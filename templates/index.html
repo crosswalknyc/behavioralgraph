@@ -8316,14 +8316,11 @@
             border: 6px solid transparent;
             border-bottom-color: var(--accent-lime);
         }
-        /* Hide tooltips when hover is disabled - TEMPORARILY DISABLED FOR DEBUGGING */
-        /*
         body.hover-disabled #globalTooltip {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
         }
-        */
         .has-tooltip-legacy::before,
         .has-tooltip-legacy::after {
             opacity: 1;
@@ -23655,6 +23652,25 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics #occupationGpActualsTable {
             display: none !important;
         }
+        #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .demo-table-container {
+            display: block !important;
+            width: 100% !important;
+            max-height: none !important;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .demo-table-container .behavioral-table {
+            max-height: none !important;
+            width: 100%;
+        }
+        #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .piq-bar-list {
+            display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .median-display {
+            display: block !important;
+            color: #9AA09B !important;
+            text-shadow: none !important;
+            margin: 0 0 10px !important;
+        }
         #dashboardView.piq-v4 #tab-demographics.tab-content.active {
             padding: 16px 32px 48px !important;
         }
@@ -23772,10 +23788,12 @@ https://www.instagram.com/p/..."></textarea>
             padding: 20px 22px !important;
         }
         #dashboardView.piq-v4 #tab-behavioral .behavioral-item,
-        #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-item {
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-item,
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-header-row {
             display: grid !important;
-            grid-template-columns: 60px 1fr 70px 70px 70px !important;
-            gap: 12px !important;
+            grid-template-columns: subgrid !important;
+            grid-column: 1 / -1 !important;
+            gap: 0 !important;
             padding: 9px 0 !important;
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
             background: transparent !important;
@@ -23917,7 +23935,6 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-interests .interest-item,
         #dashboardView.piq-v4 #tab-interests .interest-header-row {
             display: grid !important;
-            grid-template-columns: 60px 1fr 70px 70px 70px !important;
             gap: 12px !important;
             padding: 9px 0 !important;
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
@@ -121756,12 +121773,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!view.getAttribute('data-piq-tab')) view.setAttribute('data-piq-tab', 'insights');
             view.classList.remove('piq-sidebar-open');
             parsed = parsed || (typeof currentDashboardData !== 'undefined' ? currentDashboardData : null) || {};
-            var cuts = document.getElementById('dashViewDeltasBtn');
-            var bar = document.getElementById('toolbarContent');
-            if (cuts && bar && cuts.parentNode !== bar) {
-                cuts.classList.add('piq-data-cuts');
-                bar.appendChild(cuts);
-            }
+            if (window._piqV4ParkChrome) window._piqV4ParkChrome();
             window._piqV4RefreshName();
             function normKey(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
             function pick(dict, aliases) {
@@ -121848,15 +121860,7 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4DressInsights = function() {
             var view = document.getElementById('dashboardView');
             if (!view || !view.classList.contains('piq-has-profile')) return;
-            var bar = document.getElementById('toolbarContent');
-            function park(el) {
-                if (!el || !bar || el.parentNode === bar) return;
-                bar.appendChild(el);
-            }
-            var exp = document.querySelector('#contentActionButtons .dash-dropdown') || document.querySelector('.action-buttons-row .dash-dropdown');
-            park(exp);
-            park(document.getElementById('hoverToggle'));
-            park(document.getElementById('dashDisplayToggle'));
+            if (window._piqV4ParkChrome) window._piqV4ParkChrome();
             function ensureHead(host, id, eyebrow, headline, beforeEl) {
                 if (!host || host.querySelector('#' + id)) return host.querySelector('#' + id);
                 var wrap = document.createElement('div');
@@ -121968,6 +121972,30 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4Esc = function(s) {
             return String(s == null ? '' : s).replace(/</g, '');
         };
+        window._piqV4CutsOn = function() {
+            try {
+                var st = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
+                return !!(st && st.selectedKeys && st.selectedKeys.length);
+            } catch (_e) { return false; }
+        };
+        window._piqV4ParkChrome = function() {
+            var bar = document.getElementById('toolbarContent');
+            if (!bar) return;
+            function park(el) {
+                if (!el || el.parentNode === bar) return;
+                bar.appendChild(el);
+            }
+            var cuts = document.getElementById('dashViewDeltasBtn');
+            if (cuts) {
+                cuts.classList.add('piq-data-cuts');
+                cuts.style.display = '';
+                park(cuts);
+            }
+            var exp = document.querySelector('#contentActionButtons .dash-dropdown') || document.querySelector('.action-buttons-row .dash-dropdown');
+            park(exp);
+            park(document.getElementById('hoverToggle'));
+            park(document.getElementById('dashDisplayToggle'));
+        };
         window._piqV4DemoLabel = function(key, raw) {
             var s = String(raw == null ? '' : raw).trim();
             if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
@@ -122056,6 +122084,11 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4DressDemos = function() {
             var tab = document.getElementById('tab-demographics');
             if (!tab) return;
+            var cutsOn = window._piqV4CutsOn ? window._piqV4CutsOn() : false;
+            tab.classList.toggle('piq-demo-cuts', cutsOn);
+            if (cutsOn && typeof _renderDemoTablesForChartsInTableMode === 'function') {
+                try { _renderDemoTablesForChartsInTableMode(); } catch (_e) {}
+            }
             var parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || {};
             var demo = parsed.demographics || {};
             var idxMap = parsed.demographicsIndex || {};
@@ -122111,7 +122144,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (rows.length) {
                     var html = '<div class="piq-data-row head"><span>Category</span><span>Segment</span><span>Profile</span><span>Gen Pop</span><span>Index</span></div>';
                     rows.forEach(function(r) {
-                        html += '<div class="piq-data-row">' +
+                        var tip = r.name + ': ' + window._piqV4Pct(r.pct) + ' of this audience. Gen Pop ' + window._piqV4Pct(r.gp) + '. Index ' + Math.round(r.idx) + '.';
+                        html += '<div class="piq-data-row has-tooltip" data-tooltip="' + window._piqV4Esc(tip).replace(/"/g, '') + '">' +
                             '<span class="key">' + window._piqV4Esc(r.cat) + '</span>' +
                             '<span class="name">' + window._piqV4Esc(r.name) + '</span>' +
                             '<span class="pct">' + window._piqV4Pct(r.pct) + '</span>' +
@@ -122171,7 +122205,8 @@ https://www.instagram.com/p/..."></textarea>
                     var idxHtml = (isFinite(ix) && ix > 0)
                         ? '<span class="idx ' + window._piqV4IdxCls(ix) + '">' + Math.round(ix) + '</span>'
                         : '<span class="idx par">-</span>';
-                    bars += '<div class="piq-bar-strip"><span class="lbl">' + window._piqV4Esc(lbl) + '</span><div class="track-wrap"><div class="track"><div class="fill ' + (fills[j] || 'recess') + '" style="width:' + w + '%"></div></div>' + mark + '</div><span class="val">' + window._piqV4Pct(n) + '</span>' + idxHtml + '</div>';
+                    var tip = lbl + ': ' + window._piqV4Pct(n) + ' of this audience. Gen Pop ' + window._piqV4Pct(gp) + (isFinite(ix) && ix > 0 ? ('. Index ' + Math.round(ix) + '.') : '.');
+                    bars += '<div class="piq-bar-strip has-tooltip" data-tooltip="' + window._piqV4Esc(tip).replace(/"/g, '') + '"><span class="lbl">' + window._piqV4Esc(lbl) + '</span><div class="track-wrap"><div class="track"><div class="fill ' + (fills[j] || 'recess') + '" style="width:' + w + '%"></div></div>' + mark + '</div><span class="val">' + window._piqV4Pct(n) + '</span>' + idxHtml + '</div>';
                 });
                 if (list.innerHTML !== bars) list.innerHTML = bars;
                 var chead = card.querySelector('.piq-chart-head');
@@ -122414,8 +122449,6 @@ https://www.instagram.com/p/..."></textarea>
             document.querySelectorAll('#dashboardView.piq-v4 #toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
                 if (cs.display === 'none' || cs.visibility === 'hidden') return;
-                btn.classList.remove('has-tooltip');
-                btn.removeAttribute('data-tooltip');
                 var label = btn.querySelector('.tab-label');
                 if (!label) return;
                 var span = btn.querySelector('.tab-n');
@@ -122442,6 +122475,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!view || !view.classList.contains('piq-has-profile')) return;
             window._piqV4Dressing = true;
             try {
+                if (window._piqV4ParkChrome) window._piqV4ParkChrome();
                 if (window._piqV4DressInsights) window._piqV4DressInsights();
                 window._piqV4FillPills();
                 window._piqV4DressDemos();
@@ -127378,8 +127412,8 @@ https://www.instagram.com/p/..."></textarea>
             const pop = document.createElement('div');
             pop.id = 'compareDateRangesPopover';
             pop.style.cssText = [
-                'position:absolute',
-                'z-index:10000',
+                'position:fixed',
+                'z-index:20000',
                 'background:var(--bg-secondary, #1f2330)',
                 'border:1px solid var(--border-color, #2c3041)',
                 'border-radius:8px',
@@ -127664,11 +127698,15 @@ https://www.instagram.com/p/..."></textarea>
             const r = btn.getBoundingClientRect();
             const pad = 6;
             const popW = Math.min(320, Math.max(240, pop.offsetWidth || 260));
-            let left = r.left + window.scrollX;
-            if (left + popW > window.scrollX + window.innerWidth - 8) {
-                left = Math.max(8, window.scrollX + window.innerWidth - 8 - popW);
+            let left = r.left;
+            if (left + popW > window.innerWidth - 8) {
+                left = Math.max(8, window.innerWidth - 8 - popW);
             }
-            const top = r.bottom + window.scrollY + pad;
+            let top = r.bottom + pad;
+            const popH = pop.offsetHeight || 320;
+            if (top + popH > window.innerHeight - 8) {
+                top = Math.max(8, r.top - pad - popH);
+            }
             pop.style.left = left + 'px';
             pop.style.top = top + 'px';
 
@@ -128023,6 +128061,13 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof _renderIncomeMedianDisplay === 'function') {
                 try { _renderIncomeMedianDisplay(); }
                 catch (e) { console.warn('[compare] income median re-render failed', e); }
+            }
+            if (window._piqV4DressDemos) {
+                try { window._piqV4DressDemos(); }
+                catch (e) { console.warn('[compare] v4 demo dress failed', e); }
+            }
+            if (window._piqV4ParkChrome) {
+                try { window._piqV4ParkChrome(); } catch (e) {}
             }
         }
 
@@ -130103,6 +130148,15 @@ https://www.instagram.com/p/..."></textarea>
                 tstDemographicsHoverEnabled = true;
                 localStorage.setItem('bg_tst_demographics_hover', 'true');
                 Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = true; c.update(); } });
+                if (typeof charts !== 'undefined' && charts) {
+                    Object.keys(charts).forEach(function(k) {
+                        var c = charts[k];
+                        if (c && c.options && c.options.plugins && c.options.plugins.tooltip) {
+                            c.options.plugins.tooltip.enabled = true;
+                            try { c.update('none'); } catch (_e) {}
+                        }
+                    });
+                }
                 if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
             } else {
                 if (toggle) toggle.classList.add('active');
@@ -130119,6 +130173,15 @@ https://www.instagram.com/p/..."></textarea>
                 tstDemographicsHoverEnabled = false;
                 localStorage.setItem('bg_tst_demographics_hover', 'false');
                 Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = false; c.update(); } });
+                if (typeof charts !== 'undefined' && charts) {
+                    Object.keys(charts).forEach(function(k) {
+                        var c = charts[k];
+                        if (c && c.options && c.options.plugins && c.options.plugins.tooltip) {
+                            c.options.plugins.tooltip.enabled = false;
+                            try { c.update('none'); } catch (_e) {}
+                        }
+                    });
+                }
                 if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
                 
                 // Hide any currently visible tooltip using inline styles
