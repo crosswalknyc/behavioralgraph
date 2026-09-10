@@ -22039,8 +22039,394 @@ https://www.instagram.com/p/..."></textarea>
             </div>
         </div>
 
+
+    <style id="piq-v4-chrome">
+        /* Profile IQ v4 portrait cover. Scoped to #dashboardView.piq-v4.
+           Production widgets and IDs are unchanged. */
+        #dashboardView.piq-v4.piq-has-profile {
+            --piq-graphite: #0C1618;
+            --piq-slate: #15252A;
+            --piq-offwhite: #E9E8E1;
+            --piq-body: #9AA09B;
+            --piq-muted: #7C878A;
+            --piq-hair: #3B3D38;
+            --piq-signal: #C7F23E;
+            --piq-olive: #5E7E12;
+            --piq-cobalt: #3358FF;
+            --piq-orchid: #E682FF;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile {
+            --piq-graphite: #E9E8E1;
+            --piq-slate: #FFFFFF;
+            --piq-offwhite: #0C1618;
+            --piq-body: #5C6560;
+            --piq-muted: #888C89;
+            --piq-hair: #C9C6BA;
+            --piq-signal: #5E7E12;
+            --piq-olive: #5E7E12;
+        }
+        #dashboardView.piq-v4.piq-has-profile #profileAndToolbarRow {
+            display: block;
+            flex: 0 0 auto;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: var(--piq-graphite);
+            color: var(--piq-offwhite);
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #dashboardView.piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
+            display: grid;
+            max-height: none !important;
+            overflow: visible;
+            margin: 0;
+            padding: 18px 32px 28px;
+            gap: 16px 28px;
+            align-items: start;
+            background: linear-gradient(135deg, #0C1618 0%, #1B2F35 42%, #15252A 100%);
+            border-bottom: 1px solid var(--piq-hair);
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
+            background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%);
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed) {
+            grid-template-columns: 1fr min(380px, 32vw);
+            grid-template-areas:
+                "tabs tabs"
+                "copy photo";
+            min-height: min(520px, 54vh);
+            padding: 22px 48px 36px;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileHeaderRow:not(.collapsed) {
+            grid-template-columns: 130px 1fr;
+            grid-template-areas:
+                "tabs tabs"
+                "photo copy";
+            min-height: 230px;
+            align-items: center;
+        }
+        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+            grid-area: tabs;
+            width: 100%;
+            margin: 0;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo {
+            display: contents !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile .profile-title-and-toolbar-wrap {
+            grid-area: copy;
+            gap: 10px;
+            min-width: 0;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap {
+            grid-area: photo;
+            position: relative;
+            width: auto;
+            overflow: hidden;
+            background: linear-gradient(140deg, #3358FF, #E682FF 60%, #C7F23E);
+            box-shadow: 0 18px 60px rgba(51, 88, 255, 0.28);
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] .dash-profile-image-wrap {
+            width: 380px;
+            height: 400px;
+            min-width: 280px;
+            max-width: 380px;
+            border-radius: 20px;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-profile-image-wrap {
+            width: 130px;
+            height: 130px;
+            min-width: 130px;
+            max-width: 130px;
+            border-radius: 14px;
+            box-shadow: 0 6px 26px rgba(51, 88, 255, 0.3);
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-profile-image,
+        #dashboardView.piq-v4.piq-has-profile .dash-profile-image.loaded {
+            width: 100% !important;
+            height: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            border: 0 !important;
+            border-radius: 0;
+            box-shadow: none;
+            background: transparent;
+        }
+        #dashboardView.piq-v4.piq-has-profile .piq-portrait-fallback {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: flex-end;
+            padding: 22px;
+            color: #E9E8E1;
+            font-weight: 900;
+            letter-spacing: -0.06em;
+            line-height: 0.85;
+            font-size: 96px;
+            pointer-events: none;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap.is-fallback .piq-portrait-fallback { display: flex; }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-portrait-fallback {
+            font-size: 40px;
+            padding: 12px;
+            align-items: center;
+            justify-content: center;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-brand-box {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            padding: 0 !important;
+            border: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            background: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashBrandContainer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            background: transparent;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-date-box {
+            display: inline-flex;
+            background: var(--piq-slate);
+            border: 1px solid var(--piq-hair);
+            color: var(--piq-body);
+            border-radius: 999px;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqHeroCopy { display: block; min-width: 0; }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+                "name kpis"
+                "line kpis";
+            gap: 8px 28px;
+            align-items: center;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName { grid-area: name; }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner { grid-area: line; }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { grid-area: kpis; }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroEyebrow {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--piq-muted);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroEyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--piq-signal);
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroName {
+            display: block;
+            font-size: clamp(34px, 5.2vw, 80px);
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            line-height: 0.92;
+            color: var(--piq-offwhite);
+            margin: 0 0 12px;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName {
+            font-size: clamp(26px, 3vw, 40px);
+            margin-bottom: 6px;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroOneliner {
+            font-size: 18px;
+            line-height: 1.4;
+            color: var(--piq-offwhite);
+            max-width: 560px;
+            font-weight: 400;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner {
+            font-size: 14px;
+            color: var(--piq-body);
+            max-width: 620px;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroOneliner b { color: var(--piq-signal); font-weight: 700; }
+        #dashboardView.piq-v4.piq-has-profile .piq-hero-kpis {
+            display: grid;
+            grid-template-columns: repeat(4, auto);
+            gap: 28px;
+            width: max-content;
+            margin-top: 28px;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-hero-kpis {
+            margin-top: 0;
+            padding-left: 20px;
+            border-left: 1px solid var(--piq-hair);
+            gap: 24px;
+        }
+        #dashboardView.piq-v4.piq-has-profile .piq-kpi .lbl {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--piq-muted);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        #dashboardView.piq-v4.piq-has-profile .piq-kpi .val {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--piq-offwhite);
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-kpi .val { font-size: 22px; }
+        #dashboardView.piq-v4.piq-has-profile .piq-kpi.accent .val { color: var(--piq-signal); }
+        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 2;
+            background: #F5C518;
+            color: #000;
+            border: 0;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            width: auto;
+            max-width: 70%;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-label,
+        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-id { color: #000; }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-imdb-box {
+            top: auto;
+            bottom: 8px;
+            left: 8px;
+            padding: 3px 6px;
+            font-size: 9px;
+        }
+        #dashboardView.piq-v4 #piqChangeProfileBtn { display: none; }
+        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 10px;
+            padding: 6px 10px;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            color: #9AA09B;
+            border-radius: 6px;
+            font-size: 10.5px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            color: #5C6560;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
+            color: var(--piq-signal);
+            border-color: rgba(199, 242, 62, 0.35);
+        }
+        #dashboardView.piq-v4.piq-has-profile .action-buttons-row {
+            grid-template-columns: 1fr;
+            flex: 0 0 auto;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dashboard-layout {
+            gap: 0;
+            flex: 1 1 auto;
+            min-height: 0;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dashboard-tab-content {
+            min-height: 0;
+            overflow-y: auto;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar {
+            position: fixed !important;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 2147482000;
+            width: 320px !important;
+            min-width: 320px !important;
+            max-width: 320px !important;
+            height: 100vh !important;
+            max-height: none !important;
+            border-radius: 0;
+            transform: translateX(-110%);
+            transition: transform 180ms ease;
+            box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
+            display: flex !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar {
+            transform: translateX(0);
+        }
+        #piqSidebarScrim {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2147481999;
+            background: rgba(12, 22, 24, 0.55);
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
+        #dashboardView.piq-v4.piq-has-profile #tab-insights .metrics-row { display: none; }
+        @media (max-width: 980px) {
+            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed) {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "tabs"
+                    "photo"
+                    "copy";
+                min-height: 0;
+                padding: 16px 20px 24px;
+            }
+            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] .dash-profile-image-wrap {
+                width: 220px;
+                height: 240px;
+                min-width: 220px;
+                max-width: 220px;
+            }
+            #dashboardView.piq-v4.piq-has-profile .piq-hero-kpis {
+                grid-template-columns: repeat(2, auto);
+                gap: 16px 24px;
+            }
+            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "name"
+                    "line";
+            }
+            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { display: none; }
+            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileHeaderRow:not(.collapsed) {
+                grid-template-columns: 88px 1fr;
+            }
+            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-profile-image-wrap {
+                width: 88px;
+                height: 88px;
+                min-width: 88px;
+                max-width: 88px;
+            }
+        }
+    </style>
+
         <!-- DASHBOARD VIEW -->
-        <div id="dashboardView"{% if default_view_hedge_fund_iq %} style="display: none;"{% endif %}>
+        <div id="dashboardView" class="piq-v4" data-piq-tab="insights"{% if default_view_hedge_fund_iq %} style="display: none;"{% endif %}>
+            <div id="piqSidebarScrim" class="piq-sidebar-scrim"></div>
             <!-- Profile Tabs Bar -->
             <div class="profile-tabs-bar" id="profileTabsBar">
             </div>
@@ -22051,6 +22437,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
                         <div class="dash-profile-image-wrap">
                             <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile"></div>
+                            <div class="piq-portrait-fallback" id="piqPortraitFallback" aria-hidden="true"></div>
                             <div class="dash-imdb-box" id="dashImdbHeader" style="display: none;"></div>
                         </div>
                         <div class="profile-title-and-toolbar-wrap">
@@ -22060,6 +22447,12 @@ https://www.instagram.com/p/..."></textarea>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                 </div>
+                            </div>
+                            <div class="piq-hero-copy" id="piqHeroCopy">
+                                <div class="piq-hero-eyebrow" id="dashHeroEyebrow"></div>
+                                <div class="piq-hero-name" id="dashHeroName"></div>
+                                <div class="piq-hero-oneliner" id="dashHeroOneliner"></div>
+                                <div class="piq-hero-kpis" id="dashHeroKpis"></div>
                             </div>
                         </div>
                     </div>
@@ -22073,6 +22466,7 @@ https://www.instagram.com/p/..."></textarea>
                             <select id="mobileToolsNav" class="mobile-tools-nav" style="display:none;" onfocus="if(window._buildMobileToolsNav)window._buildMobileToolsNav()" onchange="if(window._onMobileToolsNav)window._onMobileToolsNav(this)" aria-label="Data &amp; Analysis Tools">
                                 <option value="" selected disabled>Data &amp; Analysis Tools</option>
                             </select>
+                            <button type="button" class="piq-change-profile" id="piqChangeProfileBtn">Change profile</button>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs">
                                     <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
@@ -22208,7 +22602,7 @@ https://www.instagram.com/p/..."></textarea>
             <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
             <div class="dashboard-layout" style="margin-top: 0.5rem;">
                 <!-- Persistent Sidebar - Always Visible -->
-                <div class="persistent-sidebar">
+                <div class="persistent-sidebar" id="piqProfileSidebar">
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
@@ -119275,6 +119669,9 @@ https://www.instagram.com/p/..."></textarea>
                     dashboardLayout.style.gap = '1rem';
                 }
             }
+            if (typeof window._piqV4OnTab === 'function') {
+                try { window._piqV4OnTab(tabName); } catch (_e) {}
+            }
         }
 
         // 2026-07-23: DELETED the dead duplicate parseAllData() that lived
@@ -119290,6 +119687,169 @@ https://www.instagram.com/p/..."></textarea>
         // The duplicate was introduced by the Jul 10 rollback commit
         // (7c8946b8) which merged old and new code without deduping.
 
+
+
+        window._piqV4OnTab = function(tabName) {
+            var view = document.getElementById('dashboardView');
+            if (!view) return;
+            view.setAttribute('data-piq-tab', tabName || 'insights');
+        };
+        window._piqV4OnClear = function() {
+            var view = document.getElementById('dashboardView');
+            if (!view) return;
+            view.classList.remove('piq-has-profile', 'piq-sidebar-open');
+            var name = document.getElementById('dashHeroName');
+            var line = document.getElementById('dashHeroOneliner');
+            var kpis = document.getElementById('dashHeroKpis');
+            var eye = document.getElementById('dashHeroEyebrow');
+            if (name) name.textContent = '';
+            if (line) line.textContent = '';
+            if (kpis) kpis.innerHTML = '';
+            if (eye) eye.textContent = '';
+        };
+        window._piqV4ToggleSidebar = function(force) {
+            var view = document.getElementById('dashboardView');
+            if (!view || !view.classList.contains('piq-has-profile')) return;
+            var open = (typeof force === 'boolean') ? force : !view.classList.contains('piq-sidebar-open');
+            view.classList.toggle('piq-sidebar-open', open);
+        };
+        window._piqV4RefreshName = function() {
+            var raw = (document.getElementById('dashBrandNameHeader') || {}).textContent || '';
+            var pretty = String(raw).replace(/\s+/g, ' ').replace(/\.$/, '').trim();
+            if (!pretty) return;
+            var letters = pretty.replace(/[^A-Za-z]/g, '');
+            var up = (letters.match(/[A-Z]/g) || []).length;
+            if (letters.length && (up / letters.length) > 0.8) {
+                pretty = pretty.toLowerCase().replace(/\b([a-z])/g, function(_, c) { return c.toUpperCase(); });
+            }
+            var nameEl = document.getElementById('dashHeroName');
+            if (nameEl) nameEl.textContent = pretty + '.';
+            var wrap = document.querySelector('#dashboardView .dash-profile-image-wrap');
+            var fb = document.getElementById('piqPortraitFallback');
+            var parts = pretty.split(/\s+/).filter(Boolean);
+            var initials = '';
+            if (parts.length === 1) initials = parts[0].slice(0, 2).toUpperCase();
+            else if (parts.length > 1) initials = (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+            if (fb) fb.textContent = initials;
+            var box = document.getElementById('dashProfileImage');
+            if (wrap) wrap.classList.toggle('is-fallback', !(box && box.classList.contains('loaded')));
+        };
+        window._piqV4OnProfile = function(parsed) {
+            var view = document.getElementById('dashboardView');
+            if (!view) return;
+            view.classList.add('piq-has-profile');
+            if (!view.getAttribute('data-piq-tab')) view.setAttribute('data-piq-tab', 'insights');
+            view.classList.remove('piq-sidebar-open');
+            parsed = parsed || (typeof currentDashboardData !== 'undefined' ? currentDashboardData : null) || {};
+            window._piqV4RefreshName();
+            function normKey(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+            function pick(dict, aliases) {
+                if (!dict) return null;
+                var map = {};
+                Object.keys(dict).forEach(function(k) { map[normKey(k)] = dict[k]; });
+                for (var i = 0; i < aliases.length; i++) {
+                    if (map.hasOwnProperty(normKey(aliases[i]))) return Number(map[normKey(aliases[i])]);
+                }
+                return null;
+            }
+            function fmtPct(n) {
+                if (n == null || !isFinite(n)) return '';
+                return (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, '') + '%';
+            }
+            function fmtCount(n) {
+                n = Number(n);
+                if (!isFinite(n) || n <= 0) return '';
+                if (n >= 1000000) {
+                    var m = n / 1000000;
+                    return (m >= 10 ? m.toFixed(1) : m.toFixed(2)).replace(/\.0$/, '') + 'M';
+                }
+                if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+                return String(Math.round(n));
+            }
+            var demo = parsed.demographics || {};
+            var female = pick(demo.gender || {}, ['Female', 'F', 'Women']);
+            var a1824 = pick(demo.age || {}, ['18-24', '18 to 24']);
+            var a2534 = pick(demo.age || {}, ['25-34', '25 to 34']);
+            var under35 = pick(demo.age || {}, ['Under 35', '18-34']);
+            if (under35 == null && a1824 != null && a2534 != null) under35 = a1824 + a2534;
+            var tiles = [];
+            var usTxt = fmtCount(parsed.projectedUS || 0);
+            if (usTxt) tiles.push({ lbl: 'US audience', val: usTxt, accent: true });
+            var fTxt = fmtPct(female);
+            if (fTxt) tiles.push({ lbl: 'Female', val: fTxt, accent: false });
+            var uTxt = fmtPct(under35);
+            if (uTxt) tiles.push({ lbl: 'Under 35', val: uTxt, accent: false });
+            var sTxt = fmtCount(parsed.sampleSize || 0);
+            if (sTxt) tiles.push({ lbl: 'Respondents', val: sTxt, accent: tiles.length === 0 });
+            var kpiEl = document.getElementById('dashHeroKpis');
+            if (kpiEl) {
+                kpiEl.innerHTML = tiles.map(function(t) {
+                    return '<div class="piq-kpi' + (t.accent ? ' accent' : '') + '"><div class="lbl">' + t.lbl + '</div><div class="val">' + t.val + '</div></div>';
+                }).join('');
+            }
+            var eye = document.getElementById('dashHeroEyebrow');
+            if (eye) {
+                var cat = String(parsed.brandCategory || '').replace(/_/g, ' ').trim();
+                var dateEl = document.getElementById('dashDateRangeHeader');
+                var dateTxt = dateEl ? String(dateEl.textContent || '').trim() : '';
+                var bits = [];
+                if (cat) bits.push(cat);
+                if (dateTxt) bits.push(dateTxt);
+                eye.textContent = bits.join('  ·  ');
+                eye.style.display = bits.length ? 'inline-flex' : 'none';
+            }
+            var line = document.getElementById('dashHeroOneliner');
+            if (line) {
+                var lead = [];
+                if (under35 != null && under35 >= 50) lead.push('young');
+                else if (under35 != null && under35 <= 30) lead.push('older-leaning');
+                if (female != null && female >= 55) lead.push('female-heavy');
+                else if (female != null && female <= 45) lead.push('male-heavy');
+                var card = document.getElementById('behavioralProfileCard');
+                var txt = card ? String(card.innerText || card.textContent || '') : '';
+                txt = txt.replace(/Analyzing behavioral patterns\.\.\./g, '').replace(/\s+/g, ' ').trim();
+                var fromCard = '';
+                if (txt && txt.length > 24 && txt.toLowerCase().indexOf('loading') !== 0) {
+                    var dot = txt.indexOf('. ');
+                    fromCard = (dot > 20) ? txt.slice(0, dot + 1) : txt;
+                    if (fromCard.length > 220) fromCard = fromCard.slice(0, 217).replace(/\s+\S*$/, '') + '.';
+                }
+                if (fromCard) {
+                    line.innerHTML = '<b>' + fromCard.replace(/</g, '') + '</b>';
+                } else if (lead.length) {
+                    line.innerHTML = '<b>Leans ' + lead.join(' and ') + '.</b>';
+                } else {
+                    line.textContent = '';
+                }
+            }
+        };
+        (function() {
+            var btn = document.getElementById('piqChangeProfileBtn');
+            if (btn && !btn._piqBound) {
+                btn._piqBound = true;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar();
+                });
+            }
+            var scrim = document.getElementById('piqSidebarScrim');
+            if (scrim && !scrim._piqBound) {
+                scrim._piqBound = true;
+                scrim.addEventListener('click', function() {
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(false);
+                });
+            }
+            var box = document.getElementById('dashProfileImage');
+            if (box && !box._piqWatch && typeof MutationObserver !== 'undefined') {
+                box._piqWatch = true;
+                new MutationObserver(function() {
+                    if (window._piqV4RefreshName) window._piqV4RefreshName();
+                }).observe(box, { attributes: true, attributeFilter: ['class'] });
+            }
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(false);
+            });
+        })();
 
         function toggleCollapsible(header) {
             const content = header.nextElementSibling;
@@ -120063,6 +120623,9 @@ https://www.instagram.com/p/..."></textarea>
             _safeRender('renderDemoInsights',         () => renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop));
             _safeRender('updateProfileTooltip',       () => updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral));
             _safeRender('renderBehavioralInsights',   () => renderBehavioralInsights(parsed.behavioral, parsed));
+            if (typeof window._piqV4OnProfile === 'function') {
+                try { window._piqV4OnProfile(parsed); } catch (_e) {}
+            }
             _safeRender('renderTopInsights',          () => renderTopInsights(parsed));
             _safeRender('_renderAudienceShareBoxes',  () => _renderAudienceShareBoxes(parsed, brandName));
         }
@@ -123041,6 +123604,9 @@ https://www.instagram.com/p/..."></textarea>
                 el.textContent = endsWithLabel ? base : (base + ' - ' + label);
             } else {
                 el.textContent = base;
+            }
+            if (typeof window._piqV4RefreshName === 'function') {
+                try { window._piqV4RefreshName(); } catch (_e) {}
             }
         }
 
@@ -126224,6 +126790,9 @@ https://www.instagram.com/p/..."></textarea>
                 if (emptyState) emptyState.style.display = 'flex';
                 if (dashContent) dashContent.style.display = 'none';
                 if (profileInfo) profileInfo.style.display = 'none';
+                if (typeof window._piqV4OnClear === 'function') {
+                    try { window._piqV4OnClear(); } catch (_e) {}
+                }
             } else {
                 // Switch to another tab
                 const newActiveTab = openProfileTabs[Math.max(0, tabIndex - 1)];
@@ -126266,6 +126835,9 @@ https://www.instagram.com/p/..."></textarea>
             if (emptyState) emptyState.style.display = 'flex';
             if (dashContent) dashContent.style.display = 'none';
             if (profileInfo) profileInfo.style.display = 'none';
+            if (typeof window._piqV4OnClear === 'function') {
+                try { window._piqV4OnClear(); } catch (_e) {}
+            }
         }
         
         function displayProfileTabData(tab) {
@@ -126417,6 +126989,9 @@ https://www.instagram.com/p/..."></textarea>
             _safeRender2('renderDemoInsights',       () => renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop));
             _safeRender2('updateProfileTooltip',     () => updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral));
             _safeRender2('renderBehavioralInsights', () => renderBehavioralInsights(parsed.behavioral));
+            if (typeof window._piqV4OnProfile === 'function') {
+                try { window._piqV4OnProfile(parsed); } catch (_e) {}
+            }
             _safeRender2('renderTopInsights',        () => renderTopInsights(parsed));
             if (parsed.interests) {
                 _safeRender2('renderInterests',      () => renderInterests(parsed.interests));
