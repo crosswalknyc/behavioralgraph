@@ -23456,8 +23456,8 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 .piq-bar-strip {
             display: grid;
-            grid-template-columns: 100px 1fr 60px;
-            gap: 12px;
+            grid-template-columns: 100px 1fr 48px 36px;
+            gap: 10px;
             align-items: center;
             padding: 6px 0;
             font-size: 12px;
@@ -23469,8 +23469,12 @@ https://www.instagram.com/p/..."></textarea>
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        #dashboardView.piq-v4 .piq-bar-strip .track-wrap {
+            position: relative;
+            height: 8px;
+        }
         #dashboardView.piq-v4 .piq-bar-strip .track {
-            height: 7px;
+            height: 8px;
             background: #3B3D38;
             border-radius: 999px;
             overflow: hidden;
@@ -23483,14 +23487,54 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .piq-bar-strip .fill.second { background: #3358FF; }
         #dashboardView.piq-v4 .piq-bar-strip .fill.third { background: #E682FF; }
         #dashboardView.piq-v4 .piq-bar-strip .fill.recess { background: #B7B3D8; }
+        #dashboardView.piq-v4 .piq-bar-strip .gp-mark {
+            position: absolute;
+            top: -4px;
+            width: 2px;
+            height: 16px;
+            margin-left: -1px;
+            background: #E9E8E1;
+            border-radius: 1px;
+            box-shadow: 0 0 0 1px #0C1618;
+            z-index: 2;
+            pointer-events: none;
+        }
         #dashboardView.piq-v4 .piq-bar-strip .val {
             text-align: right;
             color: #E9E8E1;
             font-weight: 700;
             font-size: 11.5px;
         }
+        #dashboardView.piq-v4 .piq-bar-strip .idx {
+            text-align: right;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #9AA09B;
+        }
+        #dashboardView.piq-v4 .piq-bar-strip .idx.over { color: #C7F23E; }
+        #dashboardView.piq-v4 .piq-bar-strip .idx.under { color: #E682FF; }
+        #dashboardView.piq-v4 .piq-gp-leg {
+            display: inline-block;
+            width: 10px;
+            height: 2px;
+            background: #E9E8E1;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        #dashboardView.piq-v4 .piq-chart-legend {
+            margin: -10px 0 16px;
+            font-size: 11px;
+            color: #7C878A;
+            letter-spacing: 0.02em;
+        }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-bar-strip .val { color: #0C1618; }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-bar-strip .fill { background: #5E7E12; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-bar-strip .gp-mark { background: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-bar-strip .idx.over { color: #5E7E12; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-bar-strip .idx.under { color: #8E3FA8; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-gp-leg { background: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-chart-legend { color: #888C89; }
         #dashboardView.piq-v4 .piq-callout {
             background: #1B2F35;
             border-left: 3px solid #3358FF;
@@ -121634,8 +121678,15 @@ https://www.instagram.com/p/..."></textarea>
                 var ch = document.createElement('div');
                 ch.id = 'piqDemoChartsHead';
                 ch.className = 'piq-section-head';
-                ch.innerHTML = '<div class="piq-eyebrow"><span class="num">02</span>Category charts</div><h2>Full breakouts across every demographic category tracked.</h2>';
+                ch.innerHTML = '<div class="piq-eyebrow"><span class="num">02</span>Category charts</div><h2>Full breakouts across every demographic category tracked.</h2><p class="piq-chart-legend">Bar is this audience. Line is Gen Pop. Number is index vs Gen Pop.</p>';
                 grid.parentNode.insertBefore(ch, grid);
+            }
+            var chartsHead = document.getElementById('piqDemoChartsHead');
+            if (chartsHead && !chartsHead.querySelector('.piq-chart-legend')) {
+                var leg = document.createElement('p');
+                leg.className = 'piq-chart-legend';
+                leg.textContent = 'Bar is this audience. Line is Gen Pop. Number is index vs Gen Pop.';
+                chartsHead.appendChild(leg);
             }
             var host = document.getElementById('demoDifferentiators');
             if (host) {
@@ -121700,8 +121751,12 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 if (!keys.length) return;
                 if (!keepOrder[key]) keys.sort(function(a, b) { return Number(vals[b]) - Number(vals[a]); });
+                var idxs = idxMap[key] || {};
+                var gps = gpMap[key] || {};
                 var max = 0;
-                keys.forEach(function(k) { max = Math.max(max, Number(vals[k])); });
+                keys.forEach(function(k) {
+                    max = Math.max(max, Number(vals[k]) || 0, Number(gps[k]) || 0);
+                });
                 if (max <= 0) max = 100;
                 var list = card.querySelector('.piq-bar-list');
                 if (!list) {
@@ -121712,12 +121767,22 @@ https://www.instagram.com/p/..."></textarea>
                 var bars = '';
                 keys.forEach(function(k, j) {
                     var n = Number(vals[k]);
+                    var gp = Number(gps[k]) || 0;
+                    var ix = Number(idxs[k]);
                     var lbl = k;
                     if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
                         try { lbl = getAgeDisplayLabel(k) || k; } catch (_e) {}
                     }
                     var w = Math.max(2, Math.round((n / max) * 100));
-                    bars += '<div class="piq-bar-strip"><span class="lbl">' + window._piqV4Esc(lbl) + '</span><div class="track"><div class="fill ' + (fills[j] || 'recess') + '" style="width:' + w + '%"></div></div><span class="val">' + window._piqV4Pct(n) + '</span></div>';
+                    var mark = '';
+                    if (gp > 0) {
+                        var gpw = Math.min(100, Math.max(0, (gp / max) * 100));
+                        mark = '<span class="gp-mark" style="left:' + gpw.toFixed(2) + '%" title="Gen Pop ' + window._piqV4Pct(gp) + '"></span>';
+                    }
+                    var idxHtml = (isFinite(ix) && ix > 0)
+                        ? '<span class="idx ' + window._piqV4IdxCls(ix) + '">' + Math.round(ix) + '</span>'
+                        : '<span class="idx par">-</span>';
+                    bars += '<div class="piq-bar-strip"><span class="lbl">' + window._piqV4Esc(lbl) + '</span><div class="track-wrap"><div class="track"><div class="fill ' + (fills[j] || 'recess') + '" style="width:' + w + '%"></div></div>' + mark + '</div><span class="val">' + window._piqV4Pct(n) + '</span>' + idxHtml + '</div>';
                 });
                 if (list.innerHTML !== bars) list.innerHTML = bars;
                 var chead = card.querySelector('.piq-chart-head');
@@ -121727,7 +121792,7 @@ https://www.instagram.com/p/..."></textarea>
                     chead.className = 'piq-chart-head';
                     card.insertBefore(chead, card.firstChild);
                 }
-                chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span><span class="tot">' + keys.length + ' buckets</span>';
+                chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span><span class="tot"><span class="piq-gp-leg"></span>Gen Pop</span>';
             });
         };
         window._piqV4DressBehavioral = function() {
