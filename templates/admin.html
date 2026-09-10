@@ -5784,7 +5784,10 @@
                     document.getElementById('cdProfileIQ').checked = d.has_profile_iq_access !== false;
                     document.getElementById('cdSubscriberIQ').checked = !!d.has_subscriber_iq_access;
                     document.getElementById('cdEcommerceIQ').checked = d.has_ecommerce_iq_access !== false; // Default true (matches backend)
-                    document.getElementById('cdImpactIQ').checked = d.has_ticket_sales_iq_access !== false;
+                    // cdImpactIQ was removed on 2026-09-09 (Impact IQ sunset);
+                    // null-guard the write so this loader doesn't crash.
+                    var _cdImpact = document.getElementById('cdImpactIQ');
+                    if (_cdImpact) _cdImpact.checked = d.has_ticket_sales_iq_access !== false;
                     document.getElementById('cdShareOfTimeView').checked = d.has_share_of_time_access !== false;
                     document.getElementById('cdShareOfTimeRun').checked = d.has_share_of_time_run_access !== false;
                     document.getElementById('cdHedgeFundIQ').checked = !!d.has_hedge_fund_iq_access;
@@ -5809,7 +5812,10 @@
                     const cdAan = d.auto_access_new || {};
                     document.getElementById('cdAanProfileIQ').checked = cdAan.profile_iq !== false;
                     document.getElementById('cdAanSubscriberIQ').checked = cdAan.subscriber_iq !== false;
-                    document.getElementById('cdAanImpactIQ').checked = cdAan.roas_iq !== false;
+                    // cdAanImpactIQ was removed on 2026-09-09 (Impact IQ sunset);
+                    // null-guard the write so this loader doesn't crash.
+                    var _cdAanImpact = document.getElementById('cdAanImpactIQ');
+                    if (_cdAanImpact) _cdAanImpact.checked = cdAan.roas_iq !== false;
                     document.getElementById('cdAanEcommerceIQ').checked = cdAan.ecommerce_iq !== false;
                     document.getElementById('cdAanHedgeFundIQ').checked = cdAan.hedge_fund_iq !== false;
                     document.getElementById('cdAanRankersIQ').checked = cdAan.rankers_iq !== false;
@@ -5849,7 +5855,9 @@
                 has_profile_iq_access: document.getElementById('cdProfileIQ').checked,
                 has_subscriber_iq_access: document.getElementById('cdSubscriberIQ').checked,
                 has_ecommerce_iq_access: document.getElementById('cdEcommerceIQ').checked,
-                has_ticket_sales_iq_access: document.getElementById('cdImpactIQ').checked,
+                // cdImpactIQ removed 2026-09-09 (Impact IQ sunset); fall back to
+                // the historical default (true) when the DOM element is missing.
+                has_ticket_sales_iq_access: (document.getElementById('cdImpactIQ') || {checked: true}).checked,
                 has_share_of_time_access: document.getElementById('cdShareOfTimeView').checked,
                 has_share_of_time_run_access: document.getElementById('cdShareOfTimeRun').checked && document.getElementById('cdShareOfTimeView').checked,
                 has_hedge_fund_iq_access: document.getElementById('cdHedgeFundIQ').checked,
@@ -5866,7 +5874,8 @@
                 auto_access_new: {
                     profile_iq: document.getElementById('cdAanProfileIQ').checked,
                     subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
-                    roas_iq: document.getElementById('cdAanImpactIQ').checked,
+                    // cdAanImpactIQ removed 2026-09-09 (Impact IQ sunset).
+                    roas_iq: (document.getElementById('cdAanImpactIQ') || {checked: true}).checked,
                     ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
                     hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
                     rankers_iq: document.getElementById('cdAanRankersIQ').checked,
@@ -5922,7 +5931,8 @@
             const aan = {
                 profile_iq: document.getElementById('cdAanProfileIQ').checked,
                 subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
-                roas_iq: document.getElementById('cdAanImpactIQ').checked,
+                // cdAanImpactIQ removed 2026-09-09 (Impact IQ sunset).
+                roas_iq: (document.getElementById('cdAanImpactIQ') || {checked: true}).checked,
                 ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
                 hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
                 rankers_iq: document.getElementById('cdAanRankersIQ').checked,
@@ -9891,10 +9901,14 @@
             // Preload Fin IQ tickers so they're ready when user expands section
             loadHedgeFundTickersForAccess();
 
-            // Access to New Releases: default all ON for new users
+            // Access to New Releases: default all ON for new users.
+            // Impact IQ AAN pill was removed on 2026-09-09 (Impact IQ sunset);
+            // null-guard the write so Add User doesn't crash on the missing
+            // DOM element in a cached admin session.
             document.getElementById('aanProfileIQ').checked = true;
             document.getElementById('aanSubscriberIQ').checked = true;
-            document.getElementById('aanImpactIQ').checked = true;
+            var _aanImpactAdd = document.getElementById('aanImpactIQ');
+            if (_aanImpactAdd) _aanImpactAdd.checked = true;
             document.getElementById('aanEcommerceIQ').checked = true;
             document.getElementById('aanHedgeFundIQ').checked = true;
             document.getElementById('aanRankersIQ').checked = true;
@@ -10108,7 +10122,11 @@
             const aan = user.auto_access_new || {};
             document.getElementById('aanProfileIQ').checked = aan.profile_iq !== false;
             document.getElementById('aanSubscriberIQ').checked = aan.subscriber_iq !== false;
-            document.getElementById('aanImpactIQ').checked = aan.roas_iq !== false;
+            // Impact IQ AAN pill was removed on 2026-09-09 (Impact IQ sunset).
+            // Null-guard the write so a cached admin session's edit-user
+            // click doesn't crash on the missing DOM element.
+            var _aanImpact = document.getElementById('aanImpactIQ');
+            if (_aanImpact) _aanImpact.checked = aan.roas_iq !== false;
             document.getElementById('aanEcommerceIQ').checked = aan.ecommerce_iq !== false;
             document.getElementById('aanHedgeFundIQ').checked = aan.hedge_fund_iq !== false;
             document.getElementById('aanRankersIQ').checked = aan.rankers_iq !== false;
@@ -13678,7 +13696,11 @@
                 auto_access_new: {
                     profile_iq: document.getElementById('aanProfileIQ').checked,
                     subscriber_iq: document.getElementById('aanSubscriberIQ').checked,
-                    roas_iq: document.getElementById('aanImpactIQ').checked,
+                    // Impact IQ AAN pill removed 2026-09-09 (Impact IQ sunset);
+                    // fall back to the historical default (true) when the DOM
+                    // element is missing so the payload key still gets written
+                    // as dead data per the silent-ignore contract.
+                    roas_iq: (document.getElementById('aanImpactIQ') || {checked: true}).checked,
                     ecommerce_iq: document.getElementById('aanEcommerceIQ').checked,
                     hedge_fund_iq: document.getElementById('aanHedgeFundIQ').checked,
                     rankers_iq: document.getElementById('aanRankersIQ').checked,
