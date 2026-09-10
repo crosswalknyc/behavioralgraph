@@ -22102,12 +22102,36 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             margin: 0;
-            order: -1 !important;
+            order: 0 !important;
             position: relative;
             z-index: 4;
         }
         #dashboardView.piq-v4.piq-has-profile > #toolbarRow {
             order: 0 !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            flex: 0 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
+            background: #E9E8E1;
+            border-bottom-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+            border-bottom: 1px solid #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+            border-bottom-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
+            padding: 8px 32px;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
@@ -23670,16 +23694,14 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         #dashboardView.piq-v4 #tab-behavioral .metric-legend {
-            display: flex !important;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px !important;
-            background: rgba(51, 88, 255, 0.06) !important;
-            border: 1px solid rgba(51, 88, 255, 0.2) !important;
-            border-radius: 8px !important;
-            margin-bottom: 14px !important;
-            font-size: 11px !important;
-            color: #9AA09B;
+            display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-controls {
+            position: static !important;
+            top: auto !important;
+        }
+        #dashboardView.piq-v4 #tab-behavioral #behavioralGrid {
+            scroll-margin-top: 140px;
         }
         #dashboardView.piq-v4 #tab-behavioral .behavioral-cat-icon,
         #dashboardView.piq-v4 #tab-behavioral .drag-handle,
@@ -23712,12 +23734,22 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
             background: transparent !important;
         }
-        #dashboardView.piq-v4 #piqBehJump {
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="behavioral"]) #piqBehJump {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump,
+        #dashboardView.piq-v4 #piqBehJump.piq-jump {
             display: flex;
-            gap: 8px;
-            margin: 0 0 16px;
-            flex-wrap: wrap;
             align-items: center;
+            gap: 10px;
+            position: relative;
+            padding: 8px 32px 10px;
+            margin: 0;
+            flex-wrap: nowrap;
+            background: #0C1618;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump {
+            background: #E9E8E1;
         }
         #dashboardView.piq-v4 #piqBehJump .piq-jump-lbl {
             font-size: 10px;
@@ -23725,11 +23757,87 @@ https://www.instagram.com/p/..."></textarea>
             letter-spacing: 0.14em;
             color: #7C878A;
             font-weight: 500;
-            margin-right: 4px;
+            flex: 0 0 auto;
         }
-        #dashboardView.piq-v4 #piqBehJump button.piq-chip {
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            min-width: 280px;
+            max-width: min(520px, calc(100vw - 80px));
+            padding: 8px 12px;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            border-radius: 6px;
+            color: #E9E8E1;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 10.5px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
             cursor: pointer;
+        }
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn .caret {
+            font-size: 8px;
+            color: #7C878A;
+        }
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
+            border-color: rgba(199, 242, 62, 0.35);
+            color: #C7F23E;
+        }
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-menu {
+            position: absolute;
+            left: 32px;
+            top: calc(100% - 4px);
+            min-width: 280px;
+            max-width: min(520px, calc(100vw - 80px));
+            max-height: 320px;
+            overflow-y: auto;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            border-radius: 8px;
+            padding: 6px;
+            z-index: 50;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+        }
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-radius: 4px;
+            padding: 8px 10px;
+            color: #E9E8E1;
             font-family: inherit;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt:hover,
+        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt.is-on {
+            background: rgba(199, 242, 62, 0.08);
+            color: #C7F23E;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-btn {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            color: #0C1618;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-menu {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt {
+            color: #0C1618;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt.is-on {
+            background: rgba(94, 126, 18, 0.08);
+            color: #5E7E12;
         }
         @media (max-width: 900px) {
             #dashboardView.piq-v4 #tab-behavioral .behavioral-grid {
@@ -121811,30 +121919,65 @@ https://www.instagram.com/p/..."></textarea>
             });
             var sel = document.getElementById('categoryReorderSelect');
             var jump = document.getElementById('piqBehJump');
-            if (sel && sel.parentNode) {
-                if (!jump) {
-                    jump = document.createElement('div');
-                    jump.id = 'piqBehJump';
-                    sel.parentNode.insertBefore(jump, sel);
-                }
-                var opts = Array.prototype.slice.call(sel.options).filter(function(o) { return o.value; });
-                if (opts.length) {
-                    var shown = opts.slice(0, 8);
-                    var html = '<span class="piq-jump-lbl">Jump to</span>';
-                    shown.forEach(function(o, i) {
-                        var label = String(o.text || o.value).replace(/^[\u00A0-\uFFFF\s]+/, '');
-                        html += '<button type="button" class="piq-chip' + (i === 0 ? ' second' : '') + '" data-cat="' + String(o.value).replace(/"/g, '') + '">' + window._piqV4Esc(label) + '</button>';
-                    });
-                    if (opts.length > 8) html += '<span class="piq-chip">+ ' + (opts.length - 8) + ' more</span>';
-                    if (jump.innerHTML !== html) {
-                        jump.innerHTML = html;
-                        jump.querySelectorAll('button[data-cat]').forEach(function(btn) {
-                            btn.onclick = function() {
-                                if (typeof moveCategoryToTop === 'function') moveCategoryToTop(btn.getAttribute('data-cat'));
-                            };
-                        });
-                    }
-                }
+            var wrap = window._piqV4EnsureStickyChrome ? window._piqV4EnsureStickyChrome() : null;
+            if (!jump) {
+                jump = document.createElement('div');
+                jump.id = 'piqBehJump';
+                jump.className = 'piq-jump';
+            }
+            if (wrap && jump.parentNode !== wrap) wrap.appendChild(jump);
+            var opts = [];
+            if (sel) {
+                Array.prototype.slice.call(sel.options).forEach(function(o) {
+                    if (o.value) opts.push({ value: o.value, label: String(o.text || o.value).replace(/^[\u00A0-\uFFFF\s]+/, '') });
+                });
+            }
+            if (!opts.length) {
+                cards.forEach(function(card) {
+                    var cat = card.getAttribute('data-category') || '';
+                    if (cat) opts.push({ value: cat, label: cat });
+                });
+            }
+            var sig = opts.map(function(o) { return o.value; }).join('|');
+            if (opts.length && jump.getAttribute('data-sig') !== sig) {
+                jump.setAttribute('data-sig', sig);
+                var cur = opts[0] ? opts[0].label : 'Category';
+                var html = '<span class="piq-jump-lbl">Jump to</span><button type="button" class="piq-jump-btn" id="piqBehJumpBtn" aria-expanded="false"><span class="piq-jump-current">' + window._piqV4Esc(cur) + '</span><span class="caret">&#9662;</span></button><div class="piq-jump-menu" id="piqBehJumpMenu" hidden>';
+                opts.forEach(function(o, i) {
+                    html += '<button type="button" class="piq-jump-opt' + (i === 0 ? ' is-on' : '') + '" data-cat="' + String(o.value).replace(/"/g, '') + '">' + window._piqV4Esc(o.label) + '</button>';
+                });
+                html += '</div>';
+                jump.innerHTML = html;
+            }
+            var btn = document.getElementById('piqBehJumpBtn');
+            var menu = document.getElementById('piqBehJumpMenu');
+            if (btn && menu && !btn._piqBound) {
+                btn._piqBound = true;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var open = menu.hasAttribute('hidden');
+                    if (open) menu.removeAttribute('hidden');
+                    else menu.setAttribute('hidden', '');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                menu.addEventListener('click', function(e) {
+                    var opt = e.target.closest('[data-cat]');
+                    if (!opt) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var cat = opt.getAttribute('data-cat');
+                    var curEl = jump.querySelector('.piq-jump-current');
+                    if (curEl) curEl.textContent = opt.textContent;
+                    menu.querySelectorAll('.piq-jump-opt').forEach(function(el) { el.classList.toggle('is-on', el === opt); });
+                    menu.setAttribute('hidden', '');
+                    btn.setAttribute('aria-expanded', 'false');
+                    if (typeof moveCategoryToTop === 'function') moveCategoryToTop(cat);
+                });
+                document.addEventListener('click', function() {
+                    menu.setAttribute('hidden', '');
+                    btn.setAttribute('aria-expanded', 'false');
+                });
             }
             var call = document.getElementById('piqBehCallout');
             if (!call && cards.length) {
@@ -121947,13 +122090,28 @@ https://www.instagram.com/p/..."></textarea>
                 if (call.innerHTML !== next) call.innerHTML = next;
             }
         };
+        window._piqV4EnsureStickyChrome = function() {
+            var view = document.getElementById('dashboardView');
+            var bar = document.getElementById('profileTabsBar');
+            var row = document.getElementById('toolbarRow');
+            if (!view || !bar || !row || !view.classList.contains('piq-has-profile')) return null;
+            var wrap = document.getElementById('piqStickyChrome');
+            if (!wrap) {
+                wrap = document.createElement('div');
+                wrap.id = 'piqStickyChrome';
+            }
+            if (wrap.parentNode !== view) {
+                view.insertBefore(wrap, bar);
+            }
+            if (row.parentNode !== wrap) wrap.appendChild(row);
+            if (bar.parentNode !== wrap) wrap.appendChild(bar);
+            return wrap;
+        };
         window._piqV4DressTabs = function() {
             var view = document.getElementById('dashboardView');
             var bar = document.getElementById('profileTabsBar');
             var row = document.getElementById('toolbarRow');
-            if (view && view.classList.contains('piq-has-profile') && bar && row && row.previousElementSibling !== bar) {
-                bar.insertAdjacentElement('afterend', row);
-            }
+            if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
             var n = 1;
             document.querySelectorAll('#dashboardView.piq-has-profile #toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
