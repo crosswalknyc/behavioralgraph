@@ -41,6 +41,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import traceback
 from datetime import datetime, timezone
 
 from flask import (Blueprint, jsonify, redirect, render_template,
@@ -2672,6 +2673,447 @@ def admin_export_user_usage_csv(target_username):
             "Cache-Control": "private, no-store, max-age=0",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Admin-generated top-up links (Jenna 2026-09-10)
+#
+# "add where you can click to generate a link for a user to click on to
+# add money to their account. so if I create an account I dont have to
+# ask them for their credit card they can do it themselves."
+#
+# Admin mints a link from the user's tab -> sends it -> the recipient
+# adds their own card on Stripe's hosted form. See payment_links.py for
+# the token model and why it is a token rather than a raw Stripe URL.
+#
+# THE TOKEN IS THE ONLY SOURCE OF THE TARGET ACCOUNT. Nothing in a
+# request body can change which wallet gets credited.
+# ---------------------------------------------------------------------------
+
+def _resolve_target_billing_subject(target_username: str):
+    """Resolve which record holds the wallet for `target_username`.
+
+    Admin-side twin of _resolve_caller_billing_subject: the caller is
+    an admin, the SUBJECT is somebody else. Returns a dict or None
+    when the user does not exist.
+    """
+    from app import load_users  # type: ignore
+    import wallet  # type: ignore
+    data = load_users()
+    u = (data.get("users") or {}).get(target_username)
+    if not u:
+        return None
+    subject, subject_kind, subject_key = wallet.resolve_billing_subject(
+        u, data)
+    if subject_kind == "company":
+        display = subject_key
+    else:
+        display = (f"{u.get('first_name', '')} "
+                   f"{u.get('last_name', '')}").strip() or target_username
+    return {
+        "user": u,
+        "uname": target_username,
+        "subject": subject,
+        "subject_kind": subject_kind,
+        "subject_key": subject_key,
+        "display_name": display,
+        "email": str(u.get("email") or "").strip(),
+    }
+
+
+def _link_public_payload(rec: dict, base: str) -> dict:
+    """Admin-facing view of a link record."""
+    import payment_links  # type: ignore
+    return {
+        "token": rec.get("token"),
+        "url": payment_links.public_url(base, str(rec.get("token") or "")),
+        "amount_usd": rec.get("amount_usd"),
+        "amount_locked": bool(rec.get("amount_locked")),
+        "single_use": bool(rec.get("single_use")),
+        "created_at": rec.get("created_at"),
+        "created_by": rec.get("created_by"),
+        "expires_at": rec.get("expires_at"),
+        "uses": int(rec.get("uses") or 0),
+        "total_paid_usd": float(rec.get("total_paid_usd") or 0.0),
+        "last_used_at": rec.get("last_used_at"),
+        "revoked": bool(rec.get("revoked")),
+        "live": payment_links.is_live(rec),
+    }
+
+
+@billing_bp.route(
+    "/api/admin/user/<target_username>/billing/payment-link",
+    methods=["POST"])
+def admin_create_payment_link(target_username):
+    """Mint a top-up link for a user.
+
+    Body (all optional):
+      {"amount_usd": 500, "lock_amount": false,
+       "ttl_days": 30, "single_use": false, "note": "..."}
+
+    An omitted / zero `amount_usd` means the recipient picks their own.
+    """
+    admin_uname, _admin, err = _require_super_admin()
+    if err:
+        return err
+    import payment_links  # type: ignore
+    import billing  # type: ignore
+    import wallet  # type: ignore
+
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    ctx = _resolve_target_billing_subject(target_username)
+    if not ctx:
+        return jsonify({"error": "user_not_found"}), 404
+
+    body = request.get_json(silent=True) or {}
+
+    amt = None
+    if body.get("amount_usd") not in (None, "", 0, "0"):
+        try:
+            amt = float(body.get("amount_usd"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_amount"}), 400
+        if amt <= 0:
+            amt = None
+        elif amt > payment_links.MAX_AMOUNT_USD:
+            return jsonify({"error": "above_maximum"}), 400
+        elif amt < wallet.top_up_min_custom():
+            return jsonify({
+                "error": "below_minimum",
+                "min_usd": wallet.top_up_min_custom(),
+            }), 400
+
+    try:
+        rec = payment_links.create_link(
+            subject_kind=ctx["subject_kind"],
+            subject_key=ctx["subject_key"],
+            display_name=ctx["display_name"],
+            amount_usd=amt,
+            amount_locked=bool(body.get("lock_amount")),
+            created_by=admin_uname,
+            ttl_days=int(body.get("ttl_days")
+                         or payment_links.DEFAULT_TTL_DAYS),
+            single_use=bool(body.get("single_use")),
+            note=str(body.get("note") or ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[billing] payment-link mint failed for "
+              f"{target_username}: {e}")
+        return jsonify({"error": "could_not_create_link"}), 500
+
+    out = _link_public_payload(rec, _dashboard_base_url())
+    out["success"] = True
+    out["display_name"] = ctx["display_name"]
+    out["email"] = ctx["email"]
+    out["subject_kind"] = ctx["subject_kind"]
+    # Heads-up, not a blocker: the credit lands either way (the webhook
+    # does not read this flag), but the user cannot SPEND from the
+    # wallet until billing is switched on for them on the Billing tab.
+    out["wallet_billing_on"] = bool(
+        ctx["subject"].get("paying_customer"))
+    print(f"[billing] {admin_uname} minted a top-up link for "
+          f"{ctx['subject_kind']}:{ctx['subject_key']} "
+          f"(amount={amt if amt else 'recipient chooses'}, "
+          f"expires={rec.get('expires_at')})")
+    return jsonify(out)
+
+
+@billing_bp.route(
+    "/api/admin/user/<target_username>/billing/payment-links",
+    methods=["GET"])
+def admin_list_payment_links(target_username):
+    """Live links for this user, newest first."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import payment_links  # type: ignore
+    ctx = _resolve_target_billing_subject(target_username)
+    if not ctx:
+        return jsonify({"error": "user_not_found"}), 404
+    include_dead = str(
+        request.args.get("include_dead") or "").lower() in (
+            "1", "true", "yes")
+    base = _dashboard_base_url()
+    links = payment_links.list_for_subject(
+        ctx["subject_kind"], ctx["subject_key"],
+        include_dead=include_dead)
+    return jsonify({
+        "success": True,
+        "display_name": ctx["display_name"],
+        "email": ctx["email"],
+        "links": [_link_public_payload(r, base) for r in links],
+    })
+
+
+@billing_bp.route(
+    "/api/admin/payment-link/<token>/revoke", methods=["POST"])
+def admin_revoke_payment_link(token):
+    """Kill a link so it can no longer be paid against."""
+    admin_uname, _admin, err = _require_super_admin()
+    if err:
+        return err
+    import payment_links  # type: ignore
+    ok = payment_links.revoke(token, revoked_by=admin_uname)
+    if not ok:
+        return jsonify({"error": "link_not_found"}), 404
+    print(f"[billing] {admin_uname} revoked top-up link "
+          f"{str(token)[:8]}...")
+    return jsonify({"success": True})
+
+
+@billing_bp.route(
+    "/api/admin/user/<target_username>/billing/payment-link/email",
+    methods=["POST"])
+def admin_email_payment_link(target_username):
+    """Email an existing link to the user it belongs to.
+
+    Body: {"token": "..."} - or omit it and a fresh link is minted
+    with the same body options as the mint route.
+    """
+    admin_uname, admin, err = _require_super_admin()
+    if err:
+        return err
+    import payment_links  # type: ignore
+
+    ctx = _resolve_target_billing_subject(target_username)
+    if not ctx:
+        return jsonify({"error": "user_not_found"}), 404
+    to_addr = ctx["email"]
+    if not to_addr or "@" not in to_addr:
+        return jsonify({"error": "user_has_no_email"}), 400
+
+    body = request.get_json(silent=True) or {}
+    token = str(body.get("token") or "").strip()
+    if token:
+        rec, reason = payment_links.validate(token)
+        if not rec:
+            return jsonify({"error": f"link_{reason}"}), 400
+        # A token must belong to the user it is being emailed to.
+        if (rec.get("subject_kind") != ctx["subject_kind"]
+                or str(rec.get("subject_key")) != str(ctx["subject_key"])):
+            return jsonify({"error": "link_subject_mismatch"}), 400
+    else:
+        resp = admin_create_payment_link(target_username)
+        payload = resp[0] if isinstance(resp, tuple) else resp
+        data = payload.get_json(silent=True) or {}
+        if not data.get("success"):
+            return resp
+        rec = payment_links.get_link(str(data.get("token") or ""))
+        if not rec:
+            return jsonify({"error": "could_not_create_link"}), 500
+
+    base = _dashboard_base_url()
+    url = payment_links.public_url(base, str(rec.get("token") or ""))
+    amt = rec.get("amount_usd")
+    first = str(ctx["user"].get("first_name") or "").strip()
+    greeting = f"Hi {first}," if first else "Hi,"
+    sender_name = (f"{admin.get('first_name', '')} "
+                   f"{admin.get('last_name', '')}").strip() or "Crosswalk"
+    amount_line = (
+        f"\nAmount: ${amt:,.2f}\n" if amt else
+        "\nYou can enter whatever amount you'd like to add.\n")
+    exp = str(rec.get("expires_at") or "")[:10]
+
+    subject_line = "Add funds to your Crosswalk account"
+    text = (
+        f"{greeting}\n\n"
+        f"You can add funds to your Crosswalk account here:\n\n"
+        f"{url}\n"
+        f"{amount_line}"
+        f"\nThe page is secure and hosted by our payment processor, so "
+        f"your card details never pass through us. You do not need to "
+        f"be signed in to use it.\n\n"
+        f"This link is good through {exp}.\n\n"
+        f"{sender_name}\n"
+    )
+
+    try:
+        from wallet_receipt_email import _send_async  # type: ignore
+        _send_async(subject_line, text, [to_addr])
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[billing] payment-link email failed: {e}")
+        return jsonify({"error": "could_not_send_email"}), 502
+
+    print(f"[billing] {admin_uname} emailed a top-up link to "
+          f"{to_addr} for {ctx['subject_kind']}:{ctx['subject_key']}")
+    out = _link_public_payload(rec, base)
+    out["success"] = True
+    out["emailed_to"] = to_addr
+    return jsonify(out)
+
+
+# ---------------------------------------------------------------------------
+# Public top-up link (NO LOGIN). The token is the only credential.
+# ---------------------------------------------------------------------------
+
+_LINK_DEAD_COPY = {
+    "not_found": ("This link is not valid.",
+                  "Double-check the address, or ask for a new one."),
+    "revoked": ("This link has been turned off.",
+                "Ask for a new one and it will work right away."),
+    "expired": ("This link has expired.",
+                "Ask for a new one and it will work right away."),
+    "already_used": ("This link has already been used.",
+                     "Ask for a new one if you'd like to add more."),
+}
+
+
+@billing_bp.route("/pay/<token>", methods=["GET"])
+def public_pay_page(token):
+    """The page the recipient lands on. Public by design.
+
+    Renders only the display name of the account being funded so the
+    payer can confirm they have the right one. Never a balance, never
+    an email address, never any history.
+    """
+    import payment_links  # type: ignore
+    import billing  # type: ignore
+    rec, reason = payment_links.validate(token)
+    if not rec:
+        head, sub = _LINK_DEAD_COPY.get(
+            reason or "not_found", _LINK_DEAD_COPY["not_found"])
+        return render_template(
+            "pay_link.html", ok=False, headline=head, subline=sub,
+            token=""), (404 if reason == "not_found" else 410)
+    if not billing.is_enabled():
+        return render_template(
+            "pay_link.html", ok=False,
+            headline="Payments are temporarily unavailable.",
+            subline="Please try again shortly.", token=""), 503
+
+    import wallet  # type: ignore
+    return render_template(
+        "pay_link.html",
+        ok=True,
+        token=str(rec.get("token") or ""),
+        display_name=str(rec.get("display_name") or ""),
+        amount_usd=rec.get("amount_usd"),
+        amount_locked=bool(rec.get("amount_locked")),
+        min_usd=wallet.top_up_min_custom(),
+    )
+
+
+@billing_bp.route("/api/pay/<token>/checkout", methods=["POST"])
+def public_pay_checkout(token):
+    """Mint a Stripe Checkout Session for a token. Public by design.
+
+    The target account comes from the TOKEN ONLY. The request body can
+    influence the amount and nothing else, and not even that when the
+    link is amount-locked.
+    """
+    import payment_links  # type: ignore
+    import billing  # type: ignore
+    import wallet  # type: ignore
+
+    rec, reason = payment_links.validate(token)
+    if not rec:
+        return jsonify({"error": f"link_{reason}"}), 410
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    subject_kind = str(rec.get("subject_kind") or "user")
+    subject_key = str(rec.get("subject_key") or "")
+
+    # Amount: locked links ignore the body entirely.
+    preset = rec.get("amount_usd")
+    if rec.get("amount_locked") and preset:
+        amt = float(preset)
+    else:
+        body = request.get_json(silent=True) or {}
+        raw = body.get("amount_usd")
+        if raw in (None, "", 0, "0"):
+            amt = float(preset) if preset else 0.0
+        else:
+            try:
+                amt = float(raw)
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid_amount"}), 400
+    if amt < wallet.top_up_min_custom():
+        return jsonify({"error": "below_minimum",
+                        "min_usd": wallet.top_up_min_custom()}), 400
+    if amt > payment_links.MAX_AMOUNT_USD:
+        return jsonify({"error": "above_maximum"}), 400
+
+    # Load the subject record so we can reuse / persist its Stripe
+    # customer id. Read straight from users.json - there is no session.
+    from app import load_users  # type: ignore
+    data = load_users()
+    if subject_kind == "company":
+        subject = (data.get("companies") or {}).get(subject_key) or {}
+        cust_name = subject_key
+        cust_email = str(subject.get("billing_email") or "")
+    else:
+        subject = (data.get("users") or {}).get(subject_key) or {}
+        cust_name = (f"{subject.get('first_name', '')} "
+                     f"{subject.get('last_name', '')}").strip() or subject_key
+        cust_email = str(subject.get("email") or "")
+    if not subject:
+        return jsonify({"error": "account_not_found"}), 404
+
+    try:
+        cus_id = billing.ensure_customer(
+            subject_key, email=cust_email, name=cust_name,
+            existing_customer_id=str(
+                subject.get("stripe_customer_id") or ""))
+    except billing.BillingDisabled:
+        return jsonify({"error": "billing_not_configured"}), 503
+    except billing.BillingError:
+        traceback.print_exc()
+        return jsonify({"error": "payment_setup_failed"}), 502
+
+    if cus_id and cus_id != str(subject.get("stripe_customer_id") or ""):
+        _persist_subject_customer_id(subject_kind, subject_key, cus_id)
+
+    base = _dashboard_base_url()
+    tok = str(rec.get("token") or "")
+    try:
+        sess = billing.create_checkout_session(
+            customer_id=cus_id,
+            amount_usd=amt,
+            success_url=f"{base}/pay/{tok}/success",
+            cancel_url=f"{base}/pay/{tok}",
+            username=subject_key,
+            metadata={
+                "subject_kind": subject_kind,
+                "subject_key": subject_key,
+                # Attribution: which link produced this payment.
+                "payment_link_token": tok[:64],
+                "source": "admin_payment_link",
+                "description": "Wallet top-up",
+            },
+        )
+    except billing.BillingError:
+        traceback.print_exc()
+        return jsonify({"error": "payment_setup_failed"}), 502
+
+    # Bookkeeping only. A failure here must never block the payment.
+    payment_links.record_use(
+        tok, amount_usd=amt, stripe_ref=str(sess.get("session_id") or ""))
+    print(f"[billing] top-up link {tok[:8]}... -> checkout "
+          f"${amt:.2f} for {subject_kind}:{subject_key}")
+    return jsonify(sess)
+
+
+@billing_bp.route("/pay/<token>/success", methods=["GET"])
+def public_pay_success(token):
+    """Stripe returns here after a successful payment. The wallet is
+    credited by the webhook, not by this route."""
+    import payment_links  # type: ignore
+    rec = payment_links.get_link(token)
+    return render_template(
+        "pay_link.html", ok=False, paid=True,
+        headline="Thank you. Your payment went through.",
+        subline=("The funds are on their way to "
+                 f"{rec.get('display_name')}'s account."
+                 if rec and rec.get("display_name") else
+                 "The funds are on their way to the account."),
+        token="")
 
 
 # ---------------------------------------------------------------------------

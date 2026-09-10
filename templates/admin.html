@@ -4165,6 +4165,73 @@
                         </div>
                     </div>
 
+                    <!--
+                        Payment link (Jenna 2026-09-10, verbatim: 'add where you
+                        can click to generate a link for a user to click on to
+                        add money to their account. so if I create an account I
+                        dont have to ask them for their credit card they can do
+                        it themselves. I would just click to generate it or
+                        soething from their tab').
+
+                        Hidden in create mode (the user has no billing record
+                        yet) and shown in edit mode, same toggle as
+                        openUserBillingBtnInline above.
+                    -->
+                    <div id="payLinkPanel" style="display: none; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-dark); margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1.35rem; line-height: 1;">🔗</span>
+                            <div style="flex: 1; min-width: 220px;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Payment link</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">Generate a link they open to add their own funds. They don't need to be signed in, and their card details never come to you. Good for 30 days, reusable, and you can turn it off any time.</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="margin-bottom: 0.5rem;">
+                            <div class="form-group">
+                                <label>Suggested amount (optional)</label>
+                                <input type="text" id="payLinkAmount" placeholder="Leave blank and they choose" autocomplete="off">
+                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                                    Pre-fills the amount on their page. They can
+                                    still change it unless you lock it below.
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label>Options</label>
+                                <label class="checkbox-group" style="margin-top: 0.35rem;">
+                                    <input type="checkbox" id="payLinkLockAmount">
+                                    <span>Lock to this exact amount</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="payLinkSingleUse">
+                                    <span>Single use (dies after one payment)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-small btn-primary" id="payLinkGenBtn" onclick="generatePayLink()">Generate link</button>
+                            <button type="button" class="btn btn-small" id="payLinkEmailBtn" onclick="emailPayLink()">Email it to them</button>
+                        </div>
+
+                        <!-- Freshly minted link: URL + copy. -->
+                        <div id="payLinkResult" style="display: none; margin-top: 0.85rem; padding: 0.75rem 0.85rem; border: 1px solid var(--accent-cyan); border-radius: 8px; background: rgba(0,0,0,0.25);">
+                            <div style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Send them this link</div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="payLinkUrl" readonly onclick="this.select()" style="flex: 1; min-width: 240px; font-family: ui-monospace, monospace; font-size: 0.74rem;">
+                                <button type="button" class="btn btn-small btn-primary" id="payLinkCopyBtn" onclick="copyPayLink()">Copy</button>
+                            </div>
+                            <div id="payLinkMeta" style="color: var(--text-secondary); font-size: 0.68rem; margin-top: 0.45rem;"></div>
+                        </div>
+
+                        <div id="payLinkStatus" style="display: none; margin-top: 0.6rem; font-size: 0.72rem; line-height: 1.5;"></div>
+
+                        <!-- Links already out in the wild for this user. -->
+                        <div id="payLinkExisting" style="display: none; margin-top: 0.85rem;">
+                            <div style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Active links</div>
+                            <div id="payLinkExistingList"></div>
+                        </div>
+                    </div>
+
                     <!-- Company-shared wallet routing (Jenna 2026-09-09) -->
                     <div class="form-row">
                         <div class="form-group">
@@ -9929,6 +9996,11 @@
             if (_billingBtn) _billingBtn.style.display = 'none';
             const _billingBtnInline = document.getElementById('openUserBillingBtnInline');
             if (_billingBtnInline) _billingBtnInline.style.display = 'none';
+            // Same reason for the payment link: there is no account to
+            // fund until the user is saved (Jenna 2026-09-10).
+            const _payPanelAdd = document.getElementById('payLinkPanel');
+            if (_payPanelAdd) _payPanelAdd.style.display = 'none';
+            if (typeof _payLinkReset === 'function') _payLinkReset();
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
             const addCreditsWrap = document.getElementById('addCreditsInModalWrap');
@@ -10162,6 +10234,15 @@
                 _billingBtnInline.dataset.username = username;
             }
             document.getElementById('editUsername').value = username;
+            // Payment link panel (Jenna 2026-09-10). Reset first so one
+            // user's minted link never shows under the next user, then
+            // load whatever links are already out for this one.
+            const _payPanel = document.getElementById('payLinkPanel');
+            if (_payPanel) {
+                if (typeof _payLinkReset === 'function') _payLinkReset();
+                _payPanel.style.display = 'block';
+                if (typeof loadPayLinks === 'function') loadPayLinks(username);
+            }
             document.getElementById('newUsername').value = username;
             document.getElementById('newUsername').disabled = true;
             document.getElementById('newEmail').value = user.email || '';
@@ -13713,6 +13794,340 @@
         function _currentEditUsernameForApi() {
             var el = document.getElementById('editUsername');
             return el && el.value ? el.value.trim() : '';
+        }
+
+        // -------------------------------------------------------------
+        // Payment link (Jenna 2026-09-10). Mint a link from the user's
+        // tab so they add their own card instead of reading it out.
+        // -------------------------------------------------------------
+
+        function _payLinkStatus(msg, kind) {
+            var el = document.getElementById('payLinkStatus');
+            if (!el) return;
+            if (!msg) { el.style.display = 'none'; return; }
+            var color = kind === 'error' ? 'var(--accent-pink, #E682FF)'
+                      : kind === 'ok'    ? 'var(--accent-cyan)'
+                      : 'var(--text-secondary)';
+            el.style.color = color;
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        var PAY_LINK_ERRORS = {
+            billing_not_configured: 'Payments are not switched on for this ' +
+                'dashboard yet, so a link cannot be generated.',
+            user_not_found: 'Save this user first, then generate the link.',
+            user_has_no_email: 'This user has no email address on file. Add ' +
+                'one and save, or use Copy and send it yourself.',
+            invalid_amount: 'That amount is not a valid number.',
+            above_maximum: 'That amount is too large for a link.',
+            not_authorized: 'Only a super admin can generate payment links.',
+            link_subject_mismatch: 'That link belongs to a different user.',
+            could_not_send_email: 'The link was created but the email did ' +
+                'not go out. Use Copy and send it yourself.',
+            could_not_create_link: 'The link could not be created. Try again.'
+        };
+
+        function _payLinkErrText(data, fallback) {
+            var code = (data && data.error) || '';
+            if (code === 'below_minimum' && data && data.min_usd) {
+                return 'Minimum is $' + Number(data.min_usd).toFixed(2) + '.';
+            }
+            return PAY_LINK_ERRORS[code] || fallback;
+        }
+
+        function _payLinkBody() {
+            var body = {};
+            var raw = String(
+                (document.getElementById('payLinkAmount') || {}).value || ''
+            ).replace(/[$,\s]/g, '');
+            if (raw) {
+                var v = parseFloat(raw);
+                if (!isFinite(v) || v <= 0) return null;  // caller reports
+                body.amount_usd = v;
+                var lock = document.getElementById('payLinkLockAmount');
+                if (lock && lock.checked) body.lock_amount = true;
+            }
+            var single = document.getElementById('payLinkSingleUse');
+            if (single && single.checked) body.single_use = true;
+            return body;
+        }
+
+        function _payLinkShowResult(data) {
+            var box = document.getElementById('payLinkResult');
+            var urlEl = document.getElementById('payLinkUrl');
+            var meta = document.getElementById('payLinkMeta');
+            if (!box || !urlEl) return;
+            urlEl.value = data.url || '';
+            var bits = [];
+            if (data.amount_usd) {
+                bits.push('$' + Number(data.amount_usd).toFixed(2) +
+                          (data.amount_locked ? ' (locked)' : ' suggested'));
+            } else {
+                bits.push('They choose the amount');
+            }
+            if (data.expires_at) {
+                bits.push('good through ' + String(data.expires_at).slice(0, 10));
+            }
+            if (data.single_use) bits.push('single use');
+            if (meta) meta.textContent = bits.join(' \u00b7 ');
+            box.style.display = 'block';
+            // Warn only when it actually matters: the credit lands either
+            // way, but they cannot spend it until billing is switched on.
+            if (data.wallet_billing_on === false) {
+                _payLinkStatus('Heads up: wallet billing is off for this ' +
+                    'user, so they will not be able to spend the funds ' +
+                    'until you switch it on from the Billing tab. The ' +
+                    'payment itself will still go through.', 'info');
+            }
+        }
+
+        function generatePayLink() {
+            var uname = _currentEditUsernameForApi();
+            if (!uname) {
+                _payLinkStatus(PAY_LINK_ERRORS.user_not_found, 'error');
+                return;
+            }
+            var body = _payLinkBody();
+            if (body === null) {
+                _payLinkStatus('That amount is not a valid number. Leave it ' +
+                    'blank to let them choose.', 'error');
+                return;
+            }
+            var btn = document.getElementById('payLinkGenBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+            _payLinkStatus('');
+
+            fetch('/api/admin/user/' + encodeURIComponent(uname) +
+                  '/billing/payment-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+                .then(function (r) {
+                    return r.json().then(function (d) {
+                        return { ok: r.ok, d: d };
+                    });
+                })
+                .then(function (res) {
+                    if (res.ok && res.d && res.d.success) {
+                        _payLinkShowResult(res.d);
+                        loadPayLinks(uname);
+                    } else {
+                        _payLinkStatus(_payLinkErrText(res.d,
+                            'The link could not be created. Try again.'),
+                            'error');
+                    }
+                })
+                .catch(function () {
+                    _payLinkStatus('Could not reach the server. Check your ' +
+                        'connection and try again.', 'error');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Generate link';
+                    }
+                });
+        }
+
+        function emailPayLink() {
+            var uname = _currentEditUsernameForApi();
+            if (!uname) {
+                _payLinkStatus(PAY_LINK_ERRORS.user_not_found, 'error');
+                return;
+            }
+            var body = _payLinkBody();
+            if (body === null) {
+                _payLinkStatus('That amount is not a valid number. Leave it ' +
+                    'blank to let them choose.', 'error');
+                return;
+            }
+            // Reuse the link on screen when there is one, so Generate then
+            // Email sends the same URL instead of minting a second one.
+            var shown = document.getElementById('payLinkUrl');
+            var box = document.getElementById('payLinkResult');
+            if (shown && shown.value && box &&
+                    box.style.display !== 'none') {
+                var parts = shown.value.split('/pay/');
+                if (parts.length === 2 && parts[1]) body.token = parts[1];
+            }
+            var btn = document.getElementById('payLinkEmailBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+            _payLinkStatus('');
+
+            fetch('/api/admin/user/' + encodeURIComponent(uname) +
+                  '/billing/payment-link/email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+                .then(function (r) {
+                    return r.json().then(function (d) {
+                        return { ok: r.ok, d: d };
+                    });
+                })
+                .then(function (res) {
+                    if (res.ok && res.d && res.d.success) {
+                        _payLinkShowResult(res.d);
+                        _payLinkStatus('Sent to ' + (res.d.emailed_to || 'them') +
+                            '.', 'ok');
+                        loadPayLinks(uname);
+                    } else {
+                        _payLinkStatus(_payLinkErrText(res.d,
+                            'The email did not go out. Use Copy and send it ' +
+                            'yourself.'), 'error');
+                    }
+                })
+                .catch(function () {
+                    _payLinkStatus('Could not reach the server. Check your ' +
+                        'connection and try again.', 'error');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Email it to them';
+                    }
+                });
+        }
+
+        function copyPayLink() {
+            var el = document.getElementById('payLinkUrl');
+            var btn = document.getElementById('payLinkCopyBtn');
+            if (!el || !el.value) return;
+
+            function done() {
+                if (!btn) return;
+                btn.textContent = 'Copied';
+                setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+            }
+            function fallback() {
+                // execCommand path for non-HTTPS origins and older Safari,
+                // where navigator.clipboard is unavailable.
+                try {
+                    el.select();
+                    document.execCommand('copy');
+                    done();
+                } catch (e) {
+                    _payLinkStatus('Could not copy automatically. Select the ' +
+                        'link and copy it manually.', 'error');
+                }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(el.value)
+                    .then(done).catch(fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        function revokePayLink(token) {
+            if (!token) return;
+            if (!confirm('Turn off this payment link? Anyone who already ' +
+                         'has it will no longer be able to use it.')) {
+                return;
+            }
+            fetch('/api/admin/payment-link/' + encodeURIComponent(token) +
+                  '/revoke', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d && d.success) {
+                        _payLinkStatus('Link turned off.', 'ok');
+                        var shown = document.getElementById('payLinkUrl');
+                        if (shown && shown.value.indexOf(token) !== -1) {
+                            var box = document.getElementById('payLinkResult');
+                            if (box) box.style.display = 'none';
+                        }
+                        loadPayLinks(_currentEditUsernameForApi());
+                    } else {
+                        _payLinkStatus('Could not turn off that link.',
+                            'error');
+                    }
+                })
+                .catch(function () {
+                    _payLinkStatus('Could not reach the server.', 'error');
+                });
+        }
+
+        function loadPayLinks(uname) {
+            var wrap = document.getElementById('payLinkExisting');
+            var list = document.getElementById('payLinkExistingList');
+            if (!wrap || !list) return;
+            uname = uname || _currentEditUsernameForApi();
+            if (!uname) { wrap.style.display = 'none'; return; }
+
+            fetch('/api/admin/user/' + encodeURIComponent(uname) +
+                  '/billing/payment-links')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var links = (d && d.links) || [];
+                    if (!links.length) {
+                        wrap.style.display = 'none';
+                        list.innerHTML = '';
+                        return;
+                    }
+                    list.innerHTML = links.map(function (L) {
+                        var amt = L.amount_usd
+                            ? '$' + Number(L.amount_usd).toFixed(2) +
+                              (L.amount_locked ? ' locked' : '')
+                            : 'Open amount';
+                        var used = L.uses
+                            ? L.uses + ' payment' + (L.uses === 1 ? '' : 's') +
+                              ' \u00b7 $' +
+                              Number(L.total_paid_usd || 0).toFixed(2) +
+                              ' added'
+                            : 'Not used yet';
+                        var exp = L.expires_at
+                            ? 'through ' + String(L.expires_at).slice(0, 10)
+                            : '';
+                        return '' +
+                          '<div style="display:flex;gap:0.5rem;align-items:center;' +
+                          'flex-wrap:wrap;padding:0.45rem 0.6rem;border:1px solid ' +
+                          'var(--border-color);border-radius:6px;margin-bottom:0.35rem;">' +
+                            '<code style="flex:1;min-width:150px;font-size:0.68rem;' +
+                            'color:var(--text-secondary);word-break:break-all;">' +
+                              _payLinkEsc(String(L.token || '').slice(0, 12)) + '\u2026' +
+                            '</code>' +
+                            '<span style="font-size:0.68rem;color:var(--text-secondary);">' +
+                              _payLinkEsc(amt) + ' \u00b7 ' + _payLinkEsc(used) +
+                              (exp ? ' \u00b7 ' + _payLinkEsc(exp) : '') +
+                            '</span>' +
+                            '<button type="button" class="btn btn-small" ' +
+                            'onclick="revokePayLink(\'' +
+                              _payLinkEsc(String(L.token || '')) +
+                            '\')">Turn off</button>' +
+                          '</div>';
+                    }).join('');
+                    wrap.style.display = 'block';
+                })
+                .catch(function () {
+                    wrap.style.display = 'none';
+                });
+        }
+
+        function _payLinkEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function _payLinkReset() {
+            var box = document.getElementById('payLinkResult');
+            if (box) box.style.display = 'none';
+            var urlEl = document.getElementById('payLinkUrl');
+            if (urlEl) urlEl.value = '';
+            var amt = document.getElementById('payLinkAmount');
+            if (amt) amt.value = '';
+            var lock = document.getElementById('payLinkLockAmount');
+            if (lock) lock.checked = false;
+            var single = document.getElementById('payLinkSingleUse');
+            if (single) single.checked = false;
+            _payLinkStatus('');
+            var wrap = document.getElementById('payLinkExisting');
+            if (wrap) wrap.style.display = 'none';
+            var list = document.getElementById('payLinkExistingList');
+            if (list) list.innerHTML = '';
         }
 
         function _renderApiKeyPanel(user, opts) {
