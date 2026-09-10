@@ -22448,6 +22448,306 @@ https://www.instagram.com/p/..."></textarea>
             }
             #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { display: none; }
         }
+        /* v4 body: restyle Profile IQ widgets to the portrait-cover system */
+        #dashboardView.piq-v4,
+        #dashboardView.piq-v4 .dashboard-tab-content,
+        #dashboardView.piq-v4 .tab-content,
+        #dashboardView.piq-v4 .insights-container,
+        #dashboardView.piq-v4 .demo-main,
+        #dashboardView.piq-v4 .dashboard-empty-state {
+            background: #0C1618 !important;
+            color: #E9E8E1;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4,
+        body[data-theme="light"] #dashboardView.piq-v4 .dashboard-tab-content,
+        body[data-theme="light"] #dashboardView.piq-v4 .tab-content,
+        body[data-theme="light"] #dashboardView.piq-v4 .insights-container,
+        body[data-theme="light"] #dashboardView.piq-v4 .demo-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .dashboard-empty-state {
+            background: #E9E8E1 !important;
+            color: #0C1618;
+        }
+        #dashboardView.piq-v4 .dashboard-tab-content {
+            padding: 28px 32px 64px;
+        }
+        #dashboardView.piq-v4 .tab-content.active {
+            padding-bottom: 48px;
+        }
+        #dashboardView.piq-v4 .action-buttons-row {
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38;
+            padding: 8px 32px 10px;
+            margin: 0;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .action-buttons-row {
+            background: #E9E8E1;
+            border-bottom-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 .inline-tab-header h2,
+        #dashboardView.piq-v4 .inline-tab-header p {
+            color: #9AA09B !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #dashboardView.piq-v4 .dash-action-btn,
+        #dashboardView.piq-v4 .display-mode-toggle,
+        #dashboardView.piq-v4 .content-action-buttons .btn,
+        #dashboardView.piq-v4 #dashViewDeltasBtn {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
+            font-family: inherit;
+            box-shadow: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .dash-action-btn,
+        body[data-theme="light"] #dashboardView.piq-v4 .display-mode-toggle {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #5C6560 !important;
+        }
+        #dashboardView.piq-v4 .toolbar-row .tab-btn,
+        #dashboardView.piq-v4 #toolbarRow .tab-btn {
+            background: transparent !important;
+            border: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            border-radius: 0 !important;
+            color: #9AA09B !important;
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
+            padding: 8px 10px !important;
+            box-shadow: none !important;
+        }
+        #dashboardView.piq-v4 .toolbar-row .tab-btn.active,
+        #dashboardView.piq-v4 #toolbarRow .tab-btn.active {
+            color: #E9E8E1 !important;
+            border-bottom-color: #C7F23E !important;
+            background: transparent !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .toolbar-row .tab-btn.active {
+            color: #0C1618 !important;
+            border-bottom-color: #5E7E12 !important;
+        }
+        #dashboardView.piq-v4 .insight-card-v2,
+        #dashboardView.piq-v4 .demo-insight-card,
+        #dashboardView.piq-v4 .stat-card,
+        #dashboardView.piq-v4 .activation-card,
+        #dashboardView.piq-v4 .chart-card,
+        #dashboardView.piq-v4 .behavioral-card,
+        #dashboardView.piq-v4 .location-card,
+        #dashboardView.piq-v4 .interest-card,
+        #dashboardView.piq-v4 .marketing-card,
+        #dashboardView.piq-v4 .comp-card {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 12px !important;
+            color: #E9E8E1 !important;
+            box-shadow: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .insight-card-v2,
+        body[data-theme="light"] #dashboardView.piq-v4 .demo-insight-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .stat-card {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .insight-card-v2 h3,
+        #dashboardView.piq-v4 .insight-card-header h3,
+        #dashboardView.piq-v4 .demo-insight-card h4,
+        #dashboardView.piq-v4 .stat-label,
+        #dashboardView.piq-v4 .inline-tab-header h2 {
+            color: #E9E8E1 !important;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .insight-card-v2 h3,
+        body[data-theme="light"] #dashboardView.piq-v4 .insight-card-header h3 {
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .stat-value,
+        #dashboardView.piq-v4 .metric-value {
+            color: #E9E8E1 !important;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+        #dashboardView.piq-v4 .stat-label,
+        #dashboardView.piq-v4 .metric-label,
+        #dashboardView.piq-v4 .insight-col-header {
+            color: #7C878A !important;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 10px !important;
+            font-weight: 500;
+        }
+        #dashboardView.piq-v4 #audienceShareBoxes {
+            display: grid !important;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            flex-wrap: unset !important;
+        }
+        #dashboardView.piq-v4 .asb-box {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            height: auto !important;
+            min-height: 84px;
+            padding: 16px 14px 14px !important;
+            border-radius: 10px !important;
+            background: #1B2F35 !important;
+            border: 1px solid #3B3D38 !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            position: relative;
+            white-space: normal;
+            gap: 4px !important;
+        }
+        #dashboardView.piq-v4 .asb-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #C7F23E;
+        }
+        #dashboardView.piq-v4 .asb-box[data-channel="search"]::before { background: #3358FF; }
+        #dashboardView.piq-v4 .asb-box[data-channel="owned"]::before { background: #E682FF; }
+        #dashboardView.piq-v4 .asb-box[data-channel="retail"]::before { background: #B7B3D8; }
+        #dashboardView.piq-v4 .asb-box[data-channel="media"]::before { background: #5E7E12; }
+        #dashboardView.piq-v4 .asb-box .asb-label {
+            color: #7C878A !important;
+            font-size: 9.5px !important;
+            letter-spacing: 0.14em;
+            font-weight: 500 !important;
+        }
+        #dashboardView.piq-v4 .asb-box .asb-pct {
+            color: #E9E8E1 !important;
+            font-size: 24px !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.02em;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .asb-box {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .asb-box .asb-pct { color: #0C1618 !important; }
+        #dashboardView.piq-v4 .audience-snapshot {
+            gap: 12px;
+        }
+        #dashboardView.piq-v4 .snapshot-item {
+            background: #1B2F35 !important;
+            border: 1px solid #3B3D38;
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .snapshot-item {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 .audience-takeaways {
+            border-top-color: #3B3D38;
+        }
+        #dashboardView.piq-v4 .audience-takeaways li {
+            color: #E9E8E1;
+            border-bottom-color: rgba(233,232,225,0.06);
+        }
+        #dashboardView.piq-v4 .audience-takeaways li::before { color: #3358FF; }
+        #dashboardView.piq-v4 .audience-takeaways .takeaway-highlight,
+        #dashboardView.piq-v4 .audience-takeaways .takeaway-over {
+            color: #C7F23E !important;
+        }
+        #dashboardView.piq-v4 .audience-takeaways .takeaway-under {
+            color: #E682FF !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways li { color: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways .takeaway-highlight,
+        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways .takeaway-over {
+            color: #5E7E12 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways .takeaway-under {
+            color: #8E3FA8 !important;
+        }
+        #dashboardView.piq-v4 #behavioralProfileCard,
+        #dashboardView.piq-v4 #behavioralProfileCard p,
+        #dashboardView.piq-v4 #behavioralProfileCard li {
+            color: #E9E8E1 !important;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #behavioralProfileCard,
+        body[data-theme="light"] #dashboardView.piq-v4 #behavioralProfileCard p,
+        body[data-theme="light"] #dashboardView.piq-v4 #behavioralProfileCard li {
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 table,
+        #dashboardView.piq-v4 .data-table,
+        #dashboardView.piq-v4 .behavioral-table {
+            color: #E9E8E1;
+        }
+        #dashboardView.piq-v4 th {
+            color: #7C878A !important;
+            font-size: 9.5px !important;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-weight: 500 !important;
+            border-bottom: 1px solid #3B3D38 !important;
+        }
+        #dashboardView.piq-v4 td {
+            color: #E9E8E1 !important;
+            border-bottom: 1px solid rgba(233,232,225,0.06) !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 td { color: #0C1618 !important; }
+        #dashboardView.piq-v4 .module-btn,
+        #dashboardView.piq-v4 .deck-btn {
+            background: #1B2F35 !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+        }
+        #dashboardView.piq-v4 .dashboard-empty-state h2 {
+            color: #E9E8E1;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+        #dashboardView.piq-v4 .dashboard-empty-state p,
+        #dashboardView.piq-v4 .empty-state-hint {
+            color: #9AA09B;
+        }
+        #dashboardView.piq-v4 .profile-tabs-bar {
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38;
+        }
+        #dashboardView.piq-v4 .comp-analysis-tabs,
+        #dashboardView.piq-v4 .marketing-header,
+        #dashboardView.piq-v4 .behavioral-controls {
+            background: #0C1618 !important;
+            border-color: #3B3D38 !important;
+        }
+        #dashboardView.piq-v4 .comp-tab,
+        #dashboardView.piq-v4 .marketing-btn {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+        }
+        #dashboardView.piq-v4 .comp-tab.active {
+            color: #C7F23E !important;
+            border-color: rgba(199, 242, 62, 0.35) !important;
+        }
+        @media (max-width: 980px) {
+            #dashboardView.piq-v4 #audienceShareBoxes {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            #dashboardView.piq-v4 .dashboard-tab-content {
+                padding: 18px 16px 40px;
+            }
+        }
     </style>
 
         <!-- DASHBOARD VIEW -->
