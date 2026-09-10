@@ -22286,6 +22286,7 @@ https://www.instagram.com/p/..."></textarea>
             margin: 0 0 18px;
             text-transform: none !important;
             font-synthesis: none;
+            cursor: pointer;
         }
         #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName {
             font-size: clamp(26px, 3vw, 40px);
@@ -24472,6 +24473,20 @@ https://www.instagram.com/p/..."></textarea>
             letter-spacing: -0.01em !important;
             font-size: 12px !important;
             font-weight: 600 !important;
+        }
+        #dashboardView.piq-v4 #piqChangeProfileBtn,
+        #dashboardView.piq-v4 #piqEmptyBrowseBtn {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashHeroName {
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqBehJump {
+            order: 2;
+            border-bottom: 1px solid #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqBehJump {
+            border-bottom-color: #C9C6BA;
         }
     </style>
 
@@ -122577,11 +122592,7 @@ https://www.instagram.com/p/..."></textarea>
                 jump.id = 'piqBehJump';
                 jump.className = 'piq-jump';
             }
-            if (wrap) {
-                var heroRow = document.getElementById('profileAndToolbarRow');
-                if (heroRow && heroRow.parentNode === wrap) wrap.insertBefore(jump, heroRow);
-                else if (jump.parentNode !== wrap) wrap.appendChild(jump);
-            }
+            if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
             var opts = [];
             if (sel) {
                 Array.prototype.slice.call(sel.options).forEach(function(o) {
@@ -122759,20 +122770,15 @@ https://www.instagram.com/p/..."></textarea>
             if (wrap.parentNode !== view) {
                 view.insertBefore(wrap, bar);
             }
-            if (row.parentNode !== wrap) wrap.appendChild(row);
-            if (bar.parentNode !== wrap) wrap.appendChild(bar);
+            var jump = document.getElementById('piqBehJump');
             var heroRow = document.getElementById('profileAndToolbarRow');
             var slim = view.classList.contains('piq-has-profile') && (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
+            wrap.appendChild(row);
+            if (jump) wrap.appendChild(jump);
+            wrap.appendChild(bar);
             if (heroRow) {
-                if (slim) {
-                    if (heroRow.parentNode !== wrap) wrap.appendChild(heroRow);
-                } else if (heroRow.parentNode === wrap) {
-                    wrap.insertAdjacentElement('afterend', heroRow);
-                }
-            }
-            var jump = document.getElementById('piqBehJump');
-            if (jump && jump.parentNode === wrap && heroRow && heroRow.parentNode === wrap) {
-                wrap.insertBefore(jump, heroRow);
+                if (slim) wrap.appendChild(heroRow);
+                else if (heroRow.parentNode === wrap) wrap.insertAdjacentElement('afterend', heroRow);
             }
             return wrap;
         };
@@ -122848,6 +122854,14 @@ https://www.instagram.com/p/..."></textarea>
                 closeBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(false);
+                });
+            }
+            var heroName = document.getElementById('dashHeroName');
+            if (heroName && !heroName._piqLibBound) {
+                heroName._piqLibBound = true;
+                heroName.title = 'Change profile';
+                heroName.addEventListener('click', function() {
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
                 });
             }
             if (window._piqV4DressTabs) {
