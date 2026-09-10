@@ -3337,10 +3337,51 @@
                             <option value="super_admin">Super Admin</option>
                         </select>
                     </div>
+                    <!--
+                        2026-09-09 (Jenna, verbatim: 'this needs to be
+                        removed and instead it needs to default everyone
+                        to 0 and then have a button that says Billing
+                        where you can click to go straght to the billing
+                        tab'). The Credits input, Add-or-Deduct panel,
+                        Consulting Hours pool, and Log-or-Grant Hours
+                        panel that used to sit here are hidden. New
+                        users default to 0 credits (see app.py
+                        create_user). Wallet funding, unlimited access,
+                        and specified-dollar top-ups are managed
+                        exclusively from the Billing tab
+                        (/admin/billing?user=<username>). Enabling
+                        Chatbot Profile IQ (Prometheus) below auto-
+                        flips paying_customer=true so wallet routing
+                        turns on immediately - if the user has no funds,
+                        their first Prometheus click gets the 402
+                        top-up prompt.
+
+                        The DOM below is INTENTIONALLY PRESERVED but
+                        display:none'd - a large amount of downstream JS
+                        (editUser, showAddUserModal, saveUser payload,
+                        toggleUnlimited, loadUserModalRecurring, ...)
+                        reads / writes these element ids. Removing the
+                        elements would null-crash those paths. Hiding
+                        keeps the flow intact while making the UI
+                        invisible per Jenna's ask.
+                    -->
+                    <div class="form-group" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-input);">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="font-size: 1.35rem; line-height: 1;">💳</span>
+                            <div style="flex: 1; min-width: 220px;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Wallet is managed on the Billing tab</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">New users start at 0 credits. Set unlimited access, add a specified dollar amount, or configure the payment method from Billing. If Chatbot Profile IQ is enabled below, billing is turned on automatically and the user gets a top-up prompt the first time they run it without funds.</div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-primary" id="openUserBillingBtnInline" onclick="openUserBillingFromModal()" style="flex: 0 0 auto; display: none;">Open Billing →</button>
+                        </div>
+                    </div>
+
+                    <!-- Legacy credits + consulting-hours inputs, hidden 2026-09-09 (see comment above). -->
+                    <div id="legacyCreditsConsultingWrap" style="display: none;" aria-hidden="true">
                     <div class="form-group">
                         <label>Credits</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                            <input type="number" id="newCredits" value="5" min="-1" style="flex: 1; min-width: 120px;">
+                            <input type="number" id="newCredits" value="0" min="-1" style="flex: 1; min-width: 120px;">
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
                                 <input type="checkbox" id="unlimitedCredits" onchange="toggleUnlimited()">
                                 <span>Unlimited</span>
@@ -3354,40 +3395,26 @@
                             <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
                             <input type="number" id="creditsRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Set to -1 or check Unlimited for no limit. Check <strong>Recurring / month</strong> to auto-grant this many credits on the 1st of every month.</small>
                     </div>
                     <div id="addCreditsInModalWrap" class="form-group" style="display: none;">
                         <label>Add or deduct credits (with reason)</label>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                             <input type="number" id="modalAddCreditsAmount" min="1" value="10" style="width: 70px; padding: 0.4rem;">
-                            <input type="text" id="modalAddCreditsReason" placeholder="What for (e.g. THE BETTER SISTER)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                            <input type="text" id="modalAddCreditsReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits" onchange="_modalCreditsPerMonthChange()"> <span>Deduct (charge)</span></label>
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalCreditsPerMonth" onchange="_modalCreditsPerMonthChange()"> <span>Recurring / month</span></label>
                             <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Apply</button>
                         </div>
                         <div id="modalCreditsMonthsRow" style="display:none; margin-top: 0.4rem;">
-                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
+                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months?</label>
                             <input type="number" id="modalCreditsMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds to balance. Deduct removes from balance / pool. Check <strong>Recurring / month</strong> to auto-apply the same amount every month; combine <strong>Recurring + Deduct</strong> to schedule a monthly <em>charge</em>.</small>
                     </div>
-
-                    <!--
-                        Consulting Hours pool — mirrors the CREDITS block
-                        above. Storage is in minutes internally (matches
-                        _consulting_hour_state). The UI shows hours +
-                        minutes as two inputs so admins don't have to do
-                        mental math. Recurring / month schedules a monthly
-                        auto-grant through /api/admin/recurring-grants with
-                        kind='hours' (same mechanism as recurring credits).
-                    -->
                     <div class="form-group">
                         <label>Consulting Hours</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             <input type="number" id="newConsultingHours" value="0" min="0" style="width: 90px;" placeholder="hours">
-                            <span style="font-size:0.75rem; color:var(--text-secondary);">h</span>
                             <input type="number" id="newConsultingMinutes" value="0" min="0" max="59" style="width: 70px;" placeholder="min">
-                            <span style="font-size:0.75rem; color:var(--text-secondary);">m pool</span>
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
                                 <input type="checkbox" id="unlimitedConsultingHours" onchange="toggleUnlimitedHours()">
                                 <span>Unlimited</span>
@@ -3398,38 +3425,24 @@
                             </label>
                         </div>
                         <div id="hoursRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
-                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
                             <input type="number" id="hoursRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Total pool available to this user. Time logged from the Time Tracking tab draws down this balance. Check <strong>Recurring / month</strong> to auto-grant this many hours on the 1st of every month.</small>
                     </div>
-
-                    <!--
-                        In-modal "Log or grant hours" panel (parallel to
-                        Add-or-deduct credits). Only shown in edit mode
-                        (there's no user to log time against yet at create).
-                        Routes to /api/admin/time-tracking/log for worked-hours
-                        (draws from pool) or /api/admin/time-tracking/grant
-                        for grants (adds to pool).
-                    -->
                     <div id="addHoursInModalWrap" class="form-group" style="display: none;">
                         <label>Log or grant consulting hours</label>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                             <input type="number" id="modalAddHoursH" min="0" value="0" style="width: 60px; padding: 0.4rem;" placeholder="h">
-                            <span style="font-size:0.75rem; color:var(--text-secondary);">h</span>
                             <input type="number" id="modalAddHoursM" min="0" max="59" value="30" style="width: 60px; padding: 0.4rem;" placeholder="m">
-                            <span style="font-size:0.75rem; color:var(--text-secondary);">m</span>
-                            <input type="text" id="modalAddHoursReason" placeholder="What for (e.g. Q3 planning call)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                            <input type="text" id="modalAddHoursReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursLogWorked" onchange="_modalHoursPerMonthChange()"> <span>Log worked</span></label>
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursPerMonth" onchange="_modalHoursPerMonthChange()"> <span>Recurring / month</span></label>
                             <button type="button" class="btn btn-small btn-primary" onclick="addHoursFromModal()">Apply</button>
                         </div>
                         <div id="modalHoursMonthsRow" style="display:none; margin-top: 0.4rem;">
-                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
                             <input type="number" id="modalHoursMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds hours to the user's pool. <strong>Log worked</strong> deducts from the pool as billable time (recorded in the Time Tracking ledger). <strong>Recurring / month</strong> schedules an auto-grant on the 1st of every month.</small>
                     </div>
+                    </div><!-- /legacyCreditsConsultingWrap -->
 
                     <!--
                         Recurring credit + hour rules — lists this user's
@@ -9587,6 +9600,8 @@
             // saves the user first, then re-opens to configure billing.
             const _billingBtn = document.getElementById('openUserBillingBtn');
             if (_billingBtn) _billingBtn.style.display = 'none';
+            const _billingBtnInline = document.getElementById('openUserBillingBtnInline');
+            if (_billingBtnInline) _billingBtnInline.style.display = 'none';
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
             const addCreditsWrap = document.getElementById('addCreditsInModalWrap');
@@ -9622,7 +9637,10 @@
             document.getElementById('unlimitedAccess').checked = true;
             document.getElementById('accessExpires').disabled = true;
             document.getElementById('newRole').value = 'user';
-            document.getElementById('newCredits').value = '5';
+            // 2026-09-09 (Jenna): new users default to 0 credits. Wallet
+            // funding is managed exclusively on the Billing tab. The
+            // input itself is hidden (see legacyCreditsConsultingWrap).
+            document.getElementById('newCredits').value = '0';
             document.getElementById('unlimitedCredits').checked = false;
             const _openRecur = document.getElementById('creditsRecurringMonthly');
             if (_openRecur) { _openRecur.checked = false; _openRecur.disabled = false; }
@@ -9795,6 +9813,14 @@
             if (_billingBtn) {
                 _billingBtn.style.display = 'inline-block';
                 _billingBtn.dataset.username = username;
+            }
+            // Inline "Open Billing" button that replaced the Credits +
+            // Consulting Hours blocks (Jenna 2026-09-09). Same behavior
+            // as the footer button, just more visible in-context.
+            const _billingBtnInline = document.getElementById('openUserBillingBtnInline');
+            if (_billingBtnInline) {
+                _billingBtnInline.style.display = 'inline-block';
+                _billingBtnInline.dataset.username = username;
             }
             document.getElementById('editUsername').value = username;
             document.getElementById('newUsername').value = username;

@@ -5114,7 +5114,13 @@ def create_user():
             'company_spend_scope': _sanitize_spend_scope(
                 req_data.get('company_spend_scope')),
             'role': role,
-            'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
+            # 2026-09-09 (Jenna, verbatim: 'default everyone to 0'). New
+            # users start at 0 credits. Wallet funding, unlimited access,
+            # and specified-dollar top-ups are managed exclusively from
+            # the Billing tab (/admin/billing?user=<username>). If the
+            # requesting admin explicitly passes 'credits' the value is
+            # honored; otherwise the company default (if any) wins, then 0.
+            'credits': req_data.get('credits', cd.get('credits', 0) if cd else 0),
             'credits_used': 0,
             # Consulting-hour pool (minutes; -1 = unlimited). Mirrors credits.
             # Company defaults may seed a starting pool for new hires.
@@ -5184,6 +5190,23 @@ def create_user():
                 else (list(cd.get('allowed_lenses')) if cd and isinstance(cd.get('allowed_lenses'), list) else None)
             ),
             'has_chatbot_profile_iq_access': req_data.get('has_chatbot_profile_iq_access', cd.get('has_chatbot_profile_iq_access', False) if cd else False),
+            # 2026-09-09 (Jenna, verbatim: 'if you turn prometheus on it
+            # should AUTOMTICALLY turn billing on for that person'). When
+            # Chatbot Profile IQ (Prometheus) is enabled on create, the
+            # user is auto-flipped to paying_customer=True so wallet
+            # routing turns on. If the user has no funds their first
+            # Prometheus click gets the 402 top-up prompt; the super
+            # admin can also pre-configure unlimited access or a fixed
+            # dollar top-up via the Billing tab. If the admin explicitly
+            # passed paying_customer in req_data, that value wins.
+            'paying_customer': bool(
+                req_data.get(
+                    'paying_customer',
+                    req_data.get(
+                        'has_chatbot_profile_iq_access',
+                        (cd.get('has_chatbot_profile_iq_access', False) if cd else False))
+                )
+            ),
             # Prometheus tier (2026-08-26): 'full' (analysis and
             # everything else) unless the creating super_admin picked
             # 'pulls_only'. pay_per_use_enabled starts False; only the
@@ -5440,7 +5463,19 @@ def update_user(username):
                 # empty list or non-list stores None -> defaults apply.
                 user['allowed_lenses'] = None
         if 'has_chatbot_profile_iq_access' in req_data:
-            user['has_chatbot_profile_iq_access'] = bool(req_data['has_chatbot_profile_iq_access'])
+            _chatbot_on = bool(req_data['has_chatbot_profile_iq_access'])
+            user['has_chatbot_profile_iq_access'] = _chatbot_on
+            # 2026-09-09 (Jenna, verbatim: 'if you turn prometheus on it
+            # should AUTOMTICALLY turn billing on for that person').
+            # Flipping Chatbot Profile IQ (Prometheus) ON forces
+            # paying_customer=True so wallet routing engages on the next
+            # pull; if they have no funds, the 402 top-up prompt fires.
+            # Turning Prometheus OFF does NOT auto-flip paying_customer
+            # to False - the admin might still want the user billed for
+            # other features. paying_customer stays admin-controlled via
+            # the Billing tab in that direction.
+            if _chatbot_on:
+                user['paying_customer'] = True
         if 'prometheus_access' in req_data:
             # Prometheus tier (2026-08-26): 'pulls_only' (Profile IQ /
             # Subscriber IQ builds only) or 'full' (analysis and
