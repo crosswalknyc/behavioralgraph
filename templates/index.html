@@ -18549,7 +18549,11 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
          external CSS/JS file) so it paints on the very first tick.
          ============================================================ -->
     <style>
-        /* Inter 18pt for the boot overlay only. Rest of the dashboard is unchanged. */
+        /* Inter 18pt for boot overlay and Profile IQ v4. */
+        @font-face { font-family: 'Inter 18pt'; font-weight: 300; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Light.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
             src: url("{{ url_for('static', filename='fonts/Inter_18pt-Medium.ttf') }}") format('truetype'); }
         @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
@@ -22917,6 +22921,271 @@ https://www.instagram.com/p/..."></textarea>
             max-height: none !important;
             flex: 0 0 auto !important;
         }
+        /* v4 Insights body: match the locked portrait-cover rendering. */
+        #dashboardView.piq-v4.piq-has-profile .action-buttons-row {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #inlineTabHeader {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #toolbarCollapseWrapper {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #contentActionButtons,
+        #dashboardView.piq-v4.piq-has-profile .dash-dropdown,
+        #dashboardView.piq-v4.piq-has-profile #hoverToggle,
+        #dashboardView.piq-v4.piq-has-profile #dashDisplayToggle {
+            display: inline-flex !important;
+            align-items: center;
+        }
+        #dashboardView.piq-v4.piq-has-profile #toolbarContent > .dash-dropdown,
+        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #hoverToggle,
+        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #dashDisplayToggle {
+            order: 10;
+            margin-left: 8px;
+        }
+        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #piqChangeProfileBtn {
+            order: 11;
+        }
+        #dashboardView.piq-v4 #tab-insights .insights-summary-grid > div[style*="grid-template-columns"] {
+            display: grid !important;
+            grid-template-columns: 1.2fr 1fr !important;
+            gap: 44px !important;
+            align-items: start !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .insights-summary-grid > div[style*="grid-template-columns"] > div:first-child {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 32px !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #tucCard,
+        #dashboardView.piq-v4 #tab-insights .insight-card-v2 {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .insight-card-header,
+        #dashboardView.piq-v4 #tab-insights .drag-handle,
+        #dashboardView.piq-v4 #tab-insights .module-btn,
+        #dashboardView.piq-v4 #tab-insights .deck-btn {
+            display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #audienceTakeaways {
+            display: none !important;
+        }
+        #dashboardView.piq-v4 .piq-section-head {
+            margin: 0 0 14px;
+        }
+        #dashboardView.piq-v4 .piq-eyebrow {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: #7C878A;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        #dashboardView.piq-v4 .piq-eyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+        }
+        #dashboardView.piq-v4 .piq-eyebrow .num {
+            color: #7C878A;
+            margin-right: 4px;
+        }
+        #dashboardView.piq-v4 .piq-section-head h2 {
+            font-size: 22px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em !important;
+            color: #E9E8E1 !important;
+            margin: 0 0 18px !important;
+            text-transform: none !important;
+            font-family: inherit !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-section-head h2 { color: #0C1618 !important; }
+        #dashboardView.piq-v4 .asb-box .asb-desc {
+            display: block;
+            font-size: 10px;
+            color: #9AA09B;
+            font-weight: 500;
+            line-height: 1.35;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        #dashboardView.piq-v4 #tab-insights .audience-snapshot {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .snapshot-item,
+        #dashboardView.piq-v4 .piq-data-row {
+            display: grid !important;
+            grid-template-columns: 90px 1fr 70px 70px 70px !important;
+            gap: 12px !important;
+            align-items: center !important;
+            background: transparent !important;
+            border: 0 !important;
+            border-bottom: 1px solid rgba(233,232,225,0.06) !important;
+            border-radius: 0 !important;
+            padding: 9px 0 !important;
+            min-width: 0 !important;
+        }
+        #dashboardView.piq-v4 .piq-data-row.head {
+            padding-bottom: 7px !important;
+            color: #7C878A !important;
+            font-size: 9.5px !important;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-weight: 500 !important;
+            border-bottom-color: #3B3D38 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .snapshot-label,
+        #dashboardView.piq-v4 .piq-data-row .key {
+            color: #9AA09B !important;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 10px !important;
+            font-weight: 500 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .snapshot-value,
+        #dashboardView.piq-v4 .piq-data-row .name {
+            color: #E9E8E1 !important;
+            font-size: 12.5px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.005em;
+        }
+        #dashboardView.piq-v4 #tab-insights .snapshot-subtext,
+        #dashboardView.piq-v4 .piq-data-row .pct,
+        #dashboardView.piq-v4 .piq-data-row .gp {
+            text-align: right;
+            color: #E9E8E1 !important;
+            font-size: 12.5px !important;
+            font-weight: 600 !important;
+        }
+        #dashboardView.piq-v4 .piq-data-row .gp { color: #9AA09B !important; font-weight: 500 !important; }
+        #dashboardView.piq-v4 #tab-insights .snapshot-index,
+        #dashboardView.piq-v4 .piq-data-row .idx {
+            text-align: right;
+            font-weight: 800 !important;
+            font-size: 12.5px !important;
+            margin-top: 0 !important;
+            color: #C7F23E !important;
+        }
+        #dashboardView.piq-v4 .piq-data-row .idx.par { color: #9AA09B !important; }
+        #dashboardView.piq-v4 .piq-data-row .idx.under { color: #E682FF !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .snapshot-value,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .name,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .pct {
+            color: #0C1618 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .idx.over { color: #5E7E12 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .idx.under { color: #8E3FA8 !important; }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 12px !important;
+            padding: 22px !important;
+            position: relative;
+            overflow: hidden;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, #3358FF 0%, #E682FF 100%);
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-editorial .lead {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+            line-height: 1.35;
+            margin: 0 0 14px;
+            padding: 0 0 14px 8px;
+            border-bottom: 1px solid #3B3D38;
+            color: #E9E8E1;
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-editorial .lead .glow { color: #E682FF; }
+        #dashboardView.piq-v4 #tab-insights .piq-editorial p {
+            font-size: 12.5px !important;
+            line-height: 1.65 !important;
+            color: #E9E8E1 !important;
+            margin: 0 0 8px 8px !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-editorial b,
+        #dashboardView.piq-v4 #tab-insights .piq-editorial strong {
+            color: #C7F23E !important;
+            font-weight: 700 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard ul {
+            list-style: none !important;
+            margin: 0 !important;
+            padding: 0 0 0 8px !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li {
+            font-size: 12.5px !important;
+            line-height: 1.65 !important;
+            color: #E9E8E1 !important;
+            margin: 0 0 8px !important;
+            padding: 0 !important;
+            border: 0 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li:first-child {
+            font-size: 18px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.015em;
+            line-height: 1.35 !important;
+            margin-bottom: 14px !important;
+            padding-bottom: 14px !important;
+            border-bottom: 1px solid #3B3D38 !important;
+            color: #E682FF !important;
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-callout {
+            background: #1B2F35;
+            border-left: 3px solid #3358FF;
+            padding: 12px 14px;
+            border-radius: 4px 8px 8px 4px;
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: #E9E8E1;
+            margin-top: 16px;
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-callout.orchid { border-left-color: #E682FF; }
+        #dashboardView.piq-v4 #tab-insights .piq-callout .lbl {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: #7C878A;
+            font-weight: 500;
+            margin-bottom: 5px;
+            display: block;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights #behavioralProfileCard,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-callout {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-editorial .lead,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-editorial p,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li {
+            color: #0C1618 !important;
+        }
+        @media (max-width: 1100px) {
+            #dashboardView.piq-v4 #tab-insights .insights-summary-grid > div[style*="grid-template-columns"] {
+                grid-template-columns: 1fr !important;
+                gap: 28px !important;
+            }
+        }
     </style>
 
         <!-- DASHBOARD VIEW -->
@@ -23993,11 +24262,11 @@ https://www.instagram.com/p/..."></textarea>
                                             </h3>
                                         </div>
                                         <div id="audienceShareBoxes" style="display: none; flex-wrap: nowrap; gap: 0.5rem;">
-                                            <div class="asb-box has-tooltip" data-channel="social" data-tooltip="Refers to social media digital touchpoints (includes YouTube)"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="search" data-tooltip="Refers to touchpoints within search engines (includes AI search)"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="owned"  data-tooltip="Refers to digital touchpoints to the domain(s) owned by the profile"><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="retail" data-tooltip="Refers to digital touchpoints that correspond to transactional URLs that contain the profile name/brand anywhere within"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="media"  data-tooltip="Refers to digital touchpoints where the profile name can be read, watched, played, etc"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span></div>
+                                            <div class="asb-box has-tooltip" data-channel="social" data-tooltip="Refers to social media digital touchpoints (includes YouTube)"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span><span class="asb-desc">TikTok, IG, Snap, YouTube</span></div>
+                                            <div class="asb-box has-tooltip" data-channel="search" data-tooltip="Refers to touchpoints within search engines (includes AI search)"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span><span class="asb-desc">Google + YouTube search</span></div>
+                                            <div class="asb-box has-tooltip" data-channel="owned"  data-tooltip="Refers to digital touchpoints to the domain(s) owned by the profile"><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span><span class="asb-desc">Subject-owned domains</span></div>
+                                            <div class="asb-box has-tooltip" data-channel="retail" data-tooltip="Refers to digital touchpoints that correspond to transactional URLs that contain the profile name/brand anywhere within"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span><span class="asb-desc">Transactional touches</span></div>
+                                            <div class="asb-box has-tooltip" data-channel="media"  data-tooltip="Refers to digital touchpoints where the profile name can be read, watched, played, etc"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span><span class="asb-desc">Read + watch + listen</span></div>
                                         </div>
                                     </div>
 
@@ -120225,7 +120494,14 @@ https://www.instagram.com/p/..."></textarea>
             var pretty = window._piqV4PrettyName(raw);
             if (!pretty) return;
             var nameEl = document.getElementById('dashHeroName');
-            if (nameEl) nameEl.textContent = pretty + '.';
+            if (nameEl) {
+                var bits = pretty.split(/\s+/).filter(Boolean);
+                if (bits.length >= 2) {
+                    nameEl.innerHTML = bits[0].replace(/</g, '') + '<br>' + bits.slice(1).join(' ').replace(/</g, '') + '.';
+                } else {
+                    nameEl.textContent = pretty + '.';
+                }
+            }
             var wrap = document.querySelector('#dashboardView .dash-profile-image-wrap');
             var fb = document.getElementById('piqPortraitFallback');
             var parts = pretty.split(/\s+/).filter(Boolean);
@@ -120343,10 +120619,135 @@ https://www.instagram.com/p/..."></textarea>
                 else if (under35 != null && under35 <= 30) lead.push('older-leaning');
                 if (female != null && female >= 55) lead.push('female-heavy');
                 else if (female != null && female <= 45) lead.push('male-heavy');
-                if (lead.length) {
-                    line.innerHTML = '<b>Leans ' + lead.join(' and ') + '.</b>';
-                } else {
-                    line.textContent = '';
+                var bold = lead.length ? ('Leans ' + lead.join(' and ') + '.') : '';
+                var rest = '';
+                if (under35 != null && female != null) {
+                    if (under35 >= 50 && female >= 55) rest = 'Younger and more female than the category average.';
+                    else if (under35 >= 50) rest = 'Younger than the category average.';
+                    else if (female >= 55) rest = 'More female than the category average.';
+                }
+                if (bold && rest) line.innerHTML = '<b>' + bold + '</b> ' + rest;
+                else if (bold) line.innerHTML = '<b>' + bold + '</b>';
+                else line.textContent = rest;
+            }
+            if (window._piqV4DressInsights) window._piqV4DressInsights();
+        };
+        window._piqV4DressInsights = function() {
+            var view = document.getElementById('dashboardView');
+            if (!view || !view.classList.contains('piq-has-profile')) return;
+            var bar = document.getElementById('toolbarContent');
+            function park(el) {
+                if (!el || !bar || el.parentNode === bar) return;
+                bar.appendChild(el);
+            }
+            var exp = document.querySelector('#contentActionButtons .dash-dropdown') || document.querySelector('.action-buttons-row .dash-dropdown');
+            park(exp);
+            park(document.getElementById('hoverToggle'));
+            park(document.getElementById('dashDisplayToggle'));
+            function ensureHead(host, id, eyebrow, headline, beforeEl) {
+                if (!host || host.querySelector('#' + id)) return host.querySelector('#' + id);
+                var wrap = document.createElement('div');
+                wrap.id = id;
+                wrap.className = 'piq-section-head';
+                wrap.innerHTML = '<div class="piq-eyebrow"><span class="num">' + eyebrow + '</span></div><h2>' + headline + '</h2>';
+                host.insertBefore(wrap, beforeEl || host.firstChild);
+                return wrap;
+            }
+            var tuc = document.getElementById('tucCard');
+            var boxes = document.getElementById('audienceShareBoxes');
+            if (tuc && boxes) {
+                ensureHead(tuc, 'piqTucHead', '02 Total Universe Composition', 'Leans toward the strongest digital channel.', boxes);
+                var chans = [];
+                boxes.querySelectorAll('.asb-box').forEach(function(box) {
+                    var lbl = ((box.querySelector('.asb-label') || {}).textContent || '').trim().toLowerCase();
+                    var raw = ((box.querySelector('.asb-pct') || {}).textContent || '').replace(/[^0-9.]/g, '');
+                    var n = parseFloat(raw);
+                    if (lbl && isFinite(n)) chans.push({ lbl: lbl, n: n });
+                });
+                chans.sort(function(a, b) { return b.n - a.n; });
+                var h2 = document.querySelector('#piqTucHead h2');
+                if (h2 && chans.length) {
+                    var top = chans[0].lbl;
+                    var low = chans[chans.length - 1].lbl;
+                    var map = {
+                        social: 'social-first',
+                        search: 'search-first',
+                        media: 'media-first',
+                        retail: 'retail-first',
+                        owned: 'owned-first'
+                    };
+                    var lowMap = {
+                        social: 'social exposure minor',
+                        search: 'search exposure minor',
+                        media: 'media exposure minor',
+                        retail: 'retail exposure minor',
+                        owned: 'owned exposure minor'
+                    };
+                    h2.textContent = 'Leans ' + (map[top] || (top + '-first')) + ', ' + (lowMap[low] || (low + ' secondary')) + '.';
+                }
+            }
+            var snap = document.getElementById('audienceSnapshot');
+            var snapCard = snap ? snap.closest('.insight-card-v2') : null;
+            if (snapCard && snap) {
+                ensureHead(snapCard, 'piqSnapHead', '03 Audience Snapshot', 'Dominant characteristic per category.', snap);
+                if (!snap.querySelector('.piq-data-row') && snap.querySelector('.snapshot-item')) {
+                    var catMap = {
+                        'dominant gender': 'Gender',
+                        'largest age group': 'Age',
+                        'top indexing ethnicity': 'Ethnicity',
+                        'top ethnicity': 'Ethnicity',
+                        'top income': 'Income'
+                    };
+                    var rows = ['<div class="piq-data-row head"><span>Category</span><span>Segment</span><span>Profile</span><span>Gen Pop</span><span>Index</span></div>'];
+                    snap.querySelectorAll('.snapshot-item').forEach(function(item) {
+                        var lab = ((item.querySelector('.snapshot-label') || {}).textContent || '').trim();
+                        var name = ((item.querySelector('.snapshot-value') || {}).textContent || '').trim();
+                        var pctTxt = ((item.querySelector('.snapshot-subtext') || {}).textContent || '').trim();
+                        var idxTxt = ((item.querySelector('.snapshot-index') || {}).textContent || '').replace(/[^0-9.]/g, '');
+                        var pct = parseFloat(String(pctTxt).replace(/[^0-9.]/g, ''));
+                        var idx = parseFloat(idxTxt);
+                        var gp = (isFinite(pct) && isFinite(idx) && idx > 0) ? (pct / idx) * 100 : null;
+                        function oneDec(n) {
+                            if (n == null || !isFinite(n)) return '-';
+                            var v = Math.round(n * 10) / 10;
+                            return (v % 1 === 0 ? String(v) : v.toFixed(1)) + '%';
+                        }
+                        var cls = 'par';
+                        if (isFinite(idx) && idx >= 115) cls = 'over';
+                        else if (isFinite(idx) && idx <= 90) cls = 'under';
+                        var key = catMap[lab.toLowerCase()] || lab.replace(/^Top\s+/i, '').replace(/^Dominant\s+/i, '').replace(/^Largest\s+/i, '');
+                        rows.push(
+                            '<div class="piq-data-row">' +
+                            '<span class="key">' + key.replace(/</g, '') + '</span>' +
+                            '<span class="name">' + name.replace(/</g, '') + '</span>' +
+                            '<span class="pct">' + oneDec(pct) + '</span>' +
+                            '<span class="gp">' + oneDec(gp) + '</span>' +
+                            '<span class="idx ' + cls + '">' + (isFinite(idx) ? String(Math.round(idx)) : '-') + '</span>' +
+                            '</div>'
+                        );
+                    });
+                    if (rows.length > 1) snap.innerHTML = rows.join('');
+                }
+            }
+            var bpCard = document.getElementById('behavioralProfileCard');
+            var right = bpCard ? bpCard.closest('.insight-card-v2') : null;
+            if (right && !right.querySelector('#piqBehHead')) {
+                ensureHead(right, 'piqBehHead', '04 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
+            }
+            var takes = document.getElementById('audienceTakeaways');
+            if (right && takes && !right.querySelector('.piq-callout')) {
+                var lis = takes.querySelectorAll('li');
+                if (lis.length) {
+                    var c1 = document.createElement('div');
+                    c1.className = 'piq-callout';
+                    c1.innerHTML = '<span class="lbl">One read</span>' + (lis[0].textContent || '').replace(/</g, '');
+                    right.appendChild(c1);
+                    if (lis[1]) {
+                        var c2 = document.createElement('div');
+                        c2.className = 'piq-callout orchid';
+                        c2.innerHTML = '<span class="lbl">Sponsor fit</span>' + (lis[1].textContent || '').replace(/</g, '');
+                        right.appendChild(c2);
+                    }
                 }
             }
         };
@@ -124272,6 +124673,9 @@ https://www.instagram.com/p/..."></textarea>
                 }
             } catch (err) {
                 console.warn('[insights] multi-cohort render failed', err);
+            }
+            if (typeof window._piqV4DressInsights === 'function') {
+                try { window._piqV4DressInsights(); } catch (_e) {}
             }
         }
 
@@ -131596,6 +132000,9 @@ https://www.instagram.com/p/..."></textarea>
                             ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.9rem;">${b}</li>`).join('')}
                         </ul>
                     `;
+                    if (typeof window._piqV4DressInsights === 'function') {
+                        try { window._piqV4DressInsights(); } catch (_e) {}
+                    }
                 } else if (result.error) {
                     behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">AI insights unavailable - ${result.error}</div>`;
                 } else {
