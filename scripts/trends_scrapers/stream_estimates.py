@@ -4624,6 +4624,417 @@ def _apply_continuity_guard(researched: dict[str, dict],
 
 
 # -------------------------------------------------------------------------
+# Organic day walk for carried-forward items (2026-09-09).
+#
+# The daily run only fresh-researches items on the current charts (per-
+# kind caps + the intra-day already-covered gate); everything else in
+# the snapshot carries forward from the prior day via
+# `researched = dict(prior_items)`. Before this pass, carried-forward
+# items kept the previous day's integer VERBATIM, so their day-over-day
+# delta read exactly 0% - on deep lists that froze most rows (Jenna,
+# standing rule: "ensure each thing has different numbers per day").
+#
+# This pass renders a day-specific value for every carried-forward item
+# using the SAME validated per-item rhythm composition the historical
+# window uses (`apply_daily_variation_backfill._organic_factor`,
+# formula v3.1: reasoned weekly shape with per-item phase + amplitude
+# personality, trend drift, volatility-scaled daily noise; hash-
+# personality fallback when the item has no reasoned rhythm profile):
+#
+#     new = prev_day_value x factor(item, target) / factor(item, prev)
+#
+# Consecutive-day ratios telescope, so a multi-day run of carried-
+# forward days walks the item's own curve anchored at its last fresh-
+# researched level instead of compounding noise - and no equation is
+# recoverable corpus-wide because every item carries its own phase,
+# amplitude, and noise seeds. Fresh-researched items are never touched
+# (their day-specific values come from research + the continuity
+# guard). Deterministic per (item, date): re-running a day reproduces
+# the same values, and a second pass in the same run is a no-op
+# because the value no longer equals the previous day's.
+#
+# The day-over-day ratio is kept well inside the continuity guard band
+# (0.4x .. 2.5x) so tomorrow's fresh research never sees an artifact
+# jump, and every integer passes `_ensure_non_zero_last_digit`.
+# -------------------------------------------------------------------------
+_S3_RHYTHM_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
+
+# Clamp band for the carried-forward day-over-day ratio. Non-event
+# consecutive-day organic ratios land ~0.75-1.35; the clamp only
+# catches profile-event edges and stays far inside the continuity
+# guard band so downstream never flags the move.
+_CARRY_RATIO_MIN = 0.62
+_CARRY_RATIO_MAX = 1.52
+
+_rhythm_profiles_cache: Optional[dict] = None
+
+
+def _load_rhythm_profiles() -> dict[str, dict]:
+    """Per-item rhythm profiles keyed like the items dict
+    (kind:normtitle). Cached per process; missing file degrades to {}
+    (every item then uses its hash-personality fallback)."""
+    global _rhythm_profiles_cache
+    if _rhythm_profiles_cache is not None:
+        return _rhythm_profiles_cache
+    try:
+        obj = _s3().get_object(Bucket=_S3_BUCKET, Key=_S3_RHYTHM_PROFILES)
+        snap = json.loads(obj['Body'].read().decode('utf-8'))
+        items = snap.get('items') or {}
+        _rhythm_profiles_cache = {k: v for k, v in items.items()
+                                   if isinstance(v, dict)}
+    except Exception:
+        logger.info("stream_estimates: rhythm profiles unavailable; "
+                     "carried-forward walk uses hash personalities")
+        _rhythm_profiles_cache = {}
+    return _rhythm_profiles_cache
+
+
+def _rescale_estimate_blocks(it: dict, old_mid: int, new_mid: int,
+                              key: str, salt: str) -> None:
+    """Move an item's aggregate to `new_mid` and rescale bands +
+    per-platform blocks in lockstep (band order preserved, every
+    integer ends 1-9). Same scaling rules as the continuity guard."""
+    scale = new_mid / old_mid if old_mid else 1.0
+    it['us_estimate'] = new_mid
+    lo = _continuity_scaled(it.get('us_estimate_low'), scale, key,
+                             f'{salt}|low')
+    hi = _continuity_scaled(it.get('us_estimate_high'), scale, key,
+                             f'{salt}|high')
+    if lo is not None and lo > new_mid:
+        lo = new_mid
+    if hi is not None and hi < new_mid:
+        hi = new_mid
+    it['us_estimate_low'] = lo if lo is not None else new_mid
+    it['us_estimate_high'] = hi if hi is not None else new_mid
+    by_plat = it.get('by_platform') or {}
+    if isinstance(by_plat, dict):
+        for pkey, pblock in by_plat.items():
+            if not isinstance(pblock, dict):
+                continue
+            pm = _continuity_scaled(pblock.get('us_estimate'), scale,
+                                     key, f'{salt}|plat|{pkey}')
+            pl = _continuity_scaled(pblock.get('us_estimate_low'), scale,
+                                     key, f'{salt}|plat|{pkey}|low')
+            ph = _continuity_scaled(pblock.get('us_estimate_high'), scale,
+                                     key, f'{salt}|plat|{pkey}|high')
+            if pl is not None and pm is not None and pl > pm:
+                pl = pm
+            if ph is not None and pm is not None and ph < pm:
+                ph = pm
+            if pm is not None:
+                pblock['us_estimate'] = pm
+            if pl is not None:
+                pblock['us_estimate_low'] = pl
+            if ph is not None:
+                pblock['us_estimate_high'] = ph
+
+
+def _apply_inherited_daily_variation(researched: dict[str, dict],
+                                      fresh_keys: set[str],
+                                      prev_items: dict[str, dict],
+                                      target_date_iso: str,
+                                      prev_date_iso: Optional[str] = None,
+                                      ) -> int:
+    """Walk every carried-forward item to its day-specific value.
+
+    Only items that (a) were NOT fresh-researched this run and (b)
+    would otherwise repeat the previous series day's integer verbatim
+    are touched. `prev_items` / `prev_date_iso` describe the previous
+    SERIES day (usually target - 1; target - 2 when yesterday's
+    snapshot is missing) - the same baseline the day-over-day trend
+    attach compares against. Mutates `researched` in place; returns
+    the count of items walked."""
+    try:
+        tgt = date.fromisoformat(target_date_iso)
+    except (TypeError, ValueError):
+        return 0
+    try:
+        prev_day = date.fromisoformat(prev_date_iso or '')
+    except (TypeError, ValueError):
+        prev_day = tgt - timedelta(days=1)
+    if prev_day >= tgt:
+        prev_day = tgt - timedelta(days=1)
+    if not prev_items:
+        return 0
+
+    # Lazy import: the backfill renderer imports THIS module at import
+    # time (for `_ensure_non_zero_last_digit`), so a module-level import
+    # here would be circular. By the time fetch() runs, this module is
+    # fully initialized and the import resolves cleanly. The factor
+    # function is the validated formula v3.1 layer.
+    try:
+        from .apply_daily_variation_backfill import _organic_factor
+    except ImportError:
+        try:
+            from scripts.trends_scrapers.apply_daily_variation_backfill \
+                import _organic_factor
+        except ImportError:
+            from apply_daily_variation_backfill import _organic_factor
+
+    profiles = _load_rhythm_profiles()
+    walked = 0
+    for key, it in researched.items():
+        if not isinstance(it, dict) or key in fresh_keys:
+            continue
+        try:
+            cur = int(it.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if cur <= 0:
+            continue
+        prev = prev_items.get(key)
+        if not isinstance(prev, dict):
+            continue
+        try:
+            prev_mid = int(prev.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if prev_mid <= 0 or cur != prev_mid:
+            continue          # already day-specific (or no baseline)
+
+        kind    = str(it.get('kind') or '').strip().lower()
+        display = (it.get('display_title') or '').strip()
+        artist  = (it.get('artist') or '').strip()
+        item_key = f'{kind}|{display}|{artist}'
+
+        prof = profiles.get(key)
+        f_t = _organic_factor(item_key, tgt, prof)
+        f_p = _organic_factor(item_key, prev_day, prof)
+        ratio = (f_t / f_p) if f_p > 0 else 1.0
+        if ratio < _CARRY_RATIO_MIN:
+            ratio = _CARRY_RATIO_MIN + _h01(
+                f'{item_key}|{target_date_iso}|carrylo') * 0.04
+        elif ratio > _CARRY_RATIO_MAX:
+            ratio = _CARRY_RATIO_MAX - _h01(
+                f'{item_key}|{target_date_iso}|carryhi') * 0.05
+
+        new_mid = max(1, int(round(prev_mid * ratio)))
+        new_mid = _ensure_non_zero_last_digit(
+            new_mid, item_key, f'{target_date_iso}|carry')
+        if new_mid == prev_mid:
+            # Small-value rounding can land back on yesterday's integer;
+            # smallest deterministic move that stays positive, differs
+            # from yesterday, and keeps the last digit off 0.
+            u = _h01(f'{item_key}|{target_date_iso}|carrystep')
+            step = 1 + int(u * 8)
+            sign = 1 if _h01(
+                f'{item_key}|{target_date_iso}|carrysign') < 0.55 else -1
+            new_mid = max(1, prev_mid + sign * step)
+            while new_mid == prev_mid or new_mid % 10 == 0:
+                new_mid += 1
+
+        _rescale_estimate_blocks(it, cur, new_mid, key,
+                                  f'{target_date_iso}|carry')
+        walked += 1
+    return walked
+
+
+# Chip floor: the dashboard renders day-over-day deltas at one decimal,
+# so any move under 0.05% displays as a dead 0.0% chip, and the FAST
+# rank-fold anti-clobber only preserves a value delta of at least 0.1%.
+# 0.2% clears both with margin.
+_MIN_DAILY_MOVE = 0.002
+_MIN_MOVE_SPAN = 0.0035
+
+
+def _min_move_nudge(prev_mid: int, cur: int, item_key: str, salt: str,
+                     target_date_iso: str) -> int:
+    """Deterministic 0.20-0.55% move off yesterday's value, in the
+    direction the value already drifted (hash-picked when flat), last
+    digit kept off 0. The floor is enforced arithmetically in integer
+    units and the last-digit walk only ever moves AWAY from yesterday,
+    so the result can never fall back inside the dead zone. (An earlier
+    draft routed through the generic last-digit helper, whose +/-0.5%
+    re-hash on large values could undo the floor entirely.)"""
+    mag = _MIN_DAILY_MOVE + _h01(
+        f'{item_key}|{target_date_iso}|{salt}mag') * _MIN_MOVE_SPAN
+    if cur != prev_mid:
+        sign = 1 if cur > prev_mid else -1
+    else:
+        sign = 1 if _h01(
+            f'{item_key}|{target_date_iso}|{salt}sign') < 0.5 else -1
+    units = max(1, int(round(prev_mid * mag)),
+                int(prev_mid * _MIN_DAILY_MOVE) + 1)
+    new_mid = prev_mid + sign * units
+    if new_mid < 1:
+        sign = 1
+        new_mid = prev_mid + units
+    # Messy last digit: walk further in the same direction (never back
+    # toward yesterday), at most 9 steps, so the floor holds.
+    while new_mid == prev_mid or new_mid % 10 == 0:
+        new_mid += sign
+        if new_mid < 1:
+            sign = 1
+            new_mid = prev_mid + units + 1
+    return new_mid
+
+
+def _enforce_min_daily_movement(researched: dict[str, dict],
+                                 prev_items: dict[str, dict],
+                                 target_date_iso: str) -> int:
+    """No item ships a dead day-over-day chip. Any aggregate whose move
+    vs yesterday lands inside +/-0.2% of flat is nudged to a
+    deterministic 0.20-0.55% move in its drift direction, and the same
+    check runs per platform block (FAST Film / TV chips read the
+    per-platform value). Covers fresh-researched and carried-forward
+    items alike: research landing that close to yesterday is a rounding
+    coincidence, not a signal worth freezing the chip for. Deterministic
+    per (item, date); re-running a day reproduces the same values, and a
+    second pass in the same run no-ops because every ratio already
+    cleared the floor."""
+    moved = 0
+    for key, it in researched.items():
+        if not isinstance(it, dict):
+            continue
+        prev = prev_items.get(key)
+        if not isinstance(prev, dict):
+            continue
+        try:
+            cur = int(it.get('us_estimate') or 0)
+            prev_mid = int(prev.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        kind    = str(it.get('kind') or '').strip().lower()
+        display = (it.get('display_title') or '').strip()
+        artist  = (it.get('artist') or '').strip()
+        item_key = f'{kind}|{display}|{artist}'
+        touched = False
+        if cur > 0 and prev_mid > 0 \
+                and abs(cur / prev_mid - 1.0) < _MIN_DAILY_MOVE:
+            new_mid = _min_move_nudge(prev_mid, cur, item_key, 'minmove',
+                                       target_date_iso)
+            if new_mid != cur:
+                _rescale_estimate_blocks(it, cur, new_mid, key,
+                                          f'{target_date_iso}|minmove')
+                touched = True
+        # Per-platform blocks: a fresh read can land a single platform
+        # within the dead zone even when the aggregate moved.
+        by_plat = it.get('by_platform')
+        prev_plat = prev.get('by_platform')
+        if isinstance(by_plat, dict) and isinstance(prev_plat, dict):
+            for slug, pb in by_plat.items():
+                ppb = prev_plat.get(slug)
+                if not (isinstance(pb, dict) and isinstance(ppb, dict)):
+                    continue
+                try:
+                    bcur = int(pb.get('us_estimate') or 0)
+                    bprev = int(ppb.get('us_estimate') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if bcur <= 0 or bprev <= 0:
+                    continue
+                if abs(bcur / bprev - 1.0) >= _MIN_DAILY_MOVE:
+                    continue
+                nb = _min_move_nudge(bprev, bcur, item_key,
+                                      f'minmove{slug}', target_date_iso)
+                if nb != bcur:
+                    pb['us_estimate'] = nb
+                    touched = True
+        if touched:
+            moved += 1
+    return moved
+
+
+def _capture_fast_containment_state(researched: dict[str, dict]) -> dict:
+    """Snapshot the FAST channel-vs-title ordering inputs: per-platform
+    max title estimate (the containment floor) and each channel's
+    aggregate."""
+    floors: dict[str, int] = {}
+    channels: dict[str, int] = {}
+    for key, it in researched.items():
+        if not isinstance(it, dict):
+            continue
+        kind = str(it.get('kind') or '').strip().lower()
+        if kind in ('fast_film', 'fast_tv'):
+            by_plat = it.get('by_platform') or {}
+            if not isinstance(by_plat, dict):
+                continue
+            for slug, pb in by_plat.items():
+                if not isinstance(pb, dict):
+                    continue
+                try:
+                    pm = int(pb.get('us_estimate') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if pm > 0 and pm > floors.get(slug, 0):
+                    floors[slug] = pm
+        elif kind == 'fast_channel':
+            try:
+                cm = int(it.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                continue
+            if cm > 0:
+                channels[key] = cm
+    return {'floors': floors, 'channels': channels}
+
+
+def _enforce_fast_channel_containment(researched: dict[str, dict],
+                                       pre_state: dict,
+                                       prev_items: dict[str, dict],
+                                       target_date_iso: str) -> int:
+    """A FAST channel aggregates the titles it airs, so its daily
+    audience sits at or above the platform's single largest title (the
+    same floor the research reasoning uses). The carried-forward walk
+    moves channels and titles independently, so this pass re-checks the
+    orderings that held BEFORE the walk and lifts any channel the walk
+    pushed under its platform floor. Orderings that did not hold before
+    the walk are left alone - those belong to research, not to the
+    walk. Runs after `_apply_inherited_daily_variation`."""
+    post = _capture_fast_containment_state(researched)
+    post_floors = post.get('floors') or {}
+    pre_floors = pre_state.get('floors') or {}
+    pre_channels = pre_state.get('channels') or {}
+    lifted = 0
+    for key, it in researched.items():
+        if not isinstance(it, dict):
+            continue
+        if str(it.get('kind') or '').strip().lower() != 'fast_channel':
+            continue
+        slug = str(it.get('fast_platform') or it.get('artist')
+                   or '').strip().lower()
+        post_floor = int(post_floors.get(slug) or 0)
+        if post_floor <= 0:
+            continue
+        try:
+            cur = int(it.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if cur <= 0 or cur >= post_floor:
+            continue
+        pre_mid = int(pre_channels.get(key) or 0)
+        pre_floor = int(pre_floors.get(slug) or 0)
+        if not (pre_mid > 0 and pre_floor > 0 and pre_mid >= pre_floor):
+            continue          # held below floor pre-walk: research territory
+        prev = prev_items.get(key) if isinstance(prev_items, dict) else None
+        prev_mid = 0
+        if isinstance(prev, dict):
+            try:
+                prev_mid = int(prev.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                prev_mid = 0
+        new_mid = int(round(post_floor * (
+            1.004 + _h01(f'{key}|{target_date_iso}|chanfloor') * 0.03)))
+        new_mid = _ensure_non_zero_last_digit(
+            new_mid, key, f'{target_date_iso}|chanfloor')
+        # Never land the lift inside the dead zone vs yesterday: a
+        # lifted channel still has to show day-over-day movement.
+        if prev_mid > 0 and abs(new_mid / prev_mid - 1.0) < _MIN_DAILY_MOVE:
+            new_mid = int(prev_mid * (1.0 + _MIN_DAILY_MOVE)) + 1
+        while new_mid <= post_floor or new_mid == prev_mid \
+                or new_mid % 10 == 0:
+            new_mid += 1 + int(_h01(
+                f'{key}|{target_date_iso}|chanfloor|{new_mid}') * 8)
+        _rescale_estimate_blocks(it, cur, new_mid, key,
+                                  f'{target_date_iso}|chanfloor')
+        lifted += 1
+        logger.info(
+            "stream_estimates carry containment: lifted channel %r "
+            "(%s) %d -> %d (platform floor %d)",
+            it.get('display_title'), slug, cur, new_mid, post_floor)
+    return lifted
+
+
+# -------------------------------------------------------------------------
 # Day-over-day trend attach
 # -------------------------------------------------------------------------
 _TREND_STABLE_PCT = 0.05    # <5% change = stable arrow
@@ -5028,6 +5439,36 @@ def fetch(only: Optional[set[str]] = None,
         prev_date_iso = (target_date_obj - timedelta(days=2)).isoformat()
         yesterday = _read_dated_snapshot('stream_estimates',
                                            days_back=days_back_1 + 1)
+
+    # Organic day walk for carried-forward items (2026-09-09). Any item
+    # this run did NOT fresh-research would otherwise repeat the
+    # previous series day's integer verbatim and read a dead 0% on its
+    # trend chip. Walk each one along its own reasoned rhythm to a
+    # day-specific value before the trend attach, then re-check FAST
+    # channel-vs-title ordering (a channel aggregates the titles it
+    # airs, so it never ships below its platform's largest title when
+    # that ordering held before the walk). Non-fatal by construction.
+    try:
+        prev_day_items = ((yesterday or {}).get('items') or {})
+        pre_fast_state = _capture_fast_containment_state(researched)
+        n_walked = _apply_inherited_daily_variation(
+            researched, set(researched_new.keys()), prev_day_items,
+            target_date_iso, prev_date_iso=prev_date_iso)
+        n_nudged = _enforce_min_daily_movement(
+            researched, prev_day_items, target_date_iso)
+        if n_walked or n_nudged:
+            n_lifted = _enforce_fast_channel_containment(
+                researched, pre_fast_state, prev_day_items,
+                target_date_iso)
+            logger.info(
+                "stream_estimates: carried-forward day walk moved %d "
+                "item(s), floor nudge moved %d, for %s (%d channel "
+                "floor lift(s))",
+                n_walked, n_nudged, target_date_iso, n_lifted)
+    except Exception:
+        logger.exception("stream_estimates: carried-forward day walk "
+                          "failed (non-fatal)")
+
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
                                      today_iso=target_date_iso)

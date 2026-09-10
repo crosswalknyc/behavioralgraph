@@ -1058,6 +1058,16 @@ def _accumulate_stream_estimates_over_window(
         snap = _read_snapshot('stream_estimates', asof=d_iso)
         if snap is None and d_iso == _today_iso():
             snap = today_snap or _read_snapshot('stream_estimates')
+            # Overnight guard: between UTC midnight and the morning
+            # refresh, the latest copy still belongs to the prior day.
+            # Filing it under today's date would put the same numbers
+            # in both windows and every chip would read a dead 0%.
+            # Hand it back under its real date instead; the day dedupe
+            # below folds it into the right window.
+            if snap:
+                real = str(snap.get('target_date') or '')[:10]
+                if real and real != d_iso:
+                    return real, snap
         return d_iso, snap
 
     # Fail-safe fetch: futures_wait never raises, so days that landed
@@ -1075,12 +1085,20 @@ def _accumulate_stream_estimates_over_window(
         futures = [ex.submit(_fetch_one, d) for d in dated_isos + prev_isos]
         done, not_done = futures_wait(
             futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
+        seen_days: set = set()
         for fut in done:
             try:
                 d_iso, snap = fut.result()
             except Exception:
                 continue
             if snap and isinstance(snap, dict):
+                # One snapshot per calendar day: the overnight guard
+                # can re-date the latest copy onto a day that was also
+                # fetched directly, and a double-counted day would
+                # double the window sum.
+                if d_iso in seen_days:
+                    continue
+                seen_days.add(d_iso)
                 if d_iso in cur_set:
                     fetched.append((d_iso, snap))
                 elif d_iso in prev_set:
@@ -4631,6 +4649,14 @@ def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
     if is_flat and (delta_positions in (None, 0)) \
             and isinstance(existing, (int, float)) \
             and abs(existing) >= 0.001:
+        return
+    # A row carrying its first measured value has no yesterday to move
+    # against; a flat rank fold would replace its NEW badge with a dead
+    # 0% chip. Keep the NEW badge; tomorrow it has a prior and renders
+    # a real percentage.
+    if is_flat and (delta_positions in (None, 0)) \
+            and dest.get('direction') == 'new' \
+            and not dest.get('prev_estimate'):
         return
     if delta_pct is not None:
         dest['delta_pct'] = delta_pct
