@@ -23494,18 +23494,20 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 .piq-bar-strip {
             display: grid;
-            grid-template-columns: 100px 1fr 48px 36px;
+            grid-template-columns: minmax(148px, 0.42fr) minmax(72px, 1fr) 52px 40px;
             gap: 10px;
             align-items: center;
-            padding: 6px 0;
+            padding: 7px 0;
             font-size: 12px;
         }
         #dashboardView.piq-v4 .piq-bar-strip .lbl {
             color: #9AA09B;
             font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+            line-height: 1.25;
+            hyphens: none;
         }
         #dashboardView.piq-v4 .piq-bar-strip .track-wrap {
             position: relative;
@@ -23653,19 +23655,49 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics #occupationGpActualsTable {
             display: none !important;
         }
+        #dashboardView.piq-v4 #tab-demographics.tab-content.active {
+            padding: 16px 32px 48px !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics,
+        #dashboardView.piq-v4 #tab-demographics .demo-main,
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row,
+        #dashboardView.piq-v4 #tab-demographics #demoDifferentiators,
+        #dashboardView.piq-v4 #tab-demographics .charts-grid {
+            width: 100% !important;
+            max-width: none !important;
+        }
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row {
-            display: block !important;
-            grid-template-columns: 1fr !important;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
             margin-bottom: 28px;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insight-card {
+            width: 100% !important;
+            max-width: none !important;
+            grid-column: 1 / -1 !important;
+            overflow: visible !important;
         }
         #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Key Differentiators"] {
             width: 100% !important;
             padding: 20px 22px !important;
         }
+        #dashboardView.piq-v4 #tab-demographics #demoDifferentiators {
+            display: block !important;
+            width: 100% !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics .piq-data-row {
+            grid-template-columns: 130px minmax(0, 1fr) 88px 88px 72px !important;
+            width: 100% !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics .piq-data-row .name {
+            overflow: visible !important;
+            white-space: normal !important;
+            text-overflow: clip !important;
+        }
         #dashboardView.piq-v4 #tab-demographics .charts-grid {
             display: grid !important;
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 14px !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 18px 22px !important;
         }
         #dashboardView.piq-v4 #tab-demographics .chart-card {
             aspect-ratio: auto !important;
@@ -121784,17 +121816,27 @@ https://www.instagram.com/p/..."></textarea>
             }
             var line = document.getElementById('dashHeroOneliner');
             if (line) {
+                var ageWord = null;
+                if (under35 != null && under35 >= 50) ageWord = 'younger';
+                else if (under35 != null && under35 <= 30) ageWord = 'older';
+                var sexWord = null;
+                if (female != null && female >= 55) sexWord = 'female';
+                else if (female != null && female <= 45) sexWord = 'male';
                 var lead = [];
-                if (under35 != null && under35 >= 50) lead.push('young');
-                else if (under35 != null && under35 <= 30) lead.push('older-leaning');
-                if (female != null && female >= 55) lead.push('female-heavy');
-                else if (female != null && female <= 45) lead.push('male-heavy');
+                if (ageWord) lead.push(ageWord);
+                if (sexWord) lead.push(sexWord);
                 var bold = lead.length ? ('Leans ' + lead.join(' and ') + '.') : '';
                 var rest = '';
-                if (under35 != null && female != null) {
-                    if (under35 >= 50 && female >= 55) rest = 'Younger and more female than the category average.';
-                    else if (under35 >= 50) rest = 'Younger than the category average.';
-                    else if (female >= 55) rest = 'More female than the category average.';
+                if (ageWord && sexWord) {
+                    rest = '';
+                } else if (ageWord === 'younger') {
+                    rest = 'Younger than the category average.';
+                } else if (ageWord === 'older') {
+                    rest = 'Older than the category average.';
+                } else if (sexWord === 'female') {
+                    rest = 'More female than the category average.';
+                } else if (sexWord === 'male') {
+                    rest = 'More male than the category average.';
                 }
                 if (bold && rest) line.innerHTML = '<b>' + bold + '</b> ' + rest;
                 else if (bold) line.innerHTML = '<b>' + bold + '</b>';
@@ -121926,6 +121968,60 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4Esc = function(s) {
             return String(s == null ? '' : s).replace(/</g, '');
         };
+        window._piqV4DemoLabel = function(key, raw) {
+            var s = String(raw == null ? '' : raw).trim();
+            if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
+                try { s = getAgeDisplayLabel(s) || s; } catch (_e) {}
+            }
+            var fold = s.toUpperCase().replace(/['\u2019]/g, '').replace(/\s+/g, ' ');
+            var map = {
+                'BLACK OR AFRICAN AMERICAN': 'Black',
+                'AFRICAN AMERICAN': 'Black',
+                'HISPANIC OR LATINO': 'Hispanic',
+                'HISPANIC/LATINO': 'Hispanic',
+                'ANOTHER RACE': 'Another race',
+                'SOME OTHER RACE': 'Another race',
+                'TWO OR MORE RACES': 'Two or more',
+                'TWO OR MORE': 'Two or more',
+                'AMERICAN INDIAN OR ALASKA NATIVE': 'Native',
+                'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER': 'Pacific Islander',
+                'HIGH SCHOOL OR EQUIVALENT': 'High school',
+                'HIGH SCHOOL GRADUATE': 'High school',
+                'SOME COLLEGE': 'Some college',
+                'BACHELORS DEGREE': "Bachelor's",
+                'GRADUATE OR PROFESSIONAL': 'Graduate',
+                'GRADUATE DEGREE': 'Graduate',
+                'LESS THAN HIGH SCHOOL': 'No diploma',
+                'NO HIGH SCHOOL': 'No diploma',
+                'ASSOCIATES DEGREE': "Associate's",
+                'LESS THAN $25,000': 'Under $25k',
+                'UNDER $25,000': 'Under $25k',
+                '$25,000 - $49,999': '$25-50k',
+                '$25,000-$49,999': '$25-50k',
+                '$50,000 - $74,999': '$50-75k',
+                '$50,000-$74,999': '$50-75k',
+                '$75,000 - $99,999': '$75-100k',
+                '$75,000-$99,999': '$75-100k',
+                '$100,000 - $149,999': '$100-150k',
+                '$100,000-$149,999': '$100-150k',
+                '$150,000 - $249,999': '$150-250k',
+                '$150,000-$249,999': '$150-250k',
+                '$250,000 OR MORE': '$250k+',
+                '$250,000+': '$250k+',
+                'IN A RELATIONSHIP': 'In a relationship',
+                'PREFERRED NOT TO SAY': 'Prefer not',
+                'PREFER NOT TO SAY': 'Prefer not',
+                'HETEROSEXUAL': 'Straight',
+                'GAY OR LESBIAN': 'LGBTQ+',
+                'EMPLOYED FULL TIME': 'Full-time',
+                'EMPLOYED FULL-TIME': 'Full-time',
+                'EMPLOYED PART TIME': 'Part-time',
+                'EMPLOYED PART-TIME': 'Part-time',
+                'SELF-EMPLOYED': 'Self-employed',
+                'SELF EMPLOYED': 'Self-employed'
+            };
+            return map[fold] || s;
+        };
         window._piqV4Pct = function(n) {
             n = Number(n);
             if (!isFinite(n)) return '-';
@@ -122006,10 +122102,7 @@ https://www.instagram.com/p/..."></textarea>
                         var ix = Number(idxs[seg]);
                         if (!isFinite(pct) || pct < 2 || pct > 99.9) return;
                         if (!isFinite(ix) || (ix <= 110 && ix >= 90)) return;
-                        var name = seg;
-                        if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
-                            try { name = getAgeDisplayLabel(seg) || seg; } catch (_e) {}
-                        }
+                        var name = window._piqV4DemoLabel ? window._piqV4DemoLabel(key, seg) : seg;
                         rows.push({ cat: label, name: name, pct: pct, gp: Number(gps[seg]) || 0, idx: ix });
                     });
                 });
@@ -122068,10 +122161,7 @@ https://www.instagram.com/p/..."></textarea>
                     var n = Number(vals[k]);
                     var gp = Number(gps[k]) || 0;
                     var ix = Number(idxs[k]);
-                    var lbl = k;
-                    if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
-                        try { lbl = getAgeDisplayLabel(k) || k; } catch (_e) {}
-                    }
+                    var lbl = window._piqV4DemoLabel ? window._piqV4DemoLabel(key, k) : k;
                     var w = Math.max(2, Math.round((n / max) * 100));
                     var mark = '';
                     if (gp > 0) {
