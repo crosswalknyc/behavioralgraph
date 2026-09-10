@@ -1354,6 +1354,107 @@
                 opacity: 0.7;
             }
         }
+
+        /* ------------------------------------------------------------------
+           User-edit modal collapsible groups (2026-09-09 Jenna redesign).
+           Jenna: 'The whole modal is too dense - too many sections stacked
+           ... collapse most of them behind expandable panels so I only see
+           what I'm working on.'
+           
+           Every non-identity section of the user-edit modal
+           (Billing & Wallet, Photos, Dashboard Access, API Access, Activity
+           CSV export) sits inside a .edit-modal-group card. Each card
+           has a title, a summary chip on the right (e.g. '3 of 15 granted'
+           for Dashboard Access) so the admin knows what's inside without
+           opening, and a chevron that rotates on open. All groups start
+           CLOSED. Admin clicks the header to expand the group they're
+           working on.
+           ------------------------------------------------------------------ */
+        .edit-modal-group {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-input);
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+            transition: border-color 0.15s ease;
+        }
+        .edit-modal-group.open {
+            border-color: rgba(0, 255, 255, 0.3);
+        }
+        .edit-modal-group-header {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.75rem 0.95rem;
+            cursor: pointer;
+            user-select: none;
+            background: var(--bg-dark);
+            transition: background 0.15s ease;
+        }
+        .edit-modal-group-header:hover {
+            background: rgba(0, 255, 255, 0.05);
+        }
+        .edit-modal-group.open .edit-modal-group-header {
+            border-bottom: 1px solid var(--border-color);
+        }
+        .edit-modal-group-icon {
+            font-size: 1.1rem;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .edit-modal-group-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.92rem;
+            letter-spacing: 0.01em;
+        }
+        .edit-modal-group-summary {
+            margin-left: auto;
+            padding: 0.2rem 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            font-weight: 500;
+            white-space: nowrap;
+            min-width: 2rem;
+            text-align: center;
+        }
+        .edit-modal-group-summary:empty {
+            display: none;
+        }
+        .edit-modal-group-summary.active {
+            background: rgba(0, 255, 255, 0.15);
+            color: var(--accent-cyan);
+            border-color: rgba(0, 255, 255, 0.3);
+        }
+        .edit-modal-group-chevron {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+        .edit-modal-group.open .edit-modal-group-chevron {
+            transform: rotate(90deg);
+        }
+        .edit-modal-group-body {
+            display: none;
+            padding: 1rem;
+        }
+        .edit-modal-group.open .edit-modal-group-body {
+            display: block;
+        }
+        /* Inside a group body, kill the double-rounded-border feel by
+           flattening the inner .access-section wrapper (Billing & Wallet
+           and Dashboard Access both use it). The group card carries the
+           border + padding now. */
+        .edit-modal-group-body .access-section {
+            background: transparent;
+            padding: 0;
+            margin-top: 0;
+            border: none;
+        }
     </style>
 </head>
 <body>
@@ -3365,246 +3466,14 @@
                     </div>
                 </div>
 
-                <!--
-                    💳 Billing & Wallet section (2026-09-09, Jenna: 'clean up
-                    the user admin part so that it syncs better with everythign
-                    and design wise flows better'). Groups every billing-adjacent
-                    control into one visually distinct block: the wallet callout
-                    that points to the Billing tab, the company-shared wallet
-                    routing (Bill through + company billing admin), the company
-                    spend scope, and the hidden legacy credits/consulting inputs
-                    (DOM preserved so downstream JS keeps working).
-
-                    Previous layout had these scattered above and below the
-                    Access/Role row, and the wallet callout was crammed as a
-                    third child of a 2-column grid form-row - the grid was
-                    breaking. This section is now full-width so nothing squishes.
-                -->
-                <div class="access-section" style="margin-top: 1rem;">
-                    <h4 style="margin-bottom: 0.75rem;">💳 Billing &amp; Wallet</h4>
-
-                    <!-- Wallet callout - full-width. Open Billing button is
-                         hidden in create mode (showAddUserModal) and shown in
-                         edit mode (editUser); same visibility toggle as the
-                         footer openUserBillingBtn. -->
-                    <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-dark); margin-bottom: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                            <span style="font-size: 1.35rem; line-height: 1;">💳</span>
-                            <div style="flex: 1; min-width: 220px;">
-                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Wallet is managed on the Billing tab</div>
-                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">New users start at 0 credits. Set unlimited access, add a specified dollar amount, or configure the payment method from Billing. If Prometheus is enabled below, billing is turned on automatically and the user gets a top-up prompt the first time they run it without funds.</div>
-                            </div>
-                            <button type="button" class="btn btn-small btn-primary" id="openUserBillingBtnInline" onclick="openUserBillingFromModal()" style="flex: 0 0 auto; display: none;">Open Billing →</button>
-                        </div>
+                <div class="edit-modal-group" id="editGroupDashboard">
+                    <div class="edit-modal-group-header" onclick="toggleEditModalGroup('editGroupDashboard')">
+                        <span class="edit-modal-group-icon">🎯</span>
+                        <span class="edit-modal-group-title">Dashboard Access</span>
+                        <span class="edit-modal-group-summary"></span>
+                        <span class="edit-modal-group-chevron">▶</span>
                     </div>
-
-                    <!-- Company-shared wallet routing (Jenna 2026-09-09) -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Bill through</label>
-                            <select id="newBillingSource">
-                                <option value="user">User's own wallet</option>
-                                <option value="company">Company shared wallet</option>
-                            </select>
-                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
-                                When set to Company, this user's pulls debit the
-                                company wallet at the "Company" field above.
-                                Requires a paying_customer flag on the company
-                                (set in Admin - Billing - Companies).
-                            </small>
-                        </div>
-                        <div class="form-group">
-                            <label>Company billing admin</label>
-                            <label class="checkbox-group" style="margin-top: 0.35rem;">
-                                <input type="checkbox" id="newCompanyBillingAdmin">
-                                <span>Can manage the company's card, top up, and see spend</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Company spend scope (Jenna 2026-09-09) -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Company spend scope</label>
-                            <select id="newSpendScopeMode" onchange="onSpendScopeModeChange()">
-                                <option value="inherit">Inherit company default</option>
-                                <option value="*">All tools (unrestricted)</option>
-                                <option value="list">Specific tools only</option>
-                            </select>
-                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
-                                Controls which tools this member can spend the
-                                shared company wallet on. Billing admins can
-                                always spend on anything. Ignored when Bill
-                                through = User's own wallet.
-                            </small>
-                        </div>
-                        <div class="form-group" id="spendScopeListGroup" style="display: none;">
-                            <label>Allowed tools</label>
-                            <select id="newSpendScopeList" multiple style="min-height: 8rem;">
-                                <!-- Options populated at admin-page init from
-                                     wallet.MODULE_CATALOG via /api/admin/tool_catalog -->
-                            </select>
-                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
-                                Hold Cmd/Ctrl to select multiple. Common pattern:
-                                everyone gets "Prometheus (Ask-metered)"; only
-                                2-3 billing admins or lead analysts get "Profile
-                                IQ - Full Build" and "Subscriber IQ".
-                            </small>
-                        </div>
-                    </div>
-
-                    <!--
-                        2026-09-09 (Jenna, verbatim: 'this needs to be removed
-                        and instead it needs to default everyone to 0 and then
-                        have a button that says Billing where you can click to
-                        go straght to the billing tab'). The Credits input,
-                        Add-or-Deduct panel, Consulting Hours pool, and Log-or-
-                        Grant Hours panel that used to sit inline in the modal
-                        are hidden. New users default to 0 credits (see app.py
-                        create_user). Wallet funding, unlimited access, and
-                        specified-dollar top-ups are managed exclusively from
-                        the Billing tab (/admin/billing?user=<username>).
-                        Enabling Chatbot Profile IQ (Prometheus) below auto-
-                        flips paying_customer=true so wallet routing turns on
-                        immediately - if the user has no funds, their first
-                        Prometheus click gets the 402 top-up prompt.
-
-                        The DOM below is INTENTIONALLY PRESERVED but
-                        display:none'd - a large amount of downstream JS
-                        (editUser, showAddUserModal, saveUser payload,
-                        toggleUnlimited, loadUserModalRecurring, ...) reads /
-                        writes these element ids. Removing the elements would
-                        null-crash those paths. Hiding keeps the flow intact
-                        while making the UI invisible per Jenna's ask.
-                    -->
-                    <div id="legacyCreditsConsultingWrap" style="display: none;" aria-hidden="true">
-                        <div class="form-group">
-                            <label>Credits</label>
-                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                                <input type="number" id="newCredits" value="0" min="-1" style="flex: 1; min-width: 120px;">
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
-                                    <input type="checkbox" id="unlimitedCredits" onchange="toggleUnlimited()">
-                                    <span>Unlimited</span>
-                                </label>
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
-                                    <input type="checkbox" id="creditsRecurringMonthly" onchange="_newCreditsRecurringChange()">
-                                    <span>Recurring / month</span>
-                                </label>
-                            </div>
-                            <div id="creditsRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
-                                <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
-                                <input type="number" id="creditsRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
-                            </div>
-                        </div>
-                        <div id="addCreditsInModalWrap" class="form-group" style="display: none;">
-                            <label>Add or deduct credits (with reason)</label>
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                <input type="number" id="modalAddCreditsAmount" min="1" value="10" style="width: 70px; padding: 0.4rem;">
-                                <input type="text" id="modalAddCreditsReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits" onchange="_modalCreditsPerMonthChange()"> <span>Deduct (charge)</span></label>
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalCreditsPerMonth" onchange="_modalCreditsPerMonthChange()"> <span>Recurring / month</span></label>
-                                <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Apply</button>
-                            </div>
-                            <div id="modalCreditsMonthsRow" style="display:none; margin-top: 0.4rem;">
-                                <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months?</label>
-                                <input type="number" id="modalCreditsMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Consulting Hours</label>
-                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                                <input type="number" id="newConsultingHours" value="0" min="0" style="width: 90px;" placeholder="hours">
-                                <input type="number" id="newConsultingMinutes" value="0" min="0" max="59" style="width: 70px;" placeholder="min">
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
-                                    <input type="checkbox" id="unlimitedConsultingHours" onchange="toggleUnlimitedHours()">
-                                    <span>Unlimited</span>
-                                </label>
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
-                                    <input type="checkbox" id="hoursRecurringMonthly" onchange="_newHoursRecurringChange()">
-                                    <span>Recurring / month</span>
-                                </label>
-                            </div>
-                            <div id="hoursRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
-                                <input type="number" id="hoursRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
-                            </div>
-                        </div>
-                        <div id="addHoursInModalWrap" class="form-group" style="display: none;">
-                            <label>Log or grant consulting hours</label>
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                <input type="number" id="modalAddHoursH" min="0" value="0" style="width: 60px; padding: 0.4rem;" placeholder="h">
-                                <input type="number" id="modalAddHoursM" min="0" max="59" value="30" style="width: 60px; padding: 0.4rem;" placeholder="m">
-                                <input type="text" id="modalAddHoursReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursLogWorked" onchange="_modalHoursPerMonthChange()"> <span>Log worked</span></label>
-                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursPerMonth" onchange="_modalHoursPerMonthChange()"> <span>Recurring / month</span></label>
-                                <button type="button" class="btn btn-small btn-primary" onclick="addHoursFromModal()">Apply</button>
-                            </div>
-                            <div id="modalHoursMonthsRow" style="display:none; margin-top: 0.4rem;">
-                                <input type="number" id="modalHoursMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
-                            </div>
-                        </div>
-                    </div><!-- /legacyCreditsConsultingWrap -->
-
-                    <!--
-                        Legacy recurring credit + hour rules. Lives inside the
-                        Billing & Wallet section now (2026-09-09 cleanup). Kept
-                        because admins can still view, edit, and delete rules
-                        that were created before wallet-based billing landed.
-                        New auto-monthly rules should be created on the Billing
-                        tab as USD-based subscriptions - do not add a "create"
-                        UI back to this modal.
-                        Populated by loadUserModalRecurring() when the modal
-                        opens in edit mode; hidden in create mode.
-                    -->
-                    <div id="userModalRecurringWrap" class="form-group" style="display: none; margin-top: 0.75rem;">
-                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
-                            <span>Legacy recurring credit &amp; hour rules</span>
-                            <button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="loadUserModalRecurring()" title="Refresh list">↻</button>
-                        </label>
-                        <div id="userModalRecurringList" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem; background: var(--bg-input); font-size: 0.8rem;">
-                            <div style="color: var(--text-secondary); text-align:center; padding:0.5rem;">Loading…</div>
-                        </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Rules fire on or shortly after the 1st of every month. Edit or delete existing rules here; create new auto-monthly subscriptions from the Billing tab.</small>
-                    </div>
-                </div><!-- /Billing & Wallet section -->
-
-                <!-- 2026-07-30: Compacted Profile photo + Company logo into
-                     a single 2-column row so the modal doesn't grow tall
-                     when neither is set. Old layout stacked them (took ~200
-                     vertical pixels even when empty); the grid collapses to
-                     a single column on narrow screens via minmax(280px,1fr). -->
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
-                        <div>
-                            <label style="display: block; margin-bottom: 0.4rem;">👤 Profile photo</label>
-                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                                <div id="userModalAvatarPreview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-secondary);">
-                                    <span id="userModalAvatarInitials">—</span>
-                                    <img id="userModalAvatarImg" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                                </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <input type="file" id="userModalAvatarFile" accept="image/*" onchange="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload image">
-                                    <input type="text" id="userModalAvatarUrl" placeholder="Or paste image URL" oninput="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
-                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveAvatar()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 0.4rem;">🏢 Company logo <small style="color: var(--text-secondary); font-weight: 400;">(shown on deck slides)</small></label>
-                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                                <div id="userModalLogoPreview" style="width: 72px; height: 44px; border-radius: 6px; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-secondary);">
-                                    <span id="userModalLogoPlaceholder">—</span>
-                                    <img id="userModalLogoImg" src="" alt="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
-                                </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <input type="file" id="userModalLogoFile" accept="image/*" onchange="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload logo">
-                                    <input type="text" id="userModalLogoUrl" placeholder="Or paste image URL" oninput="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
-                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveLogo()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+                    <div class="edit-modal-group-body">
                 <div class="access-section" id="dashboardAccessSection" data-active-group="everything">
                     <!-- Header + toolbar (2026-09-09 simpler pass).
                          Kept: title, group tabs (each pill carries its own
@@ -4171,7 +4040,277 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /edit-modal-group-body editGroupDashboard -->
+                </div><!-- /edit-modal-group editGroupDashboard -->
 
+                <div class="edit-modal-group" id="editGroupBilling">
+                    <div class="edit-modal-group-header" onclick="toggleEditModalGroup('editGroupBilling')">
+                        <span class="edit-modal-group-icon">💳</span>
+                        <span class="edit-modal-group-title">Billing &amp; Wallet</span>
+                        <span class="edit-modal-group-summary"></span>
+                        <span class="edit-modal-group-chevron">▶</span>
+                    </div>
+                    <div class="edit-modal-group-body">
+                <!--
+                    💳 Billing & Wallet section (2026-09-09, Jenna: 'clean up
+                    the user admin part so that it syncs better with everythign
+                    and design wise flows better'). Groups every billing-adjacent
+                    control into one visually distinct block: the wallet callout
+                    that points to the Billing tab, the company-shared wallet
+                    routing (Bill through + company billing admin), the company
+                    spend scope, and the hidden legacy credits/consulting inputs
+                    (DOM preserved so downstream JS keeps working).
+
+                    Previous layout had these scattered above and below the
+                    Access/Role row, and the wallet callout was crammed as a
+                    third child of a 2-column grid form-row - the grid was
+                    breaking. This section is now full-width so nothing squishes.
+                -->
+                <div class="access-section" style="margin-top: 1rem;">
+                    <h4 style="margin-bottom: 0.75rem;">💳 Billing &amp; Wallet</h4>
+
+                    <!-- Wallet callout - full-width. Open Billing button is
+                         hidden in create mode (showAddUserModal) and shown in
+                         edit mode (editUser); same visibility toggle as the
+                         footer openUserBillingBtn. -->
+                    <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-dark); margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="font-size: 1.35rem; line-height: 1;">💳</span>
+                            <div style="flex: 1; min-width: 220px;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Wallet is managed on the Billing tab</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">New users start at 0 credits. Set unlimited access, add a specified dollar amount, or configure the payment method from Billing. If Prometheus is enabled below, billing is turned on automatically and the user gets a top-up prompt the first time they run it without funds.</div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-primary" id="openUserBillingBtnInline" onclick="openUserBillingFromModal()" style="flex: 0 0 auto; display: none;">Open Billing →</button>
+                        </div>
+                    </div>
+
+                    <!-- Company-shared wallet routing (Jenna 2026-09-09) -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Bill through</label>
+                            <select id="newBillingSource">
+                                <option value="user">User's own wallet</option>
+                                <option value="company">Company shared wallet</option>
+                            </select>
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                                When set to Company, this user's pulls debit the
+                                company wallet at the "Company" field above.
+                                Requires a paying_customer flag on the company
+                                (set in Admin - Billing - Companies).
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label>Company billing admin</label>
+                            <label class="checkbox-group" style="margin-top: 0.35rem;">
+                                <input type="checkbox" id="newCompanyBillingAdmin">
+                                <span>Can manage the company's card, top up, and see spend</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Company spend scope (Jenna 2026-09-09) -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Company spend scope</label>
+                            <select id="newSpendScopeMode" onchange="onSpendScopeModeChange()">
+                                <option value="inherit">Inherit company default</option>
+                                <option value="*">All tools (unrestricted)</option>
+                                <option value="list">Specific tools only</option>
+                            </select>
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                                Controls which tools this member can spend the
+                                shared company wallet on. Billing admins can
+                                always spend on anything. Ignored when Bill
+                                through = User's own wallet.
+                            </small>
+                        </div>
+                        <div class="form-group" id="spendScopeListGroup" style="display: none;">
+                            <label>Allowed tools</label>
+                            <select id="newSpendScopeList" multiple style="min-height: 8rem;">
+                                <!-- Options populated at admin-page init from
+                                     wallet.MODULE_CATALOG via /api/admin/tool_catalog -->
+                            </select>
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                                Hold Cmd/Ctrl to select multiple. Common pattern:
+                                everyone gets "Prometheus (Ask-metered)"; only
+                                2-3 billing admins or lead analysts get "Profile
+                                IQ - Full Build" and "Subscriber IQ".
+                            </small>
+                        </div>
+                    </div>
+
+                    <!--
+                        2026-09-09 (Jenna, verbatim: 'this needs to be removed
+                        and instead it needs to default everyone to 0 and then
+                        have a button that says Billing where you can click to
+                        go straght to the billing tab'). The Credits input,
+                        Add-or-Deduct panel, Consulting Hours pool, and Log-or-
+                        Grant Hours panel that used to sit inline in the modal
+                        are hidden. New users default to 0 credits (see app.py
+                        create_user). Wallet funding, unlimited access, and
+                        specified-dollar top-ups are managed exclusively from
+                        the Billing tab (/admin/billing?user=<username>).
+                        Enabling Chatbot Profile IQ (Prometheus) below auto-
+                        flips paying_customer=true so wallet routing turns on
+                        immediately - if the user has no funds, their first
+                        Prometheus click gets the 402 top-up prompt.
+
+                        The DOM below is INTENTIONALLY PRESERVED but
+                        display:none'd - a large amount of downstream JS
+                        (editUser, showAddUserModal, saveUser payload,
+                        toggleUnlimited, loadUserModalRecurring, ...) reads /
+                        writes these element ids. Removing the elements would
+                        null-crash those paths. Hiding keeps the flow intact
+                        while making the UI invisible per Jenna's ask.
+                    -->
+                    <div id="legacyCreditsConsultingWrap" style="display: none;" aria-hidden="true">
+                        <div class="form-group">
+                            <label>Credits</label>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <input type="number" id="newCredits" value="0" min="-1" style="flex: 1; min-width: 120px;">
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                    <input type="checkbox" id="unlimitedCredits" onchange="toggleUnlimited()">
+                                    <span>Unlimited</span>
+                                </label>
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                    <input type="checkbox" id="creditsRecurringMonthly" onchange="_newCreditsRecurringChange()">
+                                    <span>Recurring / month</span>
+                                </label>
+                            </div>
+                            <div id="creditsRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
+                                <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
+                                <input type="number" id="creditsRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                            </div>
+                        </div>
+                        <div id="addCreditsInModalWrap" class="form-group" style="display: none;">
+                            <label>Add or deduct credits (with reason)</label>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                <input type="number" id="modalAddCreditsAmount" min="1" value="10" style="width: 70px; padding: 0.4rem;">
+                                <input type="text" id="modalAddCreditsReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits" onchange="_modalCreditsPerMonthChange()"> <span>Deduct (charge)</span></label>
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalCreditsPerMonth" onchange="_modalCreditsPerMonthChange()"> <span>Recurring / month</span></label>
+                                <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Apply</button>
+                            </div>
+                            <div id="modalCreditsMonthsRow" style="display:none; margin-top: 0.4rem;">
+                                <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months?</label>
+                                <input type="number" id="modalCreditsMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Consulting Hours</label>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <input type="number" id="newConsultingHours" value="0" min="0" style="width: 90px;" placeholder="hours">
+                                <input type="number" id="newConsultingMinutes" value="0" min="0" max="59" style="width: 70px;" placeholder="min">
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                    <input type="checkbox" id="unlimitedConsultingHours" onchange="toggleUnlimitedHours()">
+                                    <span>Unlimited</span>
+                                </label>
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                    <input type="checkbox" id="hoursRecurringMonthly" onchange="_newHoursRecurringChange()">
+                                    <span>Recurring / month</span>
+                                </label>
+                            </div>
+                            <div id="hoursRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
+                                <input type="number" id="hoursRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                            </div>
+                        </div>
+                        <div id="addHoursInModalWrap" class="form-group" style="display: none;">
+                            <label>Log or grant consulting hours</label>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                <input type="number" id="modalAddHoursH" min="0" value="0" style="width: 60px; padding: 0.4rem;" placeholder="h">
+                                <input type="number" id="modalAddHoursM" min="0" max="59" value="30" style="width: 60px; padding: 0.4rem;" placeholder="m">
+                                <input type="text" id="modalAddHoursReason" placeholder="What for" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursLogWorked" onchange="_modalHoursPerMonthChange()"> <span>Log worked</span></label>
+                                <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursPerMonth" onchange="_modalHoursPerMonthChange()"> <span>Recurring / month</span></label>
+                                <button type="button" class="btn btn-small btn-primary" onclick="addHoursFromModal()">Apply</button>
+                            </div>
+                            <div id="modalHoursMonthsRow" style="display:none; margin-top: 0.4rem;">
+                                <input type="number" id="modalHoursMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                            </div>
+                        </div>
+                    </div><!-- /legacyCreditsConsultingWrap -->
+
+                    <!--
+                        Legacy recurring credit + hour rules. Lives inside the
+                        Billing & Wallet section now (2026-09-09 cleanup). Kept
+                        because admins can still view, edit, and delete rules
+                        that were created before wallet-based billing landed.
+                        New auto-monthly rules should be created on the Billing
+                        tab as USD-based subscriptions - do not add a "create"
+                        UI back to this modal.
+                        Populated by loadUserModalRecurring() when the modal
+                        opens in edit mode; hidden in create mode.
+                    -->
+                    <div id="userModalRecurringWrap" class="form-group" style="display: none; margin-top: 0.75rem;">
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                            <span>Legacy recurring credit &amp; hour rules</span>
+                            <button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="loadUserModalRecurring()" title="Refresh list">↻</button>
+                        </label>
+                        <div id="userModalRecurringList" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem; background: var(--bg-input); font-size: 0.8rem;">
+                            <div style="color: var(--text-secondary); text-align:center; padding:0.5rem;">Loading…</div>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Rules fire on or shortly after the 1st of every month. Edit or delete existing rules here; create new auto-monthly subscriptions from the Billing tab.</small>
+                    </div>
+                </div><!-- /Billing & Wallet section -->
+                    </div><!-- /edit-modal-group-body editGroupBilling -->
+                </div><!-- /edit-modal-group editGroupBilling -->
+
+                <div class="edit-modal-group" id="editGroupPhotos">
+                    <div class="edit-modal-group-header" onclick="toggleEditModalGroup('editGroupPhotos')">
+                        <span class="edit-modal-group-icon">🖼️</span>
+                        <span class="edit-modal-group-title">Profile Photo &amp; Company Logo</span>
+                        <span class="edit-modal-group-summary"></span>
+                        <span class="edit-modal-group-chevron">▶</span>
+                    </div>
+                    <div class="edit-modal-group-body">
+                <!-- 2026-07-30: Compacted Profile photo + Company logo into
+                     a single 2-column row so the modal doesn't grow tall
+                     when neither is set. Old layout stacked them (took ~200
+                     vertical pixels even when empty); the grid collapses to
+                     a single column on narrow screens via minmax(280px,1fr). -->
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.4rem;">👤 Profile photo</label>
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div id="userModalAvatarPreview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-secondary);">
+                                    <span id="userModalAvatarInitials">—</span>
+                                    <img id="userModalAvatarImg" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <input type="file" id="userModalAvatarFile" accept="image/*" onchange="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload image">
+                                    <input type="text" id="userModalAvatarUrl" placeholder="Or paste image URL" oninput="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveAvatar()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.4rem;">🏢 Company logo <small style="color: var(--text-secondary); font-weight: 400;">(shown on deck slides)</small></label>
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div id="userModalLogoPreview" style="width: 72px; height: 44px; border-radius: 6px; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-secondary);">
+                                    <span id="userModalLogoPlaceholder">—</span>
+                                    <img id="userModalLogoImg" src="" alt="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <input type="file" id="userModalLogoFile" accept="image/*" onchange="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload logo">
+                                    <input type="text" id="userModalLogoUrl" placeholder="Or paste image URL" oninput="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveLogo()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                    </div><!-- /edit-modal-group-body editGroupPhotos -->
+                </div><!-- /edit-modal-group editGroupPhotos -->
+
+                <div class="edit-modal-group" id="editGroupApi">
+                    <div class="edit-modal-group-header" onclick="toggleEditModalGroup('editGroupApi')">
+                        <span class="edit-modal-group-icon">🔑</span>
+                        <span class="edit-modal-group-title">API Access</span>
+                        <span class="edit-modal-group-summary"></span>
+                        <span class="edit-modal-group-chevron">▶</span>
+                    </div>
+                    <div class="edit-modal-group-body">
                     <!-- API Access (2026-08-17) - per-user API key management.
                          Any user can be given API access; the key is tied to
                          THIS user's credits so add-credits / deductions flow
@@ -4394,7 +4533,17 @@
                      value as "no per-user filtering". Old users whose
                      collab_team was a named list stay compatible (nothing
                      currently reads the field to gate access anyway). -->
+                    </div><!-- /edit-modal-group-body editGroupApi -->
+                </div><!-- /edit-modal-group editGroupApi -->
 
+                <div class="edit-modal-group" id="editGroupCsv">
+                    <div class="edit-modal-group-header" onclick="toggleEditModalGroup('editGroupCsv')">
+                        <span class="edit-modal-group-icon">📧</span>
+                        <span class="edit-modal-group-title">Activity CSV export</span>
+                        <span class="edit-modal-group-summary"></span>
+                        <span class="edit-modal-group-chevron">▶</span>
+                    </div>
+                    <div class="edit-modal-group-body">
                 <!-- Activity CSV export (per user) -->
                 <div class="access-section" id="activityExportSection" style="display: none;">
                     <h4 style="margin-bottom: 0.75rem; text-align: left;">📧 Activity CSV export</h4>
@@ -4418,6 +4567,8 @@
                     </div>
                     <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem; text-align: left;">Scheduled exports run automatically on Render daily (set CRON_SECRET in dashboard).</small>
                 </div>
+                    </div><!-- /edit-modal-group-body editGroupCsv -->
+                </div><!-- /edit-modal-group editGroupCsv -->
 
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
@@ -9898,6 +10049,14 @@
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
                 if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
+                // Collapsible group panels (2026-09-09): make sure every
+                // group starts CLOSED on Add User (fresh modal) and
+                // populate the summary chips so admin sees at-a-glance
+                // state before opening.
+                document.querySelectorAll('#userModal .edit-modal-group.open').forEach(function(g) {
+                    g.classList.remove('open');
+                });
+                if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
             } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
@@ -10215,6 +10374,13 @@
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
                 if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
+                // Collapsible group panels (2026-09-09): every group starts
+                // CLOSED on Edit modal open. Admin clicks the header of the
+                // section they need. Summary chips give at-a-glance state.
+                document.querySelectorAll('#userModal .edit-modal-group.open').forEach(function(g) {
+                    g.classList.remove('open');
+                });
+                if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
             } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
@@ -11672,10 +11838,117 @@
                     if (typeof updateAccessGroupTabCounts === 'function') {
                         updateAccessGroupTabCounts();
                     }
+                    if (typeof updateEditModalGroupSummaries === 'function') {
+                        updateEditModalGroupSummaries();
+                    }
                 }
             });
             section._grantedRecountWired = true;
         })();
+
+        // ------------------------------------------------------------------
+        // Collapsible group panels in the user-edit modal (2026-09-09 Jenna
+        // redesign). Every non-identity section (Dashboard Access, Billing &
+        // Wallet, Photos, API Access, Activity CSV export) lives inside a
+        // .edit-modal-group card and starts closed. Admin clicks the header
+        // to expand the one they're working on.
+        //
+        // toggleEditModalGroup(id): flip the .open class on the wrapper.
+        // updateEditModalGroupSummaries(): rewrite the small chip on the
+        //   right of each header so the admin knows what's inside without
+        //   opening (e.g. "3 of 15 granted" for Dashboard Access, "User
+        //   wallet" for Billing).
+        // ------------------------------------------------------------------
+        function toggleEditModalGroup(groupId) {
+            const el = document.getElementById(groupId);
+            if (!el) return;
+            el.classList.toggle('open');
+        }
+
+        // Wire once: any input change inside the userModal refreshes the
+        // group-summary chips so the collapsed-view state stays truthful.
+        (function _wireEditModalGroupSummaryRefresh() {
+            const modal = document.getElementById('userModal');
+            if (!modal || modal._summaryRefreshWired) return;
+            modal.addEventListener('input', function() {
+                if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
+            });
+            modal.addEventListener('change', function() {
+                if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
+            });
+            modal._summaryRefreshWired = true;
+        })();
+
+        function _setGroupSummary(groupId, text, active) {
+            const el = document.querySelector('#' + groupId + ' .edit-modal-group-summary');
+            if (!el) return;
+            el.textContent = text || '';
+            el.classList.toggle('active', !!(active && text));
+        }
+
+        function updateEditModalGroupSummaries() {
+            // Dashboard Access: '3 of 15 granted'
+            try {
+                const section = document.getElementById('dashboardAccessSection');
+                if (section) {
+                    const items = section.querySelectorAll(':scope > .dashboard-access-item');
+                    let g = 0, t = 0;
+                    items.forEach(function(it) {
+                        if (it.dataset.adminHidden === 'true') return;
+                        const cb = it.querySelector('.dashboard-access-header .checkbox-group input[type="checkbox"]');
+                        if (cb) { t += 1; if (cb.checked) g += 1; }
+                    });
+                    _setGroupSummary('editGroupDashboard', g + ' of ' + t + ' granted', g > 0);
+                }
+            } catch (_) { /* best-effort */ }
+
+            // Billing & Wallet: 'User wallet' / 'Company wallet' plus optional
+            // 'billing admin' / 'custom scope' labels so the admin sees the
+            // routing state at a glance.
+            try {
+                const src = document.getElementById('newBillingSource');
+                const admin = document.getElementById('newCompanyBillingAdmin');
+                const scope = document.getElementById('newSpendScopeMode');
+                const parts = [];
+                if (src && src.value === 'company') parts.push('Company wallet');
+                else if (src) parts.push('User wallet');
+                if (admin && admin.checked) parts.push('billing admin');
+                if (scope && scope.value && scope.value !== 'inherit') parts.push('custom scope');
+                const active = (src && src.value === 'company') || (admin && admin.checked);
+                _setGroupSummary('editGroupBilling', parts.join(' \u00b7 '), active);
+            } catch (_) { /* best-effort */ }
+
+            // Photo & Logo: 'Photo' / 'Logo' / 'Photo \u00b7 Logo' / empty.
+            try {
+                const av = document.getElementById('userModalAvatarImg');
+                const lg = document.getElementById('userModalLogoImg');
+                const hasAv = !!(av && av.getAttribute('src') && av.style.display !== 'none');
+                const hasLg = !!(lg && lg.getAttribute('src') && lg.style.display !== 'none');
+                let text = '';
+                if (hasAv && hasLg) text = 'Photo \u00b7 Logo';
+                else if (hasAv) text = 'Photo';
+                else if (hasLg) text = 'Logo';
+                _setGroupSummary('editGroupPhotos', text, hasAv || hasLg);
+            } catch (_) { /* best-effort */ }
+
+            // API Access: 'N keys' / '1 key' / '' when zero.
+            try {
+                const list = document.getElementById('apiKeysList');
+                if (list) {
+                    const n = list.querySelectorAll('.api-key-row, [data-api-key-id]').length;
+                    const text = n === 0 ? '' : (n === 1 ? '1 key' : n + ' keys');
+                    _setGroupSummary('editGroupApi', text, n > 0);
+                }
+            } catch (_) { /* best-effort */ }
+
+            // Activity CSV export: 'Configured' when emails filled, else ''.
+            try {
+                const emails = document.getElementById('activityExportEmails');
+                const cadence = document.getElementById('activityExportCadence');
+                const on = !!(emails && emails.value && emails.value.trim() && cadence && cadence.value);
+                _setGroupSummary('editGroupCsv', on ? 'Configured' : '', on);
+            } catch (_) { /* best-effort */ }
+        }
 
         // Grant / revoke checkboxes across every VISIBLE product card
         // (respects both the active group tab and the search filter).
