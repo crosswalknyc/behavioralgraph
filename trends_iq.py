@@ -1141,9 +1141,14 @@ def _accumulate_stream_estimates_over_window(
         n = int(lookback_days or 1)
     except Exception:
         n = 1
-    # Safety cap: never sum more than 30 dated snapshots per request.
-    # Larger windows are aliased to 30-day accumulation.
-    n = max(1, min(n, 30))
+    # Safety cap: never sum more than 62 dated snapshots per request
+    # (a two-month custom range from the start/end pickers). Larger
+    # windows are aliased to 62-day accumulation ending at the range
+    # end. Was 30 before the range picker shipped (2026-09-09); the
+    # fetch fan-out is 2n reads (window + the preceding equal-length
+    # window for the delta), so this cap is also the memory guard -
+    # raise it only with a leaner per-day fold.
+    n = max(1, min(n, 62))
 
     # Reference date: asof when provided, otherwise today (UTC).
     ref_iso = asof or _today_iso()

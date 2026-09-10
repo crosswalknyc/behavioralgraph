@@ -25561,24 +25561,35 @@ https://www.instagram.com/p/..."></textarea>
                 <input type="hidden" id="trendsIQGeoValue" value="">
                 <div>
                     <label for="trendsIQLookback">Window</label>
-                    <select id="trendsIQLookback" onchange="applyTrendsIQFilters()">
+                    <select id="trendsIQLookback" onchange="tiqPresetChanged()">
                         <option value="1" selected>Yesterday</option>
                         <option value="3">Last 3 days</option>
                         <option value="7">Last 7 days</option>
                         <option value="14">Last 14 days</option>
                         <option value="30">Last 30 days</option>
+                        <option value="custom">Custom range</option>
                     </select>
                 </div>
                 <div>
-                    <!-- As-of date picker. Empty = today (live). Any past
-                         date routes the fetch to the dated snapshot folder
-                         under s3://dashboard-inputs/trends_iq_snapshots/
-                         {YYYY-MM-DD}/. The picker's min/max is set by
-                         _tiqLoadAvailableDates() on mount. -->
-                    <label for="trendsIQAsOf">As of</label>
-                    <input type="date" id="trendsIQAsOf"
-                           title="Pick a past date to see what was trending then. Defaults to today (live)."
-                           onchange="applyTrendsIQFilters()"
+                    <!-- Date-range pickers. Picking a Window preset
+                         auto-fills Start/End (ending today) and applies;
+                         editing either date is a custom range - press
+                         Apply to load it. A past end date routes the
+                         fetch to the dated snapshot folder under
+                         s3://dashboard-inputs/trends_iq_snapshots/
+                         {YYYY-MM-DD}/. min/max on both pickers is set
+                         by _tiqLoadAvailableDates() on mount. -->
+                    <label for="trendsIQStart">Start</label>
+                    <input type="date" id="trendsIQStart"
+                           title="Pick a past date range to see what was trending then. Defaults to today (live)."
+                           onchange="tiqRangeEdited()"
+                           style="min-width: 150px;">
+                </div>
+                <div>
+                    <label for="trendsIQEnd">End</label>
+                    <input type="date" id="trendsIQEnd"
+                           title="Pick a past date range to see what was trending then. Defaults to today (live)."
+                           onchange="tiqRangeEdited()"
                            style="min-width: 150px;">
                 </div>
                 <div>
@@ -53174,18 +53185,51 @@ https://www.instagram.com/p/..."></textarea>
         async function applyTrendsIQFilters(opts) {
             opts = opts || {};
             var forceRefresh = !!opts.forceRefresh;
-            // As-of date. Empty (or today) = live path. Anything else
-            // routes to the dated snapshot folder. The picker only
-            // accepts dates in the past because the future doesn't
-            // exist yet - _tiqLoadAvailableDates() sets max=today.
-            var asOfInput = document.getElementById('trendsIQAsOf');
-            var asOfVal = (asOfInput && asOfInput.value) || '';
-            var todayISO = _tiqTodayISO();
-            if (asOfVal === todayISO) asOfVal = '';
+            // Date range -> (asof, lookback_days). End empty (or today)
+            // = live path ending today; a past end date routes to the
+            // dated snapshot folder. Window length = end - start + 1
+            // days, so "Jun 1 - Jun 30" is a 30-day view ending Jun 30.
+            // _tiqLoadAvailableDates() sets min/max on both pickers.
+            var startInput = document.getElementById('trendsIQStart');
+            var endInput   = document.getElementById('trendsIQEnd');
+            var todayISO   = _tiqTodayISO();
+            var endVal     = (endInput && endInput.value) || '';
+            if (!endVal || endVal > todayISO) {
+                endVal = todayISO;
+                if (endInput && endInput.value) endInput.value = todayISO;
+            }
+            var startVal = (startInput && startInput.value) || '';
+            if (!startVal) {
+                // No start picked: fall back to the Window preset length
+                // ending at the end date (default = live today).
+                var presetN = parseInt(document.getElementById('trendsIQLookback').value, 10);
+                if (!isFinite(presetN) || presetN < 1) presetN = 1;
+                startVal = _tiqShiftISO(endVal, -(presetN - 1));
+            }
+            if (startVal > endVal) {
+                // Swapped inputs: treat the earlier date as the start.
+                var _sw = startVal; startVal = endVal; endVal = _sw;
+                if (startInput) startInput.value = startVal;
+                if (endInput)   endInput.value   = endVal;
+            }
+            // Clamp the start to available history so a range reaching
+            // past coverage degrades to the covered part.
+            if (startInput && startInput.min && startVal < startInput.min) {
+                startVal = startInput.min;
+                startInput.value = startVal;
+            }
+            var rangeDays = _tiqDaysBetween(startVal, endVal) + 1;
+            if (rangeDays > 62) {
+                // Two-month cap, matching the backend accumulator.
+                rangeDays = 62;
+                startVal = _tiqShiftISO(endVal, -61);
+                if (startInput) startInput.value = startVal;
+            }
+            var asOfVal = (endVal === todayISO) ? '' : endVal;
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
                 geo_value:     document.getElementById('trendsIQGeoValue').value || '',
-                lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '1', 10),
+                lookback_days: rangeDays,
                 asof:          asOfVal || null,
             };
             if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
@@ -53278,19 +53322,84 @@ https://www.instagram.com/p/..."></textarea>
             return y + '-' + m + '-' + day;
         }
 
-        // "Today" button: clear the As-of picker and re-run the fetch.
+        // Shift a YYYY-MM-DD by N days (negative = back) in UTC.
+        function _tiqShiftISO(iso, days) {
+            var p = String(iso || '').split('-');
+            var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+            d.setUTCDate(d.getUTCDate() + days);
+            var y = d.getUTCFullYear();
+            var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            var dd = String(d.getUTCDate()).padStart(2, '0');
+            return y + '-' + m + '-' + dd;
+        }
+
+        // Whole days between two YYYY-MM-DD dates (b - a).
+        function _tiqDaysBetween(a, b) {
+            var pa = String(a || '').split('-');
+            var pb = String(b || '').split('-');
+            var da = Date.UTC(+pa[0], +pa[1] - 1, +pa[2]);
+            var db = Date.UTC(+pb[0], +pb[1] - 1, +pb[2]);
+            var n = Math.round((db - da) / 86400000);
+            return isFinite(n) ? n : 0;
+        }
+
+        // "Jun 1 - Jun 30, 2026" (same year), "Dec 28, 2025 - Jan 3,
+        // 2026" (cross-year), or a single "Jun 30, 2026" for a 1-day
+        // range. The meta bar's text-transform renders it uppercase.
+        function _tiqRangeLabel(startISO, endISO) {
+            var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            function part(iso, withYear) {
+                var p = String(iso || '').split('-');
+                var label = MON[(+p[1] || 1) - 1] + ' ' + (+p[2] || 1);
+                return withYear ? (label + ', ' + p[0]) : label;
+            }
+            if (!startISO || startISO === endISO) return part(endISO, true);
+            var sameYear = String(startISO).slice(0, 4) === String(endISO).slice(0, 4);
+            return part(startISO, !sameYear) + ' - ' + part(endISO, true);
+        }
+
+        // Window preset picked: fill the Start/End range (ending today)
+        // and apply. "Custom range" leaves the dates alone for manual
+        // editing - press Apply after picking them.
+        function tiqPresetChanged() {
+            var sel = document.getElementById('trendsIQLookback');
+            var n = parseInt((sel && sel.value) || '', 10);
+            if (!isFinite(n) || n < 1) return; // Custom range selected
+            var end = _tiqTodayISO();
+            var start = _tiqShiftISO(end, -(n - 1));
+            var s = document.getElementById('trendsIQStart');
+            var e = document.getElementById('trendsIQEnd');
+            if (s) s.value = start;
+            if (e) e.value = end;
+            applyTrendsIQFilters();
+        }
+
+        // Start/End edited by hand: flip the Window preset to "Custom
+        // range" and wait for Apply (no fetch on a half-edited range).
+        function tiqRangeEdited() {
+            var sel = document.getElementById('trendsIQLookback');
+            if (sel) sel.value = 'custom';
+            var meta = document.getElementById('trendsIQMeta');
+            if (meta) meta.textContent = 'Press Apply to load the selected date range.';
+        }
+
+        // "Today" button: clear the range back to live today and re-run.
         function tiqResetAsOf() {
-            var el = document.getElementById('trendsIQAsOf');
-            if (el) el.value = '';
+            var s = document.getElementById('trendsIQStart');
+            var e = document.getElementById('trendsIQEnd');
+            if (s) s.value = '';
+            if (e) e.value = '';
+            var sel = document.getElementById('trendsIQLookback');
+            if (sel && sel.value === 'custom') sel.value = '1';
             applyTrendsIQFilters();
         }
 
         // On first mount, ask the backend which past dates have data
-        // so we can constrain the As-of picker. The <input type="date">
-        // widget respects `min` + `max` in every modern browser; we
-        // set `max` to today (nothing in the future) and `min` to the
-        // oldest available snapshot. Users can still type any value,
-        // but the calendar UI enforces the range.
+        // so we can constrain the Start/End pickers. The <input
+        // type="date"> widget respects `min` + `max` in every modern
+        // browser; we set `max` to today (nothing in the future) and
+        // `min` to the oldest available snapshot. Users can still type
+        // any value, but the calendar UI enforces the range.
         async function _tiqLoadAvailableDates() {
             try {
                 var resp = await fetch('/api/trends-iq/available-dates',
@@ -53298,13 +53407,24 @@ https://www.instagram.com/p/..."></textarea>
                 var data = await resp.json();
                 if (!data || !data.success) return;
                 var dates = data.dates || [];
-                var picker = document.getElementById('trendsIQAsOf');
-                if (!picker) return;
+                var startPicker = document.getElementById('trendsIQStart');
+                var endPicker = document.getElementById('trendsIQEnd');
+                if (!startPicker && !endPicker) return;
                 var today = _tiqTodayISO();
-                picker.max = today;
-                if (dates.length) {
-                    // dates is sorted descending; last entry is oldest.
-                    picker.min = dates[dates.length - 1];
+                // dates is sorted descending; last entry is oldest.
+                var oldest = dates.length ? dates[dates.length - 1] : '';
+                [startPicker, endPicker].forEach(function (p) {
+                    if (!p) return;
+                    p.max = today;
+                    if (oldest) p.min = oldest;
+                });
+                // Show the live default range explicitly; empty inputs
+                // behave the same, this just makes the state readable.
+                if (startPicker && !startPicker.value && endPicker && !endPicker.value) {
+                    var n0 = parseInt(document.getElementById('trendsIQLookback').value, 10);
+                    if (!isFinite(n0) || n0 < 1) n0 = 1;
+                    startPicker.value = _tiqShiftISO(today, -(n0 - 1));
+                    endPicker.value = today;
                 }
             } catch (e) {
                 // Best-effort. Falling back to an unconstrained picker
@@ -54439,10 +54559,15 @@ https://www.instagram.com/p/..."></textarea>
             var meta = document.getElementById('trendsIQMeta');
             var updatedAt = document.getElementById('trendsIQUpdatedAt');
             if (meta) {
-                var _asOfSuffix = filters.historic ? (' | Viewing ' + filters.asof) : '';
+                // Range read-out: "Jun 1 - Jun 30, 2026" for a range,
+                // a single date for a 1-day view. End = asof (today on
+                // the live path); start = end - (window - 1) days.
+                var _endISO = filters.asof || _tiqTodayISO();
+                var _nDays = parseInt(filters.lookback_days, 10);
+                if (!isFinite(_nDays) || _nDays < 1) _nDays = 1;
+                var _startISO = _tiqShiftISO(_endISO, -(_nDays - 1));
                 meta.textContent = 'Trending for ' + (filters.geo_label || 'National')
-                                   + ' - last ' + (filters.lookback_days || 1) + ' days'
-                                   + _asOfSuffix;
+                                   + ' - ' + _tiqRangeLabel(_startISO, _endISO);
                 // Historic-mode styling: a small purple accent on the meta
                 // line makes it obvious the user is time-travelling and
                 // that live surfaces (Search / Movers / Social /
@@ -55332,16 +55457,21 @@ https://www.instagram.com/p/..."></textarea>
             return out;
         }
 
-        // Prefer the As-Of date from the last payload's filters when in
-        // historic mode. The filename then reads e.g.
-        //   trends-iq-all-2026-08-15-millennials.csv
-        // for an August 15 As-Of + Millennials lens combo, so an ops
-        // hand-off later has zero ambiguity about which slice this is.
+        // Stamp filenames with the viewed date range. A multi-day
+        // range reads start_end, e.g.
+        //   trends-iq-all-2026-06-01_2026-06-30-millennials.csv
+        // for a June 1-30 range + Millennials lens combo; a 1-day view
+        // keeps the single date, so an ops hand-off later has zero
+        // ambiguity about which slice this is.
         function _tiqExportDateStamp() {
             var last = (window.__trendsIQ && window.__trendsIQ.lastData) || {};
             var f = last.filters || {};
-            if (f.historic && f.asof) return String(f.asof);
-            return _tiqTodayStamp();
+            var endISO = (f.historic && f.asof) ? String(f.asof) : _tiqTodayStamp();
+            var n = parseInt(f.lookback_days, 10);
+            if (isFinite(n) && n > 1) {
+                return _tiqShiftISO(endISO, -(n - 1)) + '_' + endISO;
+            }
+            return endISO;
         }
 
         // Human-readable slug for the active lens dropdown option. Used
