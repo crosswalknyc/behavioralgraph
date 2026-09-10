@@ -16,13 +16,19 @@ Manual one-shot (during dev):
 
     cd /root/finished_codes/bg-webapp
     python3 -m scripts.trends_scrapers.run_all
-    python3 -m scripts.trends_scrapers.run_all --only bestbuy,nike        # subset
-    python3 -m scripts.trends_scrapers.run_all --skip walmart,target      # skip Playwright
+    python3 -m scripts.trends_scrapers.run_all --only music_charts,book_charts   # subset
+    python3 -m scripts.trends_scrapers.run_all --skip hulu,primevideo            # skip Playwright
 
-Each scraper is executed in a thread pool so a slow retailer (Walmart
-warm-up) doesn't block the fast ones. Playwright-based scrapers still
-launch their own browsers in parallel; if you're on a small VM cap the
-workers with `--workers 3`.
+Each scraper is executed in a thread pool so a slow one (a Playwright
+warm-up, or a JustWatch top-100 page) doesn't block the fast ones.
+Playwright-based scrapers still launch their own browsers in parallel;
+if you're on a small VM cap the workers with `--workers 3`.
+
+Retailer scrapers (bestbuy, target, walmart, etsy, sephora, nike,
+lululemon) were sunset 2026-09-10 (Jenna). The dashboard's Products
+card was already retired 2026-07-28; this cleanup removes the daily
+scrapes that were still running against dead selectors / anti-bot
+walls.
 """
 
 from __future__ import annotations
@@ -98,13 +104,12 @@ SCRAPERS = [
     # any social source back, add its (source, module, label, 'social')
     # tuple back here and re-wire `_fetch_social_trending` into
     # `compute_view` in trends_iq.py.
-    ('bestbuy',   'scripts.trends_scrapers.bestbuy',    'Best Buy',  'retailer'),
-    ('nike',      'scripts.trends_scrapers.nike',       'Nike',      'retailer'),
-    ('lululemon', 'scripts.trends_scrapers.lululemon',  'Lululemon', 'retailer'),
-    ('etsy',      'scripts.trends_scrapers.etsy',       'Etsy',      'retailer'),
-    ('sephora',   'scripts.trends_scrapers.sephora',    'Sephora',   'retailer'),
-    ('target',    'scripts.trends_scrapers.target',     'Target',    'retailer'),
-    ('walmart',   'scripts.trends_scrapers.walmart',    'Walmart',   'retailer'),
+    # Retailer scrapers (bestbuy, nike, lululemon, etsy, sephora, target,
+    # walmart) were sunset 2026-09-10 (Jenna: "remove retailers, that's
+    # sunset"). The Products card was already retired from the dashboard
+    # 2026-07-28; the scrapes had been silently returning 0 categories
+    # against site-selector drift / anti-bot walls for weeks. If a retail
+    # signal comes back into scope, re-add its tuple here.
     # Streaming platforms. Prime Video uses donated cookies via
     # cookie_domain=<host>. Netflix, Disney+, ESPN+, Max, and Hulu are
     # NOT in this list because they run from Jenna's laptop via
@@ -626,29 +631,25 @@ def main(argv: list[str] | None = None) -> int:
         # indistinguishable from a total failure.
         count = int(r.get('count') or 0) or len(r.get('national') or [])
         kind = r.get('kind') or ''
-        # Retailers/streaming with 0 items are always cookie-donation
-        # candidates. Social sources (including the old TikTok CC
-        # preview-card guardrail) were removed 2026-08-20 when the
-        # scrape was killed.
-        if kind in {'retailer', 'streaming'} and count == 0:
+        # Streaming feeds with 0 items are cookie-donation candidates.
+        # Retailer scrapers (bestbuy/target/walmart/etsy/sephora/nike/
+        # lululemon) were sunset 2026-09-10; social sources were killed
+        # 2026-08-20. Only streaming remains.
+        if kind == 'streaming' and count == 0:
             empty_sources.append((r.get('source', ''), kind))
         print(f"{r.get('source', ''):<12} {kind:<9} "
                f"{count:>6}  "
                f"{(r.get('orchestrator_elapsed_s') or r.get('scrape_elapsed_s') or 0):>7.1f}s  "
                f"{err[:60]}")
 
-    # Empty retailer / streaming feeds are almost always a bot-block or
-    # a missing session. Print the exact `donate_cookies.py` command the
-    # operator needs to run. Netflix uses public TSVs so it's never in
-    # this list even when it fails (that would be a network issue, not
-    # a cookie issue).
+    # Empty streaming feeds are almost always a bot-block or a missing
+    # session. Print the exact `donate_cookies.py` command the operator
+    # needs to run. Netflix uses public TSVs so it's never in this list
+    # even when it fails (that would be a network issue, not a cookie
+    # issue). Retailer domain map was removed 2026-09-10 when those
+    # scrapers were sunset.
     if empty_sources:
         domain_map = {
-            # Retailers
-            'target':     'target.com',     'walmart':    'walmart.com',
-            'etsy':       'etsy.com',       'sephora':    'sephora.com',
-            'lululemon':  'lululemon.com',  'bestbuy':    'bestbuy.com',
-            'nike':       'nike.com',       'ulta':       'ulta.com',
             # Streaming (Disney+ / ESPN+ intentionally omitted - they
             # run from Jenna's laptop via local_residential_run.py
             # because Bamgrid IP-gates Hetzner)
