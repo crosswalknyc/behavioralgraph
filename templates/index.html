@@ -120949,6 +120949,8 @@ https://www.instagram.com/p/..."></textarea>
             view.setAttribute('data-piq-tab', tabName || 'insights');
             if (typeof currentDashboardData !== 'undefined' && currentDashboardData) {
                 view.classList.add('piq-has-profile');
+                var dc = document.getElementById('dashboardContent');
+                if (dc) dc.style.display = 'block';
             }
             if (view.classList.contains('piq-has-profile') && window._piqV4DressPages) {
                 try { window._piqV4DressPages(); } catch (_e) {}
@@ -121462,7 +121464,7 @@ https://www.instagram.com/p/..."></textarea>
             var p1 = top.slice(1, 3).map(function(it) { return it.name; }).filter(Boolean);
             var p2 = low.map(function(it) { return it.name; }).filter(Boolean);
             var html = '<div class="piq-editorial"><div class="lead"><span class="glow">' + window._piqV4Esc(lead) + '</span> The strongest interest signal on this file.</div>';
-            if (p1.length) html += '<p><b>' + window._piqV4Esc(p1.join('</b> and <b>')) + '</b> stack next.</p>';
+            if (p1.length) html += '<p><b>' + p1.map(function(n) { return window._piqV4Esc(n); }).join('</b> and <b>') + '</b> stack next.</p>';
             html += '</div>';
             if (top.length) {
                 html += '<div class="piq-callout"><span class="lbl">Sponsor fit</span>' + window._piqV4Esc(top.slice(0, 3).map(function(it) { return it.name; }).join(', ')) + ' read as first-choice categories.</div>';
