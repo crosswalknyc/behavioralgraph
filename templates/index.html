@@ -22133,6 +22133,19 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
             padding: 8px 32px;
         }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #profileAndToolbarRow {
+            max-height: none !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #dashProfileInfo {
+            border-bottom: 0;
+            background: #0C1618;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #dashProfileInfo {
+            background: #E9E8E1;
+        }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
             align-items: center;
@@ -23701,7 +23714,7 @@ https://www.instagram.com/p/..."></textarea>
             top: auto !important;
         }
         #dashboardView.piq-v4 #tab-behavioral #behavioralGrid {
-            scroll-margin-top: 140px;
+            scroll-margin-top: 300px;
         }
         #dashboardView.piq-v4 #tab-behavioral .behavioral-cat-icon,
         #dashboardView.piq-v4 #tab-behavioral .drag-handle,
@@ -121925,7 +121938,11 @@ https://www.instagram.com/p/..."></textarea>
                 jump.id = 'piqBehJump';
                 jump.className = 'piq-jump';
             }
-            if (wrap && jump.parentNode !== wrap) wrap.appendChild(jump);
+            if (wrap) {
+                var heroRow = document.getElementById('profileAndToolbarRow');
+                if (heroRow && heroRow.parentNode === wrap) wrap.insertBefore(jump, heroRow);
+                else if (jump.parentNode !== wrap) wrap.appendChild(jump);
+            }
             var opts = [];
             if (sel) {
                 Array.prototype.slice.call(sel.options).forEach(function(o) {
@@ -122105,6 +122122,19 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (row.parentNode !== wrap) wrap.appendChild(row);
             if (bar.parentNode !== wrap) wrap.appendChild(bar);
+            var heroRow = document.getElementById('profileAndToolbarRow');
+            var slim = (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
+            if (heroRow) {
+                if (slim) {
+                    if (heroRow.parentNode !== wrap) wrap.appendChild(heroRow);
+                } else if (heroRow.parentNode === wrap) {
+                    wrap.insertAdjacentElement('afterend', heroRow);
+                }
+            }
+            var jump = document.getElementById('piqBehJump');
+            if (jump && jump.parentNode === wrap && heroRow && heroRow.parentNode === wrap) {
+                wrap.insertBefore(jump, heroRow);
+            }
             return wrap;
         };
         window._piqV4DressTabs = function() {
