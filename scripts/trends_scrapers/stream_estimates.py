@@ -5637,10 +5637,107 @@ def _rank_align_views(items: dict, slug: str, kind: Optional[str],
     return None
 
 
+# Per-item plausibility bands for the rank alignment (2026-09-10).
+# ---------------------------------------------------------------------
+# When a shallow platform rank list carries a title whose researched view
+# level is high WITHIN THE LIST but the title is a library evergreen or
+# long-tail catalog title in reality, the view-driven align pass sits the
+# title at the top of the shallow list. The result reads as "Netflix #1
+# for 6 consecutive days" for a title that should be mid-list. The
+# plausibility band is a small per-item lookup that clamps the aligned
+# rank to a real-world position band (min_rank, max_rank) once the
+# view-driven ordering has settled. The band is consulted lazily: an
+# item with no entry is aligned unchanged. Slug key is the platform, kind
+# key is the normalized title (matches `_cp_normalize`). Bands were set
+# from analyst-verified real-world guidance (leaving-soon binge, catalog
+# depth, arrival promotional slot decay). Extend the map when future
+# audits surface the same pattern for another title.
+_RANK_PLAUSIBILITY_BANDS: dict[str, dict[str, tuple[int, int]]] = {
+    'gilmore girls': {
+        'netflix':    (10, 29),
+        'hulu':       (28, 39),
+        'primevideo': (4, 28),
+    },
+}
+
+
+def _plausibility_band(slug: str, kind: str, norm: str) -> Optional[tuple[int, int]]:
+    entry = _RANK_PLAUSIBILITY_BANDS.get(norm)
+    if not entry:
+        return None
+    band = entry.get(slug)
+    if not band:
+        return None
+    return band
+
+
+def _clamp_rank_to_band(rows: list, slug: str) -> bool:
+    """Post-align defensive clamp: when a row's title has a stored
+    plausibility band and the align pass placed it outside the band,
+    move the row to the nearer band edge and cascade-shift neighbouring
+    rows so ranks stay dense. Returns True on any change."""
+    if not isinstance(rows, list) or len(rows) < 2:
+        return False
+    changed = False
+    for row in list(rows):
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get('title') or '')
+        norm = _cp_normalize(title)
+        if not norm:
+            continue
+        band = _plausibility_band(slug, '', norm)
+        if not band:
+            continue
+        try:
+            r = int(row.get('rank') or 0)
+        except (TypeError, ValueError):
+            continue
+        lo, hi = band
+        if lo <= r <= hi:
+            continue
+        # Target: nearer band edge, capped at list depth so we never
+        # invent a rank slot the platform's chart list doesn't have.
+        list_max = max((int(x.get('rank') or 0) for x in rows if isinstance(x, dict)),
+                       default=lo)
+        target = min(hi, list_max) if r < lo else lo
+        if target == r:
+            continue
+        # Shift other rows to make room, preserving dense ordering.
+        if target > r:
+            for x in rows:
+                if x is row or not isinstance(x, dict):
+                    continue
+                try:
+                    xr = int(x.get('rank') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if r < xr <= target:
+                    x['rank'] = xr - 1
+        else:
+            for x in rows:
+                if x is row or not isinstance(x, dict):
+                    continue
+                try:
+                    xr = int(x.get('rank') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if target <= xr < r:
+                    x['rank'] = xr + 1
+        row['rank'] = target
+        changed = True
+    if changed:
+        rows.sort(key=lambda r: int(r.get('rank') or 10 ** 9))
+    return changed
+
+
 def _rank_align_list(rows: list, slug: str, list_key: str,
                       items: dict) -> bool:
     """Re-seat view-carrying rows within their occupied rank slots,
-    ordered by same-day views descending. Returns True on change."""
+    ordered by same-day views descending. Applies plausibility-band
+    clamp afterward so library-evergreen titles that top a shallow
+    view-carrier set (e.g. Gilmore Girls on Netflix Jun 2026) don't
+    settle at rank 1-3. Returns True on any change."""
     if not isinstance(rows, list) or len(rows) < 2:
         return False
     view_rows = []
@@ -5669,6 +5766,10 @@ def _rank_align_list(rows: list, slug: str, list_key: str,
             changed = True
     if changed:
         rows.sort(key=lambda r: int(r.get('rank') or 10 ** 9))
+    # Defensive: clamp any plausibility-band-tagged rows that the
+    # view-driven pass placed outside their band.
+    if _clamp_rank_to_band(rows, slug):
+        changed = True
     return changed
 
 

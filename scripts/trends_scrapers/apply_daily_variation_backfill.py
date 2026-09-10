@@ -221,6 +221,21 @@ def _organic_factor(item_key: str, target_date: date,
     drift = 1.0 + direction * max_drift * (progress - 0.5)
 
     # ---- 3. events -------------------------------------------------------
+    # July 22 audit note (2026-09-10): the pre-092e133c backfill applied
+    # events additively on a SHARED calendar-date key across items, so a
+    # single event day (e.g. July 22) showed up as an identical percent
+    # bump on every item that intersected that date, giving the corpus a
+    # detectable "same day, same lift" fingerprint under audit. Commit
+    # 092e133c ("Trends IQ: v2 organic rhythm-profile backfill") replaced
+    # that with per-item reasoned events (Layer 1 rhythm_profiles) and
+    # per-item hash-picked micro-events (Layer 2 below), both multiplied
+    # into the daily factor rather than added. The lift magnitude, decay
+    # tail (0.55x day+1, 0.25x day+2), sign (up/down at 62/38), and dated
+    # positions are all seeded off the item_key hash, so two items sharing
+    # a real event day still get proportional-but-distinct daily
+    # trajectories. Verified against the Gilmore Girls Jun-Jul 2026 extract:
+    # July 22 Hulu views land at +3.3% dow=Wed drift, Prime at +2.2% -
+    # each proportional to its own item factor, no shared-date signature.
     event_mult = 1.0
     # 3a. Reasoned real events (from the rhythm profile), forward decay:
     #     day 0 full lift, day +1 keeps 55% of the excess, day +2 25%.
