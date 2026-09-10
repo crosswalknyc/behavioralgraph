@@ -24100,16 +24100,16 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 #analysisToolsTabs {
             border-left-color: #C9C6BA;
         }
-        #dashboardView.piq-v4 .dashboard-layout > .persistent-sidebar,
-        #dashboardView.piq-v4 #piqProfileSidebar {
+        #dashboardView.piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar,
+        #dashboardView.piq-v4.piq-has-profile #piqProfileSidebar {
             position: fixed !important;
             left: 0;
             top: 0;
             bottom: 0;
             z-index: 2147482000;
-            width: 320px !important;
-            min-width: 320px !important;
-            max-width: 320px !important;
+            width: 360px !important;
+            min-width: 360px !important;
+            max-width: 360px !important;
             height: 100vh !important;
             max-height: none !important;
             border-radius: 0;
@@ -24118,11 +24118,11 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
             display: flex !important;
         }
-        #dashboardView.piq-v4.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
-        #dashboardView.piq-v4.piq-sidebar-open #piqProfileSidebar {
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqProfileSidebar {
             transform: translateX(0);
         }
-        #dashboardView.piq-v4.piq-sidebar-open #piqSidebarScrim { display: block; }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
         #dashboardView.piq-v4:not(.piq-has-profile) {
             overflow-x: hidden !important;
             overflow-y: auto !important;
@@ -24204,11 +24204,274 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4:not(.piq-has-profile) #toolbarContent > .dash-dropdown,
         #dashboardView.piq-v4:not(.piq-has-profile) #hoverToggle,
         #dashboardView.piq-v4:not(.piq-has-profile) #dashDisplayToggle,
-        #dashboardView.piq-v4:not(.piq-has-profile) #piqBehJump {
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqBehJump,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqChangeProfileBtn,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqEmptyBrowseBtn {
             display: none !important;
         }
         #dashboardView.piq-v4:not([data-piq-tab="behavioral"]) #piqBehJump {
             display: none !important;
+        }
+
+        /* Body copy stays sentence case. Eyebrows / tabs / KPI labels can stay caps. */
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard,
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard p,
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li,
+        #dashboardView.piq-v4 #tab-insights .piq-editorial,
+        #dashboardView.piq-v4 #tab-insights .piq-editorial .lead,
+        #dashboardView.piq-v4 #tab-insights .piq-editorial .lead .glow,
+        #dashboardView.piq-v4 #tab-insights .piq-editorial p,
+        #dashboardView.piq-v4 #tab-insights .piq-callout,
+        #dashboardView.piq-v4 .audience-takeaways li,
+        #dashboardView.piq-v4 #dashHeroOneliner,
+        #dashboardView.piq-v4 .piq-empty h2,
+        #dashboardView.piq-v4 .piq-empty p,
+        #dashboardView.piq-v4 .piq-section-head h2,
+        #dashboardView.piq-v4 .piq-panel-head h3,
+        #dashboardView.piq-v4 .inline-tab-header p {
+            text-transform: none !important;
+            letter-spacing: -0.011em !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li {
+            font-weight: 400 !important;
+            font-size: 14px !important;
+            line-height: 1.55 !important;
+            color: #E9E8E1 !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li:first-child {
+            font-weight: 700 !important;
+            font-size: 18px !important;
+            line-height: 1.35 !important;
+            color: #E682FF !important;
+            letter-spacing: -0.015em !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li {
+            color: #0C1618 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights #behavioralProfileCard li:first-child {
+            color: #8E3FA8 !important;
+        }
+
+        /* Empty: library sits as a left rail. Loaded: Change profile opens a drawer. */
+        #dashboardView.piq-v4:not(.piq-has-profile) .dashboard-layout {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: stretch !important;
+            gap: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: calc(100vh - 140px);
+            overflow: visible !important;
+            margin-top: 0 !important;
+        }
+        #dashboardView.piq-v4:not(.piq-has-profile) .dashboard-layout > .persistent-sidebar,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqProfileSidebar {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            bottom: auto !important;
+            transform: none !important;
+            width: 360px !important;
+            min-width: 360px !important;
+            max-width: 360px !important;
+            height: auto !important;
+            min-height: calc(100vh - 140px);
+            max-height: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            z-index: 2;
+        }
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqSidebarScrim,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqChangeProfileBtn,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqEmptyBrowseBtn,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqPickerCloseBtn {
+            display: none !important;
+        }
+        #dashboardView.piq-v4:not(.piq-has-profile) #dashboardEmptyState {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 72px 48px 96px !important;
+        }
+
+        #dashboardView.piq-v4 #piqProfileSidebar {
+            display: flex !important;
+            flex-direction: column;
+            gap: 16px;
+            padding: 22px 18px 28px !important;
+            background: #15252A !important;
+            border: 0 !important;
+            border-right: 1px solid #3B3D38 !important;
+            color: #E9E8E1 !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqProfileSidebar {
+            background: #FFFFFF !important;
+            border-right-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .piq-picker-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        #dashboardView.piq-v4 .piq-picker-eyebrow {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #7C878A;
+            margin-bottom: 6px;
+        }
+        #dashboardView.piq-v4 .sidebar-header-section {
+            margin-bottom: 0 !important;
+        }
+        #dashboardView.piq-v4 .sidebar-header-section h3 {
+            margin: 0 !important;
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 22px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em !important;
+            line-height: 1.1 !important;
+            text-transform: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .sidebar-header-section h3 { color: #0C1618 !important; }
+        #dashboardView.piq-v4 .piq-picker-close {
+            flex: 0 0 auto;
+            width: 28px;
+            height: 28px;
+            border: 1px solid #3B3D38;
+            border-radius: 6px;
+            background: #0C1618;
+            color: #9AA09B;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4.piq-has-profile:not(.piq-sidebar-open) #piqPickerCloseBtn { display: none; }
+        #dashboardView.piq-v4 .piq-picker-search {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        #dashboardView.piq-v4 .sidebar-search {
+            flex: 1;
+            background: #0C1618 !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 6px !important;
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            letter-spacing: -0.01em !important;
+            text-transform: none !important;
+            padding: 10px 12px !important;
+        }
+        #dashboardView.piq-v4 .sidebar-search::placeholder {
+            color: #7C878A;
+            text-transform: none;
+        }
+        #dashboardView.piq-v4 .sidebar-search:focus {
+            outline: 2px solid #3358FF;
+            outline-offset: 2px;
+            border-color: #3358FF !important;
+        }
+        #dashboardView.piq-v4 .piq-picker-refresh {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 6px !important;
+            background: #0C1618 !important;
+            color: #9AA09B !important;
+            font-size: 14px !important;
+            cursor: pointer;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .sidebar-search,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-refresh,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-close {
+            background: #E9E8E1 !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .profile-select-tree {
+            background: transparent !important;
+            border-radius: 0 !important;
+            padding: 2px 0 8px !important;
+        }
+        #dashboardView.piq-v4 .profile-cat-item {
+            background: transparent !important;
+            color: #E9E8E1 !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            letter-spacing: -0.01em !important;
+            text-transform: none !important;
+            padding: 8px 8px !important;
+            border-radius: 6px !important;
+            gap: 8px !important;
+        }
+        #dashboardView.piq-v4 .profile-cat-item.master-cat {
+            background: transparent !important;
+            font-weight: 600 !important;
+            margin-top: 6px;
+        }
+        #dashboardView.piq-v4 .profile-cat-item:hover {
+            background: #1B2F35 !important;
+        }
+        #dashboardView.piq-v4 .profile-cat-label {
+            color: #E9E8E1 !important;
+            text-transform: none !important;
+            letter-spacing: -0.01em !important;
+        }
+        #dashboardView.piq-v4 .piq-picker-icon {
+            width: 18px;
+            text-align: center;
+            opacity: 0.7;
+            flex-shrink: 0;
+        }
+        #dashboardView.piq-v4 .profile-cat-count {
+            color: #7C878A !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            font-variant-numeric: tabular-nums;
+        }
+        #dashboardView.piq-v4 .profile-select-item {
+            text-transform: none !important;
+            letter-spacing: -0.01em !important;
+            color: #E9E8E1 !important;
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            line-height: 1.35 !important;
+            padding: 8px 10px !important;
+            border-radius: 6px !important;
+        }
+        #dashboardView.piq-v4 .profile-select-item:not(.locked):hover {
+            background: #1B2F35 !important;
+            color: #E9E8E1 !important;
+        }
+        #dashboardView.piq-v4 .profile-select-item.active {
+            background: rgba(199, 242, 62, 0.08) !important;
+            color: #C7F23E !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item,
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-label,
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item {
+            color: #0C1618 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item:not(.locked):hover {
+            background: #E9E8E1 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item.active {
+            background: rgba(94, 126, 18, 0.10) !important;
+            color: #5E7E12 !important;
+        }
+        #dashboardView.piq-v4 .piq-change-profile {
+            text-transform: none !important;
+            letter-spacing: -0.01em !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
         }
     </style>
 
@@ -24393,10 +24656,16 @@ https://www.instagram.com/p/..."></textarea>
                 <!-- Persistent Sidebar - Always Visible -->
                 <div class="persistent-sidebar" id="piqProfileSidebar">
                     <div class="sidebar-header-section">
-                        <h3>Select Profile</h3>
-                        <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
-                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        <div class="piq-picker-top">
+                            <div>
+                                <div class="piq-picker-eyebrow">Library</div>
+                                <h3>Select a profile.</h3>
+                            </div>
+                            <button type="button" class="piq-picker-close" id="piqPickerCloseBtn" aria-label="Close library">×</button>
+                        </div>
+                        <div class="piq-picker-search">
+                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles" class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
+                            <button type="button" class="piq-picker-refresh has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()">↻</button>
                         </div>
                     </div>
                     <div class="profile-select-tree" id="dashProfileTree">
@@ -121728,6 +121997,56 @@ https://www.instagram.com/p/..."></textarea>
                 if (inp) setTimeout(function() { try { inp.focus(); } catch (_e) {} }, 40);
             }
         };
+        window._piqV4FolderLabel = function(raw) {
+            var s = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+            if (!s) return '';
+            var map = {
+                'TALENT': 'Talent',
+                'CONTENT': 'Content',
+                'PLATFORMS': 'Platforms',
+                'BRAND': 'Brand',
+                'GEN POP': 'Gen Pop',
+                'SPORT': 'Sport',
+                'TRENDS': 'Trends',
+                'STREAMING/PLATFORM': 'Streaming / platform',
+                'STREAMING VIDEO': 'Streaming / platform',
+                'APP/PLATFORM': 'App / platform',
+                'SEARCH ENGINE/AI': 'Search engine / AI',
+                'SOCIAL MEDIA': 'Social media',
+                'MUSICIAN/BAND': 'Musician / band',
+                'INFLUENCER/CREATOR': 'Influencer / creator',
+                'HOST/PERSONALITY': 'Host / personality',
+                'POLITICS/ACTIVIST': 'Politics / activist',
+                'WRITER/DIRECTOR/AUTHOR/ARTIST': 'Writer / director',
+                'NON PROFIT/CHARITY': 'Non profit / charity',
+                'APPAREL/FOOTWEAR': 'Apparel / footwear',
+                'MOST PURCHASED BRANDS': 'Most purchased brands'
+            };
+            var key = s.toUpperCase();
+            if (map[key]) return map[key];
+            var letters = s.replace(/[^A-Za-z]/g, '');
+            var up = s.replace(/[^A-Z]/g, '').length;
+            if (letters.length && (up / letters.length) > 0.55) {
+                s = s.toLowerCase().replace(/(^|[\s\/&-])([a-z])/g, function(_, a, b) { return a + b.toUpperCase(); });
+            }
+            return s;
+        };
+        window._piqV4SentenceCase = function(raw) {
+            var t = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+            if (!t) return t;
+            var letters = t.replace(/[^A-Za-z]/g, '');
+            var up = t.replace(/[^A-Z]/g, '').length;
+            if (!letters.length || (up / letters.length) <= 0.55) return t;
+            t = t.toLowerCase();
+            t = t.replace(/(^[a-z])|([.?!]\s+[a-z])/g, function(m) { return m.toUpperCase(); });
+            var pretty = window._piqV4PrettyName ? window._piqV4PrettyName(
+                ((document.getElementById('dashBrandNameHeader') || {}).textContent) || ''
+            ) : '';
+            if (pretty && t.toLowerCase().indexOf(pretty.toLowerCase()) === 0) {
+                t = pretty + t.slice(pretty.length);
+            }
+            return t;
+        };
         window._piqV4PrettyName = function(raw) {
             var pretty = String(raw || '').replace(/\s+/g, ' ').replace(/\.$/, '').trim();
             pretty = pretty.replace(/\s+-\s+(Total Universe|TOTAL UNIVERSE|Tu|TU|Avid Fan|Casual Fan)\s*$/i, '');
@@ -121951,6 +122270,23 @@ https://www.instagram.com/p/..."></textarea>
             if (right && !right.querySelector('#piqBehHead')) {
                 ensureHead(right, 'piqBehHead', '04 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
             }
+            if (bpCard) {
+                bpCard.querySelectorAll('li, p').forEach(function(el) {
+                    if (el.querySelector('b, strong, span, em')) return;
+                    var next = window._piqV4SentenceCase ? window._piqV4SentenceCase(el.textContent || '') : (el.textContent || '');
+                    if (next && next !== (el.textContent || '').trim()) el.textContent = next;
+                });
+            }
+            document.querySelectorAll('#tab-insights .piq-callout').forEach(function(el) {
+                var lbl = el.querySelector('.lbl');
+                var rest = '';
+                el.childNodes.forEach(function(n) {
+                    if (n === lbl) return;
+                    rest += n.textContent || '';
+                });
+                var next = window._piqV4SentenceCase ? window._piqV4SentenceCase(rest) : rest.trim();
+                if (lbl && next) el.innerHTML = lbl.outerHTML + next;
+            });
             var takes = document.getElementById('audienceTakeaways');
             if (right && takes && !right.querySelector('.piq-callout')) {
                 var lis = takes.querySelectorAll('li');
@@ -122504,6 +122840,14 @@ https://www.instagram.com/p/..."></textarea>
                 emptyBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
+                });
+            }
+            var closeBtn = document.getElementById('piqPickerCloseBtn');
+            if (closeBtn && !closeBtn._piqBound) {
+                closeBtn._piqBound = true;
+                closeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(false);
                 });
             }
             if (window._piqV4DressTabs) {
@@ -124570,8 +124914,9 @@ https://www.instagram.com/p/..."></textarea>
                 html += `
                     <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
                         <span class="cat-arrow">▸</span>
-                        <span class="profile-cat-label">${icon} ${master}</span>
-                        <span class="${countClass}">(${countLabel})</span>
+                        <span class="piq-picker-icon">${icon}</span>
+                        <span class="profile-cat-label">${(window._piqV4FolderLabel || function(s){return s;})(master)}</span>
+                        <span class="${countClass}">${Number(countLabel).toLocaleString("en-US")}</span>
                     </div>
                     <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
                 `;
@@ -124737,8 +125082,8 @@ https://www.instagram.com/p/..."></textarea>
                                 itemsHtml += `
                                     <div class="profile-cat-item ${isGenreExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${genreId}')" style="padding-left: 0.6rem;">
                                         <span class="cat-arrow">▸</span>
-                                        <span class="profile-cat-label">${escapeAttr(gKey)}</span>
-                                        <span class="profile-cat-count">(${subjsInGenre.length})</span>
+                                        <span class="profile-cat-label">${escapeAttr((window._piqV4FolderLabel || function(s){return s;})(gKey))}</span>
+                                        <span class="profile-cat-count">${Number(subjsInGenre.length).toLocaleString("en-US")}</span>
                                     </div>
                                     <div class="profile-cat-children ${isGenreExpanded ? 'open' : ''}" id="cat-${genreId}" style="padding-left: 0.5rem;">
                                         ${genreItemsHtml}
@@ -124757,8 +125102,8 @@ https://www.instagram.com/p/..."></textarea>
                         const _leafHtml = `
                             <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                                 <span class="cat-arrow">▸</span>
-                                <span class="profile-cat-label">${getCategoryDisplayLabel(cat)}</span>
-                                <span class="profile-cat-count">(${_subcatCount})</span>
+                                <span class="profile-cat-label">${(window._piqV4FolderLabel || function(s){return s;})(getCategoryDisplayLabel(cat))}</span>
+                                <span class="profile-cat-count">${Number(_subcatCount).toLocaleString("en-US")}</span>
                             </div>
                             <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
                                 ${itemsHtml}
@@ -124824,8 +125169,8 @@ https://www.instagram.com/p/..."></textarea>
                             html += `
                                 <div class="profile-cat-item ${isBucketExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${bucketId}')">
                                     <span class="cat-arrow">▸</span>
-                                    <span class="profile-cat-label">${escapeAttr(r.bucketName)}</span>
-                                    <span class="profile-cat-count">(${_bucketCount})</span>
+                                    <span class="profile-cat-label">${escapeAttr((window._piqV4FolderLabel || function(s){return s;})(r.bucketName))}</span>
+                                    <span class="profile-cat-count">${Number(_bucketCount).toLocaleString("en-US")}</span>
                                 </div>
                                 <div class="profile-cat-children ${isBucketExpanded ? 'open' : ''}" id="cat-${bucketId}" style="padding-left: 0.5rem;">
                                     ${_bucketInnerHtml}
@@ -133785,7 +134130,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (result.bullets && result.bullets.length > 0) {
                     behavioralCard.innerHTML = `
                         <ul style="margin: 0; padding-left: 1.25rem; list-style-type: disc;">
-                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.9rem;">${b}</li>`).join('')}
+                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.9rem;">${(window._piqV4SentenceCase || function(s){return s;})(b)}</li>`).join('')}
                         </ul>
                     `;
                     if (typeof window._piqV4DressInsights === 'function') {
@@ -133861,7 +134206,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (result.bullets && result.bullets.length > 0) {
                     summaryCard.innerHTML = `
                         <ul style="margin: 0; padding-left: 1.25rem; list-style-type: disc;">
-                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.85rem;">${b}</li>`).join('')}
+                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.85rem;">${(window._piqV4SentenceCase || function(s){return s;})(b)}</li>`).join('')}
                         </ul>
                     `;
                 } else if (result.error) {

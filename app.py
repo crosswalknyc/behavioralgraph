@@ -10948,7 +10948,8 @@ def _generate_behavioral_summary_multi(profile_name, cohorts):
             "- When a behavior is shared across cohorts and the gap is small, you can note "
             "the shared baseline in one sentence, but spend most bullets on the DIFFERENCES.\n"
             "- Avoid 'should/recommend/consider' language. Stay descriptive.\n"
-            "- Each bullet 1-2 sentences max.\n\n"
+            "- Each bullet 1-2 sentences max.\n"
+            "- Write every bullet in sentence case. Never all-caps.\n\n"
             "Format: return ONLY a JSON array of strings (one bullet per element)."
         )
 
@@ -11104,6 +11105,7 @@ INSTRUCTIONS:
 - Highlight what makes them UNIQUE compared to the average person
 - Use analytical language that describes observed patterns (e.g., "{profile_name} panelists show strong affinity for..." or "{profile_name} panelists tend to engage with...")
 - Each bullet should be 1-2 sentences max
+- Write every bullet in sentence case. Never all-caps.
 - Do NOT include demographic stats - focus on behavioral insights
 - Do NOT use recommendation language (avoid "should", "recommend", "consider")
 
