@@ -192,6 +192,43 @@ METERED_TOOL_KEYS = frozenset({
 })
 
 
+# 2026-09-09 (Jenna, verbatim: 'no chatbot profile iq because that
+# wouldnt work through an api then you wouldnt need chatbot profile iq
+# build or api profile iq build under other right?'). Tool_keys that
+# have been retired from MODULE_CATALOG but may still linger in
+# pricing.json:per_tool_usd from earlier admin edits. Without this
+# filter, module_catalog()'s orphan-fold defence-in-depth resurrects
+# them as 'Other' rows and admins re-encounter dead tools. Behaviour:
+#
+#   1. The orphan-fold loop SKIPS these keys, so retired tools never
+#      render in the admin pricing panel again.
+#   2. `should_charge_wallet()` short-circuits to 0 for these keys, so
+#      even if a stale pull_type route or a lingering per_tool_usd
+#      entry existed, no charge would fire.
+#
+# When a tool is retired, add its tool_key here and drop the row from
+# MODULE_CATALOG in the same change. Adding without removing the
+# MODULE_CATALOG row is a no-op (the built-in row still wins).
+RETIRED_TOOL_KEYS = frozenset({
+    # Rolled into api_chatbot_profile_iq_build (partner API canonical
+    # per the 2026-09-09 consolidation). The legacy row was removed
+    # from MODULE_CATALOG at line ~412; any stale $275 entry in
+    # per_tool_usd["api_profile_iq_build"] is now invisible + inert.
+    "api_profile_iq_build",
+    # Dashboard-side chatbot is a monthly-access product gated by
+    # has_chatbot_profile_iq_access. No per-pull fires from the
+    # dashboard chatbot path anymore. The pull_type dispatcher
+    # keeps the mapping for compat, but tool_price_usd returns 0.
+    "chatbot_profile_iq_build",
+    # Analyze Ask + Deck Export were session-metered under Prometheus
+    # from 2026-09-09; they were retired from MODULE_CATALOG at the
+    # same time. Lingering per_tool_usd entries were pinned at 0 but
+    # still folded as 'Other' orphans; filter them permanently.
+    "chatbot_analysis",
+    "chatbot_deck",
+})
+
+
 def metered_tool_keys() -> frozenset:
     """Full set of tool_keys currently flagged as session-metered.
 
@@ -308,6 +345,13 @@ MODULE_CATALOG = [
      "modules", 0, 0.0, "has_subscriber_iq_access"),
     ("prometheus_access",          "Prometheus Access",
      "modules", 0, 0.0, "has_prometheus_access"),
+    # 2026-09-09 (Jenna): dashboard-side chatbot is a monthly-access
+    # product. The per-user has_chatbot_profile_iq_access flag turns
+    # the feature on; the monthly $ lives on this row. Distinct from
+    # the partner API surface (api_chatbot_profile_iq_build), which is
+    # per-pull priced.
+    ("chatbot_profile_iq_access",  "Chatbot Profile IQ Access",
+     "modules", 0, 0.0, "has_chatbot_profile_iq_access"),
     # ---------- Pulls (per-pull dashboard-side events) ----------
     # Per-pull priced events fired from the dashboard. Admin UI renders
     # PULLS rows with only the "/ pull" cell editable; monthly cell
@@ -421,7 +465,15 @@ MODULE_CATALOG = [
      "api", 3, 100.0, None),
     ("api_subscriber_iq_build",    "API - Subscriber IQ Build",
      "api", 10, 1000.0, None),
-    ("api_chatbot_profile_iq_build", "API - Chatbot Profile IQ",
+    # 2026-09-09 (Jenna, verbatim: 'wouldnt partner API just be API-
+    # Profile IQ Build, Profile IQ Cut, Sub iq build. no chatbot profile
+    # iq because that wouldnt work through an api'). Display label
+    # dropped 'Chatbot' - partners never see a chatbot, they just POST
+    # a prompt to the API and get a Profile IQ build back. Tool_key
+    # kept as `api_chatbot_profile_iq_build` so pricing routing in
+    # bg-webapp/app.py::_v1_price_usd_for and the pull_type dispatcher
+    # keep working; the label is UI-only.
+    ("api_chatbot_profile_iq_build", "API - Profile IQ Build",
      "api", 5, 500.0, None),
     # ---------- Ask-metered (Prometheus) ----------
     # Prometheus is priced by prometheus_markup_multiplier applied to
@@ -538,9 +590,17 @@ def module_catalog(*, include_hidden: bool = False) -> list:
     # Fold in any orphan per_tool_usd / per_tool_monthly_usd keys
     # (neither builtin nor custom) so a rogue price never goes
     # invisible in the admin panel.
+    #
+    # 2026-09-09 (Jenna): retired tool_keys are SKIPPED here even if
+    # they still carry a stale per_tool_usd entry from a legacy admin
+    # edit. Prevents 'Api Profile Iq Build', 'Chatbot Profile Iq Build',
+    # 'Chatbot Analysis', and 'Chatbot Deck' from resurrecting as
+    # 'Other' rows after their MODULE_CATALOG entries were retired.
     orphan_keys = set()
     for k in list(per_tool.keys()) + list(per_tool_monthly.keys()):
         if k in builtin_keys or k in custom_keys or k in orphan_keys:
+            continue
+        if k in RETIRED_TOOL_KEYS:
             continue
         orphan_keys.add(k)
         try:
@@ -1663,6 +1723,13 @@ def should_charge_wallet(user: dict, tool_key: str,
         # Defence-in-depth per Jenna 2026-09-09: unlimited users are
         # NEVER charged even if a future code path forgets to check.
         return 0.0, "unlimited"
+    if str(tool_key) in RETIRED_TOOL_KEYS:
+        # 2026-09-09 (Jenna): retired tool_keys never fire a charge,
+        # even if a stale per_tool_usd entry lingers from a legacy
+        # admin edit. Belt + suspenders alongside the orphan-fold
+        # filter in module_catalog() - the panel doesn't show these
+        # rows AND the wallet doesn't debit them.
+        return 0.0, "retired"
     pricing = pricing or load_pricing()
     usd = float(pricing.get("per_tool_usd", {}).get(str(tool_key), 0.0))
     if usd <= 0:
@@ -2327,6 +2394,7 @@ __all__ = [
     "MODULE_CATALOG", "module_catalog",
     "METERED_TOOL_KEYS", "is_metered_tool", "is_metered_locked",
     "metered_tool_keys", "mark_metered", "unmark_metered",
+    "RETIRED_TOOL_KEYS",
     "load_pricing", "save_pricing",
     "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
