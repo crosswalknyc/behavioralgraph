@@ -515,7 +515,7 @@ def _default_seed_download():
     d = _empty_download()
     d.update({
         "enabled": True,
-        "title": "Creatorverse deck and workbook",
+        "title": "Creatorverse deck",
         "list_id": "the-read",
     })
     return d
@@ -570,6 +570,9 @@ def normalize_state(state):
                 _default_seed_download() if camp.get("id") == SEED_CAMPAIGN_ID
                 else _empty_download()
             )
+            changed = True
+        elif camp.get("id") == SEED_CAMPAIGN_ID and (dl.get("title") or "") == "Creatorverse deck and workbook":
+            dl["title"] = "Creatorverse deck"
             changed = True
     return state, changed
 
@@ -805,9 +808,11 @@ def ensure_seeded(state=None):
         _ensure_seed_assets()
         camp = _campaign(state, SEED_CAMPAIGN_ID)
         if camp and camp.get("status") == "draft" and SEED_HTML.exists():
+            fresh = SEED_HTML.read_text(encoding="utf-8")
             current = get_campaign_html(SEED_CAMPAIGN_ID) or ""
-            if "mailto:hello@crosswalknyc.com?subject=Creatorverse" in current:
-                put_campaign_html(SEED_CAMPAIGN_ID, SEED_HTML.read_text(encoding="utf-8"))
+            if current != fresh:
+                put_campaign_html(SEED_CAMPAIGN_ID, fresh)
+                _ensure_seed_assets(force=True)
         return state
     if not SEED_HTML.exists():
         return state
@@ -849,12 +854,14 @@ def ensure_seeded(state=None):
     return _cas_update_state(mutate)
 
 
-def _ensure_seed_assets():
+def _ensure_seed_assets(force=False):
     global _seed_assets_done
-    if _seed_assets_done or not SEED_ASSETS.exists():
+    if _seed_assets_done and not force:
+        return
+    if not SEED_ASSETS.exists():
         return
     sentinel = ASSET_KEY.format(cid=SEED_CAMPAIGN_ID, name="img01.jpg")
-    if _get_bytes(sentinel) is None:
+    if force or _get_bytes(sentinel) is None:
         for path in sorted(SEED_ASSETS.iterdir()):
             if not path.is_file():
                 continue
