@@ -51681,7 +51681,7 @@ https://www.instagram.com/p/..."></textarea>
             var grid = document.getElementById('microdramasIQTitleGrid');
             if (!grid) return;
             if (!titles.length) {
-                grid.innerHTML = '<div class="miq-empty">No titles in the catalog yet. Run the Peacock scraper (scripts/microdramas_scrapers/peacock.py) to populate.</div>';
+                grid.innerHTML = '<div class="miq-empty">No titles in this window.</div>';
                 return;
             }
             grid.innerHTML = '';
@@ -51736,7 +51736,7 @@ https://www.instagram.com/p/..."></textarea>
             // active window; each card's sparkline carries the shape.
             if (meta) meta.textContent = '';
             if (!titles.length) {
-                grid.innerHTML = '<div class="miq-empty">No observations in this window yet. Daily scraper (05:30 UTC) populates automatically.</div>';
+                grid.innerHTML = '<div class="miq-empty">No titles in this window.</div>';
                 return;
             }
             grid.innerHTML = '';
@@ -52516,7 +52516,7 @@ https://www.instagram.com/p/..."></textarea>
             renderMicrodramasIQPlatformRollup(d);
 
             if (!titles.length) {
-                grid.innerHTML = '<div class="miq-empty">No titles yet. The daily scraper (05:30 UTC) populates automatically once snapshots land.</div>';
+                grid.innerHTML = '<div class="miq-empty">No titles in this window.</div>';
                 return;
             }
             grid.innerHTML = '';
