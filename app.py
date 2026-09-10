@@ -17347,6 +17347,56 @@ def api_cron_microdramas_scrapers():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/cron/trends-digest', methods=['POST', 'GET'])
+def api_cron_trends_digest():
+    """Send the daily Trends IQ watchlist digest email to every user who
+    has a non-empty watchlist. Called by the `trends-digest-daily-cron`
+    Render cron; also usable via curl to force an out-of-band send:
+
+        curl -X POST 'https://.../api/cron/trends-digest?secret=$CRON_SECRET'
+
+    Optional query params:
+        user=<user_slug>   only run for this user (testing)
+        dry_run=1          compute + render but do NOT send via SES
+
+    Runs inside the web service so it always executes current `main` code
+    and reuses the prod AWS + SES env - no separate cron build or
+    duplicated secrets. Replaces the legacy Hetzner crontab entry."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        import importlib
+        td = importlib.import_module('scripts.trends_digest')
+        dry_run = (request.args.get('dry_run') or '').lower() in ('1', 'true', 'yes')
+        only_user = (request.args.get('user') or '').strip() or None
+        if only_user:
+            users = [only_user]
+        else:
+            users = td.trends_watchlist.list_all_users()
+        results = []
+        for u in users:
+            try:
+                results.append(td.run_for_user(u, dry_run=dry_run))
+            except Exception as e:
+                traceback.print_exc()
+                results.append({'user_slug': u, 'sent': False, 'error': str(e)})
+        from datetime import timezone as _tz
+        return jsonify({
+            'success':    True,
+            'users':      len(users),
+            'sent':       sum(1 for r in results if r.get('sent')),
+            'with_moves': sum(1 for r in results if (r.get('alerts') or 0) > 0),
+            'dry_run':    dry_run,
+            'results':    results,
+            'ran_at':     datetime.now(_tz.utc).isoformat(),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/microdramas-iq/title-audience', methods=['POST'])
 @requires_auth
 def api_microdramas_iq_title_audience():
