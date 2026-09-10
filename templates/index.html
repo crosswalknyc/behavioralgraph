@@ -22046,6 +22046,7 @@ https://www.instagram.com/p/..."></textarea>
 
     <style id="piq-v4-chrome">
         /* Profile IQ v4 portrait cover. Scoped to #dashboardView.piq-v4. */
+        #dashboardView.piq-v4,
         #dashboardView.piq-v4.piq-has-profile {
             --piq-graphite: #0C1618;
             --piq-slate: #15252A;
@@ -22058,6 +22059,7 @@ https://www.instagram.com/p/..."></textarea>
             --piq-cobalt: #3358FF;
             --piq-orchid: #E682FF;
         }
+        body[data-theme="light"] #dashboardView.piq-v4,
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile {
             --piq-graphite: #E9E8E1;
             --piq-slate: #FFFFFF;
@@ -22181,8 +22183,7 @@ https://www.instagram.com/p/..."></textarea>
             color: var(--piq-signal);
             border-color: rgba(199, 242, 62, 0.35);
         }
-        #dashboardView.piq-v4 #piqChangeProfileBtn { display: none; }
-        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn { display: inline-flex; }
+        #dashboardView.piq-v4 #piqChangeProfileBtn { display: inline-flex; }
 
         #dashboardView.piq-v4.piq-has-profile #dashProfileInfo {
             display: grid !important;
@@ -23999,6 +24000,156 @@ https://www.instagram.com/p/..."></textarea>
             border: 1px solid #3B3D38 !important;
             color: #E9E8E1 !important;
         }
+
+        /* First paint and empty: same chrome as an open profile.
+           The old sidebar / DATA labels / Highlights header never flash. */
+        #dashboardView.piq-v4 .toolbar-section-label { display: none !important; }
+        #dashboardView.piq-v4 #toolbarRow .tab-icon { display: none !important; }
+        #dashboardView.piq-v4 #inlineTabHeader,
+        #dashboardView.piq-v4 .action-buttons-row,
+        #dashboardView.piq-v4 #toolbarCollapseWrapper,
+        #dashboardView.piq-v4 #contentActionButtons { display: none !important; }
+        #dashboardView.piq-v4 #toolbarRow {
+            width: 100%;
+            min-width: 0;
+            flex: 0 0 auto;
+            padding: 0 32px;
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38;
+            box-sizing: border-box;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #toolbarRow {
+            background: #E9E8E1;
+            border-bottom-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 #toolbarContent {
+            display: flex !important;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0;
+            overflow: visible !important;
+            width: 100%;
+        }
+        #dashboardView.piq-v4 .toolbar-section {
+            display: flex !important;
+            flex-direction: row;
+            align-items: center;
+            width: auto !important;
+        }
+        #dashboardView.piq-v4 .dashboard-tabs {
+            display: flex !important;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 2px;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4 #analysisToolsTabs {
+            margin-left: 10px;
+            padding-left: 10px;
+            border-left: 1px solid #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #analysisToolsTabs {
+            border-left-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 .dashboard-layout > .persistent-sidebar,
+        #dashboardView.piq-v4 #piqProfileSidebar {
+            position: fixed !important;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 2147482000;
+            width: 320px !important;
+            min-width: 320px !important;
+            max-width: 320px !important;
+            height: 100vh !important;
+            max-height: none !important;
+            border-radius: 0;
+            transform: translateX(-110%);
+            transition: transform 180ms ease;
+            box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
+            display: flex !important;
+        }
+        #dashboardView.piq-v4.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
+        #dashboardView.piq-v4.piq-sidebar-open #piqProfileSidebar {
+            transform: translateX(0);
+        }
+        #dashboardView.piq-v4.piq-sidebar-open #piqSidebarScrim { display: block; }
+        #dashboardView.piq-v4:not(.piq-has-profile) {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            background: #0C1618 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4:not(.piq-has-profile) {
+            background: #E9E8E1 !important;
+        }
+        #dashboardView.piq-v4:not(.piq-has-profile) #dashboardEmptyState {
+            display: flex !important;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: calc(100vh - 160px);
+            padding: 72px 48px 96px;
+            background: transparent !important;
+        }
+        #dashboardView.piq-v4:not(.piq-has-profile) .piq-empty {
+            max-width: 560px;
+        }
+        #dashboardView.piq-v4 .piq-empty-eyebrow {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #7C878A;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        #dashboardView.piq-v4 .piq-empty-eyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-eyebrow { color: #888C89; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-eyebrow::before { background: #5E7E12; }
+        #dashboardView.piq-v4 .piq-empty h2 {
+            margin: 0 0 14px;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 48px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 0.95;
+            color: #E9E8E1;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty h2 { color: #0C1618; }
+        #dashboardView.piq-v4 .piq-empty p {
+            margin: 0 0 28px;
+            max-width: 420px;
+            font-size: 16px;
+            line-height: 1.45;
+            color: #9AA09B;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty p { color: #5C6560; }
+        #dashboardView.piq-v4 .piq-empty-cta {
+            display: inline-flex;
+            align-items: center;
+            background: #C7F23E;
+            color: #0C1618;
+            border: 0;
+            border-radius: 8px;
+            padding: 12px 18px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4 .piq-empty-cta:hover { filter: brightness(1.04); }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-cta {
+            background: #0C1618;
+            color: #E9E8E1;
+        }
     </style>
 
         <!-- DASHBOARD VIEW -->
@@ -24197,13 +24348,11 @@ https://www.instagram.com/p/..."></textarea>
                 <div class="dashboard-tab-content">
                     <!-- Empty State - Show when no profile selected -->
                     <div id="dashboardEmptyState" class="dashboard-empty-state">
-                        <div class="empty-state-content">
-                            <div class="empty-state-icon">📊</div>
-                            <h2>Select a Profile to Begin</h2>
-                            <p>Choose a profile from the sidebar to view audience insights, demographics, behavioral patterns, and more.</p>
-                            <div class="empty-state-hint">
-                                <span>💡</span> Use the search box or browse by category
-                            </div>
+                        <div class="piq-empty">
+                            <div class="piq-empty-eyebrow">Profile IQ</div>
+                            <h2>Open a profile.</h2>
+                            <p>Search the library or browse by category.</p>
+                            <button type="button" class="piq-empty-cta" id="piqEmptyBrowseBtn">Browse profiles</button>
                         </div>
                     </div>
                     
@@ -121473,6 +121622,7 @@ https://www.instagram.com/p/..."></textarea>
                 view.classList.add('piq-has-profile');
                 var dc = document.getElementById('dashboardContent');
                 if (dc) dc.style.display = 'block';
+                if (window._piqV4SyncBrowseLabel) window._piqV4SyncBrowseLabel();
             }
             if (view.classList.contains('piq-has-profile') && window._piqV4DressPages) {
                 try { window._piqV4DressPages(); } catch (_e) {}
@@ -121484,6 +121634,13 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             if (!view) return;
             view.classList.remove('piq-has-profile', 'piq-sidebar-open');
+            if (window._piqV4EnsureStickyChrome) {
+                try { window._piqV4EnsureStickyChrome(); } catch (_e) {}
+            }
+            if (window._piqV4DressTabs) {
+                try { window._piqV4DressTabs(); } catch (_e) {}
+            }
+            if (window._piqV4SyncBrowseLabel) window._piqV4SyncBrowseLabel();
             var name = document.getElementById('dashHeroName');
             var line = document.getElementById('dashHeroOneliner');
             var kpis = document.getElementById('dashHeroKpis');
@@ -121495,11 +121652,21 @@ https://www.instagram.com/p/..."></textarea>
             var pills = document.getElementById('piqHeroPills');
             if (pills) pills.innerHTML = '';
         };
+        window._piqV4SyncBrowseLabel = function() {
+            var btn = document.getElementById('piqChangeProfileBtn');
+            var view = document.getElementById('dashboardView');
+            if (!btn) return;
+            btn.textContent = (view && view.classList.contains('piq-has-profile')) ? 'Change profile' : 'Browse profiles';
+        };
         window._piqV4ToggleSidebar = function(force) {
             var view = document.getElementById('dashboardView');
-            if (!view || !view.classList.contains('piq-has-profile')) return;
+            if (!view) return;
             var open = (typeof force === 'boolean') ? force : !view.classList.contains('piq-sidebar-open');
             view.classList.toggle('piq-sidebar-open', open);
+            if (open) {
+                var inp = document.getElementById('dashProfileSearchInput');
+                if (inp) setTimeout(function() { try { inp.focus(); } catch (_e) {} }, 40);
+            }
         };
         window._piqV4PrettyName = function(raw) {
             var pretty = String(raw || '').replace(/\s+/g, ' ').replace(/\.$/, '').trim();
@@ -122111,7 +122278,7 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             var bar = document.getElementById('profileTabsBar');
             var row = document.getElementById('toolbarRow');
-            if (!view || !bar || !row || !view.classList.contains('piq-has-profile')) return null;
+            if (!view || !bar || !row || !view.classList.contains('piq-v4')) return null;
             var wrap = document.getElementById('piqStickyChrome');
             if (!wrap) {
                 wrap = document.createElement('div');
@@ -122123,7 +122290,7 @@ https://www.instagram.com/p/..."></textarea>
             if (row.parentNode !== wrap) wrap.appendChild(row);
             if (bar.parentNode !== wrap) wrap.appendChild(bar);
             var heroRow = document.getElementById('profileAndToolbarRow');
-            var slim = (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
+            var slim = view.classList.contains('piq-has-profile') && (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
             if (heroRow) {
                 if (slim) {
                     if (heroRow.parentNode !== wrap) wrap.appendChild(heroRow);
@@ -122143,7 +122310,7 @@ https://www.instagram.com/p/..."></textarea>
             var row = document.getElementById('toolbarRow');
             if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
             var n = 1;
-            document.querySelectorAll('#dashboardView.piq-has-profile #toolbarRow .tab-btn').forEach(function(btn) {
+            document.querySelectorAll('#dashboardView.piq-v4 #toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
                 if (cs.display === 'none' || cs.visibility === 'hidden') return;
                 btn.classList.remove('has-tooltip');
@@ -122196,6 +122363,18 @@ https://www.instagram.com/p/..."></textarea>
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar();
                 });
             }
+            var emptyBtn = document.getElementById('piqEmptyBrowseBtn');
+            if (emptyBtn && !emptyBtn._piqBound) {
+                emptyBtn._piqBound = true;
+                emptyBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
+                });
+            }
+            if (window._piqV4DressTabs) {
+                try { window._piqV4DressTabs(); } catch (_e) {}
+            }
+            if (window._piqV4SyncBrowseLabel) window._piqV4SyncBrowseLabel();
             var scrim = document.getElementById('piqSidebarScrim');
             if (scrim && !scrim._piqBound) {
                 scrim._piqBound = true;
