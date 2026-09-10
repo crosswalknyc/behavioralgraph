@@ -22256,7 +22256,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #dashHeroOneliner b { color: var(--piq-signal); font-weight: 700; }
         #dashboardView.piq-v4.piq-has-profile .piq-hero-kpis {
             display: grid;
-            grid-template-columns: repeat(4, auto);
+            grid-template-columns: repeat(3, auto);
             gap: 40px;
             width: max-content;
             margin-top: 28px;
@@ -120546,16 +120546,7 @@ https://www.instagram.com/p/..."></textarea>
             function fmtCount(n) {
                 n = Number(n);
                 if (!isFinite(n) || n <= 0) return '';
-                if (n >= 1000000) {
-                    var m = n / 1000000;
-                    var s = (m >= 10 ? m.toFixed(1) : m.toFixed(2)).replace(/\.?0+$/, '');
-                    return s + 'M';
-                }
-                if (n >= 1000) {
-                    var k = n / 1000;
-                    return (k >= 10 ? String(Math.round(k)) : k.toFixed(1).replace(/\.0$/, '')) + 'K';
-                }
-                return String(Math.round(n));
+                return Math.round(n).toLocaleString('en-US');
             }
             var demo = parsed.demographics || {};
             var female = pick(demo.gender || {}, ['Female', 'F', 'Women']);
@@ -120564,28 +120555,6 @@ https://www.instagram.com/p/..."></textarea>
             var under35 = pick(demo.age || {}, ['Under 35', '18-34']);
             if (under35 == null && a1824 != null && a2534 != null) under35 = a1824 + a2534;
             var us = Number(parsed.projectedUS || 0);
-            function readSample() {
-                var ids = ['insightsSampleSize', 'dashSampleSize'];
-                var found = [];
-                if (parsed.sampleSize) found.push(Number(parsed.sampleSize));
-                ids.forEach(function(id) {
-                    var el = document.getElementById(id);
-                    if (!el) return;
-                    var n = parseInt(String(el.textContent || '').replace(/[^0-9]/g, ''), 10);
-                    if (n) found.push(n);
-                });
-                for (var i = 0; i < found.length; i++) {
-                    var n = found[i];
-                    if (n > 0 && isFinite(n) && n !== us && n < 20000000) return n;
-                }
-                return 0;
-            }
-            function fmtSample(n) {
-                n = Math.round(Number(n));
-                if (!isFinite(n) || n <= 0) return '';
-                return n.toLocaleString('en-US');
-            }
-            var sample = readSample();
             var tiles = [];
             var usTxt = fmtCount(us);
             if (usTxt) tiles.push({ lbl: 'US audience', val: usTxt, accent: true });
@@ -120593,8 +120562,6 @@ https://www.instagram.com/p/..."></textarea>
             if (fTxt) tiles.push({ lbl: 'Female', val: fTxt, accent: false });
             var uTxt = fmtPct(under35);
             if (uTxt) tiles.push({ lbl: 'Under 35', val: uTxt, accent: false });
-            var sTxt = fmtSample(sample);
-            if (sTxt) tiles.push({ lbl: 'Sample size', val: sTxt, accent: false });
             var kpiEl = document.getElementById('dashHeroKpis');
             if (kpiEl) {
                 kpiEl.innerHTML = tiles.map(function(t) {
