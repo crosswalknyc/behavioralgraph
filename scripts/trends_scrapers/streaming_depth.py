@@ -47,7 +47,9 @@ Standalone:
 
 from __future__ import annotations
 
+import json
 import logging
+import random
 import sys
 import time
 from typing import Any
@@ -76,39 +78,77 @@ _PER_KIND_LIMIT = 100
 
 def _fetch_one_kind(pkg: str, label: str, object_type: str,
                     limit: int) -> list[dict]:
-    """One JustWatch popularity query for one platform + one kind."""
-    data = _post_graphql(
-        _JW_QUERY,
-        {'country': 'US', 'providers': [pkg],
-         'first': limit, 'ot': [object_type]},
-        'FASTPopular',
-    )
-    if not data:
-        return []
-    if data.get('errors'):
-        logger.warning("streaming_depth %s %s: graphql errors: %s",
-                       label, object_type,
-                       str(data['errors'])[:200])
-        return []
-    edges = (((data.get('data') or {}).get('popularTitles') or {})
-             .get('edges') or [])
-    out: list[dict] = []
-    seen: set[str] = set()
-    for e in edges:
-        row = _normalize_node(e.get('node') or {})
-        if not row:
+    """One JustWatch popularity query for one platform + one kind.
+
+    Degrades to the deepest depth that succeeds: if the full-depth
+    query comes back empty or with errors (rate limiting on the deeper
+    100-item queries, a transient outage), retry at shallower depths
+    with a short jittered pause rather than returning an empty list.
+    """
+    depths = [limit] + [d for d in (50, 20) if d < limit]
+    for attempt, depth in enumerate(depths):
+        if attempt:
+            time.sleep(0.8 + random.random() * 0.8)
+        data = _post_graphql(
+            _JW_QUERY,
+            {'country': 'US', 'providers': [pkg],
+             'first': depth, 'ot': [object_type]},
+            'FASTPopular',
+        )
+        if not data:
             continue
-        key = row['title'].lower()
-        if key in seen:
+        if data.get('errors'):
+            logger.warning("streaming_depth %s %s: graphql errors at "
+                           "depth %d: %s", label, object_type, depth,
+                           str(data['errors'])[:200])
             continue
-        seen.add(key)
-        out.append(row)
-        if len(out) >= limit:
-            break
-    for i, r in enumerate(out, 1):
-        r['rank'] = i
-        r['bucket_rank'] = i
-    return out
+        edges = (((data.get('data') or {}).get('popularTitles') or {})
+                 .get('edges') or [])
+        out: list[dict] = []
+        seen: set[str] = set()
+        for e in edges:
+            row = _normalize_node(e.get('node') or {})
+            if not row:
+                continue
+            key = row['title'].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+            if len(out) >= depth:
+                break
+        if not out:
+            continue
+        if depth != limit:
+            logger.warning("streaming_depth %s %s: degraded to depth %d "
+                           "(full depth %d returned nothing)",
+                           label, object_type, depth, limit)
+        for i, r in enumerate(out, 1):
+            r['rank'] = i
+            r['bucket_rank'] = i
+        return out
+    return []
+
+
+def _load_previous_sources() -> dict:
+    """Read the current latest/streaming_depth.json sources block from
+    S3. Empty dict on any failure. Used to carry a platform's previous
+    depth block forward when today's JustWatch fetch for that platform
+    returns nothing - the merge side must never see a good block
+    replaced by an empty one."""
+    try:
+        import boto3
+        s3 = boto3.client('s3', region_name='us-east-2')
+        o = s3.get_object(
+            Bucket='dashboard-inputs',
+            Key='trends_iq_snapshots/latest/streaming_depth.json')
+        d = json.loads(o['Body'].read().decode('utf-8'))
+        sources = d.get('sources') or {}
+        return sources if isinstance(sources, dict) else {}
+    except Exception as e:
+        logger.info("streaming_depth: could not read previous snapshot: %s",
+                    e)
+        return {}
 
 
 def fetch() -> dict[str, Any]:
@@ -136,6 +176,27 @@ def fetch() -> dict[str, Any]:
         }
         logger.info("streaming_depth %s: %d films + %d tv",
                     slug, len(films), len(tv))
+
+    # Never ship an empty platform block over a previously-good one.
+    # A platform whose fetch returned nothing today (throttle, outage)
+    # keeps yesterday's depth block, marked stale, so the dashboard
+    # merge never loses depth it already had.
+    empty_slugs = [slug for slug, block in sources.items()
+                   if not (block.get('films') or block.get('tv'))]
+    if empty_slugs:
+        prev_sources = _load_previous_sources()
+        for slug in empty_slugs:
+            prev_block = prev_sources.get(slug) or {}
+            if prev_block.get('films') or prev_block.get('tv'):
+                prev_block = dict(prev_block)
+                prev_block['available'] = True
+                prev_block['stale_from_previous'] = True
+                sources[slug] = prev_block
+                logger.warning(
+                    "streaming_depth %s: fetch returned 0 rows; "
+                    "preserving previous depth block (%d films + %d tv)",
+                    slug, len(prev_block.get('films') or []),
+                    len(prev_block.get('tv') or []))
     return {'sources': sources}
 
 

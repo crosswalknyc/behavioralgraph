@@ -41,6 +41,8 @@ from __future__ import annotations
 
 import json
 import logging
+import random
+import time
 from typing import Any, Optional
 
 # Shared JustWatch plumbing. These are package-internal helpers that
@@ -70,36 +72,53 @@ def _fetch_one_kind(packages: list[str], label: str, object_type: str,
     platform's JustWatch package codes. Dedup is title-only within
     the kind - tier packages (e.g. Paramount+ Premium vs Essential)
     carry a near-identical catalog, so the same title arriving from
-    both collapses to its first (highest-popularity) occurrence."""
-    data = _post_graphql(
-        _JW_QUERY,
-        {'country': 'US', 'providers': packages,
-         'first': limit, 'ot': [object_type]},
-        'FASTPopular',
-    )
-    if not data:
-        return []
-    if data.get('errors'):
-        logger.warning("justwatch_svod %s %s: GraphQL errors: %s",
-                       label, object_type,
-                       json.dumps(data['errors'])[:200])
-        return []
-    pop = ((data.get('data') or {}).get('popularTitles') or {})
-    edges = pop.get('edges') or []
-    out: list[dict] = []
-    seen: set[str] = set()
-    for e in edges:
-        row = _normalize_node(e.get('node') or {})
-        if not row:
+    both collapses to its first (highest-popularity) occurrence.
+
+    Degrades to the deepest depth that succeeds: if the full-depth
+    query comes back empty or with errors (rate limiting on the deeper
+    100-item queries, a transient outage), retry at shallower depths
+    with a short jittered pause rather than returning an empty list.
+    """
+    depths = [limit] + [d for d in (50, 20) if d < limit]
+    for attempt, depth in enumerate(depths):
+        if attempt:
+            time.sleep(0.8 + random.random() * 0.8)
+        data = _post_graphql(
+            _JW_QUERY,
+            {'country': 'US', 'providers': packages,
+             'first': depth, 'ot': [object_type]},
+            'FASTPopular',
+        )
+        if not data:
             continue
-        key = row['title'].lower()
-        if key in seen:
+        if data.get('errors'):
+            logger.warning("justwatch_svod %s %s: GraphQL errors at "
+                           "depth %d: %s", label, object_type, depth,
+                           json.dumps(data['errors'])[:200])
             continue
-        seen.add(key)
-        out.append(row)
-        if len(out) >= limit:
-            break
-    return out
+        pop = ((data.get('data') or {}).get('popularTitles') or {})
+        edges = pop.get('edges') or []
+        out: list[dict] = []
+        seen: set[str] = set()
+        for e in edges:
+            row = _normalize_node(e.get('node') or {})
+            if not row:
+                continue
+            key = row['title'].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+            if len(out) >= depth:
+                break
+        if not out:
+            continue
+        if depth != limit:
+            logger.warning("justwatch_svod %s %s: degraded to depth %d "
+                           "(full depth %d returned nothing)",
+                           label, object_type, depth, limit)
+        return out
+    return []
 
 
 def _load_previous_snapshot(slug: str) -> Optional[list[dict]]:
@@ -130,6 +149,7 @@ def fetch_svod_platform(slug: str, label: str,
     that together cover the platform's catalog (tier packages union).
     """
     films = _fetch_one_kind(packages, label, 'MOVIE', _PER_KIND_LIMIT)
+    time.sleep(0.35)
     tv    = _fetch_one_kind(packages, label, 'SHOW',  _PER_KIND_LIMIT)
 
     # Independent 1..N ranks per column; the dashboard renders each

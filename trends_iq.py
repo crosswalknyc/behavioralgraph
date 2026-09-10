@@ -749,6 +749,117 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
 
 
 # ============================================================================
+# Nearest-day fallback for historic streaming reads
+# ============================================================================
+# The date picker can request any archived day, but each streaming
+# platform's dated coverage starts the day its scraper first ran
+# (Paramount+ / Peacock 2026-09-05, BritBox / MGM+ / Starz 2026-08-20)
+# and the residential scrapers have occasional gap days (a dated file
+# can exist with an empty list from a blocked run). Reading only the
+# exact requested day left those platforms rendering as dark panels on
+# any earlier date, and the historic payload caches permanently, so
+# the dark state froze. Standing bar: stale-but-populated beats dark.
+# A historic read therefore falls back to the platform's nearest
+# archived day with usable rows (preferring the closest day, earlier
+# on ties). Live reads (asof=None) never touch this path.
+
+_DATED_INDEX_TTL_S = 600
+_dated_index_cache: dict = {'ts': 0.0, 'by_source': {}}
+
+
+def _dated_snapshot_index() -> dict[str, list[str]]:
+    """Map source slug -> sorted list of archived days (YYYY-MM-DD).
+
+    One paginated listing of the dated snapshot tree, cached
+    in-process for 10 minutes. Only consulted when a historic read
+    misses its exact day, so live views never pay for the listing.
+    """
+    now_ts = time.time()
+    cached = _dated_index_cache['by_source']
+    if cached and now_ts - _dated_index_cache['ts'] < _DATED_INDEX_TTL_S:
+        return cached
+    s3 = _s3_client()
+    if s3 is None:
+        return cached or {}
+    listing_prefix = _SNAPSHOT_DATED_PREFIX.split('{', 1)[0]
+    pat = re.compile(
+        r'^' + re.escape(listing_prefix) +
+        r'(\d{4}-\d{2}-\d{2})/([A-Za-z0-9_]+)\.json$')
+    by_source: dict[str, list[str]] = {}
+    try:
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
+                                          Prefix=listing_prefix):
+            for obj in page.get('Contents') or []:
+                m = pat.match(obj.get('Key') or '')
+                if m:
+                    by_source.setdefault(m.group(2), []).append(m.group(1))
+        for days in by_source.values():
+            days.sort()
+        _dated_index_cache['by_source'] = by_source
+        _dated_index_cache['ts'] = now_ts
+    except Exception as e:
+        logger.debug("trends_iq dated snapshot index failed: %s", e)
+        return cached or {}
+    return by_source
+
+
+def _snapshot_has_stream_items(snap: Optional[dict]) -> bool:
+    """True when a streaming snapshot carries at least one usable row.
+
+    Covers every shape in the fleet: platform scrapers write
+    `national`, Netflix also writes `us_films` / `us_tv`, and the
+    depth extender writes per-platform `sources` blocks. An
+    exists-but-empty dated file (a blocked run from before the
+    preserve-previous guard era) counts as unusable.
+    """
+    if not isinstance(snap, dict):
+        return False
+    if snap.get('national') or snap.get('us_films') or snap.get('us_tv'):
+        return True
+    sources = snap.get('sources')
+    if isinstance(sources, dict):
+        for block in sources.values():
+            if isinstance(block, dict) and (block.get('films')
+                                            or block.get('tv')
+                                            or block.get('items')):
+                return True
+    return False
+
+
+def _read_snapshot_nearest(source: str,
+                            asof: str) -> tuple[Optional[dict], str]:
+    """Historic snapshot read with nearest-archived-day fallback.
+
+    Returns `(snapshot, day_used)`. The exact requested day wins when
+    it has usable rows; otherwise the nearest archived day (by day
+    distance, earlier preferred on ties) with usable rows is served.
+    `day_used` lets the caller stamp row values from the day the rows
+    actually came from. Falls back to `(exact_read, asof)` when no
+    archived day anywhere has usable rows.
+    """
+    snap = _read_snapshot(source, asof)
+    if _snapshot_has_stream_items(snap):
+        return snap, asof
+    days = _dated_snapshot_index().get(source) or []
+    try:
+        want = date.fromisoformat(asof)
+    except Exception:
+        return snap, asof
+    ranked = sorted(
+        (d for d in days if d != asof),
+        key=lambda d: (abs((date.fromisoformat(d) - want).days), d > asof))
+    for day in ranked[:10]:
+        candidate = _read_snapshot(source, day)
+        if _snapshot_has_stream_items(candidate):
+            logger.info(
+                "trends_iq %s: no usable dated snapshot for %s; serving "
+                "nearest archived day %s", source, asof, day)
+            return candidate, day
+    return snap, asof
+
+
+# ============================================================================
 # Window accumulator - cumulative reach across the last N daily snapshots
 # ============================================================================
 # The `stream_estimates.py` scraper produces a per-item DAILY US audience
@@ -7950,8 +8061,21 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
     # keeps its own snapshot depth.
     depth_sources = (_read_snapshot('streaming_depth', asof) or {}).get('sources') or {}
 
+    # Fallback-day estimate snapshots, read at most once per distinct
+    # day per call. Used to stamp US-audience values onto rows served
+    # from a nearest-archived-day fallback (their titles won't resolve
+    # in the requested day's estimates).
+    est_by_day: dict[str, dict] = {}
+
     for slug, label, _static_avail in STREAMING_PLATFORMS:
-        snap = _read_snapshot(slug, asof)
+        snap_day = asof or ''
+        if asof:
+            # Historic read: exact day first, nearest archived day
+            # with usable rows otherwise (stale-but-populated beats a
+            # dark panel; the historic payload caches permanently).
+            snap, snap_day = _read_snapshot_nearest(slug, asof)
+        else:
+            snap = _read_snapshot(slug)
         depth_block = depth_sources.get(slug) or {}
         if not snap:
             # Platform's own snapshot missing entirely - ship the
@@ -8064,6 +8188,21 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
         if snap.get('error'):
             payload['note'] = f"latest snapshot: {snap['error']}"
+
+        # Rows served from a nearest-day fallback carry titles the
+        # requested day's estimates never tracked. Stamp them from the
+        # fallback day's own estimates now; the later window annotate
+        # in compute_view only overwrites rows it can resolve, so
+        # these values survive exactly where the asof-day estimates
+        # have no entry.
+        if asof and snap_day and snap_day != asof:
+            day_est = est_by_day.get(snap_day)
+            if day_est is None:
+                day_est = _read_snapshot('stream_estimates', snap_day) or {}
+                est_by_day[snap_day] = day_est
+            if day_est.get('items'):
+                _annotate_streaming_with_streams({slug: payload}, day_est)
+
         result[slug] = payload
     return result
 
