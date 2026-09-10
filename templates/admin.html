@@ -790,6 +790,90 @@
             display: none !important;
         }
 
+        /* ============================================================
+           Dashboard Access header + counter chip + granted-card highlight
+           (2026-09-09, cleanup pass). Adds an at-a-glance "N of M
+           granted" chip in the section header, restores the search
+           input in the toolbar (JS side already supports it), splits
+           the "Reset to defaults" button from the destructive bulk
+           actions with a secondary style, and tints the left edge of
+           granted product cards so an admin can eyeball what this user
+           can open without scanning every checkbox. */
+        .access-section-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .access-section-header-row h4 {
+            margin: 0 0 0.15rem 0;
+        }
+        .access-section-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .access-granted-summary {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 0.3rem;
+            padding: 0.4rem 0.75rem;
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.28);
+            border-radius: 20px;
+            font-size: 0.72rem;
+            white-space: nowrap;
+        }
+        .access-granted-count {
+            font-weight: 700;
+            color: var(--accent-cyan);
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+        .access-granted-of,
+        .access-granted-word {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+        }
+        .access-granted-total {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        /* Left-border tint on granted product cards so admins can scan
+           the list and see what's on/off at a glance. Class toggled by
+           updateAccessGroupTabCounts() on every recount. */
+        #dashboardAccessSection .dashboard-access-item.is-granted {
+            border-left: 3px solid var(--accent-cyan);
+            box-shadow: inset 1px 0 0 rgba(0, 255, 255, 0.08);
+        }
+        /* Secondary style for the "Reset to defaults" button so it
+           reads as a safety fallback, not a primary action. */
+        .access-bulk-actions .btn-mini-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border-color: var(--border-color);
+            opacity: 0.75;
+        }
+        .access-bulk-actions .btn-mini-secondary:hover {
+            opacity: 1;
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+            background: rgba(0, 255, 255, 0.06);
+        }
+        /* Group-tab count pill now reads "granted/total" so admins can
+           see per-group grant density without opening each tab. */
+        .access-group-tab .tab-count-granted {
+            font-weight: 700;
+        }
+        .access-group-tab .tab-count-divider {
+            opacity: 0.55;
+            padding: 0 0.1rem;
+        }
+
         /* Access-to-new-releases pills (2026-07-30). Small horizontal
            chips that pack tightly and never wrap mid-word — replaces
            the old fixed-column grid that was rendering "PROFILE / IQ"
@@ -3529,33 +3613,49 @@
                 </div>
 
                 <div class="access-section" id="dashboardAccessSection" data-active-group="everything">
-                    <h4 style="margin-bottom: 0.75rem;">🎯 Dashboard Access</h4>
+                    <!-- 2026-09-09 cleanup: section header carries a live
+                         "N of M granted" chip so admins see at a glance
+                         what this user can open, without scanning every
+                         checkbox. Chip is updated by
+                         updateAccessGroupTabCounts() on modal open + on
+                         every checkbox change in the section. -->
+                    <div class="access-section-header-row">
+                        <div>
+                            <h4>🎯 Dashboard Access</h4>
+                            <div class="access-section-subtitle">Which products this user can open on the dashboard.</div>
+                        </div>
+                        <div class="access-granted-summary" title="Number of products granted out of the total available in the currently active tab. Toggle the group tabs to see per-group counts.">
+                            <span class="access-granted-count" id="dashboardAccessGrantedCount">0</span>
+                            <span class="access-granted-of">of</span>
+                            <span class="access-granted-total" id="dashboardAccessTotalCount">0</span>
+                            <span class="access-granted-word">granted</span>
+                        </div>
+                    </div>
 
-                    <!-- Streamlined access toolbar (2026-07-30). Combines:
-                         - Search across product labels
-                         - Bulk actions (grant all / revoke all / defaults) that
-                           act on the currently VISIBLE cards (respects both the
-                           active group tab and the search filter)
-                         - Group tabs (Core, Trends, Finance, Conversion, Everything)
-                           that hide/show cards via data-active-group on the
-                           parent section (styled in the CSS block above). Legacy
-                           cards flagged data-admin-hidden="true" (e.g. the
-                           retired Ticket Sales IQ / Talent Fit toggles) stay
-                           hidden across every group so JS reading their
-                           .checked values still works without cluttering the UI. -->
+                    <!-- Streamlined access toolbar (2026-07-30, refined 2026-09-09).
+                         Row 1: search across product labels (input the JS side
+                                already knew about; brought back on the cleanup
+                                pass so admins can jump to a specific product
+                                without scrolling through 16 cards).
+                         Row 2: group tabs (Everything / Core / Trends / Finance /
+                                Conversion). Tab pills show "granted/total" so
+                                per-group grant density is visible without
+                                opening each tab.
+                         Row 3: bulk actions. "Grant all in view" / "Revoke all
+                                in view" act on whatever the admin can SEE right
+                                now (tab + search intersection). "Reset to
+                                defaults" sits to the right and reads as a
+                                safety fallback (secondary style).
+                         Legacy cards flagged data-admin-hidden="true" (retired
+                         Ticket Sales IQ / Talent Fit toggles) stay hidden
+                         across every group so JS reading their .checked
+                         values still works without cluttering the UI. -->
                     <div class="access-toolbar">
-                        <!-- 2026-07-30 (Jenna): search / filter bar removed;
-                             the group tabs below + product consolidation
-                             (Trends bucket) made it redundant. The
-                             filterDashboardAccessItems() JS helper is kept
-                             in place (it no-ops safely when the input is
-                             missing) so setAccessGroupTab() and the modal
-                             init blocks can still call it uniformly. -->
                         <div class="access-toolbar-row">
-                            <div class="access-bulk-actions">
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Check every product currently shown in the active tab">✅ Grant all shown</button>
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Uncheck every product currently shown in the active tab">🚫 Revoke all shown</button>
-                                <button type="button" class="btn-mini" onclick="dashboardAccessResetDefaults()" title="Reset all product toggles to the sensible default set (Profile IQ, Workspace, Share of Time, Impact IQ on; everything else off)">⭐ Reset to defaults</button>
+                            <div class="access-search">
+                                <span style="font-size: 0.85rem; opacity: 0.6;">🔍</span>
+                                <input type="text" id="dashboardAccessFilter" placeholder="Search products..." oninput="filterDashboardAccessItems(this.value)" autocomplete="off">
+                                <span class="access-count-badge" id="dashboardAccessFilterCount"></span>
                             </div>
                         </div>
                         <div class="access-group-tabs" role="tablist">
@@ -3564,6 +3664,15 @@
                             <button type="button" class="access-group-tab" data-group="trends" onclick="setAccessGroupTab('trends')">📈 Trends &amp; Rankers <span class="tab-count" data-count-for="trends"></span></button>
                             <button type="button" class="access-group-tab" data-group="finance" onclick="setAccessGroupTab('finance')">💼 Finance &amp; Analysis <span class="tab-count" data-count-for="finance"></span></button>
                             <button type="button" class="access-group-tab" data-group="conversion" onclick="setAccessGroupTab('conversion')">🔄 Conversion &amp; Impact <span class="tab-count" data-count-for="conversion"></span></button>
+                        </div>
+                        <div class="access-toolbar-row" style="justify-content: space-between;">
+                            <div class="access-bulk-actions">
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Grant every product currently in view (respects the active tab and the search filter)">✅ Grant all in view</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Revoke every product currently in view (respects the active tab and the search filter)">🚫 Revoke all in view</button>
+                            </div>
+                            <div class="access-bulk-actions">
+                                <button type="button" class="btn-mini btn-mini-secondary" onclick="dashboardAccessResetDefaults()" title="Reset every product to the sensible default set (Profile IQ, Share of Time, Impact IQ, Attribution IQ on; everything else off). Applies across every tab.">⭐ Reset to defaults</button>
+                            </div>
                         </div>
                     </div>
 
@@ -11522,28 +11631,86 @@
             tabs.forEach(t => t.classList.toggle('active', t.dataset.group === group));
             const search = document.getElementById('dashboardAccessFilter');
             filterDashboardAccessItems((search && search.value) || '');
+            // Re-scope the header chip to the newly-active group so
+            // "N of M granted" reflects THIS tab's grant density, not
+            // the global total.
+            if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
         }
 
-        // Populate the little count badge inside each group tab. Called
-        // once on modal open so admins see how many products live in
-        // each group at a glance ("Core 5", "Conversion 6", etc.).
+        // Populate the count pills inside each group tab and the
+        // header "N of M granted" chip. Two things happen on every call:
+        //   1. Per-tab pill shows "granted/total" so admins see grant
+        //      density per group without opening each tab.
+        //   2. The header chip shows granted/total scoped to the
+        //      currently-ACTIVE group tab (Everything = global). Switch
+        //      tabs and the chip re-scopes.
+        //   3. Each card gets a `.is-granted` class toggled so the CSS
+        //      can tint the left border on cards that are switched on.
+        // Called once on modal open, on every checkbox change inside
+        // the section (via a delegated 'change' listener wired below),
+        // on tab switch, and after every bulk / reset action.
         function updateAccessGroupTabCounts() {
             const section = document.getElementById('dashboardAccessSection');
             if (!section) return;
             const items = section.querySelectorAll(':scope > .dashboard-access-item');
-            const buckets = { everything: 0, core: 0, trends: 0, finance: 0, conversion: 0 };
+            const buckets = {
+                everything: {granted: 0, total: 0},
+                core: {granted: 0, total: 0},
+                trends: {granted: 0, total: 0},
+                finance: {granted: 0, total: 0},
+                conversion: {granted: 0, total: 0},
+            };
             items.forEach(item => {
                 if (item.dataset.adminHidden === 'true') return;
-                buckets.everything += 1;
+                const cb = item.querySelector('.dashboard-access-header .checkbox-group input[type="checkbox"]');
+                const isGranted = !!(cb && cb.checked);
+                item.classList.toggle('is-granted', isGranted);
+                buckets.everything.total += 1;
+                if (isGranted) buckets.everything.granted += 1;
                 (item.dataset.accessGroup || '').split(/\s+/).filter(Boolean).forEach(g => {
-                    if (buckets.hasOwnProperty(g)) buckets[g] += 1;
+                    if (buckets[g]) {
+                        buckets[g].total += 1;
+                        if (isGranted) buckets[g].granted += 1;
+                    }
                 });
             });
+            // Per-tab pill: render "granted/total" instead of just total.
             Object.keys(buckets).forEach(g => {
                 const el = section.querySelector(`.tab-count[data-count-for="${g}"]`);
-                if (el) el.textContent = buckets[g];
+                if (!el) return;
+                const b = buckets[g];
+                el.innerHTML =
+                    `<span class="tab-count-granted">${b.granted}</span>` +
+                    `<span class="tab-count-divider">/</span>` +
+                    `<span>${b.total}</span>`;
             });
+            // Header chip: scope to the currently-active group so a
+            // filter tab shows THIS tab's grant density.
+            const activeGroup = section.dataset.activeGroup || 'everything';
+            const headerBucket = buckets[activeGroup] || buckets.everything;
+            const cEl = document.getElementById('dashboardAccessGrantedCount');
+            const tEl = document.getElementById('dashboardAccessTotalCount');
+            if (cEl) cEl.textContent = headerBucket.granted;
+            if (tEl) tEl.textContent = headerBucket.total;
         }
+
+        // Delegated change listener: any checkbox inside the Dashboard
+        // Access section refreshes the granted counters on the header
+        // chip + per-tab pills + the .is-granted card highlight. Wired
+        // once on load; the presence flag on the section element keeps
+        // repeated calls (e.g. modal re-open) from stacking listeners.
+        (function _wireDashboardAccessGrantedRecount() {
+            const section = document.getElementById('dashboardAccessSection');
+            if (!section || section._grantedRecountWired) return;
+            section.addEventListener('change', function(e) {
+                if (e && e.target && e.target.type === 'checkbox') {
+                    if (typeof updateAccessGroupTabCounts === 'function') {
+                        updateAccessGroupTabCounts();
+                    }
+                }
+            });
+            section._grantedRecountWired = true;
+        })();
 
         // Grant / revoke checkboxes across every VISIBLE product card
         // (respects both the active group tab and the search filter).
