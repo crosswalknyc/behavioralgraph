@@ -1455,6 +1455,81 @@
             margin-top: 0;
             border: none;
         }
+        /* Dashboard Access, inside the collapsible group, reads as a
+           flat list of thin rows - no cards, no toolbar, no tabs, no
+           bulk-actions strip. Jenna 2026-09-09: 'when you expand it's
+           the same old clunky ness from before.' The old 5-tab
+           toolbar + 16 tall rounded cards each with nested drawers
+           was doing all the work TWICE with the outer group panel
+           already telling the admin what section they're in.
+           
+           - Toolbar (tabs, bulk-actions, sticky background) hidden.
+             Every checkbox is still in the DOM so the save payload
+             is identical; only the visual chrome disappears.
+           - Group-filter CSS (data-active-group="core" hides non-
+             core items) is neutralized because there are no tabs
+             to switch. Everything shows.
+           - Cards flatten to bordered-bottom-only list rows. Hover
+             tints instead of raising the border color.
+           - The rounded background block that wraps each product's
+             nested config drawer (Fin IQ emails, Digital Journey
+             journey allow-list, Prometheus MODE, Category / Run /
+             Behavioral for Profile IQ) stays functional but its
+             visual weight softens so a nested reveal doesn't feel
+             like a page-within-a-page.
+        */
+        .edit-modal-group-body .access-toolbar {
+            display: none !important;
+        }
+        .edit-modal-group-body #dashboardAccessSection[data-active-group="core"] .dashboard-access-item:not([data-access-group~="core"]),
+        .edit-modal-group-body #dashboardAccessSection[data-active-group="trends"] .dashboard-access-item:not([data-access-group~="trends"]),
+        .edit-modal-group-body #dashboardAccessSection[data-active-group="finance"] .dashboard-access-item:not([data-access-group~="finance"]),
+        .edit-modal-group-body #dashboardAccessSection[data-active-group="conversion"] .dashboard-access-item:not([data-access-group~="conversion"]) {
+            display: block !important;
+        }
+        .edit-modal-group-body .dashboard-access-item {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 0;
+            transition: background 0.12s ease;
+        }
+        .edit-modal-group-body .dashboard-access-item:hover {
+            background: rgba(0, 255, 255, 0.035);
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+        .edit-modal-group-body .dashboard-access-item:last-child {
+            border-bottom: none;
+        }
+        .edit-modal-group-body .dashboard-access-header {
+            padding: 0.45rem 0.35rem;
+        }
+        .edit-modal-group-body .dashboard-access-item .checkbox-group span {
+            font-size: 0.85rem;
+            letter-spacing: 0.01em;
+        }
+        /* The .is-granted highlight (cyan tint on granted rows) stays,
+           just without the raised card feel. */
+        .edit-modal-group-body .dashboard-access-item.is-granted {
+            background: rgba(0, 255, 255, 0.06);
+        }
+        .edit-modal-group-body .dashboard-access-item.is-granted:hover {
+            background: rgba(0, 255, 255, 0.09);
+        }
+        /* Nested drawer content (Fin IQ, Journey IQ, Attribution IQ,
+           Brand Partnership IQ, SF-LF Conversion, Prometheus mode,
+           Profile IQ's Category / Run / Behavioral sub-panels) reads
+           softer - lighter border, no dark card fill fighting the
+           outer group card. */
+        .edit-modal-group-body .dashboard-access-content {
+            padding: 0 0.35rem 0.55rem;
+        }
+        .edit-modal-group-body .dashboard-access-content > div[style*="background: var(--bg-dark)"],
+        .edit-modal-group-body .dashboard-access-content > div[style*="background:var(--bg-dark)"] {
+            background: rgba(0, 255, 255, 0.025) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        }
     </style>
 </head>
 <body>
