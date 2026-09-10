@@ -1277,15 +1277,42 @@ def admin_custom_charge(target_username):
 
     # Charge succeeded -> top up wallet (webhook may also arrive; we
     # dedupe on stripe_ref in the webhook path).
+    ref = str(result.get("id") or "")
+    credited = {"new_balance": 0.0, "rec_snapshot": None}
+
     def _apply(u):
         wallet.apply_wallet_topup(
             u, amt,
             description=f"Admin charge: {desc}",
-            stripe_ref=str(result.get("id") or ""),
+            stripe_ref=ref,
             kind="topup")
+        credited["new_balance"] = float(
+            u.get("wallet_balance_usd") or 0.0)
+        credited["rec_snapshot"] = dict(u)
         return True
 
     ok, _ = _mutate_target_user(target_username, _apply)
+
+    # Buyer receipt + internal notice (Jenna 2026-09-09). Fires from
+    # the inline path because the follow-up payment_intent.succeeded
+    # webhook dedupes credit-side and deliberately skips
+    # admin_custom_charge emails so we don't double-email.
+    if ok:
+        _emit_topup_emails_safe(
+            subject_kind="user",
+            subject_key=target_username,
+            subject_after=credited["rec_snapshot"] or target,
+            amount_usd=amt,
+            new_balance_usd=credited["new_balance"],
+            stripe_ref=ref,
+            kind="admin_charge",
+            metadata={
+                "billed_via_username": target_username,
+                "dashboard_username": target_username,
+                "description": desc,
+            },
+        )
+
     return jsonify({
         "success": ok,
         "payment_intent_id": result.get("id"),
@@ -1311,6 +1338,7 @@ def admin_manual_topup(target_username):
     if amt == 0:
         return jsonify({"error": "amount_must_be_nonzero"}), 400
     note = str(body.get("note") or "Admin adjustment").strip()
+    credited = {"new_balance": 0.0, "rec_snapshot": None}
 
     def _apply(u):
         if amt > 0:
@@ -1320,9 +1348,33 @@ def admin_manual_topup(target_username):
             # Negative topup = manual deduction (rare, admin cleanup).
             wallet.apply_wallet_deduct(
                 u, -amt, description=note, tool_key="admin_adjust")
+        credited["new_balance"] = float(
+            u.get("wallet_balance_usd") or 0.0)
+        credited["rec_snapshot"] = dict(u)
         return True
 
     ok, _ = _mutate_target_user(target_username, _apply)
+
+    # Internal notice ONLY (no card was charged, so no buyer receipt
+    # to send; the buyer's wallet balance changed but there is no
+    # charge to receipt for). Jenna 2026-09-09: still want visibility
+    # so we know when comp / trial credits land.
+    if ok and amt > 0:
+        _emit_topup_emails_safe(
+            subject_kind="user",
+            subject_key=target_username,
+            subject_after=credited["rec_snapshot"] or {},
+            amount_usd=amt,
+            new_balance_usd=credited["new_balance"],
+            stripe_ref="",
+            kind="adjustment",
+            metadata={
+                "billed_via_username": target_username,
+                "dashboard_username": target_username,
+                "description": note,
+            },
+        )
+
     return jsonify({"success": ok})
 
 
@@ -2098,6 +2150,150 @@ def _amount_from_object(obj: dict) -> float:
     return 0.0
 
 
+# ---------------------------------------------------------------------------
+# Top-up receipt + internal notice dispatch (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+# Jenna 2026-09-09 (verbatim): "when someone buys credits it should
+# email them a reciept ... also it should send a system email to me
+# and liz and czarina showing who bought it and the amount spent".
+# Wired here (not inside apply_wallet_topup) so the emails only fire
+# once, at the true purchase entry points (webhook + admin routes),
+# and never on internal credit adjustments that are pure bookkeeping.
+
+def _resolve_buyer_info(md, subject_kind, subject_key, subject):
+    """Look up buyer identity (name, email, company) for the receipt
+    + internal notice.
+
+    Preference order for the buyer username:
+      1. metadata.billed_via_username (Hosted Checkout sets this)
+      2. metadata.dashboard_username (auto-reload / admin charge)
+      3. subject_key when subject_kind == 'user'
+      4. First company_billing_admin user when subject_kind == 'company'
+
+    Returns a dict with buyer_username, buyer_email,
+    buyer_display_name, buyer_company. Fields are empty strings when
+    they can't be resolved. Never raises.
+    """
+    try:
+        from app import load_users  # type: ignore
+    except Exception:
+        load_users = None
+    md = md or {}
+    uname = str(md.get("billed_via_username")
+                or md.get("dashboard_username")
+                or "").strip()
+    if not uname and subject_kind == "user":
+        uname = subject_key or ""
+
+    users_data = {}
+    if load_users is not None:
+        try:
+            users_data = load_users() or {}
+        except Exception:
+            users_data = {}
+    users = users_data.get("users") or {}
+
+    if not uname and subject_kind == "company" and subject_key:
+        for u_name, u_rec in users.items():
+            if not isinstance(u_rec, dict):
+                continue
+            same_company = (str(u_rec.get("company") or "").strip()
+                            == subject_key)
+            if same_company and u_rec.get("company_billing_admin"):
+                uname = u_name
+                break
+
+    buyer = users.get(uname) if uname else None
+    if not isinstance(buyer, dict):
+        buyer = {}
+    first = str(buyer.get("first_name") or "").strip()
+    last = str(buyer.get("last_name") or "").strip()
+    display = (f"{first} {last}").strip() or uname or ""
+    return {
+        "buyer_username": uname or "",
+        "buyer_email": str(buyer.get("email") or "").strip(),
+        "buyer_display_name": display,
+        "buyer_company": str(buyer.get("company") or "").strip(),
+    }
+
+
+def _card_brand_last4_for_subject(subject: dict) -> tuple:
+    """Return (brand, last4) strings for the subject's saved card, if
+    we have one. Both empty strings when nothing is saved."""
+    subject = subject or {}
+    return (
+        str(subject.get("stripe_payment_method_brand") or "").strip(),
+        str(subject.get("stripe_payment_method_last4") or "").strip(),
+    )
+
+
+def _emit_topup_emails_safe(*, subject_kind, subject_key,
+                            subject_after: dict,
+                            amount_usd: float,
+                            new_balance_usd: float,
+                            stripe_ref: str,
+                            kind: str,
+                            metadata=None,
+                            card_brand: str = "",
+                            card_last4: str = "") -> None:
+    """Fire buyer receipt (SES) + internal notice (SES) after a
+    successful wallet top-up. Never raises: SES failures print to
+    stderr and swallow so the webhook still returns 200.
+
+    kind is one of:
+      'topup'           - buyer chose amount on /wallet page
+      'auto_reload'     - saved card auto-charged when balance low
+      'admin_charge'    - super admin ran a custom charge inline
+      'monthly_invoice' - end-of-month invoice paid
+      'adjustment'      - manual admin credit (no card charge; only
+                          the internal notice fires, no receipt to
+                          the buyer since there is nothing to receipt)
+    """
+    try:
+        from wallet_receipt_email import (
+            send_topup_receipt, send_topup_internal_notice)
+    except Exception as e:
+        print(f"[billing] receipt email module unavailable: {e}")
+        return
+    try:
+        info = _resolve_buyer_info(
+            metadata, subject_kind, subject_key, subject_after)
+        # Fill missing card metadata from the subject record when the
+        # caller didn't supply it explicitly.
+        if not (card_brand and card_last4):
+            b, l = _card_brand_last4_for_subject(subject_after)
+            card_brand = card_brand or b
+            card_last4 = card_last4 or l
+        if kind != "adjustment":
+            send_topup_receipt(
+                buyer_email=info["buyer_email"],
+                buyer_display_name=info["buyer_display_name"],
+                amount_usd=amount_usd,
+                new_balance_usd=new_balance_usd,
+                stripe_ref=stripe_ref,
+                card_brand=card_brand,
+                card_last4=card_last4,
+                kind=kind,
+            )
+        send_topup_internal_notice(
+            buyer_username=info["buyer_username"],
+            buyer_email=info["buyer_email"],
+            buyer_display_name=info["buyer_display_name"],
+            buyer_company=info["buyer_company"],
+            subject_kind=subject_kind,
+            subject_key=subject_key,
+            amount_usd=amount_usd,
+            new_balance_usd=new_balance_usd,
+            stripe_ref=stripe_ref,
+            kind=kind,
+            card_brand=card_brand,
+            card_last4=card_last4,
+        )
+    except Exception as e:
+        print(f"[billing] top-up email dispatch failed "
+              f"(non-fatal): {e}")
+
+
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
     subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
@@ -2114,6 +2310,10 @@ def _handle_checkout_session_completed(event: dict):
     md = obj.get("metadata") or {}
     desc = str(md.get("description") or "Wallet top-up").strip()
 
+    # Capture the post-mutation snapshot for the receipt email so we
+    # report the fresh balance (not a stale pre-mutation read).
+    credited = {"new_balance": 0.0, "rec_snapshot": None}
+
     def _apply(rec):
         wallet.apply_wallet_topup(
             rec, amt, description=desc, stripe_ref=ref, kind="topup")
@@ -2126,25 +2326,50 @@ def _handle_checkout_session_completed(event: dict):
             pm_id = str(pi.get("payment_method") or "")
             if pm_id and not rec.get("stripe_payment_method_id"):
                 rec["stripe_payment_method_id"] = pm_id
+        credited["new_balance"] = float(
+            rec.get("wallet_balance_usd") or 0.0)
+        credited["rec_snapshot"] = dict(rec)
         return True
 
     _mutate_billing_subject(subject_kind, subject_key, _apply)
     print(f"[billing] webhook credited ${amt:.2f} to "
           f"{subject_kind}:{subject_key} (session={ref})")
 
+    # Buyer receipt + internal notice (Jenna 2026-09-09). Fire and
+    # forget: SES failures print but never bubble up to Stripe.
+    _emit_topup_emails_safe(
+        subject_kind=subject_kind,
+        subject_key=subject_key,
+        subject_after=credited["rec_snapshot"] or subject,
+        amount_usd=amt,
+        new_balance_usd=credited["new_balance"],
+        stripe_ref=ref,
+        kind="topup",
+        metadata=md,
+    )
+
 
 def _handle_payment_intent_succeeded(event: dict):
-    """Fires on auto-reload charges + admin custom charges. The
-    admin_custom_charge route already credits the wallet inline on
-    success; this webhook is a belt-and-suspenders backstop. Because
-    we key idempotency off Stripe event id AND stripe_ref, a duplicate
-    credit is avoided."""
+    """Fires on auto-reload charges + admin custom charges + Hosted
+    Checkout follow-ups. The admin_custom_charge route already credits
+    the wallet inline on success; this webhook is a belt-and-suspenders
+    backstop. Because we key idempotency off Stripe event id AND
+    stripe_ref, a duplicate credit is avoided.
+
+    Emails (buyer receipt + internal notice, Jenna 2026-09-09):
+    fire from HERE for auto_reload / admin_custom_charge /
+    monthly_invoice. We deliberately SKIP the wallet_topup purpose
+    because that Stripe event also fires alongside
+    checkout.session.completed, and that sibling handler is what
+    emails the buyer for a Hosted Checkout purchase.
+    """
     obj = ((event or {}).get("data") or {}).get("object") or {}
     subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
     if not subject:
         return
     md = obj.get("metadata") or {}
-    if str(md.get("purpose") or "") not in (
+    purpose = str(md.get("purpose") or "")
+    if purpose not in (
             "admin_custom_charge", "auto_reload", "wallet_topup",
             "monthly_invoice"):
         # Not a wallet-affecting charge (e.g. subscription); skip.
@@ -2162,24 +2387,58 @@ def _handle_payment_intent_succeeded(event: dict):
         str(t.get("stripe_ref") or "") == ref
         and str(t.get("kind") or "") in ("topup", "auto_reload")
         for t in txns)
-    if already:
-        return
 
     import wallet  # type: ignore
-    kind = "auto_reload" if md.get("purpose") == "auto_reload" \
-        else "topup"
+    kind = "auto_reload" if purpose == "auto_reload" else "topup"
 
-    def _apply(rec):
-        wallet.apply_wallet_topup(
-            rec, amt,
-            description=str(md.get("description")
-                            or "Card charge"),
-            stripe_ref=ref, kind=kind)
-        return True
+    # Post-mutation snapshot for the receipt email (fresh balance).
+    credited = {"new_balance": 0.0, "rec_snapshot": None}
 
-    _mutate_billing_subject(subject_kind, subject_key, _apply)
-    print(f"[billing] webhook confirmed ${amt:.2f} to "
-          f"{subject_kind}:{subject_key} (pi={ref}, kind={kind})")
+    if not already:
+        def _apply(rec):
+            wallet.apply_wallet_topup(
+                rec, amt,
+                description=str(md.get("description")
+                                or "Card charge"),
+                stripe_ref=ref, kind=kind)
+            credited["new_balance"] = float(
+                rec.get("wallet_balance_usd") or 0.0)
+            credited["rec_snapshot"] = dict(rec)
+            return True
+
+        _mutate_billing_subject(subject_kind, subject_key, _apply)
+        print(f"[billing] webhook confirmed ${amt:.2f} to "
+              f"{subject_kind}:{subject_key} "
+              f"(pi={ref}, kind={kind})")
+    else:
+        # Inline path already credited; use the current subject
+        # balance as the "post-credit" balance for the receipt.
+        credited["new_balance"] = float(
+            subject.get("wallet_balance_usd") or 0.0)
+        credited["rec_snapshot"] = subject
+
+    # Emails (Jenna 2026-09-09). SKIP wallet_topup here to avoid
+    # double-emailing on Hosted Checkout (session.completed fires the
+    # emails first). SKIP admin_custom_charge here because the inline
+    # admin route sends the emails on the acting-admin thread with
+    # exact card + user context; the webhook backstop leaves the
+    # user without a duplicate email but still ensures internal
+    # visibility if the inline send fails via its own catch.
+    if purpose in ("auto_reload", "monthly_invoice"):
+        # Translate 'topup' -> the exact kind label the email module
+        # renders in the header line.
+        email_kind = ("auto_reload" if purpose == "auto_reload"
+                      else "monthly_invoice")
+        _emit_topup_emails_safe(
+            subject_kind=subject_kind,
+            subject_key=subject_key,
+            subject_after=credited["rec_snapshot"] or subject,
+            amount_usd=amt,
+            new_balance_usd=credited["new_balance"],
+            stripe_ref=ref,
+            kind=email_kind,
+            metadata=md,
+        )
 
 
 def _handle_payment_intent_failed(event: dict):
