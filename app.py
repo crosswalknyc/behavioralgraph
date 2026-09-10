@@ -45136,6 +45136,67 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
     return subjects
 
 
+def _is_explicit_combined_request(text: str) -> bool:
+    """True when the ask explicitly wants ONE combined profile covering
+    several named things, rather than one profile per thing.
+
+    Jenna 2026-09-10, on a four-audiobook ask that shipped as separate
+    builds: "it ran these as 5 profiles instead of one combined. if
+    this comes up it should ask the user do you want 5 individual
+    profiles or one combined for all? if they say combined then it
+    should ask what do you want to name the profile?"
+
+    Two callers depend on this:
+
+      1. The chat's combine gate rewrites the ask into the canonical
+         'One combined profile named "<name>" covering all of the
+         following together: A; B; C' form once the reader has picked
+         combined and supplied a name. This detector is what keeps the
+         rewritten ask away from the batch splitters, which would
+         otherwise shatter it straight back into one profile per title.
+      2. Someone who types the intent directly ("one combined profile
+         for A, B and C") gets the same single build without having to
+         answer the gate at all.
+
+    HIGH PRECISION on purpose. The combining word has to be attached to
+    the deliverable ("one combined profile", "combine these into one
+    profile"), never merely present in the sentence, so a real batch
+    whose subject happens to carry the word ("Combined Insurance
+    Company of America, State Farm, Allstate") still fans out.
+    """
+    import re as _re
+    t = (text or '').strip()
+    if len(t) < 12:
+        return False
+    # Deliverable nouns this gate speaks about.
+    d = r'(?:profile\s+iq|profile|iq|audience|persona|universe|build|read)'
+    one = r'(?:one|1|a\s+single|a\s+combined|just\s+one)'
+    pats = (
+        # "one combined profile", "a single consolidated audience"
+        r'\b' + one + r'\s+'
+        r'(?:combined|consolidated|merged|joint|single|unified)\s+' + d
+        + r'\b',
+        # "one profile covering all of them", "a single profile for both"
+        r'\b' + one + r'\s+' + d + r'\s+(?:that\s+)?'
+        r'(?:cover(?:s|ing)?|for|across|spanning|combining|including|'
+        r'that\s+includes|with)\s+'
+        r'(?:all|both|every|the\s+following|them)\b',
+        # "combine them into one profile"
+        r'\bcombin(?:e|ed|ing)\b[^.\n]{0,80}?\binto\s+' + one + r'\s+' + d,
+        # "merge/roll these into a single profile"
+        r'\b(?:merg(?:e|ed|ing)|roll(?:ed|ing)?\s+up|group(?:ed|ing)?)\b'
+        r'[^.\n]{0,80}?\binto\s+' + one + r'\s+' + d,
+        # "combined profile named X" (the gate's canonical rewrite)
+        r'\bcombined\s+' + d + r'\s+(?:named|called|titled)\b',
+        # "all in one profile", "all under a single audience"
+        r'\ball\s+(?:in|as|under)\s+' + one + r'\s+' + d + r'\b',
+    )
+    for p in pats:
+        if _re.search(p, t, _re.IGNORECASE):
+            return True
+    return False
+
+
 def _is_single_compound_audience(text: str) -> bool:
     """True when the prompt describes ONE compound behavioral audience
     (people who did X and/or satisfied one of an enumerated list of
@@ -45168,6 +45229,14 @@ def _is_single_compound_audience(text: str) -> bool:
     t = (text or '').strip()
     if len(t) < 12:
         return False
+
+    # EXPLICIT COMBINED ASK (2026-09-10, Jenna). "one combined profile
+    # named X covering all of the following: A; B; C" is one build by
+    # definition. Checked first so the combine gate's rewritten ask, and
+    # anyone who types the same intent directly, never reaches the batch
+    # splitters that would shatter it back into one profile per title.
+    if _is_explicit_combined_request(t):
+        return True
 
     # S1: audience relative clause - "<audience noun/pronoun> who ...".
     # A batch of independent subjects never says "anyone who watched X"
