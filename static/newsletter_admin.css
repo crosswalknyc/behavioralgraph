@@ -1,0 +1,236 @@
+/* Newsletter CMS (admin tab). Scoped to #section-newsletter. */
+#section-newsletter { color: var(--text-primary); }
+#section-newsletter .nl-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+#section-newsletter .nl-kicker {
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+#section-newsletter .nl-title {
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+#section-newsletter .nl-sub {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+    max-width: 42rem;
+}
+#section-newsletter .nl-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+#section-newsletter .nl-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+#section-newsletter .nl-stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+}
+#section-newsletter .nl-stat .k {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+#section-newsletter .nl-stat .v {
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+    color: var(--accent-cyan);
+}
+#section-newsletter .nl-nav {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.25rem;
+}
+#section-newsletter .nl-nav button {
+    background: none;
+    border: 0;
+    color: var(--text-secondary);
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.88rem;
+    border-bottom: 2px solid transparent;
+}
+#section-newsletter .nl-nav button.on {
+    color: var(--accent-cyan);
+    border-bottom-color: var(--accent-cyan);
+}
+#section-newsletter .nl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+#section-newsletter .nl-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+}
+#section-newsletter .nl-card-preview {
+    height: 140px;
+    background: #070F11;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+#section-newsletter .nl-card-preview iframe {
+    width: 600px;
+    height: 800px;
+    transform: scale(0.233);
+    transform-origin: top left;
+    border: 0;
+    pointer-events: none;
+    background: #070F11;
+}
+#section-newsletter .nl-card-body { padding: 0.9rem 1rem 1rem; flex: 1; }
+#section-newsletter .nl-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+#section-newsletter .nl-badge.draft { color: #fd971f; border-color: #fd971f55; }
+#section-newsletter .nl-badge.sending { color: var(--accent-cyan); border-color: #66d9ef55; }
+#section-newsletter .nl-badge.scheduled { color: #ae81ff; border-color: #ae81ff55; }
+#section-newsletter .nl-badge.sent { color: #a6e22e; border-color: #a6e22e55; }
+#section-newsletter .nl-card h3 {
+    font-size: 1.02rem;
+    margin: 0.45rem 0 0.2rem;
+}
+#section-newsletter .nl-card .meta {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+#section-newsletter .nl-card-foot {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+}
+#section-newsletter .nl-split {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+@media (max-width: 980px) {
+    #section-newsletter .nl-split { grid-template-columns: 1fr; }
+}
+#section-newsletter .nl-form {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+}
+#section-newsletter label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0.7rem 0 0.3rem;
+}
+#section-newsletter input[type="text"],
+#section-newsletter input[type="email"],
+#section-newsletter input[type="datetime-local"],
+#section-newsletter select,
+#section-newsletter textarea {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+#section-newsletter textarea { min-height: 140px; resize: vertical; }
+#section-newsletter .nl-preview-wrap {
+    background: #070F11;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    min-height: 640px;
+    overflow: hidden;
+}
+#section-newsletter .nl-preview-wrap iframe {
+    width: 100%;
+    height: 720px;
+    border: 0;
+    background: #070F11;
+}
+#section-newsletter .nl-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+#section-newsletter .nl-row > * { flex: 1; min-width: 140px; }
+#section-newsletter table.nl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+#section-newsletter table.nl-table th,
+#section-newsletter table.nl-table td {
+    text-align: left;
+    padding: 0.55rem 0.45rem;
+    border-bottom: 1px solid var(--border-color);
+}
+#section-newsletter table.nl-table th { color: var(--text-secondary); font-weight: 600; }
+#section-newsletter .nl-empty {
+    color: var(--text-secondary);
+    padding: 2rem 1rem;
+    text-align: center;
+}
+#section-newsletter .nl-hidden { display: none !important; }
+#section-newsletter .nl-warn {
+    background: #fd971f18;
+    border: 1px solid #fd971f44;
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.85rem;
+    margin: 0.75rem 0;
+}
+#section-newsletter .nl-send-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border-color);
+}
+#nl-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 12000;
+    align-items: center;
+    justify-content: center;
+}
+#nl-modal.on { display: flex; }
+#nl-modal .box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.4rem;
+    width: min(460px, 92vw);
+}
+#nl-modal h3 { margin: 0 0 0.5rem; }
+#nl-modal p { color: var(--text-secondary); font-size: 0.9rem; }

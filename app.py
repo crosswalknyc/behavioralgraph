@@ -257,6 +257,12 @@ try:
 except Exception as _billing_import_err:
     print(f"⚠️ Billing blueprint not registered: {_billing_import_err}")
 
+try:
+    from newsletter import register_newsletter_blueprint
+    register_newsletter_blueprint(app)
+except Exception as _newsletter_import_err:
+    print(f"⚠️ Newsletter blueprint not registered: {_newsletter_import_err}")
+
 # Global error handler for API routes - ensures JSON responses.
 # The partner surface (/api/v1/*) gets a fixed generic message with no
 # exception detail (2026-08-28 client finding #12: error paths must be

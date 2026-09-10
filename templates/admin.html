@@ -11,6 +11,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon-192.png?v=2">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/newsletter_admin.css">
     <script>
         // Auto-reload admin panel when a new deploy lands. Mirrors the
         // version-poller in index.html so admins never sit on stale UI.
@@ -1620,6 +1621,7 @@
             <button class="admin-tab" onclick="showAdminTab('companies')">🏢 Companies</button>
             <button class="admin-tab" onclick="showAdminTab('timeTracking')">⏱️ Time Tracking</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
+            <button class="admin-tab" onclick="showAdminTab('newsletter')">✉️ Newsletter</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
             <button class="admin-tab" onclick="showAdminTab('tickers')">📈 Tickers</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
@@ -3458,6 +3460,156 @@
                 <div id="contentAccordions">
                     <p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">Loading content from S3...</p>
                 </div>
+            </div>
+        </div>
+
+        <div id="section-newsletter" class="admin-section">
+            <div class="nl-top">
+                <div>
+                    <div class="nl-kicker">The Read</div>
+                    <div class="nl-title">Newsletter</div>
+                    <div class="nl-sub">Write it, pick the list, send from <code>no_reply@crosswalknyc.com</code>. Opens, clicks, and unsubscribes land on the report.</div>
+                    <div class="nl-sub" id="nl-from-line" style="margin-top:0.15rem;">Sends from The Read &lt;no_reply@crosswalknyc.com&gt;</div>
+                </div>
+                <div class="nl-actions">
+                    <button class="btn btn-small btn-secondary" onclick="nlInit()">Refresh</button>
+                    <button class="btn btn-small btn-success" onclick="nlCompose()">+ Compose</button>
+                </div>
+            </div>
+            <div class="nl-stats">
+                <div class="nl-stat"><div class="k">Subscribers</div><div class="v" id="nl-stat-subs">0</div></div>
+                <div class="nl-stat"><div class="k">Emails sent</div><div class="v" id="nl-stat-sent">0</div></div>
+                <div class="nl-stat"><div class="k">Avg open rate</div><div class="v" id="nl-stat-open">0%</div></div>
+                <div class="nl-stat"><div class="k">Avg click rate</div><div class="v" id="nl-stat-click">0%</div></div>
+            </div>
+            <div class="nl-nav">
+                <button class="on" data-view="campaigns" onclick="nlShow('campaigns')">Campaigns</button>
+                <button data-view="audience" onclick="nlShow('audience')">Audience</button>
+            </div>
+
+            <div id="nl-view-campaigns">
+                <div id="nl-campaign-grid" class="nl-grid">
+                    <div class="nl-empty">Loading newsletters...</div>
+                </div>
+            </div>
+
+            <div id="nl-view-editor" class="nl-hidden">
+                <div style="margin-bottom:0.75rem;">
+                    <button class="btn btn-small btn-secondary" onclick="nlBack()">← Campaigns</button>
+                </div>
+                <div class="nl-split">
+                    <div class="nl-form">
+                        <label>Internal name</label>
+                        <input type="text" id="nl-ed-name" placeholder="The Read / Creatorverse">
+                        <label>Subject</label>
+                        <input type="text" id="nl-ed-subject" placeholder="22.4M watched Tubi's Creatorverse in year one">
+                        <label>Preview text</label>
+                        <input type="text" id="nl-ed-preheader" placeholder="Their YouTube time never moved.">
+                        <div class="nl-row">
+                            <div>
+                                <label>From name</label>
+                                <input type="text" id="nl-ed-from-name" value="The Read">
+                            </div>
+                            <div>
+                                <label>Reply-to</label>
+                                <input type="email" id="nl-ed-reply" value="jenna@crosswalknyc.com">
+                            </div>
+                        </div>
+                        <label>Audience</label>
+                        <select id="nl-ed-list"></select>
+                        <label>HTML file</label>
+                        <input type="file" id="nl-html-file" accept=".html,text/html">
+                        <div class="nl-row" style="margin-top:0.6rem;">
+                            <button class="btn btn-small btn-secondary" onclick="nlUploadHtml()">Load HTML</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlSaveCampaign()">Save</button>
+                        </div>
+                        <label>Schedule (optional)</label>
+                        <input type="datetime-local" id="nl-ed-schedule">
+                        <div class="nl-send-bar">
+                            <button class="btn btn-small btn-secondary" onclick="nlTestSend()">Send test</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlConfirmSend(true)">Schedule</button>
+                            <button class="btn btn-small btn-primary" id="nl-send-now" onclick="nlConfirmSend(false)">Send now</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlDeleteCampaign()">Delete</button>
+                        </div>
+                        <div class="nl-warn">From address is always <strong>no_reply@crosswalknyc.com</strong>, same identity as dashboard completion mail. Replies go to the reply-to above.</div>
+                    </div>
+                    <div class="nl-preview-wrap">
+                        <iframe id="nl-preview" title="Newsletter preview"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <div id="nl-view-audience" class="nl-hidden">
+                <div class="nl-actions" style="margin-bottom:0.9rem;">
+                    <button class="btn btn-small btn-secondary" onclick="nlSyncDashboard()">Sync dashboard users</button>
+                    <button class="btn btn-small btn-secondary" onclick="nlNewList()">+ New list</button>
+                </div>
+                <div id="nl-lists" class="nl-stats"></div>
+                <div class="nl-form" style="margin-bottom:1rem;">
+                    <div class="nl-row">
+                        <div>
+                            <label>Email</label>
+                            <input type="email" id="nl-add-email" placeholder="name@company.com">
+                        </div>
+                        <div>
+                            <label>Name</label>
+                            <input type="text" id="nl-add-name" placeholder="Optional">
+                        </div>
+                        <div>
+                            <label>List</label>
+                            <select id="nl-add-list"></select>
+                        </div>
+                    </div>
+                    <div class="nl-row" style="margin-top:0.7rem;">
+                        <button class="btn btn-small btn-primary" onclick="nlAddSubscriber()">Add person</button>
+                    </div>
+                    <label>Paste many emails</label>
+                    <textarea id="nl-bulk-emails" placeholder="one per line, or comma-separated"></textarea>
+                    <button class="btn btn-small btn-secondary" style="margin-top:0.5rem;" onclick="nlBulkAdd()">Add all</button>
+                </div>
+                <div class="nl-form" style="margin-bottom:1rem;">
+                    <label>Search people</label>
+                    <input type="text" id="nl-sub-search" placeholder="email, name, company">
+                    <div id="nl-sub-table" style="margin-top:0.75rem;"></div>
+                </div>
+                <div class="nl-form">
+                    <h3 style="margin:0 0 0.5rem; font-size:1rem;">Sender</h3>
+                    <label>Default from name</label>
+                    <input type="text" id="nl-set-from">
+                    <label>Default reply-to</label>
+                    <input type="email" id="nl-set-reply">
+                    <label>Footer address</label>
+                    <input type="text" id="nl-set-addr">
+                    <button class="btn btn-small btn-primary" style="margin-top:0.75rem;" onclick="nlSaveSettings()">Save sender</button>
+                </div>
+            </div>
+
+            <div id="nl-view-report" class="nl-hidden">
+                <div style="margin-bottom:0.75rem;">
+                    <button class="btn btn-small btn-secondary" onclick="nlBack()">← Campaigns</button>
+                </div>
+                <div class="nl-title" id="nl-report-title">Report</div>
+                <div class="nl-sub" id="nl-report-sub"></div>
+                <div class="nl-stats" id="nl-report-stats" style="margin-top:1rem;"></div>
+                <div class="card" style="margin-bottom:1rem; padding:1rem;">
+                    <h3 style="margin:0 0 0.6rem;">Top links</h3>
+                    <div id="nl-report-links"></div>
+                </div>
+                <div class="card" style="padding:1rem;">
+                    <h3 style="margin:0 0 0.6rem;">Recipients</h3>
+                    <div id="nl-report-recips"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="nl-modal">
+        <div class="box">
+            <h3>Send this newsletter?</h3>
+            <p id="nl-modal-msg"></p>
+            <div class="nl-row" style="margin-top:1rem;">
+                <button class="btn btn-small btn-secondary" onclick="nlCloseModal()">Cancel</button>
+                <button class="btn btn-small btn-primary" id="nl-modal-yes">Send</button>
             </div>
         </div>
     </div>
@@ -5386,6 +5538,9 @@
             // 2026-07-30: company-field blur/change listeners that loaded
             // company users into the Collaboration Team picker are gone
             // (section removed; everyone collaborates with everyone).
+            if ((location.hash || '').replace('#', '') === 'newsletter') {
+                showAdminTab('newsletter');
+            }
         });
 
         // Tab switching
@@ -5397,6 +5552,10 @@
             
             if (tabName === 'content') {
                 loadContentFiles();
+            }
+            if (tabName === 'newsletter') {
+                if (typeof nlInit === 'function') nlInit();
+                try { history.replaceState(null, '', '#newsletter'); } catch (e) {}
             }
             if (tabName === 'images') {
                 loadProfileImages();
@@ -17998,6 +18157,7 @@
             }
         }
     </script>
+    <script src="/static/newsletter_admin.js"></script>
 
     <!-- Journey IQ Annotations Modal -->
     <div id="jiqAnnotModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
