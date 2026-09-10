@@ -24307,8 +24307,8 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #piqProfileSidebar {
             display: flex !important;
             flex-direction: column;
-            gap: 16px;
-            padding: 22px 18px 28px !important;
+            gap: 18px;
+            padding: 20px 16px 24px !important;
             background: #15252A !important;
             border: 0 !important;
             border-right: 1px solid #3B3D38 !important;
@@ -24328,13 +24328,25 @@ https://www.instagram.com/p/..."></textarea>
             margin-bottom: 14px;
         }
         #dashboardView.piq-v4 .piq-picker-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             font-size: 10px;
             font-weight: 500;
             letter-spacing: 0.16em;
             text-transform: uppercase;
             color: #7C878A;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
+        #dashboardView.piq-v4 .piq-picker-eyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+            flex: 0 0 6px;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-eyebrow::before { background: #5E7E12; }
         #dashboardView.piq-v4 .sidebar-header-section {
             margin-bottom: 0 !important;
         }
@@ -24342,74 +24354,89 @@ https://www.instagram.com/p/..."></textarea>
             margin: 0 !important;
             color: #E9E8E1 !important;
             font-family: inherit !important;
-            font-size: 22px !important;
+            font-size: 20px !important;
             font-weight: 700 !important;
-            letter-spacing: -0.02em !important;
-            line-height: 1.1 !important;
+            letter-spacing: -0.03em !important;
+            line-height: 1.05 !important;
             text-transform: none !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .sidebar-header-section h3 { color: #0C1618 !important; }
         #dashboardView.piq-v4 .piq-picker-close {
             flex: 0 0 auto;
-            width: 28px;
-            height: 28px;
-            border: 1px solid #3B3D38;
-            border-radius: 6px;
-            background: #0C1618;
-            color: #9AA09B;
+            width: 24px;
+            height: 24px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: #7C878A;
             font-size: 18px;
             line-height: 1;
             cursor: pointer;
+            padding: 0;
         }
+        #dashboardView.piq-v4 .piq-picker-close:hover { color: #E9E8E1; }
         #dashboardView.piq-v4.piq-has-profile:not(.piq-sidebar-open) #piqPickerCloseBtn { display: none; }
         #dashboardView.piq-v4 .piq-picker-search {
             display: flex;
-            gap: 8px;
+            gap: 0;
             align-items: center;
+            border-bottom: 1px solid #3B3D38;
+            padding-bottom: 2px;
         }
         #dashboardView.piq-v4 .sidebar-search {
             flex: 1;
-            background: #0C1618 !important;
-            border: 1px solid #3B3D38 !important;
-            border-radius: 6px !important;
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 0 !important;
             color: #E9E8E1 !important;
             font-family: inherit !important;
             font-size: 13px !important;
             font-weight: 400 !important;
             letter-spacing: -0.01em !important;
             text-transform: none !important;
-            padding: 10px 12px !important;
+            padding: 8px 0 !important;
+            box-shadow: none !important;
         }
         #dashboardView.piq-v4 .sidebar-search::placeholder {
             color: #7C878A;
             text-transform: none;
         }
         #dashboardView.piq-v4 .sidebar-search:focus {
-            outline: 2px solid #3358FF;
-            outline-offset: 2px;
-            border-color: #3358FF !important;
+            outline: none;
+            border-color: transparent !important;
+        }
+        #dashboardView.piq-v4 .piq-picker-search:focus-within {
+            border-bottom-color: #3358FF;
         }
         #dashboardView.piq-v4 .piq-picker-refresh {
-            width: 36px;
-            height: 36px;
-            border: 1px solid #3B3D38 !important;
-            border-radius: 6px !important;
-            background: #0C1618 !important;
-            color: #9AA09B !important;
-            font-size: 14px !important;
+            width: 22px;
+            height: 22px;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: #7C878A !important;
+            font-size: 13px !important;
             cursor: pointer;
+            padding: 0;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .sidebar-search,
-        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-refresh,
-        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-close {
-            background: #E9E8E1 !important;
-            border-color: #C9C6BA !important;
+        #dashboardView.piq-v4 .piq-picker-refresh:hover { color: #E9E8E1 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .sidebar-search {
+            background: transparent !important;
             color: #0C1618 !important;
         }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-search { border-bottom-color: #C9C6BA; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-refresh,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-close {
+            background: transparent !important;
+            border-color: transparent !important;
+            color: #888C89 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-refresh:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-close:hover { color: #0C1618 !important; }
         #dashboardView.piq-v4 .profile-select-tree {
             background: transparent !important;
             border-radius: 0 !important;
-            padding: 2px 0 8px !important;
+            padding: 4px 0 8px !important;
         }
         #dashboardView.piq-v4 .profile-cat-item {
             background: transparent !important;
@@ -24418,34 +24445,61 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500 !important;
             letter-spacing: -0.01em !important;
             text-transform: none !important;
-            padding: 8px 8px !important;
-            border-radius: 6px !important;
-            gap: 8px !important;
+            padding: 9px 2px !important;
+            border-radius: 0 !important;
+            gap: 10px !important;
+            border-bottom: 1px solid rgba(59, 61, 56, 0.55);
         }
         #dashboardView.piq-v4 .profile-cat-item.master-cat {
             background: transparent !important;
-            font-weight: 600 !important;
-            margin-top: 6px;
+            font-weight: 500 !important;
+            margin-top: 0;
         }
         #dashboardView.piq-v4 .profile-cat-item:hover {
-            background: #1B2F35 !important;
+            background: transparent !important;
+            color: #E9E8E1 !important;
+        }
+        #dashboardView.piq-v4 .profile-cat-item:hover .profile-cat-label { color: #E9E8E1 !important; }
+        #dashboardView.piq-v4 .profile-cat-item .cat-arrow {
+            color: #7C878A !important;
+            font-size: 9px !important;
+            width: 8px;
+            flex: 0 0 8px;
         }
         #dashboardView.piq-v4 .profile-cat-label {
             color: #E9E8E1 !important;
             text-transform: none !important;
             letter-spacing: -0.01em !important;
         }
-        #dashboardView.piq-v4 .piq-picker-icon {
-            width: 18px;
-            text-align: center;
-            opacity: 0.7;
-            flex-shrink: 0;
+        #dashboardView.piq-v4 .piq-picker-icon { display: none !important; }
+        #dashboardView.piq-v4 .piq-picker-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex: 0 0 6px;
+            background: #7C878A;
         }
+        #dashboardView.piq-v4 .piq-picker-dot.signal { background: #C7F23E; }
+        #dashboardView.piq-v4 .piq-picker-dot.orchid { background: #E682FF; }
+        #dashboardView.piq-v4 .piq-picker-dot.cobalt { background: #3358FF; }
+        #dashboardView.piq-v4 .piq-picker-dot.dusk { background: #B7B3D8; }
+        #dashboardView.piq-v4 .piq-picker-dot.offwhite { background: #E9E8E1; }
+        #dashboardView.piq-v4 .piq-picker-dot.muted { background: #7C878A; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-dot.signal { background: #5E7E12; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-dot.orchid { background: #8E3FA8; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-dot.offwhite { background: #0C1618; }
         #dashboardView.piq-v4 .profile-cat-count {
             color: #7C878A !important;
             font-size: 11px !important;
-            font-weight: 500 !important;
+            font-weight: 400 !important;
             font-variant-numeric: tabular-nums;
+            letter-spacing: 0;
+        }
+        #dashboardView.piq-v4 .profile-cat-item:hover .profile-cat-count {
+            color: #9AA09B !important;
+        }
+        #dashboardView.piq-v4 .profile-cat-children {
+            padding-left: 24px !important;
         }
         #dashboardView.piq-v4 .profile-select-item {
             text-transform: none !important;
@@ -24454,11 +24508,12 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13px !important;
             font-weight: 400 !important;
             line-height: 1.35 !important;
-            padding: 8px 10px !important;
-            border-radius: 6px !important;
+            padding: 8px 2px !important;
+            border-radius: 0 !important;
+            border-bottom: 1px solid rgba(59, 61, 56, 0.45);
         }
         #dashboardView.piq-v4 .profile-select-item:not(.locked):hover {
-            background: #1B2F35 !important;
+            background: transparent !important;
             color: #E9E8E1 !important;
         }
         #dashboardView.piq-v4 .profile-select-item.active {
@@ -24472,7 +24527,11 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item:hover,
         body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item:not(.locked):hover {
-            background: #E9E8E1 !important;
+            background: transparent !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item,
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item {
+            border-bottom-color: rgba(201, 198, 186, 0.7);
         }
         body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item.active {
             background: rgba(94, 126, 18, 0.10) !important;
@@ -122057,6 +122116,23 @@ https://www.instagram.com/p/..."></textarea>
                 if (inp) setTimeout(function() { try { inp.focus(); } catch (_e) {} }, 40);
             }
         };
+        window._piqV4FolderDot = function(raw) {
+            var key = String(raw == null ? '' : raw).toUpperCase().replace(/\s+/g, ' ').trim();
+            var map = {
+                'TALENT': 'orchid',
+                'CONTENT': 'signal',
+                'PLATFORMS': 'cobalt',
+                'BRAND': 'dusk',
+                'GEN POP': 'offwhite',
+                'SPORT': 'orchid',
+                'TRENDS': 'dusk',
+                'SVOD ACQUISITION': 'cobalt'
+            };
+            return map[key] || 'muted';
+        };
+        window._piqV4FolderDotHtml = function(raw) {
+            return '<span class="piq-picker-dot ' + window._piqV4FolderDot(raw) + '" aria-hidden="true"></span>';
+        };
         window._piqV4FolderLabel = function(raw) {
             var s = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
             if (!s) return '';
@@ -124906,13 +124982,12 @@ https://www.instagram.com/p/..."></textarea>
                     const cat = first.category || 'UNCATEGORIZED';
                     const isSvod = first.is_svod || (first.key && first.key.startsWith('svod-acquisition/')) || (first.s3_key && first.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
-                    const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
                     const subjectDisplayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
+                    const searchDot = (window._piqV4FolderDotHtml || function(){ return ''; })(masterCat);
                     
                     if (runs.length === 1) {
                         const fullName = getProfileFullName(first);
-                        const isLocked = first.accessible === false;
-                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7; flex-shrink: 0;">${isLocked ? '🔒' : icon}</span><span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(fullName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
+                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;">${searchDot}<span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(fullName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
                         html += _profileItemHtml(first, searchLabel, { skipLockIcon: true });
                     } else {
                         // Collapse multi-cut subjects to a single clickable
@@ -124920,8 +124995,7 @@ https://www.instagram.com/p/..."></textarea>
                         // Click loads the Casual Fan / base run; cohort
                         // cuts are accessed via the Data Cuts popover.
                         const base = _pickBaseRun(runs) || first;
-                        const isLocked = base.accessible === false;
-                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7; flex-shrink: 0;">${isLocked ? '🔒' : icon}</span><span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(subjectDisplayName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
+                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;">${searchDot}<span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(subjectDisplayName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
                         html += _profileItemHtml(base, searchLabel, { skipLockIcon: true });
                     }
                 });
@@ -124968,7 +125042,6 @@ https://www.instagram.com/p/..."></textarea>
             let html = '';
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master] || {};
-                const icon = MASTER_CATEGORY_ICONS[master] || '📁';
                 const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
                 const isMasterExpanded = expandedDashCategories.has(masterId);
                 
@@ -124992,9 +125065,9 @@ https://www.instagram.com/p/..."></textarea>
                 const countClass = 'profile-cat-count';
                 
                 html += `
-                    <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
+                    <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" data-folder="${master}">
                         <span class="cat-arrow">▸</span>
-                        <span class="piq-picker-icon">${icon}</span>
+                        ${(window._piqV4FolderDotHtml || function(){ return ''; })(master)}
                         <span class="profile-cat-label">${(window._piqV4FolderLabel || function(s){return s;})(master)}</span>
                         <span class="${countClass}">${Number(countLabel).toLocaleString("en-US")}</span>
                     </div>
