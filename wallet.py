@@ -74,7 +74,23 @@ DEFAULT_PRICING = {
         "profile_iq_build": 500.0,
         "profile_iq_derived_cut": 100.0,
         "subscriber_iq_build": 1000.0,
-        "chatbot_profile_iq_build": 500.0,
+        # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
+        # from modules. those are just access monthly not any per pull
+        # things'). The dashboard-side Chatbot Profile IQ pull_type
+        # still resolves to `chatbot_profile_iq_build` via
+        # pull_type_to_tool_key so nothing crashes on route, but with
+        # the default gone AND no MODULE_CATALOG row, tool_price_usd()
+        # returns 0.0 - fires no per-pull charge. Chatbot access is
+        # controlled solely by the has_chatbot_profile_iq_access
+        # feature flag (a monthly-access product).
+        # Partner API family - MUST mirror MODULE_CATALOG defaults so a
+        # fresh install without a pricing.json override still charges
+        # the sticker price (should_charge_wallet reads per_tool_usd
+        # with no MODULE_CATALOG fallback, so an unlisted key silently
+        # falls to $0). 2026-09-09 defence-in-depth add.
+        "api_profile_iq_cut": 100.0,
+        "api_subscriber_iq_build": 1000.0,
+        "api_chatbot_profile_iq_build": 500.0,
         # Analysis / journey / attribution modules (default 0 = free
         # until the admin sets a value). Every key here MUST have a
         # matching row in MODULE_CATALOG - otherwise it renders as
@@ -112,9 +128,8 @@ DEFAULT_PRICING = {
     # not use this list.
     "hidden_tools": [],
     # 2026-09-09 (Jenna): admin-configured additions to the locked
-    # metered default set. The Prometheus family (chatbot_analysis,
-    # chatbot_deck, prometheus) is ALWAYS metered regardless of
-    # what's here. This list lets an admin flip any OTHER tool to
+    # metered default set. Prometheus is ALWAYS metered regardless
+    # of what's here. This list lets an admin flip any OTHER tool to
     # session-metered via the /admin/billing per-row checkbox.
     "metered_tools": [],
     "top_up_packs_usd": [250, 500, 1000, 2500],
@@ -162,14 +177,17 @@ DEFAULT_PRICING = {
 # pulls (Profile IQ, Subscriber IQ, their chatbot / partner API twins)
 # carry a discrete per-pull charge.
 #
-# The set below is the LOCKED default - the Prometheus family is
-# always metered by design and cannot be un-toggled from the admin
-# panel. Admins can ADD additional tools to the metered set via
-# pricing.json:metered_tools[] using mark_metered() / unmark_metered()
-# (surfaced as per-row checkboxes on /admin/billing).
+# The set below is the LOCKED default - Prometheus is always metered
+# by design and cannot be un-toggled from the admin panel. Admins can
+# ADD additional tools to the metered set via pricing.json:
+# metered_tools[] using mark_metered() / unmark_metered() (surfaced
+# as per-row checkboxes on /admin/billing).
+#
+# 2026-09-09 (Jenna): `chatbot_analysis` and `chatbot_deck` were
+# retired from MODULE_CATALOG entirely (dashboard chatbot access is
+# a monthly product, not per-pull), so they no longer need to sit in
+# this locked set - there's no row to render a METERED badge on.
 METERED_TOOL_KEYS = frozenset({
-    "chatbot_analysis",
-    "chatbot_deck",
     "prometheus",
 })
 
@@ -281,17 +299,28 @@ MODULE_CATALOG = [
      "modules", 3, 100.0, "has_profile_iq_access"),
     ("subscriber_iq_build",        "Subscriber IQ",
      "modules", 10, 1000.0, "has_subscriber_iq_access"),
-    ("chatbot_profile_iq_build",   "Chatbot Profile IQ",
-     "modules", 5, 500.0, "has_chatbot_profile_iq_access"),
-    # 2026-09-09 (Jenna): chatbot_analysis and chatbot_deck are
-    # SESSION-METERED, not per-pull charged. Prices stay at 0 by
-    # design - the Prometheus session bill (or the subscribed tier)
-    # covers them. Only real pipeline pulls (Profile IQ, Subscriber
-    # IQ, their chatbot / partner API twins) carry a discrete price.
-    ("chatbot_analysis",           "Chatbot - Analyze Ask",
-     "modules", 0, 0.0, "has_chatbot_profile_iq_access"),
-    ("chatbot_deck",               "Chatbot - Deck Export",
-     "modules", 0, 0.0, "has_chatbot_profile_iq_access"),
+    # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
+    # from modules. those are just access monthly not any per pull
+    # things'). Three rows retired here:
+    #
+    #   chatbot_profile_iq_build      "Chatbot Profile IQ"
+    #   chatbot_analysis              "Chatbot - Analyze Ask"
+    #   chatbot_deck                  "Chatbot - Deck Export"
+    #
+    # Dashboard-side chatbot access is a MONTHLY product gated by the
+    # per-user `has_chatbot_profile_iq_access` flag (set in the User
+    # admin modal). A user with that flag runs the chatbot freely -
+    # every conversational turn AND every real pipeline build fired
+    # from inside the chatbot is bundled into their monthly access.
+    #
+    # Nothing in the routing changed. `pull_type_to_tool_key` still
+    # maps 'Chatbot Profile IQ (new_build)' to
+    # `chatbot_profile_iq_build`; that tool_key just has no MODULE
+    # _CATALOG row and no DEFAULT_PRICING entry now, so
+    # `tool_price_usd()` returns 0.0 and no per-pull charge fires.
+    # If a future partner wants a paid chatbot-driven build, that
+    # path is `api_chatbot_profile_iq_build` below (partner API,
+    # per-pull priced).
     # ---------- Analysis / attribution ----------
     ("ecommerce_iq",               "Ecommerce IQ",
      "modules", 5, 0.0, "has_ecommerce_iq_access"),
@@ -1151,9 +1180,11 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "talent fit assessment":         "talent_fit",
     "talent fit":                    "talent_fit",
     "find me talent":                "talent_fit",
-    # ---- Chatbot secondary flows (analysis + deck) ----
-    "chatbot analysis":              "chatbot_analysis",
-    "chatbot deck":                  "chatbot_deck",
+    # 2026-09-09 (Jenna): retired 'chatbot analysis' and 'chatbot
+    # deck' pull_types here. The consume_credit call sites for those
+    # flows were removed earlier the same day (analyze / deck build
+    # routes no longer charge per action - metered via the monthly
+    # chatbot access product).
     # ---- Rankers ----
     "rankers iq":                    "rankers_iq_access",
     "ranker fast":                   "ranker_fast",
