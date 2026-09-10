@@ -629,12 +629,18 @@ def admin_pricing_get():
     # `sections` metadata so the admin panel can render section
     # headers without hardcoding names.
     tools = {}
+    # 2026-09-09 (Jenna, verbatim: 'move these to a new section called
+    # PULLS and add a subscriber IQ Pull. the one in modules should be
+    # the one per month that is just accerss.'). Modules is now the
+    # monthly-access product list; Pulls is the per-pull events list.
+    # Both live on the same table with section headers between them.
     sections = {
         "modules":      {"label": "Modules",      "order": 1},
-        "rankers":      {"label": "Rankers",      "order": 2},
-        "api":          {"label": "Partner API",  "order": 3},
-        "subscription": {"label": "Subscription", "order": 4},
-        "custom":       {"label": "Custom",       "order": 5},
+        "pulls":        {"label": "Pulls",        "order": 2},
+        "rankers":      {"label": "Rankers",      "order": 3},
+        "api":          {"label": "Partner API",  "order": 4},
+        "subscription": {"label": "Subscription", "order": 5},
+        "custom":       {"label": "Custom",       "order": 6},
         "extras":       {"label": "Other",        "order": 99},
     }
     for row in catalog:

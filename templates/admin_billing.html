@@ -345,8 +345,11 @@
             <p style="color: #6B7280; font-size: 13px; margin:8px 0 0 0;">
               The wallet is charged these amounts when a paying
               customer runs a pull and their internal allowance is
-              exhausted. Built-in tools ship with the product; custom
-              tools can be added and removed here. Tools tagged
+              exhausted. <strong>Modules</strong> is the monthly-access
+              product list (each row bills the / month price to users
+              carrying its access flag). <strong>Pulls</strong> is the
+              per-pull events list (each row bills its / pull price
+              when the event fires). Rows tagged
               <span style="display:inline-block; padding:0 5px;
                 font-size:10px; font-weight:600;
                 background:#0C1618; color:#C7F23E;
@@ -384,7 +387,8 @@
             <div>
               <label style="margin-top:0;">Section</label>
               <select id="new-tool-section" style="width:100%;">
-                <option value="modules">Modules</option>
+                <option value="modules">Modules (monthly access)</option>
+                <option value="pulls">Pulls (per-pull)</option>
                 <option value="rankers">Rankers</option>
                 <option value="api">Partner API</option>
                 <option value="subscription">Subscription</option>
@@ -1473,32 +1477,68 @@
               esc(key) + '</span>';
           }
           html += '</td>';
+          // 2026-09-09 (Jenna, verbatim: 'move these to a new section
+          // called PULLS ... the one in modules should be the one per
+          // month that is just accerss.'). Modules rows show only the
+          // monthly cell; Pulls rows show only the per-pull cell.
+          // The suppressed cell renders an em-dash placeholder and a
+          // hidden input carrying the current stored value so
+          // saveTools() round-trips it unchanged (never silently
+          // zeros an existing price on a save-without-edit).
+          const isModulesRow = (secKey === 'modules');
+          const isPullsRow = (secKey === 'pulls');
+          const monthlyCell =
+            '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-monthly" value="' +
+            (Number(t.monthly_usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ month</div></td>';
+          const perPullCell =
+            '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-usd" value="' +
+            (Number(t.usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ pull</div></td>';
+          const monthlyDashCell =
+            '<td class="num" style="color:#B8B8B0; ' +
+            'text-align:right; font-size:14px;" ' +
+            'title="Monthly access is priced on the MODULES row ' +
+            'for this feature.">' +
+            '<span>&mdash;</span>' +
+            '<input type="hidden" class="tool-monthly" value="' +
+            (Number(t.monthly_usd) || 0) + '">' +
+            '</td>';
+          const perPullDashCell =
+            '<td class="num" style="color:#B8B8B0; ' +
+            'text-align:right; font-size:14px;" ' +
+            'title="Per-pull events are priced on the PULLS row ' +
+            'for this feature.">' +
+            '<span>&mdash;</span>' +
+            '<input type="hidden" class="tool-usd" value="' +
+            (Number(t.usd) || 0) + '">' +
+            '</td>';
           if (isMetered) {
             // Metered rows span both price columns with a static
-            // note instead of price inputs.
+            // note instead of price inputs. Prometheus sits in the
+            // PULLS section but its per-pull surface is a session
+            // bill, so neither the monthly nor the per-pull cell
+            // takes input from the admin.
             html += '<td class="num" colspan="2" ' +
               'style="color:#5C6560; font-size:12px; ' +
               'font-style:italic; text-align:right;">' +
               'Session-metered - rolls up in the ' +
               'Prometheus session bill' +
               '</td>';
+          } else if (isModulesRow) {
+            html += monthlyCell + perPullDashCell;
+          } else if (isPullsRow) {
+            html += monthlyDashCell + perPullCell;
           } else {
-            // Monthly access (recurring)
-            html += '<td class="num"><span class="usd-input-wrap">' +
-              '<span>$</span>' +
-              '<input type="number" step="1" min="0" ' +
-              'class="tool-monthly" value="' +
-              (Number(t.monthly_usd) || 0) + '"></span>' +
-              '<div style="font-size:10px; color:#B8B8B0; ' +
-              'margin-top:2px;">/ month</div></td>';
-            // Per-pull (metered)
-            html += '<td class="num"><span class="usd-input-wrap">' +
-              '<span>$</span>' +
-              '<input type="number" step="1" min="0" ' +
-              'class="tool-usd" value="' +
-              (Number(t.usd) || 0) + '"></span>' +
-              '<div style="font-size:10px; color:#B8B8B0; ' +
-              'margin-top:2px;">/ pull</div></td>';
+            html += monthlyCell + perPullCell;
           }
           // 2026-09-09 (Jenna, verbatim: "hide what does it do? there
           // should be a delete, like ecommerce iq can be forever
@@ -1514,36 +1554,41 @@
           const dispEsc = esc(display).replace(/'/g, "\\'");
           const delBtnStyle = 'font-size:11px; padding:4px 10px; ' +
             'color:#8A1F1F; border-color:#F0D0D0;';
-          // Metered toggle - first line of the action stack.
-          html += '<div style="display:flex; align-items:center; ' +
-            'justify-content:flex-end; gap:6px; ' +
-            'margin-bottom:6px; font-size:11px; ' +
-            'color:#5C6560;">';
-          const toggleAttrs =
-            'type="checkbox" class="tool-metered-toggle" ' +
-            'data-tool="' + esc(key) + '" ' +
-            (isMetered ? 'checked ' : '') +
-            (isMeteredLocked ? 'disabled ' : '') +
-            'style="cursor:' +
-            (isMeteredLocked ? 'not-allowed' : 'pointer') + ';"';
-          const toggleTitle = isMeteredLocked
-            ? 'Prometheus, Analyze Ask, and Deck Export are always ' +
-              'metered by design.'
-            : (isMetered
-                ? 'Metered - session-billed via Prometheus, no per-pull line item. Uncheck to switch back to per-pull priced.'
-                : 'Toggle on to switch this tool to session-metered. Per-pull and monthly prices will be zeroed and hidden.');
-          html += '<label style="display:flex; align-items:center; ' +
-            'gap:4px; cursor:' +
-            (isMeteredLocked ? 'not-allowed' : 'pointer') + ';" ' +
-            'title="' + esc(toggleTitle) + '">' +
-            '<input ' + toggleAttrs + '>' +
-            'Metered' +
-            (isMeteredLocked
-              ? ' <span style="color:#B8B8B0; font-size:10px;">' +
-                '(locked)</span>'
-              : '') +
-            '</label>';
-          html += '</div>';
+          // Metered toggle - first line of the action stack. Metering
+          // only applies to rows with a per-pull surface, so we skip
+          // the toggle on Modules rows (monthly-access-only). Prometheus
+          // (locked-metered) sits in the Pulls section and DOES show
+          // the toggle so admins see its locked state.
+          if (!isModulesRow) {
+            html += '<div style="display:flex; align-items:center; ' +
+              'justify-content:flex-end; gap:6px; ' +
+              'margin-bottom:6px; font-size:11px; ' +
+              'color:#5C6560;">';
+            const toggleAttrs =
+              'type="checkbox" class="tool-metered-toggle" ' +
+              'data-tool="' + esc(key) + '" ' +
+              (isMetered ? 'checked ' : '') +
+              (isMeteredLocked ? 'disabled ' : '') +
+              'style="cursor:' +
+              (isMeteredLocked ? 'not-allowed' : 'pointer') + ';"';
+            const toggleTitle = isMeteredLocked
+              ? 'Prometheus is always metered by design.'
+              : (isMetered
+                  ? 'Metered - session-billed via Prometheus, no per-pull line item. Uncheck to switch back to per-pull priced.'
+                  : 'Toggle on to switch this tool to session-metered. Per-pull and monthly prices will be zeroed and hidden.');
+            html += '<label style="display:flex; align-items:center; ' +
+              'gap:4px; cursor:' +
+              (isMeteredLocked ? 'not-allowed' : 'pointer') + ';" ' +
+              'title="' + esc(toggleTitle) + '">' +
+              '<input ' + toggleAttrs + '>' +
+              'Metered' +
+              (isMeteredLocked
+                ? ' <span style="color:#B8B8B0; font-size:10px;">' +
+                  '(locked)</span>'
+                : '') +
+              '</label>';
+            html += '</div>';
+          }
           // Delete / Restore button - second line of the action stack.
           if (isCustom) {
             html += '<button class="secondary" ' +

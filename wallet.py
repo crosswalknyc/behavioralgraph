@@ -292,13 +292,33 @@ def unmark_metered(tool_key: str) -> dict:
 
 
 MODULE_CATALOG = [
-    # ---------- Core builds ----------
+    # ---------- Module ACCESS (monthly, gated by has_*_access) ----------
+    # 2026-09-09 (Jenna, verbatim: 'move these to a new section called
+    # PULLS and add a subscriber IQ Pull. the one in modules should be
+    # the one per month that is just accerss.'). The Modules section is
+    # now a monthly-access product list: each row here represents the
+    # recurring subscription for having the feature turned on for a
+    # user. Per-pull events for these features live in the PULLS
+    # section below (profile_iq_build, profile_iq_derived_cut,
+    # subscriber_iq_build, prometheus). Admin UI renders modules rows
+    # with only the "/ month" cell editable; per-pull cell hidden.
+    ("profile_iq_access",          "Profile IQ Access",
+     "modules", 0, 0.0, "has_profile_iq_access"),
+    ("subscriber_iq_access",       "Subscriber IQ Access",
+     "modules", 0, 0.0, "has_subscriber_iq_access"),
+    ("prometheus_access",          "Prometheus Access",
+     "modules", 0, 0.0, "has_prometheus_access"),
+    # ---------- Pulls (per-pull dashboard-side events) ----------
+    # Per-pull priced events fired from the dashboard. Admin UI renders
+    # PULLS rows with only the "/ pull" cell editable; monthly cell
+    # hidden. Session-metered rows (Prometheus) render a metered note
+    # in place of the per-pull input.
     ("profile_iq_build",           "Profile IQ - Full Build",
-     "modules", 5, 500.0, "has_profile_iq_access"),
+     "pulls", 5, 500.0, "has_profile_iq_access"),
     ("profile_iq_derived_cut",     "Profile IQ - Derived Cut",
-     "modules", 3, 100.0, "has_profile_iq_access"),
-    ("subscriber_iq_build",        "Subscriber IQ",
-     "modules", 10, 1000.0, "has_subscriber_iq_access"),
+     "pulls", 3, 100.0, "has_profile_iq_access"),
+    ("subscriber_iq_build",        "Subscriber IQ - Pull",
+     "pulls", 10, 1000.0, "has_subscriber_iq_access"),
     # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
     # from modules. those are just access monthly not any per pull
     # things'). Three rows retired here:
@@ -401,7 +421,7 @@ MODULE_CATALOG = [
     # reference it. Per-pull tool_price_usd stays 0.0; the actual
     # session billing amount is computed in migration/prometheus_*.
     ("prometheus",                 "Prometheus (Ask-metered)",
-     "modules", 0, 0.0, "has_prometheus_access"),
+     "pulls", 0, 0.0, "has_prometheus_access"),
     # ---------- Recurring ----------
     ("monthly_service",            "Monthly Service (base access)",
      "subscription", 0, 0.0, None),
