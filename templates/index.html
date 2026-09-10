@@ -24120,14 +24120,18 @@ https://www.instagram.com/p/..."></textarea>
             height: 100vh !important;
             max-height: none !important;
             border-radius: 0;
-            transform: translateX(-110%);
+            transform: translateX(-110%) !important;
             transition: transform 180ms ease;
             box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
             display: flex !important;
+            pointer-events: none !important;
+            visibility: hidden !important;
         }
         #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
         #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqProfileSidebar {
-            transform: translateX(0);
+            transform: translateX(0) !important;
+            pointer-events: auto !important;
+            visibility: visible !important;
         }
         #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
         #dashboardView.piq-v4:not(.piq-has-profile) {
@@ -122004,6 +122008,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (typeof currentDashboardData !== 'undefined' && currentDashboardData) {
                 view.classList.add('piq-has-profile');
+                view.classList.remove('piq-sidebar-open');
                 var dc = document.getElementById('dashboardContent');
                 if (dc) dc.style.display = 'block';
                 if (window._piqV4SyncBrowseLabel) window._piqV4SyncBrowseLabel();
