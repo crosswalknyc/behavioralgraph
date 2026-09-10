@@ -23413,9 +23413,9 @@ https://www.instagram.com/p/..."></textarea>
             color: #9AA09B;
         }
         #dashboardView.piq-v4 .piq-pill.cat {
-            background: rgba(51, 88, 255, 0.14);
-            border: 1px solid rgba(51, 88, 255, 0.4);
-            color: #3358FF;
+            background: rgba(230, 130, 255, 0.14);
+            border: 1px solid rgba(230, 130, 255, 0.45);
+            color: #E682FF;
             font-weight: 700;
         }
         #dashboardView.piq-v4 .piq-pill.uni {
@@ -23430,7 +23430,9 @@ https://www.instagram.com/p/..."></textarea>
             color: #5C6560;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-pill.cat {
-            color: #3358FF;
+            background: rgba(142, 63, 168, 0.10);
+            border-color: rgba(142, 63, 168, 0.35);
+            color: #8E3FA8;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-pill.uni {
             color: #5E7E12;
@@ -23473,9 +23475,9 @@ https://www.instagram.com/p/..."></textarea>
             letter-spacing: -0.005em;
         }
         #dashboardView.piq-v4 .piq-chip.second {
-            background: rgba(51, 88, 255, 0.14);
-            border-color: rgba(51, 88, 255, 0.4);
-            color: #3358FF;
+            background: rgba(230, 130, 255, 0.14);
+            border-color: rgba(230, 130, 255, 0.45);
+            color: #E682FF;
             font-weight: 700;
         }
         #dashboardView.piq-v4 .piq-chip.accent {
@@ -24486,6 +24488,10 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqBehJump {
             border-bottom-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 #toolbarRow .tab-btn[data-feature="execSummary"],
+        #dashboardView.piq-v4 #toolbarRow .tab-btn[data-feature="collaborate"] {
+            display: none !important;
         }
     </style>
 
@@ -169363,7 +169369,7 @@ https://www.instagram.com/p/..."></textarea>
                     var opts = '';
                     for (var i = 0; i < groupBtns.length; i++) {
                         var b = groupBtns[i];
-                        if (b.style.display === 'none') continue; // access-gated / hidden
+                        if (b.style.display === 'none' || window.getComputedStyle(b).display === 'none') continue;
                         var labelEl = b.querySelector('.tab-label');
                         var txt = ((labelEl ? labelEl.textContent : b.textContent) || '').trim();
                         if (!txt) continue;
