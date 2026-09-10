@@ -22100,7 +22100,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             margin: 0;
-            order: 0;
+            order: -1;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
@@ -22448,18 +22448,68 @@ https://www.instagram.com/p/..."></textarea>
             }
             #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { display: none; }
         }
-        /* v4 body: restyle Profile IQ widgets to the portrait-cover system */
+        /* v4 body: remap the live tokens so every Profile IQ widget
+           inherits Graphite / Slate / Inter, then force the Insights
+           surfaces that still carry old chip / navy rules. */
+        #dashboardView.piq-v4 {
+            --bg-dark: #0C1618;
+            --bg-card: #15252A;
+            --bg-input: #1B2F35;
+            --accent-blue: #3358FF;
+            --accent-cyan: #3358FF;
+            --accent-green: #C7F23E;
+            --accent-orange: #B7B3D8;
+            --accent-red: #E682FF;
+            --accent-lime: #C7F23E;
+            --text-primary: #E9E8E1;
+            --text-secondary: #9AA09B;
+            --border-color: #3B3D38;
+            --index-over: #C7F23E;
+            --index-under: #E682FF;
+            --index-over-bg: rgba(199, 242, 62, 0.14);
+            --index-under-bg: rgba(230, 130, 255, 0.14);
+            --data-tab-active: #C7F23E;
+            --accent-primary: #3358FF;
+            background: #0C1618 !important;
+            color: #E9E8E1;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 {
+            --bg-dark: #E9E8E1;
+            --bg-card: #FFFFFF;
+            --bg-input: #FFFFFF;
+            --accent-green: #5E7E12;
+            --accent-lime: #5E7E12;
+            --accent-red: #8E3FA8;
+            --text-primary: #0C1618;
+            --text-secondary: #5C6560;
+            --border-color: #C9C6BA;
+            --index-over: #5E7E12;
+            --index-under: #8E3FA8;
+            --index-over-bg: rgba(94, 126, 18, 0.12);
+            --index-under-bg: rgba(142, 63, 168, 0.12);
+            --data-tab-active: #5E7E12;
+            background: #E9E8E1 !important;
+            color: #0C1618;
+        }
         #dashboardView.piq-v4,
         #dashboardView.piq-v4 .dashboard-tab-content,
         #dashboardView.piq-v4 .tab-content,
         #dashboardView.piq-v4 .insights-container,
+        #dashboardView.piq-v4 .insights-grid-v2,
+        #dashboardView.piq-v4 .insights-summary-grid,
         #dashboardView.piq-v4 .demo-main,
+        #dashboardView.piq-v4 .behavioral-main,
+        #dashboardView.piq-v4 .interests-main,
+        #dashboardView.piq-v4 .location-main,
+        #dashboardView.piq-v4 .comparison-main,
+        #dashboardView.piq-v4 .comparison-container,
+        #dashboardView.piq-v4 .marketing-main,
         #dashboardView.piq-v4 .dashboard-empty-state {
             background: #0C1618 !important;
             color: #E9E8E1;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        body[data-theme="light"] #dashboardView.piq-v4,
         body[data-theme="light"] #dashboardView.piq-v4 .dashboard-tab-content,
         body[data-theme="light"] #dashboardView.piq-v4 .tab-content,
         body[data-theme="light"] #dashboardView.piq-v4 .insights-container,
@@ -22469,29 +22519,68 @@ https://www.instagram.com/p/..."></textarea>
             color: #0C1618;
         }
         #dashboardView.piq-v4 .dashboard-tab-content {
-            padding: 28px 32px 64px;
+            padding: 24px 32px 64px;
         }
         #dashboardView.piq-v4 .tab-content.active {
-            padding-bottom: 48px;
+            padding: 8px 4px 40px;
         }
-        #dashboardView.piq-v4 .action-buttons-row {
-            background: #0C1618;
-            border-bottom: 1px solid #3B3D38;
-            padding: 8px 32px 10px;
-            margin: 0;
+        #dashboardView.piq-v4 .inline-tab-header {
+            background: transparent !important;
+            border: 0 !important;
+            padding: 4px 32px 10px !important;
+            margin: 0 !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .action-buttons-row {
-            background: #E9E8E1;
-            border-bottom-color: #C9C6BA;
+        #dashboardView.piq-v4 .inline-tab-header h2 {
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 22px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em !important;
+            text-transform: none !important;
         }
-        #dashboardView.piq-v4 .inline-tab-header h2,
         #dashboardView.piq-v4 .inline-tab-header p {
             color: #9AA09B !important;
-            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 13px !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .inline-tab-header h2 { color: #0C1618 !important; }
+        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+            order: -1 !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashBrandContainer {
+            display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
+        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts {
+            display: inline-flex !important;
+            align-items: center;
+            order: 8;
+            margin-left: 8px;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
+            font-family: inherit !important;
+            box-shadow: none !important;
+            padding: 6px 10px !important;
+        }
+        #dashboardView.piq-v4 .action-buttons-row {
+            background: #0C1618 !important;
+            border-bottom: 1px solid #3B3D38;
+            padding: 8px 32px 12px !important;
+            margin: 0 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .action-buttons-row {
+            background: #E9E8E1 !important;
+            border-bottom-color: #C9C6BA;
         }
         #dashboardView.piq-v4 .dash-action-btn,
         #dashboardView.piq-v4 .display-mode-toggle,
         #dashboardView.piq-v4 .content-action-buttons .btn,
+        #dashboardView.piq-v4 #exportDropdownBtn,
         #dashboardView.piq-v4 #dashViewDeltasBtn {
             background: #15252A !important;
             border: 1px solid #3B3D38 !important;
@@ -22501,7 +22590,7 @@ https://www.instagram.com/p/..."></textarea>
             letter-spacing: 0.08em;
             text-transform: uppercase;
             font-weight: 500;
-            font-family: inherit;
+            font-family: inherit !important;
             box-shadow: none !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .dash-action-btn,
@@ -22541,9 +22630,17 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .chart-card,
         #dashboardView.piq-v4 .behavioral-card,
         #dashboardView.piq-v4 .location-card,
+        #dashboardView.piq-v4 .location-section,
         #dashboardView.piq-v4 .interest-card,
+        #dashboardView.piq-v4 .interests-insights-row,
+        #dashboardView.piq-v4 .interests-heatmap-section,
+        #dashboardView.piq-v4 .interests-categories-section,
+        #dashboardView.piq-v4 .interests-list-section,
+        #dashboardView.piq-v4 .affinity-card,
         #dashboardView.piq-v4 .marketing-card,
-        #dashboardView.piq-v4 .comp-card {
+        #dashboardView.piq-v4 .comp-card,
+        #dashboardView.piq-v4 .media-reach-chart-card,
+        #dashboardView.piq-v4 .regional-breakdown {
             background: #15252A !important;
             border: 1px solid #3B3D38 !important;
             border-radius: 12px !important;
@@ -22552,7 +22649,9 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4 .insight-card-v2,
         body[data-theme="light"] #dashboardView.piq-v4 .demo-insight-card,
-        body[data-theme="light"] #dashboardView.piq-v4 .stat-card {
+        body[data-theme="light"] #dashboardView.piq-v4 .stat-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .location-section {
             background: #FFFFFF !important;
             border-color: #C9C6BA !important;
             color: #0C1618 !important;
@@ -22560,36 +22659,42 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .insight-card-v2 h3,
         #dashboardView.piq-v4 .insight-card-header h3,
         #dashboardView.piq-v4 .demo-insight-card h4,
-        #dashboardView.piq-v4 .stat-label,
-        #dashboardView.piq-v4 .inline-tab-header h2 {
+        #dashboardView.piq-v4 .behavioral-card h3,
+        #dashboardView.piq-v4 .behavioral-card-title-row,
+        #dashboardView.piq-v4 .stat-value,
+        #dashboardView.piq-v4 .metric-value {
             color: #E9E8E1 !important;
+            font-family: inherit !important;
             font-weight: 700;
             letter-spacing: -0.01em;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .insight-card-v2 h3,
-        body[data-theme="light"] #dashboardView.piq-v4 .insight-card-header h3 {
+        body[data-theme="light"] #dashboardView.piq-v4 .demo-insight-card h4,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-card h3 {
             color: #0C1618 !important;
-        }
-        #dashboardView.piq-v4 .stat-value,
-        #dashboardView.piq-v4 .metric-value {
-            color: #E9E8E1 !important;
-            font-weight: 800;
-            letter-spacing: -0.03em;
         }
         #dashboardView.piq-v4 .stat-label,
         #dashboardView.piq-v4 .metric-label,
-        #dashboardView.piq-v4 .insight-col-header {
+        #dashboardView.piq-v4 .insight-col-header,
+        #dashboardView.piq-v4 .behavioral-header-row {
             color: #7C878A !important;
             text-transform: uppercase;
             letter-spacing: 0.12em;
             font-size: 10px !important;
             font-weight: 500;
         }
+        #dashboardView.piq-v4 #tucCard {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            padding: 18px 20px !important;
+        }
         #dashboardView.piq-v4 #audienceShareBoxes {
             display: grid !important;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
             flex-wrap: unset !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            width: 100% !important;
         }
         #dashboardView.piq-v4 .asb-box {
             display: flex !important;
@@ -22597,15 +22702,17 @@ https://www.instagram.com/p/..."></textarea>
             align-items: flex-start !important;
             justify-content: flex-start !important;
             height: auto !important;
-            min-height: 84px;
+            min-height: 92px !important;
             padding: 16px 14px 14px !important;
             border-radius: 10px !important;
             background: #1B2F35 !important;
             border: 1px solid #3B3D38 !important;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
-            position: relative;
-            white-space: normal;
+            position: relative !important;
+            white-space: normal !important;
             gap: 4px !important;
+            width: auto !important;
+            flex: unset !important;
         }
         #dashboardView.piq-v4 .asb-box::before {
             content: '';
@@ -22616,22 +22723,30 @@ https://www.instagram.com/p/..."></textarea>
             height: 3px;
             background: #C7F23E;
         }
+        #dashboardView.piq-v4 .asb-box:nth-child(1)::before,
+        #dashboardView.piq-v4 .asb-box[data-channel="social"]::before { background: #C7F23E; }
+        #dashboardView.piq-v4 .asb-box:nth-child(2)::before,
         #dashboardView.piq-v4 .asb-box[data-channel="search"]::before { background: #3358FF; }
+        #dashboardView.piq-v4 .asb-box:nth-child(3)::before,
         #dashboardView.piq-v4 .asb-box[data-channel="owned"]::before { background: #E682FF; }
+        #dashboardView.piq-v4 .asb-box:nth-child(4)::before,
         #dashboardView.piq-v4 .asb-box[data-channel="retail"]::before { background: #B7B3D8; }
+        #dashboardView.piq-v4 .asb-box:nth-child(5)::before,
         #dashboardView.piq-v4 .asb-box[data-channel="media"]::before { background: #5E7E12; }
         #dashboardView.piq-v4 .asb-box .asb-label {
             color: #7C878A !important;
             font-size: 9.5px !important;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.14em !important;
             font-weight: 500 !important;
         }
         #dashboardView.piq-v4 .asb-box .asb-pct {
             color: #E9E8E1 !important;
             font-size: 24px !important;
             font-weight: 800 !important;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.02em !important;
+            line-height: 1.1;
         }
+        body[data-theme="light"] #dashboardView.piq-v4 #tucCard,
         body[data-theme="light"] #dashboardView.piq-v4 .asb-box {
             background: #FFFFFF !important;
             border-color: #C9C6BA !important;
@@ -22642,22 +22757,50 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 .snapshot-item {
             background: #1B2F35 !important;
-            border: 1px solid #3B3D38;
-            border-radius: 10px;
-            padding: 12px 14px;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 10px !important;
+            padding: 14px 14px 12px !important;
+        }
+        #dashboardView.piq-v4 .snapshot-label {
+            color: #7C878A !important;
+            font-size: 10px !important;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 500 !important;
+        }
+        #dashboardView.piq-v4 .snapshot-value {
+            color: #E9E8E1 !important;
+            font-size: 18px !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.02em;
+        }
+        #dashboardView.piq-v4 .snapshot-subtext {
+            color: #9AA09B !important;
+        }
+        #dashboardView.piq-v4 .snapshot-index {
+            color: #C7F23E !important;
+            font-weight: 800 !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .snapshot-item {
             background: #FFFFFF !important;
-            border-color: #C9C6BA;
+            border-color: #C9C6BA !important;
         }
+        body[data-theme="light"] #dashboardView.piq-v4 .snapshot-value { color: #0C1618 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .snapshot-index { color: #5E7E12 !important; }
         #dashboardView.piq-v4 .audience-takeaways {
-            border-top-color: #3B3D38;
+            border-top: 1px solid #3B3D38 !important;
+        }
+        #dashboardView.piq-v4 .audience-takeaways-title {
+            color: #7C878A !important;
+            letter-spacing: 0.14em;
         }
         #dashboardView.piq-v4 .audience-takeaways li {
-            color: #E9E8E1;
-            border-bottom-color: rgba(233,232,225,0.06);
+            color: #E9E8E1 !important;
+            border-bottom-color: rgba(233,232,225,0.06) !important;
+            font-size: 13px !important;
+            line-height: 1.55 !important;
         }
-        #dashboardView.piq-v4 .audience-takeaways li::before { color: #3358FF; }
+        #dashboardView.piq-v4 .audience-takeaways li::before { color: #3358FF !important; }
         #dashboardView.piq-v4 .audience-takeaways .takeaway-highlight,
         #dashboardView.piq-v4 .audience-takeaways .takeaway-over {
             color: #C7F23E !important;
@@ -22665,7 +22808,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .audience-takeaways .takeaway-under {
             color: #E682FF !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways li { color: #0C1618; }
+        body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways li { color: #0C1618 !important; }
         body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways .takeaway-highlight,
         body[data-theme="light"] #dashboardView.piq-v4 .audience-takeaways .takeaway-over {
             color: #5E7E12 !important;
@@ -22677,8 +22820,9 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #behavioralProfileCard p,
         #dashboardView.piq-v4 #behavioralProfileCard li {
             color: #E9E8E1 !important;
-            font-size: 13px;
-            line-height: 1.6;
+            font-size: 13px !important;
+            line-height: 1.65 !important;
+            font-family: inherit !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 #behavioralProfileCard,
         body[data-theme="light"] #dashboardView.piq-v4 #behavioralProfileCard p,
@@ -22687,8 +22831,10 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 table,
         #dashboardView.piq-v4 .data-table,
-        #dashboardView.piq-v4 .behavioral-table {
+        #dashboardView.piq-v4 .behavioral-table,
+        #dashboardView.piq-v4 .comp-table {
             color: #E9E8E1;
+            background: transparent;
         }
         #dashboardView.piq-v4 th {
             color: #7C878A !important;
@@ -22697,6 +22843,7 @@ https://www.instagram.com/p/..."></textarea>
             text-transform: uppercase;
             font-weight: 500 !important;
             border-bottom: 1px solid #3B3D38 !important;
+            background: transparent !important;
         }
         #dashboardView.piq-v4 td {
             color: #E9E8E1 !important;
@@ -22704,7 +22851,9 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4 td { color: #0C1618 !important; }
         #dashboardView.piq-v4 .module-btn,
-        #dashboardView.piq-v4 .deck-btn {
+        #dashboardView.piq-v4 .deck-btn,
+        #dashboardView.piq-v4 .item-limit-select,
+        #dashboardView.piq-v4 .behavioral-sort-select {
             background: #1B2F35 !important;
             border: 1px solid #3B3D38 !important;
             color: #9AA09B !important;
@@ -22719,10 +22868,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .empty-state-hint {
             color: #9AA09B;
         }
-        #dashboardView.piq-v4 .profile-tabs-bar {
-            background: #0C1618;
-            border-bottom: 1px solid #3B3D38;
-        }
+        #dashboardView.piq-v4 .profile-tabs-bar,
         #dashboardView.piq-v4 .comp-analysis-tabs,
         #dashboardView.piq-v4 .marketing-header,
         #dashboardView.piq-v4 .behavioral-controls {
@@ -22740,13 +22886,21 @@ https://www.instagram.com/p/..."></textarea>
             color: #C7F23E !important;
             border-color: rgba(199, 242, 62, 0.35) !important;
         }
+        #dashboardView.piq-v4 .persistent-sidebar,
+        #dashboardView.piq-v4 .profile-sidebar,
+        #dashboardView.piq-v4 #piqProfileSidebar {
+            background: #15252A !important;
+            border-color: #3B3D38 !important;
+            color: #E9E8E1 !important;
+        }
         @media (max-width: 980px) {
             #dashboardView.piq-v4 #audienceShareBoxes {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
             #dashboardView.piq-v4 .dashboard-tab-content {
                 padding: 18px 16px 40px;
             }
+        }
         }
     </style>
 
@@ -120044,7 +120198,11 @@ https://www.instagram.com/p/..."></textarea>
             var pretty = String(raw || '').replace(/\s+/g, ' ').replace(/\.$/, '').trim();
             pretty = pretty.replace(/\s+-\s+(Total Universe|TOTAL UNIVERSE|Tu|TU|Avid Fan|Casual Fan)\s*$/i, '');
             if (!pretty) return '';
-            pretty = pretty.toLowerCase().replace(/\b([a-z0-9])/g, function(_, c) { return c.toUpperCase(); });
+            var letters = pretty.replace(/[^A-Za-z]/g, '');
+            var up = pretty.replace(/[^A-Z]/g, '').length;
+            if (letters.length && (up / letters.length) > 0.7) {
+                pretty = pretty.toLowerCase().replace(/\b([a-z0-9])/g, function(_, c) { return c.toUpperCase(); });
+            }
             return pretty;
         };
         window._piqV4RefreshName = function() {
@@ -120072,6 +120230,12 @@ https://www.instagram.com/p/..."></textarea>
             if (!view.getAttribute('data-piq-tab')) view.setAttribute('data-piq-tab', 'insights');
             view.classList.remove('piq-sidebar-open');
             parsed = parsed || (typeof currentDashboardData !== 'undefined' ? currentDashboardData : null) || {};
+            var cuts = document.getElementById('dashViewDeltasBtn');
+            var bar = document.getElementById('toolbarContent');
+            if (cuts && bar && cuts.parentNode !== bar) {
+                cuts.classList.add('piq-data-cuts');
+                bar.appendChild(cuts);
+            }
             window._piqV4RefreshName();
             function normKey(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
             function pick(dict, aliases) {
