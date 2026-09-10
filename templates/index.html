@@ -22100,7 +22100,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             margin: 0;
-            order: -1;
+            order: -1 !important;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
@@ -22181,12 +22181,7 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4.piq-has-profile .dash-date-box { display: none !important; }
         #dashboardView.piq-v4.piq-has-profile #dashBrandContainer {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 8px;
-            background: transparent;
-            order: 3;
+            display: none !important;
         }
         #dashboardView.piq-v4.piq-has-profile #piqHeroCopy {
             display: flex;
@@ -22901,6 +22896,26 @@ https://www.instagram.com/p/..."></textarea>
                 padding: 18px 16px 40px;
             }
         }
+        #dashboardView.piq-v4.piq-has-profile {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #profileAndToolbarRow,
+        #dashboardView.piq-v4.piq-has-profile #profileHeaderRow {
+            position: static !important;
+            flex: 0 0 auto;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dashboard-layout {
+            height: auto !important;
+            max-height: none !important;
+            flex: 0 0 auto !important;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile .dashboard-tab-content {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            flex: 0 0 auto !important;
         }
     </style>
 
@@ -120272,13 +120287,29 @@ https://www.instagram.com/p/..."></textarea>
             var a2534 = pick(demo.age || {}, ['25-34', '25 to 34']);
             var under35 = pick(demo.age || {}, ['Under 35', '18-34']);
             if (under35 == null && a1824 != null && a2534 != null) under35 = a1824 + a2534;
-            var sample = Number(parsed.sampleSize || 0);
             var us = Number(parsed.projectedUS || 0);
-            var dashSample = document.getElementById('dashSampleSize');
-            if (dashSample) {
-                var domN = parseInt(String(dashSample.textContent || '').replace(/[^0-9]/g, ''), 10);
-                if (domN && (!sample || sample > 500000)) sample = domN;
+            function readSample() {
+                var ids = ['insightsSampleSize', 'dashSampleSize'];
+                var found = [];
+                if (parsed.sampleSize) found.push(Number(parsed.sampleSize));
+                ids.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    var n = parseInt(String(el.textContent || '').replace(/[^0-9]/g, ''), 10);
+                    if (n) found.push(n);
+                });
+                for (var i = 0; i < found.length; i++) {
+                    var n = found[i];
+                    if (n > 0 && isFinite(n) && n !== us && n < 20000000) return n;
+                }
+                return 0;
             }
+            function fmtSample(n) {
+                n = Math.round(Number(n));
+                if (!isFinite(n) || n <= 0) return '';
+                return n.toLocaleString('en-US');
+            }
+            var sample = readSample();
             var tiles = [];
             var usTxt = fmtCount(us);
             if (usTxt) tiles.push({ lbl: 'US audience', val: usTxt, accent: true });
@@ -120286,10 +120317,8 @@ https://www.instagram.com/p/..."></textarea>
             if (fTxt) tiles.push({ lbl: 'Female', val: fTxt, accent: false });
             var uTxt = fmtPct(under35);
             if (uTxt) tiles.push({ lbl: 'Under 35', val: uTxt, accent: false });
-            if (sample && sample !== us && sample < 500000) {
-                var sTxt = fmtCount(sample);
-                if (sTxt) tiles.push({ lbl: 'Respondents', val: sTxt, accent: false });
-            }
+            var sTxt = fmtSample(sample);
+            if (sTxt) tiles.push({ lbl: 'Sample size', val: sTxt, accent: false });
             var kpiEl = document.getElementById('dashHeroKpis');
             if (kpiEl) {
                 kpiEl.innerHTML = tiles.map(function(t) {
@@ -128054,13 +128083,17 @@ https://www.instagram.com/p/..."></textarea>
             scrollEl._scrollHideBannerWired = true;
             const THRESHOLD = 8;
             const onScroll = () => {
-                if (scrollEl.scrollTop > THRESHOLD) {
+                var top = (dv.classList.contains('piq-v4') && dv.classList.contains('piq-has-profile'))
+                    ? dv.scrollTop
+                    : scrollEl.scrollTop;
+                if (top > THRESHOLD) {
                     actionRow.classList.add('scroll-collapsed');
                 } else {
                     actionRow.classList.remove('scroll-collapsed');
                 }
             };
             scrollEl.addEventListener('scroll', onScroll, { passive: true });
+            dv.addEventListener('scroll', onScroll, { passive: true });
             onScroll();
         }
         document.addEventListener('DOMContentLoaded', _wireDashboardScrollHideBanner);
@@ -142112,6 +142145,9 @@ https://www.instagram.com/p/..."></textarea>
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = isForeignProfile(data) ? 'N/A' : formatNumber(data.projectedUS || 0);
+            if (typeof window._piqV4OnProfile === 'function') {
+                try { window._piqV4OnProfile(data); } catch (_e) {}
+            }
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
 
