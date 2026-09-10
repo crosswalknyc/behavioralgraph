@@ -22085,26 +22085,29 @@ https://www.instagram.com/p/..."></textarea>
             max-height: none !important;
             overflow: visible !important;
             margin: 0;
-            padding: 18px 40px 32px;
-            gap: 18px;
-            background: linear-gradient(135deg, #0C1618 0%, #1B2F35 42%, #15252A 100%);
-            border-bottom: 1px solid var(--piq-hair);
+            padding: 0;
+            gap: 0;
+            background: transparent;
+            border-bottom: 0;
+            min-height: 0 !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
-            background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%);
+            background: transparent;
         }
-        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed) {
-            min-height: 520px;
-            padding: 20px 48px 36px;
-        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed),
         #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileHeaderRow:not(.collapsed) {
-            min-height: 0;
-            padding: 16px 32px 22px;
+            min-height: 0 !important;
+            padding: 0;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             margin: 0;
             order: -1 !important;
+            position: relative;
+            z-index: 4;
+        }
+        #dashboardView.piq-v4.piq-has-profile > #toolbarRow {
+            order: 0 !important;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
@@ -22153,12 +22156,22 @@ https://www.instagram.com/p/..."></textarea>
             width: 100%;
             min-width: 0;
             flex: 1 1 auto;
+            box-sizing: border-box;
+            padding: 20px 48px 36px;
+            min-height: 520px;
+            background: linear-gradient(135deg, #0C1618 0%, #1B2F35 42%, #15252A 100%);
+            border-bottom: 1px solid var(--piq-hair);
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashProfileInfo {
+            background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%);
         }
         #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
             grid-template-columns: 130px 1fr;
             grid-template-areas: "photo copy";
             gap: 26px;
             align-items: center;
+            min-height: 0;
+            padding: 16px 32px 22px;
         }
         #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap { grid-area: photo; }
         #dashboardView.piq-v4.piq-has-profile .profile-title-and-toolbar-wrap {
@@ -22427,7 +22440,7 @@ https://www.instagram.com/p/..."></textarea>
                 grid-template-columns: 1fr;
                 grid-template-areas: "photo" "copy";
             }
-            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed) {
+            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashProfileInfo {
                 min-height: 0;
                 padding: 16px 20px 24px;
             }
@@ -68271,6 +68284,19 @@ https://www.instagram.com/p/..."></textarea>
         // releases the stash (plain 'ok') or gets combined with
         // the original ask and re-interpreted.
         let synthChatAwaitingDateConfirm = false;
+        // Combine-vs-individual gate (2026-09-10, Jenna: "it ran these
+        // as 5 profiles instead of one combined. if this comes up it
+        // should ask the user do you want 5 individual profiles or one
+        // combined for all? if they say combined then it should ask
+        // what do you want to name the profile?"). A bare list of
+        // subjects does not say which was meant, so ask.
+        let _pmCombineStash = null;   // { data, text } pending a choice
+        let _pmAwaitingCombineChoice = false;
+        let _pmAwaitingCombineName = false;
+        // Set for exactly one round trip when combined is chosen, so a
+        // reply that still comes back as a batch renders instead of
+        // re-asking forever.
+        let _pmCombineSuppress = false;
         let synthChatStashedDraft = null;
         let synthChatStashedOriginalText = '';
         let synthChatStashedProposedRange = null;
@@ -69102,6 +69128,98 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedOriginalText = '';
             synthChatStashedProposedRange = null;
             synthChatStashedBatchData = null;
+            _pmClearCombineState();
+        }
+
+        function _pmClearCombineState() {
+            _pmCombineStash = null;
+            _pmAwaitingCombineChoice = false;
+            _pmAwaitingCombineName = false;
+        }
+
+        // Read a combine-vs-individual reply. true = one combined
+        // profile, false = one per subject, null = could not tell, ask
+        // again. The chips send unambiguous phrases; this only has to
+        // cope with someone typing the answer instead of clicking.
+        function _pmWantsCombined(reply) {
+            var t = String(reply || '').trim().toLowerCase();
+            if (!t) return null;
+            // Separateness wins first, because several of those phrases
+            // also contain "one profile" ("one profile each").
+            if (/\b(?:individual|individually|separate|separately|each|apart|distinct|per\s+(?:title|book|one|subject|show|brand))\b/.test(t)) {
+                return false;
+            }
+            if (/\bno\b/.test(t) && /combin/.test(t)) return false;
+            if (/\b(?:combined?|combine|merged?|merge|together|all\s+in\s+one|one\s+profile|single\s+profile|one\s+audience|just\s+one)\b/.test(t)) {
+                return true;
+            }
+            return null;
+        }
+
+        // Pull a usable profile name out of a free-text reply.
+        function _pmCleanProfileName(reply) {
+            var t = String(reply || '').trim();
+            t = t.replace(/^(?:lets?\s+)?(?:call\s+it|name\s+it|title\s+it|titled?|named?|how\s+about)\b[:\s]*/i, '');
+            t = t.replace(/^(?:the\s+)?(?:profile\s+)?name\s+(?:is|should\s+be)\b[:\s]*/i, '');
+            t = t.trim();
+            t = t.replace(/^["'\u201c\u2018]+/, '').replace(/["'\u201d\u2019]+$/, '');
+            t = t.replace(/[.\s]+$/, '').trim();
+            if (t.length > 90) t = t.slice(0, 90).trim();
+            if (t.length < 2) return '';
+            return t;
+        }
+
+        // Individual was chosen, so render the batch we already have.
+        // Mirrors the two inline batch renderers in the interpret
+        // handler: an unanswered window question is still asked first.
+        function _pmReleaseStashedBatch() {
+            var _s = _pmCombineStash || {};
+            var _d = _s.data || {};
+            var _t = _s.text || '';
+            _pmClearCombineState();
+            if (!Array.isArray(_d.spec_drafts) || !_d.spec_drafts.length) {
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                return;
+            }
+            if (_d.needs_date_clarification) {
+                synthChatStashedBatchData = _d;
+                synthChatStashedOriginalText = _t;
+                synthChatStashedProposedRange = _d.proposed_date_range || null;
+                synthChatAwaitingDateConfirm = true;
+                var _rl = _synthChatFormatRange(synthChatStashedProposedRange)
+                    || 'July 1, 2025 to June 30, 2026';
+                var _memChip = null;
+                if (_d.memory_window && _d.memory_window.start &&
+                        _d.memory_window.end) {
+                    var _mwL = _synthChatFormatRange(_d.memory_window);
+                    if (_mwL) {
+                        _memChip = {
+                            label: 'Same as last time: ' + _mwL,
+                            send: 'from ' + _d.memory_window.start +
+                                  ' to ' + _d.memory_window.end
+                        };
+                    }
+                }
+                _synthChatPushTurnWithMeta('agent',
+                    'Which time window should I use for these '
+                    + _d.spec_drafts.length + ' profiles?\n\n'
+                    + 'Default: ' + _rl + ' (the last 12 months).\n\n'
+                    + 'Reply ok to use that, or tell me a different '
+                    + 'window (e.g. "for 2024", "trailing 6 months", '
+                    + '"Q4 2025").', { options:
+                        (_memChip ? [_memChip] : []).concat([
+                        {label: 'Use ' + _rl, send: 'ok'},
+                        {label: 'Trailing 6 months', send: 'trailing 6 months'}
+                    ])});
+                return;
+            }
+            synthChatCurrentDraft = null;
+            synthChatBatchDrafts = _d.spec_drafts;
+            synthChatPushTurn('agent', _synthChatBuildBatchSummary(
+                _d.spec_drafts, _d.estimated_credits_total,
+                _d.failures || [], _d.shared_context || ''));
+            _synthChatShowBrief(null, _d.model);
+            _synthChatMaybeStartBatchScoping();
         }
 
         // Animated working indicator (2026-08-27, Jenna: "instead of
@@ -71717,6 +71835,57 @@ https://www.instagram.com/p/..."></textarea>
             // any other reply gets combined with the stashed
             // original ask so Claude sees the full request in one
             // shot.
+            // Combine-vs-individual answers (2026-09-10, Jenna).
+            // Handled before the window question below because the
+            // choice decides whether that question is about one
+            // profile or several. The name reply folds the ask into
+            // the canonical combined form and falls through to the
+            // normal interpret, the same way a custom date reply is
+            // folded back into the original ask.
+            if (_pmAwaitingCombineName) {
+                var _cbName = _pmCleanProfileName(text);
+                if (!_cbName) {
+                    synthChatPushTurn('agent',
+                        'I need something to file it under. What '
+                        + 'should the combined profile be called?');
+                    return;
+                }
+                var _cbS = _pmCombineStash || {};
+                var _cbSubs = ((_cbS.data && _cbS.data.spec_drafts) || [])
+                    .map(function (d) {
+                        return (d && (d.display_name || d.subject)) || '';
+                    }).filter(Boolean);
+                var _cbOrig = _cbS.text || '';
+                _pmClearCombineState();
+                _pmCombineSuppress = true;
+                text = 'One combined profile named "' + _cbName + '" '
+                    + 'covering all of the following together as a '
+                    + 'single combined audience, not separate '
+                    + 'profiles: ' + _cbSubs.join('; ') + '.'
+                    + (_cbOrig
+                        ? '\n\nOriginal request for context: ' + _cbOrig
+                        : '');
+                // Falls through to the interpret call below.
+            } else if (_pmAwaitingCombineChoice) {
+                var _cbWant = _pmWantsCombined(text);
+                if (_cbWant === null) {
+                    synthChatPushTurn('agent',
+                        'I did not catch that. One combined profile '
+                        + 'covering all of them, or a separate '
+                        + 'profile for each?');
+                    return;
+                }
+                if (_cbWant) {
+                    _pmAwaitingCombineChoice = false;
+                    _pmAwaitingCombineName = true;
+                    synthChatPushTurn('agent',
+                        'What do you want to name the profile?');
+                    return;
+                }
+                _pmReleaseStashedBatch();
+                return;
+            }
+
             if (synthChatAwaitingDateConfirm && !_pmKpiPivot && !_pmDeckPivot) {
                 if (_synthChatIsDateConfirmation(text)) {
                     // Batch release (2026-08-20): the whole batch
@@ -71918,6 +72087,44 @@ https://www.instagram.com/p/..."></textarea>
                         data.discovery.message ||
                         'Which audience should I build?');
                     return;
+                }
+                // COMBINE GATE (2026-09-10, Jenna: "it ran these as
+                // 5 profiles instead of one combined. if this comes up
+                // it should ask the user do you want 5 individual
+                // profiles or one combined for all?"). Four audiobooks
+                // in one series usually wants a single audience; four
+                // unrelated brands usually wants four profiles. The ask
+                // does not say which, so ask rather than guess. Runs
+                // ahead of the window question so that question can
+                // name the right thing.
+                if (data.batch && Array.isArray(data.spec_drafts)
+                        && data.spec_drafts.length >= 2) {
+                    if (_pmCombineSuppress) {
+                        // Already asked this round. Render the batch
+                        // rather than loop on the question.
+                        _pmCombineSuppress = false;
+                    } else {
+                        var _cgN = data.spec_drafts.length;
+                        var _cgList = data.spec_drafts.map(function (d) {
+                            return '- ' + ((d && (d.display_name
+                                || d.subject)) || 'untitled');
+                        }).join('\n');
+                        _pmCombineStash = { data: data, text: text };
+                        _pmAwaitingCombineChoice = true;
+                        _synthChatPushTurnWithMeta('agent',
+                            'That reads as ' + _cgN + ' separate '
+                            + 'subjects:\n\n' + _cgList + '\n\n'
+                            + 'Do you want ' + _cgN + ' individual '
+                            + 'profiles, one each, or one combined '
+                            + 'profile covering all of them together?',
+                            { options: [
+                                { label: 'One combined profile',
+                                  send: 'one combined profile' },
+                                { label: _cgN + ' individual profiles',
+                                  send: _cgN + ' individual profiles' }
+                            ]});
+                        return;
+                    }
                 }
                 if (data.needs_date_clarification) {
                     // Grounded clarify (2026-08-27, Jenna): when the
@@ -121094,6 +121301,9 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             if (!view) return;
             view.setAttribute('data-piq-tab', tabName || 'insights');
+            if (window._piqV4RefreshName) {
+                try { window._piqV4RefreshName(); } catch (_e) {}
+            }
             if (typeof currentDashboardData !== 'undefined' && currentDashboardData) {
                 view.classList.add('piq-has-profile');
                 var dc = document.getElementById('dashboardContent');
@@ -121144,7 +121354,9 @@ https://www.instagram.com/p/..."></textarea>
             var nameEl = document.getElementById('dashHeroName');
             if (nameEl) {
                 var bits = pretty.split(/\s+/).filter(Boolean);
-                if (bits.length >= 2) {
+                var view = document.getElementById('dashboardView');
+                var slim = view && view.getAttribute('data-piq-tab') !== 'insights';
+                if (!slim && bits.length >= 2) {
                     nameEl.innerHTML = bits[0].replace(/</g, '') + '<br>' + bits.slice(1).join(' ').replace(/</g, '') + '.';
                 } else {
                     nameEl.textContent = pretty + '.';
@@ -121671,10 +121883,18 @@ https://www.instagram.com/p/..."></textarea>
             }
         };
         window._piqV4DressTabs = function() {
+            var view = document.getElementById('dashboardView');
+            var bar = document.getElementById('profileTabsBar');
+            var row = document.getElementById('toolbarRow');
+            if (view && view.classList.contains('piq-has-profile') && bar && row && row.previousElementSibling !== bar) {
+                bar.insertAdjacentElement('afterend', row);
+            }
             var n = 1;
             document.querySelectorAll('#dashboardView.piq-has-profile #toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
                 if (cs.display === 'none' || cs.visibility === 'hidden') return;
+                btn.classList.remove('has-tooltip');
+                btn.removeAttribute('data-tooltip');
                 var label = btn.querySelector('.tab-label');
                 if (!label) return;
                 var span = btn.querySelector('.tab-n');
