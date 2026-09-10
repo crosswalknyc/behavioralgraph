@@ -22123,14 +22123,26 @@ https://www.instagram.com/p/..."></textarea>
             background: #E9E8E1;
             border-bottom-color: #C9C6BA;
         }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
+            order: 0;
+            padding: 10px 32px 8px;
+            border-bottom: 1px solid #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
+            border-bottom-color: #C9C6BA;
+        }
         #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+            order: 1 !important;
             border-bottom: 1px solid #3B3D38;
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
-            padding: 8px 32px;
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #piqBehJump {
+            order: 2;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileAndToolbarRow {
+            order: 3;
         }
         #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #profileAndToolbarRow {
             max-height: none !important;
@@ -22769,12 +22781,15 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile .piq-data-cuts {
             margin-left: auto !important;
         }
+        #dashboardView.piq-v4 #profileTabsBar:empty {
+            display: none !important;
+        }
         #dashboardView.piq-v4.piq-has-profile #profileTabsBar {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 6px;
-            padding: 10px 32px 0;
+            padding: 10px 32px 8px;
             margin: 0;
             overflow: visible;
             background: #0C1618;
@@ -122896,9 +122911,9 @@ https://www.instagram.com/p/..."></textarea>
             var jump = document.getElementById('piqBehJump');
             var heroRow = document.getElementById('profileAndToolbarRow');
             var slim = view.classList.contains('piq-has-profile') && (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
+            wrap.appendChild(bar);
             wrap.appendChild(row);
             if (jump) wrap.appendChild(jump);
-            wrap.appendChild(bar);
             if (heroRow) {
                 if (slim) wrap.appendChild(heroRow);
                 else if (heroRow.parentNode === wrap) wrap.insertAdjacentElement('afterend', heroRow);
