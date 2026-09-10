@@ -3468,7 +3468,7 @@
                 <div>
                     <div class="nl-kicker">The Read</div>
                     <div class="nl-title">Newsletter</div>
-                    <div class="nl-sub">Write it, pick the list, send from <code>no_reply@crosswalknyc.com</code>. Opens, clicks, and unsubscribes land on the report.</div>
+                    <div class="nl-sub">Write it, pick a list or segment, send from <code>no_reply@crosswalknyc.com</code>. Replies go to <code>hello@crosswalknyc.com</code>. Opens, clicks, downloads, and payments land on Outcomes.</div>
                     <div class="nl-sub" id="nl-from-line" style="margin-top:0.15rem;">Sends from The Read &lt;no_reply@crosswalknyc.com&gt;</div>
                 </div>
                 <div class="nl-actions">
@@ -3481,10 +3481,12 @@
                 <div class="nl-stat"><div class="k">Emails sent</div><div class="v" id="nl-stat-sent">0</div></div>
                 <div class="nl-stat"><div class="k">Avg open rate</div><div class="v" id="nl-stat-open">0%</div></div>
                 <div class="nl-stat"><div class="k">Avg click rate</div><div class="v" id="nl-stat-click">0%</div></div>
+                <div class="nl-stat"><div class="k">Downloads</div><div class="v" id="nl-stat-downloads">0</div></div>
             </div>
             <div class="nl-nav">
                 <button class="on" data-view="campaigns" onclick="nlShow('campaigns')">Campaigns</button>
                 <button data-view="audience" onclick="nlShow('audience')">Audience</button>
+                <button data-view="outcomes" onclick="nlShow('outcomes')">Outcomes</button>
             </div>
 
             <div id="nl-view-campaigns">
@@ -3512,7 +3514,7 @@
                             </div>
                             <div>
                                 <label>Reply-to</label>
-                                <input type="email" id="nl-ed-reply" value="jenna@crosswalknyc.com">
+                                <input type="email" id="nl-ed-reply" value="hello@crosswalknyc.com">
                             </div>
                         </div>
                         <label>Audience</label>
@@ -3523,6 +3525,30 @@
                             <button class="btn btn-small btn-secondary" onclick="nlUploadHtml()">Load HTML</button>
                             <button class="btn btn-small btn-secondary" onclick="nlSaveCampaign()">Save</button>
                         </div>
+                        <div class="nl-divider">Gated download</div>
+                        <label class="nl-toggle">
+                            <input type="checkbox" id="nl-dl-enabled">
+                            <span>Offer a file download from this newsletter</span>
+                        </label>
+                        <label>Download title</label>
+                        <input type="text" id="nl-dl-title" placeholder="Creatorverse deck and workbook">
+                        <label>Attachment (pdf, deck, spreadsheet, zip)</label>
+                        <input type="file" id="nl-dl-file" accept=".pdf,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.doc,.docx">
+                        <div class="nl-row" style="margin-top:0.6rem;">
+                            <button class="btn btn-small btn-secondary" onclick="nlUploadAttachment()">Upload file</button>
+                        </div>
+                        <div class="nl-sub" id="nl-dl-file-status" style="margin-top:0.35rem;">No file attached yet.</div>
+                        <label class="nl-toggle">
+                            <input type="checkbox" id="nl-dl-paid" onchange="nlTogglePaid()">
+                            <span>Charge a fee to download (Stripe)</span>
+                        </label>
+                        <div id="nl-dl-price-wrap" class="nl-hidden">
+                            <label>Price (USD)</label>
+                            <input type="number" id="nl-dl-price" min="0.50" step="0.01" value="25">
+                        </div>
+                        <label>Add downloaders to</label>
+                        <select id="nl-dl-list"></select>
+                        <div class="nl-sub" id="nl-dl-link" style="margin-top:0.45rem;"></div>
                         <label>Schedule (optional)</label>
                         <input type="datetime-local" id="nl-ed-schedule">
                         <div class="nl-send-bar">
@@ -3543,8 +3569,53 @@
                 <div class="nl-actions" style="margin-bottom:0.9rem;">
                     <button class="btn btn-small btn-secondary" onclick="nlSyncDashboard()">Sync dashboard users</button>
                     <button class="btn btn-small btn-secondary" onclick="nlNewList()">+ New list</button>
+                    <button class="btn btn-small btn-secondary" onclick="nlNewSegment()">+ New segment</button>
                 </div>
                 <div id="nl-lists" class="nl-stats"></div>
+                <div class="nl-form" style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; font-size:1rem;">Import emails</h3>
+                    <div class="nl-sub">CSV with a header row (email, name, company, tags, list) or a plain list of addresses.</div>
+                    <div class="nl-row">
+                        <div>
+                            <label>CSV file</label>
+                            <input type="file" id="nl-import-file" accept=".csv,.txt,text/csv,text/plain">
+                        </div>
+                        <div>
+                            <label>Add to list</label>
+                            <select id="nl-import-list"></select>
+                        </div>
+                        <div>
+                            <label>Tags (optional)</label>
+                            <input type="text" id="nl-import-tags" placeholder="agency, press">
+                        </div>
+                    </div>
+                    <button class="btn btn-small btn-primary" style="margin-top:0.7rem;" onclick="nlImportCsv()">Import file</button>
+                </div>
+                <div class="nl-form" style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; font-size:1rem;">Segments</h3>
+                    <div class="nl-sub">A segment is a saved filter you can send to. People stay on their lists.</div>
+                    <div id="nl-segments" style="margin-top:0.75rem;"></div>
+                    <div id="nl-seg-form" class="nl-hidden" style="margin-top:0.9rem;">
+                        <input type="hidden" id="nl-seg-id">
+                        <label>Segment name</label>
+                        <input type="text" id="nl-seg-name" placeholder="Agencies on The Read">
+                        <div class="nl-row">
+                            <div>
+                                <label>List</label>
+                                <select id="nl-seg-list"></select>
+                            </div>
+                            <div>
+                                <label>Tags (any of these)</label>
+                                <input type="text" id="nl-seg-tags" placeholder="agency, buyer">
+                            </div>
+                            <div>
+                                <label>Company contains</label>
+                                <input type="text" id="nl-seg-company" placeholder="Optional">
+                            </div>
+                        </div>
+                        <button class="btn btn-small btn-primary" style="margin-top:0.7rem;" onclick="nlSaveSegment()">Save segment</button>
+                    </div>
+                </div>
                 <div class="nl-form" style="margin-bottom:1rem;">
                     <div class="nl-row">
                         <div>
@@ -3560,6 +3631,8 @@
                             <select id="nl-add-list"></select>
                         </div>
                     </div>
+                    <label>Tags (optional)</label>
+                    <input type="text" id="nl-add-tags" placeholder="agency, press">
                     <div class="nl-row" style="margin-top:0.7rem;">
                         <button class="btn btn-small btn-primary" onclick="nlAddSubscriber()">Add person</button>
                     </div>
@@ -3569,7 +3642,7 @@
                 </div>
                 <div class="nl-form" style="margin-bottom:1rem;">
                     <label>Search people</label>
-                    <input type="text" id="nl-sub-search" placeholder="email, name, company">
+                    <input type="text" id="nl-sub-search" placeholder="email, name, company, tag">
                     <div id="nl-sub-table" style="margin-top:0.75rem;"></div>
                 </div>
                 <div class="nl-form">
@@ -3584,6 +3657,11 @@
                 </div>
             </div>
 
+            <div id="nl-view-outcomes" class="nl-hidden">
+                <div class="nl-sub" style="margin-bottom:0.9rem;">Every send and every gated download. Opens and clicks from the letter. Leads, downloads, and revenue from the file page.</div>
+                <div id="nl-outcomes-table"></div>
+            </div>
+
             <div id="nl-view-report" class="nl-hidden">
                 <div style="margin-bottom:0.75rem;">
                     <button class="btn btn-small btn-secondary" onclick="nlBack()">← Campaigns</button>
@@ -3594,6 +3672,10 @@
                 <div class="card" style="margin-bottom:1rem; padding:1rem;">
                     <h3 style="margin:0 0 0.6rem;">Top links</h3>
                     <div id="nl-report-links"></div>
+                </div>
+                <div class="card" style="margin-bottom:1rem; padding:1rem;">
+                    <h3 style="margin:0 0 0.6rem;">Downloads</h3>
+                    <div id="nl-report-downloads"></div>
                 </div>
                 <div class="card" style="padding:1rem;">
                     <h3 style="margin:0 0 0.6rem;">Recipients</h3>

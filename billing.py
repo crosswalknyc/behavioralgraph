@@ -348,6 +348,65 @@ def create_checkout_session(customer_id: str, amount_usd: float,
     return {"id": sess.id, "url": sess.url}
 
 
+@_wrap_stripe_error
+def create_guest_checkout_session(amount_usd: float, email: str,
+                                  success_url: str, cancel_url: str,
+                                  product_name: str,
+                                  metadata: Optional[dict] = None) -> dict:
+    """Hosted Checkout for someone who is not a dashboard user.
+
+    Used by Newsletter paid downloads. No Stripe Customer is created.
+    metadata.purpose should be newsletter_download so the webhook
+    does not credit a wallet.
+    """
+    if amount_usd <= 0:
+        raise BillingError("Amount must be positive.")
+    email = (email or "").strip()
+    if not email:
+        raise BillingError("Email is required.")
+    cents = _to_cents(amount_usd)
+    s = _stripe()
+    md = dict(metadata or {})
+    md.setdefault("purpose", "newsletter_download")
+    sess = s.checkout.Session.create(
+        mode="payment",
+        payment_method_types=["card"],
+        customer_email=email,
+        line_items=[{
+            "quantity": 1,
+            "price_data": {
+                "currency": "usd",
+                "product_data": {
+                    "name": (product_name or "Crosswalk report")[:120],
+                },
+                "unit_amount": cents,
+            },
+        }],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=md,
+        payment_intent_data={"metadata": md},
+    )
+    return {"id": sess.id, "url": sess.url}
+
+
+@_wrap_stripe_error
+def retrieve_checkout_session(session_id: str) -> dict:
+    """Fetch a Checkout Session. Used to unlock a paid download."""
+    if not session_id:
+        raise BillingError("Missing session id.")
+    s = _stripe()
+    sess = s.checkout.Session.retrieve(session_id)
+    return {
+        "id": sess.id,
+        "status": getattr(sess, "status", "") or "",
+        "payment_status": getattr(sess, "payment_status", "") or "",
+        "customer_email": getattr(sess, "customer_email", "") or "",
+        "amount_total": int(getattr(sess, "amount_total", 0) or 0),
+        "metadata": dict(getattr(sess, "metadata", None) or {}),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Off-session charge (auto-reload, admin custom charge)
 # ---------------------------------------------------------------------------

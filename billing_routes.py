@@ -2297,6 +2297,14 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
 
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
+    md = obj.get("metadata") or {}
+    if (md.get("purpose") or "") == "newsletter_download":
+        try:
+            from newsletter import fulfill_paid_download
+            fulfill_paid_download(obj)
+        except Exception as e:
+            print(f"[billing] newsletter download fulfill failed: {e}")
+        return
     subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
     if not subject:
         print(f"[billing] webhook checkout.session.completed "

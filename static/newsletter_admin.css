@@ -150,8 +150,31 @@
     color: var(--text-secondary);
     margin: 0.7rem 0 0.3rem;
 }
+#section-newsletter .nl-divider {
+    margin: 1.1rem 0 0.35rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+#section-newsletter .nl-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.75rem 0 0.25rem;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+#section-newsletter .nl-toggle input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
 #section-newsletter input[type="text"],
 #section-newsletter input[type="email"],
+#section-newsletter input[type="number"],
 #section-newsletter input[type="datetime-local"],
 #section-newsletter select,
 #section-newsletter textarea {
