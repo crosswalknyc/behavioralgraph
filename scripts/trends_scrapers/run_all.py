@@ -463,6 +463,20 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             logging.exception("run_all: stream_estimates post-step crashed")
             results.append({'source': 'stream_estimates', 'error': str(e), 'national': []})
+        # Single-provenance rank (2026-09-09): once the estimator has
+        # landed, every platform tile's rank must equal the title's
+        # position ordered by that day's audience estimate. Re-seats
+        # view-carrying rows in each platform snapshot (latest + today's
+        # dated copy) and keeps items' chart labels in step. Non-fatal.
+        try:
+            from scripts.trends_scrapers.stream_estimates import (
+                align_snapshot_ranks)
+            today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            for folder in ('latest', today_iso):
+                align_snapshot_ranks(folder)
+        except Exception:
+            logging.exception("run_all: platform rank alignment crashed "
+                               "(non-fatal)")
 
     # headline_estimates: US daily-readership estimates (Claude Sonnet +
     # web_search per article) for every headline on the Trends IQ

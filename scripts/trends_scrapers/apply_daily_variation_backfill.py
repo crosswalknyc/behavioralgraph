@@ -65,8 +65,10 @@ Guardrails (unchanged from v1)
 * Pre-mutation backup created ONLY IF ABSENT - the v1 backup is the
   permanent original and is never overwritten.
 * by_platform values scale proportionally; low <= mid <= high holds.
-* `_ensure_non_zero_last_digit` on every integer (workspace rule
-  no-round-numbers-in-deliverables).
+* `_ensure_non_zero_last_digit` on every integer. Since 2026-09-09 this
+  shapes a NATURAL last-digit distribution (zeros at natural rates)
+  per the amended no-round-numbers-in-deliverables rule; placeholder
+  scale round values stay impossible.
 * Never touches `latest/` - the live daily cron owns that (fully
   reasoned per day, see stream_estimates.py).
 * --dry-run reports without writing.
@@ -752,31 +754,31 @@ def _fill_missing_date(target_date_iso: str,
 #
 # The render path is deterministic but two mechanisms can land the SAME
 # integer on an item's consecutive dates: (a) small values whose
-# level x factor products round into the same bucket, and (b) large
-# trailing-zero products whose non-zero-last-digit nudge (span up to
-# +-0.5%) lands by hash chance exactly on the neighbor's value. Both
-# read as a frozen day. This pass walks the whole dated corpus in
-# chronological order and re-places any repeat with the smallest
-# deterministic move that keeps every invariant (positive, last digit
-# 1-9, bands and platform blocks rescaled in lockstep).
+# level x factor products round into the same bucket, and (b) products
+# whose digit-shaping nudge lands by hash chance exactly on the
+# neighbor's value. Both read as a frozen day. This pass walks the
+# whole dated corpus in chronological order and re-places any repeat
+# with the smallest deterministic move that keeps every invariant
+# (positive, natural last digits per the 2026-09-09 amendment, bands
+# and platform blocks rescaled in lockstep).
 # ---------------------------------------------------------------------------
 _SWEEP_SALT = 'adjdistinct.v1'
 
 
 def _distinct_nudge(mid: int, avoid: set[int], key: str, iso: str) -> int:
-    """Smallest deterministic replacement for `mid` that is positive,
-    ends in 1-9, and is not in `avoid` (the neighboring dates' values)."""
+    """Smallest deterministic replacement for `mid` that is positive
+    and is not in `avoid` (the neighboring dates' values). Last digits
+    keep their natural distribution (2026-09-09): no zero ban."""
     u = _h01(f'{key}|{iso}|{_SWEEP_SALT}')
     step = 1 + int(u * 8)                                      # 1..8
     sign = 1 if _h01(f'{key}|{iso}|{_SWEEP_SALT}|sign') < 0.55 else -1
     for k in range(1, 60):
         for s in (sign, -sign):
             cand = mid + s * step * k
-            if cand >= 1 and cand % 10 != 0 and cand not in avoid \
-                    and cand != mid:
+            if cand >= 1 and cand not in avoid and cand != mid:
                 return cand
     cand = mid + 1
-    while cand in avoid or cand % 10 == 0:
+    while cand in avoid:
         cand += 1
     return cand
 

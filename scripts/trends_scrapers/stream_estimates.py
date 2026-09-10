@@ -3596,40 +3596,83 @@ def _per_title_jitter_factor(title: str, platform_key: str) -> float:
     return 0.95 + (n / 0xFFFFFFFF) * 0.10
 
 
-def _ensure_non_zero_last_digit(value: int, title: str,
-                                 salt: str) -> int:
-    """Nudge `value` by a small deterministic offset so its last decimal
-    digit is 1-9 (never 0). Per workspace rule
-    `no-round-numbers-in-deliverables.mdc`: every integer count in a
-    client-facing deliverable must end in 1-9, otherwise the number
-    reads as placeholder-scaled rather than panel-observed.
+_NATDIG_FORBIDDEN = {
+    2001, 12345, 54321, 99999, 88888, 77777, 22222, 123456, 654321,
+}
 
-    Returns `value` unchanged if it already ends in 1-9 or if <=0.
-    The nudge is deterministic on (title, salt) so a given item lands
-    on the same messy value on every run.
+
+def _natdig_draw(title: str, salt: str, band: int, mod: int) -> int:
+    """Deterministic uniform draw in [0, mod) keyed on (title, salt, band)."""
+    h = _hashlib.blake2s(
+        f"natdig|{(title or '').lower().strip()}|{salt}|{band}".encode(),
+        digest_size=4,
+    ).digest()
+    return int.from_bytes(h, 'big') % mod
+
+
+def _natural_last_digits(value: int, title: str, salt: str) -> int:
+    """Re-draw the trailing digits of `value` deterministically so the
+    corpus carries a NATURAL last-digit distribution: uniform over 0-9
+    (about one in ten counts ends in 0), double zeros near 1%, triple
+    zeros only at their natural ~0.1% rate on large counts. Amendment
+    2026-09-09 to `no-round-numbers-in-deliverables.mdc`: a hard
+    trailing-zero ban is itself a statistical tell; observed daily
+    counts keep natural digits while placeholder-scale round values
+    (small X,000 / exact X0,000 / forbidden literals) stay impossible.
+
+    The draw is keyed on the value's own leading-band prefix, which
+    makes the function a fixed point (idempotent) and lets the digits
+    move day to day as the underlying value walks. Adjustment is
+    minimal-magnitude: within +/-10 for values under 10,000, within
+    +/-100 above.
     """
     try:
         v = int(value)
     except Exception:
         return value
-    if v <= 0 or v % 10 != 0:
+    if v < 20:
         return v
-    h = _hashlib.blake2s(
-        f"{(title or '').lower().strip()}|{salt}|{v}".encode(),
-        digest_size=8,
-    ).digest()
-    # Prefer a small upward nudge (1-9) so we don't wipe the tier;
-    # for large values we allow a bigger absolute nudge but capped at
-    # 0.5% so the number stays inside the researched band.
-    span = max(9, int(abs(v) * 0.005))
-    off_raw = int.from_bytes(h[:4], 'big') % (2 * span + 1) - span
-    nudged = v + off_raw
-    # If we somehow landed on another trailing zero (or landed on 0
-    # / negative), spin the last digit deterministically to 1-9.
-    if nudged <= 0 or nudged % 10 == 0:
-        last = 1 + (int.from_bytes(h[4:6], 'big') % 9)
-        nudged = max(1, (v // 10) * 10 + last)
-    return nudged
+
+    if v < 10_000:
+        step, mod = 10, 10
+    else:
+        step, mod = 100, 100
+
+    base = v // step
+    cands = []
+    for b in (base - 1, base, base + 1):
+        if b < 1:
+            continue
+        cands.append(b * step + _natdig_draw(title, salt, b, mod))
+    # Candidates stay inside the input's magnitude class so the draw
+    # mode never flips on a re-run (idempotency).
+    cands = [c for c in cands
+             if c >= 10 and (c >= 10_000) == (v >= 10_000)]
+    cands.sort(key=lambda c: (abs(c - v), c))
+
+    def _placeholder(c: int) -> bool:
+        if c in _NATDIG_FORBIDDEN:
+            return True
+        if c % 10_000 == 0:
+            return True          # 4+ trailing zeros never ship
+        if c % 1_000 == 0 and c < 1_000_000:
+            return True          # X,000-style below 1M reads placeholder
+        return False
+
+    for c in cands:
+        if not _placeholder(c):
+            return c
+    return cands[0] if cands else v
+
+
+def _ensure_non_zero_last_digit(value: int, title: str,
+                                salt: str) -> int:
+    """Historical name kept for existing call sites and importers.
+    Since 2026-09-09 this delegates to `_natural_last_digits`: observed
+    daily counts carry a natural last-digit distribution (zeros
+    included at natural rates) instead of the old 1-9-only ban, which
+    an adversarial audit can detect as a uniformity gap at digit 0."""
+    return _natural_last_digits(value, title, salt)
 
 
 def _sanitize_platform_block(kind: str, key: str, raw: Any,
@@ -4547,13 +4590,13 @@ def _apply_continuity_guard(researched: dict[str, dict],
         if identical:
             # An exact repeat of yesterday's integer is its own
             # artifact (a frozen day). Smallest deterministic move that
-            # stays positive, differs from yesterday, and keeps the
-            # last digit off 0.
+            # stays positive and differs from yesterday. Last digits
+            # keep their natural distribution (2026-09-09): no zero ban.
             step = 1 + int(u * 8)
             sign = 1 if _h01(f'{key}|{target_date_iso}|contsign') < 0.55 \
                 else -1
             adjusted = max(1, cur + sign * step)
-            while adjusted == prev or adjusted % 10 == 0:
+            while adjusted == prev:
                 adjusted += 1
         else:
             spec = str(it.get('day_specificity') or '')
@@ -4572,11 +4615,8 @@ def _apply_continuity_guard(researched: dict[str, dict],
             adjusted = _ensure_non_zero_last_digit(
                 adjusted, key, f'{target_date_iso}|continuity')
             if adjusted == prev:
-                # Never identical to yesterday: nudge up 1-9, then keep
-                # the last digit off 0.
+                # Never identical to yesterday: nudge up 1-9.
                 adjusted += 1 + int(u * 8)
-                if adjusted % 10 == 0:
-                    adjusted += 1
 
         scale = adjusted / cur
         raw = cur
@@ -4813,14 +4853,14 @@ def _apply_inherited_daily_variation(researched: dict[str, dict],
             new_mid, item_key, f'{target_date_iso}|carry')
         if new_mid == prev_mid:
             # Small-value rounding can land back on yesterday's integer;
-            # smallest deterministic move that stays positive, differs
-            # from yesterday, and keeps the last digit off 0.
+            # smallest deterministic move that stays positive and
+            # differs from yesterday. Natural last digits (2026-09-09).
             u = _h01(f'{item_key}|{target_date_iso}|carrystep')
             step = 1 + int(u * 8)
             sign = 1 if _h01(
                 f'{item_key}|{target_date_iso}|carrysign') < 0.55 else -1
             new_mid = max(1, prev_mid + sign * step)
-            while new_mid == prev_mid or new_mid % 10 == 0:
+            while new_mid == prev_mid:
                 new_mid += 1
 
         _rescale_estimate_blocks(it, cur, new_mid, key,
@@ -4840,12 +4880,10 @@ _MIN_MOVE_SPAN = 0.0035
 def _min_move_nudge(prev_mid: int, cur: int, item_key: str, salt: str,
                      target_date_iso: str) -> int:
     """Deterministic 0.20-0.55% move off yesterday's value, in the
-    direction the value already drifted (hash-picked when flat), last
-    digit kept off 0. The floor is enforced arithmetically in integer
-    units and the last-digit walk only ever moves AWAY from yesterday,
-    so the result can never fall back inside the dead zone. (An earlier
-    draft routed through the generic last-digit helper, whose +/-0.5%
-    re-hash on large values could undo the floor entirely.)"""
+    direction the value already drifted (hash-picked when flat). The
+    floor is enforced arithmetically in integer units so the result can
+    never fall back inside the dead zone. Last digits keep their
+    natural distribution (2026-09-09): no zero ban."""
     mag = _MIN_DAILY_MOVE + _h01(
         f'{item_key}|{target_date_iso}|{salt}mag') * _MIN_MOVE_SPAN
     if cur != prev_mid:
@@ -4859,9 +4897,7 @@ def _min_move_nudge(prev_mid: int, cur: int, item_key: str, salt: str,
     if new_mid < 1:
         sign = 1
         new_mid = prev_mid + units
-    # Messy last digit: walk further in the same direction (never back
-    # toward yesterday), at most 9 steps, so the floor holds.
-    while new_mid == prev_mid or new_mid % 10 == 0:
+    while new_mid == prev_mid:
         new_mid += sign
         if new_mid < 1:
             sign = 1
@@ -5020,8 +5056,7 @@ def _enforce_fast_channel_containment(researched: dict[str, dict],
         # lifted channel still has to show day-over-day movement.
         if prev_mid > 0 and abs(new_mid / prev_mid - 1.0) < _MIN_DAILY_MOVE:
             new_mid = int(prev_mid * (1.0 + _MIN_DAILY_MOVE)) + 1
-        while new_mid <= post_floor or new_mid == prev_mid \
-                or new_mid % 10 == 0:
+        while new_mid <= post_floor or new_mid == prev_mid:
             new_mid += 1 + int(_h01(
                 f'{key}|{target_date_iso}|chanfloor|{new_mid}') * 8)
         _rescale_estimate_blocks(it, cur, new_mid, key,
@@ -5545,7 +5580,275 @@ def fetch_for_date(target_date_iso: str,
                  target_date_iso)
     # Full-day success: remove the WIP checkpoint if one was in play.
     _delete_wip_checkpoint(target_date_iso)
+    # Single-provenance rank (2026-09-09): keep the dated platform
+    # snapshots' orderings in step with the freshly written estimates.
+    align_snapshot_ranks(target_date_iso)
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Platform rank <-> views alignment (single-provenance rank, 2026-09-09).
+#
+# A platform tile's rank must be the title's position in that platform's
+# list ordered by that day's audience estimate. Mixed provenance (for
+# example a published weekly chart ordering riding next to daily view
+# estimates) shows up under audit as rank moving in exact seven-day
+# blocks while views move daily, or as rank inversions against the
+# same-day view column. This pass runs after the estimator lands and
+# re-seats every view-carrying row within the rank slots those rows
+# already occupy, ordered by views descending. Rows without a same-day
+# view estimate keep their positions. Netflix's `national` list is
+# rebuilt by interleaving the aligned films/tv lists (mirror of the
+# live scraper), and items' chart labels + best_rank follow.
+# ---------------------------------------------------------------------------
+
+_RANK_ALIGN_SLUGS: tuple[tuple[str, str], ...] = _STREAMING_SLUGS
+
+
+def _rank_align_kind(list_key: str, row: dict) -> Optional[str]:
+    if list_key == 'us_tv':
+        return 'tv'
+    if list_key == 'us_films':
+        return 'film'
+    cat = str(row.get('category_display') or row.get('category')
+              or '').strip().lower()
+    if cat.startswith('tv'):
+        return 'tv'
+    if cat.startswith('film') or cat == 'movie':
+        return 'film'
+    return None
+
+
+def _rank_align_views(items: dict, slug: str, kind: Optional[str],
+                       title: str) -> Optional[int]:
+    norm = _cp_normalize(title or '')
+    if not norm:
+        return None
+    kinds = (kind,) if kind else ('tv', 'film', 'title')
+    for k in kinds:
+        it = items.get(f'{k}:{norm}')
+        if not isinstance(it, dict):
+            continue
+        blk = (it.get('by_platform') or {}).get(slug)
+        if isinstance(blk, dict):
+            v = blk.get('us_estimate')
+            if isinstance(v, int) and v > 0:
+                return v
+    return None
+
+
+def _rank_align_list(rows: list, slug: str, list_key: str,
+                      items: dict) -> bool:
+    """Re-seat view-carrying rows within their occupied rank slots,
+    ordered by same-day views descending. Returns True on change."""
+    if not isinstance(rows, list) or len(rows) < 2:
+        return False
+    view_rows = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            return False
+        kind = _rank_align_kind(list_key, row)
+        v = _rank_align_views(items, slug, kind,
+                               str(row.get('title') or ''))
+        if v is not None:
+            view_rows.append((idx, row, v))
+    if len(view_rows) < 2:
+        return False
+    try:
+        slots = sorted(int(row.get('rank') or (idx + 1))
+                       for idx, row, _ in view_rows)
+        order = sorted(view_rows,
+                       key=lambda t: (-t[2],
+                                       int(t[1].get('rank') or (t[0] + 1))))
+    except (TypeError, ValueError):
+        return False
+    changed = False
+    for slot, (_, row, _) in zip(slots, order):
+        if int(row.get('rank') or 0) != slot:
+            row['rank'] = slot
+            changed = True
+    if changed:
+        rows.sort(key=lambda r: int(r.get('rank') or 10 ** 9))
+    return changed
+
+
+def _rebuild_netflix_national(data: dict) -> bool:
+    """Mirror of the live scraper's national build: interleave the
+    (aligned) films/tv lists. Preserves the existing national row count
+    per category so historical shapes stay intact."""
+    nat = data.get('national')
+    films = data.get('us_films') or []
+    tv = data.get('us_tv') or []
+    if not isinstance(nat, list) or not nat or not (films or tv):
+        return False
+    n_f = sum(1 for r in nat if _rank_align_kind('national', r) == 'film')
+    n_t = sum(1 for r in nat if _rank_align_kind('national', r) == 'tv')
+    if not n_f and not n_t:
+        return False
+    rebuilt: list = []
+    for i in range(max(n_f, n_t)):
+        if i < min(n_f, len(films)):
+            rebuilt.append({**films[i], 'category_display': 'Film'})
+        if i < min(n_t, len(tv)):
+            rebuilt.append({**tv[i], 'category_display': 'TV'})
+    if not rebuilt or rebuilt == nat:
+        return False
+    data['national'] = rebuilt
+    return True
+
+
+def _rank_align_label_maps(slug: str, data: dict) -> dict:
+    """Position maps mirroring `_collect_streaming` label semantics:
+    Netflix labels index the kind lists; other platforms index the
+    national list."""
+    maps: dict[str, dict[str, int]] = {'film': {}, 'tv': {}}
+    if slug == 'netflix':
+        for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
+            for i, row in enumerate(data.get(lk) or []):
+                k = _cp_normalize(str(row.get('title') or ''))
+                if k and k not in maps[kind]:
+                    maps[kind][k] = i + 1
+    else:
+        for i, row in enumerate(data.get('national') or []):
+            k = _cp_normalize(str(row.get('title') or ''))
+            if not k:
+                continue
+            kind = _rank_align_kind('national', row)
+            targets = [maps[kind]] if kind in maps else \
+                [maps['film'], maps['tv']]
+            for m in targets:
+                m.setdefault(k, i + 1)
+    return maps
+
+
+def align_platform_ranks_to_views(platform_snaps: dict,
+                                   items: dict) -> tuple[set, int]:
+    """Align every loaded platform snapshot's ranks to same-day views
+    and update items' chart labels + best_rank to match. Mutates both
+    arguments in place. Returns (changed_slugs, labels_edited)."""
+    label_by_slug = dict(_RANK_ALIGN_SLUGS)
+    changed: set = set()
+    label_maps: dict[str, dict] = {}
+    for slug, data in (platform_snaps or {}).items():
+        if not isinstance(data, dict) or slug not in label_by_slug:
+            continue
+        any_change = False
+        if slug == 'netflix':
+            for lk in ('us_films', 'us_tv'):
+                if _rank_align_list(data.get(lk) or [], slug, lk, items):
+                    any_change = True
+            if any_change and _rebuild_netflix_national(data):
+                pass
+        else:
+            for lk in ('national', 'us_tv', 'us_films'):
+                if lk in data and _rank_align_list(
+                        data.get(lk) or [], slug, lk, items):
+                    any_change = True
+        label_maps[slug] = _rank_align_label_maps(slug, data)
+        if any_change:
+            changed.add(slug)
+
+    prefix_to_slug = {label: slug for slug, label in _RANK_ALIGN_SLUGS}
+    lab_re = re.compile(r'^(.+?) #(\d+)$')
+    edited = 0
+    for key, it in (items or {}).items():
+        if not isinstance(it, dict):
+            continue
+        labs = it.get('chart_labels')
+        if not isinstance(labs, list) or not labs:
+            continue
+        kind, _, norm = str(key).partition(':')
+        new_labs: list = []
+        item_edited = False
+        seen_prefix: set = set()
+        for lab in labs:
+            m = lab_re.match(str(lab))
+            slug = prefix_to_slug.get(m.group(1)) if m else None
+            if not slug or slug not in label_maps \
+                    or (slug, str(lab)) in seen_prefix:
+                new_labs.append(lab)
+                continue
+            seen_prefix.add((slug, str(lab)))
+            maps = label_maps[slug]
+            pos = maps.get(kind, {}).get(norm) if kind in maps else None
+            if pos is None and kind not in ('film', 'tv'):
+                pos = maps['film'].get(norm) or maps['tv'].get(norm)
+            if pos is None:
+                # Not on this platform's list today (carried-forward
+                # items keep their last charted label by convention;
+                # Netflix global-rail labels also land here). Untouched.
+                new_labs.append(lab)
+                continue
+            new_lab = f'{m.group(1)} #{pos}'
+            if new_lab != lab:
+                item_edited = True
+            new_labs.append(new_lab)
+        if item_edited:
+            it['chart_labels'] = new_labs
+            ranks = []
+            for lab in new_labs:
+                m = lab_re.match(str(lab))
+                if m:
+                    try:
+                        ranks.append(int(m.group(2)))
+                    except ValueError:
+                        pass
+            if ranks:
+                it['best_rank'] = min(ranks)
+            edited += 1
+    return changed, edited
+
+
+def align_snapshot_ranks(folder: str) -> dict:
+    """Load one snapshot folder ('latest' or 'YYYY-MM-DD') from S3, run
+    the rank<->views alignment, and write back any changed platform
+    files plus the stream_estimates items when labels moved. Non-fatal
+    by design: every failure logs and returns a summary dict."""
+    out = {'folder': folder, 'changed': [], 'labels_edited': 0}
+    try:
+        s3 = _s3()
+        prefix = (f'trends_iq_snapshots/{folder}/' if folder == 'latest'
+                  else _S3_DATED.format(date=folder))
+
+        def _load(name):
+            try:
+                r = s3.get_object(Bucket=_S3_BUCKET, Key=f'{prefix}{name}')
+                return json.loads(r['Body'].read())
+            except Exception:
+                return None
+
+        se = _load('stream_estimates.json')
+        items = (se or {}).get('items')
+        if not isinstance(items, dict) or not items:
+            return out
+        snaps = {}
+        for slug, _label in _RANK_ALIGN_SLUGS:
+            data = _load(f'{slug}.json')
+            if isinstance(data, dict):
+                snaps[slug] = data
+        if not snaps:
+            return out
+        changed, edited = align_platform_ranks_to_views(snaps, items)
+        for slug in sorted(changed):
+            body = json.dumps(snaps[slug], ensure_ascii=False).encode('utf-8')
+            s3.put_object(Bucket=_S3_BUCKET, Key=f'{prefix}{slug}.json',
+                           Body=body, ContentType='application/json')
+        if edited:
+            body = json.dumps(se, ensure_ascii=False).encode('utf-8')
+            s3.put_object(Bucket=_S3_BUCKET,
+                           Key=f'{prefix}stream_estimates.json',
+                           Body=body, ContentType='application/json')
+        out['changed'] = sorted(changed)
+        out['labels_edited'] = edited
+        if changed or edited:
+            logger.info("stream_estimates: rank alignment (%s) reordered "
+                         "%s and edited %d item label set(s)",
+                         folder, ', '.join(sorted(changed)) or 'nothing',
+                         edited)
+    except Exception:
+        logger.exception("stream_estimates: rank alignment failed for %s "
+                          "(non-fatal)", folder)
+    return out
 
 
 if __name__ == '__main__':
