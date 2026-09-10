@@ -80,8 +80,11 @@ Guardrails (unchanged from v1)
 
 CLI
 ---
-    python3 -m scripts.trends_scrapers.apply_daily_variation_backfill \
-        --since 2026-06-01 --until 2026-09-03
+    # bare run: earliest available dated snapshot .. yesterday UTC
+    python3 -m scripts.trends_scrapers.apply_daily_variation_backfill
+
+    # explicit range:
+    ... --since 2026-06-01 --until 2026-09-03
 
     # sparse rerun:
     ... --dates 2026-08-30,2026-08-31
@@ -134,9 +137,14 @@ _S3_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 # factor layer is unchanged.
 _FORMULA_VERSION = 'v3.1.2026-09-04-scalefix'
 
-# Trend drift is centered on this fixed window (the backfill span).
-# Keeping it a module constant means sparse re-runs of single dates
-# reproduce the exact same values as the full sweep.
+# FORMULA ANCHORS ONLY. Trend drift, micro-events, and the anchor
+# series are centered on this fixed span so sparse re-runs of single
+# dates reproduce the exact same values as the full sweep. These do
+# NOT bound which dates a run processes: the default processing range
+# is earliest-available-snapshot .. yesterday (see main()), and the
+# distinctness sweep writes any date through yesterday. Never widen
+# these constants without bumping _FORMULA_VERSION - they are part of
+# the v3.1 math identity.
 _WINDOW_START = date(2026, 6, 1)
 _WINDOW_END   = date(2026, 9, 3)
 _WINDOW_LEN   = max(1, (_WINDOW_END - _WINDOW_START).days)
@@ -841,9 +849,15 @@ def enforce_adjacent_distinctness(*, dry_run: bool = False) -> dict:
     Deterministic and idempotent: a second sweep finds nothing to do.
     """
     dates = _list_snapshot_dates()
-    win_lo = _WINDOW_START.isoformat()
-    win_hi = _WINDOW_END.isoformat()
-    writable = {d for d in dates if win_lo <= d <= win_hi}
+    # Writable range: every dated snapshot through yesterday. Today's
+    # cron output (and anything later) stays a read-only neighbor so
+    # the sweep never fights the live daily writer. _WINDOW_START /
+    # _WINDOW_END remain the FORMULA anchors only (organic-factor
+    # progress, micro-events, anchor series) and no longer bound the
+    # sweep.
+    yesterday = (datetime.now(timezone.utc).date()
+                 - timedelta(days=1)).isoformat()
+    writable = {d for d in dates if d <= yesterday}
     snaps: dict[str, dict] = {}
     prev_mid: dict[str, int] = {}      # item -> value on last seen date
     prev2_mid: dict[str, int] = {}     # item -> value one appearance back
@@ -947,7 +961,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                       'dated stream_estimates snapshots from reasoned '
                       'rhythm profiles. Costs $0.'))
     parser.add_argument('--since', default='',
-                        help='Start date (YYYY-MM-DD, inclusive).')
+                        help='Start date (YYYY-MM-DD, inclusive). '
+                              'Defaults to the earliest available '
+                              'dated snapshot.')
     parser.add_argument('--until', default='',
                         help='End date (YYYY-MM-DD, inclusive). '
                               'Defaults to yesterday UTC.')
@@ -983,12 +999,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.dates:
         dates = _parse_dates_arg(args.dates)
     else:
-        if not args.since:
-            parser.error('one of --since or --dates is required')
+        since = args.since
+        if not since:
+            # Default window: the earliest dated snapshot that exists,
+            # so a bare run covers the whole corpus (including the
+            # January-May history) instead of a pinned June..Sept
+            # range. Formula-version stamps keep the bare run cheap:
+            # already-rendered dates no-op unless --force.
+            available = _list_snapshot_dates()
+            if not available:
+                parser.error('no dated snapshots found; pass --since '
+                             'or --dates explicitly')
+            since = available[0]
         until = args.until or (
             datetime.now(timezone.utc).date() - timedelta(days=1)
         ).isoformat()
-        dates = _daterange(args.since, until)
+        dates = _daterange(since, until)
 
     if not dates:
         logger.warning("no dates to process")
