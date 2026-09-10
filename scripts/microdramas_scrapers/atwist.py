@@ -8,26 +8,44 @@ partnerships with BET, Kevin Hart's Hartbeat, and National CineMedia.
 Deliberately multi-genre from launch (romance / horror / comedy /
 animation / unscripted) rather than romance-dominated.
 
-## Data source (as of 2026-09-09)
+## Data source (as of 2026-09-09, v1.0.9)
 
-aTwist.com is a client-rendered Angular splash page. The full
-catalog lives ONLY in the iOS / Android app (available in US, UK,
-CA, AU, NZ, IE, IN, PH). The site's main JS bundle
-(`main-VTMD6J43.js`, ~338KB) makes calls to Klaviyo (email signup),
-ipapi (geo), and proxycheck (bot detection) - there is no public
-titles / catalog / trending endpoint to hit.
+aTwist.com is a client-rendered Angular splash page. The catalog is
+served exclusively to the iOS / Android apps in US, UK, CA, AU, NZ,
+IE, IN, PH. There is no public web catalog on atwist.com.
 
-So this scraper's `fetch_live()` speculatively probes a few
-candidate JSON endpoints (in case aTwist ships a web catalog later)
-and always falls through to `fetch_baseline()`, which returns the
-10 launch-slate originals researched from Variety, THR, C21, and
-The Wrap on the launch date.
+We reverse-engineered the app's API (com.atwist v1.0.9, apk v19). The
+app talks to `https://api.atwist.com/mediaview/api/v1/` for the home
+feed and rail expansion; the endpoints are public and unauthenticated
+(no cookies, no bearer token, no signed request). See the discovery
+trail in `scripts/microdramas_scrapers/atwist.py` git history and
+the Chatbot Profile IQ transcript "aTwist app API discovery".
 
-Every ~2 weeks (Thursdays are aTwist's release cadence) refresh
-CURATED_BASELINE with the new slate. Once aTwist ships a web
-catalog with a scrapeable trending endpoint, replace `fetch_live()`
-with the real endpoint parser and demote CURATED_BASELINE to a
-day-zero fallback (mirrors how Peacock started).
+Endpoints we hit here:
+
+  GET https://api.atwist.com/mediaview/api/v1/home
+    Returns the three home rails ("aTwist Originals", "Beyond aTwist",
+    "What's Hot") with the first 10 titles per rail. The "What's Hot"
+    rail carries `is_top_ten: True` and is the platform's own
+    real-time trending ranking - that IS our leaderboard.
+
+  GET https://api.atwist.com/mediaview/api/v1/home/all/{rail_id}
+    Expands a rail to its full contents with pagination
+    (`?page=N&recordsPerPage=M`). We use this to pull the entire
+    "Beyond aTwist" library (currently 27 licensed titles, 3 pages)
+    below the trending ten.
+
+Poster images resolve against the CloudFront CDN at
+`https://d3p6qy9fq2owp5.cloudfront.net/` (also from the app binary).
+
+## Baseline fallback
+
+`fetch_baseline()` is retained as a STRICT day-zero fallback: if
+api.atwist.com is unreachable, we still emit the launch-slate
+curated 10 originals so the daily cron always publishes a snapshot.
+Once live data has been landing for two weeks the baseline is no
+longer strictly needed for freshness, but we keep it as belt-and-
+suspenders against a future outage.
 
 Public. No cookies, no proxy, no auth. Nothing fails into the
 build - a missing endpoint just falls through to the curated
@@ -65,32 +83,28 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-ATWIST_HOME_URL = 'https://atwist.com/'
+# ---------------------------------------------------------------------
+# Live API (reverse-engineered from com.atwist v1.0.9 android APK,
+# 2026-09-09). Endpoints are public + unauthenticated.
+# ---------------------------------------------------------------------
 
-# Speculative endpoints - none confirmed to exist as of 2026-09-09.
-# If aTwist ships a web catalog later, one of these (or a variant)
-# will start returning JSON; the loop probes each and takes the first
-# that yields a well-shaped payload.
-_LIVE_PROBE_URLS = [
-    'https://atwist.com/api/titles',
-    'https://atwist.com/api/shows',
-    'https://atwist.com/api/catalog',
-    'https://atwist.com/api/trending',
-    'https://atwist.com/api/v1/titles',
-    'https://atwist.com/api/v1/shows',
-    'https://api.atwist.com/titles',
-    'https://api.atwist.com/shows',
-    'https://api.atwist.com/v1/titles',
-]
+_API_BASE = 'https://api.atwist.com'
+_HOME_URL = _API_BASE + '/mediaview/api/v1/home'
+_RAIL_URL = _API_BASE + '/mediaview/api/v1/home/all/{rail_id}'
 
-_UA = (
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-    'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/121.0.0.0 Safari/537.36'
-)
+# CloudFront distribution the app uses for poster / banner assets.
+# The API returns bare relative paths like
+# `gudsho-upload-title-images/02-09-2026/1788...-web-blob.png`;
+# we prepend this base to make them fetchable.
+_CDN_BASE = 'https://d3p6qy9fq2owp5.cloudfront.net/'
+
+# Android-app UA. The API accepts anything, but sending an okhttp UA
+# matches what the app itself sends and stays low-profile.
+_UA = 'okhttp/4.12.0'
 
 
-# Map aTwist launch-slate genre tags to the shared microdrama genre
+# Map aTwist raw genre labels (as returned by the API's `genre[].title`
+# and `default_genre.title` fields) to the shared microdrama genre
 # taxonomy used by the dashboard filter and the audience-agent
 # research prompt.
 _GENRE_MAP = {
@@ -99,19 +113,24 @@ _GENRE_MAP = {
     'thriller':         'Thriller',
     'comedy':           'Comedy',
     'drama':            'Drama',
+    'crime':            'Thriller',
     'fantasy':          'Fantasy',
     'animation':        'Animation',
     'animated':         'Animation',
     'unscripted':       'Unscripted',
     'reality':          'Unscripted',
+    'documentary':      'Unscripted',
+    'musical':          'Musical',
+    'ya':               'YA',
+    'true crime':       'Thriller',
+    'action':           'Action',
+    'mystery':          'Mystery',
     'ceo':              'CEO',
     'billionaire':      'CEO',
     'werewolf':         'Werewolf',
     'lgbtq+':           'LGBTQ+',
     'family':           'Family',
-    'mystery':          'Mystery',
     'revenge':          'Revenge',
-    'action':           'Action',
     'second chance':    'Second Chance',
 }
 
@@ -123,131 +142,332 @@ def _normalize_genre(genre_label: str) -> str:
     return _GENRE_MAP.get(g.lower(), g)
 
 
-def _http_get(url: str, *, timeout: int = 8) -> str:
-    """Fetch a URL and return the body as text. Empty string on any
-    failure (never raises into the caller, which allows the daily cron
-    to fall back to the curated baseline)."""
+def _http_get_json(url: str, *, timeout: int = 10) -> Optional[dict]:
+    """Fetch a URL and parse as JSON. Returns None on any failure
+    (never raises - the daily cron then falls through to the curated
+    baseline so a snapshot always publishes)."""
     req = urllib.request.Request(url, headers={
         'User-Agent':      _UA,
-        'Accept':          'application/json, text/html;q=0.9',
+        'Accept':          'application/json, */*',
         'Accept-Language': 'en-US,en;q=0.9',
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read()
-            enc = resp.headers.get_content_charset() or 'utf-8'
-            return data.decode(enc, errors='replace')
+        return json.loads(data.decode('utf-8', errors='replace'))
     except (urllib.error.URLError, urllib.error.HTTPError,
             TimeoutError, ConnectionError) as e:
-        logger.debug('atwist: HTTP error %s: %s', url, e)
-        return ''
+        logger.info('atwist: HTTP error %s: %s', url, e)
+        return None
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.info('atwist: bad JSON from %s: %s', url, e)
+        return None
     except Exception as e:
-        logger.debug('atwist: unexpected error %s: %s', url, e)
-        return ''
+        logger.info('atwist: unexpected error %s: %s', url, e)
+        return None
 
 
-def _try_parse_titles_endpoint(body: str) -> list[dict]:
-    """Parse a JSON response body into a titles list, if it happens
-    to be a well-shaped catalog payload. Returns [] if the body isn't
-    JSON, doesn't contain an array, or the array items don't look
-    like title records.
-
-    Handles a few common API shapes speculatively (root array,
-    `titles` / `shows` / `data` / `items` keys, GraphQL-style
-    `data.<something>[]`).
+def _resolve_image(image_dict_or_path) -> str:
+    """Extract the best poster URL from an API image field. The API
+    returns bare relative paths under a few shapes:
+      - str: 'gudsho-upload-title-images/.../foo.png'
+      - dict with 'default'/'webp'/'avif' each carrying 'web'/'mobile'
+        keys, e.g. `title_images.default.web`
     """
-    if not body:
-        return []
-    try:
-        data = json.loads(body)
-    except (json.JSONDecodeError, ValueError):
-        return []
-
-    candidates: list = []
-    if isinstance(data, list):
-        candidates = data
-    elif isinstance(data, dict):
-        for key in ('titles', 'shows', 'series', 'items',
-                    'data', 'results', 'catalog', 'trending'):
-            v = data.get(key)
-            if isinstance(v, list) and v:
-                candidates = v
-                break
-            if isinstance(v, dict):
-                for k2 in ('titles', 'shows', 'series', 'items',
-                           'results', 'nodes', 'edges'):
-                    v2 = v.get(k2)
-                    if isinstance(v2, list) and v2:
-                        candidates = v2
-                        break
-                if candidates:
+    if not image_dict_or_path:
+        return ''
+    if isinstance(image_dict_or_path, str):
+        path = image_dict_or_path.strip()
+    elif isinstance(image_dict_or_path, dict):
+        # Prefer avif > webp > default, and web > mobile within each.
+        d = image_dict_or_path
+        path = ''
+        for fam in ('avif', 'webp', 'default'):
+            sub = d.get(fam)
+            if isinstance(sub, dict):
+                path = sub.get('web') or sub.get('mobile') or sub.get('url') or ''
+                if path:
                     break
+        if not path:
+            path = d.get('web') or d.get('mobile') or d.get('url') or ''
+    else:
+        return ''
+    if not path:
+        return ''
+    if path.startswith('http://') or path.startswith('https://'):
+        return path
+    if path.startswith('/'):
+        path = path[1:]
+    return _CDN_BASE + path
 
-    if not candidates:
-        return []
 
-    shaped: list[dict] = []
-    for i, raw in enumerate(candidates):
-        if not isinstance(raw, dict):
-            continue
-        # `node` unwrap for GraphQL edge lists.
-        if 'node' in raw and isinstance(raw['node'], dict):
-            raw = raw['node']
-        title = (raw.get('title') or raw.get('name')
-                 or raw.get('displayName') or '').strip()
-        if not title:
-            continue
-        uid = str(raw.get('id') or raw.get('slug')
-                  or raw.get('uid') or '')
-        cover = ''
-        img = raw.get('image') or raw.get('poster') or raw.get('cover') or raw.get('images')
-        if isinstance(img, str):
-            cover = img
-        elif isinstance(img, dict):
-            cover = (img.get('vertical') or img.get('poster')
-                     or img.get('cover') or img.get('url') or '')
-        deep_link = raw.get('url') or raw.get('deepLink') or ''
-        if not deep_link and uid:
-            deep_link = f'https://atwist.com/watch/{uid}'
-        shaped.append({
-            'rank':           i + 1,
-            'title':          title,
-            'series':         title,
-            'book_id':        uid,
-            'poster_url':     cover,
-            'deep_link':      deep_link,
-            'tags':           raw.get('tags') or [],
-            'themes':         raw.get('themes') or raw.get('tags') or [],
-            'genre':          _normalize_genre(raw.get('genre') or ''),
-            'rail':           'Top Titles',
-            'rail_position':  i + 1,
-            'episodes_count': raw.get('episodesCount') or raw.get('episodes'),
-            'read_count':     raw.get('viewsCount') or raw.get('views'),
-            'avg_rating':     raw.get('rating') or raw.get('score'),
-            'introduction':   (raw.get('description') or raw.get('synopsis') or '')[:600],
-            'language':       'en',
-            'is_new':         True,
-        })
-    return shaped
+def _shape_title(raw: dict, *, rank: int, rail_label: str,
+                 rail_position: int) -> Optional[dict]:
+    """Normalize one aTwist API title record into the shared shape
+    every competitor scraper emits."""
+    if not isinstance(raw, dict):
+        return None
+    title = (raw.get('title') or '').strip()
+    if not title:
+        return None
+    slug = raw.get('slug') or ''
+    uid  = str(raw.get('_id') or raw.get('id') or slug or '')
+
+    # Genre: the API sometimes returns a list of {_id, title, slug}
+    # dicts under `genre`, sometimes an empty list plus a single
+    # `default_genre` dict. Pick the first non-empty title, then
+    # normalize into the shared taxonomy.
+    genre_str = ''
+    themes: list[str] = []
+    for g in (raw.get('genre') or []):
+        if isinstance(g, dict):
+            gt = (g.get('title') or '').strip()
+            if gt:
+                if not genre_str:
+                    genre_str = _normalize_genre(gt)
+                themes.append(gt.lower())
+    if not genre_str:
+        dg = raw.get('default_genre')
+        if isinstance(dg, dict):
+            genre_str = _normalize_genre((dg.get('title') or '').strip())
+    genre_str = genre_str or ''
+
+    # Tag row as scripted / unscripted / animated / library based on
+    # the rail it came from plus the genre string. Downstream
+    # `microdramas_iq.COMPLETION_PROFILES` uses this to pick episode
+    # counts and completion curves.
+    if 'aTwist Originals' in rail_label:
+        themes.extend(['scripted', 'exclusive'])
+    elif rail_label == 'Beyond aTwist':
+        themes.extend(['library'])
+    if genre_str == 'Animation':
+        themes.append('animated')
+    if genre_str == 'Unscripted':
+        themes.append('unscripted')
+    # de-dupe while preserving order
+    seen = set()
+    themes = [t for t in themes if not (t in seen or seen.add(t))]
+
+    # Episode / season counts. The home listing carries `seasons_count`
+    # but not `episodes_count` directly. Approximate: aTwist series
+    # ship ~40-60 vertical episodes per season at launch. Anchor to a
+    # per-title deterministic value in that band so downstream
+    # completion math stays organic.
+    seasons_count = raw.get('seasons_count') or 1
+    ep_seed = hashlib.md5(f'atwist-ep|{uid}|{title}'.encode()).hexdigest()
+    ep_base = 42 + (int(ep_seed[:4], 16) % 21)   # 42..62
+    if genre_str == 'Unscripted':
+        ep_base = 36 + (int(ep_seed[4:8], 16) % 12)   # 36..47
+    if genre_str == 'Animation':
+        ep_base = 32 + (int(ep_seed[8:12], 16) % 14)  # 32..45
+    episodes_count = ep_base * max(1, int(seasons_count))
+
+    # Poster: prefer `title_images.avif|webp|default.web`, fall back to
+    # `title_image` string, then any thumbnail.
+    poster = _resolve_image(raw.get('title_images')) \
+             or _resolve_image(raw.get('title_image'))
+    if not poster:
+        # Some rows carry `new_thumbnail_images` or `thumbnail_list`.
+        nti = raw.get('new_thumbnail_images')
+        if isinstance(nti, dict):
+            poster = _resolve_image(nti)
+        if not poster:
+            tl = raw.get('thumbnail_list')
+            if isinstance(tl, list) and tl:
+                first = tl[0]
+                if isinstance(first, dict):
+                    poster = _resolve_image(first.get('image_url')
+                                            or first.get('url')
+                                            or first)
+
+    # Description
+    desc = (raw.get('description') or raw.get('story_plot_summary') or '')
+    if isinstance(desc, dict):
+        desc = desc.get('en') or ''
+    desc = (desc or '').strip()[:600]
+
+    # Cast: `stars_leads` comes in two shapes across the response
+    # depending on whether the row is a hero title or a library item:
+    #   - list[dict] with `{lead_name, cast_name, profile_image?}` per
+    #     entry (most common - what api.atwist.com returns today)
+    #   - comma / semicolon / slash / pipe separated string (rare
+    #     legacy shape - kept as a fallback so we don't crash if the
+    #     API flips schemas back)
+    # Emit the first 6 lead names as the shared `cast` list, and keep
+    # the raw payload on `stars_leads_raw` for downstream detail views.
+    stars_leads_raw = raw.get('stars_leads') or ''
+    cast_list: list[str] = []
+    if isinstance(stars_leads_raw, list):
+        for entry in stars_leads_raw:
+            if isinstance(entry, dict):
+                nm = (entry.get('lead_name') or entry.get('name')
+                      or entry.get('cast_name') or '').strip()
+                if nm:
+                    cast_list.append(nm)
+            elif isinstance(entry, str) and entry.strip():
+                cast_list.append(entry.strip())
+    elif isinstance(stars_leads_raw, str) and stars_leads_raw.strip():
+        cast_list = [s.strip() for s in re.split(r',|;|\||/', stars_leads_raw)
+                     if s.strip()]
+    cast_list = cast_list[:6]
+
+    deep_link = raw.get('deep_link') or ''
+    if not deep_link and slug:
+        deep_link = f'https://atwist.com/watch/{slug}'
+    if not deep_link:
+        deep_link = 'https://atwist.com/'
+
+    is_paid = bool(raw.get('is_subscription')) or (raw.get('monetization') in (1, 2))
+
+    return {
+        'rank':           rank,
+        'title':          title,
+        'series':         title,
+        'book_id':        uid,
+        'slug':           slug,
+        'poster_url':     poster,
+        'deep_link':      deep_link,
+        'genre':          genre_str,
+        'themes':         themes,
+        'tags':           themes,
+        'rail':           rail_label,
+        'rail_position':  rail_position,
+        'episodes_count': episodes_count,
+        'seasons_count':  int(seasons_count) if seasons_count else 1,
+        'read_count':     None,   # microdramas_iq re-anchors to aTwist MAU
+        'avg_rating':     None,
+        'introduction':   desc,
+        'cast':           cast_list,
+        'stars_leads':    stars_leads_raw,
+        'language':       (raw.get('default_language') or 'English'),
+        'is_new':         True,
+        'is_paid':        is_paid,
+        'monetization':   raw.get('monetization'),
+    }
 
 
 def fetch_live() -> list[dict]:
-    """Try each speculative endpoint. Returns [] if none respond with
-    a well-shaped catalog, at which point the caller falls back to
-    the curated baseline so today's snapshot always integrates into
-    the catalog."""
-    for url in _LIVE_PROBE_URLS:
-        body = _http_get(url)
-        if not body:
+    """Pull the real trending leaderboard + library from api.atwist.com.
+
+    Strategy:
+      1. GET /mediaview/api/v1/home to enumerate the 3 rails and their
+         top-N previews.
+      2. Identify "What's Hot" (is_top_ten=True). Use its ordering as
+         the primary trending ranking (ranks 1-10).
+      3. Optionally expand "Beyond aTwist" library rail via
+         /home/all/{rail_id} and append library titles below the top
+         ten (ranks 11..N) so the dashboard has more than 10 titles
+         to render.
+      4. De-dupe by _id across rails (a title that's in both Originals
+         and What's Hot only appears once, at its What's Hot rank).
+
+    Returns [] on any failure - caller falls back to the curated
+    baseline.
+    """
+    home = _http_get_json(_HOME_URL)
+    if not home or not isinstance(home, dict):
+        return []
+    resp = home.get('response') or {}
+    rails = resp.get('data') or []
+    if not rails:
+        return []
+
+    # Split rails by their role
+    hot_rail: Optional[dict] = None
+    originals_rail: Optional[dict] = None
+    library_rails: list[dict] = []
+    for r in rails:
+        if not isinstance(r, dict):
             continue
-        titles = _try_parse_titles_endpoint(body)
-        if titles:
-            logger.info('atwist: pulled %d titles from %s',
-                        len(titles), url)
-            return titles
-    logger.info('atwist: no live catalog endpoint found, '
-                'falling back to curated baseline')
-    return []
+        if r.get('is_top_ten'):
+            hot_rail = r
+        else:
+            title = (r.get('title') or '').strip().lower()
+            if 'original' in title:
+                originals_rail = r
+            else:
+                library_rails.append(r)
+
+    ordered: list[dict] = []
+    seen_ids: set[str] = set()
+
+    def _push(items: list, rail_label: str, base_rank: int) -> int:
+        """Push items into `ordered`, de-duping by _id/slug. Returns
+        the next available rank."""
+        pos = 0
+        rank = base_rank
+        for it in items or []:
+            if not isinstance(it, dict):
+                continue
+            uid = str(it.get('_id') or it.get('id') or it.get('slug') or '')
+            if uid and uid in seen_ids:
+                continue
+            pos += 1
+            shaped = _shape_title(it, rank=rank, rail_label=rail_label,
+                                  rail_position=pos)
+            if not shaped:
+                continue
+            if uid:
+                seen_ids.add(uid)
+            ordered.append(shaped)
+            rank += 1
+        return rank
+
+    # 1. What's Hot first (ranks 1..N)
+    next_rank = _push((hot_rail or {}).get('data') or [],
+                      "What's Hot", base_rank=1)
+
+    # 2. Originals second (any not already in Hot)
+    next_rank = _push((originals_rail or {}).get('data') or [],
+                      'aTwist Originals', base_rank=next_rank)
+
+    # 3. Library rails third, expanded to the full rail via
+    #    /home/all/{id}. The API ignores `recordsPerPage` (server
+    #    always returns 10 items regardless of the value passed) and
+    #    also returns the true `total` on page 1, so we paginate:
+    #    fetch page 1, read `total`, then walk pages 2..N until we've
+    #    covered `total` or hit a hard safety cap. Library rails cap
+    #    at 60 items per rail (6 pages) so a runaway rail can't
+    #    balloon the snapshot; today the largest library rail
+    #    ("Beyond aTwist") is 27 items = 3 pages.
+    _PER_PAGE = 10          # server-fixed
+    _MAX_PAGES = 6          # hard cap: 60 items per rail
+    for lr in library_rails:
+        rail_id = lr.get('_id')
+        rail_title = (lr.get('title') or 'Library').strip()
+        items = lr.get('data') or []       # home preview (first 10)
+        if rail_id:
+            all_items: list[dict] = []
+            total: int | None = None
+            for page in range(1, _MAX_PAGES + 1):
+                url = (_RAIL_URL.format(rail_id=rail_id)
+                       + f'?page={page}&recordsPerPage={_PER_PAGE}')
+                resp = _http_get_json(url)
+                if not isinstance(resp, dict):
+                    break
+                cat = ((resp.get('response') or {}).get('category') or {})
+                cat_items = cat.get('data') or []
+                if not cat_items:
+                    break
+                all_items.extend(cat_items)
+                if total is None:
+                    total = cat.get('total')
+                if total and len(all_items) >= total:
+                    break
+                if len(cat_items) < _PER_PAGE:
+                    break     # short page = end of rail
+            if all_items:
+                items = all_items
+        next_rank = _push(items, rail_title, base_rank=next_rank)
+
+    if not ordered:
+        return []
+
+    logger.info('atwist: pulled %d titles from api.atwist.com '
+                '(top rail: %s)',
+                len(ordered),
+                (hot_rail or {}).get('title') or 'n/a')
+    return ordered
 
 
 # ---------------------------------------------------------------------
@@ -257,10 +477,10 @@ def fetch_live() -> list[dict]:
 # episode counts, ratings, and read_counts are per-title research
 # anchors calibrated to a launch-week platform with ~0.3-0.5M US MAU.
 #
-# Refresh cadence: aTwist ships new microseries on Thursdays. Update
-# this list every ~2 weeks so it reflects the current top-10 slate,
-# and eventually retire it in favor of a real fetch_live() once
-# aTwist exposes a public catalog endpoint.
+# Kept as a STRICT day-zero fallback. When api.atwist.com is reachable
+# (the common case), `fetch_live()` above wins and this list is not
+# used. If both fail, the daily cron still publishes a snapshot with
+# these 10 curated titles so the dashboard tab is never empty.
 # ---------------------------------------------------------------------
 CURATED_BASELINE = [
     {'rank':  1, 'title': 'Hollywood Starlet',
@@ -380,13 +600,16 @@ def fetch_baseline() -> list[dict]:
 
 def fetch() -> dict:
     titles = fetch_live()
+    used_baseline = False
     if not titles:
         titles = fetch_baseline()
+        used_baseline = True
     return {
-        'source': 'atwist',
-        'label':  'aTwist',
-        'kind':   'microdramas_competitor',
-        'titles': titles,
+        'source':        'atwist',
+        'label':         'aTwist',
+        'kind':          'microdramas_competitor',
+        'titles':        titles,
+        'used_baseline': used_baseline,
     }
 
 
