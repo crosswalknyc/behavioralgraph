@@ -19255,7 +19255,6 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="brandTrackingIQ" {% if not has_brand_tracking_iq_access and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>📡 Brand Tracking</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
-                            <option value="impactIQ" {% if not has_impact_iq_access %}disabled{% endif %}>🌊 Impact IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             {# Share of Time removed from dropdown 2026-08-20
@@ -19266,11 +19265,20 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                are all left intact. Re-enable by uncommenting:
                             <option value="shareOfTimeIQ">⏱️ Share of Time</option>
                             #}
-                            <!-- Impact IQ restored 2026-07-23 (was accidentally
-                                 stripped by the Jul 10 rollback). Ticket Sales Tracker
-                                 still hidden per 2026-06-16 request; its handler +
-                                 /api routes + admin access controls remain intact so
-                                 it can be re-enabled by adding a new <option> row. -->
+                            <!-- Impact IQ product sunset 2026-09-09 per Jenna:
+                                 'fold impact iq into digital journey iq so the ones
+                                  in there just appear as data in digital journey then
+                                  remove impact iq wording from everywhere in dashboard.
+                                  sunset it'
+                                 The two folded journeys (coachella-bieber-2026,
+                                 latin-loyalty-2026) now appear as data entries under
+                                 Digital Journey IQ; the internal renderer
+                                 (#impactIQView + IMPACT_IQ_JOURNEYS) is retained as
+                                 a rendering helper and reached via showImpactIQ(slug)
+                                 from those DJ IQ entries. Ticket Sales Tracker
+                                 (talent_theater / ticket_sales) is a separate product
+                                 kept intact; its Impact IQ branding was renamed to
+                                 Ticket Sales IQ in the same sweep. -->
                             {# Talent Fit IQ hidden from dropdown 2026-06-16 per user
                                request. View div (talentFitIQView), form, handlers,
                                /api/talent-fit/* routes, sidebar, and Analysis IQ
@@ -19652,7 +19660,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                         🎯 Profile Analysis
                     </button>
                     {% endif %}
-                    {# Impact IQ (talent_theater) tab hidden 2026-06-16 per user request.
+                    {# Ticket Sales IQ (talent_theater) tab hidden 2026-06-16 per user request.
                        Tab content + form handler + /api/attribution/talent-theater
                        endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
@@ -20130,11 +20138,11 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     </div>
                 </div>
 
-                <!-- Impact IQ Tab Content -->
+                <!-- Ticket Sales IQ (talent_theater) Tab Content -->
                 <div id="customAnalysisTabContentTalentTheater" class="custom-analysis-tab-content">
                     <div class="main-grid">
                     <div class="card">
-                        <h2>🎬 Impact IQ</h2>
+                        <h2>🎬 Ticket Sales IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -20193,7 +20201,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                         </div>
                     </div>
                     <div class="card">
-                        <h2>🎬 Impact IQ</h2>
+                        <h2>🎬 Ticket Sales IQ</h2>
                         <div id="ticketSalesCurrentJob" style="display: none;">
                             <div class="status-panel">
                                 <div id="ticketSalesStatusRunning">
@@ -26950,7 +26958,7 @@ https://www.instagram.com/p/..."></textarea>
             function _iiqHideAllOtherViews() {
                 // 2026-07-28: delegate to the canonical helper defined
                 // beside `_iqTopLevelViewIds`. Old hand-rolled ids array
-                // silently missed newer views (impactIQView, trendsIQView,
+                // silently missed newer views (impactIQView [folded 2026-09-09], trendsIQView,
                 // microdramasIQView, helmIQView) and left them stacked
                 // when you switched into Attribution IQ from those products.
                 if (typeof _iqHideAllViewsExcept === 'function') {
@@ -37781,7 +37789,7 @@ https://www.instagram.com/p/..."></textarea>
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3>🎬 Impact IQ</h3>
+                        <h3>🎬 Ticket Sales IQ</h3>
                         <p style="font-style: italic; font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0.75rem 0; line-height: 1.4;">What percent of digital ticket sales came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent prior to purchasing tickets during your specified window.</p>
                         <input type="text" id="ticketSalesSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTicketSalesProfiles()">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
@@ -38825,20 +38833,31 @@ https://www.instagram.com/p/..."></textarea>
             <div id="jiqDashEmpty" style="padding: 3rem 1.5rem; text-align: center; color: var(--text-secondary);">
                 <div style="font-size: 2.5rem; margin-bottom: 1rem;">🗺️</div>
                 <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.4rem;">No journey loaded</div>
-                <div style="font-size: 0.85rem; max-width: 520px; margin: 0 auto;">Pick a run from the dropdown above, or kick off a new one under <strong>Digital Journey IQ</strong>.</div>
-            </div>
+                <div style="font-size: 0.85rem; max-width: 520px; margin: 0 auto 2rem;">Pick a run from the dropdown above, or kick off a new one under <strong>Digital Journey IQ</strong>.</div>
 
-            <div id="jiqDashContent" style="display: none; flex: 1; overflow-y: auto; padding: 1rem 1.25rem;">
-                <!-- Cohort-mode banner (conversion-anchored / mention / fallback) -->
-                <div id="jiqCohortBanner" style="display: none; padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.82rem; font-weight: 500;"></div>
-
-                <!-- Movie mode view-toggle removed per request (kept JS null-safe in renderer) -->
-
-
-                <!-- KPI strip -->
-                <div id="jiqKpiStripTitleRow" style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
-                    <h3 id="jiqKpiStripTitle" style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
+                <!-- Featured story-mode journeys folded in from the retired
+                     Impact IQ product (Jenna 2026-09-09). Clicking either
+                     card opens the pre-baked audience-flow view rendered by
+                     the existing showImpactIQ(slug) helper. The Impact IQ
+                     product tab was removed from the SELECT PRODUCT
+                     dropdown in the same sweep; these two journeys are the
+                     only user-facing surface into that renderer. -->
+                <div id="jiqFeaturedJourneysBlock" style="max-width: 780px; margin: 0 auto;">
+                    <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.6rem;">Featured story-mode journeys</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.8rem;">
+                        <div class="jiq-featured-card" onclick="if (typeof showImpactIQ === 'function') showImpactIQ('coachella-bieber-2026');" style="cursor: pointer; padding: 1rem 1.1rem; background: linear-gradient(135deg, rgba(56, 189, 248, 0.10), rgba(167, 139, 250, 0.06)); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 10px; text-align: left; transition: transform 0.12s ease, border-color 0.12s ease;" onmouseenter="this.style.transform='translateY(-1px)'; this.style.borderColor='rgba(56, 189, 248, 0.55)';" onmouseleave="this.style.transform=''; this.style.borderColor='rgba(56, 189, 248, 0.22)';">
+                            <div style="font-size: 1.35rem; margin-bottom: 0.3rem;">🎪</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Coachella 2026 &rarr; Justin Bieber</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">Ticket-buyer, livestream-watcher, and control-cohort flow through SWAG LIVE and the catalog re-listen curve.</div>
+                        </div>
+                        <div class="jiq-featured-card" onclick="if (typeof showImpactIQ === 'function') showImpactIQ('latin-loyalty-2026');" style="cursor: pointer; padding: 1rem 1.1rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.10), rgba(74, 222, 128, 0.06)); border: 1px solid rgba(236, 72, 153, 0.22); border-radius: 10px; text-align: left; transition: transform 0.12s ease, border-color 0.12s ease;" onmouseenter="this.style.transform='translateY(-1px)'; this.style.borderColor='rgba(236, 72, 153, 0.55)';" onmouseleave="this.style.transform=''; this.style.borderColor='rgba(236, 72, 153, 0.22)';">
+                            <div style="font-size: 1.35rem; margin-bottom: 0.3rem;">🔥</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Latin fan loyalty vs Pop / R&amp;B / Rap</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">Cross-genre loyalty and cross-listen matrix for Latin fans versus Pop, R&amp;B, and Rap cohorts.</div>
+                        </div>
+                    </div>
                 </div>
+            </div>
                 <details id="jiqKpiStripHowto" style="margin: 0 0 0.6rem;">
                     <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
                     <div id="jiqKpiStripHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
@@ -42245,7 +42264,7 @@ https://www.instagram.com/p/..."></textarea>
         </style>
         <div id="impactIQView">
             <div class="iiq2-header">
-                <h2 class="iiq2-title">🌊 Impact IQ <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500; margin-left: 0.4rem;">The impact of any input against a specified output.</span></h2>
+                <h2 class="iiq2-title" id="iiq2FoldedJourneyTitle">Featured journey <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500; margin-left: 0.4rem;">Data-driven audience-flow story mode.</span></h2>
             </div>
             <div class="iiq2-selector-bar">
                 <div>
@@ -42982,16 +43001,29 @@ https://www.instagram.com/p/..."></textarea>
                 ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
             }
 
-            window.showImpactIQ = function() {
+            // showImpactIQ() is retained as the internal renderer for the two
+            // folded story-mode journeys (coachella-bieber-2026, latin-loyalty-2026)
+            // reached from the Digital Journey IQ landing view. It no longer
+            // routes to a top-level 'impactIQ' dropdown option (that <option>
+            // was removed in the 2026-09-09 sunset). Instead:
+            //   * the SELECT PRODUCT dropdown is set to 'journeyIQ' so the user's
+            //     product context reads as Digital Journey IQ,
+            //   * an optional slug arg lets the fold cards force which journey
+            //     opens without going through the internal selector.
+            // Gated on Digital Journey IQ access, not the retired Impact IQ flag.
+            window.showImpactIQ = function(slug) {
                 var dd = document.getElementById('viewNavDropdown');
-                var opt = dd && dd.querySelector('option[value="impactIQ"]');
+                var opt = dd && dd.querySelector('option[value="journeyIQ"]');
                 if (opt && opt.disabled) return;
-                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('impactIQ');
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('journeyIQ');
                 _iiq2HideAllOtherViews();
                 var view = document.getElementById('impactIQView');
                 if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                if (slug && typeof slug === 'string') {
+                    try { (window.__impactIQ = window.__impactIQ || {}).current = slug; } catch (_) {}
+                }
                 _iiq2InitSelector();
-                renderImpactIQ();
+                renderImpactIQ(slug);
             };
 
             window.renderImpactIQ = function(slugArg) {
@@ -43611,7 +43643,7 @@ https://www.instagram.com/p/..."></textarea>
             <div class="dashboard-layout">
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
-                        <h2>🎬 Impact IQ</h2>
+                        <h2>🎬 Ticket Sales IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -45020,7 +45052,7 @@ https://www.instagram.com/p/..."></textarea>
                         }
                     }
                 } catch (_) { /* localStorage disabled - keep server default */ }
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, rankerIQ: showRankerIQ, cultureRankerIQ: function() { if (typeof showCultureRankerIQ === 'function') showCultureRankerIQ(); }, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); }, brandTrackingIQ: function() { if (typeof showBrandTrackingIQ === 'function') showBrandTrackingIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, rankerIQ: showRankerIQ, cultureRankerIQ: function() { if (typeof showCultureRankerIQ === 'function') showCultureRankerIQ(); }, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, brandTrackingIQ: function() { if (typeof showBrandTrackingIQ === 'function') showBrandTrackingIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -45066,7 +45098,7 @@ https://www.instagram.com/p/..."></textarea>
                         if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ');
                     }, 200);
                 },
-                journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); },
+                journeyIQ: function(slug) { if (typeof showJourneyIQ === 'function') showJourneyIQ(slug); },
                 shareOfTimeIQ: showShareOfTimeIQ,
                 flywheelConversion: showFlywheelConversionDashboard,
                 dashboard: showDashboardView,
@@ -45080,7 +45112,7 @@ https://www.instagram.com/p/..."></textarea>
                 // for #impactIQView is re-injected above (right after
                 // journeyIQView). The showImpactIQ function is defined
                 // inside that block's <script>.
-                impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); },
+                // impactIQ view-swap handler retired 2026-09-09 (Impact IQ sunset). Folded journeys route through DJ IQ.
                 brandTrackingIQ: function() { if (typeof showBrandTrackingIQ === 'function') showBrandTrackingIQ(); },
                 helmIQ: function() {
                     var c = document.querySelector('.container');
@@ -45144,7 +45176,7 @@ https://www.instagram.com/p/..."></textarea>
                 profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
                 subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
-                ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
+                ticketSalesIQ: 'Ticket Sales IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
                 hedgeFundIQ: 'Fin IQ: View financial and institutional engagement and exposure.',
                 brandTrackingIQ: 'Brand Tracking: CNBC Pro competitive set. Paid accounts, audience mix, CNBC overlap, and retention across charting, research, news, and terminal products.',
@@ -106900,7 +106932,7 @@ https://www.instagram.com/p/..."></textarea>
                 const data = await response.json();
                 if (response.ok) {
                     showAnalysisStatusModal();
-                    document.getElementById('statusModalText').textContent = 'Impact IQ';
+                    document.getElementById('statusModalText').textContent = 'Ticket Sales IQ';
                     pollCustomTalentTheaterJobStatus(data.job_id);
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
@@ -107360,7 +107392,7 @@ https://www.instagram.com/p/..."></textarea>
                     const data = await response.json();
                     
                     updateAnalysisStatusModal({
-                        project_name: data.project_name || 'Impact IQ',
+                        project_name: data.project_name || 'Ticket Sales IQ',
                         message: data.message || 'Processing...',
                         progress: data.progress || 0
                     });
@@ -147531,7 +147563,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!container) return;
             if (headerEl) headerEl.style.display = 'none';
             if (!results || results.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No Impact IQ results yet. Run an analysis to get started.</div>';
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No Ticket Sales IQ results yet. Run an analysis to get started.</div>';
                 return;
             }
             if (headerEl) headerEl.style.display = 'flex';
@@ -147543,7 +147575,7 @@ https://www.instagram.com/p/..."></textarea>
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
                 const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;';
@@ -162712,7 +162744,7 @@ https://www.instagram.com/p/..."></textarea>
             
             const typeLabels = {
                 'svod_acquisition': '📺 Subscriber IQ',
-                'talent_theater': '🎬 Impact IQ',
+                'talent_theater': '🎬 Ticket Sales IQ',
                 'profile_analysis': '🎯 Profile Analysis',
                 'ticket_sales_tracker': '🎫 Ticket Sales Tracker',
                 'roas_iq': '📊 ROAS IQ'

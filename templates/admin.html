@@ -759,7 +759,7 @@
         /* Tighter product cards: single-line by default (checkbox +
            label + optional right-side chevron). Cards with a details
            drawer (Profile IQ, Fin IQ, Analysis IQ, Journey IQ, Intent
-           IQ, Impact IQ) keep their existing collapsible sub-panels. */
+           IQ) keep their existing collapsible sub-panels. */
         #dashboardAccessSection .dashboard-access-item {
             margin-bottom: 0.4rem;
         }
@@ -2309,8 +2309,7 @@
                                 <span>🎬 Attribution IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="impactIQ" onchange="updateHiddenProduct('impactIQ', this.checked)">
-                                <span>🌊 Impact IQ</span>
+
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="brandPartnershipIQ" onchange="updateHiddenProduct('brandPartnershipIQ', this.checked)">
@@ -2826,9 +2825,7 @@
                                         <!-- E-Commerce IQ removed from the dashboard; checkbox kept (hidden) so JS handlers that read cdEcommerceIQ.checked don't null-deref. -->
                                         <input type="checkbox" id="cdEcommerceIQ" checked> E-Commerce IQ
                                     </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdImpactIQ" checked> Impact IQ
-                                    </label>
+                                    <!-- Company Defaults: Impact IQ retired 2026-09-09 per Jenna. Checkbox removed. -->
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdShareOfTimeView" checked onchange="syncCompanyDefaultsShareOfTime()"> Share of Time (View)
                                     </label>
@@ -2862,9 +2859,7 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdBrandTrackingIQ"> Brand Tracking
                                     </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdImpactIQNew"> Impact IQ
-                                    </label>
+                                    <!-- Company Defaults: Impact IQ (New) retired 2026-09-09 per Jenna. Checkbox removed. -->
                                 </div>
                             </div>
                             <!-- Access to New Releases -->
@@ -2878,9 +2873,7 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
                                         <input type="checkbox" id="cdAanSubscriberIQ" checked> Subscriber IQ
                                     </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdAanImpactIQ" checked> Impact IQ
-                                    </label>
+                                    <!-- Access to New Releases: Impact IQ retired 2026-09-09 per Jenna. Checkbox removed. -->
                                     <label style="display: none; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
                                         <!-- E-Commerce IQ removed from the dashboard; checkbox kept (hidden) so JS handlers that read cdAanEcommerceIQ.checked don't null-deref. -->
                                         <input type="checkbox" id="cdAanEcommerceIQ" checked> E-Commerce IQ
@@ -3671,7 +3664,7 @@
                                 <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Revoke every product currently in view (respects the active tab and the search filter)">🚫 Revoke all in view</button>
                             </div>
                             <div class="access-bulk-actions">
-                                <button type="button" class="btn-mini btn-mini-secondary" onclick="dashboardAccessResetDefaults()" title="Reset every product to the sensible default set (Profile IQ, Share of Time, Impact IQ, Attribution IQ on; everything else off). Applies across every tab.">⭐ Reset to defaults</button>
+                                <button type="button" class="btn-mini btn-mini-secondary" onclick="dashboardAccessResetDefaults()" title="Reset every product to the sensible default set (Profile IQ, Share of Time, Attribution IQ on; everything else off). Applies across every tab.">⭐ Reset to defaults</button>
                             </div>
                         </div>
                     </div>
@@ -3697,7 +3690,6 @@
                         <div id="accessToNewGrid" style="display: none; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem;">
                             <label class="aan-pill"><input type="checkbox" id="aanProfileIQ" checked><span>🎯 Profile IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanSubscriberIQ" checked><span>📊 Subscriber IQ</span></label>
-                            <label class="aan-pill"><input type="checkbox" id="aanImpactIQ" checked><span>🌊 Impact IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanHedgeFundIQ" checked><span>📈 Fin IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanRankersIQ" checked><span>📊 Rankers</span></label>
                             <!-- Retired features - inputs kept for JS back-compat, pill hidden. -->
@@ -3792,7 +3784,7 @@
                          still referenced by createUser / editUser POST payloads
                          (line ~11911) so the input must stay in the DOM to
                          avoid null-deref. Kept hidden. Renamed 2026-07-30 to
-                         stop being confused with the real Impact IQ card
+                         stop being confused with the retired Impact IQ card
                          (hasImpactIQAccess) further down. -->
                     <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
@@ -4029,35 +4021,13 @@
                          hasTrendsIQAccess / hasMicrodramasIQAccess /
                          hasRankersIQAccess) still resolve correctly. -->
 
-                    <!-- Impact IQ Access -->
-                    <div class="dashboard-access-item" data-access-group="conversion">
-                        <div class="dashboard-access-header" onclick="toggleImpactIQJourneysSection(event)">
-                            <label class="checkbox-group" onclick="event.stopPropagation();">
-                                <input type="checkbox" id="hasImpactIQAccess">
-                                <span style="font-weight: 600;">🌊 IMPACT IQ</span>
-                            </label>
-                            <span id="impactIQJourneysIcon" style="margin-left:auto; opacity:0.6; font-size:0.85rem;">▼</span>
-                        </div>
-                        <div id="impactIQJourneysSection" style="display:none; padding: 0.5rem 0 0.25rem 1.6rem; font-size: 0.85rem;">
-                            <div style="color: var(--text-secondary); margin-bottom: 0.35rem; font-size: 0.78rem;">
-                                Which journeys should this user see in the Impact IQ dropdown? Leave "All journeys" checked to grant everything (default).
-                            </div>
-                            <label class="checkbox-group" style="margin-bottom: 0.25rem;">
-                                <input type="checkbox" id="impactIQJourneyAll" onchange="onImpactIQJourneyAllToggle()">
-                                <span>All journeys (wildcard)</span>
-                            </label>
-                            <div id="impactIQJourneyList" style="padding-left: 1.4rem;">
-                                <label class="checkbox-group" style="margin-bottom: 0.2rem;">
-                                    <input type="checkbox" class="impact-iq-journey-cb" data-slug="coachella-bieber-2026">
-                                    <span>🎪 Coachella 2026 → Justin Bieber</span>
-                                </label>
-                                <label class="checkbox-group" style="margin-bottom: 0.2rem;">
-                                    <input type="checkbox" class="impact-iq-journey-cb" data-slug="latin-loyalty-2026">
-                                    <span>🔥 Latin fan loyalty vs Pop / R&B / Rap</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Impact IQ Access card retired 2026-09-09 per Jenna:
+                         the Impact IQ product was sunset and its journeys folded
+                         into Digital Journey IQ. Per-user access + per-journey
+                         allow-list are no longer surfaced. Fields on the user
+                         record (has_impact_iq_access, impact_iq_journeys) are
+                         left in place as dead data per the silent-ignore choice;
+                         no admin control writes to them anymore. -->
 
                     <!-- 🎭 Talent Fit Assessment Access - section hidden 2026-07-19
                          (removed from admin grants per Jenna). The
@@ -5832,7 +5802,7 @@
                     var cdBt = document.getElementById('cdBrandTrackingIQ');
                     if (cdBt) cdBt.checked = !!d.has_brand_tracking_iq_access;
                     var cdIiq = document.getElementById('cdImpactIQNew');
-                    if (cdIiq) cdIiq.checked = d.has_impact_iq_access !== false; // Default true (opt-out)
+                    // has_impact_iq_access load-side binding retired 2026-09-09 (Impact IQ sunset).
                     syncCompanyDefaultsShareOfTime();
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -5891,7 +5861,7 @@
                 has_intent_iq_access: !!(document.getElementById('cdIntentIQ') && document.getElementById('cdIntentIQ').checked),
                 has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
                 has_brand_tracking_iq_access: !!(document.getElementById('cdBrandTrackingIQ') && document.getElementById('cdBrandTrackingIQ').checked),
-                has_impact_iq_access: !!(document.getElementById('cdImpactIQNew') && document.getElementById('cdImpactIQNew').checked),
+                // has_impact_iq_access create-side payload retired 2026-09-09 (Impact IQ sunset).
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
                     profile_iq: document.getElementById('cdAanProfileIQ').checked,
@@ -7561,7 +7531,6 @@
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
             cultureRankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
             sfConversion: false, intentIQ: false,
-            impactIQ: false,
             brandPartnershipIQ: false, flywheelConversion: false,
             shareOfTimeIQ: false,
             helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false,
@@ -10118,8 +10087,7 @@
             // after that assignment (see below).
             if (typeof syncTrendsGroupMaster === 'function') syncTrendsGroupMaster();
             var iiqAccess = document.getElementById('hasImpactIQAccess');
-            if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access !== false; // Default true (opt-out)
-            setImpactIQJourneys(user.impact_iq_journeys);
+            // has_impact_iq_access / impact_iq_journeys edit-side load retired 2026-09-09 (Impact IQ sunset).
             document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasShareOfTimeAccess').checked = user.has_share_of_time_access !== false;
             document.getElementById('hasShareOfTimeRunAccess').checked = user.has_share_of_time_run_access !== false;
@@ -11756,7 +11724,7 @@
 
         // 2026-07-30 (Jenna): every product-access card that has a
         // sub-options drawer (Profile IQ, Fin IQ, Analysis IQ, Journey
-        // IQ, Attribution IQ, Impact IQ, Rankers IQ, Share of Time) starts
+        // IQ, Attribution IQ, Rankers IQ, Share of Time) starts
         // COLLAPSED when the modal opens, no matter whether the parent
         // checkbox is currently ticked. Old UX auto-opened every drawer
         // for a user with several enabled products — a wall of nested
@@ -11774,7 +11742,7 @@
                 { section: 'intentIqRunAccessContent',   icon: 'intentIqRunAccessIcon' },
                 { section: 'bpJourneyAccessContent',     icon: 'bpJourneyAccessIcon' },
                 { section: 'sfConversionJourneyAccessContent', icon: 'sfConversionJourneyAccessIcon' },
-                { section: 'impactIQJourneysSection',    icon: 'impactIQJourneysIcon' },
+                // impactIQJourneysSection collapsible retired 2026-09-09 (Impact IQ sunset).
                 { section: 'trendsGroupSection',         icon: 'trendsGroupIcon' },
             ];
             drawers.forEach(({ section, icon }) => {
@@ -11783,7 +11751,7 @@
                 const i = document.getElementById(icon);
                 if (!i) return;
                 i.classList.add('rotated');
-                // Impact IQ uses textContent-based arrows (▲/▼) instead
+                // Legacy Impact IQ collapsible used textContent-based arrows (▲/▼); retained here for other sections that follow the same pattern.
                 // of the .rotated class. Reset to the collapsed glyph.
                 if (i.textContent === '▲' || i.textContent === '▼') i.textContent = '▼';
             });
@@ -11791,7 +11759,7 @@
 
         // Reset ALL product access toggles (across every group, ignoring
         // active tab / search filter) to a sensible default set:
-        //   ON:  Profile IQ, Workspace, Share of Time (view+run), Impact IQ,
+        //   ON:  Profile IQ, Workspace, Share of Time (view+run),
         //        Attribution IQ  — the always-granted defaults from the backend
         //   OFF: everything else
         // Matches the create-new-user preset in showAddUserModal().
@@ -12182,65 +12150,13 @@
             document.querySelectorAll('.ranker-option-checkbox').forEach(cb => cb.checked = false);
         }
 
-        // Impact IQ per-user journey allow-list helpers.
-        function toggleImpactIQJourneysSection(evt) {
-            if (evt) evt.stopPropagation();
-            var s = document.getElementById('impactIQJourneysSection');
-            var icon = document.getElementById('impactIQJourneysIcon');
-            if (!s) return;
-            var open = s.style.display !== 'none';
-            s.style.display = open ? 'none' : 'block';
-            if (icon) icon.textContent = open ? '▼' : '▲';
-        }
-        function onImpactIQJourneyAllToggle() {
-            var all = document.getElementById('impactIQJourneyAll');
-            var list = document.getElementById('impactIQJourneyList');
-            if (!all || !list) return;
-            // When "All journeys" is checked, uncheck individuals and grey them out.
-            var boxes = list.querySelectorAll('.impact-iq-journey-cb');
-            if (all.checked) {
-                boxes.forEach(function(cb) { cb.checked = false; cb.disabled = true; });
-                list.style.opacity = '0.4';
-            } else {
-                boxes.forEach(function(cb) { cb.disabled = false; });
-                list.style.opacity = '1';
-            }
-        }
-        function setImpactIQJourneys(journeys) {
-            // Called during user-edit load. journeys is either ['*'] (all),
-            // an explicit array of slugs, or undefined (treat as all).
-            var all = document.getElementById('impactIQJourneyAll');
-            var list = document.getElementById('impactIQJourneyList');
-            if (!all || !list) return;
-            var boxes = list.querySelectorAll('.impact-iq-journey-cb');
-            var isWildcard = !Array.isArray(journeys) || journeys.length === 0 || journeys.indexOf('*') !== -1;
-            if (isWildcard) {
-                all.checked = true;
-                boxes.forEach(function(cb) { cb.checked = false; });
-            } else {
-                all.checked = false;
-                boxes.forEach(function(cb) {
-                    cb.checked = journeys.indexOf(cb.getAttribute('data-slug')) !== -1;
-                });
-            }
-            onImpactIQJourneyAllToggle();
-        }
-        function getImpactIQJourneys() {
-            // Returns the value to send in the save payload:
-            //   ['*']            = all journeys
-            //   [slug1, slug2]   = explicit subset
-            //   ['*']            = fallback if nothing is checked (avoids
-            //                       accidentally locking the user out)
-            var all = document.getElementById('impactIQJourneyAll');
-            if (all && all.checked) return ['*'];
-            var list = document.getElementById('impactIQJourneyList');
-            if (!list) return ['*'];
-            var slugs = [];
-            list.querySelectorAll('.impact-iq-journey-cb').forEach(function(cb) {
-                if (cb.checked) slugs.push(cb.getAttribute('data-slug'));
-            });
-            return slugs.length ? slugs : ['*'];
-        }
+        // Impact IQ per-user journey allow-list helpers retired 2026-09-09
+        // (Impact IQ sunset). Legacy stubs kept so any inbound reference from
+        // cached admin sessions no-ops cleanly instead of throwing.
+        function toggleImpactIQJourneysSection(evt) { if (evt && evt.stopPropagation) evt.stopPropagation(); }
+        function onImpactIQJourneyAllToggle() { /* no-op */ }
+        function setImpactIQJourneys(_journeys) { /* no-op */ }
+        function getImpactIQJourneys() { return ['*']; }
         
         // Set Rankers IQ Access (for editing users)
         function setRankersIQAccess(user) {
@@ -13748,8 +13664,7 @@
                     (document.getElementById('prometheusModePull') && document.getElementById('prometheusModePull').checked) ? 'pull' :
                     'both'
                 ),
-                has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
-                impact_iq_journeys: getImpactIQJourneys(),
+                // has_impact_iq_access / impact_iq_journeys update-side payload retired 2026-09-09 (Impact IQ sunset).
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
                 has_share_of_time_access: document.getElementById('hasShareOfTimeAccess').checked,
                 has_share_of_time_run_access: document.getElementById('hasShareOfTimeRunAccess').checked && document.getElementById('hasShareOfTimeAccess').checked,

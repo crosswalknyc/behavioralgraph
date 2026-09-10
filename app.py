@@ -9462,8 +9462,9 @@ def compute_product_access_flags(user, role):
         'has_brand_tracking_iq_access': role == 'admin' or bool(u.get('has_brand_tracking_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'allowed_intent_iq_runs': list(u.get('allowed_intent_iq_runs', ['*']) or ['*']),
-        'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
-        'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
+        # has_impact_iq_access + impact_iq_journeys removed from product-access response
+        # 2026-09-09 (Impact IQ sunset). Fields persist on user records as dead data
+        # per silent-ignore choice; no consumer reads them anymore.
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
         'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
@@ -9592,8 +9593,7 @@ def index():
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_brand_tracking_iq = _acc.get('has_brand_tracking_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
-    has_impact_iq = _acc.get('has_impact_iq_access', True)
-    impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
+    # has_impact_iq / impact_iq_journeys derivation retired 2026-09-09 (Impact IQ sunset).
     has_helm_iq = _acc.get('has_helm_iq_access', False)
     has_trends_iq = _acc.get('has_trends_iq_access', False)
     has_microdramas_iq = _acc.get('has_microdramas_iq_access', False)
@@ -9653,8 +9653,7 @@ def index():
                            has_blue_iq_access=has_blue_iq,
                            has_brand_tracking_iq_access=has_brand_tracking_iq,
                            has_intent_iq_access=has_intent_iq,
-                           has_impact_iq_access=has_impact_iq,
-                           impact_iq_journeys=impact_iq_journeys,
+                           # has_impact_iq_access / impact_iq_journeys template kwargs retired 2026-09-09.
                            has_helm_iq_access=has_helm_iq,
                            has_trends_iq_access=has_trends_iq,
                            has_microdramas_iq_access=has_microdramas_iq,

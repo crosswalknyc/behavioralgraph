@@ -388,9 +388,9 @@ MODULE_CATALOG = [
     # ---------- Analysis / attribution ----------
     ("ecommerce_iq",               "Ecommerce IQ",
      "modules", 5, 0.0, "has_ecommerce_iq_access"),
-    ("impact_iq",                  "Impact IQ",
+    ("impact_iq",                  "Ticket Sales IQ",
      "modules", 10, 0.0, "has_impact_iq_access"),
-    ("ticket_sales",               "Impact IQ - Ticket Sales",
+    ("ticket_sales",               "Ticket Sales - Runs",
      "modules", 10, 0.0, "has_ticket_sales_iq_access"),
     ("ticket_sales_tracker",       "Ticket Sales Tracker",
      "modules", 10, 0.0, "has_ticket_sales_tracker_access"),
