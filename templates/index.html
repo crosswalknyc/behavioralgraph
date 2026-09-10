@@ -122592,6 +122592,8 @@ https://www.instagram.com/p/..."></textarea>
                 jump.id = 'piqBehJump';
                 jump.className = 'piq-jump';
             }
+            var view = document.getElementById('dashboardView');
+            if (jump && !jump.parentNode && view) view.appendChild(jump);
             if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
             var opts = [];
             if (sel) {
