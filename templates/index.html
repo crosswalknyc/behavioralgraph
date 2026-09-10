@@ -25400,6 +25400,7 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-audience-delta.up   { color: #86efac; }
             #trendsIQView .tiq-audience-delta.down { color: #fca5a5; }
             #trendsIQView .tiq-audience-delta.flat { color: var(--text-secondary); }
+            #trendsIQView .tiq-audience-delta.new  { color: #60a5fa; letter-spacing: 0.04em; font-size: 0.85em; }
             #trendsIQView .tiq-sheet { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
             #trendsIQView .tiq-sheet thead th { text-align: left; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); padding: 0.25rem 0.5rem 0.45rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
             #trendsIQView .tiq-sheet th.tiq-sheet-th-num { text-align: right; width: 1%; }
@@ -25549,6 +25550,7 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #trendsIQView .tiq-audience-chip { background: rgba(99,102,241,0.14); color: #4338ca; border-color: rgba(99,102,241,0.4); }
             body[data-theme="light"] #trendsIQView .tiq-audience-delta.up { color: #15803d; }
             body[data-theme="light"] #trendsIQView .tiq-audience-delta.down { color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-audience-delta.new  { color: #2563eb; }
             body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-search-primary b { color: #1d4ed8; }
             body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-media-primary b { color: #b45309; }
             body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-social-primary b { color: #be185d; }
@@ -53647,6 +53649,19 @@ https://www.instagram.com/p/..."></textarea>
                 var noun = pos === 1 ? 'spot' : 'spots';
                 deltaTip = 'Moved ' + verb + ' ' + pos + ' ' + noun +
                            (us.prev_rank ? ' (was #' + us.prev_rank + ')' : '');
+            } else if (String(us.direction || '').toLowerCase() === 'new') {
+                // First day this row has been on the list, so there is no
+                // prior day to compare against. The sheet renderers have
+                // always shown NEW here; the shared chip used to show
+                // nothing, which read as a missing value.
+                arrow = ' <span class="tiq-audience-delta new">NEW</span>';
+                deltaTip = 'First day on this list.';
+            } else if (us.delta_kind === 'rank' && us.direction) {
+                // Rank delta of zero: the row held its exact spot. Only
+                // reachable when the isRankDelta branch above declined
+                // because delta_positions was 0.
+                arrow = ' <span class="tiq-audience-delta flat">\u00B7 0</span>';
+                deltaTip = 'Held its spot.';
             } else if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
                 if (pct >= 1) {
@@ -53658,7 +53673,18 @@ https://www.instagram.com/p/..."></textarea>
                              : 'flat';
                     arrow = ' <span class="tiq-audience-delta ' + cls + '">' +
                             glyph + ' ' + pct + '%</span>';
+                    var verb = (us.direction === 'up') ? 'up' : 'down';
+                    deltaTip = 'Audience ' + verb + ' ' + pct + '% vs the day before.';
+                } else {
+                    // Moved, but rounds to under a percent. Show the flat
+                    // glyph rather than nothing so the column never reads
+                    // as a gap.
+                    arrow = ' <span class="tiq-audience-delta flat">\u00B7 0%</span>';
+                    deltaTip = 'Held flat vs the day before.';
                 }
+            } else if (us.direction) {
+                arrow = ' <span class="tiq-audience-delta flat">\u00B7 0%</span>';
+                deltaTip = 'Held flat vs the day before.';
             }
             // When lensed, prefer the lens-scoped count in the tooltip's
             // primary line so hovering reads "1.8M weekly Gen Z readers"
@@ -57519,7 +57545,10 @@ https://www.instagram.com/p/..."></textarea>
             // (holds, availability, subjects) that store rows never
             // have; `sourceKind` gates whether we render them.
             function rowsFor(items, sourceKind, sourceSlug) {
-                return items.map(function(it, i) {
+                // The row number is a position index, not the store's own
+                // chart position, so rank and audience have to move
+                // together. Same ordering the Streaming / FAST sheets use.
+                return _tiqSortByDisplayedEstimate(items).map(function(it, i) {
                     var img = _tiqPosterCell(it.image);
                     var titleLine = it.url
                         ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
@@ -57833,7 +57862,9 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             function rowsFor(items, sourceSlug) {
-                return items.map(function(it, i) {
+                // Rank is a position index here too, so order by the
+                // audience figure the row displays.
+                return _tiqSortByDisplayedEstimate(items).map(function(it, i) {
                     var img = _tiqPosterCell(it.image);
                     var titleLine = it.url
                         ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'

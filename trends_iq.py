@@ -4907,14 +4907,34 @@ def _apply_rank_deltas(current_items: list,
         prev_items, prev_rank_field or rank_field, key_fn)
     matched = 0
     total = 0
+
+    def _stamp_first_appearance(row: dict) -> None:
+        """The row is on today's list with no counterpart yesterday, so
+        there is nothing to compare it against. Mark it as a first
+        appearance rather than leaving the movement column blank - a
+        blank reads as a missing value, which is what news rows used to
+        show on the day they broke. Idempotent, and it never overwrites
+        a direction another pass already settled."""
+        blk = row.get(target_field)
+        if not isinstance(blk, dict) or not blk.get('us_estimate'):
+            return
+        if blk.get('direction'):
+            return
+        blk['direction'] = 'new'
+        blk.setdefault('delta_pct', 0.0)
+        if prev_date:
+            blk.setdefault('prev_date', prev_date)
+
     for row in current_items or []:
         total += 1
         k = key_fn(row)
         today_rank = _row_rank(row, rank_field)
         if not k or today_rank is None:
+            _stamp_first_appearance(row)
             continue
         prev_rank = prev_index.get(k)
         if prev_rank is None:
+            _stamp_first_appearance(row)
             continue
         # Symmetric clamp so a rank chip never renders |delta_pct| >
         # 100%.  The signed-position delta is the truthful integer;
@@ -4922,6 +4942,7 @@ def _apply_rank_deltas(current_items: list,
         # Formula: (prev - today) / max(prev, today), then clamp.
         denom = max(prev_rank, today_rank)
         if denom <= 0:
+            _stamp_first_appearance(row)
             continue
         raw_pct = (prev_rank - today_rank) / denom
         delta_pct = max(-1.0, min(1.0, raw_pct))
@@ -5494,6 +5515,26 @@ def _annotate_trending_people_with_audience(
                  or items_lookup.get(f'trending_person:{norm}'))
         if entry:
             _stamp_stream_estimate(row, entry, kind_hint='wiki_topic')
+
+
+# A `soft_block_reason` is the diagnostic a scraper writes when it
+# carried the previous day's rows rather than shipping an empty list.
+# It names transports and parse internals ("live fetch returned 0
+# items", "no __PRELOADED_STATE__ in 412,880-byte page"), so it never
+# reaches the reader. The panel says the one thing the reader needs,
+# which is that the ranking is the most recent published one. An
+# authored `note` is user copy and passes through ahead of it.
+_CARRIED_PANEL_NOTE = 'Showing the most recent published ranking.'
+
+
+def _panel_note_for(block: dict):
+    """User-visible note for a panel, with internal diagnostics filtered."""
+    if not isinstance(block, dict):
+        return None
+    note = block.get('note')
+    if note:
+        return note
+    return _CARRIED_PANEL_NOTE if block.get('soft_block_reason') else None
 
 
 def _annotate_fused_trending_with_audience(
@@ -8390,7 +8431,7 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
                 panel_out[bucket] = bucket_items
                 if bucket_items:
                     any_items = True
-                bn = block.get('soft_block_reason') or block.get('note')
+                bn = _panel_note_for(block)
                 if bn and not first_note:
                     first_note = bn
             panel_out['available'] = any_items
@@ -8409,7 +8450,7 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
             # per-source `by_state` block can be added later if a
             # provider ships regional charts.
             panel_available = block.get('available')
-            panel_note = block.get('soft_block_reason') or block.get('note')
+            panel_note = _panel_note_for(block)
         else:
             raw_items = _snapshot_items_for_geo(snap, state, keywords=keywords)
             panel_available = None
@@ -9366,9 +9407,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Headlines rank delta: Business + Wall Street sub-tabs each ride
     # their own flat top-N ranked list plus a `by_source` dict.  URL
     # is the stable per-row key so a persistent headline (same URL
-    # yesterday and today) gets a chip when its rank moved, while a
-    # brand-new headline (no prior day match) gets no chip.  Delta
-    # folds into `us_readers` because the headline chip renders off
+    # yesterday and today) gets a chip when its rank moved, and a
+    # headline that broke today is marked as a first appearance
+    # instead of rendering blank.  Delta folds into `us_readers`
+    # because the headline chip renders off
     # `_tiqAudienceChip(r.us_readers)`.
     _annotate_headlines_with_rank_change(
         business_news, snapshot_source='business_news',
@@ -9378,6 +9420,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         wall_street_news, snapshot_source='wall_street_news',
         by_source_dict=wall_street_by_source,
         label='headlines.wall_street')
+    # Philanthropy rides the same shape and was the one news sub-tab
+    # never wired in, which left its rows with no movement chip.
+    _annotate_headlines_with_rank_change(
+        philanthropy_news, snapshot_source='philanthropy_news',
+        by_source_dict=philanthropy_by_source,
+        label='headlines.philanthropy')
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
@@ -9614,6 +9662,25 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         fused = []
     payload['cards']['fused_trending'] = fused
     payload['counts']['trending']      = len(fused)
+
+    # Headlines + Business read most-read-first, matching the Wall
+    # Street sub-tab. Without this they stack one publisher's block
+    # after another, so the reader column jumps up and down the page.
+    # Deliberately after the fused pass: fused scores off each list's
+    # incoming position, so re-ordering earlier would move Trending
+    # Overall as a side effect of a presentation change.
+    try:
+        payload['cards']['trending_headlines'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('trending_headlines') or [])
+        payload['cards']['business_news'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('business_news') or [])
+        payload['cards']['philanthropy_news'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('philanthropy_news') or [])
+    except Exception as e:
+        logger.warning("headline readership sort failed: %s", e)
 
     # Trending Overall audience chip - stamped AFTER the fused list is
     # computed so every fused row can inherit from its underlying
