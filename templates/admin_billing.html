@@ -345,11 +345,12 @@
             <p style="color: #6B7280; font-size: 13px; margin:8px 0 0 0;">
               The wallet is charged these amounts when a paying
               customer runs a pull and their internal allowance is
-              exhausted. <strong>Modules</strong> is the monthly-access
-              product list (each row bills the / month price to users
-              carrying its access flag). <strong>Pulls</strong> is the
-              per-pull events list (each row bills its / pull price
-              when the event fires). Rows tagged
+              exhausted. <strong>Modules</strong> and
+              <strong>Rankers</strong> are the monthly-access product
+              lists (each row bills the / month price to users carrying
+              its access flag). <strong>Pulls</strong> is the per-pull
+              events list (each row bills its / pull price when the
+              event fires). Rows tagged
               <span style="display:inline-block; padding:0 5px;
                 font-size:10px; font-weight:600;
                 background:#0C1618; color:#C7F23E;
@@ -1360,12 +1361,23 @@
       const tools = p.tools || {};
       const sections = p.sections || {};
       // Group tool keys by section, preserving MODULE_CATALOG order.
+      // 2026-09-09 (Jenna): iterate p.tool_order[] (server-authored
+      // catalog order) instead of Object.keys(tools) so within-section
+      // row order is deterministic - Flask's default JSON encoder can
+      // alphabetize dict keys, which would push 'rankers_iq_access'
+      // (ALL bundle) below every 'ranker_*' key. Fallback to
+      // Object.keys keeps the panel usable if an older backend sends
+      // no tool_order.
       // Skip hidden built-ins here unless _showHidden is on. Custom
       // tools are never hidden via this list (they're hard-deleted).
       const bySection = {};
       let hiddenCount = 0;
-      Object.keys(tools).forEach(key => {
-        const t = tools[key] || {};
+      const iterKeys = Array.isArray(p.tool_order) && p.tool_order.length
+        ? p.tool_order
+        : Object.keys(tools);
+      iterKeys.forEach(key => {
+        const t = tools[key];
+        if (!t) return;
         if (t.is_hidden) hiddenCount += 1;
         if (t.is_hidden && !_showHidden) return;
         const s = t.section || 'extras';
@@ -1479,14 +1491,17 @@
           html += '</td>';
           // 2026-09-09 (Jenna, verbatim: 'move these to a new section
           // called PULLS ... the one in modules should be the one per
-          // month that is just accerss.'). Modules rows show only the
-          // monthly cell; Pulls rows show only the per-pull cell.
+          // month that is just accerss.' + 'rankers should all be
+          // monthly no pulls'). Modules AND Rankers rows show only
+          // the monthly cell; Pulls rows show only the per-pull cell.
           // The suppressed cell renders an em-dash placeholder and a
           // hidden input carrying the current stored value so
           // saveTools() round-trips it unchanged (never silently
           // zeros an existing price on a save-without-edit).
           const isModulesRow = (secKey === 'modules');
           const isPullsRow = (secKey === 'pulls');
+          const isRankersRow = (secKey === 'rankers');
+          const isMonthlyOnlyRow = isModulesRow || isRankersRow;
           const monthlyCell =
             '<td class="num"><span class="usd-input-wrap">' +
             '<span>$</span>' +
@@ -1533,11 +1548,14 @@
               'Session-metered - rolls up in the ' +
               'Prometheus session bill' +
               '</td>';
-          } else if (isModulesRow) {
+          } else if (isMonthlyOnlyRow) {
+            // Modules + Rankers: monthly access only.
             html += monthlyCell + perPullDashCell;
           } else if (isPullsRow) {
+            // Pulls: per-pull only.
             html += monthlyDashCell + perPullCell;
           } else {
+            // API / subscription / custom / extras: both sides editable.
             html += monthlyCell + perPullCell;
           }
           // 2026-09-09 (Jenna, verbatim: "hide what does it do? there
@@ -1556,10 +1574,11 @@
             'color:#8A1F1F; border-color:#F0D0D0;';
           // Metered toggle - first line of the action stack. Metering
           // only applies to rows with a per-pull surface, so we skip
-          // the toggle on Modules rows (monthly-access-only). Prometheus
-          // (locked-metered) sits in the Pulls section and DOES show
-          // the toggle so admins see its locked state.
-          if (!isModulesRow) {
+          // the toggle on Modules AND Rankers rows (both monthly-
+          // access-only). Prometheus (locked-metered) sits in the
+          // Pulls section and DOES show the toggle so admins see its
+          // locked state.
+          if (!isMonthlyOnlyRow) {
             html += '<div style="display:flex; align-items:center; ' +
               'justify-content:flex-end; gap:6px; ' +
               'margin-bottom:6px; font-size:11px; ' +

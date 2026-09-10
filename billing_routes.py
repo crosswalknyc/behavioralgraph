@@ -661,6 +661,13 @@ def admin_pricing_get():
     resp = dict(p)
     resp["tools"] = tools
     resp["sections"] = sections
+    # 2026-09-09 (Jenna, verbatim: 'rankers ... rankers base access
+    # would be Rankers IQ - ALL and ... move to the first spot').
+    # Explicit tool_key ordering so the admin panel renders rows in
+    # module_catalog() order, immune to any JSON serialization key
+    # sorting downstream. Client iterates tool_order[] instead of
+    # Object.keys(tools).
+    resp["tool_order"] = [row["tool_key"] for row in catalog]
     resp["hidden_tools"] = list(p.get("hidden_tools") or [])
     resp["prometheus_markup"] = float(
         p.get("prometheus_markup_multiplier", 2.10))

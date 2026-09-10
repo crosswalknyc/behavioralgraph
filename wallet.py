@@ -384,18 +384,27 @@ MODULE_CATALOG = [
      "modules", 0, 0.0, "has_trends_iq_access"),
     ("microdramas_iq",             "Microdramas IQ",
      "modules", 0, 0.0, "has_microdramas_iq_access"),
-    # ---------- Rankers (sub-tabs under has_rankers_iq_access) ----------
-    ("rankers_iq_access",          "Rankers IQ - Base Access",
+    # ---------- Rankers (monthly-access family) ----------
+    # 2026-09-09 (Jenna, verbatim: 'rankers should all be monthly no
+    # pulls and rankers base access would be Rankers IQ - ALL and that
+    # would be a better price so if you got the bundle youc ould have
+    # that but if not it would be more expensive per one'). Rankers IQ
+    # - ALL is the bundle tier - subscribing here unlocks every ranker
+    # at a preferred bundle rate. The individual ranker rows carry a
+    # HIGHER per-ranker monthly for solo access. Rankers render with
+    # monthly-only pricing on the admin panel (no per-pull cell) and
+    # no metered toggle (never session-metered).
+    ("rankers_iq_access",          "Rankers IQ - ALL",
      "rankers", 0, 0.0, "has_rankers_iq_access"),
     ("ranker_fast",                "FAST Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_gaming",              "Gaming Ranker",
      "rankers", 0, 0.0, None),
     ("ranker_music",               "Music Ranker",
      "rankers", 0, 0.0, None),
     ("ranker_podcast",             "Podcast Ranker",
      "rankers", 0, 0.0, None),
     ("ranker_streaming",           "Streaming Ranker",
-     "rankers", 0, 0.0, None),
-    ("ranker_gaming",              "Gaming Ranker",
      "rankers", 0, 0.0, None),
     ("ranker_talent",              "Talent Ranker",
      "rankers", 0, 0.0, None),
