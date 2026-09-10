@@ -198,10 +198,29 @@ def _render_email(user_slug: str, alerts: list[dict],
         return f"  {label}"
 
     order = ['BREAKOUT', 'RISING', 'RETURNED', 'NEW', 'FALLING', 'DROPPED_OFF']
-    text_lines = [f"Trends IQ digest for {today}",
-                   f"You are watching {len(entries)} item(s).", ""]
+    # Display labels for the section headers (internal alert-type keys are
+    # kept as-is for the movement logic). 'RETURNED' reads as 'YOUR TRENDS'.
+    tag_label = {'RETURNED': 'YOUR TRENDS'}
+    text_lines = [
+        "Crosswalk Trends IQ",
+        f"Hi! Your Trends IQ Digest for {today} is here!",
+        "",
+        "Monitor and manage your watchlist in Trends IQ here:",
+        f"{APP_URL}/",
+        "",
+    ]
+    # Lime-branded header + a prominent CTA pulled up into the main body
+    # (was a small grey footer link) to drive readers back to the dashboard.
     html_lines = [
-        f"<p>Hey, here's your Trends IQ digest for <b>{today}</b>. You're watching <b>{len(entries)}</b> item(s).</p>",
+        ("<div style='font-size:22px;font-weight:800;letter-spacing:0.2px;margin:0 0 14px;'>"
+         "<span style='color:#65a30d;'>Crosswalk</span> "
+         "<span style='color:#111111;'>Trends IQ</span></div>"),
+        f"<p style='margin:0 0 6px;font-size:16px;'>Hi! Your Trends IQ Digest for <b>{today}</b> is here!</p>",
+        "<p style='font-size:16px;margin:16px 0 10px;color:#111111;'>Monitor and manage your watchlist in Trends IQ here:</p>",
+        (f"<p style='margin:0 0 22px;'><a href='{APP_URL}/' "
+         "style='display:inline-block;background:#84cc16;color:#0b0b0b;font-weight:700;"
+         "font-size:16px;line-height:1;text-decoration:none;padding:14px 26px;border-radius:8px;'>"
+         "Open your dashboard &rarr;</a></p>"),
     ]
     if not alerts:
         text_lines.append("No material movement on any of your watched items today.")
@@ -211,8 +230,9 @@ def _render_email(user_slug: str, alerts: list[dict],
             items = bucket.get(tag) or []
             if not items:
                 continue
-            text_lines.append(f"{tag} ({len(items)}):")
-            html_lines.append(f"<h3 style='margin-bottom:6px;'>{tag} <span style='opacity:0.65;font-weight:400;'>({len(items)})</span></h3><ul style='margin-top:0;'>")
+            hdr_label = tag_label.get(tag, tag)
+            text_lines.append(f"{hdr_label} ({len(items)}):")
+            html_lines.append(f"<h3 style='margin-bottom:6px;'>{hdr_label} <span style='opacity:0.65;font-weight:400;'>({len(items)})</span></h3><ul style='margin-top:0;'>")
             for a in items:
                 text_lines.append(_row_line(a))
                 label = (a.get('label') or a.get('key') or '')
@@ -229,11 +249,6 @@ def _render_email(user_slug: str, alerts: list[dict],
             html_lines.append("</ul>")
             text_lines.append("")
 
-    text_lines.append("--")
-    text_lines.append("Open Trends IQ to manage your watchlist:")
-    text_lines.append(f"{APP_URL}/  (Trends section)")
-    html_lines.append("<hr style='margin:24px 0;border:0;border-top:1px solid #ddd;'/>")
-    html_lines.append(f"<p style='color:#666;font-size:0.9em;'>Manage your watchlist in Trends IQ: <a href='{APP_URL}/'>open the dashboard</a>.</p>")
     return subject, ''.join(html_lines), '\n'.join(text_lines)
 
 
