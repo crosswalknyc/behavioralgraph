@@ -3,376 +3,442 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Crosswalk IQ+</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Sign in | Crosswalk</title>
     <style>
+        /* Inter 18pt only. Never the default Inter family. */
+        @font-face { font-family: 'Inter 18pt'; font-weight: 300; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Light.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Medium.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Bold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-ExtraBold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 900; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Black.ttf') }}") format('truetype'); }
+
         :root {
-            --bg-dark: #0a1929;
-            --bg-card: #0d2137;
-            --bg-input: #132f4c;
-            --accent-blue: #5a9ad9;
-            --accent-cyan: #66d9ef;
-            --accent-green: #a6e22e;
-            --accent-red: #f92672;
-            --accent-lime: #c8ff00;
-            --text-primary: #e6f1ff;
-            --text-secondary: #8892b0;
-            --border-color: #1e3a5f;
+            /* Ten-color palette. If a value is missing here it does not belong on this page. */
+            --cw-graphite: #0C1618;
+            --cw-slate:    #15252A;
+            --cw-offwhite: #E9E8E1;
+            --cw-signal-green: #C7F23E;
+            --cw-signal-olive: #5E7E12;
+            --cw-orchid:   #E682FF;
+            --cw-amethyst: #8E3FA8;
+            --cw-cobalt:   #3358FF;
+            --cw-dusk:     #B7B3D8;
+            --cw-pavement: #3B3D38;
+            --cw-olive-small: #547110;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text-primary);
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cw-offwhite);
+            color: var(--cw-graphite);
             min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Split ground per twin rule: Graphite hero on the left,
+           Off-White form on the right. Signal Olive on the light half
+           (never Signal Green - blows out on Off-White). */
+        .split {
+            display: grid;
+            grid-template-columns: 5fr 6fr;
+            min-height: 100vh;
+        }
+
+        /* ---- Brand hero (dark ground) ---- */
+        .brand {
+            padding: 40px 48px;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #0a1929 0%, #0d2137 50%, #132f4c 100%);
+            flex-direction: column;
+            justify-content: space-between;
+            background: var(--cw-graphite);
+            color: var(--cw-offwhite);
+            position: relative;
+            overflow: hidden;
         }
-
-        .login-container {
-            width: 100%;
-            max-width: 420px;
-            padding: 2rem;
+        .brand::after {
+            content: '';
+            position: absolute;
+            right: -220px; bottom: -220px;
+            width: 520px; height: 520px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(230, 130, 255, 0.32) 0%, transparent 60%);
+            pointer-events: none;
         }
-
-        .login-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 2.5rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        .brand::before {
+            content: '';
+            position: absolute;
+            left: -140px; top: 20%;
+            width: 320px; height: 320px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(51, 88, 255, 0.28) 0%, transparent 60%);
+            pointer-events: none;
         }
-
-        .logo-section {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        /* Green only behind the logo image */
-        .logo-wrap {
-            display: inline-block;
-            background: linear-gradient(135deg, #c8e600, #a0d911);
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-        }
-
-        .logo {
-            width: 220px;
-            height: auto;
+        .brand .logo-lockup img {
+            height: 32px;
+            width: auto;
             display: block;
+            position: relative;
+            z-index: 2;
+        }
+        .brand .headline {
+            position: relative;
+            z-index: 2;
+            max-width: 32ch;
+        }
+        .brand .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 500;
+            color: var(--cw-offwhite);
+            margin-bottom: 14px;
+        }
+        .brand .eyebrow::before {
+            content: '';
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--cw-signal-green);
+        }
+        .brand .num {
+            color: #9AA09B;
+            font-weight: 500;
+            margin-right: 0.35em;
+        }
+        .brand .headline h1 {
+            font-size: 44px;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            font-weight: 800;
+            color: var(--cw-offwhite);
+        }
+        .brand .headline p {
+            color: #9AA09B;
+            font-size: 15px;
+            margin-top: 14px;
+            max-width: 40ch;
+            line-height: 1.55;
+        }
+        .brand .foot {
+            color: #7C878A;
+            font-size: 12px;
+            position: relative;
+            z-index: 2;
+        }
+        .brand .foot a {
+            color: var(--cw-signal-green);
+            text-decoration: none;
+            margin-right: 14px;
+        }
+        .brand .foot .copyright {
+            margin-left: 20px;
+            color: #7C878A;
         }
 
-        .logo-section h1 {
-            font-family: 'Space Mono', monospace;
-            font-size: 1.5rem;
-            color: var(--accent-cyan);
-            margin-bottom: 0.5rem;
+        /* ---- Form (light ground) ---- */
+        .form-side {
+            padding: 48px 56px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: var(--cw-offwhite);
+            color: var(--cw-graphite);
+        }
+        .accent-line {
+            width: 40px;
+            height: 3px;
+            background: var(--cw-amethyst);
+            border-radius: 999px;
+            margin-bottom: 22px;
+        }
+        .form-side .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 500;
+            color: #5C6560;
+        }
+        .form-side .eyebrow::before {
+            content: '';
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--cw-signal-olive);
+        }
+        .form-side .eyebrow .num {
+            color: #888C89;
+            font-weight: 500;
+            margin-right: 0.35em;
+        }
+        .form-side h2 {
+            color: var(--cw-graphite);
+            font-size: 34px;
+            letter-spacing: -0.02em;
+            font-weight: 800;
+            margin: 8px 0 6px;
+        }
+        .form-side p.lead {
+            color: #5C6560;
+            font-size: 15px;
+            margin-bottom: 26px;
+            max-width: 42ch;
         }
 
-        .logo-section p {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
+        .form-body {
+            max-width: 420px;
+            width: 100%;
         }
 
         .form-group {
-            margin-bottom: 1.25rem;
+            margin-bottom: 14px;
         }
-
-        label {
+        .form-group label {
             display: block;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
+            font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            color: #888C89;
+            margin-bottom: 6px;
         }
-
-        input {
+        .form-group input {
             width: 100%;
-            padding: 0.875rem 1rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            padding: 12px 14px;
+            background: #FFFFFF;
+            border: 1px solid rgba(59, 61, 56, 0.32);
+            border-radius: 6px;
+            color: var(--cw-graphite);
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 14px;
+            outline: 0;
+            transition: border-color 140ms ease, box-shadow 140ms ease;
+        }
+        .form-group input:focus {
+            border-color: var(--cw-cobalt);
+            box-shadow: 0 0 0 3px rgba(51, 88, 255, 0.14);
+        }
+        .form-group input::placeholder {
+            color: #888C89;
+            opacity: 0.65;
         }
 
-        input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(90, 154, 217, 0.2);
-        }
-
-        input::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.6;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 1rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.9rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-blue), #4a8ac9);
-            color: white;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(90, 154, 217, 0.3);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .error-message {
-            background: rgba(249, 38, 114, 0.1);
-            border: 1px solid var(--accent-red);
-            color: var(--accent-red);
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            margin-bottom: 1.25rem;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .footer-text {
-            text-align: center;
-            margin-top: 1.5rem;
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-        }
-
-        .footer-text a {
-            color: var(--accent-cyan);
-            text-decoration: none;
-        }
-
-        .remember-forgot-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 0.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-
-        .remember-me input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--accent-cyan);
-            cursor: pointer;
-        }
-
-        .remember-me label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            text-transform: none;
-            letter-spacing: normal;
-            margin: 0;
-            cursor: pointer;
-        }
-
-        .forgot-password a {
-            color: var(--accent-cyan);
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: color 0.2s;
-        }
-
-        .forgot-password a:hover {
-            color: var(--accent-blue);
-            text-decoration: underline;
-        }
-
-        /* Password input wrapper with toggle */
         .password-input-wrapper {
             position: relative;
             display: flex;
             align-items: center;
         }
-
-        .password-input-wrapper input {
-            padding-right: 3rem;
-        }
-
+        .password-input-wrapper input { padding-right: 3rem; }
         .toggle-password {
             position: absolute;
-            right: 0.75rem;
+            right: 10px;
             background: transparent;
-            border: none;
+            border: 0;
             cursor: pointer;
-            padding: 0.5rem;
-            font-size: 1.1rem;
+            padding: 6px 8px;
+            font-size: 15px;
             opacity: 0.7;
-            transition: opacity 0.2s;
+            color: var(--cw-graphite);
         }
+        .toggle-password:hover { opacity: 1; }
 
-        .toggle-password:hover {
-            opacity: 1;
+        .remember-forgot-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 14px 0 20px;
+            font-size: 13px;
         }
-
-        /* Animated background elements */
-        .bg-decoration {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: -1;
+        .remember-me {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
         }
-
-        .bg-circle {
+        .remember-me input[type="checkbox"] {
+            appearance: none;
+            width: 14px; height: 14px;
+            border: 1px solid rgba(59, 61, 56, 0.55);
+            border-radius: 3px;
+            background: #FFFFFF;
+            cursor: pointer;
+            position: relative;
+        }
+        .remember-me input[type="checkbox"]:checked {
+            background: var(--cw-signal-olive);
+            border-color: var(--cw-signal-olive);
+        }
+        .remember-me input[type="checkbox"]:checked::after {
+            content: '';
             position: absolute;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(90, 154, 217, 0.1) 0%, transparent 70%);
+            left: 4px; top: 1px;
+            width: 4px; height: 8px;
+            border: solid var(--cw-offwhite);
+            border-width: 0 1.5px 1.5px 0;
+            transform: rotate(45deg);
+        }
+        .remember-me label {
+            font-size: 13px;
+            color: var(--cw-graphite);
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 500;
+            margin: 0;
+        }
+        .forgot-password a {
+            color: var(--cw-olive-small);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .forgot-password a:hover { text-decoration: underline; }
+
+        .btn {
+            width: 100%;
+            padding: 12px 16px;
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.005em;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 140ms ease, transform 120ms ease;
+        }
+        .btn-primary {
+            background: var(--cw-signal-olive);
+            color: var(--cw-offwhite);
+        }
+        .btn-primary:hover {
+            background: #6C9013;
+        }
+        .btn-primary:active {
+            transform: translateY(1px);
         }
 
-        .bg-circle:nth-child(1) {
-            width: 600px;
-            height: 600px;
-            top: -200px;
-            right: -200px;
+        .error-message {
+            background: rgba(142, 63, 168, 0.10);
+            border: 1px solid var(--cw-amethyst);
+            color: var(--cw-amethyst);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 14px;
+            display: none;
         }
+        .error-message.show { display: block; }
 
-        .bg-circle:nth-child(2) {
-            width: 400px;
-            height: 400px;
-            bottom: -100px;
-            left: -100px;
-            background: radial-gradient(circle, rgba(200, 255, 0, 0.05) 0%, transparent 70%);
+        .terms {
+            margin-top: 22px;
+            color: #888C89;
+            font-size: 11px;
+            max-width: 44ch;
+            line-height: 1.55;
         }
+        .terms a { color: var(--cw-olive-small); text-decoration: none; font-weight: 500; }
+        .terms a:hover { text-decoration: underline; }
+        .terms .copyright { display: block; margin-top: 8px; color: #888C89; }
 
-        /* Help button beneath the login card */
+        /* Help button + video modal (kept from the previous login) */
         .help-signin {
             text-align: center;
-            margin-top: 1.5rem;
+            margin-top: 22px;
         }
-
         .help-signin-btn {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            background: rgba(102, 217, 239, 0.08);
-            border: 1px solid var(--border-color);
-            color: var(--accent-cyan);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.9rem;
+            gap: 8px;
+            background: transparent;
+            border: 1px solid rgba(59, 61, 56, 0.32);
+            color: #5C6560;
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 13px;
             font-weight: 600;
-            padding: 0.7rem 1.25rem;
+            padding: 8px 14px;
             border-radius: 999px;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s, transform 0.2s;
+            transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
         }
-
         .help-signin-btn:hover {
-            background: rgba(102, 217, 239, 0.15);
-            border-color: var(--accent-cyan);
-            transform: translateY(-1px);
+            background: rgba(51, 88, 255, 0.06);
+            border-color: var(--cw-cobalt);
+            color: var(--cw-cobalt);
         }
+        .help-signin-btn svg { width: 16px; height: 16px; }
 
-        .help-signin-btn svg {
-            width: 18px;
-            height: 18px;
-            flex-shrink: 0;
-        }
-
-        /* Video modal */
         .video-modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(5, 12, 22, 0.8);
+            background: rgba(12, 22, 24, 0.78);
             backdrop-filter: blur(4px);
             display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            padding: 2rem;
+            padding: 24px;
         }
-
-        .video-modal-overlay.show {
-            display: flex;
-        }
-
+        .video-modal-overlay.show { display: flex; }
         .video-modal {
             width: 48vw;
             min-width: 360px;
             max-width: 860px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
+            background: var(--cw-slate);
+            border: 1px solid var(--cw-pavement);
+            border-radius: 12px;
             box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
             overflow: hidden;
-            animation: modal-pop 0.2s ease-out;
+            animation: modal-pop 200ms ease-out;
         }
-
         @keyframes modal-pop {
             from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
+            to   { opacity: 1; transform: scale(1); }
         }
-
         .video-modal-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid var(--border-color);
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--cw-pavement);
         }
-
         .video-modal-header h2 {
-            font-family: 'Space Mono', monospace;
-            font-size: 0.95rem;
-            color: var(--accent-cyan);
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 13px;
+            color: var(--cw-offwhite);
             font-weight: 700;
-            letter-spacing: 0.5px;
+            letter-spacing: -0.005em;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
-
         .video-modal-close {
             background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 1.5rem;
+            border: 0;
+            color: #9AA09B;
+            font-size: 22px;
             line-height: 1;
             cursor: pointer;
-            padding: 0.25rem 0.5rem;
+            padding: 4px 8px;
             border-radius: 6px;
-            transition: color 0.2s, background 0.2s;
         }
-
         .video-modal-close:hover {
-            color: var(--text-primary);
-            background: var(--bg-input);
+            color: var(--cw-offwhite);
+            background: var(--cw-graphite);
         }
-
         .video-modal video {
             display: block;
             width: 100%;
@@ -380,86 +446,102 @@
             background: #000;
         }
 
+        /* Mobile: stack the two halves. */
         @media (max-width: 900px) {
-            .video-modal {
-                width: 90vw;
-            }
+            .split { grid-template-columns: 1fr; }
+            .brand { padding: 32px 28px; min-height: auto; }
+            .brand .headline h1 { font-size: 32px; }
+            .form-side { padding: 32px 28px; }
+            .video-modal { width: 92vw; }
         }
     </style>
 </head>
 <body>
-    <div class="bg-decoration">
-        <div class="bg-circle"></div>
-        <div class="bg-circle"></div>
-    </div>
+    <div class="split">
 
-    <div class="login-container">
-        <div class="login-card">
-            <div class="logo-section">
-                <div class="logo-wrap">
-                    <img src="{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'" style="filter: invert(1); mix-blend-mode: multiply;">
-                </div>
-                <p style="font-size: 1.1rem; letter-spacing: 2px; margin-top: 1rem;">IQ LABORATORY DASHBOARD</p>
+        <aside class="brand">
+            <div class="logo-lockup">
+                <img src="{{ url_for('static', filename='crosswalk-logo-brand-white.png') }}"
+                     alt="Crosswalk"
+                     onerror="this.onerror=null;this.src='{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}';">
             </div>
-
-            <div class="error-message" id="errorMessage">
-                Invalid username or password
+            <div class="headline">
+                <span class="eyebrow"><span class="num">01</span>WELCOME BACK</span>
+                <h1>Read what people actually do, not what they say they do.</h1>
+                <p>Every profile, journey, and read across this workspace measures at the individual viewer level. First-party. In window. Ready when you sign in.</p>
             </div>
+            <div class="foot">
+                <a href="/terms">Terms</a>
+                <a href="/privacy">Privacy</a>
+                <a href="mailto:jenna@crosswalknyc.com">Contact</a>
+                <span class="copyright">&copy; 2026 Crosswalk</span>
+            </div>
+        </aside>
 
-            <form id="loginForm" method="POST" action="/login">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" placeholder="Enter your username" required autofocus>
+        <section class="form-side">
+            <div class="form-body">
+                <div class="accent-line"></div>
+                <span class="eyebrow"><span class="num">02</span>SIGN IN</span>
+                <h2>Sign in to your workspace.</h2>
+                <p class="lead">Use your Crosswalk username. Trouble getting in? Watch the short orientation below or email <a href="mailto:jenna@crosswalknyc.com" style="color: var(--cw-olive-small); text-decoration: none; font-weight: 500;">jenna@</a>.</p>
+
+                <div class="error-message" id="errorMessage">
+                    Invalid username or password.
                 </div>
 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <div class="password-input-wrapper">
-                        <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="Show/Hide Password">
-                            <span id="eyeIcon">🙈</span>
-                        </button>
+                <form id="loginForm" method="POST" action="/login">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" placeholder="Enter your username" required autofocus autocomplete="username">
                     </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="Show or hide password" aria-label="Show or hide password">
+                                <span id="eyeIcon">&#128584;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="remember-forgot-row">
+                        <div class="remember-me">
+                            <input type="checkbox" id="rememberMe" name="rememberMe">
+                            <label for="rememberMe">Keep me signed in</label>
+                        </div>
+                        <div class="forgot-password">
+                            <a href="#" onclick="handleForgotPassword(event)">Forgot password</a>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Sign in</button>
+                </form>
+
+                <p class="terms">
+                    By signing in you agree to Crosswalk's <a href="/terms">terms of use</a> and <a href="/privacy">privacy policy</a>.
+                    <span class="copyright">Crosswalk &copy; 2026 &middot; individual viewer level &middot; first-party</span>
+                </p>
+
+                <div class="help-signin">
+                    <button type="button" class="help-signin-btn" onclick="openHelpVideo()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        Need help signing in
+                    </button>
                 </div>
+            </div>
+        </section>
 
-                <div class="remember-forgot-row">
-                    <div class="remember-me">
-                        <input type="checkbox" id="rememberMe" name="rememberMe">
-                        <label for="rememberMe">Remember me</label>
-                    </div>
-                    <div class="forgot-password">
-                        <a href="#" onclick="handleForgotPassword(event)">Forgot Password?</a>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Sign In</button>
-            </form>
-
-            <p class="footer-text">
-                By signing in, you agree to our<br>
-                <a href="/terms">Terms of Use</a> and <a href="/privacy">Privacy Policy</a>
-            </p>
-            <p class="footer-text" style="margin-top: 0.75rem;">
-                Crosswalk &copy; 2025
-            </p>
-        </div>
-
-        <div class="help-signin">
-            <button type="button" class="help-signin-btn" onclick="openHelpVideo()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
-                Need help signing in?
-            </button>
-        </div>
     </div>
 
     <div class="video-modal-overlay" id="helpVideoOverlay" onclick="closeHelpVideo(event)">
         <div class="video-modal" onclick="event.stopPropagation()">
             <div class="video-modal-header">
-                <h2>Signing In</h2>
+                <h2>Signing in</h2>
                 <button type="button" class="video-modal-close" onclick="closeHelpVideo()" aria-label="Close">&times;</button>
             </div>
             <video id="helpVideo" controls playsinline preload="metadata">
@@ -470,7 +552,7 @@
     </div>
 
     <script>
-        // Help video modal
+        // Help video modal - preserved behavior from prior login.
         function openHelpVideo() {
             const overlay = document.getElementById('helpVideoOverlay');
             const video = document.getElementById('helpVideo');
@@ -478,7 +560,6 @@
             video.currentTime = 0;
             video.play().catch(() => {});
         }
-
         function closeHelpVideo(e) {
             if (e && e.target !== e.currentTarget && e.type === 'click') return;
             const overlay = document.getElementById('helpVideoOverlay');
@@ -486,12 +567,11 @@
             overlay.classList.remove('show');
             video.pause();
         }
-
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeHelpVideo();
         });
 
-        // Show error if redirected with error
+        // Show error if redirected with ?error=1
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('error') === '1') {
             document.getElementById('errorMessage').classList.add('show');
@@ -501,22 +581,20 @@
         function togglePasswordVisibility() {
             const passwordInput = document.getElementById('password');
             const eyeIcon = document.getElementById('eyeIcon');
-            
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';
-                eyeIcon.textContent = '👁️';
+                eyeIcon.innerHTML = '&#128065;&#65039;';
             } else {
                 passwordInput.type = 'password';
-                eyeIcon.textContent = '🙈';
+                eyeIcon.innerHTML = '&#128584;';
             }
         }
 
-        // Remember me functionality - load saved username and password on page load
+        // Remember me: load saved username and password on page load
         document.addEventListener('DOMContentLoaded', function() {
             const savedUsername = localStorage.getItem('rememberedUsername');
             const savedPassword = localStorage.getItem('rememberedPassword');
             const rememberMeChecked = localStorage.getItem('rememberMe') === 'true';
-            
             if (rememberMeChecked && savedUsername) {
                 document.getElementById('username').value = savedUsername;
                 document.getElementById('rememberMe').checked = true;
@@ -526,30 +604,26 @@
             }
         });
 
-        // Handle forgot password
         function handleForgotPassword(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
-            
             if (!username) {
-                alert('Please enter your username first, then click "Forgot Password?"');
+                alert('Please enter your username first, then click Forgot password.');
                 document.getElementById('username').focus();
                 return;
             }
-
-            // Show confirmation message
-            const message = `Password reset request for username: ${username}\n\nPlease contact your administrator at:\njenna@crosswalknyc.com\n\nInclude your username in the email.`;
+            const message = 'Password reset request for username: ' + username +
+                '\n\nEmail your administrator: jenna@crosswalknyc.com\nInclude your username in the email.';
             alert(message);
         }
 
-        // Form submission
+        // Form submission - same JSON POST as before.
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('rememberMe').checked;
 
-            // Save or clear remember me preference (username and password)
             if (rememberMe) {
                 localStorage.setItem('rememberedUsername', username);
                 localStorage.setItem('rememberedPassword', password);
@@ -566,13 +640,11 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password, rememberMe })
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     window.location.href = data.redirect || '/';
                 } else {
-                    document.getElementById('errorMessage').textContent = data.error || 'Invalid credentials';
+                    document.getElementById('errorMessage').textContent = data.error || 'Invalid credentials.';
                     document.getElementById('errorMessage').classList.add('show');
                 }
             } catch (error) {

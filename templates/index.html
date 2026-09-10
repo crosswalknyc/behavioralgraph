@@ -21325,37 +21325,64 @@ https://www.instagram.com/p/..."></textarea>
              Styling follows Crosswalk Brand System v1.0 dashboard tokens. -->
         <style>
         #prometheusLauncher {
-            position: fixed; right: 22px; bottom: 22px; width: 54px; height: 54px;
-            border-radius: 50%; background: #15252A; border: 1px solid #3B3D38;
-            display: none; align-items: center; justify-content: center;
+            /* Pill launcher (Crosswalk brand ship 2026-09-09).
+               Was a 54px circle; now a rounded pill with the slash
+               mark avatar + "Ask Prometheus" label + Signal Green
+               status dot on the right. Same drag/click handlers. */
+            position: fixed; right: 22px; bottom: 22px;
+            display: none; align-items: center; gap: 10px;
+            height: 46px; padding: 0 14px 0 6px;
+            border-radius: 999px;
+            background: #0C1618; border: 1px solid #3358FF;
+            color: #E9E8E1;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 13px; font-weight: 600; letter-spacing: -0.005em;
             cursor: grab; z-index: 99000;
-            /* Discreet outline + soft ground shadow. Removed the loud
-               inner white ring (2026-08-26 polish) so the launcher reads
-               as a small elegant target rather than a beacon. */
-            box-shadow: 0 0 0 1px rgba(233,232,225,0.18),
-                        0 10px 26px rgba(0,0,0,0.50);
+            box-shadow: 0 12px 32px rgba(51, 88, 255, 0.28),
+                        0 0 0 1px rgba(233,232,225,0.10);
             touch-action: none; user-select: none; -webkit-user-select: none;
             transition: background 140ms ease-out, transform 140ms ease-out,
-                        box-shadow 140ms ease-out;
+                        box-shadow 140ms ease-out, border-color 140ms ease-out;
         }
-        #prometheusLauncher.pm-on {
-            display: flex;
-            animation: pmGlowPulse 2.6s ease-in-out infinite;
+        #prometheusLauncher.pm-on { display: inline-flex; }
+        #prometheusLauncher:hover {
+            background: #15252A;
+            box-shadow: 0 14px 36px rgba(51, 88, 255, 0.36),
+                        0 0 0 1px rgba(233,232,225,0.14);
         }
-        @keyframes pmGlowPulse {
-            0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.28),
-                                   0 0 14px 3px rgba(255,255,255,0.30),
-                                   0 6px 22px rgba(0,0,0,0.45); }
-            50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.55),
-                              0 0 28px 9px rgba(255,255,255,0.55),
-                              0 6px 22px rgba(0,0,0,0.45); }
-        }
-        #prometheusLauncher:hover { background: #1B2F35; }
         #prometheusLauncher:active { cursor: grabbing; }
         #prometheusLauncher:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
+        #prometheusLauncher .pm-launcher-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: linear-gradient(135deg, #3358FF 0%, #E682FF 100%);
+            display: inline-flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        #prometheusLauncher .pm-launcher-label {
+            display: inline-block; white-space: nowrap;
+        }
+        /* Status dot sits INLINE at the right end of the pill now,
+           not top-right of a circle. Signal Green on Graphite ground;
+           Signal Olive twin on Off-White per the twin rule. */
         #prometheusLauncherDot {
-            position: absolute; right: 2px; top: 2px; width: 11px; height: 11px;
-            border-radius: 50%; background: #C7F23E; border: 2px solid #0C1618;
+            position: static;
+            width: 8px; height: 8px;
+            border-radius: 50%; background: #C7F23E; border: 0;
+            box-shadow: 0 0 0 3px rgba(199, 242, 62, 0.20);
+            flex-shrink: 0;
+        }
+        body[data-theme="light"] #prometheusLauncherDot {
+            background: #5E7E12;
+            box-shadow: 0 0 0 3px rgba(94, 126, 18, 0.20);
+        }
+        /* Mobile: keep the pill but tighten it. */
+        @media (max-width: 480px) {
+            #prometheusLauncher {
+                right: 12px; bottom: 12px;
+                height: 42px; padding: 0 12px 0 5px;
+                font-size: 12px;
+            }
+            #prometheusLauncher .pm-launcher-avatar { width: 28px; height: 28px; }
         }
         #prometheusWidget {
             position: fixed; right: 22px; bottom: 22px; width: 440px;
@@ -21622,8 +21649,11 @@ https://www.instagram.com/p/..."></textarea>
                 } catch (e) { console.warn('[prometheus] chip fill failed', e); }
             }
         </script>
-        <div id="prometheusLauncher" role="button" tabindex="0" aria-label="Open Prometheus" title="Prometheus">
-            <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+        <div id="prometheusLauncher" role="button" tabindex="0" aria-label="Open Prometheus" title="Ask Prometheus">
+            <span class="pm-launcher-avatar" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+            </span>
+            <span class="pm-launcher-label">Ask Prometheus</span>
             <span id="prometheusLauncherDot" aria-hidden="true"></span>
         </div>
         <div id="prometheusWidget" class="no-uppercase" role="dialog" aria-label="Prometheus">
@@ -66641,7 +66671,7 @@ https://www.instagram.com/p/..."></textarea>
                     ? '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' +
                         _synthChatEscapeHtml(_rawText) + '</div>'
                     : _synthChatFormatAgentText(_rawText);
-                var bg = isUser ? 'rgba(139, 92, 246, 0.14)' : 'rgba(255,255,255,0.05)';
+                var bg = isUser ? 'rgba(51, 88, 255, 0.18)' : 'rgba(255,255,255,0.05)';
                 var label = isUser ? 'You' : 'Prometheus';
                 // Quick-reply chips (2026-08-20 Jenna: every keyword
                 // prompt should be clickable like the opening
