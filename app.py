@@ -44828,6 +44828,177 @@ def _synth_chat_gate(allow_api_key: bool = True):
 SYNTH_CHAT_BATCH_MAX = 100
 
 
+# ---------------------------------------------------------------------------
+# REQUEST-LINE GUARD (2026-09-10, Jenna: Audible phantom-subject defect)
+#
+# A line that ASKS for a profile is never itself a subject. Jessie sent:
+#
+#     I need a new profile for the listeners on Audible for:
+#     The Weddings of Lady Miss Jacqueline Audiobook
+#     Becoming Lady Miss Jacqueline Audiobook
+#     Bereavement Committee Audiobook
+#     From the Desk of Lady Miss Audiobook
+#
+# No trigger phrase matched ("a new profile" has "a new" between "need"
+# and "profile", which none of the trigger alternations allow), so the
+# text fell through to `_detect_implicit_list_subjects`, whose newline
+# branch splits the WHOLE message. Its only shape test is that the first
+# token is capitalized - and "I" is capitalized - so the instruction line
+# became subject #1. A complete 20,564-row profile shipped whose SUBJECT
+# row read "I Need a New Profile for the Listeners on Audible For:",
+# plus an Avid cut, both registered in the Select Profile dropdown.
+#
+# The comment block inside that newline branch already promised this
+# check ("If line still looks like a sentence (ends with `:` ...) skip
+# it") but the code was never written. This is that check.
+#
+# Deliberately HIGH PRECISION: dropping a real subject from a batch is
+# also a defect, and plenty of real titles open with a pronoun or a
+# request-shaped verb. All of these must stay subjects:
+#   'I Think You Should Leave', 'We Need to Talk About Kevin',
+#   'Please Dont Destroy', 'Get Out', 'Mission: Impossible' (colon is
+#   interior, not trailing), 'Dont Look Up'.
+# So a bare leading pronoun or a bare request verb is NOT enough. We
+# fire only on a trailing colon, or on a request verb paired with a
+# deliverable noun (profile / audience / cohort / report), or on an
+# explicit "can you ... <verb>" / "please <verb>" construction.
+# ---------------------------------------------------------------------------
+_REQUEST_VERBS = (
+    r'need|want|like|build|create|make|pull|run|generate|give|queue|'
+    r'get|do|send|prepare|produce|set\s+up|put\s+together'
+)
+_DELIVERABLE_NOUNS = (
+    r'profiles?|profile\s+iqs?|iqs?|audiences?|cohorts?|reports?|'
+    r'analys[ie]s|builds?|pulls?|cuts?'
+)
+
+
+def _is_request_instruction_line(s: str) -> bool:
+    """True when `s` is a request / instruction / preamble line rather
+    than the name of a buildable subject.
+
+    High precision by design - see the block comment above for the real
+    titles this must NOT reject.
+    """
+    import re as _re
+    t = (s or '').strip()
+    if not t:
+        return False
+
+    # 1) Trailing colon: a label / preamble line ("... for:", "they are:",
+    #    "here is the list:"). A real title carries its colon in the
+    #    middle ("Mission: Impossible"), never at the end.
+    if t.rstrip().endswith(':'):
+        return True
+
+    low = t.lower()
+
+    # 2) A request verb followed (later in the line) by a deliverable
+    #    noun. "I need a new profile for ..." fires; "We Need to Talk
+    #    About Kevin" does not, because it has no deliverable noun.
+    if _re.search(
+            r'\b(?:' + _REQUEST_VERBS + r')\b.{0,40}?\b(?:'
+            + _DELIVERABLE_NOUNS + r')\b', low, _re.DOTALL):
+        return True
+
+    # 3) Explicit polite request: "can you build ...", "please pull ...".
+    #    Requires the request VERB, so "Please Dont Destroy" survives.
+    if _re.search(
+            r'\b(?:can|could|would|will)\s+you\b.{0,30}?\b(?:'
+            + _REQUEST_VERBS + r')\b', low, _re.DOTALL):
+        return True
+    if _re.match(
+            r'^\s*please\s+.{0,20}?\b(?:' + _REQUEST_VERBS + r')\b',
+            low, _re.DOTALL):
+        return True
+
+    return False
+
+
+# ---------------------------------------------------------------------------
+# TRAILING DATE-RANGE CLAUSE (2026-09-10, same Audible request)
+#
+# The 5th line of that same message was:
+#
+#     From the Desk of Lady Miss Audiobook. Date Range: September 10
+#     2025 to September 9 2026
+#
+# The splitter handed the whole string to the per-subject interpret, so
+# the date-range instruction got BAKED INTO THE SUBJECT NAME. The
+# shipped file's SUBJECT row read 'From the Desk of Lady Miss Audiobook.
+# Date Range: September 10 2025 to September 9 2026' and the window was
+# not honoured either - the SAMPLE SIZE row still carried the standing
+# 2025-07-01 to 2026-06-30 default.
+#
+# Per `default-date-range.mdc` an explicitly-stated window IS honoured,
+# so the clause is parsed into the spec's date_range rather than thrown
+# away. Fail-safe: when the dates cannot be parsed we still STRIP the
+# clause out of the name (that alone fixes the deliverable) and leave
+# the standing default window in place.
+# ---------------------------------------------------------------------------
+_DATE_CLAUSE_RE = None
+
+
+def _parse_loose_date(tok: str):
+    """Parse 'September 10 2025' / '2025-09-10' / '9/10/2025' -> date.
+
+    Returns None when the token is not a date we recognize.
+    """
+    import re as _re
+    from datetime import datetime as _dt
+    t = (tok or '').strip().strip(',').strip()
+    if not t:
+        return None
+    t = _re.sub(r'(\d)(st|nd|rd|th)\b', r'\1', t, flags=_re.IGNORECASE)
+    t = _re.sub(r'\s+', ' ', t).replace(',', '')
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%B %d %Y',
+                '%b %d %Y', '%d %B %Y', '%d %b %Y', '%Y/%m/%d'):
+        try:
+            return _dt.strptime(t, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _split_trailing_date_range(subject: str):
+    """Split a 'Date Range: X to Y' clause off a subject string.
+
+    Returns `(clean_subject, date_range_str_or_None)` where
+    `date_range_str` is the engine's 'START TO END' form
+    ('2025-09-10 TO 2026-09-09'). The clause is removed from the
+    subject even when the dates do not parse.
+    """
+    import re as _re
+    s = (subject or '').strip()
+    if not s:
+        return s, None
+
+    m = _re.search(
+        r'[\s.,;\-(]*\b(?:date\s*range|dates?|date\s*window|window|'
+        r'time\s*frame|timeframe|period)\b\s*[:\-]?\s*'
+        r'(.{4,60}?)\s*$',
+        s, _re.IGNORECASE | _re.DOTALL)
+    if not m:
+        return s, None
+
+    clean = s[:m.start()].strip().rstrip('.,;:-').strip()
+    if not clean:
+        # The whole string was the clause; keep the original rather
+        # than return an empty subject.
+        return s, None
+
+    body = m.group(1).strip()
+    parts = _re.split(r'\s+(?:to|through|thru|until|-|–|—)\s+', body,
+                      maxsplit=1, flags=_re.IGNORECASE)
+    rng = None
+    if len(parts) == 2:
+        d1 = _parse_loose_date(parts[0])
+        d2 = _parse_loose_date(parts[1])
+        if d1 and d2 and d1 < d2:
+            rng = f"{d1.isoformat()} TO {d2.isoformat()}"
+    return clean, rng
+
+
 def _detect_implicit_list_subjects(text: str) -> list[str]:
     """Recognize a bare list of proper nouns as a multi-subject batch
     request even when no explicit "profiles for" trigger phrase is
@@ -44906,6 +45077,14 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
+                continue
+            # REQUEST-LINE GUARD (2026-09-10): the check the comment
+            # above has always promised. "I need a new profile for the
+            # listeners on Audible for:" is the ask, not a subject.
+            # Checked against the RAW line so a trailing colon is still
+            # visible (the strip above removes '.' and ',' only).
+            if _is_request_instruction_line(ln) or \
+                    _is_request_instruction_line(s):
                 continue
             first_tok = s.split()[0]
             if not (first_tok[0].isupper() or first_tok.isupper()):
@@ -45200,6 +45379,14 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
                 continue
             if _re.match(r'^(for|with|during|over|since|in|by)\s',
                           s, _re.IGNORECASE):
+                continue
+            # REQUEST-LINE GUARD (2026-09-10). The trigger path already
+            # strips the matched trigger prefix, so a preamble rarely
+            # survives to here - but a SECOND request line further down
+            # the message would, and the cost of one leaking through is
+            # a shipped phantom profile. Cheap, so check every line.
+            if _is_request_instruction_line(ln) or \
+                    _is_request_instruction_line(s):
                 continue
             subjects.append(s)
 
@@ -46307,6 +46494,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Universe deliverable is titled with exactly this name - "
         "never bake demographic qualifiers or generic audience nouns "
         "into it.\n"
+        "  * `subject` is NEVER the user's REQUEST. The words they "
+        "used to ask for the work are not an audience. If the ask is "
+        "'I need a new profile for the listeners on Audible for: "
+        "<titles>', the subject is the titles' audience - NEVER 'I "
+        "Need a New Profile for the Listeners on Audible For:'. Any "
+        "candidate subject that reads as an instruction, ends with a "
+        "colon, or contains a request verb next to a deliverable noun "
+        "('need a profile', 'build me an audience', 'pull a report', "
+        "'can you run') is the ask, not the entity. Re-read the "
+        "request and name the actual entity instead.\n"
+        "  * `subject` NEVER carries a date-range instruction. 'From "
+        "the Desk of Lady Miss Audiobook. Date Range: September 10 "
+        "2025 to September 9 2026' has subject 'From the Desk of Lady "
+        "Miss Audiobook' and the window goes in `date_range` with "
+        "`date_range_explicit` true. The same applies to any 'Dates:', "
+        "'Window:', 'Timeframe:' or 'Period:' clause.\n"
         "  * If the request embeds a demographic qualifier - an age "
         "band ('Go-GURT consumers (18-24)'), a gender ('female Nike "
         "shoppers'), a generation ('Gen Z Chipotle eaters'), or a "
@@ -54702,6 +54905,44 @@ def _spec_from_draft(draft):
     subject = draft.get('subject') or draft.get('name') or 'Unknown Subject'
     subject = _scrub(subject, field='subject', subject=str(subject)[:80],
                      max_len=200, single_line=True) or 'Unknown Subject'
+    # ---- Phantom-subject + date-clause choke point (2026-09-10, Jenna:
+    # Audible defect). This runs on EVERY external surface - the
+    # dashboard chatbot approve route and partner API v1 both mint their
+    # spec here - so it is the one place that catches a bad subject
+    # regardless of which interpret path produced it.
+    #
+    # (a) Strip a trailing 'Date Range: X to Y' clause out of the name
+    #     and route the window into spec['date_range'] instead. The
+    #     shipped defect baked the clause into the subject AND ignored
+    #     the window.
+    _dr_from_subject = None
+    try:
+        _subj_no_dr, _dr_from_subject = _split_trailing_date_range(subject)
+        if _subj_no_dr and _subj_no_dr != subject:
+            print(f"[spec-guard] stripped date clause from subject: "
+                  f"{subject!r} -> {_subj_no_dr!r} "
+                  f"(window={_dr_from_subject or 'unparsed, default kept'})")
+            subject = _subj_no_dr
+    except Exception:
+        pass
+    # (b) A request / instruction line is not a buildable subject. Both
+    #     callers are exception-safe (the chatbot approve route is
+    #     wrapped by _chatbot_route_guard, the v1 path has its own
+    #     try/except returning 'could not interpret prompt'), so
+    #     raising here surfaces as a calm partner-safe message and no
+    #     frame is ever created. This is the "genuine upstream build
+    #     failure surfaced BEFORE a frame exists" case from
+    #     no-rebuild-level-correction.mdc, not a held file.
+    try:
+        _is_req = _is_request_instruction_line(subject)
+    except Exception:
+        _is_req = False
+    if _is_req:
+        print(f"[spec-guard] REJECT phantom subject (request line): "
+              f"{subject!r}")
+        raise ValueError(
+            f"refusing to build: subject looks like a request line, "
+            f"not an audience: {subject!r}")
     # Canonical-casing choke point (2026-08-24 SHARKNINJA directive):
     # subject + file_stem minted here flow verbatim into the worker's
     # TU key and avid display name, so fixing the casing here fixes
@@ -55219,6 +55460,17 @@ def _spec_from_draft(draft):
         spec['date_range'] = _scrub(draft['engine_date_range'],
                                     field='date_range', subject=subject,
                                     max_len=60, single_line=True)
+    elif _dr_from_subject:
+        # A 'Date Range: X to Y' clause the user wrote into the subject
+        # line itself (2026-09-10 Audible defect). The interpret step
+        # never turned it into a window, so it would otherwise be lost
+        # AND pollute the name. Honour it per default-date-range.mdc
+        # ("if the user says any explicit date ... use their range").
+        # Only applies when the draft carries no resolved window, so an
+        # explicitly-interpreted range always wins.
+        spec['date_range'] = _dr_from_subject
+        print(f"[spec-guard] date_range recovered from subject clause: "
+              f"{_dr_from_subject}")
     if draft.get('cut_date_range'):
         spec['cut_date_range'] = _scrub(draft['cut_date_range'],
                                         field='cut_date_range',
