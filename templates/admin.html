@@ -3606,51 +3606,20 @@
                 </div>
 
                 <div class="access-section" id="dashboardAccessSection" data-active-group="everything">
-                    <!-- 2026-09-09 cleanup: section header carries a live
-                         "N of M granted" chip so admins see at a glance
-                         what this user can open, without scanning every
-                         checkbox. Chip is updated by
-                         updateAccessGroupTabCounts() on modal open + on
-                         every checkbox change in the section. -->
-                    <div class="access-section-header-row">
-                        <div>
-                            <h4>🎯 Dashboard Access</h4>
-                            <div class="access-section-subtitle">Which products this user can open on the dashboard.</div>
-                        </div>
-                        <div class="access-granted-summary" title="Number of products granted out of the total available in the currently active tab. Toggle the group tabs to see per-group counts.">
-                            <span class="access-granted-count" id="dashboardAccessGrantedCount">0</span>
-                            <span class="access-granted-of">of</span>
-                            <span class="access-granted-total" id="dashboardAccessTotalCount">0</span>
-                            <span class="access-granted-word">granted</span>
-                        </div>
-                    </div>
+                    <!-- Header + toolbar (2026-09-09 simpler pass).
+                         Kept: title, group tabs (each pill carries its own
+                         "granted/total" so per-group density reads at a
+                         glance), bulk grant/revoke, subtle Reset.
+                         Dropped: search input (unnecessary for 16 cards),
+                         redundant "N of M granted" chip (Everything tab
+                         pill already carries the same summary).
+                         Legacy cards flagged data-admin-hidden="true" stay
+                         hidden across every group so their .checked values
+                         are still readable to JS without cluttering the UI. -->
+                    <h4 style="margin: 0 0 0.4rem 0;">🎯 Dashboard Access</h4>
+                    <div class="access-section-subtitle" style="margin: 0 0 0.75rem 0;">Which products this user can open on the dashboard.</div>
 
-                    <!-- Streamlined access toolbar (2026-07-30, refined 2026-09-09).
-                         Row 1: search across product labels (input the JS side
-                                already knew about; brought back on the cleanup
-                                pass so admins can jump to a specific product
-                                without scrolling through 16 cards).
-                         Row 2: group tabs (Everything / Core / Trends / Finance /
-                                Conversion). Tab pills show "granted/total" so
-                                per-group grant density is visible without
-                                opening each tab.
-                         Row 3: bulk actions. "Grant all in view" / "Revoke all
-                                in view" act on whatever the admin can SEE right
-                                now (tab + search intersection). "Reset to
-                                defaults" sits to the right and reads as a
-                                safety fallback (secondary style).
-                         Legacy cards flagged data-admin-hidden="true" (retired
-                         Ticket Sales IQ / Talent Fit toggles) stay hidden
-                         across every group so JS reading their .checked
-                         values still works without cluttering the UI. -->
                     <div class="access-toolbar">
-                        <div class="access-toolbar-row">
-                            <div class="access-search">
-                                <span style="font-size: 0.85rem; opacity: 0.6;">🔍</span>
-                                <input type="text" id="dashboardAccessFilter" placeholder="Search products..." oninput="filterDashboardAccessItems(this.value)" autocomplete="off">
-                                <span class="access-count-badge" id="dashboardAccessFilterCount"></span>
-                            </div>
-                        </div>
                         <div class="access-group-tabs" role="tablist">
                             <button type="button" class="access-group-tab active" data-group="everything" onclick="setAccessGroupTab('everything')">Everything <span class="tab-count" data-count-for="everything"></span></button>
                             <button type="button" class="access-group-tab" data-group="core" onclick="setAccessGroupTab('core')">📊 Core <span class="tab-count" data-count-for="core"></span></button>
@@ -3660,8 +3629,8 @@
                         </div>
                         <div class="access-toolbar-row" style="justify-content: space-between;">
                             <div class="access-bulk-actions">
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Grant every product currently in view (respects the active tab and the search filter)">✅ Grant all in view</button>
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Revoke every product currently in view (respects the active tab and the search filter)">🚫 Revoke all in view</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Grant every product in the currently-active tab">✅ Grant all in view</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Revoke every product in the currently-active tab">🚫 Revoke all in view</button>
                             </div>
                             <div class="access-bulk-actions">
                                 <button type="button" class="btn-mini btn-mini-secondary" onclick="dashboardAccessResetDefaults()" title="Reset every product to the sensible default set (Profile IQ, Share of Time, Attribution IQ on; everything else off). Applies across every tab.">⭐ Reset to defaults</button>
@@ -11599,9 +11568,19 @@
                 item.classList.toggle('access-filter-hidden', !match);
                 if (match) shown += 1;
             });
+            // Search-bar counter shows ONLY during an active search so it
+            // doesn't duplicate the header chip ('N of M granted') and the
+            // Everything tab pill when the input is empty. During a search
+            // it becomes real feedback: how many cards matched.
             const counter = document.getElementById('dashboardAccessFilterCount');
             if (counter) {
-                counter.textContent = q ? `${shown} / ${groupTotal} shown` : `${groupTotal} product${groupTotal === 1 ? '' : 's'}`;
+                if (q) {
+                    counter.textContent = `${shown} of ${groupTotal} match${shown === 1 ? '' : 'es'}`;
+                    counter.style.display = '';
+                } else {
+                    counter.textContent = '';
+                    counter.style.display = 'none';
+                }
             }
         }
 
