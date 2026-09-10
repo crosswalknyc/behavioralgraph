@@ -45075,6 +45075,14 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            # Trailing 'Date range: X to Y' clause (2026-09-10, Jenna:
+            # "these dates are not what the user entered either"). When
+            # the reader answers the window question with a custom
+            # range, the chat folds it onto the end of the ask, which
+            # glues it to the LAST line of a list. It is shared
+            # context, never part of anyone's name - the window itself
+            # rides _bind_shared_explicit_window onto every element.
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
                 continue
@@ -45441,6 +45449,14 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             # Strip bulleted prefix "- ", "* ", "• ", "· "
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            # Trailing 'Date range: X to Y' clause (2026-09-10, Jenna:
+            # "these dates are not what the user entered either"). When
+            # the reader answers the window question with a custom
+            # range, the chat folds it onto the end of the ask, which
+            # glues it to the LAST line of a list. It is shared
+            # context, never part of anyone's name - the window itself
+            # rides _bind_shared_explicit_window onto every element.
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
                 continue
@@ -45472,6 +45488,7 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', s)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip()
             if not s or len(s) > 120:
                 continue
@@ -47665,6 +47682,61 @@ def _bind_relative_window(draft, user_text, chat_history=None,
         return False
 
 
+def _bind_shared_explicit_window(draft, user_text, decision=None):
+    """Bind an explicit 'Date range: X to Y' clause that applies to the
+    WHOLE request onto this draft.
+
+    Jenna 2026-09-10, on the Audible batch: "these dates are not what
+    the user entered either". The reader answered the window question
+    with "september 10 2025 to September 9 2026" and all five queued
+    profiles still went out on the standing default window.
+
+    Why: when the reader types a custom window instead of accepting the
+    default, the chat folds the answer onto the end of the original ask
+    as ". Date range: ...". On a batch that trailing clause is glued to
+    the LAST line, so the list splitter hands it to the last subject as
+    part of its name. That one subject could recover the window from
+    its own name (the _split_trailing_date_range guard in
+    _spec_from_draft); every other subject silently kept the default,
+    and the polluted name shipped as the subject.
+
+    A trailing clause on the whole message is shared context, so bind
+    it to every element. Only fires when the draft has no explicit
+    window of its own, so a confident event window, a relative phrase
+    ('trailing 6 months', handled by _bind_relative_window), or a
+    per-subject range always wins. Absolute dates only: an unparseable
+    clause yields nothing and the default stands.
+    """
+    try:
+        if draft.get('date_range_explicit'):
+            return False
+        _, rng = _split_trailing_date_range(str(user_text or ''))
+        if not rng or ' TO ' not in rng:
+            return False
+        start, end = [p.strip() for p in rng.split(' TO ', 1)]
+        if not start or not end:
+            return False
+        cur = draft.get('date_range') or {}
+        if (cur.get('start'), cur.get('end')) != (start, end):
+            try:
+                print(f"[shared-window] "
+                      f"{draft.get('subject') or draft.get('name')!r}: "
+                      f"request states {start} to {end} but draft window "
+                      f"was {cur.get('start')} to {cur.get('end')}; "
+                      f"binding to the stated window")
+            except Exception:
+                pass
+        draft['date_range'] = {'start': start, 'end': end}
+        draft['date_range_explicit'] = True
+        label = _ew_format_label(start, end)
+        draft['date_window_label'] = label or rng
+        _route_window_fields(draft, decision, start, end,
+                             draft['date_window_label'], label)
+        return True
+    except Exception:
+        return False
+
+
 def _append_window_echo_to_cut_label(draft, date_label):
     """Fold the window's date label into the display cut_label so the
     chat confirmation line always shows it ('Rosie O'Donnell Guest Host
@@ -49717,6 +49789,11 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
                 spec_draft['event_window_query'] = _ew['query']
         if _ev_state != 'confident':
             _bind_relative_window(spec_draft, prompt_text, decision=_dn)
+            # Shared 'Date range: X to Y' clause (2026-09-10). On a
+            # batch the clause is glued to the last line, so without
+            # this only that one subject got the stated window.
+            _bind_shared_explicit_window(spec_draft, prompt_text,
+                                         decision=_dn)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
         # Semantic bind-or-ask guards (2026-08-25): array elements are
@@ -54407,6 +54484,8 @@ def api_synth_chat_interpret():
             # a confident event window wins when both are present.
             _bind_relative_window(spec_draft, text, chat_history=history,
                                   decision=_dec_norm)
+            _bind_shared_explicit_window(spec_draft, text,
+                                         decision=_dec_norm)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         # Subscriber IQ dates/season guard (2026-08-25): researches the
         # real air window, flags a season still in progress as 'Season
@@ -63993,6 +64072,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
             draft['event_window_query'] = _ew['query']
     if _ev_state != 'confident':
         _bind_relative_window(draft, prompt, decision=decision)
+        _bind_shared_explicit_window(draft, prompt, decision=decision)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
     # `cuts` was computed above (deliverable defs only), BEFORE the
