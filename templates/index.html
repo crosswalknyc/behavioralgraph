@@ -24668,9 +24668,19 @@ https://www.instagram.com/p/..."></textarea>
             gap: 4px !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .comp-analysis-tabs { border-bottom-color: #C9C6BA !important; }
+        /* The header cells are flex rows, so the size has to claim a full
+           line of its own rather than sitting beside the label. */
+        #dashboardView.piq-v4 .behavioral-header-row .behavioral-sortable,
+        #dashboardView.piq-v4 .interest-header-row .interest-sortable,
+        #dashboardView.piq-v4 .behavioral-header-row .cmp-col-cell,
+        #dashboardView.piq-v4 .interest-header-row .cmp-col-cell {
+            flex-wrap: wrap;
+        }
         #dashboardView.piq-v4 .cmp-col-size,
         .cmp-col-size {
             display: block;
+            flex: 0 0 100%;
+            width: 100%;
             font-size: 0.58rem;
             font-weight: 500;
             letter-spacing: 0.04em;
@@ -24678,6 +24688,13 @@ https://www.instagram.com/p/..."></textarea>
             margin-top: 2px;
             opacity: 0.72;
             white-space: nowrap;
+        }
+        #dashboardView.piq-v4 .behavioral-header-row .profile-col .cmp-col-size,
+        #dashboardView.piq-v4 .behavioral-header-row .cmp-col-cell .cmp-col-size {
+            text-align: left;
+        }
+        #dashboardView.piq-v4 .interest-header-row .cmp-col-size {
+            text-align: right;
         }
         #dashboardView.piq-v4 #tab-marketing .marketing-hero { display: none !important; }
         #dashboardView.piq-v4 #tab-marketing .marketing-subtabs {
