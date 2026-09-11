@@ -25120,6 +25120,14 @@ https://www.instagram.com/p/..."></textarea>
             border-color: #C9C6BA;
         }
         #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head { margin-bottom: 16px; }
+        /* The insights row sets uppercase for its table chrome. Sentences
+           in the rail have to opt back out. */
+        #dashboardView.piq-v4 #piqMomentumRail,
+        #dashboardView.piq-v4 #piqMomentumRail .what,
+        #dashboardView.piq-v4 #piqMomentumRail .why,
+        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head h3 {
+            text-transform: none !important;
+        }
         #dashboardView.piq-v4 .piq-mom-list {
             list-style: none;
             margin: 0;
