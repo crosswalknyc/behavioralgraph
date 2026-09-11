@@ -24224,18 +24224,36 @@ https://www.instagram.com/p/..."></textarea>
             display: grid !important;
             grid-template-columns: 1.4fr 1fr;
             gap: 20px;
-            align-items: start;
+            align-items: start !important;
+            align-content: start !important;
         }
         #dashboardView.piq-v4 #tab-location #locationStats { display: none !important; }
-        #dashboardView.piq-v4 #tab-location #allLocationsContainer { grid-column: 1; grid-row: 1; }
-        #dashboardView.piq-v4 #tab-location .heatmap-container { grid-column: 1; grid-row: 2; }
-        #dashboardView.piq-v4 #tab-location .regional-breakdown { grid-column: 2; grid-row: 1; }
+        #dashboardView.piq-v4 #tab-location #allLocationsContainer {
+            grid-column: 1;
+            grid-row: 1;
+            align-self: start !important;
+            margin-top: 0 !important;
+        }
+        #dashboardView.piq-v4 #tab-location .heatmap-container {
+            grid-column: 1;
+            grid-row: 2;
+            align-self: start !important;
+            margin-top: 0 !important;
+        }
+        #dashboardView.piq-v4 #tab-location .regional-breakdown {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: start !important;
+            margin-top: 0 !important;
+        }
         #dashboardView.piq-v4 #tab-location .location-grid {
             grid-column: 2;
             grid-row: 2;
             display: flex !important;
             flex-direction: column !important;
             gap: 16px !important;
+            align-self: start !important;
+            margin-top: 0 !important;
         }
         #dashboardView.piq-v4 #tab-location .drag-handle { display: none !important; }
         #dashboardView.piq-v4 #tab-location .location-section > h3,
