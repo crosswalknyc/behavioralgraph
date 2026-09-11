@@ -126,6 +126,7 @@ The CSV appears on your **Desktop**.
 | Paramount+   | No                       | —                                                 |
 | Starz        | No                       | URL column is `starz.com/us/en/play/<id>`         |
 | Hallmark Plus| No                       | Main episodes only (bonus filtered); URL = `item/<CODE>` |
+| Amazon       | No                       | 3 id fragments per title (`detail/<ASIN>`, `detail/<GTI>`, `amzn1.dv.gti.<uuid>`); shells + episodes |
 | Netflix      | **Yes** (opens Firefox)  | Uses `.env.local`; a window will open             |
 | HBO MAX      | **Yes** (opens Firefox)  | Uses `.env.local`; needs a visible window         |
 | Disney+      | Situational              | Tries no-login first; opens Firefox only if unsure|
@@ -175,6 +176,6 @@ that's expected. Don't click around in it; just let it finish.
 - `streamscout.py` — the tool you run
 - `production_tags.py` — fills the PRODUCTION column
 - `*_identifier.py` — one resolver per platform (Hulu, Netflix, Peacock, Apple
-  TV, Paramount+, HBO MAX, Disney+, Starz, Hallmark Plus)
+  TV, Paramount+, HBO MAX, Disney+, Starz, Hallmark Plus, Amazon)
 
 That's it — four questions, one spreadsheet. Happy scouting. 🛰️

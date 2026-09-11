@@ -122,6 +122,7 @@ RESOLVER_PLATFORMS = {
     "disney": {"label": "Disney Plus", "module": "disney_episode_identifier"},
     "starz": {"label": "Starz", "module": "starz_episode_identifier"},
     "hallmark": {"label": "Hallmark Plus", "module": "hallmark_episode_identifier"},
+    "amazon": {"label": "Amazon", "module": "amazon_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -136,13 +137,14 @@ RESOLVER_MODULE = {
     "disney": "disney_episode_identifier",
     "starz": "starz_episode_identifier",
     "hallmark": "hallmark_episode_identifier",
+    "amazon": "amazon_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
-                      "starz", "hallmark"}
+                      "starz", "hallmark", "amazon"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
-                  "max", "disney", "starz", "hallmark"]
+                  "max", "disney", "starz", "hallmark", "amazon"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -405,6 +407,8 @@ def choose_platform() -> str:
             tag = "direct · no login"
         elif key == "hallmark":
             tag = "direct · no login"
+        elif key == "amazon":
+            tag = "direct · no login · id fragments"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -514,6 +518,9 @@ def main() -> int:
         elif platform == "hallmark":
             print(f"Resolving {label} episodes from its public catalog "
                   f"(no login) ...")
+        elif platform == "amazon":
+            print(f"Resolving {label} id fragments (ASIN + GTI) from its public "
+                  f"detail pages (no login) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
