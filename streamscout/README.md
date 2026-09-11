@@ -126,7 +126,7 @@ The CSV appears on your **Desktop**.
 | Paramount+   | No                       | —                                                 |
 | Starz        | No                       | URL column is `starz.com/us/en/play/<id>`         |
 | Hallmark Plus| No                       | Main episodes only (bonus filtered); URL = `item/<CODE>` |
-| Amazon       | No                       | 3 id fragments per title (`detail/<ASIN>`, `detail/<GTI>`, `amzn1.dv.gti.<uuid>`); shells + episodes |
+| Amazon       | No                       | Every watch id per title — all offer ASINs (SD/HD/UHD/ad) + GTI in both forms (`detail/<ASIN>`, `detail/<GTI>`, `amzn1.dv.gti.<uuid>`); shells + episodes. Pass `--lean` for just the primary ASIN |
 | Netflix      | **Yes** (opens Firefox)  | Uses `.env.local`; a window will open             |
 | HBO MAX      | **Yes** (opens Firefox)  | Uses `.env.local`; needs a visible window         |
 | Disney+      | Situational              | Tries no-login first; opens Firefox only if unsure|

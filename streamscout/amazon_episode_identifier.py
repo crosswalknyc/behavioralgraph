@@ -4,13 +4,17 @@ amazon_episode_identifier.py  —  Amazon / Prime Video title -> id fragments
 ==================================================================================
 Amazon lists a title under MANY URLs (amazon.com vs primevideo.com, "open" vs
 "share", web vs app), but they all reduce to a couple of per-title ids. We store
-the "portion we actually need" as normalized fragments — 3 forms per title:
+the "portion we actually need" as normalized fragments, per title:
 
   * detail/<ASIN>            e.g. detail/B09NF4J7XW   (amazon.com side)
   * detail/<GTI-26char>      e.g. detail/0KAW4T6OO... (primevideo.com side)
   * amzn1.dv.gti.<uuid>      the internal GTI encoding
 
-(--all-asins additionally emits every offer ASIN: SD/HD/UHD/ad SKUs.)
+To catch every way an episode can show up in clickstream we emit EVERY offer
+ASIN a title carries (SD/HD/UHD/ad-tier SKUs) by default — a season/episode can
+have 4-6 of them. (amazon.com and primevideo.com share the same GTIs, and there
+is no separate series-level entity, so those are the complete id set.) Pass
+--lean for just the primary ASIN per title.
 
 How (no login): Amazon's public /gp/video/detail/<seasonASIN> page embeds a
 `self` map that pairs every title on the page — the season shell AND each
@@ -223,11 +227,15 @@ def discover_asin(title):
 
 
 # ── reusable resolver ─────────────────────────────────────────────────────────
-def resolve(title=None, url=None, kind="series", seasons=None, all_asins=False):
+def resolve(title=None, url=None, kind="series", seasons=None, all_asins=True):
     """Return (show_name, rows). Each row is one normalized id fragment:
         {season, episode, title, identifier, watch_url}
     identifier is 'detail/<ASIN>', 'detail/<GTI-26>' or 'amzn1.dv.gti.<uuid>'.
-    episode == "" marks the season shell."""
+    episode == "" marks the season shell.
+
+    all_asins=True (default) emits EVERY offer ASIN per title (SD/HD/UHD/ad
+    SKUs) so we capture all ids a viewer's URL could carry in clickstream;
+    all_asins=False keeps just the primary ASIN per title."""
     entry_asin = _asin_from_url(url) if url else None
     show = title or ""
     if not entry_asin and url:
@@ -279,9 +287,10 @@ def main():
     ap.add_argument("--seasons", help="e.g. 1 | 1,3 | 1-4 | all")
     ap.add_argument("--url", help="an amazon.com or primevideo.com detail URL")
     ap.add_argument("--production", default="", help="PRODUCTION column value")
-    ap.add_argument("--all-asins", action="store_true",
-                    help="include every offer ASIN (SD/HD/UHD/ad SKUs), not just "
-                         "the primary one")
+    ap.add_argument("--lean", action="store_true",
+                    help="only the primary ASIN per title (default emits every "
+                         "offer ASIN: SD/HD/UHD/ad SKUs, for full clickstream "
+                         "coverage)")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
     args = ap.parse_args()
 
@@ -296,7 +305,7 @@ def main():
 
     try:
         show, rows = resolve(title=title, url=args.url, seasons=seasons,
-                             all_asins=args.all_asins)
+                             all_asins=not args.lean)
     except Exception as e:  # noqa: BLE001
         print(f"  ! Fetch/parse failed: {e!r}"); return 2
     if not rows:

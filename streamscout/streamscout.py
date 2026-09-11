@@ -519,8 +519,8 @@ def main() -> int:
             print(f"Resolving {label} episodes from its public catalog "
                   f"(no login) ...")
         elif platform == "amazon":
-            print(f"Resolving {label} id fragments (ASIN + GTI) from its public "
-                  f"detail pages (no login) ...")
+            print(f"Resolving {label} watch ids (every offer ASIN + GTI, shells "
+                  f"+ episodes) from its public detail pages (no login) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
