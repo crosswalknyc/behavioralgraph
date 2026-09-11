@@ -60,6 +60,52 @@ APP_URL     = (os.environ.get('TRENDS_DIGEST_APP_URL')
                or os.environ.get('PUBLIC_APP_URL')
                or 'https://dashboard.crosswalknyc.com').rstrip('/')
 
+# Deep-link straight into the Trends IQ view (index.html reads ?view= on
+# boot) so the CTA lands the reader where the watchlist lives instead of
+# the default dashboard tab.
+CTA_URL     = f"{APP_URL}/?view=trendsIQ"
+
+# --- Crosswalk brand tokens (August 2026 system) --------------------------
+# This email is an Off-White (light) surface, so it follows the "twin rule":
+# Signal Green (#C7F23E) is dark-surface only and blows out on Off-White, so
+# the accent here is Signal Olive (#5E7E12) with the small-text link olive
+# (#547110). One accent, one job. Table-based single column, ~600px, inline
+# styles, no web fonts (Inter if the client has it, else a system stack).
+_FONT = ("'Inter 18pt','Inter',-apple-system,BlinkMacSystemFont,"
+         "'Segoe UI',Roboto,Helvetica,Arial,sans-serif")
+_BRAND = {
+    'page':   '#E9E8E1',   # Neutral Off-White ground
+    'card':   '#FFFFFF',   # raised light surface
+    'ink':    '#0C1618',   # Graphite Teal / primary text
+    'body':   '#5C6560',   # body + subhead grey
+    'muted':  '#888C89',   # source / count grey
+    'footer': '#5C6466',   # footer grey
+    'border': '#C9C6BA',   # hairline divider
+    'olive':  '#5E7E12',   # Signal Olive (light-surface accent)
+    'link':   '#547110',   # small-text olive, for links
+}
+
+
+def _brand_button(url: str, label: str) -> str:
+    """One bulletproof CTA. Graphite Teal fill with an Off-White label
+    (Signal Olive is type/data only, never a background, so the button rides
+    on a ground color). VML fallback keeps the shape in Outlook desktop."""
+    return (
+        "<!--[if mso]>"
+        f"<v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" "
+        f"xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"{url}\" "
+        "style=\"height:46px;v-text-anchor:middle;width:220px;\" arcsize=\"18%\" "
+        f"strokecolor=\"{_BRAND['ink']}\" fillcolor=\"{_BRAND['ink']}\">"
+        f"<w:anchorlock/><center style=\"color:{_BRAND['page']};"
+        "font-family:sans-serif;font-size:15px;font-weight:bold;\">"
+        f"{label}</center></v:roundrect><![endif]-->"
+        "<!--[if !mso]><!-- -->"
+        f"<a href=\"{url}\" style=\"display:inline-block;background:{_BRAND['ink']};"
+        f"color:{_BRAND['page']};font-family:{_FONT};font-size:15px;font-weight:700;"
+        "line-height:46px;text-decoration:none;padding:0 30px;border-radius:8px;\">"
+        f"{label}</a><!--<![endif]-->"
+    )
+
 
 def _s3():
     import boto3  # type: ignore
@@ -170,13 +216,21 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
 
 def _render_email(user_slug: str, alerts: list[dict],
                    entries: list[dict]) -> tuple[str, str, str]:
-    """Return (subject, html, text) for the digest email."""
+    """Return (subject, html, text) for the digest email.
+
+    Styled to the Crosswalk brand system (August 2026): Off-White ground,
+    Inter 18pt, Signal Olive as the single light-surface accent, one
+    bulletproof CTA. Single-column table layout, inline styles only.
+    """
     today = datetime.now(timezone.utc).strftime('%A, %b %-d')
     n = len(alerts)
     if n == 0:
-        subject = f"Trends IQ digest - {today} - no material moves"
+        subject = f"Trends IQ: no watchlist moves, {today}"
+        preheader = "No rank changes on your watched items in the latest snapshot."
     else:
-        subject = f"Trends IQ digest - {today} - {n} watchlist move{'s' if n != 1 else ''}"
+        moves = f"{n} watchlist move{'s' if n != 1 else ''}"
+        subject = f"Trends IQ: {moves}, {today}"
+        preheader = f"{moves} in the latest Trends IQ snapshot."
 
     bucket = {
         'BREAKOUT':  [], 'RISING':   [], 'FALLING': [],
@@ -199,32 +253,31 @@ def _render_email(user_slug: str, alerts: list[dict],
 
     order = ['BREAKOUT', 'RISING', 'RETURNED', 'NEW', 'FALLING', 'DROPPED_OFF']
     # Display labels for the section headers (internal alert-type keys are
-    # kept as-is for the movement logic). 'RETURNED' reads as 'YOUR TRENDS'.
-    tag_label = {'RETURNED': 'YOUR TRENDS'}
+    # kept as-is for the movement logic). 'RETURNED' reads as 'YOUR TRENDS';
+    # 'DROPPED_OFF' loses the code-token underscore.
+    tag_label = {'RETURNED': 'YOUR TRENDS', 'DROPPED_OFF': 'DROPPED OFF'}
+
+    # ---- plain-text part -------------------------------------------------
     text_lines = [
-        "Crosswalk Trends IQ",
+        "CROSSWALK / TRENDS IQ",
+        "",
         f"Hi! Your Trends IQ Digest for {today} is here!",
         "",
-        "Monitor and manage your watchlist in Trends IQ here:",
-        f"{APP_URL}/",
+        "Monitor and manage your watchlist in Trends IQ:",
+        CTA_URL,
         "",
     ]
-    # Lime-branded header + a prominent CTA pulled up into the main body
-    # (was a small grey footer link) to drive readers back to the dashboard.
-    html_lines = [
-        ("<div style='font-size:22px;font-weight:800;letter-spacing:0.2px;margin:0 0 14px;'>"
-         "<span style='color:#65a30d;'>Crosswalk</span> "
-         "<span style='color:#111111;'>Trends IQ</span></div>"),
-        f"<p style='margin:0 0 6px;font-size:16px;'>Hi! Your Trends IQ Digest for <b>{today}</b> is here!</p>",
-        "<p style='font-size:16px;margin:16px 0 10px;color:#111111;'>Monitor and manage your watchlist in Trends IQ here:</p>",
-        (f"<p style='margin:0 0 22px;'><a href='{APP_URL}/' "
-         "style='display:inline-block;background:#84cc16;color:#0b0b0b;font-weight:700;"
-         "font-size:16px;line-height:1;text-decoration:none;padding:14px 26px;border-radius:8px;'>"
-         "Open your dashboard &rarr;</a></p>"),
-    ]
+
+    # ---- HTML body sections ----------------------------------------------
+    B = _BRAND
+    section_html: list[str] = []
     if not alerts:
-        text_lines.append("No material movement on any of your watched items today.")
-        html_lines.append("<p>No material movement on any of your watched items today.</p>")
+        text_lines.append("No material movement on your watched items in the latest snapshot.")
+        section_html.append(
+            f"<p style=\"margin:0;font-size:14px;line-height:1.5;color:{B['body']};\">"
+            "No material movement on your watched items in the latest snapshot. "
+            "The next rank change will show up here.</p>"
+        )
     else:
         for tag in order:
             items = bucket.get(tag) or []
@@ -232,24 +285,91 @@ def _render_email(user_slug: str, alerts: list[dict],
                 continue
             hdr_label = tag_label.get(tag, tag)
             text_lines.append(f"{hdr_label} ({len(items)}):")
-            html_lines.append(f"<h3 style='margin-bottom:6px;'>{hdr_label} <span style='opacity:0.65;font-weight:400;'>({len(items)})</span></h3><ul style='margin-top:0;'>")
+            rows = []
             for a in items:
                 text_lines.append(_row_line(a))
                 label = (a.get('label') or a.get('key') or '')
                 cur = a.get('curr_rank'); prev = a.get('prev_rank')
                 if cur is not None and prev is not None:
-                    detail = f"was #{prev} -> now <b>#{cur}</b>"
+                    detail = f"was #{prev} &rarr; now <b style=\"color:{B['ink']};\">#{cur}</b>"
                 elif cur is not None:
-                    detail = f"now <b>#{cur}</b>"
+                    detail = f"now <b style=\"color:{B['ink']};\">#{cur}</b>"
                 elif prev is not None:
                     detail = f"dropped from #{prev}"
                 else:
                     detail = ''
-                html_lines.append(f"<li><b>{label}</b> {detail}</li>")
-            html_lines.append("</ul>")
+                rows.append(
+                    "<tr>"
+                    f"<td style=\"padding:9px 0;border-bottom:1px solid {B['border']};"
+                    f"font-size:14px;line-height:1.3;color:{B['ink']};font-weight:700;\">{label}</td>"
+                    f"<td align=\"right\" style=\"padding:9px 0 9px 12px;"
+                    f"border-bottom:1px solid {B['border']};font-size:13px;line-height:1.3;"
+                    f"color:{B['body']};white-space:nowrap;\">{detail}</td>"
+                    "</tr>"
+                )
             text_lines.append("")
+            section_html.append(
+                "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+                "style=\"margin:0 0 22px;border-collapse:collapse;\">"
+                "<tr><td colspan=\"2\" style=\"padding:0 0 6px;font-size:11px;"
+                f"letter-spacing:1px;text-transform:uppercase;font-weight:700;color:{B['ink']};\">"
+                f"{hdr_label} <span style=\"color:{B['muted']};font-weight:500;\">({len(items)})</span>"
+                "</td></tr>" + ''.join(rows) + "</table>"
+            )
 
-    return subject, ''.join(html_lines), '\n'.join(text_lines)
+    text_lines.append("--")
+    text_lines.append("CROSSWALK / BEHAVIORAL INTELLIGENCE")
+
+    button = _brand_button(CTA_URL, "Open Trends IQ &rarr;")
+
+    html = (
+        "<!DOCTYPE html><html lang=\"en\"><head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<meta name=\"x-apple-disable-message-reformatting\">"
+        "<title>Crosswalk Trends IQ</title></head>"
+        f"<body style=\"margin:0;padding:0;background:{B['page']};\">"
+        f"<div style=\"display:none;max-height:0;overflow:hidden;opacity:0;\">{preheader}</div>"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"background:{B['page']};\"><tr><td align=\"center\" style=\"padding:32px 16px;\">"
+        "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"width:600px;max-width:600px;background:{B['card']};border:1px solid {B['border']};"
+        "border-radius:12px;\">"
+        # header row: eyebrow (olive dot + product) left, wordmark right
+        f"<tr><td style=\"padding:28px 32px 6px;font-family:{_FONT};\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
+        "<td align=\"left\" style=\"vertical-align:middle;\">"
+        f"<span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;"
+        f"background:{B['olive']};\"></span>"
+        f"<span style=\"padding-left:8px;font-size:11px;letter-spacing:2.6px;"
+        f"text-transform:uppercase;color:{B['body']};\">Trends IQ</span></td>"
+        f"<td align=\"right\" style=\"vertical-align:middle;font-size:16px;font-weight:800;"
+        f"letter-spacing:0.2px;color:{B['ink']};\">Crosswalk</td>"
+        "</tr></table></td></tr>"
+        # greeting + lead
+        f"<tr><td style=\"padding:16px 32px 0;font-family:{_FONT};\">"
+        f"<p style=\"margin:0;font-size:20px;line-height:1.3;font-weight:800;color:{B['ink']};\">"
+        f"Hi! Your Trends IQ Digest for {today} is here!</p>"
+        f"<p style=\"margin:12px 0 0;font-size:15px;line-height:1.5;color:{B['body']};\">"
+        "Monitor and manage your watchlist in Trends IQ.</p></td></tr>"
+        # CTA
+        f"<tr><td style=\"padding:18px 32px 6px;font-family:{_FONT};\">{button}</td></tr>"
+        # divider
+        f"<tr><td style=\"padding:10px 32px 0;\"><div style=\"border-top:1px solid {B['border']};"
+        "font-size:0;line-height:0;\">&nbsp;</div></td></tr>"
+        # sections
+        f"<tr><td style=\"padding:22px 32px 4px;font-family:{_FONT};\">{''.join(section_html)}</td></tr>"
+        # footer
+        f"<tr><td style=\"padding:18px 32px 28px;font-family:{_FONT};border-top:1px solid {B['border']};\">"
+        f"<div style=\"font-size:9px;letter-spacing:2px;text-transform:uppercase;color:{B['footer']};\">"
+        "Crosswalk &nbsp;/&nbsp; Behavioral intelligence</div>"
+        f"<div style=\"margin-top:8px;font-size:12px;line-height:1.5;color:{B['footer']};\">"
+        f"Manage your watchlist in <a href=\"{CTA_URL}\" style=\"color:{B['link']};"
+        "text-decoration:underline;\">Trends IQ</a>.</div></td></tr>"
+        "</table></td></tr></table></body></html>"
+    )
+
+    return subject, html, '\n'.join(text_lines)
 
 
 def _send_email(to_addr: str, subject: str, html: str, text: str, *, dry_run: bool) -> None:
