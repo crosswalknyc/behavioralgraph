@@ -87,20 +87,19 @@ _BRAND = {
 
 
 def _brand_button(url: str, label: str) -> str:
-    """One bulletproof CTA. Graphite Teal fill with an Off-White label
-    (Signal Olive is type/data only, never a background, so the button rides
-    on a ground color). VML fallback keeps the shape in Outlook desktop."""
+    """One bulletproof CTA. Signal Olive fill (matching the footer link)
+    with an Off-White label. VML fallback keeps the shape in Outlook."""
     return (
         "<!--[if mso]>"
         f"<v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" "
         f"xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"{url}\" "
         "style=\"height:46px;v-text-anchor:middle;width:220px;\" arcsize=\"18%\" "
-        f"strokecolor=\"{_BRAND['ink']}\" fillcolor=\"{_BRAND['ink']}\">"
+        f"strokecolor=\"{_BRAND['link']}\" fillcolor=\"{_BRAND['link']}\">"
         f"<w:anchorlock/><center style=\"color:{_BRAND['page']};"
         "font-family:sans-serif;font-size:15px;font-weight:bold;\">"
         f"{label}</center></v:roundrect><![endif]-->"
         "<!--[if !mso]><!-- -->"
-        f"<a href=\"{url}\" style=\"display:inline-block;background:{_BRAND['ink']};"
+        f"<a href=\"{url}\" style=\"display:inline-block;background:{_BRAND['link']};"
         f"color:{_BRAND['page']};font-family:{_FONT};font-size:15px;font-weight:700;"
         "line-height:46px;text-decoration:none;padding:0 30px;border-radius:8px;\">"
         f"{label}</a><!--<![endif]-->"
@@ -261,7 +260,8 @@ def _render_email(user_slug: str, alerts: list[dict],
     text_lines = [
         "CROSSWALK / TRENDS IQ",
         "",
-        f"Hi! Your Trends IQ Digest for {today} is here!",
+        "Good morning!",
+        f"Your Trends IQ Digest for {today} is here.",
         "",
         "Monitor and manage your watchlist in Trends IQ:",
         CTA_URL,
@@ -349,7 +349,9 @@ def _render_email(user_slug: str, alerts: list[dict],
         # greeting + lead
         f"<tr><td style=\"padding:16px 32px 0;font-family:{_FONT};\">"
         f"<p style=\"margin:0;font-size:20px;line-height:1.3;font-weight:800;color:{B['ink']};\">"
-        f"Hi! Your Trends IQ Digest for {today} is here!</p>"
+        "Good morning!</p>"
+        f"<p style=\"margin:8px 0 0;font-size:16px;line-height:1.4;color:{B['ink']};\">"
+        f"Your Trends IQ Digest for {today} is here.</p>"
         f"<p style=\"margin:12px 0 0;font-size:15px;line-height:1.5;color:{B['body']};\">"
         "Monitor and manage your watchlist in Trends IQ.</p></td></tr>"
         # CTA
