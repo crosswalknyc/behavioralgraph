@@ -23273,9 +23273,23 @@ https://www.instagram.com/p/..."></textarea>
                 padding: 18px 16px 40px;
             }
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile {
+        #dashboardView.piq-v4.piq-has-profile {
             overflow-x: hidden !important;
             overflow-y: auto !important;
+        }
+        #piqStickyChrome.piq-v4.piq-has-profile,
+        #piqStickyChrome.piq-chrome-fixed {
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            bottom: auto !important;
+        }
+        #piqStickyChrome .tab-btn,
+        #piqStickyChrome .tab-btn.has-tooltip {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 8;
         }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileAndToolbarRow,
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow {
@@ -25128,19 +25142,19 @@ https://www.instagram.com/p/..."></textarea>
                             <button type="button" class="piq-change-profile" id="piqChangeProfileBtn">Select Profile</button>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs">
-                                    <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                                    <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                                    <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
-                                    <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
-                                    <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                                    <button type="button" class="tab-btn active has-tooltip" data-tab="insights" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                                    <button type="button" class="tab-btn has-tooltip" data-tab="demographics" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                                    <button type="button" class="tab-btn has-tooltip" data-tab="behavioral" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
+                                    <button type="button" class="tab-btn has-tooltip" data-tab="interests" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                                    <button type="button" class="tab-btn has-tooltip" data-tab="location" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
                                 </div>
                                 <div class="toolbar-section-label">DATA</div>
                             </div>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs" id="analysisToolsTabs">
-                                    <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                    <button type="button" class="tab-btn tool-tab has-tooltip" data-tab="comparison" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook - media mix, per-platform priority, lookalike seed spec, geo targeting, retargeting, creator roster, and brand-partner shortlist." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                    <button type="button" class="tab-btn tool-tab has-tooltip" data-tab="marketing" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook - media mix, per-platform priority, lookalike seed spec, geo targeting, retargeting, creator roster, and brand-partner shortlist." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                 </div>
                                 <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -122440,8 +122454,10 @@ https://www.instagram.com/p/..."></textarea>
             document.querySelectorAll('.tab-content').forEach(t => {
                 t.scrollTop = 0;
             });
-            // Scroll window to top as well for good measure
-            window.scrollTo(0, 0);
+            var _piqViewScroll = document.getElementById('dashboardView');
+            if (!_piqViewScroll || !_piqViewScroll.classList.contains('piq-v4')) {
+                window.scrollTo(0, 0);
+            }
             
             // Track tab usage
             trackActivity(tabName);
@@ -122573,10 +122589,14 @@ https://www.instagram.com/p/..."></textarea>
                 if (dc) dc.style.display = 'block';
                 if (window._piqV4SyncBrowseLabel) window._piqV4SyncBrowseLabel();
             }
-            if (view.classList.contains('piq-has-profile') && window._piqV4DressPages) {
-                try { window._piqV4DressPages(); } catch (_e) {}
-                setTimeout(function() { try { window._piqV4DressPages(); } catch (_e) {} }, 80);
-                setTimeout(function() { try { window._piqV4DressPages(); } catch (_e) {} }, 400);
+            if (window._piqV4EnsureStickyChrome) {
+                try { window._piqV4EnsureStickyChrome(); } catch (_e) {}
+            }
+            if (window._piqV4BindNav) {
+                try { window._piqV4BindNav(); } catch (_e) {}
+            }
+            if (window._piqV4SyncLibraryRail) {
+                try { window._piqV4SyncLibraryRail(); } catch (_e) {}
             }
         };
         window._piqV4OnClear = function() {
@@ -123429,11 +123449,16 @@ https://www.instagram.com/p/..."></textarea>
                 view.insertBefore(spacer, view.firstChild);
             }
             var vr = view.getBoundingClientRect();
+            var header = document.querySelector('.container > header, header');
+            var headerBottom = 0;
+            if (header) headerBottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom));
             wrap.style.position = 'fixed';
-            wrap.style.top = Math.max(0, Math.round(vr.top)) + 'px';
+            wrap.style.top = Math.max(headerBottom, Math.round(vr.top), 0) + 'px';
             wrap.style.left = Math.round(vr.left) + 'px';
             wrap.style.width = Math.round(vr.width) + 'px';
             wrap.style.right = 'auto';
+            wrap.style.bottom = 'auto';
+            wrap.style.height = 'auto';
             wrap.style.zIndex = '2147481000';
             wrap.style.pointerEvents = 'auto';
             spacer.style.height = (wrap.offsetHeight || 0) + 'px';
@@ -123493,11 +123518,96 @@ https://www.instagram.com/p/..."></textarea>
             if (window._piqV4PinChrome) window._piqV4PinChrome();
             return wrap;
         };
+
+        window._piqV4BindNav = function() {
+            function once(el, key, fn) {
+                if (!el || el[key]) return;
+                el[key] = true;
+                el.addEventListener('click', fn, true);
+            }
+            function tabNameFrom(btn) {
+                var name = btn.getAttribute('data-tab');
+                if (name) return name;
+                var m = (btn.getAttribute('onclick') || '').match(/showTab\('([^']+)'\)/);
+                return m ? m[1] : '';
+            }
+            document.querySelectorAll('#toolbarRow .tab-btn').forEach(function(btn) {
+                once(btn, '_piqNavBound', function(e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    var feat = btn.getAttribute('data-feature') || '';
+                    if (feat === 'execSummary' || feat === 'collaborate') return;
+                    var name = tabNameFrom(btn);
+                    if (name && typeof window.showTab === 'function') window.showTab(name);
+                });
+            });
+            document.querySelectorAll('#profileTabsBar .profile-tab').forEach(function(chip) {
+                once(chip, '_piqChipBound', function(e) {
+                    if (e.target && e.target.closest && e.target.closest('.profile-tab-close')) return;
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    var id = chip.getAttribute('data-tab-id');
+                    if (id != null && typeof window.switchToProfileTab === 'function') window.switchToProfileTab(id);
+                });
+            });
+            document.querySelectorAll('#profileTabsBar .profile-tab-close').forEach(function(btn) {
+                once(btn, '_piqChipCloseBound', function(e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    var id = btn.getAttribute('data-tab-id');
+                    if (id != null && typeof window.closeProfileTab === 'function') window.closeProfileTab(id);
+                });
+            });
+            once(document.getElementById('piqChangeProfileBtn'), '_piqBound', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar();
+            });
+            once(document.getElementById('dashViewDeltasBtn'), '_piqCutsBound', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (typeof window._openCompareDateRangesPopover === 'function') window._openCompareDateRangesPopover();
+            });
+            var expBtn = document.querySelector('#toolbarRow .dash-dropdown > button, #toolbarRow .dash-dropdown .dash-action-btn');
+            once(expBtn, '_piqExpBound', function(e) {
+                if (e.target && e.target.closest && e.target.closest('#tabExportDropdown')) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
+            });
+            once(document.getElementById('hoverToggle'), '_piqHoverBound', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (typeof window.toggleHoverDescriptors === 'function') window.toggleHoverDescriptors();
+            });
+            once(document.getElementById('dashDisplayToggle'), '_piqUsBound', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
+            });
+            document.querySelectorAll('#profileTabsBar .profile-help-pill').forEach(function(help) {
+                once(help, '_piqHelpBound', function(e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    var hoc = help.getAttribute('onclick') || '';
+                    var hm = hoc.match(/openHowToVideo\(['"]([^'"]+)['"](?:,\s*['"]([^'"]*)['"])?/);
+                    if (hm && typeof window.openHowToVideo === 'function') window.openHowToVideo(hm[1], hm[2] || 'Profile IQ');
+                });
+            });
+            document.querySelectorAll('#profileTabsBar .profile-tab-close-all').forEach(function(btn) {
+                once(btn, '_piqCloseAllBound', function(e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    if (typeof window.closeAllProfileTabs === 'function') window.closeAllProfileTabs();
+                });
+            });
+        };
         window._piqV4DressTabs = function() {
             var view = document.getElementById('dashboardView');
             var bar = document.getElementById('profileTabsBar');
             var row = document.getElementById('toolbarRow');
             if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
+            if (window._piqV4BindNav) window._piqV4BindNav();
             var n = 1;
             document.querySelectorAll('#toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
@@ -123584,108 +123694,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
                 });
             }
-            if (!document._piqChromeDispatchBound) {
-                document._piqChromeDispatchBound = true;
-                document.addEventListener('click', function(e) {
-                    var chrome = document.getElementById('piqStickyChrome');
-                    if (!chrome || chrome.style.display === 'none') return;
-                    var t = e.target;
-                    if (!t || !t.closest) return;
-                    if (t.closest('#piqProfileSidebar, #piqSidebarScrim, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay, #creditsModal')) return;
-                    var hit = chrome.contains(t) ? t : null;
-                    if (!hit) {
-                        var x = e.clientX, y = e.clientY;
-                        if (typeof x !== 'number' || typeof y !== 'number') return;
-                        var r = chrome.getBoundingClientRect();
-                        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return;
-                        var stack = document.elementsFromPoint(x, y) || [];
-                        for (var i = 0; i < stack.length; i++) {
-                            if (chrome.contains(stack[i]) && stack[i] !== chrome) { hit = stack[i]; break; }
-                        }
-                        if (!hit) return;
-                    }
-                    var closer = hit.closest('.profile-tab-close');
-                    if (closer) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var closeId = closer.getAttribute('data-tab-id');
-                        if (closeId != null && typeof window.closeProfileTab === 'function') window.closeProfileTab(closeId);
-                        return;
-                    }
-                    var help = hit.closest('.profile-help-pill');
-                    if (help) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var hoc = help.getAttribute('onclick') || '';
-                        var hm = hoc.match(/openHowToVideo\(['"]([^'"]+)['"](?:,\s*['"]([^'"]*)['"])?/);
-                        if (hm && typeof window.openHowToVideo === 'function') window.openHowToVideo(hm[1], hm[2] || 'Profile IQ');
-                        return;
-                    }
-                    var closeAll = hit.closest('.profile-tab-close-all');
-                    if (closeAll) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window.closeAllProfileTabs === 'function') window.closeAllProfileTabs();
-                        return;
-                    }
-                    var chip = hit.closest('#profileTabsBar .profile-tab');
-                    if (chip) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var chipId = chip.getAttribute('data-tab-id');
-                        if (chipId != null && typeof window.switchToProfileTab === 'function') window.switchToProfileTab(chipId);
-                        return;
-                    }
-                    var tabBtn = hit.closest('#toolbarRow .tab-btn');
-                    if (tabBtn) {
-                        var feat = tabBtn.getAttribute('data-feature') || '';
-                        if (feat === 'execSummary' || feat === 'collaborate') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                        }
-                        var toc = tabBtn.getAttribute('onclick') || '';
-                        var tm = toc.match(/showTab\('([^']+)'\)/);
-                        if (tm && typeof window.showTab === 'function') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.showTab(tm[1]);
-                        }
-                        return;
-                    }
-                    if (hit.closest('#dashViewDeltasBtn')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window._openCompareDateRangesPopover === 'function') window._openCompareDateRangesPopover();
-                        return;
-                    }
-                    if (hit.closest('#piqChangeProfileBtn')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window._piqV4ToggleSidebar === 'function') window._piqV4ToggleSidebar();
-                        return;
-                    }
-                    var expBtn = hit.closest('.dash-dropdown > button, .dash-dropdown .dash-action-btn');
-                    if (expBtn && !hit.closest('#tabExportDropdown')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
-                        return;
-                    }
-                    if (hit.closest('#hoverToggle')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window.toggleHoverDescriptors === 'function') window.toggleHoverDescriptors();
-                        return;
-                    }
-                    if (hit.closest('#dashDisplayToggle')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
-                        return;
-                    }
-                }, true);
-            }
+            if (window._piqV4BindNav) window._piqV4BindNav();
             if (window._piqV4DressTabs) {
                 try { window._piqV4DressTabs(); } catch (_e) {}
             }
