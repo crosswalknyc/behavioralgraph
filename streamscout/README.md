@@ -18,8 +18,9 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 - **SEASON** = `Season 1`, `Season 2`, … (blank for movies, and for Apple TV+
   which keys a whole series to one id).
 
-> 📄 **The full platform list is in `StreamScout-Platforms.xlsx`** (on the
-> Desktop) — who needs a login, what each id looks like, etc. Keep it handy.
+> 💡 This how-to is all you need to run the tool. (There's also an optional
+> one-page grid, `StreamScout-Platforms.xlsx`, shared with the wider team if you
+> ever want an at-a-glance platform reference — but you don't need it here.)
 
 ---
 
@@ -116,8 +117,8 @@ The CSV appears on your **Desktop**. That's the whole job.
 When a browser platform runs, **let the Firefox window do its thing** — don't
 click around in it.
 
-*(Details for each — logins, what each id looks like — are in
-`StreamScout-Platforms.xlsx`.)*
+*(That's everything you need. An optional at-a-glance grid of all 10 platforms
+lives in the shared `StreamScout-Platforms.xlsx` if you ever want it.)*
 
 ---
 
