@@ -12,7 +12,7 @@ import re
 import time
 import traceback
 from datetime import datetime, timezone
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -24,6 +24,8 @@ LINKEDIN_API = "https://api.linkedin.com/rest"
 LINKEDIN_V2 = "https://api.linkedin.com/v2"
 LINKEDIN_VERSION = os.environ.get("LINKEDIN_API_VERSION", "202509")
 SCOPES = "openid profile email w_organization_social r_organization_social"
+DEAD_SCOPES = frozenset({"offline_access", "r_liteprofile", "r_emailaddress"})
+UNKNOWN_SCOPE_RE = re.compile(r"unknown scope\s+[\"']?([a-z0-9_]+)", re.I)
 IMAGE_NAME = "linkedin.jpg"
 SEED_HEADLINE = "YouTube was supposed to lose. 22.4 million people proved it did not."
 SEED_TEXT = (
@@ -87,6 +89,7 @@ def empty_settings_linkedin():
         "expires_at": 0,
         "pages": [],
         "oauth_state": "",
+        "oauth_rejected": [],
         "connected_at": "",
     }
 
@@ -205,18 +208,58 @@ def merge_campaign_body(current, body):
     return row
 
 
-def authorization_url(settings, state_token):
+def requested_scopes(settings=None):
+    rejected = set(_li_settings(settings).get("oauth_rejected") or [])
+    rejected |= DEAD_SCOPES
+    return [s for s in SCOPES.split() if s and s not in rejected]
+
+
+def unknown_scope_from_error(err):
+    text = unescape(err or "")
+    for token in ("&quot;", "&#34;", "&#39;", "&apos;"):
+        text = text.replace(token, '"')
+    match = UNKNOWN_SCOPE_RE.search(text)
+    return (match.group(1) if match else "").strip()
+
+
+def authorization_url(settings, state_token, scopes=None):
     cid = client_id(settings)
     if not cid:
+        return ""
+    scope = " ".join(scopes or requested_scopes(settings))
+    if not scope:
         return ""
     q = urlencode({
         "response_type": "code",
         "client_id": cid,
         "redirect_uri": redirect_uri(settings),
         "state": state_token,
-        "scope": SCOPES,
+        "scope": scope,
     })
     return f"{LINKEDIN_AUTH}?{q}"
+
+
+def retry_authorization_url(rejected):
+    """Start a fresh LinkedIn login without a scope the app does not have."""
+    rejected = (rejected or "").strip()
+    if not rejected:
+        return ""
+    nl = _nl()
+    settings = (nl.load_state_raw() or {}).get("settings") or {}
+    if not client_id(settings) or not client_secret(settings):
+        return ""
+    li = _li_settings(settings)
+    already = set(li.get("oauth_rejected") or [])
+    already.add(rejected)
+    already |= DEAD_SCOPES
+    scopes = [s for s in SCOPES.split() if s and s not in already]
+    if not scopes:
+        return ""
+    token = nl.sign_token({"p": "li", "t": _utcnow(), "retry": rejected})
+    li["oauth_rejected"] = sorted(already)
+    li["oauth_state"] = token
+    persist_linkedin_settings(li)
+    return authorization_url(settings, token, scopes)
 
 
 def _api_headers(token, rest=True):
@@ -364,6 +407,7 @@ def apply_oauth_payload(settings, payload, pages):
     li["expires_at"] = int(time.time()) + expires_in - 120 if expires_in else 0
     li["pages"] = pages
     li["oauth_state"] = ""
+    li["oauth_rejected"] = []
     li["connected_at"] = _utcnow()
     if len(pages) == 1:
         li["organization_id"] = pages[0]["id"]

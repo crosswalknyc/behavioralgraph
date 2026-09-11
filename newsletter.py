@@ -1676,6 +1676,7 @@ def api_linkedin_connect():
     def mutate(st):
         li = nli._li_settings(st.get("settings") or {})
         li["oauth_state"] = token
+        li["oauth_rejected"] = sorted(nli.DEAD_SCOPES)
         st.setdefault("settings", {})["linkedin"] = li
         return st
 
@@ -2487,8 +2488,17 @@ def linkedin_callback():
     err = unescape((request.args.get("error_description") or request.args.get("error") or "").strip())
     err = err.replace("&quot;", '"').strip()
     if err:
-        if "offline_access" in err or "unknown scope" in err.lower():
-            err = "LinkedIn rejected a permission this app does not have. Try Connect again."
+        rejected = nli.unknown_scope_from_error(err)
+        retry = nli.retry_authorization_url(rejected) if rejected in nli.DEAD_SCOPES or rejected == "offline_access" else ""
+        if retry:
+            return redirect(retry)
+        if rejected and "organization" in rejected:
+            err = (
+                "The LinkedIn app needs the Community Management API product "
+                "before the company page can connect. Add that product, then Connect again."
+            )
+        elif "offline_access" in err or "unknown scope" in err.lower():
+            err = "LinkedIn rejected a permission this app does not have. Close this tab and click Connect company page again."
         return _linkedin_result_page("LinkedIn did not connect. " + err, ok=False), 400
     code = (request.args.get("code") or "").strip()
     state_tok = (request.args.get("state") or "").strip()
