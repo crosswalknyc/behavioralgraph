@@ -24356,6 +24356,23 @@ https://www.instagram.com/p/..."></textarea>
             align-self: start !important;
             margin-top: 0 !important;
         }
+        #dashboardView.piq-v4 #tab-location .piq-loc-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 0;
+            align-self: start;
+        }
+        #dashboardView.piq-v4 #tab-location .piq-loc-col.is-left { grid-column: 1; grid-row: 1; }
+        #dashboardView.piq-v4 #tab-location .piq-loc-col.is-right { grid-column: 2; grid-row: 1; }
+        #dashboardView.piq-v4 #tab-location .piq-loc-col > * {
+            grid-column: auto !important;
+            grid-row: auto !important;
+            align-self: stretch !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin-top: 0 !important;
+        }
         #dashboardView.piq-v4 #tab-location .location-grid {
             grid-column: 2;
             grid-row: 2;
@@ -24384,7 +24401,9 @@ https://www.instagram.com/p/..."></textarea>
             #dashboardView.piq-v4 #tab-location #allLocationsContainer,
             #dashboardView.piq-v4 #tab-location .heatmap-container,
             #dashboardView.piq-v4 #tab-location .regional-breakdown,
-            #dashboardView.piq-v4 #tab-location .location-grid {
+            #dashboardView.piq-v4 #tab-location .location-grid,
+            #dashboardView.piq-v4 #tab-location .piq-loc-col.is-left,
+            #dashboardView.piq-v4 #tab-location .piq-loc-col.is-right {
                 grid-column: 1;
                 grid-row: auto;
             }
@@ -25216,8 +25235,8 @@ https://www.instagram.com/p/..."></textarea>
             background: #5E7E12;
             box-shadow: 0 0 0 3px #FFFFFF;
         }
-        #dashboardView.piq-v4 .piq-mom-item:last-child .dot { background: #E682FF; }
-        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item:last-child .dot { background: #8E3FA8; }
+        #dashboardView.piq-v4 .piq-mom-item:first-child .dot { background: #E682FF; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item:first-child .dot { background: #8E3FA8; }
         #dashboardView.piq-v4 .piq-mom-item .when {
             font-size: 10px;
             letter-spacing: 0.14em;
@@ -123318,10 +123337,15 @@ https://www.instagram.com/p/..."></textarea>
                 row.appendChild(rail);
             }
             row.classList.add('piq-has-rail');
+            // Newest first. Cached payloads are stored oldest first, so sort
+            // here rather than upstream and every existing entry flips too.
+            var ordered = events.slice().sort(function(a, b) {
+                return String(b.date || '').localeCompare(String(a.date || ''));
+            });
             var html = '<div class="piq-panel-head"><div class="stack">' +
                 '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
                 '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
-            events.forEach(function(ev) {
+            ordered.forEach(function(ev) {
                 var when = window._piqV4MomentumDate(ev.date);
                 html += '<li class="piq-mom-item"><span class="dot"></span>' +
                     (when ? '<div class="when">' + window._piqV4Esc(when) + '</div>' : '') +
@@ -123662,9 +123686,41 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (rail.innerHTML !== html) rail.innerHTML = html;
         };
+        // Grid rows are shared across columns, so a short card next to a tall
+        // one inherits the tall row and leaves a dead block under it. Give each
+        // column its own stack so both pack to their own content.
+        window._piqV4LocationColumns = function(tab) {
+            var all = tab.querySelector('#allLocationsContainer');
+            var heat = tab.querySelector('.heatmap-container');
+            var reg = tab.querySelector('.regional-breakdown');
+            var grid = tab.querySelector('.location-grid');
+            if (!all || !heat || !reg || !grid) return;
+            var left = tab.querySelector('.piq-loc-col.is-left');
+            var right = tab.querySelector('.piq-loc-col.is-right');
+            if (left && right && all.parentNode === left && heat.parentNode === left
+                    && reg.parentNode === right && grid.parentNode === right) return;
+            if (!left) {
+                left = document.createElement('div');
+                left.className = 'piq-loc-col is-left';
+                tab.appendChild(left);
+            }
+            if (!right) {
+                right = document.createElement('div');
+                right.className = 'piq-loc-col is-right';
+                tab.appendChild(right);
+            }
+            [[all, left], [heat, left], [reg, right], [grid, right]].forEach(function(pair) {
+                if (pair[0].parentNode !== pair[1]) pair[1].appendChild(pair[0]);
+            });
+            // The map sizes itself to its box, so tell it the box moved.
+            setTimeout(function() {
+                try { window.dispatchEvent(new Event('resize')); } catch (_e) {}
+            }, 0);
+        };
         window._piqV4DressLocation = function() {
             var tab = document.getElementById('tab-location');
             if (!tab) return;
+            try { window._piqV4LocationColumns(tab); } catch (_e) {}
             function labelSection(sel, id, num, eyebrow, title) {
                 var el = tab.querySelector(sel);
                 if (!el || el.querySelector('#' + id)) return;
