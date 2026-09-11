@@ -21462,18 +21462,15 @@ https://www.instagram.com/p/..."></textarea>
             #prometheusLauncher .pm-launcher-avatar { width: 28px; height: 28px; }
         }
         #prometheusWidget {
-            position: fixed; right: 22px; bottom: 22px; width: 440px;
-            height: min(660px, calc(100vh - 44px));
+            position: fixed; right: 22px; bottom: 22px; width: 480px;
+            height: min(680px, calc(100vh - 44px));
             min-width: 360px; min-height: 440px; max-width: 94vw; max-height: 94vh;
-            background: #0C1618; border: 1px solid #3B3D38; border-radius: 14px;
-            /* Slight static white outline + deep drop shadow. No pulse when
-               open (Jenna 2026-08-21): "when the chatbot is open dont have
-               It pulse glow just a slight white border". */
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.30),
-                        0 14px 44px rgba(0,0,0,0.55);
+            background: #15252A; border: 1px solid #3B3D38; border-radius: 20px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.36);
             display: none; flex-direction: column; overflow: hidden;
             z-index: 99000;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #E9E8E1;
         }
         #prometheusWidget.pm-on {
             display: flex;
@@ -21486,47 +21483,187 @@ https://www.instagram.com/p/..."></textarea>
         }
         @keyframes pmFade { from { opacity: 0; } to { opacity: 1; } }
         #prometheusHeader {
-            display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-            padding: 0.75rem 1rem; background: #15252A; border-bottom: 1px solid #3B3D38;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 14px 18px; background: #1B2F35; border-bottom: 1px solid #3B3D38;
             cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
             flex: 0 0 auto;
         }
         #prometheusHeader:active { cursor: grabbing; }
-        #prometheusTitle { font-size: 14px; font-weight: 700; color: #E9E8E1; line-height: 1.15;
-            letter-spacing: 0.005em; }
-        /* Eyebrow-style subtitle per Crosswalk brand: tracked caps,
-           muted grey, sits under the title like a spec label. */
-        #prometheusSub { font-size: 9.5px; color: #9AA09B; line-height: 1.2;
-            margin-top: 3px; text-transform: uppercase !important;
-            letter-spacing: 0.14em; font-weight: 500; }
-        /* Chat body copy opts out of the site-wide uppercase (the
-           widget carries .no-uppercase) so replies read in sentence
-           case per the brand voice (Jenna 2026-08-27: "kinda hard to
-           read can you clean it up"). Eyebrow labels stay tracked
-           caps deliberately: !important + higher specificity wins
-           the cascade against `.no-uppercase *`. */
-        #prometheusWidget .pm-speaker {
-            text-transform: uppercase !important;
-            letter-spacing: 0.08em;
+        #prometheusHeader .pm-header-mark {
+            width: 30px; height: 30px; border-radius: 50%; flex: 0 0 30px;
+            background: linear-gradient(135deg, #3358FF 0%, #E682FF 100%);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        #prometheusTitle { font-size: 15px; font-weight: 700; color: #E9E8E1; line-height: 1.15;
+            letter-spacing: -0.01em; }
+        #prometheusSub { font-size: 11px; color: #7C878A; line-height: 1.3;
+            margin-top: 2px; text-transform: none !important;
+            letter-spacing: -0.005em; font-weight: 400; }
+        #prometheusWidget #synthChatQueueBadge {
+            font-size: 11px !important; color: #7C878A !important; font-weight: 400 !important;
+            letter-spacing: 0; text-transform: none !important;
+        }
+        #prometheusWidget .pm-speaker,
+        #prometheusWidget .synth-thinking-label {
+            display: none !important;
         }
         #prometheusCollapseBtn {
-            width: 28px; height: 28px; border-radius: 8px; background: transparent;
-            border: 1px solid #3B3D38; color: #9AA09B; display: inline-flex;
+            width: 26px; height: 26px; border-radius: 6px; background: transparent;
+            border: 0; color: #9AA09B; display: inline-flex;
             align-items: center; justify-content: center; cursor: pointer; padding: 0;
             transition: background 120ms ease-out, color 120ms ease-out; flex: 0 0 auto;
         }
-        #prometheusCollapseBtn:hover { background: #1B2F35; color: #E9E8E1; }
+        #prometheusCollapseBtn:hover { background: #15252A; color: #E9E8E1; }
         #prometheusCollapseBtn:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
         #prometheusBody {
             flex: 1; display: flex; flex-direction: column; min-height: 0;
-            padding: 0.6rem 0.7rem 0.7rem 0.7rem;
+            padding: 0; background: #15252A;
         }
-        #prometheusBody #synthChatMessages { min-height: 120px !important; }
+        #prometheusWidget #synthChatMessages {
+            flex: 1 !important; overflow-y: auto !important;
+            min-height: 120px !important;
+            padding: 20px 22px !important;
+            margin: 0 !important;
+            background: #15252A !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
         #prometheusBody #synthChatBriefPreview { max-height: 46%; overflow-y: auto; }
-        /* Drag-resize handles on every edge + corner (2026-08-20).
-           Kept inside the widget bounds because overflow is hidden. */
+        #prometheusWidget .pm-msg {
+            display: flex; gap: 12px; align-items: flex-start;
+            margin: 0 0 14px; padding: 0; background: transparent;
+        }
+        #prometheusWidget .pm-msg-user { justify-content: flex-end; }
+        #prometheusWidget .pm-msg-avatar {
+            width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px;
+            background: linear-gradient(135deg, #3358FF 0%, #E682FF 100%);
+            margin-top: 2px;
+        }
+        #prometheusWidget .pm-msg-bubble {
+            max-width: 82%; font-size: 13.5px; line-height: 1.55;
+            color: #E9E8E1;
+        }
+        #prometheusWidget .pm-msg-user .pm-msg-bubble {
+            background: #3358FF; color: #E9E8E1;
+            padding: 10px 14px; border-radius: 12px 12px 4px 12px;
+            margin-left: auto;
+        }
+        #prometheusWidget .pm-msg-agent .pm-msg-bubble { max-width: 100%; }
+        #prometheusWidget .pm-msg-bubble p { margin: 0 0 8px; }
+        #prometheusWidget .pm-msg-bubble strong { font-weight: 700; color: #E9E8E1; }
+        #prometheusWidget .pm-msg-bubble a {
+            display: inline-block !important;
+            background: #1B2F35 !important;
+            border: 1px solid #3B3D38 !important;
+            color: #E9E8E1 !important;
+            border-radius: 999px !important;
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            text-decoration: none !important;
+            box-shadow: none !important;
+        }
+        #prometheusWidget .synth-thinking-bubble {
+            margin: 0 0 14px !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+        }
+        #prometheusWidget .pm-actions {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+        }
+        #prometheusWidget .pm-action,
+        #prometheusWidget button[onclick*="synthChatChipFill"],
+        #prometheusWidget button[onclick*="synthChatChipSend"],
+        #prometheusWidget #synthChatStarterChips button,
+        #prometheusWidget #synthChatSuggestBtn,
+        #prometheusWidget #synthChatMicBtn {
+            background: #1B2F35 !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 999px !important;
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            font-family: inherit !important;
+            letter-spacing: -0.005em !important;
+            text-transform: none !important;
+            cursor: pointer;
+            box-shadow: none !important;
+        }
+        #prometheusWidget .pm-action:hover,
+        #prometheusWidget button[onclick*="synthChatChipFill"]:hover,
+        #prometheusWidget button[onclick*="synthChatChipSend"]:hover,
+        #prometheusWidget #synthChatStarterChips button:hover,
+        #prometheusWidget #synthChatSuggestBtn:hover,
+        #prometheusWidget #synthChatMicBtn:hover {
+            color: #E9E8E1 !important;
+            border-color: #5C6466 !important;
+            background: #1B2F35 !important;
+        }
+        #prometheusWidget #synthChatMicBtn {
+            width: 36px !important; height: 36px !important;
+            padding: 0 !important; border-radius: 50% !important;
+        }
+        #prometheusWidget #synthChatMicBtn.synth-mic-listening {
+            color: #E682FF !important;
+            border-color: #E682FF !important;
+            background: rgba(230, 130, 255, 0.10) !important;
+        }
+        #prometheusWidget .pm-composer {
+            padding: 12px 14px 14px;
+            border-top: 1px solid #3B3D38;
+            background: #1B2F35;
+        }
+        #prometheusWidget #synthChatInput {
+            width: 100% !important;
+            box-sizing: border-box !important;
+            background: #0C1618 !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 6px !important;
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 13px !important;
+            padding: 10px 12px !important;
+            min-height: 44px !important;
+            resize: vertical;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        #prometheusWidget #synthChatInput:focus {
+            border-color: #3358FF !important;
+            box-shadow: 0 0 0 3px rgba(51, 88, 255, 0.20) !important;
+        }
+        #prometheusWidget #synthChatInputHint {
+            font-size: 11px !important;
+            color: #7C878A !important;
+            opacity: 1 !important;
+            white-space: normal !important;
+        }
+        #synthChatSubmitBtn.btn-primary {
+            background: #C7F23E !important;
+            border: 0 !important;
+            color: #0C1618 !important;
+            border-radius: 6px !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            width: auto !important;
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            font-family: inherit !important;
+            letter-spacing: -0.005em !important;
+            text-transform: none !important;
+        }
+        #synthChatSubmitBtn.btn-primary:hover {
+            background: #D4F55C !important;
+            border: 0 !important;
+            color: #0C1618 !important;
+        }
         #prometheusWidget .pm-rs { position: absolute; z-index: 6; touch-action: none; }
-        #prometheusWidget .pm-rs:hover { background: rgba(199,242,62,0.14); }
+        #prometheusWidget .pm-rs:hover { background: rgba(199,242,62,0.10); }
         .pm-rs-n { top: 0; left: 18px; right: 18px; height: 6px; cursor: ns-resize; }
         .pm-rs-s { bottom: 0; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
         .pm-rs-e { right: 0; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
@@ -21534,7 +21671,7 @@ https://www.instagram.com/p/..."></textarea>
         .pm-rs-ne { top: 0; right: 0; width: 18px; height: 18px; cursor: nesw-resize; }
         .pm-rs-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; }
         .pm-rs-se { bottom: 0; right: 0; width: 18px; height: 18px; cursor: nwse-resize; }
-        .pm-rs-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+        .pm-rs-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; }
         .pm-rs-se::after {
             content: ''; position: absolute; right: 4px; bottom: 4px;
             width: 8px; height: 8px; border-right: 2px solid #5C6466;
@@ -21549,159 +21686,82 @@ https://www.instagram.com/p/..."></textarea>
             }
             #prometheusWidget .pm-rs { display: none; }
         }
-        /* Prometheus SEND button uses our lime gradient in both themes. */
-        #synthChatSubmitBtn.btn-primary {
-            background: linear-gradient(135deg, #C7F23E, #A0D911) !important;
-            border-color: #A0D911 !important;
-            color: #14330A !important;
+        body[data-theme="light"] #prometheusWidget {
+            background: #FFFFFF; border-color: #C9C6BA; color: #0C1618;
+            box-shadow: 0 24px 48px rgba(12, 22, 24, 0.12);
         }
-        #synthChatSubmitBtn.btn-primary:hover {
-            background: linear-gradient(135deg, #D3F95E, #B5E61A) !important;
-            border-color: #B5E61A !important;
-            color: #14330A !important;
+        body[data-theme="light"] #prometheusHeader,
+        body[data-theme="light"] #prometheusWidget .pm-composer {
+            background: #E9E8E1; border-color: #C9C6BA;
         }
-
-        /* ---- Prometheus light-mode polish (2026-09-02) ------------------
-           In light mode the composer box + buttons read anemic (pale
-           white fills, ghost borders). Give them our purple accent with
-           defined borders + darker text so they pop; saturate the lime
-           accent chip. Dark mode is untouched. */
+        body[data-theme="light"] #prometheusTitle { color: #0C1618; }
+        body[data-theme="light"] #prometheusSub,
+        body[data-theme="light"] #prometheusWidget #synthChatQueueBadge,
+        body[data-theme="light"] #prometheusWidget #synthChatInputHint { color: #888C89 !important; }
         body[data-theme="light"] #prometheusWidget #synthChatMessages {
-            background: #ffffff !important;
-            border: 1px solid #cbb8f2 !important;
-            box-shadow: 0 1px 3px rgba(76,29,149,0.08);
+            background: #FFFFFF !important;
+        }
+        body[data-theme="light"] #prometheusWidget .pm-msg-bubble { color: #0C1618; }
+        body[data-theme="light"] #prometheusWidget .pm-msg-user .pm-msg-bubble {
+            background: #3358FF; color: #E9E8E1;
+        }
+        body[data-theme="light"] #prometheusWidget .pm-action,
+        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"],
+        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipSend"],
+        body[data-theme="light"] #prometheusWidget #synthChatStarterChips button,
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn,
+        body[data-theme="light"] #prometheusWidget #synthChatMicBtn {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #5C6560 !important;
         }
         body[data-theme="light"] #prometheusWidget #synthChatInput {
-            background: #ffffff !important;
-            border: 1px solid #cbb8f2 !important;
-            color: #1f2430 !important;
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
         }
-        /* Muted suggestion chips (Prep a pitch / Build / Size / Cut /
-           Refresh - both the static row and the JS welcome chips) and the
-           Suggestions button. */
-        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"] {
-            background: #efeafc !important;
-            border: 1px solid #8b5cf6 !important;
-            color: #4c1d95 !important;
-            font-weight: 600 !important;
+        body[data-theme="light"] #synthChatSubmitBtn.btn-primary {
+            background: #5E7E12 !important;
+            color: #E9E8E1 !important;
         }
-        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"]:hover {
-            background: #e3d9fa !important;
-            border-color: #7c3aed !important;
-            color: #3b0f7a !important;
+        body[data-theme="light"] #synthChatSubmitBtn.btn-primary:hover {
+            background: #6C9013 !important;
+            color: #E9E8E1 !important;
         }
-        /* Primary "Analyze the open profile" accent chip: saturate the
-           lime so it doesn't read olive/washed. */
-        body[data-theme="light"] #prometheusWidget button[onclick*="Analyze this data"] {
-            background: #C7F23E !important;
-            border: 1px solid #A0D911 !important;
-            color: #14330A !important;
-            font-weight: 700 !important;
-        }
-        body[data-theme="light"] #prometheusWidget button[onclick*="Analyze this data"]:hover {
-            background: #D3F95E !important;
-            border-color: #B5E61A !important;
-            color: #14330A !important;
-        }
-        /* Mic: in-house hot pink (#ec4899). Suggestions + the 'builds'
-           counter: lime (#C7F23E). Chat highlight chips stay purple.
-           (Jessie 2026-09-02) */
-        #prometheusWidget #synthChatMicBtn {
-            background: rgba(168,85,247,0.16) !important;
-            border: 1px solid #a855f7 !important;
-            color: #d8b4fe !important;
-            border-radius: 999px !important;
-            padding: 0.3rem 0.5rem !important;
-        }
-        body[data-theme="light"] #prometheusWidget #synthChatMicBtn {
-            background: rgba(168,85,247,0.12) !important;
-            border: 1px solid #a855f7 !important;
-            color: #7c3aed !important;
-        }
-        #prometheusWidget #synthChatMicBtn:hover {
-            background: rgba(168,85,247,0.24) !important;
-            border-color: #9333ea !important;
-        }
-        body[data-theme="light"] #prometheusWidget #synthChatMicBtn:hover {
-            color: #6d28d9 !important;
-        }
-        #prometheusWidget #synthChatSuggestBtn {
-            background: rgba(199,242,62,0.16) !important;
-            border: 1px solid #C7F23E !important;
-            color: #C7F23E !important;
-            border-radius: 999px !important;
-        }
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn {
-            background: rgba(160,217,17,0.18) !important;
-            border: 1px solid #A0D911 !important;
-            color: #C7F23E !important;
-            font-weight: 600 !important;
-        }
-        #prometheusWidget #synthChatSuggestBtn:hover {
-            background: rgba(199,242,62,0.28) !important;
-            border-color: #A0D911 !important;
-        }
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover {
-            background: rgba(160,217,17,0.28) !important;
-            color: #d3f95e !important;
-        }
-        /* Input hint: lift off ghost-grey. */
-        #prometheusWidget #synthChatInputHint {
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
-            line-height: 1.2;
-        }
-        body[data-theme="light"] #prometheusWidget #synthChatInputHint {
-            color: #9AA09B !important;
-            opacity: 1 !important;
-        }
-
-        /* ---- Empty-state design (2026-08-26 polish) ---------------------
-           Replaces the old run-on grey paragraph. Two-line intro on top,
-           four clickable example chips underneath. Chips are Slate Teal
-           on Pavement border, muted title text; hover raises the border
-           to Signal Green so it reads as a real affordance rather than a
-           label. Click fills #synthChatInput and focuses the textarea. */
         #prometheusBody .pm-empty {
             display: flex; flex-direction: column; align-items: stretch;
-            padding: 1.8rem 1rem 1.2rem 1rem; color: #9AA09B;
+            padding: 28px 8px 8px; color: #9AA09B;
         }
         #prometheusBody .pm-empty-title {
-            font-size: 14px; font-weight: 700; color: #E9E8E1;
-            line-height: 1.35; letter-spacing: 0.005em;
-            text-align: center; margin-bottom: 0.35rem;
+            font-size: 15px; font-weight: 700; color: #E9E8E1;
+            line-height: 1.3; letter-spacing: -0.01em;
+            text-align: left; margin-bottom: 6px;
         }
         #prometheusBody .pm-empty-sub {
-            font-size: 9.5px; color: #9AA09B; text-transform: uppercase !important;
-            letter-spacing: 0.14em; font-weight: 500; text-align: center;
-            margin-bottom: 1.1rem;
+            font-size: 13px; color: #9AA09B; text-transform: none !important;
+            letter-spacing: -0.005em; font-weight: 400; text-align: left;
+            margin-bottom: 16px;
         }
         #prometheusBody .pm-empty-chips {
-            display: grid; grid-template-columns: 1fr; gap: 0.5rem;
-        }
-        @media (min-width: 420px) {
-            #prometheusBody .pm-empty-chips {
-                grid-template-columns: 1fr 1fr;
-            }
+            display: flex; flex-wrap: wrap; gap: 6px;
         }
         #prometheusBody .pm-empty-chip {
-            appearance: none; background: #15252A; color: #E9E8E1;
+            appearance: none; background: #1B2F35; color: #9AA09B;
             border: 1px solid #3B3D38; border-radius: 999px;
-            padding: 0.55rem 0.85rem; font-size: 0.8rem; font-weight: 500;
+            padding: 6px 10px; font-size: 11px; font-weight: 500;
             font-family: inherit; text-align: left; cursor: pointer;
-            line-height: 1.25; letter-spacing: 0.005em;
-            transition: border-color 140ms ease-out, background 140ms ease-out,
-                        color 140ms ease-out, transform 120ms ease-out;
+            line-height: 1.25; letter-spacing: -0.005em;
+            transition: border-color 120ms ease-out, color 120ms ease-out;
         }
         #prometheusBody .pm-empty-chip:hover {
-            border-color: #C7F23E; background: #1B2F35; color: #E9E8E1;
-        }
-        #prometheusBody .pm-empty-chip:active {
-            transform: translateY(1px);
+            border-color: #5C6466; color: #E9E8E1;
         }
         #prometheusBody .pm-empty-chip:focus-visible {
             outline: 2px solid #3358FF; outline-offset: 2px;
+        }
+        body[data-theme="light"] #prometheusBody .pm-empty-title { color: #0C1618; }
+        body[data-theme="light"] #prometheusBody .pm-empty-chip {
+            background: #FFFFFF; border-color: #C9C6BA; color: #5C6560;
         }
         </style>
         <script>
@@ -21743,25 +21803,27 @@ https://www.instagram.com/p/..."></textarea>
             <div class="pm-rs pm-rs-se" data-rs="se" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-sw" data-rs="sw" aria-hidden="true"></div>
             <div id="prometheusHeader">
-                <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
-                    <svg width="17" height="17" viewBox="0 0 64 64" aria-hidden="true" style="flex:0 0 auto;"><g transform="skewX(-14)" fill="#C7F23E"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+                <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+                    <span class="pm-header-mark" aria-hidden="true">
+                        <svg width="14" height="14" viewBox="0 0 64 64"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+                    </span>
                     <div style="min-width:0;">
                         <div id="prometheusTitle">Prometheus</div>
-                        <div id="prometheusSub">IQ Assistant</div>
+                        <div id="prometheusSub">Ask any read across your workspace.</div>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
-                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #C7F23E;"></span>
+                    <span id="synthChatQueueBadge"></span>
                     <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
                 </div>
             </div>
             <div id="prometheusBody">
-                <div id="synthChatMessages" style="flex: 1; overflow-y: auto; padding: 0.7rem; background: var(--bg-input, #1a1a1a); border: 1px solid #3B3D38; border-radius: 10px; margin-bottom: 0.55rem; min-height: 260px;">
+                <div id="synthChatMessages" style="flex: 1; overflow-y: auto; min-height: 260px;">
                                 <div class="brief-chat-empty pm-empty">
-                                    <div class="pm-empty-title">Start with a natural-language brief.</div>
-                                    <div class="pm-empty-sub">Try one of these or write your own.</div>
+                                    <div class="pm-empty-title">Ask a question.</div>
+                                    <div class="pm-empty-sub">Try one of these, or write your own.</div>
                                     <div class="pm-empty-chips">
                                         <button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="K-pop fans in the US">K-pop fans in the US</button>
                                         <button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Cancelled Netflix, signed up for Max in the last 12 months">Netflix cancels who moved to Max</button>
@@ -21953,7 +22015,7 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
 
-                            <div style="display:flex; flex-direction: column; gap: 0.4rem;">
+                            <div class="pm-composer" style="display:flex; flex-direction: column; gap: 8px;">
                                 <div id="synthChatStarterChips" style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Analyze this data')" style="background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Analyze the open profile</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Pitching [brand] - help me figure out the right audience to profile')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Prep a pitch</button>
@@ -21962,7 +22024,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut a profile I own</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
                                 </div>
-                                <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.65rem 0.8rem; background: var(--bg-input); border: 1px solid #3B3D38; border-radius: 8px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit; outline: none; transition: border-color 120ms ease-out, box-shadow 120ms ease-out;" onfocus="this.style.borderColor='#3358FF';this.style.boxShadow='0 0 0 2px rgba(51,88,255,0.28)';" onblur="this.style.borderColor='#3B3D38';this.style.boxShadow='none';" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
+                                <textarea id="synthChatInput" placeholder="Ask something else about this audience..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
                                     <span id="synthChatInputHint" style="font-size: 0.66rem; color: var(--text-secondary); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0;">Enter to send &middot; Shift + Enter for new line</span>
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
@@ -21975,7 +22037,7 @@ https://www.instagram.com/p/..."></textarea>
                                                 <line x1="8" y1="22" x2="16" y2="22"></line>
                                             </svg>
                                         </button>
-                                        <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="width: auto !important; min-width: 140px; max-width: 200px; padding: 0.55rem 1.25rem; font-size: 0.85rem;">Send</button>
+                                        <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn">Send</button>
                                     </div>
                                 </div>
                             </div>
@@ -69389,7 +69451,15 @@ https://www.instagram.com/p/..."></textarea>
             var _chips = document.getElementById('synthChatStarterChips');
             if (_chips) _chips.style.display = synthChatHistory.length ? 'none' : 'flex';
             if (!synthChatHistory.length) {
-                box.innerHTML = '<div class="brief-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
+                box.innerHTML = '<div class="brief-chat-empty pm-empty">' +
+                    '<div class="pm-empty-title">Ask a question.</div>' +
+                    '<div class="pm-empty-sub">Try one of these, or write your own.</div>' +
+                    '<div class="pm-empty-chips">' +
+                    '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="K-pop fans in the US">K-pop fans in the US</button>' +
+                    '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Cancelled Netflix, signed up for Max in the last 12 months">Netflix cancels who moved to Max</button>' +
+                    '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Sephora shoppers who bought at Ulta in the same window">Sephora shoppers who also bought at Ulta</button>' +
+                    '<button type="button" class="pm-empty-chip" onclick="_pmFillFromChip(this)" data-example="Moms of tweens who buy Prime Video">Moms of tweens who buy Prime Video</button>' +
+                    '</div></div>';
                 return;
             }
             _synthChatActiveOptions = null;
@@ -69402,24 +69472,14 @@ https://www.instagram.com/p/..."></textarea>
                     ? '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' +
                         _synthChatEscapeHtml(_rawText) + '</div>'
                     : _synthChatFormatAgentText(_rawText);
-                var bg = isUser ? 'rgba(51, 88, 255, 0.18)' : 'rgba(255,255,255,0.05)';
-                var label = isUser ? 'You' : 'Prometheus';
-                // Quick-reply chips (2026-08-20 Jenna: every keyword
-                // prompt should be clickable like the opening
-                // questions). Only the NEWEST agent turn renders its
-                // options so stale chips disappear as the
-                // conversation moves on.
                 var chipsHtml = '';
                 var _opts = (turn.meta && turn.meta.options) || null;
                 if (!isUser && _ti === _lastTurnIdx && _opts && _opts.length) {
                     _synthChatActiveOptions = _opts;
-                    chipsHtml = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.55rem;">' +
+                    chipsHtml = '<div class="pm-actions">' +
                         _opts.map(function(o, oi) {
                             var lbl = _synthChatEscapeHtml(String((o && o.label) || o));
-                            return '<button type="button" data-synth-opt="' + oi + '" ' +
-                                'style="background: var(--bg-input); border: 1px solid var(--border-color); ' +
-                                'color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; ' +
-                                'font-size: 0.75rem; cursor: pointer; font-family: inherit;">' + lbl + '</button>';
+                            return '<button type="button" class="pm-action" data-synth-opt="' + oi + '">' + lbl + '</button>';
                         }).join('') + '</div>';
                 }
                 // Download-link pill (2026-08-20): deck builds attach a
@@ -69436,12 +69496,13 @@ https://www.instagram.com/p/..."></textarea>
                             _synthChatEscapeHtml(String(turn.meta.link.label || 'Download')) + '</a></div>';
                     }
                 }
-                return '<div style="margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: ' + bg + '; border-radius: 8px;">' +
-                    '<div class="pm-speaker" style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
+                return '<div class="pm-msg ' + (isUser ? 'pm-msg-user' : 'pm-msg-agent') + '">' +
+                    (isUser ? '' : '<div class="pm-msg-avatar" aria-hidden="true"></div>') +
+                    '<div class="pm-msg-bubble">' +
                     bodyHtml +
                     linkHtml +
                     chipsHtml +
-                    '</div>';
+                    '</div></div>';
             }).join('');
             box.innerHTML = rows;
             _pmReattachLiveBubbles(box);
@@ -69648,13 +69709,12 @@ https://www.instagram.com/p/..."></textarea>
                 chips += '<button type="button" onclick="synthChatChipFill(\'Pitching [brand] - help me figure out the right audience to profile\')" style="' + pill + '">Prep a pitch</button>';
                 var el = document.createElement('div');
                 el.id = 'synthChatWelcomeBubble';
-                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(139,92,246,0.45);';
+                el.className = 'pm-msg pm-msg-agent';
                 el.innerHTML =
-                    '<div class="pm-speaker" style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
-                    '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
-                        _synthChatEscapeHtml(lead) + '</div>' +
-                    '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' +
-                        chips + '</div>';
+                    '<div class="pm-msg-avatar" aria-hidden="true"></div>' +
+                    '<div class="pm-msg-bubble">' +
+                    '<p>' + _synthChatEscapeHtml(lead) + '</p>' +
+                    '<div class="pm-actions">' + chips + '</div></div>';
                 // Only follow to the bottom if the user was already
                 // there - the idle repopulate must not yank the scroll
                 // away from someone reading an earlier reply.
