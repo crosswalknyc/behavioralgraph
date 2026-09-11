@@ -23,7 +23,7 @@ LINKEDIN_TOKEN = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_API = "https://api.linkedin.com/rest"
 LINKEDIN_V2 = "https://api.linkedin.com/v2"
 LINKEDIN_VERSION = os.environ.get("LINKEDIN_API_VERSION", "202509")
-SCOPES = "openid profile email w_organization_social r_organization_social"
+SCOPES = "w_organization_social r_organization_social"
 DEAD_SCOPES = frozenset({"offline_access", "r_liteprofile", "r_emailaddress"})
 UNKNOWN_SCOPE_RE = re.compile(
     r"(?:unknown scope|scope)\s+[\"']?([a-z0-9_]+)[\"']?(?:\s+is not authorized)?",
