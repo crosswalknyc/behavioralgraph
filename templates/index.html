@@ -21406,18 +21406,19 @@ https://www.instagram.com/p/..."></textarea>
             /* Pill launcher (Crosswalk brand ship 2026-09-09).
                Was a 54px circle; now a rounded pill with the slash
                mark avatar + "Ask Prometheus" label + Signal Green
-               status dot on the right. Same drag/click handlers. */
+               status dot on the right. Same drag/click handlers.
+               Outline is Orchid to match Data Cuts / Select Profile. */
             position: fixed; right: 22px; bottom: 22px;
             display: none; align-items: center; gap: 10px;
             height: 46px; padding: 0 14px 0 6px;
             border-radius: 999px;
-            background: #0C1618; border: 1px solid #3358FF;
+            background: #0C1618; border: 1px solid #E682FF;
             color: #E9E8E1;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: 13px; font-weight: 600; letter-spacing: -0.005em;
             cursor: grab; z-index: 99000;
-            box-shadow: 0 12px 32px rgba(51, 88, 255, 0.28),
-                        0 0 0 1px rgba(233,232,225,0.10);
+            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.20),
+                        0 12px 32px rgba(230, 130, 255, 0.34);
             touch-action: none; user-select: none; -webkit-user-select: none;
             transition: background 140ms ease-out, transform 140ms ease-out,
                         box-shadow 140ms ease-out, border-color 140ms ease-out;
@@ -21425,11 +21426,28 @@ https://www.instagram.com/p/..."></textarea>
         #prometheusLauncher.pm-on { display: inline-flex; }
         #prometheusLauncher:hover {
             background: #15252A;
-            box-shadow: 0 14px 36px rgba(51, 88, 255, 0.36),
-                        0 0 0 1px rgba(233,232,225,0.14);
+            border-color: #E682FF;
+            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.30),
+                        0 14px 36px rgba(230, 130, 255, 0.46);
         }
         #prometheusLauncher:active { cursor: grabbing; }
-        #prometheusLauncher:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
+        #prometheusLauncher:focus-visible { outline: 2px solid #E682FF; outline-offset: 2px; }
+        body[data-theme="light"] #prometheusLauncher {
+            background: #FFFFFF;
+            border-color: #8E3FA8;
+            color: #0C1618;
+            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.16),
+                        0 12px 28px rgba(142, 63, 168, 0.24);
+        }
+        body[data-theme="light"] #prometheusLauncher:hover {
+            background: #E9E8E1;
+            border-color: #8E3FA8;
+            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.26),
+                        0 14px 32px rgba(142, 63, 168, 0.32);
+        }
+        body[data-theme="light"] #prometheusLauncher:focus-visible {
+            outline-color: #8E3FA8;
+        }
         #prometheusLauncher .pm-launcher-avatar {
             width: 32px; height: 32px; border-radius: 50%;
             background: linear-gradient(135deg, #3358FF 0%, #E682FF 100%);
