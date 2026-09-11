@@ -21482,14 +21482,18 @@ https://www.instagram.com/p/..."></textarea>
         }
         #prometheusWidget {
             position: fixed; right: 22px; bottom: 22px; width: 480px;
-            height: min(680px, calc(100vh - 250px));
-            min-width: 360px; min-height: 360px; max-width: 94vw; max-height: calc(100vh - 250px);
+            height: min(680px, calc(100vh - 420px));
+            min-width: 360px; min-height: 360px; max-width: 94vw; max-height: calc(100vh - 420px);
             background: #15252A; border: 1px solid #3B3D38; border-radius: 20px;
             box-shadow: 0 30px 60px rgba(0, 0, 0, 0.36);
             display: none; flex-direction: column; overflow: hidden;
             z-index: 99000;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             color: #E9E8E1;
+            pointer-events: auto;
+        }
+        #prometheusWidget:not(.pm-on) {
+            pointer-events: none !important;
         }
         #prometheusWidget.pm-on {
             display: flex;
@@ -22189,6 +22193,12 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile > #toolbarRow {
             order: 0 !important;
         }
+        #piqChromeSpacer {
+            flex: 0 0 auto;
+            width: 100%;
+            height: 0;
+            pointer-events: none;
+        }
         #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
             position: sticky;
             top: 0;
@@ -22199,6 +22209,11 @@ https://www.instagram.com/p/..."></textarea>
             flex-direction: column;
             background: #0C1618;
             border-bottom: 1px solid #3B3D38;
+            pointer-events: auto !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome.piq-chrome-fixed {
+            position: fixed !important;
+            z-index: 100060 !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
             background: #E9E8E1;
@@ -24904,7 +24919,7 @@ https://www.instagram.com/p/..."></textarea>
             border: 0 !important;
         }
         #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
-            z-index: 100050;
+            z-index: 100060;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarRow,
         #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
@@ -123206,6 +123221,62 @@ https://www.instagram.com/p/..."></textarea>
                 if (call.innerHTML !== next) call.innerHTML = next;
             }
         };
+        window._piqV4PinChrome = function() {
+            var view = document.getElementById('dashboardView');
+            var wrap = document.getElementById('piqStickyChrome');
+            var promo = document.getElementById('prometheusWidget');
+            var spacer = document.getElementById('piqChromeSpacer');
+            if (!view || !wrap || !view.classList.contains('piq-v4') || !view.classList.contains('piq-has-profile')) {
+                if (wrap) {
+                    wrap.classList.remove('piq-chrome-fixed');
+                    wrap.style.top = '';
+                    wrap.style.left = '';
+                    wrap.style.width = '';
+                    wrap.style.right = '';
+                }
+                if (spacer) spacer.style.height = '0px';
+                if (promo) promo.style.maxHeight = '';
+                return wrap || null;
+            }
+            if (!spacer) {
+                spacer = document.createElement('div');
+                spacer.id = 'piqChromeSpacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                view.insertBefore(spacer, view.firstChild);
+            }
+            var h = wrap.offsetHeight || 0;
+            spacer.style.height = h + 'px';
+            var vr = view.getBoundingClientRect();
+            wrap.classList.add('piq-chrome-fixed');
+            wrap.style.top = Math.round(vr.top) + 'px';
+            wrap.style.left = Math.round(vr.left) + 'px';
+            wrap.style.width = Math.round(vr.width) + 'px';
+            wrap.style.right = 'auto';
+            if (promo) {
+                var gap = Math.round(wrap.getBoundingClientRect().bottom) + 18;
+                promo.style.maxHeight = Math.max(360, window.innerHeight - gap) + 'px';
+            }
+            return wrap;
+        };
+        window._piqV4WatchChrome = function() {
+            if (window._piqV4ChromeWatch) return;
+            window._piqV4ChromeWatch = true;
+            window.addEventListener('resize', function() {
+                if (window._piqV4PinChrome) window._piqV4PinChrome();
+            });
+            document.addEventListener('scroll', function() {
+                if (window._piqV4PinChrome) window._piqV4PinChrome();
+            }, true);
+            if (typeof ResizeObserver !== 'undefined') {
+                var ro = new ResizeObserver(function() {
+                    if (window._piqV4PinChrome) window._piqV4PinChrome();
+                });
+                var view = document.getElementById('dashboardView');
+                var wrap = document.getElementById('piqStickyChrome');
+                if (view) ro.observe(view);
+                if (wrap) ro.observe(wrap);
+            }
+        };
         window._piqV4EnsureStickyChrome = function() {
             var view = document.getElementById('dashboardView');
             var bar = document.getElementById('profileTabsBar');
@@ -123229,6 +123300,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (slim) wrap.appendChild(heroRow);
                 else if (heroRow.parentNode === wrap) wrap.insertAdjacentElement('afterend', heroRow);
             }
+            if (window._piqV4WatchChrome) window._piqV4WatchChrome();
+            if (window._piqV4PinChrome) window._piqV4PinChrome();
             return wrap;
         };
         window._piqV4DressTabs = function() {
@@ -123330,6 +123403,27 @@ https://www.instagram.com/p/..."></textarea>
                     if (!m || typeof window.showTab !== 'function') return;
                     e.preventDefault();
                     window.showTab(m[1]);
+                }, true);
+            }
+            if (!document._piqChromeRetargetBound) {
+                document._piqChromeRetargetBound = true;
+                document.addEventListener('pointerdown', function(e) {
+                    var view = document.getElementById('dashboardView');
+                    var chrome = document.getElementById('piqStickyChrome');
+                    if (!view || !chrome || !view.classList.contains('piq-has-profile')) return;
+                    if (chrome.contains(e.target)) return;
+                    if (e.target.closest && e.target.closest('#piqProfileSidebar, #piqSidebarScrim, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay, #creditsModal')) return;
+                    var r = chrome.getBoundingClientRect();
+                    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+                    var stack = document.elementsFromPoint(e.clientX, e.clientY);
+                    var inner = null;
+                    for (var i = 0; i < stack.length; i++) {
+                        if (chrome.contains(stack[i]) && stack[i] !== chrome) { inner = stack[i]; break; }
+                    }
+                    if (!inner) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof inner.click === 'function') inner.click();
                 }, true);
             }
             if (window._piqV4DressTabs) {
