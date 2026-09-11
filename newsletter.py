@@ -2531,11 +2531,8 @@ def linkedin_callback():
         retry = nli.retry_authorization_url(rejected) if rejected in nli.DEAD_SCOPES or rejected == "offline_access" else ""
         if retry:
             return redirect(retry)
-        if rejected and "organization" in rejected:
-            err = (
-                "The LinkedIn app needs the Community Management API product "
-                "before the company page can connect. Add that product, then Connect again."
-            )
+        if nli.is_company_page_scope_error(err, rejected):
+            err = nli.COMPANY_PAGE_HELP
         elif "offline_access" in err or "unknown scope" in err.lower():
             err = "LinkedIn rejected a permission this app does not have. Close this tab and click Connect company page again."
         return _linkedin_result_page("LinkedIn did not connect. " + err, ok=False), 400

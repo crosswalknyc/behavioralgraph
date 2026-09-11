@@ -25,7 +25,17 @@ LINKEDIN_V2 = "https://api.linkedin.com/v2"
 LINKEDIN_VERSION = os.environ.get("LINKEDIN_API_VERSION", "202509")
 SCOPES = "openid profile email w_organization_social r_organization_social"
 DEAD_SCOPES = frozenset({"offline_access", "r_liteprofile", "r_emailaddress"})
-UNKNOWN_SCOPE_RE = re.compile(r"unknown scope\s+[\"']?([a-z0-9_]+)", re.I)
+UNKNOWN_SCOPE_RE = re.compile(
+    r"(?:unknown scope|scope)\s+[\"']?([a-z0-9_]+)[\"']?(?:\s+is not authorized)?",
+    re.I,
+)
+COMPANY_PAGE_HELP = (
+    "This LinkedIn app cannot post to a company page yet. "
+    "Open linkedin.com/developers, open the app, go to Products, "
+    "and Request Access on Community Management API. "
+    "If that button is gray, create a new app, attach the Crosswalk company page, "
+    "request Community Management API first, then paste the new Client ID and secret and Connect again."
+)
 IMAGE_NAME = "linkedin.jpg"
 SEED_HEADLINE = "YouTube was supposed to lose. 22.4 million people proved it did not."
 SEED_TEXT = (
@@ -216,10 +226,22 @@ def requested_scopes(settings=None):
 
 def unknown_scope_from_error(err):
     text = unescape(err or "")
-    for token in ("&quot;", "&#34;", "&#39;", "&apos;"):
+    for token in ("&quot;", "&#34;", "&#39;", "&apos;", "%22"):
         text = text.replace(token, '"')
     match = UNKNOWN_SCOPE_RE.search(text)
     return (match.group(1) if match else "").strip()
+
+
+def is_company_page_scope_error(err, rejected=""):
+    text = unescape(err or "").lower()
+    name = (rejected or unknown_scope_from_error(err) or "").lower()
+    if "organization" in name:
+        return True
+    return (
+        "unauthorized_scope" in text
+        or "not authorized for your application" in text
+        or ("w_organization_social" in text and "not authorized" in text)
+    )
 
 
 def authorization_url(settings, state_token, scopes=None):
