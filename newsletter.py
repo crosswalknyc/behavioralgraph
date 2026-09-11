@@ -35,6 +35,7 @@ SES_REGION = os.environ.get("SES_REGION", "us-east-2")
 FROM_EMAIL = "no_reply@crosswalknyc.com"
 DEFAULT_FROM_NAME = "The Read"
 DEFAULT_REPLY_TO = "hello@crosswalknyc.com"
+DEFAULT_COMPANY_ADDRESS = "Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265"
 DEFAULT_PUBLIC_BASE = "https://dashboard.crosswalknyc.com"
 STATE_KEY = "system/newsletter/state.json"
 CAMPAIGN_HTML_KEY = "system/newsletter/campaigns/{cid}.html"
@@ -409,7 +410,7 @@ def empty_state():
             "from_name": DEFAULT_FROM_NAME,
             "from_email": FROM_EMAIL,
             "reply_to": DEFAULT_REPLY_TO,
-            "company_address": "Crosswalk, New York, NY",
+            "company_address": DEFAULT_COMPANY_ADDRESS,
             "public_base_url": "",
         },
         "lists": [
@@ -550,6 +551,10 @@ def normalize_state(state):
     settings = state.setdefault("settings", {})
     if _legacy_jenna_reply(settings.get("reply_to")) or not settings.get("reply_to"):
         settings["reply_to"] = DEFAULT_REPLY_TO
+        changed = True
+    addr = (settings.get("company_address") or "").strip()
+    if not addr or addr in ("Crosswalk, New York, NY", "New York, NY"):
+        settings["company_address"] = DEFAULT_COMPANY_ADDRESS
         changed = True
     settings["from_email"] = FROM_EMAIL
     state.setdefault("segments", [])
@@ -2619,9 +2624,20 @@ color:#5C6560;">Crosswalk / The Read</div>
 <p style="font-size:16px;line-height:1.5;color:#5C6560;">{escape(message)}</p>
 {action}
 <p style="margin-top:36px;font-size:12px;color:#888C89;">
-<span style="color:{tone};">&#9679;</span> Crosswalk, New York, NY
+<span style="color:{tone};">&#9679;</span> {escape(_company_address())}
 </p>
 </div></body></html>"""
+
+
+def _company_address():
+    try:
+        settings = (load_state_raw() or {}).get("settings") or {}
+        addr = (settings.get("company_address") or "").strip()
+        if addr and addr not in ("Crosswalk, New York, NY", "New York, NY"):
+            return addr
+    except Exception:
+        pass
+    return DEFAULT_COMPANY_ADDRESS
 
 
 def _unsub_page(message, ok=True, confirm=False, token=""):
@@ -2647,7 +2663,7 @@ color:#5C6560;">Crosswalk / The Read</div>
 <p style="font-size:16px;line-height:1.5;color:#5C6560;">{escape(message)}</p>
 {action}
 <p style="margin-top:36px;font-size:12px;color:#888C89;">
-<span style="color:{tone};">&#9679;</span> Crosswalk, New York, NY
+<span style="color:{tone};">&#9679;</span> {escape(_company_address())}
 </p>
 </div></body></html>"""
 

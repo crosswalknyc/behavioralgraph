@@ -510,7 +510,7 @@
         const settings = (state.data && state.data.settings) || {};
         $('nl-set-from').value = settings.from_name || 'The Read';
         $('nl-set-reply').value = settings.reply_to || 'hello@crosswalknyc.com';
-        $('nl-set-addr').value = settings.company_address || 'Crosswalk, New York, NY';
+        $('nl-set-addr').value = settings.company_address || 'Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265';
         const q = ($('nl-sub-search').value || '').trim().toLowerCase();
         const rows = ((state.data && state.data.subscribers) || []).filter((s) => {
             if (!q) return true;
