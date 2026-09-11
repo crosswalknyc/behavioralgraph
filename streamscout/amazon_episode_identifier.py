@@ -56,6 +56,12 @@ _ENTRY = re.compile(
     r'"compactGTI":"(' + GTI_RE + r')",'
     r'"gti":"(amzn1\.dv\.gti\.[0-9a-f-]{36})"'
     r'[^}]*?"sequenceNumber":(\d+),"titleType":"(season|episode)"')
+# a movie entry has no sequenceNumber
+_MOVIE_ENTRY = re.compile(
+    r'"(' + ASIN_RE + r')":\{"asins":\[([^\]]*)\],'
+    r'"compactGTI":"(' + GTI_RE + r')",'
+    r'"gti":"(amzn1\.dv\.gti\.[0-9a-f-]{36})"'
+    r'[^}]*?"titleType":"movie"')
 # season selector: season number -> season-shell ASIN
 _SEASONSEL = re.compile(
     r'detail/(' + ASIN_RE + r')[^"\']*?season_select_s(\d+)')
@@ -122,7 +128,7 @@ def show_name(html, fallback=""):
     else:
         t = m.group(1)
     t = re.sub(r"^\s*watch\s+", "", t, flags=re.I)
-    t = re.sub(r"\s*[-–—|:]\s*season\s+\d+.*$", "", t, flags=re.I)
+    t = re.sub(r"\s*[-–—|:,]\s*season\s+\d+.*$", "", t, flags=re.I)
     t = re.sub(r"\s*[-–—|]\s*prime\s+video.*$", "", t, flags=re.I)
     t = re.sub(r"^\s*prime\s+video\s*:\s*", "", t, flags=re.I)
     return t.strip() or fallback
@@ -141,6 +147,20 @@ def self_entries(html):
         out.append({"asin": asin, "asins": asins, "gti": m.group(3),
                     "uuid": m.group(4), "seq": int(m.group(5)),
                     "type": m.group(6)})
+    return out
+
+
+def movie_entries(html):
+    """Movie entries from the `self` map: {asin, asins[], gti, uuid, type}."""
+    out, seen = [], set()
+    for m in _MOVIE_ENTRY.finditer(html or ""):
+        asin = m.group(1)
+        if asin in seen:
+            continue
+        seen.add(asin)
+        asins = re.findall(ASIN_RE, m.group(2)) or [asin]
+        out.append({"asin": asin, "asins": asins, "gti": m.group(3),
+                    "uuid": m.group(4), "seq": 0, "type": "movie"})
     return out
 
 
@@ -197,33 +217,51 @@ def _web_search(query):
     return ""
 
 
-def discover_asin(title):
-    """Return a season ASIN for a title (or None), no login."""
+def _candidate_asins(title):
+    """Gather candidate detail ASINs for a title from search (best-effort)."""
     want = set(tokens(title))
-    # A) Amazon instant-video search — match a detail link near matching text.
+    cands = []
+    # A) Amazon instant-video search — detail links near matching text.
     code, _, html = fetch("https://www.amazon.com/s?" +
                           urllib.parse.urlencode({"k": title, "i": "instant-video"}))
     if code == 200 and html and len(html) > 20000:
         for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
             ctx = html[max(0, m.start() - 500):m.start() + 200].lower()
             if want and len(want & set(tokens(ctx))) >= max(2, len(want) - 1):
-                return m.group(1)
-    # B) Web search — surfaces an amazon ASIN or (usually) a primevideo GTI.
+                cands.append(m.group(1))
+    # B) Web search — amazon ASINs and/or primevideo GTIs.
     for q in (f"{title} prime video", f"{title} primevideo detail",
               f"{title} amazon prime video watch"):
         blob = _web_search(q)
         if not blob:
             continue
-        am = re.search(r'amazon\.com/gp/video/detail/(' + ASIN_RE + r')', blob)
-        if am:
-            return am.group(1)
-        gm = re.search(r'primevideo\.com/(?:region/na/)?detail/(' + GTI_RE + r')', blob)
-        if gm:  # GTI -> primevideo page -> season-shell ASIN
-            _, _, pv = fetch("https://www.primevideo.com/detail/" + gm.group(1) + "/")
+        cands += re.findall(r'amazon\.com/gp/video/detail/(' + ASIN_RE + r')', blob)
+        for gti in re.findall(
+                r'primevideo\.com/(?:region/na/)?detail/(' + GTI_RE + r')', blob):
+            _, _, pv = fetch("https://www.primevideo.com/detail/%s/" % gti)
             a = asin_from_pv(pv)
             if a:
-                return a
-    return None
+                cands.append(a)
+    return list(dict.fromkeys(cands))            # de-dupe, keep order
+
+
+def discover_asin(title, kind="series"):
+    """Return a detail ASIN for a title, preferring a candidate whose page
+    matches the requested kind (series -> has seasons/episodes; movie -> movie)
+    and whose title best matches. No login."""
+    want = set(tokens(title))
+    best, best_score = None, (-1, -1, -1)
+    for asin in _candidate_asins(title)[:6]:
+        _, _, page = fetch("https://www.amazon.com/gp/video/detail/%s/" % asin)
+        kind_ok = bool(movie_entries(page)) if kind == "movie" \
+            else bool(self_entries(page))
+        have = set(tokens(show_name(page, "")))
+        score = (1 if kind_ok else 0, 1 if have == want else 0, len(want & have))
+        if kind_ok and have == want:         # perfect match — take it
+            return asin
+        if score > best_score:
+            best, best_score = asin, score
+    return best
 
 
 # ── reusable resolver ─────────────────────────────────────────────────────────
@@ -244,24 +282,38 @@ def resolve(title=None, url=None, kind="series", seasons=None, all_asins=True):
             _, _, pv = fetch("https://www.primevideo.com/detail/%s/" % gti)
             entry_asin = asin_from_pv(pv)
     if not entry_asin and title:
-        entry_asin = discover_asin(title)
+        entry_asin = discover_asin(title, kind=kind)
     if not entry_asin:
         return (show, [])
 
     # entry page -> season->ASIN map (+ ensure the entry season is included)
     _, _, html = fetch("https://www.amazon.com/gp/video/detail/%s/" % entry_asin)
     show = show_name(html, title or "")
+
+    def _emit(rows, season, episode, ent):
+        for frag in entity_fragments(ent, all_asins=all_asins):
+            rows.append({"season": str(season), "episode": episode,
+                         "title": "", "identifier": frag, "watch_url": ""})
+
+    # MOVIE: no seasons/episodes — emit the movie's ids (incl. the discovered
+    # ASIN, which can differ from the page's canonical one).
+    if kind == "movie":
+        ments = movie_entries(html)
+        rows = []
+        for ent in ments:
+            _emit(rows, "", "", ent)
+        have = {r["identifier"] for r in rows}
+        if ("detail/%s" % entry_asin) not in have:
+            rows.append({"season": "", "episode": "", "title": "",
+                         "identifier": "detail/%s" % entry_asin, "watch_url": ""})
+        return (show, rows)
+
     smap = season_asins(html)
     for e in self_entries(html):        # the entry page's own season shell
         if e["type"] == "season":
             smap.setdefault(e["seq"], e["asin"])
     if not smap:                        # single-season fallback
         smap = {1: entry_asin}
-
-    def _emit(rows, season, episode, ent):
-        for frag in entity_fragments(ent, all_asins=all_asins):
-            rows.append({"season": str(season), "episode": episode,
-                         "title": "", "identifier": frag, "watch_url": ""})
 
     rows = []
     for n in sorted(smap):
