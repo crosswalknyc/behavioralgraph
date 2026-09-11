@@ -24409,6 +24409,257 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+
+        /* ---- Compare tab, v4 comparison mockup ------------------------- */
+        #dashboardView.piq-v4 #tab-comparison .comparison-container,
+        #dashboardView.piq-v4 #tab-comparison .comparison-main {
+            background: transparent !important;
+            padding: 0 !important;
+        }
+        /* Open profiles read as a row of chips, not coloured gradients. */
+        #dashboardView.piq-v4 .comp-profile-tabs-bar {
+            display: flex !important;
+            flex-wrap: wrap;
+            gap: 8px !important;
+            padding: 0 0 12px !important;
+            background: transparent !important;
+            border: 0 !important;
+        }
+        #dashboardView.piq-v4 .comp-profile-tab {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-bottom: 1px solid #3B3D38 !important;
+            border-radius: 999px !important;
+            padding: 6px 12px !important;
+            display: inline-flex !important;
+            align-items: center;
+            gap: 8px;
+            color: #9AA09B !important;
+            font-size: 10.5px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            box-shadow: none !important;
+        }
+        #dashboardView.piq-v4 .comp-profile-tab.is-primary {
+            border-color: rgba(199, 242, 62, 0.45) !important;
+            color: #C7F23E !important;
+            font-weight: 700 !important;
+        }
+        #dashboardView.piq-v4 .comp-profile-tab-primary { color: #C7F23E !important; }
+        #dashboardView.piq-v4 .comp-profile-tab-name { color: inherit !important; }
+        #dashboardView.piq-v4 .comp-profile-tab-close {
+            color: #7C878A !important;
+            background: transparent !important;
+            border: 0 !important;
+            font-size: 13px !important;
+            line-height: 1;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4 .comp-profile-tab-close:hover { color: #E682FF !important; }
+        #dashboardView.piq-v4 .comp-profile-tabs-helper {
+            font-size: 10px !important;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: #7C878A !important;
+            padding: 0 0 18px !important;
+        }
+        #dashboardView.piq-v4 .comp-profile-tabs-helper .helper-star { color: #C7F23E; }
+
+        /* Each category is one card, table flush to the edges. */
+        #dashboardView.piq-v4 .comp-section {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            margin: 0 0 16px !important;
+            box-shadow: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-section {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+        }
+        #dashboardView.piq-v4 .comp-section-title {
+            background: #0C1618 !important;
+            border-bottom: 1px solid #3B3D38 !important;
+            margin: 0 !important;
+            padding: 12px 16px !important;
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            color: #E9E8E1 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-section-title {
+            background: #E9E8E1 !important;
+            border-bottom-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .comp-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            background: transparent !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        #dashboardView.piq-v4 .comp-table thead tr { background: #0C1618 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table thead tr { background: #F4F3EE !important; }
+        #dashboardView.piq-v4 .comp-table th {
+            text-align: left !important;
+            padding: 12px 16px !important;
+            font-size: 9.5px !important;
+            letter-spacing: 0.14em !important;
+            text-transform: uppercase !important;
+            color: #7C878A !important;
+            font-weight: 500 !important;
+            border-bottom: 1px solid #3B3D38 !important;
+            vertical-align: middle !important;
+        }
+        #dashboardView.piq-v4 .comp-table th + th,
+        #dashboardView.piq-v4 .comp-table td + td {
+            border-left: 1px solid #3B3D38 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table th + th,
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table td + td {
+            border-left-color: #C9C6BA !important;
+        }
+        #dashboardView.piq-v4 .comp-table th:first-child { width: 200px; }
+        /* Name + reach stacked beside a colour block, as in the mockup. */
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-av {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            flex: 0 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 900;
+            color: #E9E8E1;
+            letter-spacing: 0;
+        }
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-av.gp {
+            background: #1B2F35;
+            border: 1px solid #3B3D38;
+            color: #9AA09B;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table th .piq-cmp-av.gp {
+            background: #F4F3EE;
+            border-color: #C9C6BA;
+            color: #5C6560;
+        }
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-nm {
+            font-size: 13px;
+            font-weight: 800;
+            color: #E9E8E1;
+            letter-spacing: -0.01em;
+            text-transform: none;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table th .piq-cmp-nm { color: #0C1618; }
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-sub {
+            font-size: 10px;
+            font-weight: 500;
+            color: #9AA09B;
+            margin-top: 1px;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        #dashboardView.piq-v4 .comp-table th.piq-cmp-primary .piq-cmp-sub {
+            color: #C7F23E;
+            font-weight: 700;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table th.piq-cmp-primary .piq-cmp-sub { color: #5E7E12; }
+        #dashboardView.piq-v4 .comp-table td {
+            padding: 10px 16px !important;
+            border-bottom: 1px solid rgba(233, 232, 225, 0.06) !important;
+            background: transparent !important;
+            font-size: 12.5px !important;
+            color: #E9E8E1 !important;
+            font-weight: 500 !important;
+            vertical-align: middle !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table td {
+            border-bottom-color: rgba(12, 22, 24, 0.07) !important;
+            color: #0C1618 !important;
+        }
+        #dashboardView.piq-v4 .comp-table tbody tr:last-child td { border-bottom: 0 !important; }
+        #dashboardView.piq-v4 .comp-table tbody tr:hover td { background: rgba(233, 232, 225, 0.03) !important; }
+        #dashboardView.piq-v4 .comp-table td:first-child {
+            color: #9AA09B !important;
+            font-weight: 500 !important;
+            font-size: 11px !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table td:first-child { color: #5C6560 !important; }
+        #dashboardView.piq-v4 .comp-table td.primary-col {
+            color: #C7F23E !important;
+            font-weight: 700 !important;
+            font-size: 13.5px !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table td.primary-col { color: #5E7E12 !important; }
+        #dashboardView.piq-v4 .comp-table td.genpop-column {
+            color: #9AA09B !important;
+            font-weight: 500 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table td.genpop-column { color: #5C6560 !important; }
+        /* The mockup reads as numbers, not bar charts. */
+        #dashboardView.piq-v4 .comp-table .comp-bar { display: none !important; }
+        #dashboardView.piq-v4 .comp-table .comp-bar-cell {
+            display: flex !important;
+            align-items: baseline;
+            gap: 8px;
+        }
+        #dashboardView.piq-v4 .comp-table .comp-bar-pct {
+            color: inherit !important;
+            font-weight: inherit !important;
+            font-size: inherit !important;
+        }
+        #dashboardView.piq-v4 .comp-table .index-badge {
+            background: transparent !important;
+            border: 0 !important;
+            padding: 0 !important;
+            font-size: 10.5px !important;
+            font-weight: 800 !important;
+        }
+        #dashboardView.piq-v4 .comp-table .index-badge.index-over { color: #C7F23E !important; }
+        #dashboardView.piq-v4 .comp-table .index-badge.index-under { color: #E682FF !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table .index-badge.index-over { color: #5E7E12 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-table .index-badge.index-under { color: #8E3FA8 !important; }
+        /* Section controls sit quietly in the head. */
+        #dashboardView.piq-v4 .comp-section-title .btn,
+        #dashboardView.piq-v4 .comp-section-title select {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+            font-size: 10px !important;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500 !important;
+            padding: 5px 9px !important;
+            box-shadow: none !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-section-title .btn,
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-section-title select {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #5C6560 !important;
+        }
+        #dashboardView.piq-v4 .comp-section-title .btn:hover { border-color: #7C878A !important; color: #E9E8E1 !important; }
+        /* Jump strip above the tables. */
+        #dashboardView.piq-v4 .comp-analysis-tabs {
+            border-bottom: 1px solid #3B3D38 !important;
+            padding: 0 0 14px !important;
+            margin: 0 0 18px !important;
+            gap: 4px !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-analysis-tabs { border-bottom-color: #C9C6BA !important; }
         #dashboardView.piq-v4 #tab-marketing .marketing-hero { display: none !important; }
         #dashboardView.piq-v4 #tab-marketing .marketing-subtabs {
             display: flex !important;
@@ -124122,7 +124373,83 @@ https://www.instagram.com/p/..."></textarea>
                 n += 1;
             });
         };
+
+        // Compare tab: give each profile column the mockup's colour block,
+        // name and reach. Everything else is CSS; this only adds the header
+        // treatment, which needs the names and the US row to build.
+        window._piqV4CmpInitials = function(name) {
+            var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+            if (!parts.length) return '?';
+            if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        };
+        window._piqV4CmpReach = function(raw) {
+            var n = Number(String(raw == null ? '' : raw).replace(/[^0-9.]/g, ''));
+            if (!isFinite(n) || n <= 0) return '';
+            if (n >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B US';
+            if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M US';
+            if (n >= 1e3) return Math.round(n / 1e3) + 'K US';
+            return Math.round(n) + ' US';
+        };
+        window._piqV4DressCompare = function() {
+            var tab = document.getElementById('tab-comparison');
+            if (!tab) return;
+            var grads = [
+                'linear-gradient(135deg, #3358FF, #E682FF)',
+                'linear-gradient(135deg, #C7F23E, #5E7E12)',
+                'linear-gradient(135deg, #E682FF, #8E3FA8)',
+                'linear-gradient(135deg, #B7B3D8, #3358FF)',
+                'linear-gradient(135deg, #5E7E12, #3358FF)'
+            ];
+            // Reach per column comes from the summary table's US row.
+            var reach = [];
+            var sum = document.getElementById('comp-summary');
+            if (sum) {
+                Array.prototype.slice.call(sum.querySelectorAll('tbody tr')).forEach(function(tr) {
+                    var lbl = ((tr.cells[0] || {}).textContent || '').trim().toLowerCase();
+                    if (lbl !== 'us') return;
+                    reach = Array.prototype.slice.call(tr.cells, 1).map(function(c) {
+                        return window._piqV4CmpReach(c.textContent);
+                    });
+                });
+            }
+            tab.querySelectorAll('.comp-table thead tr').forEach(function(row) {
+                var cells = Array.prototype.slice.call(row.cells);
+                cells.forEach(function(th, i) {
+                    if (i === 0) return;
+                    var name = (th.getAttribute('data-piq-name') || th.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (!name) return;
+                    var sub = reach[i - 1] || '';
+                    var isGp = /gen\s*pop/i.test(name);
+                    var sig = name + '|' + sub;
+                    if (th.getAttribute('data-piq-cmp') === sig) return;
+                    th.setAttribute('data-piq-cmp', sig);
+                    th.setAttribute('data-piq-name', name);
+                    th.classList.toggle('piq-cmp-primary', i === 1 && !isGp);
+                    var av = '<span class="piq-cmp-av' + (isGp ? ' gp' : '') + '"' +
+                        (isGp ? '' : ' style="background: ' + grads[(i - 1) % grads.length] + '"') + '>' +
+                        window._piqV4Esc(window._piqV4CmpInitials(name)) + '</span>';
+                    th.innerHTML = '<span class="piq-cmp-head">' + av + '<span><span class="piq-cmp-nm">' +
+                        window._piqV4Esc(name) + '</span>' +
+                        (sub ? '<span class="piq-cmp-sub">' + window._piqV4Esc(sub) + '</span>' : '') +
+                        '</span></span>';
+                });
+            });
+        };
+        (function() {
+            var host = document.getElementById('comparisonResults');
+            if (!host || host._piqCmpWatch || typeof MutationObserver === 'undefined') return;
+            host._piqCmpWatch = true;
+            new MutationObserver(function() {
+                if (window._piqV4DressCompare) {
+                    setTimeout(function() { try { window._piqV4DressCompare(); } catch (_e) {} }, 0);
+                }
+            }).observe(host, { childList: true, subtree: false });
+        })();
         window._piqV4DressTools = function() {
+            if (window._piqV4DressCompare) {
+                try { window._piqV4DressCompare(); } catch (_e) {}
+            }
             document.querySelectorAll('#tab-marketing .marketing-subtab').forEach(function(btn) {
                 var span = btn.querySelector('span');
                 if (span) btn.textContent = span.textContent;
