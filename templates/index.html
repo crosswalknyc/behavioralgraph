@@ -122624,7 +122624,7 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4SyncBrowseLabel = function() {
             var btn = document.getElementById('piqChangeProfileBtn');
             if (!btn) return;
-            btn.textContent = 'Select Profile';
+            if (btn.textContent !== 'Select Profile') btn.textContent = 'Select Profile';
         };
         window._piqV4SyncLibraryRail = function() {
             var view = document.getElementById('dashboardView');
@@ -122998,13 +122998,13 @@ https://www.instagram.com/p/..."></textarea>
             }
             var cuts = document.getElementById('dashViewDeltasBtn');
             if (cuts) {
-                cuts.classList.add('piq-data-cuts');
-                cuts.style.display = '';
+                if (!cuts.classList.contains('piq-data-cuts')) cuts.classList.add('piq-data-cuts');
+                if (cuts.style.display !== '') cuts.style.display = '';
                 park(cuts);
             }
             var pick = document.getElementById('piqChangeProfileBtn');
             if (pick) {
-                pick.textContent = 'Select Profile';
+                if (pick.textContent !== 'Select Profile') pick.textContent = 'Select Profile';
                 park(pick);
             }
             var exp = document.querySelector('#contentActionButtons .dash-dropdown') || document.querySelector('.action-buttons-row .dash-dropdown');
@@ -123452,23 +123452,29 @@ https://www.instagram.com/p/..."></textarea>
             var header = document.querySelector('.container > header, header');
             var headerBottom = 0;
             if (header) headerBottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom));
-            wrap.style.position = 'fixed';
-            wrap.style.top = Math.max(headerBottom, Math.round(vr.top), 0) + 'px';
-            wrap.style.left = Math.round(vr.left) + 'px';
-            wrap.style.width = Math.round(vr.width) + 'px';
-            wrap.style.right = 'auto';
-            wrap.style.bottom = 'auto';
-            wrap.style.height = 'auto';
-            wrap.style.zIndex = '2147481000';
-            wrap.style.pointerEvents = 'auto';
-            spacer.style.height = (wrap.offsetHeight || 0) + 'px';
-            spacer.style.flexShrink = '0';
-            spacer.style.pointerEvents = 'none';
-            if (promo) {
-                var gap = Math.round(wrap.getBoundingClientRect().bottom) + 18;
-                promo.style.maxHeight = Math.max(360, window.innerHeight - gap) + 'px';
+            function setStyle(el, prop, val) {
+                if (el && el.style[prop] !== val) el.style[prop] = val;
             }
-            document.documentElement.style.setProperty('--piq-chrome-bottom', Math.round(wrap.getBoundingClientRect().bottom) + 'px');
+            setStyle(wrap, 'position', 'fixed');
+            setStyle(wrap, 'top', Math.max(headerBottom, Math.round(vr.top), 0) + 'px');
+            setStyle(wrap, 'left', Math.round(vr.left) + 'px');
+            setStyle(wrap, 'width', Math.round(vr.width) + 'px');
+            setStyle(wrap, 'right', 'auto');
+            setStyle(wrap, 'bottom', 'auto');
+            setStyle(wrap, 'height', 'auto');
+            setStyle(wrap, 'zIndex', '2147481000');
+            setStyle(wrap, 'pointerEvents', 'auto');
+            setStyle(spacer, 'height', (wrap.offsetHeight || 0) + 'px');
+            setStyle(spacer, 'flexShrink', '0');
+            setStyle(spacer, 'pointerEvents', 'none');
+            var chromeBottom = Math.round(wrap.getBoundingClientRect().bottom);
+            if (promo) {
+                var promoMax = Math.max(360, window.innerHeight - (chromeBottom + 18)) + 'px';
+                if (promo.style.maxHeight !== promoMax) promo.style.maxHeight = promoMax;
+            }
+            if (document.documentElement.style.getPropertyValue('--piq-chrome-bottom') !== chromeBottom + 'px') {
+                document.documentElement.style.setProperty('--piq-chrome-bottom', chromeBottom + 'px');
+            }
             if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
             return wrap;
         };
@@ -123507,11 +123513,20 @@ https://www.instagram.com/p/..."></textarea>
             var jump = document.getElementById('piqBehJump');
             var heroRow = document.getElementById('profileAndToolbarRow');
             var slim = view.classList.contains('piq-has-profile') && (view.getAttribute('data-piq-tab') || 'insights') !== 'insights';
-            wrap.appendChild(bar);
-            wrap.appendChild(row);
-            if (jump) wrap.appendChild(jump);
+            // Re-appending a node that is already in place detaches and
+            // re-inserts it. Do that between a mousedown and mouseup and the
+            // browser never fires the click, so the tab looks dead.
+            function place(el, after) {
+                if (!el) return;
+                if (el.parentNode === wrap && (!after || el.previousElementSibling === after)) return;
+                if (after && after.parentNode === wrap) after.insertAdjacentElement('afterend', el);
+                else wrap.appendChild(el);
+            }
+            place(bar, null);
+            place(row, bar);
+            place(jump, row);
             if (heroRow) {
-                if (slim) wrap.appendChild(heroRow);
+                if (slim) place(heroRow, jump && jump.parentNode === wrap ? jump : row);
                 else if (heroRow.parentNode === wrap) wrap.insertAdjacentElement('afterend', heroRow);
             }
             if (window._piqV4WatchChrome) window._piqV4WatchChrome();
@@ -123519,7 +123534,114 @@ https://www.instagram.com/p/..."></textarea>
             return wrap;
         };
 
+        window._piqV4NavAct = function(hit, e) {
+            if (!hit || !hit.closest) return false;
+            function fire(fn) {
+                if (e) { e.preventDefault(); e.stopImmediatePropagation(); }
+                if (typeof fn === 'function') fn();
+                return true;
+            }
+            var tabBtn = hit.closest('#toolbarRow .tab-btn');
+            if (tabBtn) {
+                var feat = tabBtn.getAttribute('data-feature') || '';
+                if (feat === 'execSummary' || feat === 'collaborate') return fire(null);
+                var name = tabBtn.getAttribute('data-tab');
+                if (!name) {
+                    var m = (tabBtn.getAttribute('onclick') || '').match(/showTab\('([^']+)'\)/);
+                    name = m ? m[1] : '';
+                }
+                return fire(function() {
+                    if (name && typeof window.showTab === 'function') window.showTab(name);
+                });
+            }
+            var closer = hit.closest('#profileTabsBar .profile-tab-close');
+            if (closer) {
+                var closeId = closer.getAttribute('data-tab-id');
+                return fire(function() {
+                    if (closeId != null && typeof window.closeProfileTab === 'function') window.closeProfileTab(closeId);
+                });
+            }
+            var closeAll = hit.closest('#profileTabsBar .profile-tab-close-all');
+            if (closeAll) {
+                return fire(function() {
+                    if (typeof window.closeAllProfileTabs === 'function') window.closeAllProfileTabs();
+                });
+            }
+            var help = hit.closest('#profileTabsBar .profile-help-pill');
+            if (help) {
+                var hoc = help.getAttribute('onclick') || '';
+                var hm = hoc.match(/openHowToVideo\(['"]([^'"]+)['"](?:,\s*['"]([^'"]*)['"])?/);
+                return fire(function() {
+                    if (hm && typeof window.openHowToVideo === 'function') window.openHowToVideo(hm[1], hm[2] || 'Profile IQ');
+                });
+            }
+            var chip = hit.closest('#profileTabsBar .profile-tab');
+            if (chip) {
+                var chipId = chip.getAttribute('data-tab-id');
+                return fire(function() {
+                    if (chipId != null && typeof window.switchToProfileTab === 'function') window.switchToProfileTab(chipId);
+                });
+            }
+            if (hit.closest('#piqChangeProfileBtn')) {
+                return fire(function() {
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar();
+                });
+            }
+            if (hit.closest('#dashViewDeltasBtn')) {
+                return fire(function() {
+                    if (typeof window._openCompareDateRangesPopover === 'function') window._openCompareDateRangesPopover();
+                });
+            }
+            if (hit.closest('#piqLibraryRail')) {
+                return fire(function() {
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
+                });
+            }
+            if (hit.closest('#toolbarRow .dash-dropdown') && !hit.closest('#tabExportDropdown')) {
+                return fire(function() {
+                    if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
+                });
+            }
+            if (hit.closest('#hoverToggle')) {
+                return fire(function() {
+                    if (typeof window.toggleHoverDescriptors === 'function') window.toggleHoverDescriptors();
+                });
+            }
+            if (hit.closest('#dashDisplayToggle')) {
+                return fire(function() {
+                    if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
+                });
+            }
+            return false;
+        };
         window._piqV4BindNav = function() {
+            if (!document._piqV4NavDelegated) {
+                document._piqV4NavDelegated = true;
+                // Act on press. A chrome refresh between press and release
+                // would otherwise cancel the click entirely.
+                document.addEventListener('pointerdown', function(e) {
+                    if (e.button != null && e.button !== 0) return;
+                    var view = document.getElementById('dashboardView');
+                    if (!view || !view.classList.contains('piq-v4')) return;
+                    var t = e.target;
+                    if (!t || !t.closest) return;
+                    if (t.closest('#piqProfileSidebar, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay')) return;
+                    if (window._piqV4NavAct(t, e)) {
+                        document._piqV4NavSwallow = Date.now();
+                    }
+                }, true);
+                // Swallow the click that follows a handled press so nothing
+                // runs twice.
+                document.addEventListener('click', function(e) {
+                    var t = e.target;
+                    if (!t || !t.closest) return;
+                    var stamp = document._piqV4NavSwallow || 0;
+                    if (Date.now() - stamp > 1200) return;
+                    if (!t.closest('#toolbarRow .tab-btn, #profileTabsBar .profile-tab, #profileTabsBar .profile-tab-close, #profileTabsBar .profile-tab-close-all, #profileTabsBar .profile-help-pill, #piqChangeProfileBtn, #dashViewDeltasBtn, #piqLibraryRail, #hoverToggle, #dashDisplayToggle')) return;
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                }, true);
+            }
             function once(el, key, fn) {
                 if (!el || el[key]) return;
                 el[key] = true;
@@ -123620,7 +123742,8 @@ https://www.instagram.com/p/..."></textarea>
                     span.className = 'tab-n';
                     btn.insertBefore(span, label);
                 }
-                span.textContent = (n < 10 ? '0' : '') + n;
+                var numTxt = (n < 10 ? '0' : '') + n;
+                if (span.textContent !== numTxt) span.textContent = numTxt;
                 n += 1;
             });
         };
