@@ -48,6 +48,7 @@ OVERRIDES = {
     "house of the dragon": "WBD",
     "percy jackson and the olympians": "20th Television",
     "power": "CBS Studios",
+    "mistletoe murders": "Lionsgate",
 }
 
 # ── 2. canonical TMDB company name (lowercased) -> your preferred short code ────

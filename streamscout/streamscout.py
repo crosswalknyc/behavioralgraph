@@ -46,6 +46,10 @@ Two kinds of platform
       starz      starz_episode_identifier.resolve()     (HTTP, no login) —
                  per-season episode play ids from Starz's public metadata
                  service (playdata.starz.com); URL col = starz.com/us/en/play/<id>.
+      hallmark   hallmark_episode_identifier.resolve()  (HTTP, no login) —
+                 per-season episode item ids from Hallmark+'s public Accedo
+                 catalog API; URL col = item/<CODE> (MAIN episodes only, bonus
+                 filtered out).
 
 Season/episode granularity: full for Netflix, Hulu, Peacock, Max and Disney+
 (all read the full episode tree straight from the platform). Peacock's direct resolver returns
@@ -117,6 +121,7 @@ RESOLVER_PLATFORMS = {
     "max": {"label": "HBO MAX", "module": "max_episode_identifier"},
     "disney": {"label": "Disney Plus", "module": "disney_episode_identifier"},
     "starz": {"label": "Starz", "module": "starz_episode_identifier"},
+    "hallmark": {"label": "Hallmark Plus", "module": "hallmark_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -130,13 +135,14 @@ RESOLVER_MODULE = {
     "max": "max_episode_identifier",
     "disney": "disney_episode_identifier",
     "starz": "starz_episode_identifier",
+    "hallmark": "hallmark_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
-                      "starz"}
+                      "starz", "hallmark"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
-                  "max", "disney", "starz"]
+                  "max", "disney", "starz", "hallmark"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -397,6 +403,8 @@ def choose_platform() -> str:
             tag = "direct · login fallback"
         elif key == "starz":
             tag = "direct · no login"
+        elif key == "hallmark":
+            tag = "direct · no login"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -501,6 +509,9 @@ def main() -> int:
             print(f"Resolving {label} episodes directly from its site "
                   f"(no login) ...")
         elif platform == "starz":
+            print(f"Resolving {label} episodes from its public catalog "
+                  f"(no login) ...")
+        elif platform == "hallmark":
             print(f"Resolving {label} episodes from its public catalog "
                   f"(no login) ...")
         else:
