@@ -1,9 +1,11 @@
 # StreamScout — How-To (for Jenna)
 
-StreamScout finds the exact **watch/play identifier** for a movie or TV series
-across the major streaming platforms and drops the results into a spreadsheet on
-your Desktop. It turns the tedious manual hunt (opening each episode to copy its
-URL slug) into four quick questions.
+StreamScout turns "find the watch id for this title" into **four quick
+questions**. You give it a movie or series, it finds that title's exact
+watch/play identifier(s) on the streaming platform you pick, and drops them into
+a spreadsheet on your Desktop.
+
+It works for **both movies and series on all 10 platforms.**
 
 Every run writes one consistent CSV:
 
@@ -11,38 +13,35 @@ Every run writes one consistent CSV:
 SHOW · URL · PRODUCTION · PLATFORM · SEASON
 ```
 
-- **URL** = the identifier segment we care about (e.g. `watch/81268514` for
-  Netflix, a UUID for Hulu/Peacock/Max/Disney, `starz.com/us/en/play/23688` for
-  Starz).
-- **SEASON** = `Season 1`, `Season 2`, … (blank for movies and Apple TV, which
-  keys a whole series to one id).
+- **URL** = the identifier we care about (a UUID, a `watch/<id>`, an
+  `item/<CODE>`, an Amazon `detail/<ASIN>`, etc. — depends on the platform).
+- **SEASON** = `Season 1`, `Season 2`, … (blank for movies, and for Apple TV+
+  which keys a whole series to one id).
+
+> 📄 **The full platform list is in `StreamScout-Platforms.xlsx`** (on the
+> Desktop) — who needs a login, what each id looks like, etc. Keep it handy.
 
 ---
 
-## 0. First — put the tool on `main` (do this once)
+## Step 0 — Put the tool on `main` (do this once, ~30 seconds)
 
-The tool currently lives in **Pull Request #75**. Until that PR is merged, the
-`streamscout/` folder isn't on `main` yet, so the setup steps below can't find
-it. Merging is a ~30-second click, and you (as the repo owner) can do it:
+The tool lives in **Pull Request #75**. Until it's merged, the `streamscout/`
+folder isn't on `main` yet — so do this first:
 
-1. Open the PR: **https://github.com/crosswalknyc/behavioralgraph/pull/75**
+1. Open **https://github.com/crosswalknyc/behavioralgraph/pull/75**
 2. Click **Merge pull request** → **Confirm merge**.
-   - You may see a note that a check named **`validate` didn't run** — that check
-     only applies to website (`index.html`) edits, *not* this Python tool, so
-     it's safe to merge past it. As the owner you'll have a **Merge** button
-     regardless; use it.
-3. That's it — the entire tool, with all the latest fixes, is now on `main`.
+   - If you see "the check **`validate`** didn't run" — that check only applies
+     to website (`index.html`) edits, **not** this Python tool, so it's safe to
+     merge past. As the owner you'll have a **Merge** button regardless.
+3. Done — the whole tool, with every latest fix, is now on `main`.
 
-You only do this once. After it's merged, everything below "just works."
+You only ever do this once.
 
 ---
 
-## 1. One-time setup
+## Step 1 — One-time setup (once per computer)
 
-You only do this once per computer.
-
-**a) Get the code.** It lives in the `behavioralgraph` repo under the
-`streamscout/` folder. Pull the latest `main`:
+**a) Get the code:**
 
 ```bash
 git checkout main
@@ -50,29 +49,22 @@ git pull
 cd streamscout
 ```
 
-**b) Python 3.** Check you have it:
+**b) Check Python 3:**
 
 ```bash
 python3 --version
 ```
 
-**c) Install the two libraries.** Only the login-based platforms need these; the
-no-login platforms work with nothing extra, but it's easiest to just install
-both up front:
+**c) Install the two libraries** (only the login platforms need them, but it's
+easiest to install both now):
 
 ```bash
 python3 -m pip install playwright clickhouse-connect
 python3 -m playwright install firefox
 ```
 
-- `playwright` + Firefox → needed for **Netflix, HBO MAX, Disney+** (they open a
-  real browser window to search while logged in).
-- `clickhouse-connect` → only used by Peacock's rare database fallback. Skip it
-  if you never need that (see Troubleshooting).
-
-**d) Logins (`.env.local`).** Netflix, HBO MAX, and Disney+ need credentials.
-They're read from a file named `.env.local` at the **root of the repo** (the
-folder *above* `streamscout/`). Create it if it isn't there, with these lines:
+**d) Logins — only for Netflix, HBO Max, Disney+.** Put them in a file named
+`.env.local` at the **repo root** (the folder *above* `streamscout/`):
 
 ```
 NETFLIX_EMAIL=your_netflix_login
@@ -83,16 +75,12 @@ DISNEY_EMAIL=your_disney_login
 DISNEY_PASSWORD=your_disney_password
 ```
 
-> `.env.local` is **gitignored** — it never gets committed or shared through the
-> repo. Keep your copy local. (Ask Jessie for the shared logins if you don't have
-> them.) The first time a browser platform logs in, it may ask for a one-time
-> device verification; after that it remembers the session.
+> `.env.local` is **gitignored** — it never gets committed or shared. Ask Jessie
+> for the shared logins if you need them. The other 7 platforms need no login.
 
 ---
 
-## 2. Running it
-
-From the repo root **or** from inside the `streamscout/` folder:
+## Step 2 — Run it
 
 ```bash
 python3 streamscout/streamscout.py
@@ -100,82 +88,75 @@ python3 streamscout/streamscout.py
 
 It asks four questions:
 
-1. **Movie or Series?** → type `m` or `s`
+1. **Movie or Series?** → `m` or `s`
 2. **What title?** → e.g. `The Bear`
 3. **Which season(s)?** *(series only)* → `1` · `1,3,5` · `1-4` · `all`
 4. **Which platform?** → pick the number or name from the list
 
-Then it fetches everything and tells you where the CSV landed, e.g.:
+Then it fetches everything and tells you where the CSV landed:
 
 ```
 Found 63 result(s) for 'Power' on Starz.
 CSV written to: /Users/you/Desktop/lookup_starz_series_power_20260828-153027.csv
 ```
 
-The CSV appears on your **Desktop**.
+The CSV appears on your **Desktop**. That's the whole job.
 
 ---
 
-## 3. Platform cheat-sheet
+## The platforms (quick version)
 
-| Platform     | Login needed?            | Notes                                             |
-|--------------|--------------------------|---------------------------------------------------|
-| Peacock      | No                       | Reads its public site (DB fallback is optional)   |
-| Hulu         | No                       | —                                                 |
-| Apple TV     | No                       | One id for the whole series (no season split)     |
-| Paramount+   | No                       | —                                                 |
-| Starz        | No                       | URL column is `starz.com/us/en/play/<id>`         |
-| Hallmark Plus| No                       | Main episodes only (bonus filtered); URL = `item/<CODE>` |
-| Amazon       | No                       | Every watch id per title — all offer ASINs (SD/HD/UHD/ad) + GTI in both forms (`detail/<ASIN>`, `detail/<GTI>`, `amzn1.dv.gti.<uuid>`); shells + episodes. Pass `--lean` for just the primary ASIN |
-| Netflix      | **Yes** (opens Firefox)  | Uses `.env.local`; a window will open             |
-| HBO MAX      | **Yes** (opens Firefox)  | Uses `.env.local`; needs a visible window         |
-| Disney+      | Situational              | Tries no-login first; opens Firefox only if unsure|
+**10 platforms, movies + series on all of them.** Only **two** need a login:
 
-When a browser platform runs, **a Firefox window will pop up and drive itself** —
-that's expected. Don't click around in it; just let it finish.
+- 🔓 **No login (7):** Peacock, Hulu, Apple TV+, Paramount+, Starz,
+  Hallmark Plus, Amazon
+- 🔐 **Login — a Firefox window opens and drives itself (2):** Netflix, HBO Max
+- 🔓/🔐 **Disney+:** tries no-login first, only opens Firefox for tricky titles
+
+When a browser platform runs, **let the Firefox window do its thing** — don't
+click around in it.
+
+*(Details for each — logins, what each id looks like — are in
+`StreamScout-Platforms.xlsx`.)*
 
 ---
 
-## 4. Handy tips
+## Handy tips
 
-- **Paste a URL instead of searching.** If a title is obscure and the search
-  can't find it, the tool offers to let you paste a link from that platform
-  (an episode page, show page, or play URL). It'll extract everything from there.
-- **Seasons are flexible:** `all` grabs every season; `1-3` is a range; `1,4,6`
-  is a pick-list.
-- **Production column** is filled automatically (studio/house), with a few
-  hand-pinned overrides for accuracy.
-- **Low-confidence flag:** if the tool isn't sure about a result, it prints a
-  notice and records it locally for review. It does **not** send anything
-  anywhere yet — that's a future hookup. (Nothing to action; just so you know
-  what the "flagged for Jenna" message means.)
+- **Can't find a title?** The tool offers to let you **paste a link** from that
+  platform (an episode, show, or play URL) and extracts everything from there.
+- **Seasons are flexible:** `all` = every season, `1-3` = a range, `1,4,6` = a
+  pick-list.
+- **Amazon** captures *every* way a title shows up in clickstream (all offer
+  ASINs + the GTI in both forms, shells + episodes). It also covers Amazon
+  **Channels** — Lionsgate+, Starz, etc. sold through Prime Video.
+- **PRODUCTION** (studio) is filled in automatically.
 
 ---
 
-## 5. Troubleshooting
+## Troubleshooting
 
-- **"Missing NETFLIX_EMAIL / …"** → your `.env.local` is missing or in the wrong
-  place. It goes at the **repo root**, not inside `streamscout/`.
+- **"Missing NETFLIX_EMAIL / …"** → `.env.local` is missing or misplaced. It goes
+  at the **repo root**, not inside `streamscout/`.
 - **No Firefox window / browser error** → run
   `python3 -m playwright install firefox` again.
-- **A Netflix/Disney/MAX login gets stuck** → close the window and re-run; the
-  session is remembered, so the second try usually sails through. If it asks for
-  a device verification code, complete it once.
-- **Peacock says it's "falling back to clickstream" and errors** → that database
-  fallback needs the company network/credentials and `clickhouse-connect`. It's
-  rarely needed; Peacock's normal path works without it. If you hit it, paste a
+- **A login gets stuck** → close the window and re-run; the session is
+  remembered, so the second try usually sails through. If it asks for a one-time
+  device code, complete it once.
+- **Nothing found** → check spelling, or use the paste-a-URL fallback.
+- **Peacock mentions a "clickstream" database fallback and errors** → that path
+  needs the company network + `clickhouse-connect` and is rarely needed. Paste a
   `peacocktv.com` URL when prompted, or ask Jessie.
-- **Nothing found** → double-check spelling, or try the paste-a-URL fallback.
 
 ---
 
-## 6. What's in the folder
+## What's in the folder
 
 `streamscout/` is self-contained — keep these files together:
 
 - `streamscout.py` — the tool you run
 - `production_tags.py` — fills the PRODUCTION column
-- `*_identifier.py` — one resolver per platform (Hulu, Netflix, Peacock, Apple
-  TV, Paramount+, HBO MAX, Disney+, Starz, Hallmark Plus, Amazon)
+- `*_identifier.py` — one resolver per platform (Peacock, Hulu, Netflix,
+  Apple TV+, Paramount+, HBO Max, Disney+, Starz, Hallmark Plus, Amazon)
 
 That's it — four questions, one spreadsheet. Happy scouting. 🛰️
