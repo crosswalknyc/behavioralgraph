@@ -3468,7 +3468,7 @@
                 <div>
                     <div class="nl-kicker">The Read</div>
                     <div class="nl-title">Newsletter</div>
-                    <div class="nl-sub">Write it, pick a list or segment, send from <code>no_reply@crosswalknyc.com</code>. Replies go to <code>hello@crosswalknyc.com</code>. Opens, clicks, downloads, and payments land on Outcomes.</div>
+                    <div class="nl-sub">Write it, pick a list or segment, send from <code>no_reply@crosswalknyc.com</code>. Replies go to <code>hello@crosswalknyc.com</code>. A send also posts to the LinkedIn company page with a headline, clickbait copy, image, and a link back to the issue. Opens, clicks, downloads, and payments land on Outcomes.</div>
                     <div class="nl-sub" id="nl-from-line" style="margin-top:0.15rem;">Sends from The Read &lt;no_reply@crosswalknyc.com&gt;</div>
                 </div>
                 <div class="nl-actions">
@@ -3549,6 +3549,26 @@
                         <label>Add downloaders to</label>
                         <select id="nl-dl-list"></select>
                         <div class="nl-sub" id="nl-dl-link" style="margin-top:0.45rem;"></div>
+                        <div class="nl-divider">LinkedIn company page</div>
+                        <label class="nl-toggle">
+                            <input type="checkbox" id="nl-li-enabled" checked>
+                            <span>Post to LinkedIn when this sends</span>
+                        </label>
+                        <label>Headline</label>
+                        <input type="text" id="nl-li-headline" placeholder="YouTube was supposed to lose. 22.4 million people proved it did not.">
+                        <label>Post text</label>
+                        <textarea id="nl-li-text" placeholder="Short clickbait copy. The issue link is added on send."></textarea>
+                        <label>Post image</label>
+                        <input type="file" id="nl-li-file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+                        <div class="nl-row" style="margin-top:0.6rem;">
+                            <button class="btn btn-small btn-secondary" onclick="nlGenerateLinkedIn()">Write post + image</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlUploadLinkedInImage()">Upload image</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlPostLinkedIn()">Post now</button>
+                        </div>
+                        <div class="nl-sub" id="nl-li-status" style="margin-top:0.45rem;"></div>
+                        <div id="nl-li-preview-wrap" class="nl-li-preview nl-hidden">
+                            <img id="nl-li-preview" alt="LinkedIn post image">
+                        </div>
                         <label>Schedule (optional)</label>
                         <input type="datetime-local" id="nl-ed-schedule">
                         <div class="nl-send-bar">
@@ -3654,6 +3674,31 @@
                     <label>Footer address</label>
                     <input type="text" id="nl-set-addr" placeholder="Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265">
                     <button class="btn btn-small btn-primary" style="margin-top:0.75rem;" onclick="nlSaveSettings()">Save sender</button>
+                </div>
+                <div class="nl-form" style="margin-top:1rem;">
+                    <h3 style="margin:0 0 0.5rem; font-size:1rem;">LinkedIn company page</h3>
+                    <div class="nl-sub">Create an app at linkedin.com/developers for Crosswalk. Add Share on LinkedIn and Community Management API. On the Auth tab, paste the redirect URL below. Then save the Client ID and Client Secret here and connect the company page.</div>
+                    <label>Client ID</label>
+                    <input type="text" id="nl-li-client" autocomplete="off">
+                    <label>Client secret</label>
+                    <input type="password" id="nl-li-secret" placeholder="Saved secret stays hidden" autocomplete="new-password">
+                    <label>Redirect URL (paste this into the LinkedIn app)</label>
+                    <input type="text" id="nl-li-redirect" readonly>
+                    <label class="nl-toggle">
+                        <input type="checkbox" id="nl-li-auto" checked>
+                        <span>Post automatically when a newsletter sends</span>
+                    </label>
+                    <div class="nl-row" style="margin-top:0.7rem;">
+                        <button class="btn btn-small btn-primary" onclick="nlSaveLinkedIn()">Save LinkedIn app</button>
+                        <button class="btn btn-small btn-secondary" onclick="nlConnectLinkedIn()">Connect company page</button>
+                        <button class="btn btn-small btn-secondary" onclick="nlDisconnectLinkedIn()">Disconnect</button>
+                    </div>
+                    <div class="nl-sub" id="nl-li-conn" style="margin-top:0.55rem;">Not connected.</div>
+                    <div id="nl-li-pages-wrap" class="nl-hidden" style="margin-top:0.7rem;">
+                        <label>Company page</label>
+                        <select id="nl-li-page"></select>
+                        <button class="btn btn-small btn-secondary" style="margin-top:0.55rem;" onclick="nlPickLinkedInPage()">Use this page</button>
+                    </div>
                 </div>
             </div>
 

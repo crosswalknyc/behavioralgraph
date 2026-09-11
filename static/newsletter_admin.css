@@ -172,8 +172,21 @@
     width: auto;
     margin: 0;
 }
+#section-newsletter .nl-li-preview {
+    margin-top: 0.7rem;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: #0C1618;
+}
+#section-newsletter .nl-li-preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
 #section-newsletter input[type="text"],
 #section-newsletter input[type="email"],
+#section-newsletter input[type="password"],
 #section-newsletter input[type="number"],
 #section-newsletter input[type="datetime-local"],
 #section-newsletter select,

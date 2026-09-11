@@ -28,6 +28,8 @@ from urllib.parse import unquote
 
 from flask import Blueprint, Response, jsonify, redirect, request, session
 
+import newsletter_linkedin as nli
+
 newsletter_bp = Blueprint("newsletter", __name__)
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "dashboard-inputs")
@@ -412,6 +414,7 @@ def empty_state():
             "reply_to": DEFAULT_REPLY_TO,
             "company_address": DEFAULT_COMPANY_ADDRESS,
             "public_base_url": "",
+            "linkedin": nli.empty_settings_linkedin(),
         },
         "lists": [
             {
@@ -557,6 +560,15 @@ def normalize_state(state):
         settings["company_address"] = DEFAULT_COMPANY_ADDRESS
         changed = True
     settings["from_email"] = FROM_EMAIL
+    if not isinstance(settings.get("linkedin"), dict):
+        settings["linkedin"] = nli.empty_settings_linkedin()
+        changed = True
+    else:
+        base_li = nli.empty_settings_linkedin()
+        for key, val in base_li.items():
+            if key not in settings["linkedin"]:
+                settings["linkedin"][key] = val
+                changed = True
     state.setdefault("segments", [])
     state.setdefault("lists", [])
     state.setdefault("subscribers", [])
@@ -578,6 +590,16 @@ def normalize_state(state):
             changed = True
         elif camp.get("id") == SEED_CAMPAIGN_ID and (dl.get("title") or "") == "Creatorverse deck and workbook":
             dl["title"] = "Creatorverse deck"
+            changed = True
+        li_row = camp.get("linkedin")
+        if not isinstance(li_row, dict):
+            camp["linkedin"] = (
+                nli.default_seed_linkedin() if camp.get("id") == SEED_CAMPAIGN_ID
+                else nli.empty_campaign_linkedin()
+            )
+            changed = True
+        elif camp.get("id") == SEED_CAMPAIGN_ID and not (li_row.get("headline") or "").strip():
+            camp["linkedin"] = nli.default_seed_linkedin()
             changed = True
     return state, changed
 
@@ -846,6 +868,7 @@ def ensure_seeded(state=None):
             "seed": True,
             "stats": _empty_stats(),
             "download": _default_seed_download(),
+            "linkedin": nli.default_seed_linkedin(),
         })
         if not _list(st, "the-read"):
             st.setdefault("lists", []).append({
@@ -1271,6 +1294,8 @@ def _run_send(campaign_id):
 
         _cas_update_state(mutate)
         print(f"newsletter campaign {campaign_id} finished sent={sent} failed={failed}")
+        if sent:
+            nli.maybe_autopost(campaign_id)
     except Exception:
         traceback.print_exc()
 
@@ -1512,6 +1537,8 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
         "download": dl,
         "download_url": _public_download_url(cid, settings) if dl.get("enabled") else "",
         "download_stats": dl_stats,
+        "share_url": nli.share_url(cid, settings) if cid else "",
+        "linkedin": nli.public_campaign_linkedin(c, settings),
     }
 
 
@@ -1526,6 +1553,8 @@ def _overview_payload():
         for lid in s.get("list_ids") or []:
             list_counts[lid] = list_counts.get(lid, 0) + 1
     settings = state.get("settings") or {}
+    public_settings = dict(settings)
+    public_settings["linkedin"] = nli.public_status(settings)
     campaigns = [_public_campaign(c, settings=settings) for c in state.get("campaigns") or []]
     sent_camps = [c for c in campaigns if c.get("status") == "sent"]
     tot_sent = sum(int((c.get("stats") or {}).get("sent") or 0) for c in sent_camps)
@@ -1546,7 +1575,7 @@ def _overview_payload():
         segments.append({**seg, "subscriber_count": n})
     return {
         "success": True,
-        "settings": settings,
+        "settings": public_settings,
         "from_identity": f"{settings.get('from_name') or DEFAULT_FROM_NAME} <{FROM_EMAIL}>",
         "stripe_enabled": stripe_on,
         "lists": [
@@ -1623,11 +1652,125 @@ def api_settings():
             s["company_address"] = (body.get("company_address") or "").strip()
         if "public_base_url" in body:
             s["public_base_url"] = (body.get("public_base_url") or "").strip().rstrip("/")
+        if "linkedin" in body or any(k.startswith("linkedin_") or k in ("client_id", "client_secret", "auto_post", "organization_id") for k in body):
+            s["linkedin"] = nli.merge_settings_body(s.get("linkedin") or {}, body)
         s["from_email"] = FROM_EMAIL
         return st
 
     _cas_update_state(mutate)
     return jsonify(_overview_payload())
+
+
+@newsletter_bp.route("/api/admin/newsletter/linkedin/connect")
+@admin_required
+def api_linkedin_connect():
+    state = load_state()
+    settings = state.get("settings") or {}
+    if not nli.client_id(settings) or not nli.client_secret(settings):
+        return jsonify({
+            "success": False,
+            "error": "Save the LinkedIn app Client ID and Client Secret first.",
+        }), 400
+    token = sign_token({"p": "li", "t": _utcnow()})
+
+    def mutate(st):
+        li = nli._li_settings(st.get("settings") or {})
+        li["oauth_state"] = token
+        st.setdefault("settings", {})["linkedin"] = li
+        return st
+
+    _cas_update_state(mutate)
+    url = nli.authorization_url(settings, token)
+    return jsonify({"success": True, "url": url})
+
+
+@newsletter_bp.route("/api/admin/newsletter/linkedin/disconnect", methods=["POST"])
+@admin_required
+def api_linkedin_disconnect():
+    def mutate(st):
+        s = st.setdefault("settings", {})
+        s["linkedin"] = nli.disconnect(s)
+        return st
+
+    _cas_update_state(mutate)
+    return jsonify(_overview_payload())
+
+
+@newsletter_bp.route("/api/admin/newsletter/linkedin/page", methods=["POST"])
+@admin_required
+def api_linkedin_pick_page():
+    body = request.get_json(silent=True) or {}
+
+    def mutate(st):
+        s = st.setdefault("settings", {})
+        s["linkedin"] = nli.merge_settings_body(s.get("linkedin") or {}, body)
+        return st
+
+    _cas_update_state(mutate)
+    return jsonify(_overview_payload())
+
+
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/linkedin/generate", methods=["POST"])
+@admin_required
+def api_linkedin_generate(cid):
+    state = load_state()
+    camp = _campaign(state, cid)
+    if not camp:
+        return jsonify({"success": False, "error": "campaign not found"}), 404
+    html = get_campaign_html(cid) or ""
+    headline, text = nli.generate_post_copy(
+        {**camp, "linkedin": {"headline": "", "text": ""}},
+        html,
+    )
+    nli.ensure_share_image(cid, {**camp, "linkedin": {**(camp.get("linkedin") or {}), "headline": headline, "text": text}}, html)
+    nli.persist_campaign_linkedin(cid, {
+        "headline": headline,
+        "text": text,
+        "image_name": "linkedin.jpg",
+    })
+    nxt = load_state_raw()
+    return jsonify({
+        "success": True,
+        "campaign": _public_campaign(_campaign(nxt, cid), settings=nxt.get("settings") or {}),
+        **_overview_payload(),
+    })
+
+
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/linkedin/image", methods=["POST"])
+@admin_required
+def api_linkedin_image(cid):
+    state = load_state()
+    if not _campaign(state, cid):
+        return jsonify({"success": False, "error": "campaign not found"}), 404
+    up = request.files.get("file")
+    if not up:
+        return jsonify({"success": False, "error": "Choose an image first"}), 400
+    raw = up.read()
+    if not raw or len(raw) > 8_000_000:
+        return jsonify({"success": False, "error": "Image must be under 8MB"}), 400
+    name = nli.store_uploaded_image(cid, raw, up.filename or "linkedin.jpg")
+    nli.persist_campaign_linkedin(cid, {"image_name": name, "error": ""})
+    nxt = load_state_raw()
+    return jsonify({
+        "success": True,
+        "campaign": _public_campaign(_campaign(nxt, cid), settings=nxt.get("settings") or {}),
+    })
+
+
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/linkedin/post", methods=["POST"])
+@admin_required
+def api_linkedin_post(cid):
+    try:
+        result = nli.post_campaign(cid)
+    except Exception as e:
+        traceback.print_exc()
+        nli.persist_campaign_linkedin(cid, {"error": str(e)[:400]})
+        return jsonify({"success": False, "error": str(e)[:240]}), 400
+    return jsonify({
+        "success": True,
+        "post_url": result.get("post_url") or "",
+        **_overview_payload(),
+    })
 
 
 @newsletter_bp.route("/api/admin/newsletter/campaigns", methods=["POST"])
@@ -1660,6 +1803,7 @@ def api_create_campaign():
             "stats": _empty_stats(),
             "segment_id": (body.get("segment_id") or "").strip(),
             "download": _download_from_body(body, _empty_download()),
+            "linkedin": nli.merge_campaign_body(nli.empty_campaign_linkedin(), body),
         })
         return st
 
@@ -1699,6 +1843,8 @@ def api_update_campaign(cid):
             c["reply_to"] = _valid_email(body.get("reply_to")) or DEFAULT_REPLY_TO
         if "download" in body or any(k.startswith("download_") for k in body):
             c["download"] = _download_from_body(body, c.get("download") or _empty_download())
+        if "linkedin" in body:
+            c["linkedin"] = nli.merge_campaign_body(c.get("linkedin") or {}, body)
         if "scheduled_at" in body:
             raw = (body.get("scheduled_at") or "").strip()
             c["scheduled_at"] = raw or None
@@ -1794,6 +1940,16 @@ def api_duplicate(cid):
             "stats": _empty_stats(),
             "segment_id": src.get("segment_id") or "",
             "download": dict(src.get("download") or _empty_download()),
+            "linkedin": nli.merge_campaign_body(
+                src.get("linkedin") or nli.empty_campaign_linkedin(),
+                {"linkedin": {
+                    **nli._campaign_li(src),
+                    "posted_at": None,
+                    "post_urn": "",
+                    "post_url": "",
+                    "error": "",
+                }},
+            ),
         })
         return st
 
@@ -2304,6 +2460,61 @@ def preview_campaign(cid):
     if not html.strip():
         return Response("No HTML on this campaign yet.", status=404)
     return Response(html, mimetype="text/html; charset=utf-8")
+
+
+@newsletter_bp.route("/n/r/<cid>")
+def public_issue(cid):
+    cid = re.sub(r"[^A-Za-z0-9._-]", "", cid or "")
+    state = load_state_raw()
+    camp = _campaign(state, cid)
+    if not camp:
+        return _download_page("This issue is not available.", ok=False), 404
+    settings = state.get("settings") or {}
+    html = _preview_html(cid)
+    if not (html or "").strip():
+        return _download_page("This issue is not available.", ok=False), 404
+    li = nli.public_campaign_linkedin(camp, settings)
+    title = li.get("headline") or camp.get("subject") or camp.get("name") or "The Read"
+    desc = (li.get("text") or camp.get("preheader") or title).split("\n")[0][:220]
+    image = li.get("image_url") or ""
+    page = li.get("share_url") or nli.share_url(cid, settings)
+    html = nli.inject_share_meta(html, title, desc, image, page)
+    return Response(html, mimetype="text/html; charset=utf-8")
+
+
+@newsletter_bp.route("/n/linkedin/callback")
+def linkedin_callback():
+    err = (request.args.get("error_description") or request.args.get("error") or "").strip()
+    if err:
+        return _linkedin_result_page("LinkedIn did not connect. " + err, ok=False), 400
+    code = (request.args.get("code") or "").strip()
+    state_tok = (request.args.get("state") or "").strip()
+    payload = verify_token(state_tok)
+    if not code or not payload or payload.get("p") != "li":
+        return _linkedin_result_page("That LinkedIn link is not valid. Try Connect again.", ok=False), 400
+    state = load_state_raw()
+    settings = state.get("settings") or {}
+    stored = ((settings.get("linkedin") or {}).get("oauth_state") or "").strip()
+    if stored and stored != state_tok:
+        return _linkedin_result_page("That LinkedIn link expired. Try Connect again.", ok=False), 400
+    try:
+        tokens = nli.exchange_code(settings, code)
+        pages = nli.list_company_pages(tokens.get("access_token") or "")
+        if not pages:
+            raise RuntimeError(
+                "No company pages came back. The LinkedIn app needs "
+                "Community Management access, and you need admin rights on the page."
+            )
+        li = nli.apply_oauth_payload(settings, tokens, pages)
+        nli.persist_linkedin_settings(li)
+    except Exception as e:
+        traceback.print_exc()
+        return _linkedin_result_page(str(e)[:300], ok=False), 400
+    return redirect("/admin#newsletter")
+
+
+def _linkedin_result_page(message, ok=True):
+    return _download_page(message, ok=ok, title="LinkedIn")
 
 
 @newsletter_bp.route("/n/d/<cid>", methods=["GET", "POST"])

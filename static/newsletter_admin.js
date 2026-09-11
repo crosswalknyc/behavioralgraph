@@ -204,6 +204,43 @@
         $('nl-dl-price-wrap').classList.toggle('nl-hidden', !$('nl-dl-paid').checked);
     };
 
+    function fillLinkedInFields(camp) {
+        const li = (camp && camp.linkedin) || {};
+        if ($('nl-li-enabled')) $('nl-li-enabled').checked = li.enabled !== false;
+        if ($('nl-li-headline')) $('nl-li-headline').value = li.headline || '';
+        if ($('nl-li-text')) $('nl-li-text').value = li.text || '';
+        const status = $('nl-li-status');
+        if (status) {
+            if (li.post_url) status.innerHTML = `Posted: <a href="${esc(li.post_url)}" target="_blank" rel="noopener">open on LinkedIn</a>`;
+            else if (li.error) status.textContent = li.error;
+            else if (li.share_url) status.innerHTML = `Issue link: <a href="${esc(li.share_url)}" target="_blank" rel="noopener">${esc(li.share_url)}</a>`;
+            else status.textContent = '';
+        }
+        const wrap = $('nl-li-preview-wrap');
+        const img = $('nl-li-preview');
+        if (wrap && img) {
+            if (li.image_url) {
+                img.src = li.image_url + '?t=' + Date.now();
+                wrap.classList.remove('nl-hidden');
+            } else {
+                wrap.classList.add('nl-hidden');
+            }
+        }
+    }
+
+    function applyCampaignLinkedIn(data) {
+        if (!data) return;
+        if (data.success !== false) state.data = data;
+        const camp = (data && data.campaign) || ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
+        if (camp) {
+            const camps = (state.data && state.data.campaigns) || [];
+            const idx = camps.findIndex((c) => c.id === (camp.id || state.editingId));
+            if (idx >= 0) camps[idx] = camp;
+            fillLinkedInFields(camp);
+        }
+        renderStats();
+    }
+
     function campaignPayload() {
         const aud = parseAudience($('nl-ed-list').value);
         return {
@@ -222,6 +259,11 @@
                 price_usd: Number($('nl-dl-price').value || 0),
                 list_id: $('nl-dl-list').value || 'the-read',
             },
+            linkedin: {
+                enabled: $('nl-li-enabled') ? $('nl-li-enabled').checked : true,
+                headline: $('nl-li-headline') ? $('nl-li-headline').value : '',
+                text: $('nl-li-text') ? $('nl-li-text').value : '',
+            },
         };
     }
 
@@ -236,6 +278,7 @@
         fillAudienceSelect($('nl-ed-list'), camp);
         $('nl-ed-schedule').value = toLocalInput(camp && camp.scheduled_at);
         fillDownloadFields(camp);
+        fillLinkedInFields(camp);
         $('nl-preview').src = '/n/preview/' + encodeURIComponent(id) + '?t=' + Date.now();
         $('nl-html-file').value = '';
         if ($('nl-dl-file')) $('nl-dl-file').value = '';
@@ -286,6 +329,7 @@
             await nlRefresh(true);
             const camp = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
             fillDownloadFields(camp);
+            fillLinkedInFields(camp);
         } catch (e) { toast(e.message, true); }
     };
 
@@ -363,9 +407,12 @@
         }
         const subject = $('nl-ed-subject').value || '(no subject)';
         const label = audienceLabel(value);
+        const liOn = $('nl-li-enabled') && $('nl-li-enabled').checked;
+        const liConn = state.data && state.data.settings && state.data.settings.linkedin && state.data.settings.linkedin.connected;
+        const liNote = (liOn && liConn) ? ' LinkedIn gets the headline, image, and issue link at the same time.' : '';
         const msg = schedule
-            ? `Schedule "${subject}" to ${n} people on ${label} at ${fmtWhen(when)}?`
-            : `Send "${subject}" to ${n} people on ${label} now? This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.`;
+            ? `Schedule "${subject}" to ${n} people on ${label} at ${fmtWhen(when)}?` + liNote
+            : `Send "${subject}" to ${n} people on ${label} now? This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.` + liNote;
         openModal(msg, async () => {
             try {
                 const aud = parseAudience(value);
@@ -511,6 +558,7 @@
         $('nl-set-from').value = settings.from_name || 'The Read';
         $('nl-set-reply').value = settings.reply_to || 'hello@crosswalknyc.com';
         $('nl-set-addr').value = settings.company_address || 'Crosswalk, 23465 Civic Center Way Bldg 9, Malibu, CA 90265';
+        renderLinkedInSettings(settings.linkedin || {});
         const q = ($('nl-sub-search').value || '').trim().toLowerCase();
         const rows = ((state.data && state.data.subscribers) || []).filter((s) => {
             if (!q) return true;
@@ -696,7 +744,129 @@
             });
             state.data = data;
             renderStats();
+            renderAudience();
             toast('Sender settings saved');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    function renderLinkedInSettings(li) {
+        li = li || {};
+        if ($('nl-li-client')) $('nl-li-client').value = li.client_id || '';
+        if ($('nl-li-secret')) $('nl-li-secret').value = '';
+        if ($('nl-li-redirect')) $('nl-li-redirect').value = li.redirect_uri || '';
+        if ($('nl-li-auto')) $('nl-li-auto').checked = li.auto_post !== false;
+        const conn = $('nl-li-conn');
+        if (conn) {
+            if (li.connected) {
+                conn.textContent = 'Connected' + (li.organization_name ? ' as ' + li.organization_name : '') + '.';
+            } else if (li.has_client_id && li.has_client_secret) {
+                conn.textContent = 'App saved. Connect the company page next.';
+            } else {
+                conn.textContent = 'Not connected.';
+            }
+        }
+        const wrap = $('nl-li-pages-wrap');
+        const sel = $('nl-li-page');
+        const pages = li.pages || [];
+        if (wrap && sel) {
+            wrap.classList.toggle('nl-hidden', pages.length < 2 && !li.connected);
+            sel.innerHTML = pages.map((p) => {
+                const on = String(p.id) === String(li.organization_id || '');
+                return `<option value="${esc(p.id)}"${on ? ' selected' : ''}>${esc(p.name || p.id)}</option>`;
+            }).join('');
+        }
+    }
+
+    window.nlSaveLinkedIn = async function () {
+        try {
+            const data = await api('/api/admin/newsletter/settings', {
+                method: 'POST',
+                body: JSON.stringify({
+                    linkedin: {
+                        client_id: $('nl-li-client').value,
+                        client_secret: $('nl-li-secret').value,
+                        auto_post: $('nl-li-auto').checked,
+                    },
+                }),
+            });
+            state.data = data;
+            renderAudience();
+            toast('LinkedIn app saved');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlConnectLinkedIn = async function () {
+        try {
+            await nlSaveLinkedIn();
+            const data = await api('/api/admin/newsletter/linkedin/connect');
+            if (data.url) window.location.href = data.url;
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlDisconnectLinkedIn = async function () {
+        if (!confirm('Disconnect the LinkedIn company page?')) return;
+        try {
+            const data = await api('/api/admin/newsletter/linkedin/disconnect', { method: 'POST', body: '{}' });
+            state.data = data;
+            renderAudience();
+            toast('LinkedIn disconnected');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlPickLinkedInPage = async function () {
+        try {
+            const data = await api('/api/admin/newsletter/linkedin/page', {
+                method: 'POST',
+                body: JSON.stringify({ organization_id: $('nl-li-page').value }),
+            });
+            state.data = data;
+            renderAudience();
+            toast('Company page saved');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlGenerateLinkedIn = async function () {
+        if (!state.editingId) return;
+        await nlSaveCampaign();
+        try {
+            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/linkedin/generate', {
+                method: 'POST',
+                body: '{}',
+            });
+            applyCampaignLinkedIn(data);
+            toast('LinkedIn post ready');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlUploadLinkedInImage = async function () {
+        if (!state.editingId) return;
+        const file = $('nl-li-file') && $('nl-li-file').files[0];
+        if (!file) { toast('Choose a LinkedIn image first', true); return; }
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const resp = await fetch('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/linkedin/image', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: fd,
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.success === false) throw new Error(data.error || 'Upload failed');
+            applyCampaignLinkedIn(data);
+            toast('LinkedIn image uploaded');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlPostLinkedIn = async function () {
+        if (!state.editingId) return;
+        await nlSaveCampaign();
+        try {
+            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/linkedin/post', {
+                method: 'POST',
+                body: '{}',
+            });
+            applyCampaignLinkedIn(data);
+            toast(data.post_url ? 'Posted to LinkedIn' : 'Posted to LinkedIn');
         } catch (e) { toast(e.message, true); }
     };
 
