@@ -22544,6 +22544,58 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
         #dashboardView.piq-v4.piq-has-profile #tab-insights .metrics-row { display: none; }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metrics-row {
+            display: flex !important;
+            flex-wrap: nowrap;
+            gap: 16px;
+            width: 100%;
+            margin: 0 0 22px;
+            padding: 0;
+            grid-column: 1 / -1;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 12px !important;
+            color: #E9E8E1 !important;
+            box-shadow: none !important;
+            padding: 18px 20px !important;
+            align-items: flex-start !important;
+            overflow: visible !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list {
+            width: 100%;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list-header,
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .cmp-stat-list-header {
+            color: #7C878A !important;
+            font-size: 10px !important;
+            letter-spacing: 0.14em !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stats-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 16px !important;
+            width: 100% !important;
+            margin: 0 0 20px !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            padding: 18px 20px !important;
+            overflow: visible !important;
+            aspect-ratio: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            text-align: left !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card,
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
         @media (max-width: 980px) {
             #dashboardView.piq-v4.piq-has-profile #dashProfileInfo,
             #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
@@ -128972,6 +129024,10 @@ https://www.instagram.com/p/..."></textarea>
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
+            try {
+                var view = document.getElementById('dashboardView');
+                if (view) view.classList.toggle('piq-cuts-on', series.length > 0);
+            } catch (_e) {}
 
             const targets = [
                 { sampleId: 'dashSampleSize',     projId: 'dashProjectedUS',     cardSel: '.stat-card' },
