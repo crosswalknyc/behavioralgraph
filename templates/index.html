@@ -22554,13 +22554,13 @@ https://www.instagram.com/p/..."></textarea>
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar {
             position: fixed !important;
             left: 0;
-            top: 0;
+            top: var(--piq-chrome-bottom, 168px) !important;
             bottom: 0;
             z-index: 2147482000;
             width: 320px !important;
             min-width: 320px !important;
             max-width: 320px !important;
-            height: 100vh !important;
+            height: auto !important;
             max-height: none !important;
             border-radius: 0;
             transform: translateX(-110%);
@@ -22574,7 +22574,10 @@ https://www.instagram.com/p/..."></textarea>
         #piqSidebarScrim {
             display: none;
             position: fixed;
-            inset: 0;
+            top: var(--piq-chrome-bottom, 168px);
+            left: 0;
+            right: 0;
+            bottom: 0;
             z-index: 2147481999;
             background: rgba(12, 22, 24, 0.55);
         }
@@ -24425,13 +24428,13 @@ https://www.instagram.com/p/..."></textarea>
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqProfileSidebar {
             position: fixed !important;
             left: 0;
-            top: 0;
+            top: var(--piq-chrome-bottom, 168px) !important;
             bottom: 0;
             z-index: 2147482000;
             width: 360px !important;
             min-width: 360px !important;
             max-width: 360px !important;
-            height: 100vh !important;
+            height: auto !important;
             max-height: none !important;
             border-radius: 0;
             transform: translateX(-110%) !important;
@@ -24759,10 +24762,12 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500 !important;
             letter-spacing: -0.01em !important;
             text-transform: none !important;
-            padding: 9px 2px !important;
+            padding: 10px 8px 10px 4px !important;
             border-radius: 0 !important;
             gap: 10px !important;
             border-bottom: 1px solid rgba(59, 61, 56, 0.55);
+            cursor: pointer !important;
+            overflow: visible !important;
         }
         #dashboardView.piq-v4 .profile-cat-item.master-cat {
             background: transparent !important;
@@ -24770,16 +24775,41 @@ https://www.instagram.com/p/..."></textarea>
             margin-top: 0;
         }
         #dashboardView.piq-v4 .profile-cat-item:hover {
-            background: transparent !important;
+            background: #15252A !important;
             color: #E9E8E1 !important;
         }
         #dashboardView.piq-v4 .profile-cat-item:hover .profile-cat-label { color: #E9E8E1 !important; }
         #dashboardView.piq-v4 .profile-cat-item .cat-arrow {
-            color: #7C878A !important;
-            font-size: 9px !important;
-            width: 8px;
-            flex: 0 0 8px;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            color: #C7F23E !important;
+            font-size: 13px !important;
+            width: 22px !important;
+            height: 22px !important;
+            flex: 0 0 22px !important;
+            border: 1px solid #3B3D38;
+            border-radius: 6px;
+            background: #0C1618;
+            line-height: 1;
         }
+        #dashboardView.piq-v4 .profile-cat-item:not(.open)::after {
+            content: 'Open';
+            margin-left: auto;
+            color: #7C878A;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+        }
+        #dashboardView.piq-v4 .profile-cat-item.open::after {
+            content: 'Close';
+            margin-left: auto;
+            color: #7C878A;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+        }
+        #dashboardView.piq-v4 .profile-cat-item:hover::after { color: #C7F23E; }
         #dashboardView.piq-v4 .profile-cat-label {
             color: #E9E8E1 !important;
             text-transform: none !important;
@@ -24834,6 +24864,15 @@ https://www.instagram.com/p/..."></textarea>
             background: rgba(199, 242, 62, 0.08) !important;
             color: #C7F23E !important;
         }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item .cat-arrow {
+            color: #5E7E12 !important;
+            border-color: #C9C6BA;
+            background: #E9E8E1;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item:hover {
+            background: #FFFFFF !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item:hover::after { color: #5E7E12; }
         body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-item,
         body[data-theme="light"] #dashboardView.piq-v4 .profile-cat-label,
         body[data-theme="light"] #dashboardView.piq-v4 .profile-select-item {
@@ -24968,11 +25007,84 @@ https://www.instagram.com/p/..."></textarea>
             position: relative;
             z-index: 6;
         }
+
+        #piqLibraryRail {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: var(--piq-chrome-bottom, 168px);
+            z-index: 2147481500;
+            width: 36px;
+            min-height: 168px;
+            padding: 16px 0 14px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 12px;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            border-left: 3px solid #C7F23E;
+            border-radius: 0 12px 12px 0;
+            color: #E9E8E1;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            cursor: pointer;
+            box-shadow: 8px 12px 28px rgba(0, 0, 0, 0.32);
+        }
+        #dashboardView.piq-v4.piq-has-profile:not(.piq-sidebar-open) #piqLibraryRail,
+        #piqLibraryRail.piq-rail-on {
+            display: flex;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqLibraryRail,
+        #piqLibraryRail.piq-rail-on.piq-rail-hide {
+            display: none !important;
+        }
+        #piqLibraryRail .piq-rail-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+            flex: 0 0 6px;
+        }
+        #piqLibraryRail .piq-rail-label {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #E9E8E1;
+        }
+        #piqLibraryRail .piq-rail-chevron {
+            color: #C7F23E;
+            font-size: 18px;
+            line-height: 1;
+            font-weight: 600;
+        }
+        #piqLibraryRail:hover {
+            width: 40px;
+            box-shadow: 10px 14px 32px rgba(0, 0, 0, 0.4);
+        }
+        body[data-theme="light"] #piqLibraryRail {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            border-left-color: #5E7E12;
+            color: #0C1618;
+            box-shadow: 8px 12px 28px rgba(12, 22, 24, 0.12);
+        }
+        body[data-theme="light"] #piqLibraryRail .piq-rail-dot,
+        body[data-theme="light"] #piqLibraryRail .piq-rail-chevron { background: transparent; color: #5E7E12; }
+        body[data-theme="light"] #piqLibraryRail .piq-rail-dot { background: #5E7E12; }
+        body[data-theme="light"] #piqLibraryRail .piq-rail-label { color: #0C1618; }
     </style>
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView" class="piq-v4" data-piq-tab="insights"{% if default_view_hedge_fund_iq %} style="display: none;"{% endif %}>
             <div id="piqSidebarScrim" class="piq-sidebar-scrim"></div>
+            <button type="button" id="piqLibraryRail" class="piq-library-rail" aria-label="Open library" title="Open library">
+                <span class="piq-rail-dot" aria-hidden="true"></span>
+                <span class="piq-rail-label">Library</span>
+                <span class="piq-rail-chevron" aria-hidden="true">›</span>
+            </button>
             <!-- Profile Tabs Bar -->
             <div class="profile-tabs-bar" id="profileTabsBar">
             </div>
@@ -122494,11 +122606,30 @@ https://www.instagram.com/p/..."></textarea>
             if (!btn) return;
             btn.textContent = 'Select Profile';
         };
+        window._piqV4SyncLibraryRail = function() {
+            var view = document.getElementById('dashboardView');
+            var rail = document.getElementById('piqLibraryRail');
+            var chrome = document.getElementById('piqStickyChrome');
+            if (!rail) return;
+            var show = !!(view && view.classList.contains('piq-v4') && view.classList.contains('piq-has-profile') && !view.classList.contains('piq-sidebar-open'));
+            rail.classList.toggle('piq-rail-on', show);
+            rail.classList.toggle('piq-rail-hide', !show);
+            rail.setAttribute('aria-hidden', show ? 'false' : 'true');
+            if (chrome && chrome.style.display !== 'none') {
+                var bottom = Math.round(chrome.getBoundingClientRect().bottom);
+                document.documentElement.style.setProperty('--piq-chrome-bottom', bottom + 'px');
+                rail.style.top = bottom + 'px';
+            }
+            if (rail.parentNode !== document.body) {
+                document.body.appendChild(rail);
+            }
+        };
         window._piqV4ToggleSidebar = function(force) {
             var view = document.getElementById('dashboardView');
             if (!view) return;
             var open = (typeof force === 'boolean') ? force : !view.classList.contains('piq-sidebar-open');
             view.classList.toggle('piq-sidebar-open', open);
+            if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
             if (open) {
                 var inp = document.getElementById('dashProfileSearchInput');
                 if (inp) setTimeout(function() { try { inp.focus(); } catch (_e) {} }, 40);
@@ -123281,6 +123412,8 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 if (spacer) spacer.style.height = '0px';
                 if (promo) promo.style.maxHeight = '';
+                document.documentElement.style.removeProperty('--piq-chrome-bottom');
+                if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
                 return wrap || null;
             }
             wrap.classList.add('piq-v4', 'piq-has-profile', 'piq-chrome-fixed');
@@ -123310,6 +123443,8 @@ https://www.instagram.com/p/..."></textarea>
                 var gap = Math.round(wrap.getBoundingClientRect().bottom) + 18;
                 promo.style.maxHeight = Math.max(360, window.innerHeight - gap) + 'px';
             }
+            document.documentElement.style.setProperty('--piq-chrome-bottom', Math.round(wrap.getBoundingClientRect().bottom) + 'px');
+            if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
             return wrap;
         };
         window._piqV4WatchChrome = function() {
@@ -123430,6 +123565,15 @@ https://www.instagram.com/p/..."></textarea>
                 closeBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(false);
+                });
+            }
+            var railBtn = document.getElementById('piqLibraryRail');
+            if (railBtn && !railBtn._piqBound) {
+                railBtn._piqBound = true;
+                railBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
                 });
             }
             var heroName = document.getElementById('dashHeroName');
