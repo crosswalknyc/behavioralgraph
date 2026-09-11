@@ -22755,8 +22755,11 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13px !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .inline-tab-header h2 { color: #0C1618 !important; }
-        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
+        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
             order: -1 !important;
+        }
+        #piqStickyChrome.piq-v4.piq-has-profile #toolbarRow {
+            order: 1 !important;
         }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashBrandContainer {
             display: none !important;
