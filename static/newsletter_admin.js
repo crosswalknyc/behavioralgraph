@@ -282,6 +282,7 @@
         $('nl-preview').src = '/n/preview/' + encodeURIComponent(id) + '?t=' + Date.now();
         $('nl-html-file').value = '';
         if ($('nl-dl-file')) $('nl-dl-file').value = '';
+        if ($('nl-send-now')) $('nl-send-now').textContent = (camp && camp.status === 'sent') ? 'Send again' : 'Send now';
         state.dirty = false;
         showView('editor');
         if (focusSend) $('nl-send-now').focus();
@@ -407,12 +408,16 @@
         }
         const subject = $('nl-ed-subject').value || '(no subject)';
         const label = audienceLabel(value);
+        const camp = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
         const liOn = $('nl-li-enabled') && $('nl-li-enabled').checked;
         const liConn = state.data && state.data.settings && state.data.settings.linkedin && state.data.settings.linkedin.connected;
         const liNote = (liOn && liConn) ? ' LinkedIn gets the headline, image, and issue link at the same time.' : '';
+        const already = camp && camp.status === 'sent';
         const msg = schedule
             ? `Schedule "${subject}" to ${n} people on ${label} at ${fmtWhen(when)}?` + liNote
-            : `Send "${subject}" to ${n} people on ${label} now? This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.` + liNote;
+            : (already
+                ? `Send "${subject}" again to ${n} people on ${label}? They already got the last send.`
+                : `Send "${subject}" to ${n} people on ${label} now? This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.`) + liNote;
         openModal(msg, async () => {
             try {
                 const aud = parseAudience(value);
@@ -427,7 +432,8 @@
                 state.data = data;
                 renderAll();
                 if (data.status === 'scheduled') toast('Scheduled');
-                else toast('Sending to ' + (data.recipients || n) + ' people');
+                else if (data.failed) toast('Sent to ' + (data.sent || 0) + ', ' + data.failed + ' did not go out', true);
+                else toast('Sent to ' + (data.sent || data.recipients || n) + ' people');
                 showView('campaigns');
             } catch (e) { toast(e.message, true); }
         });
@@ -484,8 +490,8 @@
             }
             const recips = data.recipients || [];
             $('nl-report-recips').innerHTML = recips.length
-                ? '<table class="nl-table"><thead><tr><th>Email</th><th>Status</th><th>Opened</th><th>Clicks</th></tr></thead><tbody>' +
-                  recips.map((r) => `<tr><td>${esc(r.email)}</td><td>${esc(r.status || '')}</td><td>${r.opened_at ? fmtWhen(r.opened_at) : '-'}</td><td>${fmtNum(r.click_count)}</td></tr>`).join('') +
+                ? '<table class="nl-table"><thead><tr><th>Email</th><th>Status</th><th>Opened</th><th>Clicks</th><th>Note</th></tr></thead><tbody>' +
+                  recips.map((r) => `<tr><td>${esc(r.email)}</td><td>${esc(r.status || '')}</td><td>${r.opened_at ? fmtWhen(r.opened_at) : '-'}</td><td>${fmtNum(r.click_count)}</td><td>${esc(r.error || '')}</td></tr>`).join('') +
                   '</tbody></table>'
                 : '<div class="nl-empty">No recipients on this send yet.</div>';
             showView('report');

@@ -1166,8 +1166,10 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
     camp = _campaign(state, campaign_id)
     if not camp:
         return None, "campaign not found"
-    if camp.get("status") not in ("draft", "scheduled", "sending"):
+    if camp.get("status") not in ("draft", "scheduled", "sending", "sent"):
         return None, f"campaign is {camp.get('status')}"
+    if scheduled and camp.get("status") == "sent":
+        return None, "campaign already sent"
     segment_id = segment_id or camp.get("segment_id") or None
     recipients = resolve_recipients(
         state,
@@ -1179,6 +1181,8 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
         return None, "no subscribed recipients on that audience"
 
     snap = get_send_snapshot(campaign_id)
+    if camp.get("status") == "sent" and (snap.get("recipients") or {}):
+        _put_json(SEND_KEY.format(cid=campaign_id) + ".prior", snap)
     existing = (snap.get("recipients") or {}) if camp.get("status") == "sending" else {}
     recips = {}
     for row in recipients:
@@ -1203,9 +1207,9 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
         c = _campaign(st, campaign_id)
         if not c:
             return None
-        if c.get("status") not in ("draft", "scheduled", "sending"):
+        if c.get("status") not in ("draft", "scheduled", "sending", "sent"):
             return None
-        if scheduled and c.get("status") == "sending":
+        if scheduled and c.get("status") in ("sending", "sent"):
             return None
         c["status"] = "sending"
         c["list_id"] = list_id or c.get("list_id")
@@ -1232,11 +1236,13 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
 
 
 def _run_send(campaign_id):
+    result = {"sent": 0, "failed": 0, "errors": []}
     try:
         state = load_state_raw()
         camp = _campaign(state, campaign_id)
         if not camp:
-            return
+            result["errors"].append("campaign not found")
+            return result
         settings = state.get("settings") or {}
         html = get_campaign_html(campaign_id)
         base = _public_base(settings)
@@ -1271,6 +1277,7 @@ def _run_send(campaign_id):
                 row["status"] = "failed"
                 row["error"] = str(e)[:400]
                 failed += 1
+                result["errors"].append(f"{email}: {row['error']}")
                 print(f"newsletter send failed {campaign_id} -> {email}: {e}")
             snap["recipients"][email] = row
             put_send_snapshot(campaign_id, snap)
@@ -1280,13 +1287,16 @@ def _run_send(campaign_id):
         snap["links"] = links
         put_send_snapshot(campaign_id, snap)
         stats = _stats_from_snapshot(snap)
+        result["sent"] = sent
+        result["failed"] = failed
 
         def mutate(st):
             c = _campaign(st, campaign_id)
             if not c:
                 return None
-            c["status"] = "sent"
-            c["sent_at"] = snap.get("finished_at")
+            c["status"] = "sent" if sent else "draft"
+            if sent:
+                c["sent_at"] = snap.get("finished_at")
             c["scheduled_at"] = None
             c["stats"] = stats
             c["updated_at"] = _utcnow()
@@ -1296,8 +1306,23 @@ def _run_send(campaign_id):
         print(f"newsletter campaign {campaign_id} finished sent={sent} failed={failed}")
         if sent:
             nli.maybe_autopost(campaign_id)
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
+        result["errors"].append(str(e)[:400])
+
+        def revert(st):
+            c = _campaign(st, campaign_id)
+            if not c or c.get("status") != "sending":
+                return None
+            c["status"] = "draft"
+            c["updated_at"] = _utcnow()
+            return st
+
+        try:
+            _cas_update_state(revert)
+        except Exception:
+            pass
+    return result
 
 
 def start_send_async(campaign_id):
@@ -2013,11 +2038,25 @@ def api_send(cid):
     recips, err = _claim_send(cid, list_id, emails, segment_id=segment_id)
     if err:
         return jsonify({"success": False, "error": err}), 400
-    start_send_async(cid)
+    result = _run_send(cid)
+    sent = int(result.get("sent") or 0)
+    failed = int(result.get("failed") or 0)
+    errors = result.get("errors") or []
+    if sent == 0 and failed:
+        return jsonify({
+            "success": False,
+            "error": errors[0] if errors else "Send failed.",
+            "sent": sent,
+            "failed": failed,
+            **_overview_payload(),
+        }), 400
     return jsonify({
         "success": True,
-        "status": "sending",
+        "status": "sent",
         "recipients": len(recips),
+        "sent": sent,
+        "failed": failed,
+        "errors": errors[:8],
         **_overview_payload(),
     })
 
