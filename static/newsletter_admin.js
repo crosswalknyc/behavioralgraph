@@ -138,9 +138,10 @@
                     <h3>${esc(c.name || 'Untitled')}</h3>
                     <div class="meta">${esc(meta)}</div>
                     <div class="nl-card-foot">
-                        <button class="btn btn-small btn-secondary" onclick="nlOpenEditor('${c.id}')">Edit</button>
-                        ${c.status === 'sent' ? `<button class="btn btn-small btn-secondary" onclick="nlOpenReport('${c.id}')">Report</button>` : `<button class="btn btn-small btn-primary" onclick="nlOpenEditor('${c.id}', true)">Send</button>`}
-                        <button class="btn btn-small btn-secondary" onclick="nlDuplicate('${c.id}')">Duplicate</button>
+                        <button class="btn btn-small btn-secondary" onclick="nlOpenEditor('${esc(c.id)}')">Edit</button>
+                        ${c.status === 'sent' ? `<button class="btn btn-small btn-secondary" onclick="nlOpenReport('${esc(c.id)}')">Report</button>` : `<button class="btn btn-small btn-primary" onclick="nlOpenEditor('${esc(c.id)}', true)">Send</button>`}
+                        <button class="btn btn-small btn-secondary" onclick="nlDuplicate('${esc(c.id)}')">Duplicate</button>
+                        ${c.status === 'sent' ? '' : `<button class="btn btn-small btn-secondary" onclick="nlDeleteCampaign('${esc(c.id)}')">Delete</button>`}
                     </div>
                 </div>
             </article>`;
@@ -439,13 +440,14 @@
         });
     };
 
-    window.nlDeleteCampaign = async function () {
-        if (!state.editingId) return;
+    window.nlDeleteCampaign = async function (id) {
+        const cid = id || state.editingId;
+        if (!cid) return;
         if (!confirm('Delete this newsletter?')) return;
         try {
-            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId), { method: 'DELETE' });
+            const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(cid), { method: 'DELETE' });
             state.data = data;
-            state.editingId = null;
+            if (state.editingId === cid) state.editingId = null;
             renderAll();
             showView('campaigns');
             toast('Deleted');
