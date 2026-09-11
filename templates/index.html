@@ -24144,11 +24144,16 @@ https://www.instagram.com/p/..."></textarea>
             transform: rotate(180deg);
             color: #C7F23E;
         }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-wrap {
+            position: relative;
+            display: inline-flex;
+            flex: 0 0 auto;
+        }
         :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu {
             position: absolute !important;
-            left: 32px;
-            top: calc(100% - 2px);
-            min-width: 300px;
+            left: 0;
+            top: calc(100% + 6px);
+            min-width: 100%;
             max-width: min(560px, calc(100vw - 80px));
             max-height: 340px;
             overflow-y: auto;
@@ -123552,11 +123557,13 @@ https://www.instagram.com/p/..."></textarea>
             if (opts.length && jump.getAttribute('data-sig') !== sig) {
                 jump.setAttribute('data-sig', sig);
                 var cur = opts[0] ? opts[0].label : 'Category';
-                var html = '<span class="piq-jump-lbl">Jump to</span><button type="button" class="piq-jump-btn" id="piqBehJumpBtn" aria-expanded="false"><span class="piq-jump-current">' + window._piqV4Esc(cur) + '</span><span class="caret">&#9662;</span></button><div class="piq-jump-menu" id="piqBehJumpMenu" hidden>';
+                var html = '<span class="piq-jump-lbl">Jump to</span><div class="piq-jump-wrap">' +
+                    '<button type="button" class="piq-jump-btn" id="piqBehJumpBtn" aria-expanded="false"><span class="piq-jump-current">' + window._piqV4Esc(cur) + '</span><span class="caret">&#9662;</span></button>' +
+                    '<div class="piq-jump-menu" id="piqBehJumpMenu" hidden>';
                 opts.forEach(function(o, i) {
                     html += '<button type="button" class="piq-jump-opt' + (i === 0 ? ' is-on' : '') + '" data-cat="' + String(o.value).replace(/"/g, '') + '">' + window._piqV4Esc(o.label) + '</button>';
                 });
-                html += '</div>';
+                html += '</div></div>';
                 jump.innerHTML = html;
             }
             var btn = document.getElementById('piqBehJumpBtn');
@@ -123570,6 +123577,10 @@ https://www.instagram.com/p/..."></textarea>
                     if (open) menu.removeAttribute('hidden');
                     else menu.setAttribute('hidden', '');
                     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    if (open) {
+                        var on = menu.querySelector('.piq-jump-opt.is-on');
+                        menu.scrollTop = on ? Math.max(0, on.offsetTop - 8) : 0;
+                    }
                 });
                 menu.addEventListener('click', function(e) {
                     var opt = e.target.closest('[data-cat]');
