@@ -21407,18 +21407,18 @@ https://www.instagram.com/p/..."></textarea>
                Was a 54px circle; now a rounded pill with the slash
                mark avatar + "Ask Prometheus" label + Signal Green
                status dot on the right. Same drag/click handlers.
-               Outline is Orchid to match Data Cuts / Select Profile. */
+               Outer outline is Cobalt, shared with Data Cuts / Select Profile. */
             position: fixed; right: 22px; bottom: 22px;
             display: none; align-items: center; gap: 10px;
             height: 46px; padding: 0 14px 0 6px;
             border-radius: 999px;
-            background: #0C1618; border: 1px solid #E682FF;
+            background: #0C1618; border: 1px solid #3358FF;
             color: #E9E8E1;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: 13px; font-weight: 600; letter-spacing: -0.005em;
             cursor: grab; z-index: 99000;
-            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.20),
-                        0 12px 32px rgba(230, 130, 255, 0.34);
+            box-shadow: 0 12px 32px rgba(51, 88, 255, 0.28),
+                        0 0 0 1px rgba(233,232,225,0.10);
             touch-action: none; user-select: none; -webkit-user-select: none;
             transition: background 140ms ease-out, transform 140ms ease-out,
                         box-shadow 140ms ease-out, border-color 140ms ease-out;
@@ -21426,27 +21426,27 @@ https://www.instagram.com/p/..."></textarea>
         #prometheusLauncher.pm-on { display: inline-flex; }
         #prometheusLauncher:hover {
             background: #15252A;
-            border-color: #E682FF;
-            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.30),
-                        0 14px 36px rgba(230, 130, 255, 0.46);
+            border-color: #3358FF;
+            box-shadow: 0 14px 36px rgba(51, 88, 255, 0.36),
+                        0 0 0 1px rgba(233,232,225,0.14);
         }
         #prometheusLauncher:active { cursor: grabbing; }
-        #prometheusLauncher:focus-visible { outline: 2px solid #E682FF; outline-offset: 2px; }
+        #prometheusLauncher:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
         body[data-theme="light"] #prometheusLauncher {
             background: #FFFFFF;
-            border-color: #8E3FA8;
+            border-color: #3358FF;
             color: #0C1618;
-            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.16),
-                        0 12px 28px rgba(142, 63, 168, 0.24);
+            box-shadow: 0 12px 28px rgba(51, 88, 255, 0.18),
+                        0 0 0 1px rgba(12, 22, 24, 0.08);
         }
         body[data-theme="light"] #prometheusLauncher:hover {
             background: #E9E8E1;
-            border-color: #8E3FA8;
-            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.26),
-                        0 14px 32px rgba(142, 63, 168, 0.32);
+            border-color: #3358FF;
+            box-shadow: 0 14px 32px rgba(51, 88, 255, 0.24),
+                        0 0 0 1px rgba(12, 22, 24, 0.10);
         }
         body[data-theme="light"] #prometheusLauncher:focus-visible {
-            outline-color: #8E3FA8;
+            outline-color: #3358FF;
         }
         #prometheusLauncher .pm-launcher-avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -21568,7 +21568,8 @@ https://www.instagram.com/p/..."></textarea>
             color: #E9E8E1;
         }
         #prometheusWidget .pm-msg-user .pm-msg-bubble {
-            background: #3358FF; color: #E9E8E1;
+            background: #0C1618; color: #E9E8E1;
+            border: 1px solid #3B3D38;
             padding: 10px 14px; border-radius: 12px 12px 4px 12px;
             margin-left: auto;
         }
@@ -21726,7 +21727,8 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #prometheusWidget .pm-msg-bubble { color: #0C1618; }
         body[data-theme="light"] #prometheusWidget .pm-msg-user .pm-msg-bubble {
-            background: #3358FF; color: #E9E8E1;
+            background: #E9E8E1; color: #0C1618;
+            border: 1px solid #C9C6BA;
         }
         body[data-theme="light"] #prometheusWidget .pm-action,
         body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"],
@@ -24860,40 +24862,40 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
             display: inline-flex !important;
             align-items: center;
-            border: 1px solid #E682FF !important;
+            border: 1px solid #3358FF !important;
             color: #E9E8E1 !important;
             background: #15252A !important;
-            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.20),
-                        0 6px 20px rgba(230, 130, 255, 0.34) !important;
+            box-shadow: 0 12px 24px rgba(51, 88, 255, 0.28),
+                        0 0 0 1px rgba(233,232,225,0.10) !important;
         }
         #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
         #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
         #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
-            border-color: #E682FF !important;
+            border-color: #3358FF !important;
             color: #E9E8E1 !important;
-            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.30),
-                        0 8px 26px rgba(230, 130, 255, 0.46) !important;
+            box-shadow: 0 14px 28px rgba(51, 88, 255, 0.36),
+                        0 0 0 1px rgba(233,232,225,0.14) !important;
         }
         #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
-            color: #E682FF !important;
-            border-color: #E682FF !important;
+            color: #3358FF !important;
+            border-color: #3358FF !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts,
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
             background: #FFFFFF !important;
-            border-color: #8E3FA8 !important;
+            border-color: #3358FF !important;
             color: #0C1618 !important;
-            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.16),
-                        0 6px 18px rgba(142, 63, 168, 0.24) !important;
+            box-shadow: 0 8px 18px rgba(51, 88, 255, 0.16),
+                        0 0 0 1px rgba(12, 22, 24, 0.08) !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
         body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
-            border-color: #8E3FA8 !important;
+            border-color: #3358FF !important;
             color: #0C1618 !important;
-            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.26),
-                        0 8px 22px rgba(142, 63, 168, 0.32) !important;
+            box-shadow: 0 10px 22px rgba(51, 88, 255, 0.22),
+                        0 0 0 1px rgba(12, 22, 24, 0.10) !important;
         }
         #dashboardView.piq-v4.piq-has-profile #dashHeroName {
             cursor: pointer;
