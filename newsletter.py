@@ -2524,17 +2524,19 @@ def public_issue(cid):
 
 @newsletter_bp.route("/n/linkedin/callback")
 def linkedin_callback():
-    err = unescape((request.args.get("error_description") or request.args.get("error") or "").strip())
+    err_code = unescape((request.args.get("error") or "").strip())
+    err = unescape((request.args.get("error_description") or err_code or "").strip())
     err = err.replace("&quot;", '"').strip()
-    if err:
+    if err or err_code:
         rejected = nli.unknown_scope_from_error(err)
         retry = nli.retry_authorization_url(rejected) if rejected in nli.DEAD_SCOPES or rejected == "offline_access" else ""
         if retry:
             return redirect(retry)
-        if nli.is_company_page_scope_error(err, rejected):
+        if nli.is_company_page_scope_error(err, rejected, error_code=err_code):
             err = nli.COMPANY_PAGE_HELP
         elif "offline_access" in err or "unknown scope" in err.lower():
             err = "LinkedIn rejected a permission this app does not have. Close this tab and click Connect company page again."
+        nli.persist_connect_error(err)
         return _linkedin_result_page("LinkedIn did not connect. " + err, ok=False), 400
     code = (request.args.get("code") or "").strip()
     state_tok = (request.args.get("state") or "").strip()
@@ -2558,12 +2560,35 @@ def linkedin_callback():
         nli.persist_linkedin_settings(li)
     except Exception as e:
         traceback.print_exc()
+        nli.persist_connect_error(str(e)[:300])
         return _linkedin_result_page(str(e)[:300], ok=False), 400
     return redirect("/admin#newsletter")
 
 
 def _linkedin_result_page(message, ok=True):
-    return _download_page(message, ok=ok, title="LinkedIn")
+    tone = "#5E7E12" if ok else "#8E3FA8"
+    paras = [
+        f'<p style="font-size:16px;line-height:1.5;color:#5C6560;">{escape(part.strip())}</p>'
+        for part in re.split(r"(?<=\.)\s+", message or "")
+        if part.strip()
+    ]
+    body = "".join(paras) or f'<p style="font-size:16px;line-height:1.5;color:#5C6560;">{escape(message or "")}</p>'
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LinkedIn · Crosswalk</title></head>
+<body style="margin:0;background:#E9E8E1;color:#0C1618;
+font-family:Arial,Helvetica,sans-serif;">
+<div style="max-width:480px;margin:72px auto;padding:0 24px;">
+<div style="font-size:11px;letter-spacing:2.6px;text-transform:uppercase;
+color:#5C6560;">Crosswalk / The Read</div>
+<h1 style="font-size:28px;margin:16px 0 12px;">LinkedIn</h1>
+{body}
+<p style="margin-top:22px;"><a href="/admin#newsletter" style="color:#0C1618;font-weight:700;">Back to Newsletter</a></p>
+<p style="margin-top:36px;font-size:12px;color:#888C89;">
+<span style="color:{tone};">&#9679;</span> {escape(_company_address())}
+</p>
+</div></body></html>"""
 
 
 @newsletter_bp.route("/n/d/<cid>", methods=["GET", "POST"])

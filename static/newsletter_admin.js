@@ -767,6 +767,8 @@
         if (conn) {
             if (li.connected) {
                 conn.textContent = 'Connected' + (li.organization_name ? ' as ' + li.organization_name : '') + '.';
+            } else if (li.last_error) {
+                conn.textContent = li.last_error;
             } else if (li.has_client_id && li.has_client_secret) {
                 conn.textContent = 'App saved. Connect the company page next.';
             } else {

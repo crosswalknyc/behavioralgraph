@@ -14,7 +14,7 @@ import traceback
 from datetime import datetime, timezone
 from html import escape, unescape
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import requests
 
@@ -101,6 +101,7 @@ def empty_settings_linkedin():
         "oauth_state": "",
         "oauth_rejected": [],
         "connected_at": "",
+        "last_error": "",
     }
 
 
@@ -157,6 +158,7 @@ def public_status(settings=None):
         "organization_name": (li.get("organization_name") or "").strip(),
         "pages": li.get("pages") or [],
         "connected_at": li.get("connected_at") or "",
+        "last_error": (li.get("last_error") or "").strip(),
     }
 
 
@@ -232,14 +234,24 @@ def unknown_scope_from_error(err):
     return (match.group(1) if match else "").strip()
 
 
-def is_company_page_scope_error(err, rejected=""):
+def is_company_page_scope_error(err, rejected="", error_code=""):
     text = unescape(err or "").lower()
+    code = unescape(error_code or "").lower()
     name = (rejected or unknown_scope_from_error(err) or "").lower()
     if "organization" in name:
         return True
+    if code in (
+        "invalid_scope_error",
+        "invalid_scope",
+        "unauthorized_scope_error",
+        "unauthorized_scope",
+    ):
+        return True
     return (
         "unauthorized_scope" in text
+        or "invalid_scope" in text
         or "not authorized for your application" in text
+        or "permission scope is not valid" in text
         or ("w_organization_social" in text and "not authorized" in text)
     )
 
@@ -257,7 +269,7 @@ def authorization_url(settings, state_token, scopes=None):
         "redirect_uri": redirect_uri(settings),
         "state": state_token,
         "scope": scope,
-    })
+    }, quote_via=quote)
     return f"{LINKEDIN_AUTH}?{q}"
 
 
@@ -430,6 +442,7 @@ def apply_oauth_payload(settings, payload, pages):
     li["pages"] = pages
     li["oauth_state"] = ""
     li["oauth_rejected"] = []
+    li["last_error"] = ""
     li["connected_at"] = _utcnow()
     if len(pages) == 1:
         li["organization_id"] = pages[0]["id"]
@@ -780,6 +793,15 @@ def persist_linkedin_settings(li):
         return st
 
     return nl._cas_update_state(mutate)
+
+
+def persist_connect_error(message):
+    nl = _nl()
+    settings = (nl.load_state_raw() or {}).get("settings") or {}
+    li = _li_settings(settings)
+    li["last_error"] = (message or "")[:500]
+    persist_linkedin_settings(li)
+    return li
 
 
 def persist_campaign_linkedin(cid, patch):
