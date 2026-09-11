@@ -123528,8 +123528,17 @@ https://www.instagram.com/p/..."></textarea>
             place(row, bar);
             place(jump, row);
             if (heroRow) {
-                if (slim) place(heroRow, jump && jump.parentNode === wrap ? jump : row);
-                else if (heroRow.parentNode === wrap) wrap.insertAdjacentElement('afterend', heroRow);
+                if (slim) {
+                    place(heroRow, jump && jump.parentNode === wrap ? jump : row);
+                } else if (heroRow.parentNode !== view) {
+                    // The chrome is pinned to <body>, so "after the chrome" is
+                    // the end of the page, not the top of the view. The full
+                    // cover belongs in the view, under the spacer that stands
+                    // in for the chrome.
+                    var spacerEl = document.getElementById('piqChromeSpacer');
+                    if (spacerEl && spacerEl.parentNode === view) spacerEl.insertAdjacentElement('afterend', heroRow);
+                    else view.insertBefore(heroRow, view.firstChild);
+                }
             }
             if (window._piqV4WatchChrome) window._piqV4WatchChrome();
             if (window._piqV4PinChrome) window._piqV4PinChrome();
