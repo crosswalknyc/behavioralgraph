@@ -75,6 +75,7 @@ Usage  (run from the repo root, or from inside the streamscout/ folder)
 
 import argparse
 import csv
+import difflib
 import json
 import os
 import re
@@ -123,6 +124,8 @@ RESOLVER_PLATFORMS = {
     "starz": {"label": "Starz", "module": "starz_episode_identifier"},
     "hallmark": {"label": "Hallmark Plus", "module": "hallmark_episode_identifier"},
     "amazon": {"label": "Amazon", "module": "amazon_episode_identifier"},
+    "mgmplus": {"label": "MGM Plus", "module": "mgmplus_episode_identifier"},
+    "britbox": {"label": "BritBox", "module": "britbox_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -138,13 +141,16 @@ RESOLVER_MODULE = {
     "starz": "starz_episode_identifier",
     "hallmark": "hallmark_episode_identifier",
     "amazon": "amazon_episode_identifier",
+    "mgmplus": "mgmplus_episode_identifier",
+    "britbox": "britbox_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
-                      "starz", "hallmark", "amazon"}
+                      "starz", "hallmark", "amazon", "mgmplus", "britbox"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
-                  "max", "disney", "starz", "hallmark", "amazon"]
+                  "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
+                  "britbox"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -216,6 +222,35 @@ def notify_jenna(reason, title, platform, label, kind, seasons, rows) -> None:
 # ── small helpers ─────────────────────────────────────────────────────────────
 def tokens(s: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", (s or "").lower())
+
+
+# ── fuzzy title matching (hardening for messy client input) ───────────────────
+# Clients typing titles into Prometheus will mangle them: extra franchise
+# prefixes ("The Fast and the Furious: F9 The Fast Saga" vs the canonical
+# "F9: The Fast Saga"), typos ("Alien Extinciton"), missing subtitles, trailing
+# years, etc. A strict token-set equality test flags all of those as
+# "near match / LOW CONFIDENCE" even when discovery found the right title.
+# These helpers accept a correct-but-messy client title as an EXACT match.
+def title_similarity(a: str, b: str) -> float:
+    """0..1 similarity between two titles, robust to word order and typos.
+    Combines token-set Jaccard, subset containment, and a character ratio."""
+    ta, tb = set(tokens(a)), set(tokens(b))
+    if not ta or not tb:
+        return 0.0
+    if ta == tb or ta <= tb or tb <= ta:      # one is contained in the other
+        return 1.0
+    jacc = len(ta & tb) / len(ta | tb)
+    ratio = difflib.SequenceMatcher(
+        None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
+    return max(jacc, ratio)
+
+
+def is_title_match(client_title: str, canonical_title: str,
+                   thresh: float = 0.7) -> bool:
+    """True if a (possibly messy) client title should count as an EXACT match
+    for a resolver's canonical title. Subset containment (wordy-but-correct)
+    and high fuzzy similarity (typos, reordering) both qualify."""
+    return title_similarity(client_title, canonical_title) >= thresh
 
 
 def token_regex(title: str) -> str:
@@ -344,7 +379,6 @@ def resolver_lookup(platform, title, kind, seasons, url=None):
         show, rrows = mod.resolve(title=title, url=url, kind=kind, seasons=seasons)
     else:
         show, rrows = mod.resolve(title=title, kind=kind, seasons=seasons)
-    want = tokens(title)
     out = []
     for r in rrows:
         out.append({
@@ -355,7 +389,9 @@ def resolver_lookup(platform, title, kind, seasons, url=None):
             "identifier": r.get("identifier", "") or "",
             "watch_url": r.get("watch_url", "") or "",
             "hits": "",
-            "exact": "yes" if tokens(show) == want else "no",
+            # Fuzzy: a correct-but-messy client title (extra franchise prefix,
+            # typo, reordering) still counts as exact against the canonical show.
+            "exact": "yes" if is_title_match(title, show) else "no",
         })
     return out
 
@@ -409,6 +445,10 @@ def choose_platform() -> str:
             tag = "direct · no login"
         elif key == "amazon":
             tag = "direct · no login · id fragments"
+        elif key == "mgmplus":
+            tag = "direct · no login · watch paths"
+        elif key == "britbox":
+            tag = "direct · no login · series shell"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -521,6 +561,12 @@ def main() -> int:
         elif platform == "amazon":
             print(f"Resolving {label} watch ids (every offer ASIN + GTI, shells "
                   f"+ episodes) from its public detail pages (no login) ...")
+        elif platform == "mgmplus":
+            print(f"Resolving {label} watch paths (season shells / movie) from "
+                  f"its public sitemap + pages (no login) ...")
+        elif platform == "britbox":
+            print(f"Resolving {label} watch-path shell (one URL per title) from "
+                  f"its public sitemap (no login) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:

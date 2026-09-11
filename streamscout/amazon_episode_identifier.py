@@ -36,6 +36,7 @@ Usage
 
 import argparse
 import csv
+import difflib
 import gzip
 import re
 import os
@@ -78,6 +79,52 @@ _PAGETYPEID = re.compile(r"pageTypeId=['\"]?(" + ASIN_RE + r")")
 # ── tiny helpers ──────────────────────────────────────────────────────────────
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
+
+
+def title_similarity(a, b):
+    """0..1 similarity, robust to word order, extra words, and typos.
+    Subset containment scores 1.0 (wordy-but-correct client titles)."""
+    ta, tb = set(tokens(a)), set(tokens(b))
+    if not ta or not tb:
+        return 0.0
+    if ta == tb or ta <= tb or tb <= ta:
+        return 1.0
+    jacc = len(ta & tb) / len(ta | tb)
+    ratio = difflib.SequenceMatcher(
+        None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
+    return max(jacc, ratio)
+
+
+def title_variants(title):
+    """Alternate search forms for a messy client title, most-specific first.
+    Clients mistype titles in Prometheus, so we search a few normalizations:
+      * the raw title
+      * de-punctuated
+      * with a leading 'Franchise:' prefix dropped
+        ('The Fast and the Furious: F9 The Fast Saga' -> 'F9 The Fast Saga')
+      * with a trailing 4-digit year dropped ('F9 2021' -> 'F9')
+    """
+    raw = (title or "").strip()
+    out, seen = [], set()
+
+    def _add(v):
+        v = re.sub(r"\s+", " ", (v or "").strip())
+        key = " ".join(tokens(v))
+        if v and key and key not in seen:
+            seen.add(key)
+            out.append(v)
+
+    _add(raw)
+    # drop a leading "Prefix:" segment when real words follow the colon
+    if ":" in raw:
+        head, tail = raw.split(":", 1)
+        if len(tokens(tail)) >= 2:
+            _add(tail)
+    # drop a trailing year
+    _add(re.sub(r"\b(19|20)\d{2}\b\s*$", "", raw))
+    # de-punctuated form
+    _add(re.sub(r"[^0-9A-Za-z ]+", " ", raw))
+    return out
 
 
 def parse_seasons(raw):
@@ -164,6 +211,30 @@ def movie_entries(html):
     return out
 
 
+def edition_ids(html, base_title, thresh=0.7):
+    """Detail ids for OTHER editions of the same movie (Director's Cut, extended,
+    ad-supported "original version", etc.). A film is often several distinct
+    Amazon titles — each its own ASIN/GTI — so to capture every way it appears
+    in clickstream we enumerate the page's `VariantCarousel` and keep only the
+    entities whose title matches the base title (this excludes franchise
+    siblings like "The Fast And The Furious" that share the carousel)."""
+    out, seen = [], set()
+    idpat = re.compile(r'/gp/video/detail/(' + GTI_RE + r'|' + ASIN_RE + r')')
+    for cm in re.finditer(r'"containerType":"VariantCarousel"', html or ""):
+        seg = html[cm.start():cm.start() + 12000]
+        nxt = seg.find('"containerType":', 5)      # bound to this container
+        if nxt != -1:
+            seg = seg[:nxt]
+        for m in re.finditer(r'"displayTitle":"([^"]+)"', seg):
+            if title_similarity(base_title, m.group(1)) < thresh:
+                continue
+            ids = idpat.findall(seg[max(0, m.start() - 800):m.start()])
+            if ids and ids[-1] not in seen:
+                seen.add(ids[-1])
+                out.append(ids[-1])
+    return out
+
+
 def entity_fragments(ent, all_asins=True):
     """Normalized id fragments for one entity, in the order:
        detail/<ASIN>...  detail/<GTI-26>  amzn1.dv.gti.<uuid>"""
@@ -206,58 +277,108 @@ def _gti_from_url(url):
     return m.group(1) if m else None
 
 
-def _web_search(query):
+# Discovery fetches (search engines, /s, pv hops) use a shorter timeout than
+# payload fetches: a slow provider shouldn't hang a client's Prometheus query.
+DISCOVERY_TIMEOUT = 12
+
+
+def _web_search(query, timeout=DISCOVERY_TIMEOUT):
     """Return raw HTML from a DuckDuckGo HTML endpoint (best effort)."""
-    for engine in ("https://html.duckduckgo.com/html/",
-                   "https://lite.duckduckgo.com/lite/"):
+    for engine in ("https://lite.duckduckgo.com/lite/",
+                   "https://html.duckduckgo.com/html/"):
         code, _, html = fetch(engine + "?" +
-                              urllib.parse.urlencode({"q": query}))
+                              urllib.parse.urlencode({"q": query}), timeout=timeout)
         if code == 200 and html:
             return urllib.parse.unquote(html)
     return ""
 
 
-def _candidate_asins(title):
-    """Gather candidate detail ASINs for a title from search (best-effort)."""
+def _candidate_asins(title, limit=8, max_pv_fetch=4):
+    """Gather up to `limit` candidate detail ASINs for a title from search.
+
+    Robust to messy client titles: we search a few normalized VARIANTS of the
+    title (extra franchise prefix dropped, year dropped, de-punctuated) so a
+    wordy or lightly-mistyped query still surfaces the right listing.
+
+    Bounded work: at most `max_pv_fetch` primevideo GTI->ASIN look-ups total,
+    and we stop early once we have enough candidates (so a popular title with
+    dozens of GTIs in the SERP can't blow up into dozens of fetches)."""
+    variants = title_variants(title)
     want = set(tokens(title))
     cands = []
-    # A) Amazon instant-video search — detail links near matching text.
-    code, _, html = fetch("https://www.amazon.com/s?" +
-                          urllib.parse.urlencode({"k": title, "i": "instant-video"}))
-    if code == 200 and html and len(html) > 20000:
-        for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
-            ctx = html[max(0, m.start() - 500):m.start() + 200].lower()
-            if want and len(want & set(tokens(ctx))) >= max(2, len(want) - 1):
-                cands.append(m.group(1))
-    # B) Web search — amazon ASINs and/or primevideo GTIs.
-    for q in (f"{title} prime video", f"{title} primevideo detail",
-              f"{title} amazon prime video watch"):
+
+    def _enough():
+        return len(dict.fromkeys(cands)) >= limit
+
+    # A) Amazon instant-video search — detail links near matching text (cheap).
+    #    Try the most-specific variant first, then a fallback if it came up dry.
+    for v in variants[:2]:
+        vwant = set(tokens(v))
+        code, _, html = fetch(
+            "https://www.amazon.com/s?" +
+            urllib.parse.urlencode({"k": v, "i": "instant-video"}),
+            timeout=DISCOVERY_TIMEOUT)
+        if code == 200 and html and len(html) > 20000:
+            for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
+                ctx = html[max(0, m.start() - 500):m.start() + 200].lower()
+                if vwant and len(vwant & set(tokens(ctx))) >= max(2, len(vwant) - 1):
+                    cands.append(m.group(1))
+                    if _enough():
+                        return list(dict.fromkeys(cands))[:limit]
+        if cands:
+            break
+
+    # B) Web search — amazon ASINs (free) and, sparingly, primevideo GTIs.
+    #    Iterate (variant x query) but stay bounded via early-exit + pv cap.
+    seen_gti, pv_fetches = set(), 0
+    queries = [f"{v} prime video" for v in variants[:2]]
+    queries += [f"{title} primevideo detail", f"{title} amazon prime video watch"]
+    for q in queries:
         blob = _web_search(q)
         if not blob:
             continue
         cands += re.findall(r'amazon\.com/gp/video/detail/(' + ASIN_RE + r')', blob)
+        if _enough():
+            break
         for gti in re.findall(
                 r'primevideo\.com/(?:region/na/)?detail/(' + GTI_RE + r')', blob):
-            _, _, pv = fetch("https://www.primevideo.com/detail/%s/" % gti)
+            if gti in seen_gti or pv_fetches >= max_pv_fetch:
+                continue
+            seen_gti.add(gti)
+            pv_fetches += 1
+            _, _, pv = fetch("https://www.primevideo.com/detail/%s/" % gti,
+                             timeout=DISCOVERY_TIMEOUT)
             a = asin_from_pv(pv)
             if a:
                 cands.append(a)
-    return list(dict.fromkeys(cands))            # de-dupe, keep order
+            if _enough():
+                break
+        if _enough():
+            break
+    return list(dict.fromkeys(cands))[:limit]
 
 
 def discover_asin(title, kind="series"):
     """Return a detail ASIN for a title, preferring a candidate whose page
     matches the requested kind (series -> has seasons/episodes; movie -> movie)
-    and whose title best matches. No login."""
+    and whose title best matches. Fuzzy title scoring tolerates typos and
+    extra/re-ordered words in the client's query. No login."""
     want = set(tokens(title))
-    best, best_score = None, (-1, -1, -1)
+    best, best_score = None, (-1, -1, -1.0, -1)
     for asin in _candidate_asins(title)[:6]:
         _, _, page = fetch("https://www.amazon.com/gp/video/detail/%s/" % asin)
         kind_ok = bool(movie_entries(page)) if kind == "movie" \
             else bool(self_entries(page))
         have = set(tokens(show_name(page, "")))
-        score = (1 if kind_ok else 0, 1 if have == want else 0, len(want & have))
-        if kind_ok and have == want:         # perfect match — take it
+        equal = (have == want)                       # true token-set equality
+        # char-level closeness catches typos ("Alien Extinciton")
+        typo = difflib.SequenceMatcher(
+            None, " ".join(sorted(want)), " ".join(sorted(have))).ratio()
+        sim = title_similarity(title, show_name(page, ""))  # subset/fuzzy (rank)
+        # Rank equality ABOVE subset/fuzzy so a short query prefers its exact
+        # title (e.g. "Power") over a superset ("Power Book II").
+        score = (1 if kind_ok else 0, 1 if equal else 0, sim, len(want & have))
+        if kind_ok and (equal or typo >= 0.9):       # confident — take it
             return asin
         if score > best_score:
             best, best_score = asin, score
@@ -296,17 +417,30 @@ def resolve(title=None, url=None, kind="series", seasons=None, all_asins=True):
                          "title": "", "identifier": frag, "watch_url": ""})
 
     # MOVIE: no seasons/episodes — emit the movie's ids (incl. the discovered
-    # ASIN, which can differ from the page's canonical one).
+    # ASIN, which can differ from the page's canonical one). A film is often
+    # several distinct Amazon editions (theatrical, ad-supported, Director's
+    # Cut) — each its own ASIN/GTI — so we also resolve the sibling editions
+    # listed in the page's VariantCarousel to capture every clickstream id.
     if kind == "movie":
-        ments = movie_entries(html)
         rows = []
-        for ent in ments:
+        for ent in movie_entries(html):
             _emit(rows, "", "", ent)
+        for edid in edition_ids(html, show):
+            _, _, ehtml = fetch(
+                "https://www.amazon.com/gp/video/detail/%s/" % edid)
+            for ent in movie_entries(ehtml):
+                _emit(rows, "", "", ent)
         have = {r["identifier"] for r in rows}
         if ("detail/%s" % entry_asin) not in have:
             rows.append({"season": "", "episode": "", "title": "",
                          "identifier": "detail/%s" % entry_asin, "watch_url": ""})
-        return (show, rows)
+        # de-dupe identifiers while preserving order
+        seen, uniq = set(), []
+        for r in rows:
+            if r["identifier"] not in seen:
+                seen.add(r["identifier"])
+                uniq.append(r)
+        return (show, uniq)
 
     smap = season_asins(html)
     for e in self_entries(html):        # the entry page's own season shell
