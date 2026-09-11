@@ -48714,6 +48714,20 @@ https://www.instagram.com/p/..."></textarea>
                         }
                     }
                 } catch (_) { /* localStorage disabled - keep server default */ }
+                // Deep-link from an email/CTA: ?view=<product> opens that
+                // product on load (the Trends digest links to ?view=trendsIQ).
+                // Only honored when it names a real, enabled dropdown option;
+                // otherwise the saved/default view wins.
+                try {
+                    var _qv = new URLSearchParams(window.location.search).get('view');
+                    if (_qv && /^[A-Za-z]+$/.test(_qv) && viewDropdownEl) {
+                        var _qvOpt = viewDropdownEl.querySelector('option[value="' + _qv + '"]');
+                        if (_qvOpt && !_qvOpt.disabled) {
+                            initialVal = _qv;
+                            viewDropdownEl.value = _qv;
+                        }
+                    }
+                } catch (_) { /* bad URL / no URLSearchParams - keep prior initialVal */ }
                 var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, rankerIQ: showRankerIQ, cultureRankerIQ: function() { if (typeof showCultureRankerIQ === 'function') showCultureRankerIQ(); }, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, brandTrackingIQ: function() { if (typeof showBrandTrackingIQ === 'function') showBrandTrackingIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
