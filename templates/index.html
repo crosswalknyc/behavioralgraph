@@ -836,7 +836,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 100000;
+            z-index: 2147483000;
             padding: 2rem;
         }
         .howto-video-overlay.show { display: flex; }
@@ -22131,7 +22131,7 @@ https://www.instagram.com/p/..."></textarea>
     <style id="piq-v4-chrome">
         /* Profile IQ v4 portrait cover. Scoped to #dashboardView.piq-v4. */
         #dashboardView.piq-v4,
-        #dashboardView.piq-v4.piq-has-profile {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile {
             --piq-graphite: #0C1618;
             --piq-slate: #15252A;
             --piq-offwhite: #E9E8E1;
@@ -22144,7 +22144,7 @@ https://www.instagram.com/p/..."></textarea>
             --piq-orchid: #E682FF;
         }
         body[data-theme="light"] #dashboardView.piq-v4,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile {
             --piq-graphite: #E9E8E1;
             --piq-slate: #FFFFFF;
             --piq-offwhite: #0C1618;
@@ -22154,7 +22154,7 @@ https://www.instagram.com/p/..."></textarea>
             --piq-signal: #5E7E12;
             --piq-olive: #5E7E12;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileAndToolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileAndToolbarRow {
             display: block;
             flex: 0 0 auto;
             width: 100%;
@@ -22165,7 +22165,7 @@ https://www.instagram.com/p/..."></textarea>
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-synthesis: none;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
             display: flex !important;
             flex-direction: column;
             max-height: none !important;
@@ -22177,22 +22177,22 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 0;
             min-height: 0 !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow:not(.collapsed) {
             background: transparent;
         }
-        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed),
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileHeaderRow:not(.collapsed) {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="insights"] #profileHeaderRow:not(.collapsed),
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileHeaderRow:not(.collapsed) {
             min-height: 0 !important;
             padding: 0;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             margin: 0;
             order: 0 !important;
             position: relative;
             z-index: 4;
         }
-        #dashboardView.piq-v4.piq-has-profile > #toolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile > #toolbarRow {
             order: 0 !important;
         }
         #piqChromeSpacer {
@@ -22201,7 +22201,7 @@ https://www.instagram.com/p/..."></textarea>
             height: 0;
             pointer-events: none;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
+        #piqStickyChrome.piq-v4.piq-has-profile {
             position: sticky;
             top: 0;
             z-index: 40;
@@ -22213,56 +22213,56 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 1px solid #3B3D38;
             pointer-events: auto !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome.piq-chrome-fixed {
+        #piqStickyChrome.piq-v4.piq-has-profile.piq-chrome-fixed {
             position: fixed !important;
-            z-index: 100060 !important;
+            z-index: 2147481000 !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
+        body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile {
             background: #E9E8E1;
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
+        #piqStickyChrome.piq-v4.piq-has-profile #profileTabsBar {
             order: 0;
             padding: 10px 32px 8px;
             border-bottom: 1px solid #3B3D38;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileTabsBar {
+        body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile #profileTabsBar {
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+        #piqStickyChrome.piq-v4.piq-has-profile #toolbarRow {
             order: 1 !important;
             border-bottom: 1px solid #3B3D38;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+        body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile #toolbarRow {
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #piqBehJump {
+        #piqStickyChrome.piq-v4.piq-has-profile #piqBehJump {
             order: 2;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #profileAndToolbarRow {
+        #piqStickyChrome.piq-v4.piq-has-profile #profileAndToolbarRow {
             order: 3;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #profileAndToolbarRow {
+        #piqStickyChrome.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #profileAndToolbarRow {
             max-height: none !important;
             opacity: 1 !important;
             pointer-events: auto !important;
             overflow: visible !important;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #dashProfileInfo {
+        #piqStickyChrome.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
             border-bottom: 0;
             background: #0C1618;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqStickyChrome #dashProfileInfo {
+        body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
             background: #E9E8E1;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent {
             width: 100%;
             align-items: center;
             overflow: visible;
         }
-        #dashboardView.piq-v4.piq-has-profile .toolbar-section-label { display: none !important; }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow .tab-icon { display: none !important; }
-        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .toolbar-section-label { display: none !important; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow .tab-icon { display: none !important; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -22281,18 +22281,18 @@ https://www.instagram.com/p/..."></textarea>
             font-family: inherit;
             cursor: pointer;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn {
             background: #FFFFFF;
             border-color: #C9C6BA;
             color: #5C6560;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
             color: var(--piq-signal);
             border-color: rgba(199, 242, 62, 0.35);
         }
-        #dashboardView.piq-v4 #piqChangeProfileBtn { display: inline-flex; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqChangeProfileBtn { display: inline-flex; }
 
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashProfileInfo {
             display: grid !important;
             grid-template-columns: 1fr 380px;
             grid-template-areas: "copy photo";
@@ -22307,10 +22307,10 @@ https://www.instagram.com/p/..."></textarea>
             background: linear-gradient(135deg, #0C1618 0%, #1B2F35 42%, #15252A 100%);
             border-bottom: 1px solid var(--piq-hair);
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashProfileInfo {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashProfileInfo {
             background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%);
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
             grid-template-columns: 130px 1fr;
             grid-template-areas: "photo copy";
             gap: 26px;
@@ -22318,8 +22318,8 @@ https://www.instagram.com/p/..."></textarea>
             min-height: 0;
             padding: 16px 32px 22px;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap { grid-area: photo; }
-        #dashboardView.piq-v4.piq-has-profile .profile-title-and-toolbar-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image-wrap { grid-area: photo; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .profile-title-and-toolbar-wrap {
             grid-area: copy;
             display: flex;
             flex-direction: column;
@@ -22328,12 +22328,12 @@ https://www.instagram.com/p/..."></textarea>
             min-height: 400px;
             gap: 16px;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .profile-title-and-toolbar-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .profile-title-and-toolbar-wrap {
             min-height: 0;
             justify-content: center;
             gap: 8px;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashBrandNameHeader {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashBrandNameHeader {
             position: absolute !important;
             left: -9999px !important;
             width: 1px !important;
@@ -22341,11 +22341,11 @@ https://www.instagram.com/p/..."></textarea>
             overflow: hidden !important;
             clip: rect(0, 0, 0, 0) !important;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-date-box { display: none !important; }
-        #dashboardView.piq-v4.piq-has-profile #dashBrandContainer {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-date-box { display: none !important; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashBrandContainer {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqHeroCopy {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqHeroCopy {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -22353,7 +22353,7 @@ https://www.instagram.com/p/..."></textarea>
             min-width: 0;
             min-height: 0;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
             display: grid;
             grid-template-columns: 1fr auto;
             grid-template-areas:
@@ -22364,11 +22364,11 @@ https://www.instagram.com/p/..."></textarea>
             align-items: center;
             min-height: 0;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName { grid-area: name; }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner { grid-area: line; }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { grid-area: kpis; }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroPills { grid-area: pills; }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroEyebrow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName { grid-area: name; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner { grid-area: line; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { grid-area: kpis; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroPills { grid-area: pills; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroEyebrow {
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.16em;
@@ -22379,14 +22379,14 @@ https://www.instagram.com/p/..."></textarea>
             gap: 8px;
             margin-bottom: 14px;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroEyebrow::before {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroEyebrow::before {
             content: '';
             width: 6px;
             height: 6px;
             border-radius: 50%;
             background: var(--piq-signal);
         }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroName {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroName {
             display: block;
             font-size: clamp(42px, 6vw, 84px);
             font-weight: 900;
@@ -22398,37 +22398,37 @@ https://www.instagram.com/p/..."></textarea>
             font-synthesis: none;
             cursor: pointer;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroName {
             font-size: clamp(26px, 3vw, 40px);
             margin-bottom: 6px;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroOneliner {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroOneliner {
             font-size: 20px;
             line-height: 1.4;
             color: var(--piq-offwhite);
             max-width: 560px;
             font-weight: 400;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroOneliner {
             font-size: 14px;
             color: var(--piq-body);
             max-width: 620px;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroOneliner b { color: var(--piq-signal); font-weight: 700; }
-        #dashboardView.piq-v4.piq-has-profile .piq-hero-kpis {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroOneliner b { color: var(--piq-signal); font-weight: 700; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-hero-kpis {
             display: grid;
             grid-template-columns: repeat(3, auto);
             gap: 40px;
             width: max-content;
             margin-top: 28px;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-hero-kpis {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-hero-kpis {
             margin-top: 0;
             padding-left: 20px;
             border-left: 1px solid var(--piq-hair);
             gap: 24px;
         }
-        #dashboardView.piq-v4.piq-has-profile .piq-kpi .lbl {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-kpi .lbl {
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.14em;
@@ -22436,16 +22436,16 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500;
             margin-bottom: 4px;
         }
-        #dashboardView.piq-v4.piq-has-profile .piq-kpi .val {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-kpi .val {
             font-size: 32px;
             font-weight: 800;
             letter-spacing: -0.03em;
             color: var(--piq-offwhite);
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-kpi .val { font-size: 22px; }
-        #dashboardView.piq-v4.piq-has-profile .piq-kpi.accent .val { color: var(--piq-signal); }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-kpi .val { font-size: 22px; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-kpi.accent .val { color: var(--piq-signal); }
 
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image-wrap {
             position: relative;
             width: 380px !important;
             height: 400px !important;
@@ -22459,7 +22459,7 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: 0 20px 80px rgba(51, 88, 255, 0.4);
             justify-self: end;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-profile-image-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-profile-image-wrap {
             width: 130px !important;
             height: 130px !important;
             min-width: 130px !important;
@@ -22471,8 +22471,8 @@ https://www.instagram.com/p/..."></textarea>
             justify-self: start;
             order: -1;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image,
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image.loaded {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image.loaded {
             display: block !important;
             width: 100% !important;
             height: 100% !important;
@@ -22485,13 +22485,13 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: none !important;
             background: transparent;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image img {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image img {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover;
             object-position: center top;
         }
-        #dashboardView.piq-v4.piq-has-profile .piq-portrait-fallback {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-portrait-fallback {
             display: none;
             position: absolute;
             inset: 0;
@@ -22504,14 +22504,14 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 96px;
             pointer-events: none;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap.is-fallback .piq-portrait-fallback { display: flex; }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-portrait-fallback {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image-wrap.is-fallback .piq-portrait-fallback { display: flex; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .piq-portrait-fallback {
             font-size: 40px;
             padding: 12px;
             align-items: center;
             justify-content: center;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-imdb-box {
             position: absolute;
             top: 16px;
             left: 16px;
@@ -22527,31 +22527,31 @@ https://www.instagram.com/p/..."></textarea>
             width: auto;
             max-width: 70%;
         }
-        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-label,
-        #dashboardView.piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-id { color: #000; }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-imdb-box {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-label,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-imdb-box .dash-imdb-id { color: #000; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) .dash-imdb-box {
             top: auto;
             bottom: 8px;
             left: 8px;
             padding: 3px 6px;
             font-size: 9px;
         }
-        #dashboardView.piq-v4.piq-has-profile .action-buttons-row {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .action-buttons-row {
             grid-template-columns: 1fr;
             flex: 0 0 auto;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-layout {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout {
             gap: 0;
             flex: 1 1 auto;
             min-height: 0;
             height: auto !important;
             overflow: visible !important;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-tab-content {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-tab-content {
             min-height: 0;
             overflow-y: auto;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar {
             position: fixed !important;
             left: 0;
             top: 0;
@@ -22568,7 +22568,7 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: 16px 0 40px rgba(0, 0, 0, 0.35);
             display: flex !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar {
             transform: translateX(0);
         }
         #piqSidebarScrim {
@@ -22578,9 +22578,9 @@ https://www.instagram.com/p/..."></textarea>
             z-index: 2147481999;
             background: rgba(12, 22, 24, 0.55);
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
-        #dashboardView.piq-v4.piq-has-profile #tab-insights .metrics-row { display: none; }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metrics-row {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #tab-insights .metrics-row { display: none; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metrics-row {
             display: flex !important;
             flex-wrap: nowrap;
             gap: 16px;
@@ -22589,7 +22589,7 @@ https://www.instagram.com/p/..."></textarea>
             padding: 0;
             grid-column: 1 / -1;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card {
             background: #15252A !important;
             border: 1px solid #3B3D38 !important;
             border-radius: 12px !important;
@@ -22599,23 +22599,23 @@ https://www.instagram.com/p/..."></textarea>
             align-items: flex-start !important;
             overflow: visible !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list {
             width: 100%;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list-header,
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .cmp-stat-list-header {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-insights .cmp-stat-list-header,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .cmp-stat-list-header {
             color: #7C878A !important;
             font-size: 10px !important;
             letter-spacing: 0.14em !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stats-row {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stats-row {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
             gap: 16px !important;
             width: 100% !important;
             margin: 0 0 20px !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
             display: flex !important;
             flex-direction: column !important;
             align-items: stretch !important;
@@ -22626,24 +22626,24 @@ https://www.instagram.com/p/..."></textarea>
             min-height: 0 !important;
             text-align: left !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-insights .metric-card,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-cuts-on #tab-demographics .stat-card {
             background: #FFFFFF !important;
             border-color: #C9C6BA !important;
             color: #0C1618 !important;
         }
         @media (max-width: 980px) {
-            #dashboardView.piq-v4.piq-has-profile #dashProfileInfo,
-            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashProfileInfo,
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashProfileInfo {
                 grid-template-columns: 1fr;
                 grid-template-areas: "photo" "copy";
             }
-            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashProfileInfo {
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="insights"] #dashProfileInfo {
                 min-height: 0;
                 padding: 16px 20px 24px;
             }
-            #dashboardView.piq-v4.piq-has-profile .dash-profile-image-wrap,
-            #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] .dash-profile-image-wrap {
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-profile-image-wrap,
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="insights"] .dash-profile-image-wrap {
                 width: 220px !important;
                 height: 240px !important;
                 min-width: 220px !important;
@@ -22652,13 +22652,13 @@ https://www.instagram.com/p/..."></textarea>
                 max-height: 240px !important;
                 justify-self: start;
             }
-            #dashboardView.piq-v4.piq-has-profile .profile-title-and-toolbar-wrap { min-height: 0; }
-            #dashboardView.piq-v4.piq-has-profile .piq-hero-kpis { grid-template-columns: repeat(2, auto); gap: 16px 24px; }
-            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .profile-title-and-toolbar-wrap { min-height: 0; }
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-hero-kpis { grid-template-columns: repeat(2, auto); gap: 16px 24px; }
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
                 grid-template-columns: 1fr;
                 grid-template-areas: "name" "line" "pills";
             }
-            #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { display: none; }
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroKpis { display: none; }
         }
         /* v4 body: remap the live tokens so every Profile IQ widget
            inherits Graphite / Slate / Inter, then force the Insights
@@ -22755,14 +22755,14 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13px !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .inline-tab-header h2 { color: #0C1618 !important; }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
             order: -1 !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashBrandContainer {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashBrandContainer {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
-        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts {
             display: inline-flex !important;
             align-items: center;
             order: 8;
@@ -22793,7 +22793,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .display-mode-toggle,
         #dashboardView.piq-v4 .content-action-buttons .btn,
         #dashboardView.piq-v4 #exportDropdownBtn,
-        #dashboardView.piq-v4 #dashViewDeltasBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #dashViewDeltasBtn {
             background: #15252A !important;
             border: 1px solid #3B3D38 !important;
             color: #9AA09B !important;
@@ -22811,7 +22811,7 @@ https://www.instagram.com/p/..."></textarea>
             border-color: #C9C6BA !important;
             color: #5C6560 !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
             width: 100%;
             min-width: 0;
             flex: 0 0 auto;
@@ -22820,11 +22820,11 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 1px solid #3B3D38;
             box-sizing: border-box;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #toolbarRow {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
             background: #E9E8E1;
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent {
             display: flex !important;
             flex-wrap: wrap;
             align-items: center;
@@ -22833,7 +22833,7 @@ https://www.instagram.com/p/..."></textarea>
             width: 100%;
             min-width: 0;
         }
-        #dashboardView.piq-v4.piq-has-profile .toolbar-section {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .toolbar-section {
             display: flex !important;
             flex-direction: row;
             align-items: center;
@@ -22841,7 +22841,7 @@ https://www.instagram.com/p/..."></textarea>
             flex: 0 1 auto;
             min-width: 0;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-tabs {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-tabs {
             display: flex !important;
             flex-wrap: wrap;
             align-items: center;
@@ -22849,16 +22849,16 @@ https://www.instagram.com/p/..."></textarea>
             overflow: visible !important;
             width: auto !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #analysisToolsTabs {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #analysisToolsTabs {
             margin-left: 10px;
             padding-left: 10px;
             border-left: 1px solid #3B3D38;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #analysisToolsTabs {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #analysisToolsTabs {
             border-left-color: #C9C6BA;
         }
-        #dashboardView.piq-v4 .toolbar-row .tab-btn,
-        #dashboardView.piq-v4 #toolbarRow .tab-btn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 .toolbar-row .tab-btn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn {
             display: inline-flex !important;
             flex-direction: row !important;
             align-items: center !important;
@@ -22886,7 +22886,7 @@ https://www.instagram.com/p/..."></textarea>
             height: auto !important;
             box-shadow: none !important;
         }
-        #dashboardView.piq-v4 #toolbarRow .tab-btn .tab-label {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn .tab-label {
             font-size: 10.5px !important;
             letter-spacing: 0.08em;
             white-space: nowrap;
@@ -22894,47 +22894,47 @@ https://www.instagram.com/p/..."></textarea>
             text-overflow: clip;
             max-width: none !important;
         }
-        #dashboardView.piq-v4 #toolbarRow .tab-btn .tab-n {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn .tab-n {
             font-size: 9px;
             color: #7C878A;
             font-weight: 500;
             margin-right: 4px;
             letter-spacing: 0.08em;
         }
-        #dashboardView.piq-v4 .toolbar-row .tab-btn:hover,
-        #dashboardView.piq-v4 #toolbarRow .tab-btn:hover {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 .toolbar-row .tab-btn:hover,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn:hover {
             color: #E9E8E1 !important;
             background: transparent !important;
         }
-        #dashboardView.piq-v4 .toolbar-row .tab-btn.active,
-        #dashboardView.piq-v4 #toolbarRow .tab-btn.active,
-        #dashboardView.piq-v4 #toolbarRow .tab-btn.tool-tab.active {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 .toolbar-row .tab-btn.active,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn.active,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn.tool-tab.active {
             color: #E9E8E1 !important;
             border-bottom-color: #C7F23E !important;
             background: transparent !important;
         }
-        #dashboardView.piq-v4 #toolbarRow .tab-btn.tool-tab {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn.tool-tab {
             background: transparent !important;
             border: 0 !important;
             border-bottom: 2px solid transparent !important;
             color: #9AA09B !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .toolbar-row .tab-btn.active,
-        body[data-theme="light"] #dashboardView.piq-v4 #toolbarRow .tab-btn.active {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 .toolbar-row .tab-btn.active,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn.active {
             color: #0C1618 !important;
             border-bottom-color: #5E7E12 !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 #toolbarRow .tab-btn:hover {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn:hover {
             color: #0C1618 !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
-        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts {
             margin-left: auto !important;
         }
-        #dashboardView.piq-v4 #profileTabsBar:empty {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #profileTabsBar:empty {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileTabsBar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -22945,10 +22945,10 @@ https://www.instagram.com/p/..."></textarea>
             background: #0C1618;
             scrollbar-width: none;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileTabsBar {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar {
             background: #E9E8E1;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab {
             background: #15252A;
             border: 1px solid #3B3D38;
             border-radius: 6px;
@@ -22958,7 +22958,7 @@ https://www.instagram.com/p/..."></textarea>
             min-width: 0;
             gap: 8px;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab-name {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-name {
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: 10.5px;
             letter-spacing: 0.08em;
@@ -22967,24 +22967,24 @@ https://www.instagram.com/p/..."></textarea>
             overflow: visible;
             text-overflow: clip;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab.active {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab.active {
             background: rgba(199, 242, 62, 0.06);
             border-color: rgba(199, 242, 62, 0.35);
             color: #C7F23E;
             font-weight: 500;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab-close {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close {
             width: 16px;
             height: 16px;
             font-size: 12px;
             opacity: 0.7;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab {
             background: #FFFFFF;
             border-color: #C9C6BA;
             color: #5C6560;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #profileTabsBar .profile-tab.active {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab.active {
             background: rgba(94, 126, 18, 0.08);
             border-color: rgba(94, 126, 18, 0.4);
             color: #5E7E12;
@@ -23267,51 +23267,51 @@ https://www.instagram.com/p/..."></textarea>
                 padding: 18px 16px 40px;
             }
         }
-        #dashboardView.piq-v4.piq-has-profile {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile {
             overflow-x: hidden !important;
             overflow-y: auto !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #profileAndToolbarRow,
-        #dashboardView.piq-v4.piq-has-profile #profileHeaderRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileAndToolbarRow,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow {
             position: static !important;
             flex: 0 0 auto;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-layout {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout {
             height: auto !important;
             max-height: none !important;
             flex: 0 0 auto !important;
             overflow: visible !important;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-tab-content {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-tab-content {
             overflow: visible !important;
             height: auto !important;
             max-height: none !important;
             flex: 0 0 auto !important;
         }
         /* v4 Insights body: match the locked portrait-cover rendering. */
-        #dashboardView.piq-v4.piq-has-profile .action-buttons-row {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .action-buttons-row {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #inlineTabHeader {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #inlineTabHeader {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarCollapseWrapper {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarCollapseWrapper {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #contentActionButtons,
-        #dashboardView.piq-v4.piq-has-profile .dash-dropdown,
-        #dashboardView.piq-v4.piq-has-profile #hoverToggle,
-        #dashboardView.piq-v4.piq-has-profile #dashDisplayToggle {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #contentActionButtons,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dash-dropdown,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #hoverToggle,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashDisplayToggle {
             display: inline-flex !important;
             align-items: center;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent > .dash-dropdown,
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #hoverToggle,
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #dashDisplayToggle {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent > .dash-dropdown,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent > #hoverToggle,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent > #dashDisplayToggle {
             order: 10;
             margin-left: 8px;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarContent > #piqChangeProfileBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarContent > #piqChangeProfileBtn {
             order: 9;
             margin-left: 8px;
         }
@@ -23556,16 +23556,16 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         /* v4 sub pages: match the locked portrait-cover outline. */
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroEyebrow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #dashHeroEyebrow {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqHeroPills {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqHeroPills {
             display: none;
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroPills {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroPills {
             display: flex;
             grid-area: pills;
         }
@@ -24058,10 +24058,10 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
             background: transparent !important;
         }
-        #dashboardView.piq-v4.piq-has-profile:not([data-piq-tab="behavioral"]) #piqBehJump {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="behavioral"]) #piqBehJump {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump,
         #dashboardView.piq-v4 #piqBehJump.piq-jump {
             display: flex;
             align-items: center;
@@ -24072,7 +24072,7 @@ https://www.instagram.com/p/..."></textarea>
             flex-wrap: nowrap;
             background: #0C1618;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump {
             background: #E9E8E1;
         }
         #dashboardView.piq-v4 #piqBehJump .piq-jump-lbl {
@@ -24371,12 +24371,12 @@ https://www.instagram.com/p/..."></textarea>
         /* First paint and empty: same chrome as an open profile.
            The old sidebar / DATA labels / Highlights header never flash. */
         #dashboardView.piq-v4 .toolbar-section-label { display: none !important; }
-        #dashboardView.piq-v4 #toolbarRow .tab-icon { display: none !important; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-icon { display: none !important; }
         #dashboardView.piq-v4 #inlineTabHeader,
         #dashboardView.piq-v4 .action-buttons-row,
         #dashboardView.piq-v4 #toolbarCollapseWrapper,
         #dashboardView.piq-v4 #contentActionButtons { display: none !important; }
-        #dashboardView.piq-v4 #toolbarRow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow {
             width: 100%;
             min-width: 0;
             flex: 0 0 auto;
@@ -24385,7 +24385,7 @@ https://www.instagram.com/p/..."></textarea>
             border-bottom: 1px solid #3B3D38;
             box-sizing: border-box;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 #toolbarRow {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow {
             background: #E9E8E1;
             border-bottom-color: #C9C6BA;
         }
@@ -24418,8 +24418,8 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 #analysisToolsTabs {
             border-left-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar,
-        #dashboardView.piq-v4.piq-has-profile #piqProfileSidebar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqProfileSidebar {
             position: fixed !important;
             left: 0;
             top: 0;
@@ -24438,13 +24438,13 @@ https://www.instagram.com/p/..."></textarea>
             pointer-events: none !important;
             visibility: hidden !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqProfileSidebar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open .dashboard-layout > .persistent-sidebar,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open #piqProfileSidebar {
             transform: translateX(0) !important;
             pointer-events: auto !important;
             visibility: visible !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open #piqSidebarScrim { display: block; }
         #dashboardView.piq-v4:not(.piq-has-profile) {
             overflow-x: hidden !important;
             overflow-y: auto !important;
@@ -24686,7 +24686,7 @@ https://www.instagram.com/p/..."></textarea>
             padding: 0;
         }
         #dashboardView.piq-v4 .piq-picker-close:hover { color: #E9E8E1; }
-        #dashboardView.piq-v4.piq-has-profile:not(.piq-sidebar-open) #piqPickerCloseBtn { display: none; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not(.piq-sidebar-open) #piqPickerCloseBtn { display: none; }
         #dashboardView.piq-v4 .piq-picker-search {
             display: flex;
             gap: 0;
@@ -24857,9 +24857,9 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #piqEmptyBrowseBtn {
             display: none !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
-        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts,
-        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn {
             display: inline-flex !important;
             align-items: center;
             border: 1px solid #3358FF !important;
@@ -24868,48 +24868,48 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: 0 12px 24px rgba(51, 88, 255, 0.28),
                         0 0 0 1px rgba(233,232,225,0.10) !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
-        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
-        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts:hover,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
             border-color: #3358FF !important;
             color: #E9E8E1 !important;
             box-shadow: 0 14px 28px rgba(51, 88, 255, 0.36),
                         0 0 0 1px rgba(233,232,225,0.14) !important;
         }
-        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
             color: #3358FF !important;
             border-color: #3358FF !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn {
             background: #FFFFFF !important;
             border-color: #3358FF !important;
             color: #0C1618 !important;
             box-shadow: 0 8px 18px rgba(51, 88, 255, 0.16),
                         0 0 0 1px rgba(12, 22, 24, 0.08) !important;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-data-cuts:hover,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
             border-color: #3358FF !important;
             color: #0C1618 !important;
             box-shadow: 0 10px 22px rgba(51, 88, 255, 0.22),
                         0 0 0 1px rgba(12, 22, 24, 0.10) !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashHeroName {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroName {
             cursor: pointer;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqBehJump {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqBehJump {
             border-bottom: 1px solid #3B3D38;
         }
-        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqBehJump {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqBehJump {
             border-bottom-color: #C9C6BA;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow .tab-btn[data-feature="execSummary"],
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow .tab-btn[data-feature="collaborate"],
-        #dashboardView.piq-v4 #toolbarRow .tab-btn[data-feature="execSummary"],
-        #dashboardView.piq-v4 #toolbarRow .tab-btn[data-feature="collaborate"] {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow .tab-btn[data-feature="execSummary"],
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow .tab-btn[data-feature="collaborate"],
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn[data-feature="execSummary"],
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarRow .tab-btn[data-feature="collaborate"] {
             display: none !important;
             pointer-events: none !important;
             width: 0 !important;
@@ -24920,11 +24920,47 @@ https://www.instagram.com/p/..."></textarea>
             overflow: hidden !important;
             border: 0 !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome {
-            z-index: 100060;
+        #piqStickyChrome.piq-v4.piq-has-profile {
+            display: flex !important;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38;
+            pointer-events: auto !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #toolbarRow,
-        #dashboardView.piq-v4.piq-has-profile #piqStickyChrome #toolbarRow {
+        body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile {
+            background: #E9E8E1;
+            border-bottom-color: #C9C6BA;
+        }
+        #piqStickyChrome.piq-chrome-fixed {
+            position: fixed !important;
+            z-index: 2147481000 !important;
+            pointer-events: auto !important;
+        }
+        #piqStickyChrome,
+        #piqStickyChrome * {
+            pointer-events: auto !important;
+        }
+        #piqChromeSpacer {
+            pointer-events: none !important;
+        }
+        #piqStickyChrome .tab-btn,
+        #piqStickyChrome .profile-tab,
+        #piqStickyChrome .profile-tab-close,
+        #piqStickyChrome .profile-tab-close-all,
+        #piqStickyChrome .profile-help-pill,
+        #piqStickyChrome #dashViewDeltasBtn,
+        #piqStickyChrome #piqChangeProfileBtn,
+        #piqStickyChrome .dash-action-btn,
+        #piqStickyChrome #hoverToggle,
+        #piqStickyChrome #dashDisplayToggle {
+            cursor: pointer !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow,
+        #piqStickyChrome.piq-v4.piq-has-profile #toolbarRow {
             pointer-events: auto !important;
             position: relative;
             z-index: 6;
@@ -122410,6 +122446,8 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             if (!view) return;
             view.setAttribute('data-piq-tab', tabName || 'insights');
+            var chromeTab = document.getElementById('piqStickyChrome');
+            if (chromeTab) chromeTab.setAttribute('data-piq-tab', tabName || 'insights');
             if (window._piqV4RefreshName) {
                 try { window._piqV4RefreshName(); } catch (_e) {}
             }
@@ -123230,15 +123268,23 @@ https://www.instagram.com/p/..."></textarea>
             var spacer = document.getElementById('piqChromeSpacer');
             if (!view || !wrap || !view.classList.contains('piq-v4') || !view.classList.contains('piq-has-profile')) {
                 if (wrap) {
-                    wrap.classList.remove('piq-chrome-fixed');
+                    wrap.classList.remove('piq-chrome-fixed', 'piq-has-profile');
+                    wrap.style.display = 'none';
                     wrap.style.top = '';
                     wrap.style.left = '';
                     wrap.style.width = '';
                     wrap.style.right = '';
+                    wrap.style.zIndex = '';
                 }
                 if (spacer) spacer.style.height = '0px';
                 if (promo) promo.style.maxHeight = '';
                 return wrap || null;
+            }
+            wrap.classList.add('piq-v4', 'piq-has-profile', 'piq-chrome-fixed');
+            wrap.setAttribute('data-piq-tab', view.getAttribute('data-piq-tab') || 'insights');
+            wrap.style.display = 'flex';
+            if (wrap.parentNode !== document.body) {
+                document.body.appendChild(wrap);
             }
             if (!spacer) {
                 spacer = document.createElement('div');
@@ -123246,14 +123292,17 @@ https://www.instagram.com/p/..."></textarea>
                 spacer.setAttribute('aria-hidden', 'true');
                 view.insertBefore(spacer, view.firstChild);
             }
-            var h = wrap.offsetHeight || 0;
-            spacer.style.height = h + 'px';
             var vr = view.getBoundingClientRect();
-            wrap.classList.add('piq-chrome-fixed');
-            wrap.style.top = Math.round(vr.top) + 'px';
+            wrap.style.position = 'fixed';
+            wrap.style.top = Math.max(0, Math.round(vr.top)) + 'px';
             wrap.style.left = Math.round(vr.left) + 'px';
             wrap.style.width = Math.round(vr.width) + 'px';
             wrap.style.right = 'auto';
+            wrap.style.zIndex = '2147481000';
+            wrap.style.pointerEvents = 'auto';
+            spacer.style.height = (wrap.offsetHeight || 0) + 'px';
+            spacer.style.flexShrink = '0';
+            spacer.style.pointerEvents = 'none';
             if (promo) {
                 var gap = Math.round(wrap.getBoundingClientRect().bottom) + 18;
                 promo.style.maxHeight = Math.max(360, window.innerHeight - gap) + 'px';
@@ -123289,7 +123338,7 @@ https://www.instagram.com/p/..."></textarea>
                 wrap = document.createElement('div');
                 wrap.id = 'piqStickyChrome';
             }
-            if (wrap.parentNode !== view) {
+            if (wrap.parentNode !== view && wrap.parentNode !== document.body) {
                 view.insertBefore(wrap, bar);
             }
             var jump = document.getElementById('piqBehJump');
@@ -123312,7 +123361,7 @@ https://www.instagram.com/p/..."></textarea>
             var row = document.getElementById('toolbarRow');
             if (window._piqV4EnsureStickyChrome) window._piqV4EnsureStickyChrome();
             var n = 1;
-            document.querySelectorAll('#dashboardView.piq-v4 #toolbarRow .tab-btn').forEach(function(btn) {
+            document.querySelectorAll('#toolbarRow .tab-btn').forEach(function(btn) {
                 var cs = window.getComputedStyle(btn);
                 if (cs.display === 'none' || cs.visibility === 'hidden') return;
                 var label = btn.querySelector('.tab-label');
@@ -123388,44 +123437,106 @@ https://www.instagram.com/p/..."></textarea>
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
                 });
             }
-            var tabHost = document.getElementById('dashboardView');
-            if (tabHost && !tabHost._piqTabClickBound) {
-                tabHost._piqTabClickBound = true;
-                tabHost.addEventListener('click', function(e) {
-                    var btn = e.target && e.target.closest && e.target.closest('#toolbarRow .tab-btn');
-                    if (!btn) return;
-                    var feat = btn.getAttribute('data-feature') || '';
-                    if (feat === 'execSummary' || feat === 'collaborate') {
+            if (!document._piqChromeDispatchBound) {
+                document._piqChromeDispatchBound = true;
+                document.addEventListener('click', function(e) {
+                    var chrome = document.getElementById('piqStickyChrome');
+                    if (!chrome || chrome.style.display === 'none') return;
+                    var t = e.target;
+                    if (!t || !t.closest) return;
+                    if (t.closest('#piqProfileSidebar, #piqSidebarScrim, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay, #creditsModal')) return;
+                    var hit = chrome.contains(t) ? t : null;
+                    if (!hit) {
+                        var x = e.clientX, y = e.clientY;
+                        if (typeof x !== 'number' || typeof y !== 'number') return;
+                        var r = chrome.getBoundingClientRect();
+                        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return;
+                        var stack = document.elementsFromPoint(x, y) || [];
+                        for (var i = 0; i < stack.length; i++) {
+                            if (chrome.contains(stack[i]) && stack[i] !== chrome) { hit = stack[i]; break; }
+                        }
+                        if (!hit) return;
+                    }
+                    var closer = hit.closest('.profile-tab-close');
+                    if (closer) {
                         e.preventDefault();
                         e.stopPropagation();
+                        var closeId = closer.getAttribute('data-tab-id');
+                        if (closeId != null && typeof window.closeProfileTab === 'function') window.closeProfileTab(closeId);
                         return;
                     }
-                    var oc = btn.getAttribute('onclick') || '';
-                    var m = oc.match(/showTab\('([^']+)'\)/);
-                    if (!m || typeof window.showTab !== 'function') return;
-                    e.preventDefault();
-                    window.showTab(m[1]);
-                }, true);
-            }
-            if (!document._piqChromeRetargetBound) {
-                document._piqChromeRetargetBound = true;
-                document.addEventListener('pointerdown', function(e) {
-                    var view = document.getElementById('dashboardView');
-                    var chrome = document.getElementById('piqStickyChrome');
-                    if (!view || !chrome || !view.classList.contains('piq-has-profile')) return;
-                    if (chrome.contains(e.target)) return;
-                    if (e.target.closest && e.target.closest('#piqProfileSidebar, #piqSidebarScrim, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay, #creditsModal')) return;
-                    var r = chrome.getBoundingClientRect();
-                    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
-                    var stack = document.elementsFromPoint(e.clientX, e.clientY);
-                    var inner = null;
-                    for (var i = 0; i < stack.length; i++) {
-                        if (chrome.contains(stack[i]) && stack[i] !== chrome) { inner = stack[i]; break; }
+                    var help = hit.closest('.profile-help-pill');
+                    if (help) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var hoc = help.getAttribute('onclick') || '';
+                        var hm = hoc.match(/openHowToVideo\(['"]([^'"]+)['"](?:,\s*['"]([^'"]*)['"])?/);
+                        if (hm && typeof window.openHowToVideo === 'function') window.openHowToVideo(hm[1], hm[2] || 'Profile IQ');
+                        return;
                     }
-                    if (!inner) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof inner.click === 'function') inner.click();
+                    var closeAll = hit.closest('.profile-tab-close-all');
+                    if (closeAll) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.closeAllProfileTabs === 'function') window.closeAllProfileTabs();
+                        return;
+                    }
+                    var chip = hit.closest('#profileTabsBar .profile-tab');
+                    if (chip) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var chipId = chip.getAttribute('data-tab-id');
+                        if (chipId != null && typeof window.switchToProfileTab === 'function') window.switchToProfileTab(chipId);
+                        return;
+                    }
+                    var tabBtn = hit.closest('#toolbarRow .tab-btn');
+                    if (tabBtn) {
+                        var feat = tabBtn.getAttribute('data-feature') || '';
+                        if (feat === 'execSummary' || feat === 'collaborate') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                        }
+                        var toc = tabBtn.getAttribute('onclick') || '';
+                        var tm = toc.match(/showTab\('([^']+)'\)/);
+                        if (tm && typeof window.showTab === 'function') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.showTab(tm[1]);
+                        }
+                        return;
+                    }
+                    if (hit.closest('#dashViewDeltasBtn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window._openCompareDateRangesPopover === 'function') window._openCompareDateRangesPopover();
+                        return;
+                    }
+                    if (hit.closest('#piqChangeProfileBtn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window._piqV4ToggleSidebar === 'function') window._piqV4ToggleSidebar();
+                        return;
+                    }
+                    var expBtn = hit.closest('.dash-dropdown > button, .dash-dropdown .dash-action-btn');
+                    if (expBtn && !hit.closest('#tabExportDropdown')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
+                        return;
+                    }
+                    if (hit.closest('#hoverToggle')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.toggleHoverDescriptors === 'function') window.toggleHoverDescriptors();
+                        return;
+                    }
+                    if (hit.closest('#dashDisplayToggle')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.toggleDashboardDisplayMode === 'function') window.toggleDashboardDisplayMode();
+                        return;
+                    }
                 }, true);
             }
             if (window._piqV4DressTabs) {
@@ -128310,7 +128421,7 @@ https://www.instagram.com/p/..."></textarea>
             _closeCompareDateRangesPopover();
         }
 
-        function _openCompareDateRangesPopover() {
+        window._openCompareDateRangesPopover = function _openCompareDateRangesPopover() {
             const existing = document.getElementById('compareDateRangesPopover');
             if (existing) { _closeCompareDateRangesPopover(); return; }
 
@@ -128333,7 +128444,7 @@ https://www.instagram.com/p/..."></textarea>
             pop.id = 'compareDateRangesPopover';
             pop.style.cssText = [
                 'position:fixed',
-                'z-index:100080',
+                'z-index:2147481500',
                 'background:var(--bg-secondary, #1f2330)',
                 'border:1px solid var(--border-color, #2c3041)',
                 'border-radius:8px',
@@ -130359,7 +130470,7 @@ https://www.instagram.com/p/..."></textarea>
             });
         }
         
-        function switchToProfileTab(profileId) {
+        window.switchToProfileTab = function switchToProfileTab(profileId) {
             const tab = openProfileTabs.find(t => t.id === profileId);
             if (!tab) return;
             
@@ -130379,7 +130490,7 @@ https://www.instagram.com/p/..."></textarea>
             displayProfileTabData(tab);
         }
         
-        function closeProfileTab(profileId) {
+        window.closeProfileTab = function closeProfileTab(profileId) {
             const tabIndex = openProfileTabs.findIndex(t => t.id === profileId);
             if (tabIndex === -1) return;
             
@@ -130425,7 +130536,7 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
         
-        function closeAllProfileTabs() {
+        window.closeAllProfileTabs = function closeAllProfileTabs() {
             if (!Array.isArray(openProfileTabs) || openProfileTabs.length === 0) {
                 return;
             }
