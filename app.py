@@ -17036,6 +17036,175 @@ def _trends_iq_apply_lens_access(payload, allowed_lens_ids):
     return out
 
 
+# ---------------------------------------------------------------------------
+# Profile IQ momentum rail
+# ---------------------------------------------------------------------------
+# The Demographics page answers "who is this audience" and leaves "why does
+# it look like this right now" on the table. The rail fills that: a handful
+# of dated moments inside the profile's own window, each with one line on
+# what it means for the audience.
+#
+# Researched once per subject and cached in S3 for a week, so the page never
+# pays for a lookup and a popular subject is researched once for everyone.
+# Every failure path returns an empty list; the panel simply does not render.
+_MOMENTUM_CACHE_PREFIX = 'system/momentum_cache/'
+_MOMENTUM_TTL_DAYS = 7
+_MOMENTUM_MAX_EVENTS = 7
+
+
+def _momentum_cache_key(subject, start, end):
+    import hashlib
+    raw = '{}|{}|{}'.format(
+        (subject or '').strip().lower(), start or '', end or '')
+    digest = hashlib.sha256(raw.encode('utf-8')).hexdigest()[:20]
+    return '{}{}.json'.format(_MOMENTUM_CACHE_PREFIX, digest)
+
+
+def _momentum_read_cache(key):
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        payload = json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+    try:
+        from datetime import datetime as _dt, timedelta as _td
+        stamped = _dt.fromisoformat(str(payload.get('generated_at') or ''))
+        if _dt.utcnow() - stamped > _td(days=_MOMENTUM_TTL_DAYS):
+            return None
+    except Exception:
+        return None
+    return payload
+
+
+def _momentum_write_cache(key, payload):
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload).encode('utf-8'),
+            ContentType='application/json')
+    except Exception:
+        pass
+
+
+def _momentum_research(subject, category, start, end):
+    """One web-search call. Returns a list of {date, title, note}."""
+    try:
+        from claude_client import get_claude_client
+    except Exception:
+        return []
+    client = get_claude_client()
+    if client is None:
+        return []
+
+    window = 'between {} and {}'.format(start, end) if (start and end) else 'over the past year'
+    cat = (category or '').strip()
+    prompt = (
+        "Research " + subject + (" (" + cat + ")" if cat else "") + " and list the "
+        "notable public moments " + window + ".\n\n"
+        "Pick the moments an audience would actually have reacted to: a tour or "
+        "residency, a premiere or release, an awards appearance, a major "
+        "announcement, a brand partnership, a viral moment. Real, verifiable "
+        "events only. If you cannot verify a date, leave the event out.\n\n"
+        "Return ONLY a JSON array, at most " + str(_MOMENTUM_MAX_EVENTS) + " items, "
+        "oldest first:\n"
+        '[{"date":"YYYY-MM-DD","title":"short title, 8 words max",'
+        '"note":"one sentence on what this would mean for the people who follow them"}]\n\n'
+        "Rules for every note:\n"
+        "- One sentence, plain English, under 20 words.\n"
+        "- Write about the audience, not the person. Say what kind of attention "
+        "the moment would draw and who it would draw.\n"
+        "- Keep it directional. Say leans, skews, draws, widens, narrows. Never "
+        "state a number or a percentage.\n"
+        "- Never name a publication, outlet, or website.\n"
+        "- Never use an em dash.\n"
+        "- If you find nothing verifiable, return []."
+    )
+
+    text = ''
+    try:
+        resp = client.messages.create(
+            model=os.environ.get('MOMENTUM_MODEL', 'claude-sonnet-4-5'),
+            max_tokens=1600,
+            tools=[{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 4}],
+            messages=[{'role': 'user', 'content': prompt}],
+            timeout=55.0,
+        )
+        for block in (getattr(resp, 'content', None) or []):
+            if getattr(block, 'type', '') == 'text':
+                text += getattr(block, 'text', '') or ''
+    except Exception as e:
+        print('[momentum] research failed for {!r}: {}'.format(subject, e))
+        return []
+
+    import re as _re
+    match = _re.search(r'\[.*\]', text, _re.S)
+    if not match:
+        return []
+    try:
+        rows = json.loads(match.group(0))
+    except Exception:
+        return []
+
+    out = []
+    for row in (rows if isinstance(rows, list) else []):
+        if not isinstance(row, dict):
+            continue
+        date = str(row.get('date') or '').strip()[:10]
+        title = str(row.get('title') or '').strip()
+        note = str(row.get('note') or '').strip()
+        if not _re.match(r'^\d{4}-\d{2}-\d{2}$', date) or not title:
+            continue
+        out.append({
+            'date': date,
+            'title': title.replace('\u2014', '-').replace('\u2013', '-')[:90],
+            'note': note.replace('\u2014', '-').replace('\u2013', '-')[:180],
+        })
+    out.sort(key=lambda r: r['date'])
+    return out[:_MOMENTUM_MAX_EVENTS]
+
+
+@app.route('/api/profile-iq/momentum', methods=['GET'])
+@requires_auth
+def api_profile_iq_momentum():
+    """Dated moments for one subject. Always 200; empty list means no panel."""
+    subject = (request.args.get('subject') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    start = (request.args.get('start') or '').strip()
+    end = (request.args.get('end') or '').strip()
+    if not subject or len(subject) > 120:
+        return jsonify({'success': True, 'events': []})
+
+    key = _momentum_cache_key(subject, start, end)
+    cached = _momentum_read_cache(key)
+    if cached is not None:
+        return jsonify({
+            'success': True,
+            'subject': subject,
+            'cached': True,
+            'events': cached.get('events') or [],
+        })
+
+    try:
+        events = _momentum_research(subject, category, start, end)
+    except Exception:
+        traceback.print_exc()
+        events = []
+
+    if events:
+        from datetime import datetime as _dt
+        _momentum_write_cache(key, {
+            'subject': subject,
+            'generated_at': _dt.utcnow().isoformat(),
+            'events': events,
+        })
+    return jsonify({
+        'success': True,
+        'subject': subject,
+        'cached': False,
+        'events': events,
+    })
+
+
 @app.route('/api/trends-iq/filter-options', methods=['GET'])
 @requires_auth
 def api_trends_iq_filter_options():

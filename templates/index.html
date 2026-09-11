@@ -25091,6 +25091,111 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #piqLibraryRail .piq-rail-chevron { background: transparent; color: #5E7E12; }
         body[data-theme="light"] #piqLibraryRail .piq-rail-dot { background: #5E7E12; }
         body[data-theme="light"] #piqLibraryRail .piq-rail-label { color: #0C1618; }
+
+        /* Momentum rail: fills the column beside Key Differentiators. */
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail {
+            grid-template-columns: minmax(0, 1fr) minmax(300px, 400px) !important;
+            column-gap: 28px;
+            align-items: start;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail > #piqDemoDiffHead {
+            grid-column: 1 / -1 !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail > .demo-insight-card {
+            grid-column: 1 !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail > #piqMomentumRail {
+            grid-column: 2 !important;
+            grid-row: 2 !important;
+        }
+        #dashboardView.piq-v4 #piqMomentumRail {
+            display: block;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            border-radius: 14px;
+            padding: 18px 20px 14px;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #piqMomentumRail {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+        }
+        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head { margin-bottom: 16px; }
+        #dashboardView.piq-v4 .piq-mom-list {
+            list-style: none;
+            margin: 0;
+            padding: 0 0 0 20px;
+            position: relative;
+        }
+        #dashboardView.piq-v4 .piq-mom-list::before {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 4px;
+            bottom: 10px;
+            width: 1px;
+            background: #3B3D38;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-list::before { background: #C9C6BA; }
+        #dashboardView.piq-v4 .piq-mom-item {
+            position: relative;
+            padding: 0 0 18px;
+        }
+        #dashboardView.piq-v4 .piq-mom-item:last-child { padding-bottom: 2px; }
+        #dashboardView.piq-v4 .piq-mom-item .dot {
+            position: absolute;
+            left: -20px;
+            top: 4px;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #C7F23E;
+            box-shadow: 0 0 0 3px #15252A;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item .dot {
+            background: #5E7E12;
+            box-shadow: 0 0 0 3px #FFFFFF;
+        }
+        #dashboardView.piq-v4 .piq-mom-item:last-child .dot { background: #E682FF; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item:last-child .dot { background: #8E3FA8; }
+        #dashboardView.piq-v4 .piq-mom-item .when {
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #7C878A;
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+        #dashboardView.piq-v4 .piq-mom-item .what {
+            font-size: 13.5px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #E9E8E1;
+            line-height: 1.35;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item .what { color: #0C1618; }
+        #dashboardView.piq-v4 .piq-mom-item .why {
+            font-size: 12.5px;
+            line-height: 1.5;
+            color: #9AA09B;
+            margin-top: 3px;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-item .why { color: #5C6560; }
+        #dashboardView.piq-v4 .piq-mom-skel {
+            height: 11px;
+            border-radius: 6px;
+            background: #1B2F35;
+            margin-bottom: 10px;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-mom-skel { background: #EFEEE8; }
+        @media (max-width: 1280px) {
+            #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+            #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail > #piqMomentumRail {
+                grid-column: 1 !important;
+                grid-row: auto !important;
+            }
+        }
     </style>
 
         <!-- DASHBOARD VIEW -->
@@ -122604,6 +122709,10 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4OnClear = function() {
             var view = document.getElementById('dashboardView');
             if (!view) return;
+            window._piqMomentumSubject = null;
+            if (window._piqV4MomentumTeardown) {
+                try { window._piqV4MomentumTeardown(); } catch (_e) {}
+            }
             view.classList.remove('piq-has-profile', 'piq-sidebar-open');
             if (window._piqV4EnsureStickyChrome) {
                 try { window._piqV4EnsureStickyChrome(); } catch (_e) {}
@@ -123110,6 +123219,100 @@ https://www.instagram.com/p/..."></textarea>
             html += '<span class="piq-pill uni">' + uni + '</span>';
             el.innerHTML = html;
         };
+
+        // Momentum rail. The demographics table says who the audience is;
+        // this says what happened in the window that shaped it. Researched
+        // once per subject server-side and cached, so a repeat view is free.
+        window._piqV4MomentumDate = function(iso) {
+            var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!m) return '';
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var mi = Number(m[2]) - 1;
+            if (mi < 0 || mi > 11) return '';
+            return months[mi] + ' ' + Number(m[3]) + ', ' + m[1];
+        };
+        window._piqV4MomentumTeardown = function() {
+            var rail = document.getElementById('piqMomentumRail');
+            if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
+            var row = document.getElementById('demoInsightsRow');
+            if (row) row.classList.remove('piq-has-rail');
+        };
+        window._piqV4MomentumRender = function(events) {
+            var row = document.getElementById('demoInsightsRow');
+            if (!row) return;
+            if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
+            var rail = document.getElementById('piqMomentumRail');
+            if (!rail) {
+                rail = document.createElement('aside');
+                rail.id = 'piqMomentumRail';
+                row.appendChild(rail);
+            }
+            row.classList.add('piq-has-rail');
+            var html = '<div class="piq-panel-head"><div class="stack">' +
+                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
+            events.forEach(function(ev) {
+                var when = window._piqV4MomentumDate(ev.date);
+                html += '<li class="piq-mom-item"><span class="dot"></span>' +
+                    (when ? '<div class="when">' + window._piqV4Esc(when) + '</div>' : '') +
+                    '<div class="what">' + window._piqV4Esc(ev.title || '') + '</div>' +
+                    (ev.note ? '<div class="why">' + window._piqV4Esc(ev.note) + '</div>' : '') +
+                    '</li>';
+            });
+            html += '</ol>';
+            if (rail.innerHTML !== html) rail.innerHTML = html;
+        };
+        window._piqV4MomentumSkeleton = function() {
+            var row = document.getElementById('demoInsightsRow');
+            if (!row) return;
+            var rail = document.getElementById('piqMomentumRail');
+            if (!rail) {
+                rail = document.createElement('aside');
+                rail.id = 'piqMomentumRail';
+                row.appendChild(rail);
+            }
+            row.classList.add('piq-has-rail');
+            var bars = '';
+            [70, 96, 88, 60, 96, 82].forEach(function(w, i) {
+                bars += '<div class="piq-mom-skel" style="width:' + w + '%;opacity:' + (0.55 - i * 0.06).toFixed(2) + '"></div>';
+            });
+            rail.innerHTML = '<div class="piq-panel-head"><div class="stack">' +
+                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<h3>What moved in this window</h3></div></div>' + bars;
+        };
+        window._piqV4LoadMomentum = function() {
+            var view = document.getElementById('dashboardView');
+            if (!view || !view.classList.contains('piq-has-profile')) return;
+            var raw = (document.getElementById('dashBrandNameHeader') || {}).textContent || '';
+            var subject = window._piqV4PrettyName ? window._piqV4PrettyName(raw) : String(raw).trim();
+            if (!subject) return;
+            if (window._piqMomentumSubject === subject) return;
+            window._piqMomentumSubject = subject;
+
+            var parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || {};
+            var cat = String(parsed.brandCategory || '').replace(/_/g, ' ').trim();
+            var dateEl = document.getElementById('dashDateRangeHeader');
+            var dateTxt = dateEl ? String(dateEl.textContent || '').replace(/^date\s*range:\s*/i, '').trim() : '';
+            var dates = dateTxt.split(/\s+-\s+/);
+            var start = (dates[0] || '').trim();
+            var end = (dates[1] || '').trim();
+
+            window._piqV4MomentumSkeleton();
+            var url = '/api/profile-iq/momentum?subject=' + encodeURIComponent(subject) +
+                '&category=' + encodeURIComponent(cat) +
+                '&start=' + encodeURIComponent(start) +
+                '&end=' + encodeURIComponent(end);
+            fetch(url, { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(j) {
+                    if (window._piqMomentumSubject !== subject) return;
+                    window._piqV4MomentumRender(j && j.events);
+                })
+                .catch(function() {
+                    if (window._piqMomentumSubject !== subject) return;
+                    window._piqV4MomentumTeardown();
+                });
+        };
         window._piqV4DressDemos = function() {
             var tab = document.getElementById('tab-demographics');
             if (!tab) return;
@@ -123132,6 +123335,9 @@ https://www.instagram.com/p/..."></textarea>
             }
             var chartsHead = document.getElementById('piqDemoChartsHead');
             if (chartsHead) chartsHead.style.display = 'none';
+            if (window._piqV4LoadMomentum) {
+                try { window._piqV4LoadMomentum(); } catch (_e) {}
+            }
             var host = document.getElementById('demoDifferentiators');
             if (host) {
                 var cats = [
