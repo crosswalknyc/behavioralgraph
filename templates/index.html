@@ -23162,7 +23162,8 @@ https://www.instagram.com/p/..."></textarea>
             margin-left: 8px;
         }
         #dashboardView.piq-v4.piq-has-profile #toolbarContent > #piqChangeProfileBtn {
-            order: 11;
+            order: 9;
+            margin-left: 8px;
         }
         #dashboardView.piq-v4 #tab-insights .insights-summary-grid > div[style*="grid-template-columns"] {
             display: grid !important;
@@ -24558,9 +24559,48 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 12px !important;
             font-weight: 600 !important;
         }
-        #dashboardView.piq-v4 #piqChangeProfileBtn,
         #dashboardView.piq-v4 #piqEmptyBrowseBtn {
             display: none !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
+        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts,
+        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+            display: inline-flex !important;
+            align-items: center;
+            border: 1px solid #E682FF !important;
+            color: #E9E8E1 !important;
+            background: #15252A !important;
+            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.20),
+                        0 6px 20px rgba(230, 130, 255, 0.34) !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
+        #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
+        #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
+            border-color: #E682FF !important;
+            color: #E9E8E1 !important;
+            box-shadow: 0 0 0 1px rgba(230, 130, 255, 0.30),
+                        0 8px 26px rgba(230, 130, 255, 0.46) !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile.piq-sidebar-open #piqChangeProfileBtn {
+            color: #E682FF !important;
+            border-color: #E682FF !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn,
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts,
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn {
+            background: #FFFFFF !important;
+            border-color: #8E3FA8 !important;
+            color: #0C1618 !important;
+            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.16),
+                        0 6px 18px rgba(142, 63, 168, 0.24) !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #dashViewDeltasBtn:hover,
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile .piq-data-cuts:hover,
+        body[data-theme="light"] #dashboardView.piq-v4.piq-has-profile #piqChangeProfileBtn:hover {
+            border-color: #8E3FA8 !important;
+            color: #0C1618 !important;
+            box-shadow: 0 0 0 1px rgba(142, 63, 168, 0.26),
+                        0 8px 22px rgba(142, 63, 168, 0.32) !important;
         }
         #dashboardView.piq-v4.piq-has-profile #dashHeroName {
             cursor: pointer;
@@ -24639,7 +24679,7 @@ https://www.instagram.com/p/..."></textarea>
                             <select id="mobileToolsNav" class="mobile-tools-nav" style="display:none;" onfocus="if(window._buildMobileToolsNav)window._buildMobileToolsNav()" onchange="if(window._onMobileToolsNav)window._onMobileToolsNav(this)" aria-label="Data &amp; Analysis Tools">
                                 <option value="" selected disabled>Data &amp; Analysis Tools</option>
                             </select>
-                            <button type="button" class="piq-change-profile" id="piqChangeProfileBtn">Change profile</button>
+                            <button type="button" class="piq-change-profile" id="piqChangeProfileBtn">Select Profile</button>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs">
                                     <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
@@ -122117,9 +122157,8 @@ https://www.instagram.com/p/..."></textarea>
         };
         window._piqV4SyncBrowseLabel = function() {
             var btn = document.getElementById('piqChangeProfileBtn');
-            var view = document.getElementById('dashboardView');
             if (!btn) return;
-            btn.textContent = (view && view.classList.contains('piq-has-profile')) ? 'Change profile' : 'Browse profiles';
+            btn.textContent = 'Select Profile';
         };
         window._piqV4ToggleSidebar = function(force) {
             var view = document.getElementById('dashboardView');
@@ -122477,6 +122516,11 @@ https://www.instagram.com/p/..."></textarea>
                 cuts.classList.add('piq-data-cuts');
                 cuts.style.display = '';
                 park(cuts);
+            }
+            var pick = document.getElementById('piqChangeProfileBtn');
+            if (pick) {
+                pick.textContent = 'Select Profile';
+                park(pick);
             }
             var exp = document.querySelector('#contentActionButtons .dash-dropdown') || document.querySelector('.action-buttons-row .dash-dropdown');
             park(exp);
