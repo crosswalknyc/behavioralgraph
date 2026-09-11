@@ -5752,12 +5752,13 @@
         /* Median display styling - larger and easier to read */
         .chart-card .median-display {
             font-size: clamp(0.8rem, 1.2vw + 0.4rem, 0.95rem);
-            color: #f0ff00;
+            color: #E9E8E1;
             font-weight: 600;
-            text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
+            text-shadow: none;
             line-height: 1.4;
             text-transform: none;
-            background: rgba(200, 255, 0, 0.1);
+            background: #15252A;
+            border: 1px solid #3B3D38;
             padding: 0.35rem 0.6rem;
             border-radius: 6px;
             width: 100%;
@@ -5781,10 +5782,10 @@
             outline: none;
         }
         .median-collapsed .median-trigger-label {
-            color: #f0ff00;
+            color: #C7F23E;
             font-weight: 700;
-            text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
-            border-bottom: 1px dashed rgba(240, 255, 0, 0.55);
+            text-shadow: none;
+            border-bottom: 1px dashed rgba(199, 242, 62, 0.45);
             padding: 0 0.15rem 1px 0.15rem;
         }
         .median-collapsed .median-trigger-hint {
@@ -23804,9 +23805,17 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .median-display {
             display: block !important;
-            color: #9AA09B !important;
+            color: #E9E8E1 !important;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
             text-shadow: none !important;
             margin: 0 0 10px !important;
+            padding: 12px 14px !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics.piq-demo-cuts .median-display {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
         }
         #dashboardView.piq-v4 #tab-demographics.tab-content.active {
             padding: 16px 32px 48px !important;
@@ -125616,7 +125625,7 @@ https://www.instagram.com/p/..."></textarea>
         // removes the dataset. Clearing or switching to a different subject
         // wipes the state.
         // -------------------------------------------------------------------
-        const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
+        const _COMPARISON_PALETTE = ['#3358FF', '#E682FF', '#C7F23E', '#B7B3D8', '#E9E8E1', '#7C9BFF', '#F0B3FF', '#9AA09B'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
         // Synthetic key for the precomputed Category Norm "run". Treated by
         // every downstream rendering helper as if it were a real data cut.
@@ -133605,7 +133614,7 @@ https://www.instagram.com/p/..."></textarea>
                 : [];
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#3358FF', '#E682FF', '#C7F23E', '#B7B3D8', '#E9E8E1'];
             // 2026-06-22: one line per cohort + drop the profile name so
             // the chips read e.g. "Total Universe Median: 47.12 years"
             // / "Avid Median: 52.33 years" / "Avid Female Median: 54.84
@@ -133626,7 +133635,7 @@ https://www.instagram.com/p/..."></textarea>
                 return `<span style="display:block; color: ${color}; font-weight: 600;">${label} Median: ${med.toFixed(2)} years</span>`;
             }).join('');
 
-            const baseHtml = `<span class="median-highlight" style="display:block; color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${baseLbl} Median: ${profileVal}</span>`;
+            const baseHtml = `<span class="median-highlight" style="display:block; color: #C7F23E; text-shadow: none;">${baseLbl} Median: ${profileVal}</span>`;
             const gpHtml = isGP ? '' : `<span style="display:block; color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             el.innerHTML = baseHtml + cohortChipsHtml + gpHtml;
         }
@@ -133655,7 +133664,7 @@ https://www.instagram.com/p/..."></textarea>
                 : [];
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#3358FF', '#E682FF', '#C7F23E', '#B7B3D8', '#E9E8E1'];
             // 2026-06-22: one line per cohort + drop the profile name
             // (mirror of the age-median layout above).
             const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
@@ -133672,7 +133681,7 @@ https://www.instagram.com/p/..."></textarea>
                 return `<span style="display:block; color: ${color}; font-weight: 600;">${label} Median: $${med}</span>`;
             }).join('');
 
-            const baseHtml = `<span class="median-highlight" style="display:block; color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${baseLbl} Median: ${profileVal}</span>`;
+            const baseHtml = `<span class="median-highlight" style="display:block; color: #C7F23E; text-shadow: none;">${baseLbl} Median: ${profileVal}</span>`;
             const gpHtml = isGP ? '' : `<span style="display:block; color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             el.innerHTML = baseHtml + cohortChipsHtml + gpHtml;
         }
@@ -133716,7 +133725,7 @@ https://www.instagram.com/p/..."></textarea>
             const _cmpHideGP    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeGP;
             const _cmpPalette   = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#3358FF', '#E682FF', '#C7F23E', '#B7B3D8', '#E9E8E1'];
             // Chart-key → demographics-dict key (mostly identity, but
             // camelCase chart keys map to snake_case dict keys).
             const _cmpDataCatMap = {
