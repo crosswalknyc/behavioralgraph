@@ -24553,7 +24553,13 @@ https://www.instagram.com/p/..."></textarea>
             border-color: #C9C6BA;
             color: #5C6560;
         }
+        #dashboardView.piq-v4 .comp-table th .piq-cmp-stack {
+            display: block;
+            min-width: 0;
+        }
         #dashboardView.piq-v4 .comp-table th .piq-cmp-nm {
+            display: block !important;
+            line-height: 1.25 !important;
             font-size: 13px !important;
             font-weight: 800 !important;
             color: #E9E8E1;
@@ -24562,6 +24568,8 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4 .comp-table th .piq-cmp-nm { color: #0C1618; }
         #dashboardView.piq-v4 .comp-table th .piq-cmp-sub {
+            display: block !important;
+            line-height: 1.2 !important;
             font-size: 10px !important;
             font-weight: 500 !important;
             color: #9AA09B;
@@ -124446,7 +124454,7 @@ https://www.instagram.com/p/..."></textarea>
                     var av = '<span class="piq-cmp-av' + (isGp ? ' gp' : '') + '"' +
                         (isGp ? '' : ' style="background: ' + grads[(i - 1) % grads.length] + '"') + '>' +
                         window._piqV4Esc(window._piqV4CmpInitials(name)) + '</span>';
-                    th.innerHTML = '<span class="piq-cmp-head">' + av + '<span><span class="piq-cmp-nm">' +
+                    th.innerHTML = '<span class="piq-cmp-head">' + av + '<span class="piq-cmp-stack"><span class="piq-cmp-nm">' +
                         window._piqV4Esc(name) + '</span>' +
                         (sub ? '<span class="piq-cmp-sub">' + window._piqV4Esc(sub) + '</span>' : '') +
                         '</span></span>';
