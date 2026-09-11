@@ -22554,7 +22554,7 @@ https://www.instagram.com/p/..."></textarea>
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .dashboard-layout > .persistent-sidebar {
             position: fixed !important;
             left: 0;
-            top: var(--piq-chrome-bottom, 168px) !important;
+            top: var(--piq-header-bottom, 121px) !important;
             bottom: 0;
             z-index: 2147482000;
             width: 320px !important;
@@ -22574,7 +22574,7 @@ https://www.instagram.com/p/..."></textarea>
         #piqSidebarScrim {
             display: none;
             position: fixed;
-            top: var(--piq-chrome-bottom, 168px);
+            top: var(--piq-header-bottom, 121px);
             left: 0;
             right: 0;
             bottom: 0;
@@ -24444,7 +24444,7 @@ https://www.instagram.com/p/..."></textarea>
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #piqProfileSidebar {
             position: fixed !important;
             left: 0;
-            top: var(--piq-chrome-bottom, 168px) !important;
+            top: var(--piq-header-bottom, 121px) !important;
             bottom: 0;
             z-index: 2147482000;
             width: 360px !important;
@@ -123014,6 +123014,17 @@ https://www.instagram.com/p/..."></textarea>
             park(document.getElementById('hoverToggle'));
             park(document.getElementById('dashDisplayToggle'));
         };
+        // Age buckets read youngest to oldest. Parse the bucket's own
+        // numbers so label variants ("17 and under", "Under 18", "65+")
+        // still land at the right end.
+        window._piqV4AgeRank = function(label) {
+            var s = String(label == null ? '' : label).toUpperCase();
+            var m = s.match(/\d+/);
+            var n = m ? Number(m[0]) : 999;
+            if (/UNDER|YOUNGER|LESS THAN/.test(s)) return n - 1000;
+            if (/OLDER|OVER|PLUS|\+/.test(s)) return n + 1000;
+            return n;
+        };
         window._piqV4DemoLabel = function(key, raw) {
             var s = String(raw == null ? '' : raw).trim();
             if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
@@ -123194,7 +123205,8 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 card.classList.remove('piq-no-data');
-                if (!keepOrder[key]) keys.sort(function(a, b) { return Number(vals[b]) - Number(vals[a]); });
+                if (key === 'age') keys.sort(function(a, b) { return window._piqV4AgeRank(a) - window._piqV4AgeRank(b); });
+                else if (!keepOrder[key]) keys.sort(function(a, b) { return Number(vals[b]) - Number(vals[a]); });
                 var idxs = idxMap[key] || {};
                 var gps = gpMap[key] || {};
                 if (!list) {
@@ -123435,6 +123447,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (spacer) spacer.style.height = '0px';
                 if (promo) promo.style.maxHeight = '';
                 document.documentElement.style.removeProperty('--piq-chrome-bottom');
+                document.documentElement.style.removeProperty('--piq-header-bottom');
                 if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
                 return wrap || null;
             }
@@ -123469,6 +123482,9 @@ https://www.instagram.com/p/..."></textarea>
             setStyle(spacer, 'height', (wrap.offsetHeight || 0) + 'px');
             setStyle(spacer, 'flexShrink', '0');
             setStyle(spacer, 'pointerEvents', 'none');
+            if (document.documentElement.style.getPropertyValue('--piq-header-bottom') !== headerBottom + 'px') {
+                document.documentElement.style.setProperty('--piq-header-bottom', headerBottom + 'px');
+            }
             var chromeBottom = Math.round(wrap.getBoundingClientRect().bottom);
             if (promo) {
                 var promoMax = Math.max(360, window.innerHeight - (chromeBottom + 18)) + 'px';
