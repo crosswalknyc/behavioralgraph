@@ -24157,6 +24157,46 @@ https://www.instagram.com/p/..."></textarea>
             flex-direction: column;
             gap: 16px;
         }
+        #dashboardView.piq-v4 #tab-interests .interests-header {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 0 14px !important;
+        }
+        #dashboardView.piq-v4 #tab-interests .interests-filter {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 10px !important;
+            width: 100% !important;
+        }
+        #dashboardView.piq-v4 #tab-interests .interests-filter > span {
+            flex: 0 0 auto;
+            color: #7C878A;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        #dashboardView.piq-v4 #tab-interests #interestsCategorySelect {
+            flex: 0 1 200px !important;
+            width: auto !important;
+            min-width: 140px !important;
+            max-width: 240px;
+        }
+        #dashboardView.piq-v4 #tab-interests #interestsSearchInput {
+            flex: 1 1 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interests-filter > span {
+            color: #888C89;
+        }
         #dashboardView.piq-v4 #tab-interests .interest-item,
         #dashboardView.piq-v4 #tab-interests .interest-header-row {
             display: grid !important;
