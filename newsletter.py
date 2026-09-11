@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -2484,8 +2484,11 @@ def public_issue(cid):
 
 @newsletter_bp.route("/n/linkedin/callback")
 def linkedin_callback():
-    err = (request.args.get("error_description") or request.args.get("error") or "").strip()
+    err = unescape((request.args.get("error_description") or request.args.get("error") or "").strip())
+    err = err.replace("&quot;", '"').strip()
     if err:
+        if "offline_access" in err or "unknown scope" in err.lower():
+            err = "LinkedIn rejected a permission this app does not have. Try Connect again."
         return _linkedin_result_page("LinkedIn did not connect. " + err, ok=False), 400
     code = (request.args.get("code") or "").strip()
     state_tok = (request.args.get("state") or "").strip()
