@@ -1413,6 +1413,15 @@
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
         #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        /* The page shell does not scroll, so each view scrolls itself. Journey
+           IQ stacks its cards straight into the view with no inner scroller,
+           so anything past the first screen was unreachable. !important beats
+           the inline overflow the markup carries. */
+        #journeyIQView {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            min-height: 0;
+        }
         
         /* App Footer - Data Source (above modals so always visible) */
         .app-footer {
