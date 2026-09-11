@@ -24554,20 +24554,20 @@ https://www.instagram.com/p/..."></textarea>
             color: #5C6560;
         }
         #dashboardView.piq-v4 .comp-table th .piq-cmp-nm {
-            font-size: 13px;
-            font-weight: 800;
+            font-size: 13px !important;
+            font-weight: 800 !important;
             color: #E9E8E1;
-            letter-spacing: -0.01em;
-            text-transform: none;
+            letter-spacing: -0.01em !important;
+            text-transform: none !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .comp-table th .piq-cmp-nm { color: #0C1618; }
         #dashboardView.piq-v4 .comp-table th .piq-cmp-sub {
-            font-size: 10px;
-            font-weight: 500;
+            font-size: 10px !important;
+            font-weight: 500 !important;
             color: #9AA09B;
             margin-top: 1px;
-            letter-spacing: 0;
-            text-transform: none;
+            letter-spacing: 0 !important;
+            text-transform: none !important;
         }
         #dashboardView.piq-v4 .comp-table th.piq-cmp-primary .piq-cmp-sub {
             color: #C7F23E;
@@ -124377,8 +124377,23 @@ https://www.instagram.com/p/..."></textarea>
         // Compare tab: give each profile column the mockup's colour block,
         // name and reach. Everything else is CSS; this only adds the header
         // treatment, which needs the names and the US row to build.
+        window._piqV4CmpCleanName = function(raw) {
+            var s = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+            var note = '';
+            var med = s.match(/median:\s*([0-9.,]+)/i);
+            if (med) {
+                note = 'Median ' + med[1];
+                s = s.replace(/median:\s*[0-9.,]+/i, ' ');
+            }
+            s = s.replace(/\([^)]*\)/g, ' ');
+            s = s.replace(/\s+/g, ' ').trim();
+            return { name: s, note: note };
+        };
         window._piqV4CmpInitials = function(name) {
-            var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+            var s = String(name || '').trim();
+            if (/gen\s*pop/i.test(s)) return 'GP';
+            var parts = s.replace(/\b(19|20)\d{2}\b/g, ' ')
+                .split(/[^A-Za-z0-9]+/).filter(Boolean);
             if (!parts.length) return '?';
             if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
             return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
@@ -124417,14 +124432,16 @@ https://www.instagram.com/p/..."></textarea>
                 var cells = Array.prototype.slice.call(row.cells);
                 cells.forEach(function(th, i) {
                     if (i === 0) return;
-                    var name = (th.getAttribute('data-piq-name') || th.textContent || '').replace(/\s+/g, ' ').trim();
+                    var raw = th.getAttribute('data-piq-name') || th.textContent || '';
+                    var cleaned = window._piqV4CmpCleanName(raw);
+                    var name = cleaned.name;
                     if (!name) return;
-                    var sub = reach[i - 1] || '';
+                    var sub = cleaned.note || reach[i - 1] || '';
                     var isGp = /gen\s*pop/i.test(name);
                     var sig = name + '|' + sub;
                     if (th.getAttribute('data-piq-cmp') === sig) return;
                     th.setAttribute('data-piq-cmp', sig);
-                    th.setAttribute('data-piq-name', name);
+                    th.setAttribute('data-piq-name', raw.replace(/\s+/g, ' ').trim());
                     th.classList.toggle('piq-cmp-primary', i === 1 && !isGp);
                     var av = '<span class="piq-cmp-av' + (isGp ? ' gp' : '') + '"' +
                         (isGp ? '' : ' style="background: ' + grads[(i - 1) % grads.length] + '"') + '>' +
