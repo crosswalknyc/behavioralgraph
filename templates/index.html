@@ -122745,12 +122745,21 @@ https://www.instagram.com/p/..."></textarea>
             if (!btn) return;
             if (btn.textContent !== 'Select Profile') btn.textContent = 'Select Profile';
         };
+        window._piqV4ViewVisible = function() {
+            var view = document.getElementById('dashboardView');
+            if (!view) return false;
+            if (view.style && view.style.display === 'none') return false;
+            try {
+                if (getComputedStyle(view).display === 'none') return false;
+            } catch (_e) {}
+            return view.getClientRects().length > 0;
+        };
         window._piqV4SyncLibraryRail = function() {
             var view = document.getElementById('dashboardView');
             var rail = document.getElementById('piqLibraryRail');
             var chrome = document.getElementById('piqStickyChrome');
             if (!rail) return;
-            var show = !!(view && view.classList.contains('piq-v4') && view.classList.contains('piq-has-profile') && !view.classList.contains('piq-sidebar-open'));
+            var show = !!(view && view.classList.contains('piq-v4') && view.classList.contains('piq-has-profile') && !view.classList.contains('piq-sidebar-open') && window._piqV4ViewVisible());
             rail.classList.toggle('piq-rail-on', show);
             rail.classList.toggle('piq-rail-hide', !show);
             rail.setAttribute('aria-hidden', show ? 'false' : 'true');
@@ -123648,7 +123657,8 @@ https://www.instagram.com/p/..."></textarea>
             var wrap = document.getElementById('piqStickyChrome');
             var promo = document.getElementById('prometheusWidget');
             var spacer = document.getElementById('piqChromeSpacer');
-            if (!view || !wrap || !view.classList.contains('piq-v4') || !view.classList.contains('piq-has-profile')) {
+            if (!view || !wrap || !view.classList.contains('piq-v4') || !view.classList.contains('piq-has-profile')
+                    || !(window._piqV4ViewVisible ? window._piqV4ViewVisible() : true)) {
                 if (wrap) {
                     wrap.classList.remove('piq-chrome-fixed', 'piq-has-profile');
                     wrap.style.display = 'none';
@@ -123727,6 +123737,15 @@ https://www.instagram.com/p/..."></textarea>
                 var wrap = document.getElementById('piqStickyChrome');
                 if (view) ro.observe(view);
                 if (wrap) ro.observe(wrap);
+            }
+            if (typeof MutationObserver !== 'undefined') {
+                var viewEl = document.getElementById('dashboardView');
+                if (viewEl && !viewEl._piqVisWatch) {
+                    viewEl._piqVisWatch = true;
+                    new MutationObserver(function() {
+                        if (window._piqV4PinChrome) window._piqV4PinChrome();
+                    }).observe(viewEl, { attributes: true, attributeFilter: ['style', 'class'] });
+                }
             }
         };
         window._piqV4EnsureStickyChrome = function() {
