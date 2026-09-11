@@ -126951,7 +126951,7 @@ https://www.instagram.com/p/..."></textarea>
         // removes the dataset. Clearing or switching to a different subject
         // wipes the state.
         // -------------------------------------------------------------------
-        const _COMPARISON_PALETTE = ['#3358FF', '#E682FF', '#C7F23E', '#B7B3D8', '#E9E8E1', '#7C9BFF', '#F0B3FF', '#9AA09B'];
+        const _COMPARISON_PALETTE = ['#E682FF', '#C7F23E', '#B7B3D8', '#F0B3FF', '#E9E8E1', '#7C9BFF', '#9AA09B', '#3358FF'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
         // Synthetic key for the precomputed Category Norm "run". Treated by
         // every downstream rendering helper as if it were a real data cut.
@@ -135179,7 +135179,9 @@ https://www.instagram.com/p/..."></textarea>
                     for (const [bk, bv] of Object.entries(dict)) {
                         if (typeof bv === 'number' && isFinite(bv)) norm[_cmpNormKey(bk)] = bv;
                     }
-                    return { label: entry.label || 'Run', norm };
+                    const projected = (entry && entry.parsed && typeof entry.parsed.projectedUS === 'number')
+                        ? entry.parsed.projectedUS : null;
+                    return { label: entry.label || 'Run', norm, projected };
                 });
 
                 // Sort order: age uses the canonical age sequence; all
@@ -135273,7 +135275,9 @@ https://www.instagram.com/p/..."></textarea>
                 const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
                     const color = _cmpPalette[ci % _cmpPalette.length];
                     const lbl = _safeEscape(lk.label || 'Run');
-                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;" title="' + lbl + '">' + lbl + '</span>';
+                    const szTxt = (typeof _cmpCompactCount === 'function') ? _cmpCompactCount(lk.projected) : '';
+                    const szHtml = szTxt ? '<span class="cmp-col-size">' + szTxt + '</span>' : '';
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;" title="' + lbl + '">' + lbl + szHtml + '</span>';
                 }).join('');
 
                 // Match the behavioral-card grid template so the
