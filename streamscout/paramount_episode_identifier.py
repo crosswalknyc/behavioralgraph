@@ -121,6 +121,8 @@ def show_name(html, fallback=""):
         t = re.sub(r"^\s*watch\s+", "", t, flags=re.I)
         t = re.sub(r"\s+movies?\s*(?:-|on)\s*paramount\+?.*$", "", t, flags=re.I)
         t = re.sub(r"\s+on\s+paramount\+?.*$", "", t, flags=re.I)
+        t = re.sub(r"\s*[-–—|:]?\s*(?:streaming\s+online|full\s+episodes"
+                   r"(?:\s+and\s+clips)?|watch\s+free).*$", "", t, flags=re.I)
         t = re.sub(r"\s*[-–—|]\s*watch\s*$", "", t, flags=re.I)
         if t.strip():
             return t.strip()
