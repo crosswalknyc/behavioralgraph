@@ -24097,7 +24097,10 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile[data-piq-tab="behavioral"] #piqBehJump {
             background: #E9E8E1;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-lbl {
+        /* The jump row lives inside the pinned chrome, so every rule here
+           has to match there too. Scoped to #dashboardView alone, the menu
+           lost its dropdown styling and spilled out as a wall of buttons. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-lbl {
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.14em;
@@ -24105,17 +24108,17 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500;
             flex: 0 0 auto;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn {
-            display: inline-flex;
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn {
+            display: inline-flex !important;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            min-width: 280px;
+            min-width: 300px;
             max-width: min(520px, calc(100vw - 80px));
             padding: 8px 12px;
             background: #15252A;
             border: 1px solid #3B3D38;
-            border-radius: 6px;
+            border-radius: 8px;
             color: #E9E8E1;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: 10.5px;
@@ -24123,37 +24126,59 @@ https://www.instagram.com/p/..."></textarea>
             text-transform: uppercase;
             font-weight: 500;
             cursor: pointer;
+            transition: border-color 120ms ease;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn .caret {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn:hover {
+            border-color: #7C878A;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn .caret {
             font-size: 8px;
             color: #7C878A;
+            transition: transform 120ms ease;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
-            border-color: rgba(199, 242, 62, 0.35);
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
+            border-color: rgba(199, 242, 62, 0.45);
             color: #C7F23E;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-menu {
-            position: absolute;
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] .caret {
+            transform: rotate(180deg);
+            color: #C7F23E;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu {
+            position: absolute !important;
             left: 32px;
-            top: calc(100% - 4px);
-            min-width: 280px;
-            max-width: min(520px, calc(100vw - 80px));
-            max-height: 320px;
+            top: calc(100% - 2px);
+            min-width: 300px;
+            max-width: min(560px, calc(100vw - 80px));
+            max-height: 340px;
             overflow-y: auto;
+            overscroll-behavior: contain;
             background: #15252A;
             border: 1px solid #3B3D38;
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 6px;
-            z-index: 50;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+            z-index: 60;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt {
-            display: block;
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu[hidden] {
+            display: none !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu::-webkit-scrollbar {
+            width: 8px;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu::-webkit-scrollbar-thumb {
+            background: #3B3D38;
+            border-radius: 999px;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt {
+            display: flex !important;
+            align-items: center;
+            gap: 8px;
             width: 100%;
             text-align: left;
-            background: transparent;
-            border: 0;
-            border-radius: 4px;
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 6px;
             padding: 8px 10px;
             color: #E9E8E1;
             font-family: inherit;
@@ -24163,27 +24188,50 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500;
             cursor: pointer;
         }
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt:hover,
-        #dashboardView.piq-v4 #piqBehJump .piq-jump-opt.is-on {
-            background: rgba(199, 242, 62, 0.08);
+        /* Leading dot marks the category the list is currently sorted to. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex: 0 0 5px;
+            background: transparent;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt:hover {
+            background: rgba(199, 242, 62, 0.08) !important;
             color: #C7F23E;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-btn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on {
+            background: rgba(199, 242, 62, 0.12) !important;
+            color: #C7F23E;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on::before {
+            background: #C7F23E;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn {
             background: #FFFFFF;
             border-color: #C9C6BA;
             color: #0C1618;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-menu {
-            background: #FFFFFF;
-            border-color: #C9C6BA;
-        }
-        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt {
-            color: #0C1618;
-        }
-        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt:hover,
-        body[data-theme="light"] #dashboardView.piq-v4 #piqBehJump .piq-jump-opt.is-on {
-            background: rgba(94, 126, 18, 0.08);
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
+            border-color: #5E7E12;
             color: #5E7E12;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            box-shadow: 0 18px 44px rgba(12, 22, 24, 0.16);
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt {
+            color: #0C1618;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt:hover,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on {
+            background: rgba(94, 126, 18, 0.10) !important;
+            color: #5E7E12;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on::before {
+            background: #5E7E12;
         }
         @media (max-width: 900px) {
             #dashboardView.piq-v4 #tab-behavioral .behavioral-grid {
