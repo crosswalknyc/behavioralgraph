@@ -24668,6 +24668,17 @@ https://www.instagram.com/p/..."></textarea>
             gap: 4px !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .comp-analysis-tabs { border-bottom-color: #C9C6BA !important; }
+        #dashboardView.piq-v4 .cmp-col-size,
+        .cmp-col-size {
+            display: block;
+            font-size: 0.58rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            line-height: 1.2;
+            margin-top: 2px;
+            opacity: 0.72;
+            white-space: nowrap;
+        }
         #dashboardView.piq-v4 #tab-marketing .marketing-hero { display: none !important; }
         #dashboardView.piq-v4 #tab-marketing .marketing-subtabs {
             display: flex !important;
@@ -130193,6 +130204,39 @@ https://www.instagram.com/p/..."></textarea>
             return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
         }
 
+        // With a cut on, each column header carries that cohort's projected
+        // US size, so the percentages underneath are read against a known
+        // base rather than an unlabelled one.
+        function _cmpCompactCount(n) {
+            n = Number(n);
+            if (!isFinite(n) || n <= 0) return '';
+            if (n >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+            if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M';
+            if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+            return String(Math.round(n));
+        }
+        function _cmpAttachSize(span, projected) {
+            if (!span) return;
+            const prev = span.querySelector('.cmp-col-size');
+            if (prev) prev.remove();
+            const txt = _cmpCompactCount(projected);
+            if (!txt) return;
+            const s = document.createElement('span');
+            s.className = 'cmp-col-size';
+            s.textContent = txt;
+            s.title = 'Projected US audience for this cohort';
+            span.appendChild(s);
+        }
+        function _cmpEntryProjected(entry) {
+            return (entry && entry.parsed) ? entry.parsed.projectedUS : null;
+        }
+        function _cmpBaseProjected() {
+            try {
+                return (typeof currentDashboardData !== 'undefined' && currentDashboardData)
+                    ? currentDashboardData.projectedUS : null;
+            } catch (_e) { return null; }
+        }
+
         // Build a Set/Map of "behavioral items" from a parsed run, keyed
         // by normalized item name, with the pct as value. We try every
         // category in `parsed.behavioral` because the same brand can live
@@ -130671,6 +130715,7 @@ https://www.instagram.com/p/..."></textarea>
                 // columns, plus a sort-arrow span for the active state.
                 const header = table.querySelector('.behavioral-header-row');
                 if (header) {
+                    _cmpAttachSize(header.querySelector('.profile-col'), _cmpBaseProjected());
                     const gpHeader = header.querySelector('.genpop-col');
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
@@ -130700,6 +130745,7 @@ https://www.instagram.com/p/..."></textarea>
                             span.appendChild(document.createTextNode(label));
                         }
                         span.title = 'Sort by ' + label;
+                        _cmpAttachSize(span, _cmpEntryProjected(entry));
                         // Header label is allowed to wrap inside its
                         // own column so long cohort names (e.g.
                         // "Casual Female") don't visually bleed into
@@ -130782,6 +130828,7 @@ https://www.instagram.com/p/..."></textarea>
 
                     if (intHeader) {
                         intHeader.style.gridTemplateColumns = intGridTpl;
+                        _cmpAttachSize(intHeader.querySelector('.profile-col'), _cmpBaseProjected());
                         const gpHeader = intHeader.querySelector('.genpop-col');
                         series.forEach((entry, idx) => {
                             const span = document.createElement('span');
@@ -130797,6 +130844,7 @@ https://www.instagram.com/p/..."></textarea>
                             span.appendChild(arrow);
                             span.appendChild(document.createTextNode(label));
                             span.title = 'Sort by ' + label;
+                            _cmpAttachSize(span, _cmpEntryProjected(entry));
                             span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.7rem;text-align:right;justify-self:end;align-self:end;font-weight:600;white-space:normal;word-wrap:break-word;line-height:1.3;min-width:0;padding-right:8px;cursor:pointer;user-select:none;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
@@ -130948,6 +130996,7 @@ https://www.instagram.com/p/..."></textarea>
                         const label = entry.label || ('Run ' + (idx + 1));
                         span.textContent = label;
                         span.title = label;
+                        _cmpAttachSize(span, _cmpEntryProjected(entry));
                         // Allow multi-word cohort labels ("Unprepared
                         // Underdogs", "Worried Warriors") to wrap within
                         // the column instead of overflowing onto the
