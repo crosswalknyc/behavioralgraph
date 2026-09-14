@@ -5,7 +5,7 @@ questions**. You give it a movie or series, it finds that title's exact
 watch/play identifier(s) on the streaming platform you pick, and drops them into
 a spreadsheet on your Desktop.
 
-It works for **both movies and series on all 12 platforms.**
+It works for **both movies and series on all 13 platforms.**
 
 Every run writes one consistent CSV:
 
@@ -14,9 +14,10 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 ```
 
 - **URL** = the identifier we care about (a UUID, a `watch/<id>`, an
-  `item/<CODE>`, an Amazon `detail/<ASIN>`, etc. — depends on the platform).
-- **SEASON** = `Season 1`, `Season 2`, … (blank for movies, and for Apple TV+
-  which keys a whole series to one id).
+  `item/<CODE>`, an Amazon `detail/<ASIN>`, a full YouTube `watch?v=…` link,
+  etc. — depends on the platform).
+- **SEASON** = `Season 1`, `Season 2`, … (blank for movies, and for Apple TV+,
+  BritBox and YouTube, which don't split their ids by season).
 
 > 💡 This how-to is all you need to run the tool. (There's also an optional
 > one-page grid, `StreamScout-Platforms.xlsx`, shared with the wider team if you
@@ -77,7 +78,7 @@ DISNEY_PASSWORD=your_disney_password
 ```
 
 > `.env.local` is **gitignored** — it never gets committed or shared. Ask Jessie
-> for the shared logins if you need them. The other 9 platforms need no login.
+> for the shared logins if you need them. The other 10 platforms need no login.
 
 ---
 
@@ -107,17 +108,17 @@ The CSV appears on your **Desktop**. That's the whole job.
 
 ## The platforms (quick version)
 
-**12 platforms, movies + series on all of them.** Only **two** need a login:
+**13 platforms, movies + series on all of them.** Only **two** need a login:
 
-- 🔓 **No login (9):** Peacock, Hulu, Apple TV+, Paramount+, Starz,
-  Hallmark Plus, Amazon, MGM Plus, BritBox
+- 🔓 **No login (10):** Peacock, Hulu, Apple TV+, Paramount+, Starz,
+  Hallmark Plus, Amazon, MGM Plus, BritBox, YouTube
 - 🔐 **Login — a Firefox window opens and drives itself (2):** Netflix, HBO Max
 - 🔓/🔐 **Disney+:** tries no-login first, only opens Firefox for tricky titles
 
 When a browser platform runs, **let the Firefox window do its thing** — don't
 click around in it.
 
-*(That's everything you need. An optional at-a-glance grid of all 12 platforms
+*(That's everything you need. An optional at-a-glance grid of all 13 platforms
 lives in the shared `StreamScout-Platforms.xlsx` if you ever want it.)*
 
 ---
@@ -131,6 +132,12 @@ lives in the shared `StreamScout-Platforms.xlsx` if you ever want it.)*
 - **Seasons are flexible:** `all` = every season, `1-3` = a range, `1,4,6` = a
   pick-list. (MGM Plus returns one shell per season; Apple TV+ and BritBox use a
   single shell for the whole series, so their SEASON is blank.)
+- **YouTube** treats a show as its **channel** and returns **one row per
+  episode** with the full `watch?v=…` link — every long-form video on the
+  channel's Videos tab (Shorts are left out). Paste a channel, `@handle`, or
+  `playlist` link if the title search doesn't land it. Heads-up: clip-heavy
+  channels (e.g. *Wild 'N Out*) return **a lot** of rows — that's every clip as
+  it appears in clickstream, by design.
 - **Amazon** captures *every* way a title shows up in clickstream (all offer
   ASINs + the GTI in both forms, shells + episodes, **and every film edition** —
   theatrical / ad-supported / Director's Cut). It also covers Amazon
@@ -163,6 +170,6 @@ lives in the shared `StreamScout-Platforms.xlsx` if you ever want it.)*
 - `production_tags.py` — fills the PRODUCTION column
 - `*_identifier.py` — one resolver per platform (Peacock, Hulu, Netflix,
   Apple TV+, Paramount+, HBO Max, Disney+, Starz, Hallmark Plus, Amazon,
-  MGM Plus, BritBox)
+  MGM Plus, BritBox, YouTube)
 
 That's it — four questions, one spreadsheet. Happy scouting. 🛰️
