@@ -629,7 +629,25 @@ def normalize_state(state):
         elif camp.get("id") == SEED_CAMPAIGN_ID and not (li_row.get("headline") or "").strip():
             camp["linkedin"] = nli.default_seed_linkedin()
             changed = True
+        if _effective_status(camp) == "sent" and camp.get("status") == "draft":
+            camp["status"] = "sent"
+            camp["sent_at"] = camp.get("sent_at") or camp.get("updated_at") or _utcnow()
+            changed = True
     return state, changed
+
+
+def _effective_status(camp):
+    """A letter that has gone out is sent, even if a crash left status as draft."""
+    status = (camp or {}).get("status") or "draft"
+    if status == "sending":
+        return "sending"
+    try:
+        sent = int(((camp or {}).get("stats") or {}).get("sent") or 0)
+    except (TypeError, ValueError):
+        sent = 0
+    if sent > 0 and status in ("draft", "", None):
+        return "sent"
+    return status
 
 
 def _persist_normalized(state):
@@ -1757,7 +1775,7 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
         "reply_to": c.get("reply_to") or DEFAULT_REPLY_TO,
         "list_id": c.get("list_id"),
         "segment_id": c.get("segment_id") or "",
-        "status": c.get("status"),
+        "status": _effective_status(c),
         "created_at": c.get("created_at"),
         "updated_at": c.get("updated_at"),
         "sent_at": c.get("sent_at"),
