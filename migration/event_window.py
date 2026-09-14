@@ -25,8 +25,14 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-DEFAULT_WINDOW_START = "2025-07-01"
-DEFAULT_WINDOW_END = "2026-06-30"
+# Retired 2026-09-14: the 2026-08-17 frozen fiscal pair. Kept so
+# is_default_window still treats leftover Claude drafts as "the
+# default" (not a custom event window) and so old imports compile.
+# New code should call default_window().
+LEGACY_DEFAULT_START = "2025-07-01"
+LEGACY_DEFAULT_END = "2026-06-30"
+DEFAULT_WINDOW_START = LEGACY_DEFAULT_START
+DEFAULT_WINDOW_END = LEGACY_DEFAULT_END
 
 # Phrases that tie an audience window to a real-world event or stint.
 # Conservative on purpose: a false positive turns into a clarify
@@ -122,9 +128,40 @@ def format_window_label(start, end):
             f"{_MONTHS[d2.month - 1]} {d2.day}, {d2.year}")
 
 
-def is_default_window(start, end):
-    return (str(start or "").strip() == DEFAULT_WINDOW_START
-            and str(end or "").strip() == DEFAULT_WINDOW_END)
+def default_window(today=None):
+    """Standing default: trailing 12 calendar months ending today UTC.
+
+    Jenna 2026-09-14: the confirm prompt was still offering the
+    retired Jul 1 2025 to Jun 30 2026 fiscal pair as "the last 12
+    months". The default is the rolling trailing year, not that
+    frozen window.
+    """
+    rel = resolve_relative_window("trailing 12 months", today=today)
+    if rel:
+        return rel[0], rel[1]
+    return LEGACY_DEFAULT_START, LEGACY_DEFAULT_END
+
+
+def default_window_string(today=None):
+    """ISO pair as the engine SAMPLE SIZE form 'START TO END'."""
+    start, end = default_window(today)
+    return f"{start} TO {end}"
+
+
+def is_default_window(start, end, today=None):
+    """True for the current trailing-12 pair OR the retired fiscal pair.
+
+    The fiscal pair stays in the set so leftover interpret drafts
+    that still emit Jul 2025-Jun 2026 are treated as 'no custom
+    window' (event-scoped confident checks, etc.), not as an
+    explicit event range.
+    """
+    s, e = str(start or "").strip(), str(end or "").strip()
+    d1, d2 = default_window(today)
+    return (s, e) in {
+        (d1, d2),
+        (LEGACY_DEFAULT_START, LEGACY_DEFAULT_END),
+    }
 
 
 # ---- Relative windows (2026-08-24, Florida/Iowa trailing-60-days

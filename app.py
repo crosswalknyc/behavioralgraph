@@ -46134,6 +46134,12 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
     _t_minus_90 = (_today - _td(days=90)).isoformat()
     _t_minus_180 = (_today - _td(days=180)).isoformat()
     _t_minus_365 = (_today - _td(days=365)).isoformat()
+    # Standing default is trailing 12 calendar months (Jenna 2026-09-14),
+    # not the retired Jul 1 2025 to Jun 30 2026 fiscal pair.
+    try:
+        _def_start, _def_end = _ew_default_window(_today)
+    except Exception:
+        _def_start, _def_end = _t_minus_365, _today_iso
 
     system_prompt = (
         "You are the Profile Brief Architect for BehavioralGraph's Profile "
@@ -46164,6 +46170,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         f"      past  90 days   -> {{start: {_t_minus_90}, end: {_today_iso}}}\n"
         f"      past 180 days   -> {{start: {_t_minus_180}, end: {_today_iso}}}\n"
         f"      past year (365) -> {{start: {_t_minus_365}, end: {_today_iso}}}\n"
+        f"      trailing 12 months -> {{start: {_def_start}, end: {_def_end}}}\n"
         "  * All events, tour dates, releases, controversies, and\n"
         "    macro trends you cite in `refresh_row_hypothesis` and\n"
         "    `persona_notes` MUST be dated on or before the current\n"
@@ -46930,7 +46937,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"persona_notes\": \"200-500 words of researched persona shape\",\n"
         "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
         "  \"estimated_run_minutes\": <int>,\n"
-        "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" },\n"
+        f"  \"date_range\": {{ \"start\": \"{_def_start}\", \"end\": \"{_def_end}\" }},\n"
         "  \"date_range_explicit\": <true|false>,\n"
         "  \"event_window\": null, // OR, when the request scopes the audience to a real-world event/stint (see EVENT-SCOPED WINDOWS): {\"query\": \"<web-search query that verifies the event dates>\", \"label\": \"<plain framing, e.g. 'her guest-host week'>\", \"confident\": <true|false>, \"candidates\": [{\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\", \"label\": \"...\"}]}\n"
         "  \"subiq\": null, // OR, when the request asks for a Subscriber IQ (see SUBSCRIBER IQ REQUESTS): {\"title\": \"Landman\", \"platform\": \"Paramount+\", \"medium\": \"series|movie\", \"season\": <int or null>, \"genre\": \"Drama\", \"content_cadence\": \"Weekly|Binge|Single Event Telecast\", \"is_new_show\": <bool>, \"air_window\": {\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"} or null, \"air_window_confident\": <bool>, \"episode_dates\": [\"YYYY-MM-DD\", ...] or [], \"movie_scope\": \"theatrical|streaming|since_release\" or null}\n"
@@ -47014,11 +47021,12 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * A Subscriber IQ request NEVER matches an existing Profile "
         "IQ catalog entry - do not emit existing_match for it.\n\n"
 
-        "DEFAULT DATE RANGE - use these unless the user's request "
-        "explicitly names a different window:\n"
-        "  * start: 2025-07-01\n"
-        "  * end:   2026-06-30\n"
-        "  * label the window in `persona_notes` as 'Jul 1 2025 to Jun 30 2026'\n"
+        f"DEFAULT DATE RANGE - trailing 12 months ending today "
+        f"({_today_iso}), unless the user's request explicitly names "
+        f"a different window:\n"
+        f"  * start: {_def_start}\n"
+        f"  * end:   {_def_end}\n"
+        f"  * label the window in `persona_notes` as 'Trailing 12 months'\n"
         "If the user says something like 'for 2024', 'trailing 6 months', "
         "'since March', 'Q4 window', or names an explicit date/month/quarter/"
         "year, use their window instead and echo it back in `date_range` and "
@@ -47596,6 +47604,7 @@ try:
         parse_iso_date as _ew_parse_iso,
         is_default_window as _ew_is_default,
         resolve_relative_window as _ew_resolve_relative,
+        default_window as _ew_default_window,
     )
 except Exception:  # pragma: no cover - twin module missing
     def _ew_detect(text):
@@ -47616,8 +47625,90 @@ except Exception:  # pragma: no cover - twin module missing
     def _ew_resolve_relative(text, today=None):
         return None
 
+    def _ew_default_window(today=None):
+        rel = _ew_resolve_relative('trailing 12 months', today=today)
+        if rel:
+            return rel[0], rel[1]
+        return '2025-07-01', '2026-06-30'
+
 
 _DEFAULT_WINDOW_LABEL = 'Jul 1, 2025 to Jun 30, 2026'
+_LEGACY_FISCAL_START = '2025-07-01'
+_LEGACY_FISCAL_END = '2026-06-30'
+
+
+def _standing_default_dates(today=None):
+    """Trailing 12 calendar months. The standing default as of 2026-09-14."""
+    try:
+        pair = _ew_default_window(today)
+        if pair and pair[0] and pair[1]:
+            return pair[0], pair[1]
+    except Exception:
+        pass
+    return _LEGACY_FISCAL_START, _LEGACY_FISCAL_END
+
+
+def _stamp_default_engine_window(draft, start, end):
+    """Land the standing default on engine_date_range for fresh builds.
+
+    derive_cut / existing_match inherit a parent window and must not
+    get a new engine stamp. Never overwrites a window already routed.
+    """
+    if not isinstance(draft, dict):
+        return
+    dec = str(draft.get('decision') or '').strip().lower()
+    if dec in ('derive_cut', 'existing_match'):
+        return
+    if draft.get('engine_date_range'):
+        return
+    ws = _ew_window_string(start, end)
+    if ws:
+        draft['engine_date_range'] = ws
+
+
+def _apply_standing_default_window(draft):
+    """Bind trailing 12 months onto a draft that still has no real window.
+
+    Rewrites empty ranges and leftover Jul 2025-Jun 2026 fiscal drafts.
+    Does not mark the range explicit (the chat still confirms). Never
+    overwrites an explicit, event-confident, or otherwise custom window.
+    """
+    if not isinstance(draft, dict):
+        return False
+    if draft.get('date_range_explicit'):
+        return False
+    ew = draft.get('event_window')
+    if isinstance(ew, dict) and ew.get('confident'):
+        return False
+    dr = draft.get('date_range') if isinstance(draft.get('date_range'), dict) else {}
+    start = str(dr.get('start') or '').strip()
+    end = str(dr.get('end') or '').strip()
+    ds, de = _standing_default_dates()
+    if (start, end) == (ds, de):
+        _stamp_default_engine_window(draft, ds, de)
+        return False
+    if start and end and (start, end) != (_LEGACY_FISCAL_START, _LEGACY_FISCAL_END):
+        return False
+    draft['date_range'] = {'start': ds, 'end': de}
+    _stamp_default_engine_window(draft, ds, de)
+    return True
+
+
+def _proposed_range_from_drafts(drafts):
+    """Apply the standing default, then return {start, end} for the confirm."""
+    ds, de = _standing_default_dates()
+    first = {}
+    for d in drafts or []:
+        if not isinstance(d, dict):
+            continue
+        _apply_standing_default_window(d)
+        if not first:
+            first = d.get('date_range') or {}
+    return {
+        'start': first.get('start') or ds,
+        'end': first.get('end') or de,
+    }
+
 
 # Parent-window cache for cut confirmations: s3_key -> plain label.
 # A Range GET of the first 8KB covers the SAMPLE SIZE row (always in
@@ -49971,6 +50062,7 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             # this only that one subject got the stated window.
             _bind_shared_explicit_window(spec_draft, prompt_text,
                                          decision=_dn)
+            _apply_standing_default_window(spec_draft)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
         # Semantic bind-or-ask guards (2026-08-25): array elements are
@@ -50095,10 +50187,7 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
                      for i, d in enumerate(drafts)],
         'needs_date_clarification': bool(drafts) and not (
             user_explicit or claude_explicit),
-        'proposed_date_range': {
-            'start': _dr0.get('start') or '2025-07-01',
-            'end': _dr0.get('end') or '2026-06-30',
-        },
+        'proposed_date_range': _proposed_range_from_drafts(drafts),
         'spec_drafts': drafts,
         'per_subject_meta': [
             {
@@ -50322,10 +50411,8 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     _dr0 = {}
     if ok_drafts:
         _dr0 = (ok_drafts[0].get('spec_draft') or {}).get('date_range') or {}
-    proposed_range = {
-        'start': _dr0.get('start') or '2025-07-01',
-        'end': _dr0.get('end') or '2026-06-30',
-    }
+    proposed_range = _proposed_range_from_drafts(
+        [r.get('spec_draft') for r in ok_drafts])
 
     if failures:
         _chatbot_error_email(
@@ -51787,8 +51874,8 @@ def _synth_chat_cut_strategist(draft):
     except (TypeError, ValueError):
         pass
     dr = draft.get('date_range') or {}
-    window = f"{dr.get('start') or '2025-07-01'} to " \
-             f"{dr.get('end') or '2026-06-30'}"
+    _ds, _de = _standing_default_dates()
+    window = f"{dr.get('start') or _ds} to {dr.get('end') or _de}"
     fallback_msg = (
         "Want any add-on cuts beyond the standard build? Female "
         "only, male only, by generation, an age band, or a specific "
@@ -54626,11 +54713,7 @@ def api_synth_chat_interpret():
                 'event_window': spec_draft.get('event_window'),
             })
 
-        dr = spec_draft.get('date_range') or {}
-        proposed_range = {
-            'start': dr.get('start') or '2025-07-01',
-            'end': dr.get('end') or '2026-06-30',
-        }
+        proposed_range = _proposed_range_from_drafts([spec_draft])
         subject_label = (
             spec_draft.get('subject')
             or spec_draft.get('name')
@@ -54700,6 +54783,7 @@ def api_synth_chat_interpret():
                                   decision=_dec_norm)
             _bind_shared_explicit_window(spec_draft, text,
                                          decision=_dec_norm)
+            _apply_standing_default_window(spec_draft)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         # Subscriber IQ dates/season guard (2026-08-25): researches the
         # real air window, flags a season still in progress as 'Season
@@ -55818,10 +55902,25 @@ def _spec_from_draft(draft):
     # cut_needs_parent PARENT still builds on the default window. An
     # unresolved `event_window_query` is resolved by the engine host
     # pre-build (migration/event_window.ensure_event_window_resolved).
+    _win_str = globals().get('_ew_window_string') or (
+        lambda a, b: f"{a} TO {b}" if a and b else '')
+    _def_dates = globals().get('_standing_default_dates') or (
+        lambda today=None: ('2025-07-01', '2026-06-30'))
     if draft.get('engine_date_range'):
         spec['date_range'] = _scrub(draft['engine_date_range'],
                                     field='date_range', subject=subject,
                                     max_len=60, single_line=True)
+    elif isinstance(draft.get('date_range'), dict):
+        _drs = str((draft.get('date_range') or {}).get('start') or '').strip()
+        _dre = str((draft.get('date_range') or {}).get('end') or '').strip()
+        _drw = _win_str(_drs, _dre)
+        if _drw:
+            spec['date_range'] = _scrub(_drw, field='date_range',
+                                        subject=subject, max_len=60,
+                                        single_line=True)
+        else:
+            _ds, _de = _def_dates()
+            spec['date_range'] = f"{_ds} TO {_de}"
     elif _dr_from_subject:
         # A 'Date Range: X to Y' clause the user wrote into the subject
         # line itself (2026-09-10 Audible defect). The interpret step
@@ -55833,6 +55932,12 @@ def _spec_from_draft(draft):
         spec['date_range'] = _dr_from_subject
         print(f"[spec-guard] date_range recovered from subject clause: "
               f"{_dr_from_subject}")
+    else:
+        _dec = str(draft.get('decision') or '').strip().lower()
+        if _dec in ('new_build', 'time_shifted_refresh',
+                    'cut_needs_parent', ''):
+            _ds, _de = _def_dates()
+            spec['date_range'] = f"{_ds} TO {_de}"
     if draft.get('cut_date_range'):
         spec['cut_date_range'] = _scrub(draft['cut_date_range'],
                                         field='cut_date_range',
@@ -64404,6 +64509,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     if _ev_state != 'confident':
         _bind_relative_window(draft, prompt, decision=decision)
         _bind_shared_explicit_window(draft, prompt, decision=decision)
+        _apply_standing_default_window(draft)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
     # `cuts` was computed above (deliverable defs only), BEFORE the

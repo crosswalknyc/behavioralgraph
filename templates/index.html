@@ -72577,6 +72577,25 @@ https://www.instagram.com/p/..."></textarea>
             return _fmt(range.start) + ' to ' + _fmt(range.end);
         }
 
+        // Standing default: trailing 12 calendar months ending today.
+        // Used only when proposed_date_range is missing; the server
+        // pair is authoritative when present.
+        function _synthChatTrailing12Range() {
+            var end = new Date();
+            var y = end.getFullYear(), m = end.getMonth(), d = end.getDate();
+            var last = new Date(y - 1, m + 1, 0).getDate();
+            var sd = Math.min(d, last);
+            function iso(yy, mm, dd) {
+                return yy + '-' + String(mm + 1).padStart(2, '0') + '-'
+                    + String(dd).padStart(2, '0');
+            }
+            return {start: iso(y - 1, m, sd), end: iso(y, m, d)};
+        }
+        function _synthChatDefaultRangeLabel(range) {
+            return _synthChatFormatRange(range)
+                || _synthChatFormatRange(_synthChatTrailing12Range());
+        }
+
         // True if user's reply looks like a plain 'yes proceed'
         // ack. When awaiting a date confirmation we short-circuit
         // and release the stashed draft without another Claude
@@ -72595,6 +72614,9 @@ https://www.instagram.com/p/..."></textarea>
                 'use them': 1, 'use those': 1, 'use that': 1,
                 'use the default': 1, 'use defaults': 1,
                 'those work': 1,
+                'trailing 12 months': 1,
+                'last 12 months': 1,
+                'the last 12 months': 1,
             };
             return yes[t] === 1;
         }
@@ -72713,7 +72735,7 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatStashedProposedRange = _d.proposed_date_range || null;
                 synthChatAwaitingDateConfirm = true;
                 var _rl = _synthChatFormatRange(synthChatStashedProposedRange)
-                    || 'July 1, 2025 to June 30, 2026';
+                    || _synthChatFormatRange(_synthChatTrailing12Range());
                 var _memChip = null;
                 if (_d.memory_window && _d.memory_window.start &&
                         _d.memory_window.end) {
@@ -72729,12 +72751,12 @@ https://www.instagram.com/p/..."></textarea>
                 _synthChatPushTurnWithMeta('agent',
                     'Which time window should I use for these '
                     + _d.spec_drafts.length + ' profiles?\n\n'
-                    + 'Default: ' + _rl + ' (the last 12 months).\n\n'
+                    + 'Default: Trailing 12 months (' + _rl + ').\n\n'
                     + 'Reply ok to use that, or tell me a different '
                     + 'window (e.g. "for 2024", "trailing 6 months", '
                     + '"Q4 2025").', { options:
                         (_memChip ? [_memChip] : []).concat([
-                        {label: 'Use ' + _rl, send: 'ok'},
+                        {label: 'Trailing 12 months', send: 'ok'},
                         {label: 'Trailing 6 months', send: 'trailing 6 months'}
                     ])});
                 return;
@@ -75693,17 +75715,17 @@ https://www.instagram.com/p/..."></textarea>
                         synthChatAwaitingDateConfirm = true;
                         var bRangeLabel = _synthChatFormatRange(
                             synthChatStashedProposedRange)
-                            || 'July 1, 2025 to June 30, 2026';
+                            || _synthChatFormatRange(_synthChatTrailing12Range());
                         _synthChatPushTurnWithMeta('agent',
                             'Which time window should I use for these '
                             + data.spec_drafts.length + ' profiles?\n\n'
-                            + 'Default: ' + bRangeLabel
-                            + ' (the last 12 months).\n\n'
+                            + 'Default: Trailing 12 months ('
+                            + bRangeLabel + ').\n\n'
                             + 'Reply ok to use that, or tell me a '
                             + 'different window (e.g. "for 2024", '
                             + '"trailing 6 months", "Q4 2025").', { options:
                                 (_memWinChip ? [_memWinChip] : []).concat([
-                                {label: 'Use ' + bRangeLabel, send: 'ok'},
+                                {label: 'Trailing 12 months', send: 'ok'},
                                 {label: 'Trailing 6 months', send: 'trailing 6 months'}
                             ])});
                         return;
@@ -75722,17 +75744,17 @@ https://www.instagram.com/p/..."></textarea>
                         || 'this profile';
                     var rangeLabel = _synthChatFormatRange(
                         synthChatStashedProposedRange)
-                        || 'July 1, 2025 to June 30, 2026';
+                        || _synthChatFormatRange(_synthChatTrailing12Range());
                     var msg = 'Which time window should I use for '
                         + subj + '?\n\n'
-                        + 'Default: ' + rangeLabel
-                        + ' (the last 12 months).\n\n'
+                        + 'Default: Trailing 12 months ('
+                        + rangeLabel + ').\n\n'
                         + 'Reply ok to use that, or tell me a '
                         + 'different window (e.g. "for 2024", '
                         + '"trailing 6 months", "Q4 2025").';
                     _synthChatPushTurnWithMeta('agent', msg, { options:
                         (_memWinChip ? [_memWinChip] : []).concat([
-                        {label: 'Use ' + rangeLabel, send: 'ok'},
+                        {label: 'Trailing 12 months', send: 'ok'},
                         {label: 'Trailing 6 months', send: 'trailing 6 months'}
                     ])});
                     return;
@@ -75855,7 +75877,7 @@ https://www.instagram.com/p/..."></textarea>
                     || _wd.cut_window_label || '').trim();
                 if (!_wLbl && _wDec !== 'existing_match' && _wDec !== 'derive_cut') {
                     _wLbl = _synthChatFormatRange(_wd.date_range)
-                        || 'July 1, 2025 to June 30, 2026';
+                        || _synthChatFormatRange(_synthChatTrailing12Range());
                 }
                 _winByIdx.push(_wLbl);
                 if (_wLbl && !_winSeen[_wLbl]) {
@@ -77016,7 +77038,7 @@ https://www.instagram.com/p/..."></textarea>
             if (_dec === 'new_build' || _dec === 'time_shifted_refresh' ||
                 _dec === 'cut_needs_parent') {
                 facts.push('Window: ' + (_synthChatFormatRange(s.date_range)
-                    || 'July 1, 2025 to June 30, 2026'));
+                    || _synthChatFormatRange(_synthChatTrailing12Range())));
             }
             var _tuEst = s.subject_raw_tu;
             if (typeof _tuEst === 'number' && _tuEst > 0 &&
