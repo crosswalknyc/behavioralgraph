@@ -176,17 +176,38 @@ def _row_from_episode(e):
 
 def _resolve_series(slug, seasons):
     rows = []
-    want = sorted(seasons) if seasons else range(1, MAX_SEASONS + 1)
-    for s in want:
+
+    # Explicit season list: fetch exactly those (an empty one is just skipped).
+    if seasons is not None:
+        for s in sorted(seasons):
+            for e in _fetch_season(slug, s):
+                r = _row_from_episode(e)
+                if r:
+                    rows.append(r)
+            time.sleep(0.3)
+        return rows
+
+    # "all": Paramount+ often carries only a NON-CONTIGUOUS subset of a show's
+    # seasons (e.g. Wild 'N Out streams seasons 12, 15, 19-21 — nothing earlier).
+    # So we can't stop at the first empty season. Scan from 1, and stop only
+    # after a run of empty seasons that (a) follows at least one populated season
+    # and (b) is long enough to jump internal gaps. Before any hit we keep going
+    # (the catalog may start late), bounded by MAX_SEASONS.
+    GAP_LIMIT = 5              # jumps up to 4 consecutive empty seasons mid-run
+    consecutive_empty, found_any = 0, False
+    for s in range(1, MAX_SEASONS + 1):
         eps = _fetch_season(slug, s)
-        if not eps:
-            if seasons is None:
-                break          # first empty season ends "all" enumeration
-            continue           # a requested season may just be empty
-        for e in eps:
-            r = _row_from_episode(e)
-            if r:
-                rows.append(r)
+        if eps:
+            found_any = True
+            consecutive_empty = 0
+            for e in eps:
+                r = _row_from_episode(e)
+                if r:
+                    rows.append(r)
+        else:
+            consecutive_empty += 1
+            if found_any and consecutive_empty >= GAP_LIMIT:
+                break          # we're past the end of the catalog
         time.sleep(0.3)
     return rows
 

@@ -52,6 +52,8 @@ OVERRIDES = {
     "the summer i turned pretty": "Amazon MGM Studios",
     "robin hood": "Lionsgate Television",
     "project hail mary": "Amazon MGM Studios",
+    "nick cannon presents wild n out": "MTV Entertainment Studios",
+    "wild n out": "MTV Entertainment Studios",
 }
 
 # ── 2. canonical TMDB company name (lowercased) -> your preferred short code ────
