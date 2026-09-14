@@ -19169,7 +19169,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     <!-- Credits Modal -->
     <div class="credits-modal" id="creditsModal" onclick="if(event.target === this) closeCreditsModal()">
         <div class="credits-modal-content">
-            <h2>💳 Your Credits</h2>
+            <div class="credits-eyebrow">Wallet</div>
+            <h2>Your credits.</h2>
             <div class="credits-info">
                 <div class="credits-info-row">
                     <span class="credits-info-label">Available Credits</span>
@@ -19197,21 +19198,20 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             
             <div id="creditsRequestSection">
                 {% if credits != -1 %}
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Need more credits? Top up your wallet in a couple of clicks.
+                <p class="credits-note">
+                    Top up your wallet and the credits land on this account straight away.
                 </p>
                 <button class="request-credits-btn" id="requestCreditsBtn" onclick="goBuyMoreCredits()">
-                    💳 Buy more credits
+                    Buy more credits
                 </button>
+                <p class="credits-subnote">Opens the secure payment page.</p>
                 {% else %}
-                <p style="color: var(--accent-lime); font-size: 0.9rem;">
-                    ✨ You have unlimited credits!
-                </p>
+                <p class="credits-unlimited">You have unlimited credits.</p>
                 {% endif %}
             </div>
             
             <div id="creditsSuccessMessage" class="credits-success-message" style="display: none;">
-                <p style="margin: 0 0 0.5rem 0; font-weight: 600;">✅ Request Sent!</p>
+                <p style="margin: 0 0 0.5rem 0; font-weight: 700;">Request sent.</p>
                 <p style="margin: 0; font-size: 0.85rem;">Your request for more credits has been sent. Someone will reach out to you shortly.</p>
             </div>
             
@@ -19224,9 +19224,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                 </p>
             </div>
             
-            <button onclick="closeCreditsModal()" style="margin-top: 1.5rem; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1.5rem; border-radius: 6px; cursor: pointer;">
-                Close
-            </button>
+            <button class="credits-close-btn" onclick="closeCreditsModal()">Close</button>
         </div>
     </div>
     
@@ -25889,6 +25887,207 @@ https://www.instagram.com/p/..."></textarea>
         .view-nav-group-trigger:hover { background: #1B2F35 !important; color: #E9E8E1 !important; }
         body[data-theme="light"] .view-nav-group-trigger:hover { background: #F4F3EE !important; color: #0C1618 !important; }
         .view-nav-trigger { text-transform: uppercase !important; }
+
+        /* ================================================================
+           Credits modal, brand system. Replaces the navy card, the lime
+           heading and the emoji with Graphite / Slate / Signal Green.
+           ================================================================ */
+        .credits-modal {
+            background: rgba(12, 22, 24, 0.78) !important;
+            backdrop-filter: blur(4px);
+        }
+        .credits-modal-content {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 14px !important;
+            padding: 26px 26px 22px !important;
+            max-width: 420px !important;
+            text-align: left !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
+        }
+        body[data-theme="light"] .credits-modal-content {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            box-shadow: 0 28px 70px rgba(12, 22, 24, 0.18);
+        }
+        .credits-eyebrow {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #7C878A;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .credits-eyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+        }
+        body[data-theme="light"] .credits-eyebrow::before { background: #5E7E12; }
+        .credits-modal-content h2 {
+            margin: 0 0 18px !important;
+            color: #E9E8E1 !important;
+            font-size: 22px !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.025em !important;
+            text-transform: none !important;
+        }
+        body[data-theme="light"] .credits-modal-content h2 { color: #0C1618 !important; }
+        .credits-info {
+            background: #0C1618 !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 10px !important;
+            padding: 4px 14px !important;
+            margin: 0 0 18px !important;
+        }
+        body[data-theme="light"] .credits-info {
+            background: #F4F3EE !important;
+            border-color: #C9C6BA !important;
+        }
+        .credits-info-row {
+            padding: 11px 0 !important;
+            border-bottom: 1px solid rgba(233, 232, 225, 0.07) !important;
+            align-items: center;
+        }
+        body[data-theme="light"] .credits-info-row { border-bottom-color: rgba(12, 22, 24, 0.08) !important; }
+        .credits-info-label {
+            color: #7C878A !important;
+            font-size: 10px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.14em !important;
+            text-transform: uppercase !important;
+        }
+        .credits-info-value {
+            color: #E9E8E1 !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.01em !important;
+        }
+        body[data-theme="light"] .credits-info-value { color: #0C1618 !important; }
+        /* The balance is the number people came to read. */
+        #modalCreditsAvailable { color: #C7F23E !important; }
+        body[data-theme="light"] #modalCreditsAvailable { color: #5E7E12 !important; }
+        .credits-used-row { margin: 0 -8px; padding-left: 8px !important; padding-right: 8px !important; }
+        .credits-used-row:hover {
+            background: rgba(233, 232, 225, 0.04) !important;
+            border-radius: 6px;
+        }
+        .credits-used-chevron {
+            width: 18px !important;
+            height: 18px !important;
+            font-size: 9px !important;
+            color: #7C878A !important;
+            background: transparent !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 5px !important;
+        }
+        .credits-used-row:hover .credits-used-chevron {
+            color: #C7F23E !important;
+            border-color: rgba(199, 242, 62, 0.45) !important;
+            background: transparent !important;
+        }
+        .credits-note {
+            color: #9AA09B !important;
+            font-size: 12.5px !important;
+            line-height: 1.5 !important;
+            margin: 0 0 12px !important;
+        }
+        body[data-theme="light"] .credits-note { color: #5C6560 !important; }
+        .credits-subnote {
+            color: #7C878A !important;
+            font-size: 10px !important;
+            letter-spacing: 0.14em !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            margin: 9px 0 0 !important;
+            text-align: center;
+        }
+        .credits-unlimited {
+            color: #C7F23E !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            margin: 0 !important;
+        }
+        body[data-theme="light"] .credits-unlimited { color: #5E7E12 !important; }
+        /* Signal Green may fill a control on the dark ground. */
+        .request-credits-btn {
+            background: #C7F23E !important;
+            color: #0C1618 !important;
+            border: 0 !important;
+            border-radius: 8px !important;
+            padding: 12px 18px !important;
+            margin-top: 0 !important;
+            font-family: inherit !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.1em !important;
+            text-transform: uppercase !important;
+            transition: filter 140ms ease;
+        }
+        .request-credits-btn:hover {
+            transform: none !important;
+            box-shadow: none !important;
+            filter: brightness(1.08);
+        }
+        body[data-theme="light"] .request-credits-btn {
+            background: #5E7E12 !important;
+            color: #E9E8E1 !important;
+        }
+        .credits-contact-info {
+            margin-top: 18px !important;
+            padding-top: 14px !important;
+            border-top: 1px solid #3B3D38 !important;
+            color: #7C878A !important;
+            font-size: 11.5px !important;
+            line-height: 1.6 !important;
+        }
+        body[data-theme="light"] .credits-contact-info { border-top-color: #C9C6BA !important; color: #5C6560 !important; }
+        .credits-contact-info strong { color: #E9E8E1 !important; font-weight: 700 !important; }
+        body[data-theme="light"] .credits-contact-info strong { color: #0C1618 !important; }
+        .credits-contact-info a { color: #C7F23E !important; }
+        body[data-theme="light"] .credits-contact-info a { color: #5E7E12 !important; }
+        .credits-success-message {
+            background: rgba(199, 242, 62, 0.08) !important;
+            border: 1px solid rgba(199, 242, 62, 0.35) !important;
+            border-radius: 8px !important;
+            color: #E9E8E1 !important;
+            font-size: 12.5px !important;
+        }
+        .credits-close-btn {
+            margin-top: 18px;
+            width: 100%;
+            background: transparent;
+            border: 1px solid #3B3D38;
+            color: #9AA09B;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: border-color 140ms ease, color 140ms ease;
+        }
+        .credits-close-btn:hover { border-color: #7C878A; color: #E9E8E1; }
+        body[data-theme="light"] .credits-close-btn { border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] .credits-close-btn:hover { color: #0C1618; }
+        #creditUsageDetail {
+            background: #0C1618 !important;
+            border-color: #3B3D38 !important;
+            border-radius: 10px !important;
+        }
+        body[data-theme="light"] #creditUsageDetail {
+            background: #F4F3EE !important;
+            border-color: #C9C6BA !important;
+        }
+
 
 
 
