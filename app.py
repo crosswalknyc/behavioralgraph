@@ -53873,6 +53873,30 @@ def _ask_infer_route_outcome(surface, payload, status_code):
     return route, outcome, subject
 
 
+# Views where the subject describes what the ask is ABOUT. Elsewhere
+# the handlers still resolve a subject in order to answer (page
+# context, cross-session memory), but it is whatever the reader had
+# open last rather than the topic of this question.
+_ASK_SUBJECT_VIEWS = {'profileIQ', 'subscriberIQ', 'journeyIQ'}
+
+_ASK_SUBJ_STOP = {'the', 'a', 'an', 'and', 'of', 'show', 'series',
+                  'movie', 'audience', 'fans', 'viewers', 'profile'}
+
+
+def _ask_mentions_subject(question, subject):
+    """The ask names the subject, so recording it is meaningful even
+    on a view that does not own one ("how is Shark Tank trending" in
+    Trends IQ). Any distinctive subject token is enough."""
+    try:
+        q = re.sub(r'[^a-z0-9 ]+', ' ', str(question or '').lower())
+        toks = [t for t in re.sub(r'[^a-z0-9 ]+', ' ',
+                                  str(subject or '').lower()).split()
+                if len(t) >= 4 and t not in _ASK_SUBJ_STOP]
+        return any(t in q for t in toks)
+    except Exception:
+        return True
+
+
 def _ask_logged(surface):
     """Wrap a chatbot route so every question is recorded to the ask
     log with route, outcome, and response time. Fire-and-forget."""
@@ -53915,6 +53939,19 @@ def _ask_logged(surface):
                 outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
                 subject = getattr(_g, '_pm_ask_subject', None) or subject
                 mode = getattr(_g, '_pm_ask_mode', None) or mode
+                # Do not record a subject the view cannot own
+                # (2026-09-14). Week 2026-W37 filed three Trends IQ
+                # asks about DNC news coverage under subject 'shark
+                # tank' and two about MMA under 'the twilight saga',
+                # because the field held the last profile the reader
+                # opened. The weekly review then grouped them and
+                # proposed teaching replay on those pairs, which would
+                # have served a Shark Tank read to a news question.
+                # An ask that names the subject keeps it, and an
+                # unknown view keeps it rather than lose real data.
+                if subject and view and view not in _ASK_SUBJECT_VIEWS \
+                        and not _ask_mentions_subject(question, subject):
+                    subject = None
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=(session.get('username') or 'unknown'),
