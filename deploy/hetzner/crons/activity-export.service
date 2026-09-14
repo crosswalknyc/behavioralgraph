@@ -1,0 +1,36 @@
+[Unit]
+# Scheduled activity CSV exports + Fin IQ alpha-ideas + digest.
+#
+# Migrated from Render cron `activity-export-cron` (crn-d6kti6lactks73a5ngv0).
+# On Render this ran `python run_activity_export_cron.py` which:
+#   1. Wakes the web service (a Render starter-plan concession)
+#   2. POSTs /api/cron/run-activity-export-jobs with X-Cron-Secret header
+#   3. POSTs /api/cron/hf-alpha-ideas for Fin IQ
+#
+# The wake-up step is a no-op on Hetzner (no cold starts), but the runner
+# script is idempotent so we keep using it verbatim.
+#
+# NOTE: this cron is currently SUSPENDED on Render (Jenna suspended it
+# on 2026-06-05). This unit is installed on Hetzner but NOT enabled by
+# default; enable at cutover if Jenna wants it running again.
+
+Description=Scheduled activity CSV exports + Fin IQ alpha-ideas
+After=network-online.target bg-webapp.service
+Wants=network-online.target
+Requires=bg-webapp.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/bg-webapp
+EnvironmentFile=/etc/bg-webapp/env
+# Point the runner at the local nginx (not the Render URL).
+Environment=APP_URL=http://127.0.0.1
+# 30-minute timeout is plenty; exports finish in single-digit minutes.
+TimeoutStartSec=1800
+ExecStart=/opt/bg-webapp/.venv/bin/python run_activity_export_cron.py
+StandardOutput=append:/var/log/activity-export-cron.log
+StandardError=append:/var/log/activity-export-cron.log
+
+[Install]
+WantedBy=multi-user.target

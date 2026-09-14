@@ -401,12 +401,26 @@ def enforce_mpb_deband(df, subject=None, verbose=True,
     m = df["Column"] == "MOST PURCHASED BRANDS"
     if not m.any():
         return df, 0
-    idxs = df.index[m].tolist()
-    bps = pd.to_numeric(df.loc[idxs, "Brand Penetration (Row)"],
-                         errors="coerce").fillna(0.0)
+    idxs_all = df.index[m].tolist()
+    bps_all = pd.to_numeric(df.loc[idxs_all, "Brand Penetration (Row)"],
+                            errors="coerce").fillna(0.0)
+
+    # 2026-08-29 (Bethenny / Automotive Aftermarket avid holds): a mass
+    # of NEAR-ZERO rows is NOT the banding pathology this enforcer
+    # exists for. Banding = weak-signal brands piled into a generic
+    # MIDDLE band; near-zero rows are deliberate "negligible" reads
+    # (on derived cuts, parent-anchored fallbacks). Re-spreading them
+    # up through the p05/p50/p95 map fabricated 1-8% penetrations for
+    # hundreds of long-tail brands, which on cuts blew straight past
+    # the parent subset ceiling (I12) at the terminal gate. Near-zero
+    # rows are excluded from both collapse detection and the re-spread;
+    # they keep their values.
+    NEARZERO_BP = 0.15
+    idxs = [i for i in idxs_all if float(bps_all.loc[i]) >= NEARZERO_BP]
+    bps = bps_all.loc[idxs]
     n = len(idxs)
     if n < 30:
-        return df, 0  # too few brands to worry about banding
+        return df, 0  # too few brands (above near-zero) for banding
 
     # Detect collapse
     sorted_bps = sorted(bps.tolist())
@@ -466,7 +480,18 @@ def enforce_mpb_deband(df, subject=None, verbose=True,
             if top_min is not None:
                 new_vals[k] = min(new_vals[k], top_min * 0.995)
 
-    new_vals = np.maximum(new_vals, 0.05)
+    # Salted floor (2026-08-29): the old flat np.maximum(new_vals, 0.05)
+    # pinned every floored row at exactly 0.0500 - a rule-1 violation
+    # the terminal gate flags as a G4 within-category collision cluster
+    # (564 rows on the Automotive Aftermarket avid). Floor each row at
+    # a subject+brand-salted value in [0.021, 0.079] instead; the
+    # re-sort below restores monotone ordering.
+    for k in range(n):
+        brand = df.at[order[k], "Value"]
+        lo = 0.021 + abs(_jitter(subj_key, "mpb-deband-floor", brand,
+                                 amp=0.058))
+        if new_vals[k] < lo:
+            new_vals[k] = lo
     new_vals.sort()  # preserve ordinal ordering
 
     for k, row_idx in enumerate(order):
@@ -476,8 +501,10 @@ def enforce_mpb_deband(df, subject=None, verbose=True,
 
     if verbose:
         subj = f"[{subject}]" if subject else ""
+        n_nearzero = len(idxs_all) - n
         print(f"   🌈 enforce_mpb_deband {subj}: re-spread {n} MPB brands "
-              f"(max cluster in {cluster_window}pp: {max_cluster} -> "
+              f"({n_nearzero} near-zero row(s) excluded, kept as-is; "
+              f"max cluster in {cluster_window}pp: {max_cluster} -> "
               f"{cluster_size - 1}); p05={p05:.3f} p50={p50:.3f} p95={p95:.3f}")
     return df, 1
 

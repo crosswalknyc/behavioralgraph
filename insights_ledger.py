@@ -737,12 +737,56 @@ _ASK_FAMILY_RULES = (
                     'tune', 'viewing')),
     ('revenue', ('revenue', 'arpu')),
     ('engagement', ('engagement', 'session', 'follow')),
+    # 2026-09-14: week 2026-W37 classified ZERO of 38 asks, so replay
+    # could not fire on anything and every repeat ask paid for a full
+    # read. The seven families above cover behaviour verbs but nothing
+    # covered the way people actually ask ("what is the gender split",
+    # "top QSR brands", "generate a seed for meta advertising", "how
+    # does she compare to the other 3 profiles").
+    #
+    # These sit AFTER the originals on purpose: first match wins, so
+    # "what brands do they buy" stays a purchases ask and "what are
+    # they watching" stays viewership. Vocabulary is kept narrow and
+    # unambiguous - a broad catch-all here would let replay serve one
+    # ask's answer to a different ask, which is worse than a slow
+    # correct read. Genuinely ambiguous asks ("give me the full read
+    # on this data") still return None and are never replayed on
+    # family alone.
+    #
+    # Substring matching is how this table works ('purchas' catches
+    # purchase and purchasing), so short words that hide inside other
+    # words are avoided: no bare 'race' (racing, grace), no bare
+    # 'demo' (democrat), no bare 'age' (average, engagement, usage).
+    ('demographics', ('gender split', 'gender breakdown', 'gender skew',
+                      'male female', 'men vs women', 'women vs men',
+                      'age breakdown', 'age skew', 'age range',
+                      'age split', 'how old', 'ethnicity', 'ethnic',
+                      'income', 'hhi', 'education', 'household size',
+                      'marital', 'parental status', 'demographic',
+                      'demos', 'skew younger', 'skew older')),
+    ('brand_rank', ('top brands', 'which brands', 'what brands',
+                    'brands index', 'index highest', 'indexes highest',
+                    'over index', 'overindex', 'over-index',
+                    'strongest brands', 'brand affinity',
+                    'top retailers', 'top qsr', 'punches above')),
+    ('activation', ('seed', 'segment for', 'activate', 'activation',
+                    'media plan', 'targeting', 'lookalike',
+                    'make money', 'making money', 'monetize',
+                    'monetise', 'sell against', 'pitch to',
+                    'sponsorship')),
+    ('comparison', ('compare', 'comparison', 'versus', ' vs ',
+                    'side by side', 'against the other', 'differ from',
+                    'overlap with', 'stack up')),
 )
 _DIM_STOP = {'category', 'categories', 'share', 'mix', 'breakdown',
              'of', 'the', 'by', 'top'}
 _DIM_CLASS_WORDS = ('brand', 'retailer', 'store', 'platform', 'market',
                     'dma', 'city', 'state', 'genre', 'network',
                     'channel')
+# Demographic slice words, checked on word boundaries in
+# _dimension_ok so a stored gender table never serves an age ask.
+_DIM_SLICE_WORDS = ('gender', 'age', 'ages', 'income', 'ethnicity',
+                    'education', 'household', 'parental', 'marital')
 
 
 def cohort_signature(text):
@@ -798,6 +842,20 @@ def _dimension_ok(entry, qn):
         return False
     for c in _DIM_CLASS_WORDS:
         if c in qn and c not in dim:
+            return False
+    # Demographic slices need the same conflict check as the class
+    # words above, added 2026-09-14 alongside the 'demographics'
+    # family: without it a stored gender table would satisfy an age
+    # ask, because both now carry the same family and the loop above
+    # only guards brand / retailer / platform style dimensions.
+    #
+    # Matched on word boundaries, not as substrings, because these are
+    # short and hide inside common words ('age' in average, usage and
+    # engagement; 'income' is safe but the others are not worth the
+    # risk of an inconsistent rule).
+    for c in _DIM_SLICE_WORDS:
+        if re.search(r'\b' + c + r'\b', qn) \
+                and not re.search(r'\b' + c, dim):
             return False
     return True
 

@@ -47,11 +47,11 @@
         ]
       },
       {
-        "text": " This collection model is classified as Zero Party Data because consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
+        "text": " This collection model runs on consented opt-in panel data: consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
         "is_list": false,
         "runs": [
           {
-            "text": " This collection model is classified as Zero Party Data because consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
+            "text": " This collection model runs on consented opt-in panel data: consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
             "bold": false
           }
         ]
@@ -2537,11 +2537,11 @@
     "title": "Compliance and Consent",
     "intro": [
       {
-        "text": "Crosswalk's products are built on ethically sourced Zero Party Data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. Crosswalk does not purchase email lists, scrape personal data, or ingest data without user authorization.",
+        "text": "Crosswalk's products are built on ethically sourced, consented opt-in panel data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. Crosswalk does not purchase email lists, scrape personal data, or ingest data without user authorization.",
         "is_list": false,
         "runs": [
           {
-            "text": "Crosswalk's products are built on ethically sourced Zero Party Data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. ",
+            "text": "Crosswalk's products are built on ethically sourced, consented opt-in panel data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. ",
             "bold": false
           },
           {
@@ -2591,11 +2591,11 @@
         ]
       },
       {
-        "text": "This collection model is classified as Zero Party Data: information a user knowingly and intentionally shares with a brand.",
+        "text": "This collection model is consented opt-in panel data: information a user knowingly and intentionally shares with a brand.",
         "is_list": false,
         "runs": [
           {
-            "text": "This collection model is classified as Zero Party Data: information a user knowingly and intentionally shares with a brand.",
+            "text": "This collection model is consented opt-in panel data: information a user knowingly and intentionally shares with a brand.",
             "bold": false
           }
         ]

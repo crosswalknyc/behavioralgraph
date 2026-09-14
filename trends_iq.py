@@ -52,6 +52,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import wait as futures_wait
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
@@ -104,6 +105,16 @@ S3_CACHE_BUCKET    = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs'
 S3_CACHE_PREFIX    = os.environ.get('TRENDS_IQ_CACHE_PREFIX', 'trends_iq/cache/')
 CACHE_TTL_S        = int(os.environ.get('TRENDS_IQ_CACHE_TTL', '86400'))      # 24h - matches the daily-cron cadence of the underlying trends_iq_snapshots/latest/ writes. There is no reason to invalidate the aggregated dashboard payload before the next scraper cron produces new upstream snapshots.
 DEFAULT_LOOKBACK_DAYS = int(os.environ.get('TRENDS_IQ_LOOKBACK_DAYS', '1'))
+# compute_view section fan-out budget. A cold recompute right after a
+# cache purge legitimately needs more than the old 45s, so the budget is
+# 90s AND the fan-out is fail-safe (futures_wait never raises): sections
+# that miss the deadline are salvaged as loading placeholders instead of
+# killing the whole view with "N (of M) futures unfinished".
+SECTION_BUDGET_S   = int(os.environ.get('TRENDS_IQ_SECTION_BUDGET_S', '90'))
+# A live payload that shipped with pending sections goes stale after 10
+# minutes instead of the full 24h TTL so the missing panels self-heal on
+# the next recompute once the slow feed recovers.
+PARTIAL_RETRY_TTL_S = int(os.environ.get('TRENDS_IQ_PARTIAL_RETRY_TTL', '600'))
 _HTTP_TIMEOUT_S    = 8
 _UA                = "CrosswalkTrendsIQ/1.0 (+contact: jenna@crosswalknyc.com)"
 
@@ -319,6 +330,12 @@ STREAMING_PLATFORMS = [
     # in the streaming sub-tab strip.
     ('max',        'HBO Max',      False),
     ('primevideo', 'Prime Video',  False),
+    # 2026-09-04: Paramount+ and Peacock. Both ride JustWatch's public
+    # GraphQL (the same no-cookie path the FAST tab uses), so they run
+    # from Hetzner in the daily run_all batch - no residential hop, no
+    # donated session. Slugs follow the disneyplus/espnplus convention.
+    ('paramountplus', 'Paramount+', False),
+    ('peacock',       'Peacock',    False),
     ('espnplus',   'ESPN+',        False),
     # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
     # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
@@ -338,14 +355,70 @@ STREAMING_PLATFORMS = [
     ('starz',      'Starz',        False),
 ]
 
-# 2026-08-20: Gaming tab. First platform is Xbox Game Pass Ultimate;
-# PlayStation Plus / Nintendo Switch Online / Steam trending can slot
-# in here later without touching the frontend or payload shape - they
-# just need a scraper that writes trends_iq_snapshots/latest/{slug}.json
-# with the same {national: [{title, image, publisher, genre, url}, ...]}
-# structure.
+# 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
+# 2026-08-31 added Meta Quest (Top Free + Top Paid) as one grouped pill
+# whose panel renders Free + Paid side-by-side (parity with the FAST
+# tab's Film/TV column split). PlayStation Plus, Nintendo Switch Online,
+# and Steam trending slot in here without touching the frontend or
+# payload shape - each new provider just needs a scraper that writes to
+# `trends_iq_snapshots/latest/{slug}.json`.
+#
+# Tuple shape: (panel_key, panel_label, default_available,
+#               snapshot_slug, source_spec)
+#   panel_key         - Frontend + estimator key. Also the CSV export
+#                       section slug.
+#   panel_label       - Human-readable label rendered on the pill.
+#   default_available - Assume the source is up on first render before
+#                       the snapshot lands (True) vs. show a "warming
+#                       up" state (False).
+#   snapshot_slug     - Name of the S3 snapshot file (without extension).
+#   source_spec       - Controls how items are read out of the snapshot:
+#                         None                          -> read
+#                                                          `snap['national']`
+#                                                          (Xbox pattern);
+#                                                          emit as one
+#                                                          flat `items`
+#                                                          list on the
+#                                                          panel.
+#                         '<source_key>'                -> read
+#                                                          `snap['sources'][source_key]['items']`
+#                                                          (FAST pattern);
+#                                                          emit as one
+#                                                          flat `items`
+#                                                          list.
+#                         [(bucket, source_key), ...]   -> grouped panel.
+#                                                          Read each
+#                                                          `snap['sources'][source_key]`
+#                                                          and emit as
+#                                                          `<bucket>` on
+#                                                          the panel
+#                                                          (frontend
+#                                                          renders each
+#                                                          bucket as its
+#                                                          own column,
+#                                                          mirroring the
+#                                                          FAST Film/TV
+#                                                          split). Meta
+#                                                          Quest uses
+#                                                          this: one
+#                                                          `meta_quest`
+#                                                          pill with
+#                                                          `free` +
+#                                                          `paid`
+#                                                          columns
+#                                                          rendered
+#                                                          side-by-side.
 GAMING_PLATFORMS = [
-    ('xbox_gamepass', 'Xbox Game Pass Ultimate', False),
+    ('xbox_gamepass',  'Xbox Game Pass Ultimate', False, 'xbox_gamepass', None),
+    ('meta_quest',     'Meta Quest',              False, 'meta_quest',
+     [('free', 'meta_quest_free'), ('paid', 'meta_quest_paid')]),
+    # Steam: one pill with two columns (Most Played by 24-hour peak
+    # concurrent, Top Sellers by weekly US revenue). Snapshot shape
+    # matches Meta Quest - one steam_charts.json packs both under
+    # sources[steam_most_played] / sources[steam_top_sellers].
+    ('steam',          'Steam',                   False, 'steam_charts',
+     [('most_played', 'steam_most_played'),
+      ('top_sellers', 'steam_top_sellers')]),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -424,6 +497,65 @@ def _today_iso() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+# ---------------------------------------------------------------------------
+# Ops alerting. On any section timeout or view-level failure the UI shows
+# a neutral loading state; the detail goes to ops by email instead. Jenna
+# and Jessie only (standing rule for failure / system alerts), deduped to
+# one send per alert kind per UTC day via an S3 day stamp.
+# ---------------------------------------------------------------------------
+_OPS_ALERT_EMAILS = ['jenna@crosswalknyc.com', 'jessie@crosswalknyc.com']
+_OPS_ALERT_STAMP_PREFIX = 'trends_iq/state/ops_alert_'
+
+
+def _send_ops_alert(kind: str, subject: str, body: str) -> None:
+    """Best-effort ops email. Never raises, never blocks the view."""
+    try:
+        s3 = _s3_client()
+        stamp_key = f"{_OPS_ALERT_STAMP_PREFIX}{kind}_{_today_iso()}.json"
+        if s3 is not None:
+            try:
+                s3.head_object(Bucket=S3_CACHE_BUCKET, Key=stamp_key)
+                return  # already alerted today for this kind
+            except Exception:
+                pass
+        import boto3  # type: ignore
+        ses = boto3.client('ses', region_name='us-east-2')
+        ses.send_email(
+            Source='BehavioralGraph <jenna@crosswalknyc.com>',
+            Destination={'ToAddresses': list(_OPS_ALERT_EMAILS)},
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {'Text': {'Data': body}},
+            },
+        )
+        if s3 is not None:
+            try:
+                s3.put_object(
+                    Bucket=S3_CACHE_BUCKET, Key=stamp_key,
+                    Body=json.dumps({
+                        'sent_at': datetime.now(timezone.utc).isoformat(),
+                        'subject': subject,
+                    }).encode('utf-8'),
+                    ContentType='application/json')
+            except Exception:
+                pass
+        logger.warning("trends_iq ops alert sent (%s): %s", kind, subject)
+    except Exception as e:
+        logger.debug("trends_iq ops alert failed (%s): %s", kind, e)
+
+
+def notify_compute_failure(detail: str) -> None:
+    """Called by app.py when the Trends IQ data route hits an unexpected
+    exception. The user sees a neutral loading state; ops get the detail."""
+    _send_ops_alert(
+        'compute_failure',
+        'Trends IQ view failed to compute',
+        ('The Trends IQ view hit an unexpected error while computing. '
+         'Users see a loading state and the view retries automatically.\n\n'
+         f'Detail: {detail}\n'
+         f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
+
+
 def _cache_key(filters: dict) -> str:
     """Build the S3 cache key for the given filter tuple.
 
@@ -497,6 +629,65 @@ def _cache_put(filters: dict, payload: dict) -> None:
         logger.debug("trends_iq cache put failed: %s", e)
 
 
+def invalidate_live_compute_view_caches() -> int:
+    """Delete every LIVE (non-historic) compute_view S3 cache entry.
+
+    The compute_view payload is cached at
+    `s3://dashboard-inputs/trends_iq/cache/{hash}.json` for CACHE_TTL_S
+    seconds keyed on the filter tuple (asof + geo_type + geo_value +
+    lookback_days). When an upstream snapshot changes mid-day (e.g. a
+    fresh `lens_scores.json` write from a manual scoring run adding new
+    lenses), those cached payloads still serve the stale view until
+    their `stale_until` elapses. The dashboard then shows the old lens
+    set (or old chart values) for up to 24 hours after a snapshot
+    refresh.
+
+    Rule 0a of `profile-iq-pipeline-rules.mdc` and the no-rebuild-level-
+    correction rule both say: fix in place, never wait. This helper is
+    the fix-in-place - any writer that mutates a `latest/*.json`
+    snapshot should call it so the next dashboard request re-computes
+    against the fresh snapshot.
+
+    Historic entries (`filters.historic == True`) are PERMANENT
+    snapshots of a past day and are NEVER deleted. Only live-view
+    entries get invalidated.
+
+    Returns the number of live cache entries deleted (0 when nothing
+    to invalidate or when S3 isn't reachable - callers can safely
+    ignore the return value).
+    """
+    s3 = _s3_client()
+    if s3 is None:
+        return 0
+    deleted = 0
+    try:
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
+                                          Prefix=S3_CACHE_PREFIX):
+            for obj in page.get('Contents') or []:
+                key = obj.get('Key') or ''
+                if not key.endswith('.json'):
+                    continue
+                try:
+                    resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                    data = json.loads(resp['Body'].read().decode('utf-8'))
+                except Exception:
+                    continue
+                filters = data.get('filters') or {}
+                if bool(filters.get('historic')):
+                    continue
+                try:
+                    s3.delete_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                    deleted += 1
+                except Exception as e:
+                    logger.debug("invalidate: delete %s failed: %s", key, e)
+    except Exception as e:
+        logger.debug("invalidate_live_compute_view_caches failed: %s", e)
+    if deleted:
+        logger.info("invalidated %d live compute_view cache entries", deleted)
+    return deleted
+
+
 # ============================================================================
 # Daily snapshot reader
 # ============================================================================
@@ -557,6 +748,614 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
     return data
 
 
+# ============================================================================
+# Nearest-day fallback for historic streaming reads
+# ============================================================================
+# The date picker can request any archived day, but each streaming
+# platform's dated coverage starts the day its scraper first ran
+# (Paramount+ / Peacock 2026-09-05, BritBox / MGM+ / Starz 2026-08-20)
+# and the residential scrapers have occasional gap days (a dated file
+# can exist with an empty list from a blocked run). Reading only the
+# exact requested day left those platforms rendering as dark panels on
+# any earlier date, and the historic payload caches permanently, so
+# the dark state froze. Standing bar: stale-but-populated beats dark.
+# A historic read therefore falls back to the platform's nearest
+# archived day with usable rows (preferring the closest day, earlier
+# on ties). Live reads (asof=None) never touch this path.
+
+_DATED_INDEX_TTL_S = 600
+_dated_index_cache: dict = {'ts': 0.0, 'by_source': {}}
+
+
+def _dated_snapshot_index() -> dict[str, list[str]]:
+    """Map source slug -> sorted list of archived days (YYYY-MM-DD).
+
+    One paginated listing of the dated snapshot tree, cached
+    in-process for 10 minutes. Only consulted when a historic read
+    misses its exact day, so live views never pay for the listing.
+    """
+    now_ts = time.time()
+    cached = _dated_index_cache['by_source']
+    if cached and now_ts - _dated_index_cache['ts'] < _DATED_INDEX_TTL_S:
+        return cached
+    s3 = _s3_client()
+    if s3 is None:
+        return cached or {}
+    listing_prefix = _SNAPSHOT_DATED_PREFIX.split('{', 1)[0]
+    pat = re.compile(
+        r'^' + re.escape(listing_prefix) +
+        r'(\d{4}-\d{2}-\d{2})/([A-Za-z0-9_]+)\.json$')
+    by_source: dict[str, list[str]] = {}
+    try:
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
+                                          Prefix=listing_prefix):
+            for obj in page.get('Contents') or []:
+                m = pat.match(obj.get('Key') or '')
+                if m:
+                    by_source.setdefault(m.group(2), []).append(m.group(1))
+        for days in by_source.values():
+            days.sort()
+        _dated_index_cache['by_source'] = by_source
+        _dated_index_cache['ts'] = now_ts
+    except Exception as e:
+        logger.debug("trends_iq dated snapshot index failed: %s", e)
+        return cached or {}
+    return by_source
+
+
+def _snapshot_has_stream_items(snap: Optional[dict]) -> bool:
+    """True when a streaming snapshot carries at least one usable row.
+
+    Covers every shape in the fleet: platform scrapers write
+    `national`, Netflix also writes `us_films` / `us_tv`, and the
+    depth extender writes per-platform `sources` blocks. An
+    exists-but-empty dated file (a blocked run from before the
+    preserve-previous guard era) counts as unusable.
+    """
+    if not isinstance(snap, dict):
+        return False
+    if snap.get('national') or snap.get('us_films') or snap.get('us_tv'):
+        return True
+    sources = snap.get('sources')
+    if isinstance(sources, dict):
+        for block in sources.values():
+            if isinstance(block, dict) and (block.get('films')
+                                            or block.get('tv')
+                                            or block.get('items')):
+                return True
+    return False
+
+
+def _read_snapshot_nearest(source: str,
+                            asof: str) -> tuple[Optional[dict], str]:
+    """Historic snapshot read with nearest-archived-day fallback.
+
+    Returns `(snapshot, day_used)`. The exact requested day wins when
+    it has usable rows; otherwise the nearest archived day (by day
+    distance, earlier preferred on ties) with usable rows is served.
+    `day_used` lets the caller stamp row values from the day the rows
+    actually came from. Falls back to `(exact_read, asof)` when no
+    archived day anywhere has usable rows.
+    """
+    snap = _read_snapshot(source, asof)
+    if _snapshot_has_stream_items(snap):
+        return snap, asof
+    days = _dated_snapshot_index().get(source) or []
+    try:
+        want = date.fromisoformat(asof)
+    except Exception:
+        return snap, asof
+    ranked = sorted(
+        (d for d in days if d != asof),
+        key=lambda d: (abs((date.fromisoformat(d) - want).days), d > asof))
+    for day in ranked[:10]:
+        candidate = _read_snapshot(source, day)
+        if _snapshot_has_stream_items(candidate):
+            logger.info(
+                "trends_iq %s: no usable dated snapshot for %s; serving "
+                "nearest archived day %s", source, asof, day)
+            return candidate, day
+    return snap, asof
+
+
+# ============================================================================
+# Window accumulator - cumulative reach across the last N daily snapshots
+# ============================================================================
+# The `stream_estimates.py` scraper produces a per-item DAILY US audience
+# integer every day (`items[key].us_estimate`, `items[key].by_platform.
+# <slug>.us_estimate`). Each daily snapshot lives at
+# `trends_iq_snapshots/{YYYY-MM-DD}/stream_estimates.json` and represents
+# the unique US audience for that single calendar day (researched fresh
+# per item, per day - see the `stream_estimates.py` header for how the
+# daily research is grounded).
+#
+# The WINDOW dropdown at the top of the Trends IQ view (Yesterday /
+# Last 3 days / Last 7 / Last 14 / Last 30) once only relabelled the
+# panel: audience integers on every ranker row were identical across
+# every window because compute_view always read the single `latest/`
+# snapshot.
+#
+# This accumulator solves that by summing the per-item `us_estimate`
+# across the last N daily snapshots. Titles observed on every day of
+# the window sum all N days; a title that only appeared on 3 of the
+# last 30 days sums only those 3 days and its `window_days_covered`
+# field lets the frontend say so in the tooltip.
+#
+# No multiplier, no decay factor, no reach curve - a WINDOW's audience
+# count is a plain sum of DAILY audience counts, each of which was
+# researched with real domain awareness on its own calendar day. Same
+# treatment for every kind (title / fast_channel / song / podcast /
+# ...), so channel-title containment holds by construction: a channel's
+# daily audience is researched aware of the titles that air on it that
+# day, so the sum over N days preserves that ordering as long as
+# per-item coverage aligns.
+#
+# Downstream annotators (`_annotate_music_with_streams`,
+# `_annotate_streaming_with_streams`, `_annotate_fast_channels_with_views`,
+# ...) are unchanged - they read `items[key].us_estimate` and
+# `items[key].by_platform.<slug>.us_estimate` verbatim.
+#
+# Cadence noun in `unit_label` is rewritten to match the window:
+# "daily US listeners" becomes "monthly US listeners" for N=30, etc.
+#
+# lookback_days=1 short-circuits to `None` - the caller falls through
+# to the plain `latest/` read, which is the same day's dated snapshot
+# and therefore the same daily count.
+
+_WINDOW_ACCUMULATOR_MAX_WORKERS = int(
+    os.environ.get('TRENDS_IQ_ACCUM_WORKERS', '8'))
+_WINDOW_ACCUMULATOR_TIMEOUT_S   = int(
+    os.environ.get('TRENDS_IQ_ACCUM_TIMEOUT_S', '90'))
+
+
+# ---------------------------------------------------------------------------
+# Fold-tolerant key matching for window deltas (2026-09-09).
+#
+# The same show drifts between key spellings across days: rails flip
+# between base and season-qualified titles ('tv:leanne' one week,
+# 'tv:leanne season 2' the next), the Netflix published-record history
+# uses the season-qualified convention, and Disney/ESPN rows land under
+# 'title:'. An exact-key join across days therefore misses real
+# history and every miss used to render a dash in the chip column.
+#
+# `_fold_stream_key` strips trailing season/part/volume qualifiers so
+# 'tv:beauty in black season 3' and 'tv:beauty in black' resolve to one
+# cross-day identity. Resolution per day stays EXACT-FIRST: the folded
+# lookup only fires when the exact key carried nothing that day.
+# ---------------------------------------------------------------------------
+
+_STREAM_KEY_QUALIFIER_RE = re.compile(
+    r'\s+(?:season|series|part|volume|vol|chapter)\s+\d+$')
+
+# Kind families that may cross-resolve, mirroring the fallback order
+# `_annotate_streaming_with_streams` / `_annotate_fast_with_streams`
+# already use when stamping rows.
+_FOLD_KIND_FALLBACK = {
+    'film':      ('film', 'tv', 'title'),
+    'tv':        ('tv', 'film', 'title'),
+    'title':     ('title', 'film', 'tv'),
+    'fast_film': ('fast_film', 'fast_tv'),
+    'fast_tv':   ('fast_tv', 'fast_film'),
+}
+
+_fold_key_cache: dict = {}
+
+
+def _fold_stream_key(key: str) -> str:
+    """'tv:my life with walter boys season 3' -> 'tv:my life with
+    walter boys'. Iterative so 'season 2 part 1' fully strips. Keys
+    with no qualifier return unchanged. Cached per process (keys
+    repeat across the ~60 daily snapshots a 30-day window reads)."""
+    cached = _fold_key_cache.get(key)
+    if cached is not None:
+        return cached
+    kind, sep, name = key.partition(':')
+    if sep:
+        prev = None
+        while prev != name:
+            prev = name
+            name = _STREAM_KEY_QUALIFIER_RE.sub('', name)
+        folded = f'{kind}:{name}'
+    else:
+        folded = key
+    if len(_fold_key_cache) < 500_000:
+        _fold_key_cache[key] = folded
+    return folded
+
+
+def _build_day_fold_index(items: dict) -> dict:
+    """{folded_key: entry-with-max-us_estimate} for one day's items.
+    When several exact keys fold to the same identity on the same day
+    (base zombie + season-qualified twin), the largest estimate wins so
+    the folded fallback never undercounts."""
+    out: dict = {}
+    for k, e in (items or {}).items():
+        if not isinstance(e, dict):
+            continue
+        v = e.get('us_estimate')
+        if not isinstance(v, (int, float)) or v <= 0:
+            continue
+        fk = _fold_stream_key(k)
+        cur = out.get(fk)
+        if cur is None or (cur.get('us_estimate') or 0) < v:
+            out[fk] = e
+    return out
+
+
+def _resolve_day_entry(day_items: dict, day_fold: dict,
+                        key: str) -> Optional[dict]:
+    """One day's entry for `key`: exact key first, then the folded
+    identity across the kind-fallback family."""
+    e = day_items.get(key)
+    if isinstance(e, dict) and (e.get('us_estimate') or 0) > 0:
+        return e
+    fk = _fold_stream_key(key)
+    kind, _, name = fk.partition(':')
+    for alt_kind in _FOLD_KIND_FALLBACK.get(kind, (kind,)):
+        e = day_fold.get(f'{alt_kind}:{name}')
+        if isinstance(e, dict):
+            return e
+    return None
+
+
+def _window_delta_fields(cur_sum: float, prev_sum: float,
+                          prev_days_fetched: int) -> Optional[tuple]:
+    """(delta_pct, direction) comparing this window's sum against the
+    immediately preceding equal-length window's sum.
+
+    prev window carried data for this item -> real ratio.
+    prev window fetched but item absent   -> ('new'): first time this
+                                              item carries a measured
+                                              audience in our record.
+    prev window entirely unreachable      -> None: caller leaves the
+                                              stored day-over-day
+                                              fields untouched.
+    """
+    if prev_days_fetched <= 0:
+        return None
+    if prev_sum > 0:
+        pct = (cur_sum - prev_sum) / prev_sum
+        return (round(pct, 4), _direction_for(pct))
+    if cur_sum > 0:
+        return (0.0, 'new')
+    return None
+
+
+def _window_noun_for_days(lookback_days: int) -> str:
+    """Cadence noun that matches the WINDOW dropdown value.
+
+    1  -> "yesterday's"   (WINDOW dropdown "Yesterday" option, value=1)
+    3  -> "3-day"
+    7  -> "weekly"        (matches the underlying scraper cadence)
+    14 -> "2-week"
+    30 -> "monthly"
+
+    Values in between round to the nearest ladder rung. See
+    _tiqWindowNoun in bg-webapp/templates/index.html for the frontend
+    twin (kept in lockstep so a chip's cadence noun matches the sub-
+    label's cadence noun on every rerender).
+    """
+    n = int(lookback_days or 1)
+    if n <= 1:
+        return "yesterday's"
+    if n <= 3:
+        return "3-day"
+    if n <= 7:
+        return "weekly"
+    if n <= 14:
+        return "2-week"
+    return "monthly"
+
+
+_UNIT_LABEL_CADENCE_PREFIXES = (
+    'weekly', 'daily', 'monthly', 'yearly', 'annual',
+)
+
+
+def _rewrite_unit_label(label: Optional[str], noun: str) -> str:
+    """Swap the leading cadence word in a unit_label ("weekly US
+    listeners" -> "<noun> US listeners"). Preserves the tail of the
+    label verbatim.
+
+    Never returns an empty string - if the label was empty or non-str,
+    falls back to `<noun> US audience` so the chip still renders.
+    """
+    if not label or not isinstance(label, str):
+        return f'{noun} US audience'
+    stripped = label.strip()
+    lower = stripped.lower()
+    for cad in _UNIT_LABEL_CADENCE_PREFIXES:
+        if lower.startswith(cad):
+            return noun + stripped[len(cad):]
+    # No cadence prefix (unusual - the scraper always emits one).
+    # Prepend so the chip carries the window noun regardless.
+    return f'{noun} {stripped}'
+
+
+def _accumulate_stream_estimates_over_window(
+        lookback_days: int,
+        asof: Optional[str] = None,
+        today_snap: Optional[dict] = None
+        ) -> Optional[dict]:
+    """Sum per-item `us_estimate` across the last N daily
+    `stream_estimates` snapshots and stamp a window-over-window delta
+    on every item, returning a merged snapshot.
+
+    N = min(max(lookback_days, 1), 30). The reference day is `asof`
+    (when set) or today. Reads dated snapshots via `_read_snapshot(
+    source, asof=DATE)` in parallel; today's dated read falls back to
+    `latest/` when the nightly cron hasn't stamped a dated copy yet
+    (or to `today_snap` when the caller already fetched it).
+
+    Each daily snapshot's `us_estimate` is a DAILY unique-audience
+    count researched fresh for that calendar day (see
+    `stream_estimates.py` for how the daily research is grounded).
+    Summing N daily counts across the window produces the window's
+    unique-audience count as a plain sum with no multiplier and no
+    decay factor.
+
+    DELTAS (2026-09-09 rework). The old behavior inherited the latest
+    day's day-over-day `direction` / `delta_pct` verbatim, so a 30-day
+    chip showed yesterday's movement (or nothing at all when the
+    latest-day entry was merged without trend fields). Now every
+    window's delta is computed here, at query time, from the dated
+    record itself:
+
+        this window's sum  vs  the immediately preceding
+                               equal-length window's sum
+
+    with per-day fold-tolerant key resolution (exact key first, then
+    the season-qualifier-stripped identity - see `_fold_stream_key`)
+    so rails flipping between 'Leanne' and 'Leanne: Season 2' no
+    longer sever an item from its own history. Items with no measured
+    data anywhere in the prior window get direction='new' (the chip
+    renders the NEW treatment); items whose prior window couldn't be
+    fetched at all keep their stored day-over-day fields. The same
+    computation runs per `by_platform` block so platform-scoped rows
+    (a Netflix panel row shows the Netflix-only number) carry a
+    platform-scoped delta. lookback_days=1 runs the same math with a
+    1-day window (today vs yesterday), repairing entries that were
+    merged into `latest/` without trend fields.
+
+    Returns:
+        A merged snapshot whose `items` dict inherits the latest day's
+        entry shape (methods, sources), but whose `us_estimate`,
+        `by_platform.<slug>.us_estimate`, `delta_pct` and `direction`
+        are window-scoped as described above. For N>1 each merged
+        entry also picks up `window_days_covered` / `window_days_total`
+        and a cadence-rewritten `unit_label`; N=1 keeps the daily
+        label and values untouched (only the delta fields are
+        recomputed).
+
+        None when no dated snapshot was reachable at all.
+
+    Rules the caller can rely on:
+      - Non-persistent titles sum only the days they appeared.
+      - Persistent titles get materially larger numbers than their
+        single-day estimate.
+      - Zero external dependencies beyond the existing S3 layer.
+      - Never raises: partial failures degrade to whatever fetched.
+    """
+    try:
+        n = int(lookback_days or 1)
+    except Exception:
+        n = 1
+    # Safety cap: never sum more than 62 dated snapshots per request
+    # (a two-month custom range from the start/end pickers). Larger
+    # windows are aliased to 62-day accumulation ending at the range
+    # end. Was 30 before the range picker shipped (2026-09-09); the
+    # fetch fan-out is 2n reads (window + the preceding equal-length
+    # window for the delta), so this cap is also the memory guard -
+    # raise it only with a leaner per-day fold.
+    n = max(1, min(n, 62))
+
+    # Reference date: asof when provided, otherwise today (UTC).
+    ref_iso = asof or _today_iso()
+    try:
+        ref_date = date.fromisoformat(ref_iso)
+    except Exception:
+        return None
+
+    dated_isos = [(ref_date - timedelta(days=i)).isoformat()
+                  for i in range(n)]
+    # The immediately preceding equal-length window, fetched in the
+    # same pool, so the delta compares window sum vs window sum.
+    prev_isos = [(ref_date - timedelta(days=i)).isoformat()
+                 for i in range(n, 2 * n)]
+    cur_set  = set(dated_isos)
+    prev_set = set(prev_isos)
+
+    def _fetch_one(d_iso: str) -> tuple[str, Optional[dict]]:
+        # Live view: for today's date the dated snapshot may not exist
+        # until the nightly cron runs, so fall back to the already-
+        # fetched `latest/` copy (or a fresh `latest/` read) so we
+        # never lose today's day of data on an accumulated read.
+        snap = _read_snapshot('stream_estimates', asof=d_iso)
+        if snap is None and d_iso == _today_iso():
+            snap = today_snap or _read_snapshot('stream_estimates')
+            # Overnight guard: between UTC midnight and the morning
+            # refresh, the latest copy still belongs to the prior day.
+            # Filing it under today's date would put the same numbers
+            # in both windows and every chip would read a dead 0%.
+            # Hand it back under its real date instead; the day dedupe
+            # below folds it into the right window.
+            if snap:
+                real = str(snap.get('target_date') or '')[:10]
+                if real and real != d_iso:
+                    return real, snap
+        return d_iso, snap
+
+    # Fail-safe fetch: futures_wait never raises, so days that landed
+    # inside the budget are kept even when a straggler read runs long
+    # (the old as_completed(timeout=...) path threw the whole window
+    # away on one slow day AND blocked on executor exit). The executor
+    # is shut down without waiting; straggler threads finish in the
+    # background and are discarded.
+    fetched: list[tuple[str, dict]] = []
+    prev_fetched: list[tuple[str, dict]] = []
+    ex = ThreadPoolExecutor(
+        max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
+        thread_name_prefix='tiq-accum')
+    try:
+        futures = [ex.submit(_fetch_one, d) for d in dated_isos + prev_isos]
+        done, not_done = futures_wait(
+            futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
+        seen_days: set = set()
+        for fut in done:
+            try:
+                d_iso, snap = fut.result()
+            except Exception:
+                continue
+            if snap and isinstance(snap, dict):
+                # One snapshot per calendar day: the overnight guard
+                # can re-date the latest copy onto a day that was also
+                # fetched directly, and a double-counted day would
+                # double the window sum.
+                if d_iso in seen_days:
+                    continue
+                seen_days.add(d_iso)
+                if d_iso in cur_set:
+                    fetched.append((d_iso, snap))
+                elif d_iso in prev_set:
+                    prev_fetched.append((d_iso, snap))
+        if not_done:
+            logger.warning(
+                "trends_iq accumulator: %d of %d dated reads missed the "
+                "%ss budget; summing the days that landed",
+                len(not_done), len(futures), _WINDOW_ACCUMULATOR_TIMEOUT_S)
+    except Exception as e:
+        logger.debug("trends_iq accumulator fetch failed: %s", e)
+        return None
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    if not fetched:
+        return None
+
+    # Sort newest first so the "base" snapshot (whose non-us_estimate
+    # fields survive into the merged output) is the freshest day.
+    fetched.sort(key=lambda t: t[0], reverse=True)
+
+    # Deep-copy the latest snapshot as the shape template. Method /
+    # sources / unit vocab survive verbatim; us_estimate becomes the
+    # window sum and delta_pct / direction become the window-over-
+    # window comparison computed below.
+    try:
+        merged = json.loads(json.dumps(fetched[0][1]))
+    except Exception:
+        merged = dict(fetched[0][1])
+    merged_items = merged.get('items')
+    if not isinstance(merged_items, dict):
+        return None
+
+    # Per-day exact + folded indexes for both windows. Resolution per
+    # target key per day is exact-first, folded fallback (see
+    # `_resolve_day_entry`), so a title keeps its history across key-
+    # spelling drift without ever double-counting a day.
+    cur_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+                for d, snap in fetched]
+    prev_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+                 for d, snap in prev_fetched]
+    prev_days_fetched = len(prev_days)
+
+    noun = _window_noun_for_days(n)
+    stamped = 0
+    for key, entry in merged_items.items():
+        if not isinstance(entry, dict):
+            continue
+        if not isinstance(entry.get('us_estimate'), (int, float)) \
+                or entry.get('us_estimate') <= 0:
+            continue
+
+        cur_sum = 0
+        days_covered = 0
+        slug_cur: dict[str, int] = {}
+        for _d, day_items, day_fold in cur_days:
+            e = _resolve_day_entry(day_items, day_fold, key)
+            if e is None:
+                continue
+            v = e.get('us_estimate')
+            if not isinstance(v, (int, float)) or v <= 0:
+                continue
+            cur_sum += int(v)
+            days_covered += 1
+            bp = e.get('by_platform') or {}
+            if isinstance(bp, dict):
+                for slug, per in bp.items():
+                    if not isinstance(per, dict):
+                        continue
+                    pv = per.get('us_estimate')
+                    if isinstance(pv, (int, float)) and pv > 0:
+                        slug_cur[slug] = slug_cur.get(slug, 0) + int(pv)
+        if cur_sum <= 0:
+            continue
+
+        prev_sum = 0
+        slug_prev: dict[str, int] = {}
+        for _d, day_items, day_fold in prev_days:
+            e = _resolve_day_entry(day_items, day_fold, key)
+            if e is None:
+                continue
+            v = e.get('us_estimate')
+            if not isinstance(v, (int, float)) or v <= 0:
+                continue
+            prev_sum += int(v)
+            bp = e.get('by_platform') or {}
+            if isinstance(bp, dict):
+                for slug, per in bp.items():
+                    if not isinstance(per, dict):
+                        continue
+                    pv = per.get('us_estimate')
+                    if isinstance(pv, (int, float)) and pv > 0:
+                        slug_prev[slug] = slug_prev.get(slug, 0) + int(pv)
+
+        # N=1 keeps the single-day value and daily label untouched;
+        # N>1 swaps in the window sum + coverage + cadence noun.
+        if n > 1:
+            entry['us_estimate']         = cur_sum
+            entry['window_days_covered'] = days_covered
+            entry['window_days_total']   = n
+            entry['unit_label'] = _rewrite_unit_label(
+                entry.get('unit_label'), noun)
+
+        d = _window_delta_fields(cur_sum, prev_sum, prev_days_fetched)
+        if d is not None:
+            entry['delta_pct'], entry['direction'] = d
+            entry['prev_estimate'] = int(prev_sum)
+            entry['prev_date'] = prev_isos[0]
+            stamped += 1
+
+        by_plat = entry.get('by_platform') or {}
+        if isinstance(by_plat, dict):
+            for slug, per in by_plat.items():
+                if not isinstance(per, dict):
+                    continue
+                s_cur = slug_cur.get(slug, 0)
+                if n > 1 and s_cur > 0:
+                    per['us_estimate']         = s_cur
+                    per['window_days_covered'] = days_covered
+                    per['window_days_total']   = n
+                pd = _window_delta_fields(
+                    s_cur, slug_prev.get(slug, 0), prev_days_fetched)
+                if pd is not None:
+                    per['delta_pct'], per['direction'] = pd
+                    per['prev_estimate'] = int(slug_prev.get(slug, 0))
+                    per['prev_date'] = prev_isos[0]
+
+    # Stamp the whole snapshot so log messages and cache lookups can
+    # tell an accumulated read apart from a single-day read.
+    merged['window_lookback_days'] = n
+    merged['window_days_fetched']  = len(fetched)
+    merged['window_prev_days_fetched'] = prev_days_fetched
+    logger.info(
+        "trends_iq stream_estimates accumulator: window=%dd, "
+        "fetched=%d/%d current + %d/%d prior dated snapshots, "
+        "window deltas on %d items",
+        n, len(fetched), n, prev_days_fetched, n, stamped)
+    return merged
+
+
 def _snapshot_items_for_geo(snap: dict, state: Optional[str],
                               keywords: Optional[list[str]] = None) -> list[dict]:
     """Pick the right slice out of a snapshot: state-scoped when the
@@ -577,7 +1376,7 @@ def _snapshot_items_for_geo(snap: dict, state: Optional[str],
 
 
 # ============================================================================
-# Geo keyword expansion — state + DMA -> list of case-insensitive match
+# Geo keyword expansion - state + DMA -> list of case-insensitive match
 # strings used to reorder national feeds so region-relevant items float
 # to the top. Never drops content; only reorders.
 # ============================================================================
@@ -2622,7 +3421,7 @@ def compute_search_movers(state: Optional[str]) -> dict:
                                               -int(r.get('score') or 0)))
 
     for bucket in ('breakout', 'rising', 'falling', 'sustained'):
-        result[bucket] = result[bucket][:25]
+        result[bucket] = result[bucket][:100]
 
     result['available']    = True
     result['today_day']    = today_end or today_start
@@ -2805,7 +3604,7 @@ def _cp_normalize(text: str) -> str:
 # "12.5M weekly US listeners · ↑20% vs yesterday" under the card.
 #
 # Keys are `podcast:<norm>` / `song:<norm(title+artist)>` /
-# `film:<norm>` / `tv:<norm>` — mirrored from
+# `film:<norm>` / `tv:<norm>` - mirrored from
 # `scripts/trends_scrapers/stream_estimates._lookup_key`.
 
 _STREAM_FIELDS = (
@@ -2813,6 +3612,14 @@ _STREAM_FIELDS = (
     'unit_label', 'confidence', 'method', 'sources',
     'delta_pct', 'direction', 'prev_estimate',
     'prev_date', 'as_of_date',
+    # Window-accumulator provenance (2026-09-03). Set only when
+    # `_accumulate_stream_estimates_over_window` has stamped a summed
+    # us_estimate: `window_days_covered` = days the item actually
+    # contributed to the sum; `window_days_total` = N (matches the
+    # WINDOW dropdown). Frontend tooltips can surface the coverage
+    # honestly ("Observed on 3 of last 30 days.") without hedging the
+    # number itself. Rows with lookback_days=1 leave both unset.
+    'window_days_covered', 'window_days_total',
 )
 
 
@@ -2829,6 +3636,12 @@ _DEFAULT_UNIT_BY_KIND = {
     # vs library borrows). The aggregate fallback below is generic; the
     # per-platform stamp prefers `_PLATFORM_UNIT_LABEL` when set.
     'book':    'weekly US audience',
+    # Comics: same pattern as books - the per-platform stamp prefers
+    # a comics-specific unit label from `_PLATFORM_UNIT_LABEL`
+    # (readers on Amazon/Apple, library borrows on Libby). The
+    # aggregate fallback stays 'weekly US readers' since a comic is
+    # almost always read (never listened to like an audiobook).
+    'comic':   'weekly US readers',
     # FAST channels: ad-supported free viewers. Same "views" noun as
     # paid streaming (Nielsen's household definition), but the daily
     # Claude research is calibrated separately against FAST Gauge /
@@ -2846,6 +3659,24 @@ _DEFAULT_UNIT_BY_KIND = {
     # 7 days. Not to be confused with `fast_film` / `fast_tv` which
     # are per-title reach on the same platforms.
     'fast_channel': 'weekly US viewers',
+    # Search / trending person / trending wiki topic. Weekly-US
+    # audience interest counts, not measured behavior on a specific
+    # platform - see `stream_estimates._SEARCH_TERM_PLATFORMS` /
+    # `_TRENDING_PERSON_PLATFORMS` / `_WIKI_TOPIC_PLATFORMS`.
+    'search_term':     'weekly US searchers',
+    'trending_person': 'weekly US audience',
+    'wiki_topic':      'weekly US audience',
+    # Wattpad serialized fiction: unique US readers who opened this
+    # story on Wattpad in the past 7 days. See
+    # `stream_estimates._WATTPAD_PLATFORMS` for anchor language +
+    # per-story ceiling.
+    'wattpad_story':   'weekly US readers',
+    # Goodreads community weekly-read: unique US readers who read this
+    # book in the past 7 days across ALL surfaces (Kindle, print,
+    # audio, library, Goodreads-native), projected from the Goodreads
+    # community weekly-read signal. See
+    # `stream_estimates._GOODREADS_PLATFORMS` for anchor + ceiling.
+    'goodreads_book':  'weekly US readers',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -2863,6 +3694,19 @@ _PLATFORM_UNIT_LABEL = {
     ('book', 'audible'):      'weekly US listeners',
     ('book', 'libby_ebook'):  'weekly US library borrows',
     ('book', 'libby_audio'):  'weekly US library borrows',
+    # Comics
+    ('comic', 'amazon_kindle'): 'weekly US readers',
+    ('comic', 'apple_comics'):  'weekly US readers',
+    ('comic', 'libby_comics'):  'weekly US library comic borrows',
+    # Wattpad serialized fiction: every rail rolls up to the single
+    # `wattpad` platform anchor tier (see
+    # `stream_estimates._WATTPAD_PLATFORMS`). Same "readers" noun as
+    # a Kindle / Apple Books row so the Books tab reads consistently.
+    ('wattpad_story', 'wattpad'): 'weekly US readers',
+    # Goodreads community weekly-read rail: one platform key today
+    # (`goodreads_most_read`). Reader-count unit matches the rest of
+    # the Books tab so cross-panel comparisons read consistently.
+    ('goodreads_book', 'goodreads_most_read'): 'weekly US readers',
 }
 
 
@@ -2889,12 +3733,28 @@ def _stamp_stream_estimate(row: dict, entry: dict,
 
     if per and (per.get('us_estimate') or 0) > 0:
         # Per-platform source of truth.
-        unit_label = (
-            _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
-            or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
-            or entry.get('unit_label')
-            or 'weekly US audience'
-        )
+        # When the window accumulator has run, `entry.unit_label`
+        # already carries the window-cadence noun ("monthly US views")
+        # AND the per-platform block has been summed. Prefer the
+        # accumulator-rewritten label over the (weekly-default)
+        # per-platform-vocab table, so a Netflix row on a 30-day
+        # window reads "monthly US views" instead of the default
+        # weekly noun. Rows without the accumulator (lookback_days=1)
+        # fall back to the vocab table as before.
+        if entry.get('window_days_total'):
+            unit_label = (
+                entry.get('unit_label')
+                or _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
+                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
+                or 'weekly US audience'
+            )
+        else:
+            unit_label = (
+                _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
+                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
+                or entry.get('unit_label')
+                or 'weekly US audience'
+            )
         out = {
             'us_estimate':      per.get('us_estimate'),
             'us_estimate_low':  per.get('us_estimate_low'),
@@ -2912,6 +3772,13 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             'sources':          entry.get('sources'),
             'unit_label':       unit_label,
             'platform':         platform_key,
+            # Window accumulator provenance (2026-09-03). Per-platform
+            # block picks up its own `window_days_covered` (days the
+            # per-platform value contributed) and inherits the
+            # entry-level `window_days_total` (N).
+            'window_days_covered': per.get('window_days_covered'),
+            'window_days_total':   per.get('window_days_total')
+                                     or entry.get('window_days_total'),
         }
     else:
         # Fallback to aggregate. This still preserves old-snapshot
@@ -2939,11 +3806,12 @@ _MUSIC_PANEL_TO_PLATFORM = {
     # per-track streams, so they get the aggregate (or nothing).
 }
 _PODCAST_PANEL_TO_PLATFORM = {
-    'apple':   'apple',
-    'spotify': 'spotify',
-    'netflix': 'netflix',
-    'amazon':  'amazon',
-    'audible': 'audible',
+    'apple':            'apple',
+    'spotify':          'spotify',
+    'youtube_podcasts': 'youtube_podcasts',
+    'netflix':          'netflix',
+    'amazon':           'amazon',
+    'audible':          'audible',
 }
 _STREAMING_PANEL_TO_PLATFORM = {
     'netflix':    'netflix',
@@ -2955,6 +3823,8 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'britbox':    'britbox',
     'mgmplus':    'mgmplus',
     'starz':      'starz',
+    'paramountplus': 'paramountplus',
+    'peacock':       'peacock',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
@@ -2967,12 +3837,33 @@ _FAST_PANEL_TO_PLATFORM = {
     'pluto':  'pluto',
     'amazon': 'amazon',
 }
-# Gaming: currently one platform. Same shape as the other tabs so
-# adding PS Plus / Nintendo Switch Online / Steam later is a
-# one-line addition here (plus a new platform entry in
-# stream_estimates._GAMING_PLATFORMS_META).
+# Gaming: two pills today (Xbox Game Pass Ultimate; Meta Quest -
+# whose panel splits into Free / Paid columns). Adding PS Plus /
+# Nintendo Switch Online / Steam later is a one-line addition here
+# (plus a new platform entry in stream_estimates._GAMING_PLATFORMS_META).
+#
+# The lookup key here matches the stream_estimates platform `key`
+# value in `_GAMING_PLATFORMS_META`. For single-list panels (Xbox)
+# the panel_slug and platform key are identical. For grouped panels
+# (Meta Quest) the platform key is per-bucket (meta_quest_free,
+# meta_quest_paid) - the annotator walks each bucket separately via
+# `_GAMING_PANEL_BUCKETS` below so Free rows anchor to the Free
+# ceiling and Paid rows anchor to the Paid ceiling.
 _GAMING_PANEL_TO_PLATFORM = {
-    'xbox_gamepass': 'xbox_gamepass',
+    'xbox_gamepass':    'xbox_gamepass',
+    'meta_quest_free':  'meta_quest_free',
+    'meta_quest_paid':  'meta_quest_paid',
+    'steam_most_played': 'steam_most_played',
+    'steam_top_sellers': 'steam_top_sellers',
+}
+# For grouped Gaming panels: which bucket names on the panel map to
+# which stream_estimates platform key. Non-grouped panels are absent
+# from this dict; the annotator falls back to the single-list walk.
+_GAMING_PANEL_BUCKETS = {
+    'meta_quest': [('free', 'meta_quest_free'),
+                    ('paid', 'meta_quest_paid')],
+    'steam':      [('most_played', 'steam_most_played'),
+                    ('top_sellers', 'steam_top_sellers')],
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book
@@ -2994,6 +3885,36 @@ _LIBBY_PANEL_TO_PLATFORM = {
     'ebook':     'libby_ebook',
     'audiobook': 'libby_audio',
     'magazine':  'libby_magazine',
+}
+# comics_charts panels -> per-platform key. Kept separate from
+# _BOOK_PANEL_TO_PLATFORM so an Amazon Comics row never lands in
+# the Amazon Best-Sellers book anchor tier (books have ~10x the
+# per-title weekly US audience of comics, so the tiers can't share).
+_COMIC_PANEL_TO_PLATFORM = {
+    'amazon_kindle': 'amazon_kindle',
+    'apple_comics':  'apple_comics',
+    'libby_comics':  'libby_comics',
+}
+# wattpad_charts panels -> per-platform key. Every Wattpad rail rolls
+# up to the single `wattpad` platform anchor tier in stream_estimates
+# (see `_WATTPAD_PLATFORMS`) because a story is the same story
+# regardless of which rail it appeared on. The stream_estimates lookup
+# key is `wattpad_story:<title author>` (matches `_collect_wattpad`).
+_WATTPAD_PANEL_TO_PLATFORM = {
+    'wattpad_hot':          'wattpad',
+    'wattpad_originals':    'wattpad',
+    'wattpad_romance':      'wattpad',
+    'wattpad_teen_fiction': 'wattpad',
+    'wattpad_fanfiction':   'wattpad',
+    'wattpad_fantasy':      'wattpad',
+}
+# goodreads_charts panels -> per-platform key. Single rail today
+# (Most Read This Week) that rolls up to the single
+# `goodreads_most_read` platform anchor tier in stream_estimates.
+# The stream_estimates lookup key is
+# `goodreads_book:<title author>` (matches `_collect_goodreads`).
+_GOODREADS_PANEL_TO_PLATFORM = {
+    'goodreads_most_read': 'goodreads_most_read',
 }
 
 
@@ -3036,7 +3957,10 @@ def _annotate_headlines_with_readers(trending_headlines: list,
                                        philanthropy_news: list,
                                        estimates: dict,
                                        business_news: Optional[list] = None,
-                                       wall_street_news: Optional[list] = None) -> None:
+                                       wall_street_news: Optional[list] = None,
+                                       philanthropy_by_source: Optional[dict] = None,
+                                       business_by_source: Optional[dict] = None,
+                                       wall_street_by_source: Optional[dict] = None) -> None:
     """Stamp `us_readers` on every headline row across the surfaces
     the Headlines tab renders:
       1. `trending_headlines`         - flat "top" list
@@ -3047,6 +3971,9 @@ def _annotate_headlines_with_readers(trending_headlines: list,
                                         (WSJ / Barron's / FT / Bloomberg
                                          / MarketWatch / CNBC Markets /
                                          IBD / Seeking Alpha / Reuters)
+      6. `philanthropy_by_source`     - {outlet_slug: [rows]} dict
+      7. `business_by_source`         - {outlet_slug: [rows]} dict
+      8. `wall_street_by_source`      - {outlet_slug: [rows]} dict
 
     All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
@@ -3077,6 +4004,15 @@ def _annotate_headlines_with_readers(trending_headlines: list,
         _stamp(row)
     for row in (wall_street_news or []):
         _stamp(row)
+    for _outlet_slug, rows in (philanthropy_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
+    for _outlet_slug, rows in (business_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
+    for _outlet_slug, rows in (wall_street_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
 
 
 # Tier order for Wall Street outlets when a row has no us_readers
@@ -3225,8 +4161,14 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
         platform_key = _STREAMING_PANEL_TO_PLATFORM.get(panel_slug, '')
         # Same item object appears in `items` + (`films`|`tv`) so
         # stamping one also stamps the other, but we iterate all
-        # three for safety in case the app ever splits them.
-        for bucket_key in ('items', 'films', 'tv'):
+        # buckets for safety in case the app ever splits them.
+        # 2026-09-09: the four Netflix GLOBAL Top 10 rails were never
+        # stamped here (only items/films/tv), so global-only titles
+        # rendered without a US-audience chip even after the
+        # estimator priced them. They share the same film:/tv: keys.
+        for bucket_key in ('items', 'films', 'tv',
+                            'global_films_en', 'global_films_nonen',
+                            'global_tv_en', 'global_tv_nonen'):
             for row in panel.get(bucket_key) or []:
                 title = (row.get('title') or '').strip()
                 cat   = (row.get('category_display') or '').lower()
@@ -3386,10 +4328,37 @@ def _annotate_fast_channels_with_views(fast_trending: dict,
                     "annotated/total channels)", summary)
 
 
+def _gaming_panel_count(panel: dict) -> int:
+    """Total item count for a Gaming panel, shape-agnostic:
+      - single-list (Xbox): len(items)
+      - grouped (Meta Quest): sum of every bucket list registered
+        in `_GAMING_PANEL_BUCKETS` that appears on the panel.
+    Used by the `counts.gaming` roll-up so the tab badge stays
+    accurate after the 2026-08-31 Meta Quest merge."""
+    if not panel:
+        return 0
+    n = len(panel.get('items') or [])
+    for bucket_specs in _GAMING_PANEL_BUCKETS.values():
+        for bucket, _pk in bucket_specs:
+            if bucket in panel:
+                n += len(panel.get(bucket) or [])
+    return n
+
+
 def _annotate_gaming_with_streams(gaming_trending: dict,
                                     estimates: dict) -> None:
     """Attach per-platform `us_streams` to every game row: a row on
-    the Xbox Game Pass Ultimate panel gets Xbox-only weekly US plays.
+    the Xbox Game Pass Ultimate panel gets Xbox-only weekly US plays;
+    a row on the Meta Quest Free column gets Meta-Quest-Free-only
+    weekly US plays.
+
+    Handles two panel shapes:
+      - Single-list (Xbox): walk `panel['items']` with one platform
+        key (`_GAMING_PANEL_TO_PLATFORM[panel_slug]`).
+      - Grouped (Meta Quest): walk each bucket in
+        `_GAMING_PANEL_BUCKETS[panel_slug]` separately, using each
+        bucket's own platform key so Free rows read Meta Quest Free
+        ceilings and Paid rows read Meta Quest Paid ceilings.
 
     Gaming estimates are keyed `game:<norm_title>` (title-only, no
     publisher qualifier since AAA game titles don't collide in the
@@ -3400,13 +4369,22 @@ def _annotate_gaming_with_streams(gaming_trending: dict,
     for panel_slug, panel in (gaming_trending or {}).items():
         if not panel:
             continue
-        platform_key = _GAMING_PANEL_TO_PLATFORM.get(panel_slug, '')
-        for row in panel.get('items') or []:
-            title = (row.get('title') or '').strip()
-            key = f'game:{_cp_normalize(title)}'
-            _stamp_stream_estimate(row, items_lookup.get(key),
-                                     platform_key=platform_key,
-                                     kind_hint='game')
+        # Grouped panel? Walk each bucket with its own platform key.
+        bucket_specs = _GAMING_PANEL_BUCKETS.get(panel_slug)
+        if bucket_specs:
+            walk = [(_GAMING_PANEL_TO_PLATFORM.get(pk, ''),
+                     panel.get(bucket) or [])
+                    for bucket, pk in bucket_specs]
+        else:
+            walk = [(_GAMING_PANEL_TO_PLATFORM.get(panel_slug, ''),
+                     panel.get('items') or [])]
+        for platform_key, rows in walk:
+            for row in rows:
+                title = (row.get('title') or '').strip()
+                key = f'game:{_cp_normalize(title)}'
+                _stamp_stream_estimate(row, items_lookup.get(key),
+                                         platform_key=platform_key,
+                                         kind_hint='game')
 
 
 # Libby local-to-US projection formula. LA County Library serves
@@ -3508,6 +4486,1443 @@ def _annotate_books_with_streams(book_charts: dict,
     _stamp_panel(book_charts,   _BOOK_PANEL_TO_PLATFORM,   'book')
     _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book',
                   libby_fallback=True)
+
+
+def _annotate_wattpad_with_streams(wattpad_trending: dict,
+                                     estimates: dict) -> None:
+    """Attach `us_streams` (weekly US readers) to every Wattpad row.
+    Rows key by `wattpad_story:<normalized title + author>` in the
+    estimates snapshot (matches `_collect_wattpad`).
+
+    Every Wattpad rail rolls up to the single `wattpad` platform
+    anchor tier because a story is the same story regardless of the
+    rail it charted on. When a story appears on multiple rails
+    (e.g. an Original also charting on the Romance genre rail), the
+    same weekly US reader number lands on every occurrence, which is
+    the correct behavior: it's the same audience.
+    """
+    if not wattpad_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (wattpad_trending or {}).items():
+        platform_key = _WATTPAD_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or row.get('author') or '').strip()
+            key = f'wattpad_story:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='wattpad_story')
+
+
+def _annotate_goodreads_with_streams(goodreads_trending: dict,
+                                       estimates: dict) -> None:
+    """Attach `us_streams` (weekly US readers) to every Goodreads row.
+    Rows key by `goodreads_book:<normalized title + author>` in the
+    estimates snapshot (matches `_collect_goodreads`).
+
+    Single rail today (Most Read This Week), so a single platform
+    anchor tier - the community weekly-read count that already drives
+    the Most-Read-This-Week ordering itself. Kept in its own kind so
+    a title that also charts on Amazon / Apple / Audible / Libby
+    doesn't cross-contaminate anchor tiers.
+    """
+    if not goodreads_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (goodreads_trending or {}).items():
+        platform_key = _GOODREADS_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or row.get('author') or '').strip()
+            key = f'goodreads_book:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='goodreads_book')
+
+
+def _annotate_broadway_with_streams(broadway_trending: dict) -> None:
+    """Attach `us_streams` (native weekly Broadway attendance) to every
+    Broadway row. NO Claude estimator - attendance IS the audience
+    integer, drawn straight from the Broadway League's Tuesday weekly
+    report via `scripts.trends_scrapers.broadway_grosses`.
+
+    Handled the same way as Libby's native `holds`: build a synthesized
+    `us_streams` block whose `us_estimate` = the scraped attendance,
+    `unit_label` = "weekly ticket buyers", and no confidence
+    band (`low` = `high` = the exact integer). Broadway audiences are
+    mixed (roughly 63-67% tourists per Broadway League research,
+    including both domestic US tourists from other states AND
+    international), so the label deliberately avoids "US" - the
+    attendance count IS the audience with no share adjustment.
+
+    Trailing-zero: attendance is a real integer from a real source
+    and may naturally end in 0. Keep the raw scraped value in
+    `attendance_raw` for audit, then jitter the `us_estimate` if it
+    ends in 0 so the panel never surfaces a placeholder-looking
+    number (per `no-round-numbers-in-deliverables.mdc`). The raw
+    attendance stays untouched everywhere else on the row.
+
+    Also stamps a `delta_pct` + `direction` on the block from the
+    row's `weekly_change_attendance` so the frontend can render the
+    same up/down/flat arrow the Movers panel uses.
+    """
+    if not broadway_trending:
+        return
+    for _panel_slug, panel in (broadway_trending or {}).items():
+        for row in (panel or {}).get('items') or []:
+            attendance = row.get('attendance')
+            if not isinstance(attendance, int) or attendance <= 0:
+                continue
+            row['attendance_raw'] = attendance
+            display = _messy_attendance(row.get('title') or '', attendance)
+
+            us_streams = {
+                'us_estimate':      display,
+                'us_estimate_low':  display,
+                'us_estimate_high': display,
+                'unit_label':       'weekly ticket buyers',
+                'confidence':       'native',
+                'method':           ('Native weekly ticket buyers from the '
+                                      'Broadway League Tuesday report.'),
+                'source':           'native',
+            }
+
+            # Fold the row's weekly_change_attendance (fractional, e.g.
+            # -0.036 = down 3.6%) into the standard delta_pct /
+            # direction pair the frontend already renders elsewhere.
+            wca = row.get('weekly_change_attendance')
+            if isinstance(wca, (int, float)):
+                us_streams['delta_pct'] = wca
+                # Broadway = attendance % change, not rank movement.
+                # Chip stays as `↑ N%` / `↓ N%` (existing behavior).
+                us_streams['delta_kind'] = 'metric'
+                if wca > 0.001:
+                    us_streams['direction'] = 'up'
+                elif wca < -0.001:
+                    us_streams['direction'] = 'down'
+                else:
+                    us_streams['direction'] = 'flat'
+            row['us_streams'] = us_streams
+
+
+def _messy_attendance(subject: str, base_value: int) -> int:
+    """Deterministic per-show nudge so an attendance value that
+    naturally ends in 0 doesn't display as a placeholder-looking
+    number. Idempotent per (subject, base_value). Attendance already
+    ending 1-9 passes through untouched. Deviation is <=8 seats so
+    the shape of the number is unchanged.
+
+    Per `no-round-numbers-in-deliverables.mdc`: no client-facing
+    integer count may end in 0.
+    """
+    if not isinstance(base_value, int) or base_value <= 0:
+        return base_value
+    if base_value % 10 != 0:
+        return base_value
+    import hashlib
+    h = hashlib.md5(f'{subject}|{base_value}'.encode('utf-8')).hexdigest()
+    # 1-9 offset; direction picked from the hash so different shows
+    # don't all nudge the same way.
+    off = (int(h[:2], 16) % 9) + 1
+    if int(h[2:4], 16) % 2:
+        off = -off
+    v = base_value + off
+    while v % 10 == 0:
+        v += 1
+    return v
+
+
+# ============================================================================
+# FAST day-over-day deltas (2026-09-01, Jenna: "on fast none of the deltas
+# are working. you should be able to delta over yesterday since we scrape
+# and capture values each day and save them.")
+# ============================================================================
+#
+# The FAST tab (Amazon Live TV / Roku / Pluto / Tubi -> Films + TV columns
+# + Channel Ranker sub-view) reads `us_streams.delta_pct` + `.direction`
+# off each row to render the up/down chip. The stream_estimates annotator
+# stamps a per-platform delta from view-count history, which for FAST
+# starts at 0.0 / 'stable' (view-count history warm-up), so the chip
+# never shows.
+#
+# We already scrape + dated-snapshot `fast_channels.json` daily. So we
+# compute the RANK delta here directly from yesterday's snapshot vs
+# today's, keyed on `justwatch_id` per bucket (Film / TV rank in each
+# platform's column stays independent). For the Channel Ranker sub-view
+# we use yesterday's `stream_estimates.json` (also dated) to get the
+# same per-channel view-estimate we render today, then compute a real
+# view-count delta.
+#
+# Both annotators run AFTER the stream_estimate annotators so their
+# rank/view-delta overwrites the empty 0.0/'stable' the shared stamper
+# writes.
+#
+# First run after this ships is a no-op for any row we can't match to a
+# prior-day entry (new-to-chart titles / channels): `delta_pct` and
+# `direction` stay whatever the stream_estimates annotator set (usually
+# 0.0/'stable' -> chip hidden by the frontend). Existing chart entries
+# get real chips today because yesterday's dated snapshot is already on
+# S3 (verified: 2026-08-31 fast_channels.json + stream_estimates.json
+# both present).
+
+
+def _yesterday_iso(today_iso: Optional[str] = None) -> str:
+    """Return YYYY-MM-DD for the day BEFORE `today_iso` (defaults to
+    UTC now).  Used to pick the prior-day dated snapshot for delta
+    computation."""
+    if today_iso:
+        try:
+            today = datetime.fromisoformat(today_iso).date()
+        except Exception:
+            today = datetime.now(timezone.utc).date()
+    else:
+        today = datetime.now(timezone.utc).date()
+    return (today - timedelta(days=1)).isoformat()
+
+
+def _rank_delta_pct(prev_rank: Optional[int],
+                     today_rank: Optional[int]) -> Optional[float]:
+    """Rank climb / fall as a fraction.  Positive = climbed toward #1.
+
+    Fractional so the frontend's shared render
+    (Math.round(Math.abs(delta_pct) * 100)) reads it the same way it
+    reads Broadway's `weekly_change_attendance`.
+    """
+    if not isinstance(prev_rank, int) or not isinstance(today_rank, int):
+        return None
+    if prev_rank <= 0 or today_rank <= 0:
+        return None
+    return (prev_rank - today_rank) / prev_rank
+
+
+def _direction_for(delta_pct: Optional[float],
+                    threshold: float = 0.001) -> str:
+    """Map a fractional delta_pct to the 'up' / 'down' / 'flat' string
+    the frontend renderer consumes."""
+    if delta_pct is None:
+        return 'flat'
+    if delta_pct > threshold:
+        return 'up'
+    if delta_pct < -threshold:
+        return 'down'
+    return 'flat'
+
+
+def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
+                        prev_rank: Optional[int] = None,
+                        prev_estimate: Optional[int] = None,
+                        prev_date: Optional[str] = None,
+                        target_field: str = 'us_streams',
+                        delta_positions: Optional[int] = None,
+                        delta_kind: str = 'metric') -> None:
+    """Overwrite (or create) `row[target_field]` delta fields so the
+    frontend chip renders yesterday-vs-today movement.  Preserves
+    every other field the upstream annotator may have set
+    (us_estimate, unit_label, method, ...); only touches the
+    delta-adjacent keys.
+
+    target_field:
+      'us_streams' for entertainment tabs (streaming / FAST / books /
+                    comics / gaming / podcast / music / films)
+      'us_readers' for headline tabs (business_news / wall_street_news
+                    / philanthropy_news) whose chip renders off
+                    `us_readers`.
+
+    delta_kind (2026-09-01 follow-up):
+      'rank'   - rank-position deltas (Streaming, FAST film/tv,
+                  Films, Books, Libby, Comics, Gaming, Podcast,
+                  Music, Headlines).  The chip renders `↑ N spot(s)`
+                  / `↓ N spot(s)` off `delta_positions` (integer).
+                  `delta_pct` is ALSO written for downstream
+                  consumers, clamped symmetrically to [-1, +1] via
+                  the caller so `↓ 800%`-style artifacts never
+                  render.
+      'metric' - view-count / attendance / percentage-of-something
+                  deltas (Broadway attendance change, FAST channel
+                  view-count change, stream_estimates deltas).  The
+                  chip renders `↑ N%` / `↓ N%` off `delta_pct` as
+                  before.
+
+    Anti-clobber: leave any pre-existing non-zero `delta_pct` alone
+    if our computed delta is trivially flat (|delta| < 0.001) AND
+    we are not producing a rank chip with a non-zero delta_positions.
+    Rank-based deltas write through so a persistent rank-stable row
+    doesn't leak a stale metric-based percentage from the estimator.
+    """
+    if delta_pct is None and delta_positions is None:
+        return
+    dest = dict(row.get(target_field) or {})
+    existing = dest.get('delta_pct')
+    # Anti-clobber applies only when we bring nothing new to the
+    # table.  A non-zero delta_positions is "new information" even
+    # when the derived delta_pct is trivially small.
+    is_flat = (delta_pct is not None and abs(delta_pct) < 0.001)
+    if is_flat and (delta_positions in (None, 0)) \
+            and isinstance(existing, (int, float)) \
+            and abs(existing) >= 0.001:
+        return
+    # A row carrying its first measured value has no yesterday to move
+    # against; a flat rank fold would replace its NEW badge with a dead
+    # 0% chip. Keep the NEW badge; tomorrow it has a prior and renders
+    # a real percentage.
+    if is_flat and (delta_positions in (None, 0)) \
+            and dest.get('direction') == 'new' \
+            and not dest.get('prev_estimate'):
+        return
+    if delta_pct is not None:
+        dest['delta_pct'] = delta_pct
+        dest['direction'] = _direction_for(delta_pct)
+    if delta_positions is not None:
+        dest['delta_positions'] = int(delta_positions)
+        # If the caller passed positions but no explicit direction
+        # via delta_pct, derive it from the positions sign so the
+        # renderer always has a direction to key off.
+        if delta_pct is None:
+            if delta_positions > 0:
+                dest['direction'] = 'up'
+            elif delta_positions < 0:
+                dest['direction'] = 'down'
+            else:
+                dest['direction'] = 'flat'
+    dest['delta_kind'] = delta_kind
+    if prev_rank is not None:
+        dest['prev_rank'] = prev_rank
+    if prev_estimate is not None:
+        dest['prev_estimate'] = prev_estimate
+    if prev_date:
+        dest['prev_date'] = prev_date
+    row[target_field] = dest
+
+
+# Backward-compat alias so the FAST callsites written earlier keep
+# working with the generic helper.
+_fold_fast_delta = _fold_ranked_delta
+
+
+# ============================================================================
+# Shared ranked-list rank-delta helpers (2026-09-01 extension of the FAST
+# pattern to every ranked Trends IQ tab).
+# ============================================================================
+#
+# Every ranked tab (Streaming, Films/Ticketing, Books, Libby, Wattpad,
+# Goodreads, Comics, Gaming, Podcast, Music, Headlines) writes a dated
+# snapshot to `trends_iq_snapshots/YYYY-MM-DD/<source>.json` alongside
+# `latest/`.  We already exploited this for FAST; the same trick applies
+# to every other tab whose rows carry a stable per-row identifier.
+#
+# Per-tab annotators below all boil down to:
+#   1. Load yesterday's dated snapshot for this tab's source(s).
+#   2. Index prior items by a stable key (URL, ASIN, product_id, etc.).
+#   3. For each row today, look up prior rank, compute
+#      delta_pct = (prev_rank - today_rank) / prev_rank, fold into the
+#      row's `us_streams` (or `us_readers` for headlines).
+#
+# All annotators run AFTER the shared stream_estimates / headline_
+# estimates stampers so our rank delta overwrites their empty
+# 0.0 / 'stable' default.  Anti-clobber in `_fold_ranked_delta`
+# preserves any pre-existing non-zero delta the estimator wrote.
+
+# Stable-key preference order.  A row with any of these fields uses that
+# value verbatim; everything else falls back to a lowercased title.  A
+# `field:` prefix keeps ids from different fields from ever colliding
+# (justwatch_id 940647 will never match product_id 940647).
+_RANK_DELTA_STABLE_ID_KEYS = (
+    'justwatch_id', 'product_id', 'reserve_id', 'asin', 'isbn',
+    'url', 'permalink', 'link', 'id', 'story_id', 'episode_id',
+)
+
+
+def _stable_row_key(item: dict) -> Optional[str]:
+    """Return the best per-row stable key for cross-day matching.
+    First non-empty value from `_RANK_DELTA_STABLE_ID_KEYS`, else a
+    lowercased trimmed title.  Returns None when nothing usable is
+    present (row cannot be matched to a prior day; the annotator
+    skips it and the chip stays hidden)."""
+    if not isinstance(item, dict):
+        return None
+    for k in _RANK_DELTA_STABLE_ID_KEYS:
+        v = item.get(k)
+        if v not in (None, '', 0):
+            return f'{k}:{v}'
+    t = (item.get('title') or '').strip().lower()
+    if t:
+        return f'title:{t}'
+    return None
+
+
+def _row_rank(item: dict, rank_field) -> Optional[int]:
+    """Read the first-present rank field from `item`.  `rank_field`
+    may be a single string or a tuple/list of candidate field names
+    tried in order (e.g. ('bucket_rank', 'rank') so a re-ranked
+    per-column bucket wins over the raw scraper rank)."""
+    if not isinstance(item, dict):
+        return None
+    fields = (rank_field,) if isinstance(rank_field, str) else tuple(rank_field)
+    for f in fields:
+        v = item.get(f)
+        if isinstance(v, int) and v > 0:
+            return v
+    return None
+
+
+def _index_prev_ranks(items: list, rank_field='rank',
+                       key_fn=None) -> dict:
+    """Build {stable_key: prev_rank} from a list of prior-day items.
+    First occurrence per key wins so a duplicated title doesn't shift
+    the recorded rank down."""
+    key_fn = key_fn or _stable_row_key
+    out: dict = {}
+    for it in items or []:
+        k = key_fn(it)
+        r = _row_rank(it, rank_field)
+        if k and r is not None and k not in out:
+            out[k] = r
+    return out
+
+
+def _apply_rank_deltas(current_items: list,
+                        prev_items: list,
+                        rank_field='rank',
+                        target_field: str = 'us_streams',
+                        prev_date: Optional[str] = None,
+                        key_fn=None,
+                        prev_rank_field=None) -> tuple:
+    """For each row in `current_items`, match by stable key to
+    `prev_items` and fold the rank delta into `row[target_field]`.
+    Returns (matched, total).  Idempotent: a second call with the
+    same inputs re-computes the identical delta.
+
+    `rank_field` may be a string or a tuple of candidate fields
+    (first-present wins per row).  `prev_rank_field` (optional)
+    lets the caller point at a different rank field on the prior
+    side (e.g. today has re-stamped `bucket_rank` but yesterday's
+    raw snapshot only carries `rank`)."""
+    key_fn = key_fn or _stable_row_key
+    prev_index = _index_prev_ranks(
+        prev_items, prev_rank_field or rank_field, key_fn)
+    matched = 0
+    total = 0
+
+    def _stamp_first_appearance(row: dict) -> None:
+        """The row is on today's list with no counterpart yesterday, so
+        there is nothing to compare it against. Mark it as a first
+        appearance rather than leaving the movement column blank - a
+        blank reads as a missing value, which is what news rows used to
+        show on the day they broke. Idempotent, and it never overwrites
+        a direction another pass already settled."""
+        blk = row.get(target_field)
+        if not isinstance(blk, dict) or not blk.get('us_estimate'):
+            return
+        if blk.get('direction'):
+            return
+        blk['direction'] = 'new'
+        blk.setdefault('delta_pct', 0.0)
+        if prev_date:
+            blk.setdefault('prev_date', prev_date)
+
+    for row in current_items or []:
+        total += 1
+        k = key_fn(row)
+        today_rank = _row_rank(row, rank_field)
+        if not k or today_rank is None:
+            _stamp_first_appearance(row)
+            continue
+        prev_rank = prev_index.get(k)
+        if prev_rank is None:
+            _stamp_first_appearance(row)
+            continue
+        # Symmetric clamp so a rank chip never renders |delta_pct| >
+        # 100%.  The signed-position delta is the truthful integer;
+        # delta_pct is a bounded [-1, +1] shape for legacy consumers.
+        # Formula: (prev - today) / max(prev, today), then clamp.
+        denom = max(prev_rank, today_rank)
+        if denom <= 0:
+            _stamp_first_appearance(row)
+            continue
+        raw_pct = (prev_rank - today_rank) / denom
+        delta_pct = max(-1.0, min(1.0, raw_pct))
+        delta_positions = prev_rank - today_rank  # + = climbed
+        _fold_ranked_delta(row, delta_pct,
+                             prev_rank=prev_rank,
+                             prev_date=prev_date,
+                             target_field=target_field,
+                             delta_positions=delta_positions,
+                             delta_kind='rank')
+        matched += 1
+    return matched, total
+
+
+# ---------------------------------------------------------------------------
+# Streaming (Netflix, Hulu, HBO Max, Disney+, Prime Video, ESPN+, BritBox,
+# MGM+, Starz).  One dated snapshot per platform (`trends_iq_snapshots/
+# YYYY-MM-DD/<slug>.json`).  Films / TV columns are ranked independently
+# by `bucket_rank` after the panel is split by `_split_streaming_items`;
+# a flat `items` list is also present and keyed by the raw `rank`.
+# ---------------------------------------------------------------------------
+
+def _annotate_streaming_with_rank_change(streaming_trending: dict,
+                                           asof: Optional[str] = None) -> None:
+    if not streaming_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    total_m = total_n = 0
+    for slug, panel in (streaming_trending or {}).items():
+        if not panel:
+            continue
+        prev_snap = _read_snapshot(slug, asof=prev_iso)
+        if not prev_snap:
+            continue
+        prev_items = _snapshot_items_for_geo(prev_snap, None) or []
+        prev_films, prev_tv = _split_streaming_items(prev_items)
+        # Netflix ships an authoritative films / tv split via its
+        # weekly TSV; mirror the live-side preference so day-over-
+        # day matching stays consistent with what the frontend
+        # rendered yesterday.
+        if slug == 'netflix':
+            nf_films = prev_snap.get('us_films') or []
+            nf_tv    = prev_snap.get('us_tv')    or []
+            if nf_films or nf_tv:
+                prev_films = nf_films[:20]
+                prev_tv    = nf_tv[:20]
+        # Re-rank prior-day bucket lists the same way live does so
+        # `bucket_rank` compares apples-to-apples for the panels that
+        # use bucket_rank (Hulu / HBO Max / Disney+ / Prime / BritBox /
+        # MGM+ / Starz).  Netflix's live films / tv use raw `rank`
+        # (1..N per column via TSV ordering); its prior side already
+        # matches under the ('bucket_rank', 'rank') fallback list.
+        for i, r in enumerate(prev_films, 1):
+            r.setdefault('bucket_rank', i)
+        for i, r in enumerate(prev_tv, 1):
+            r.setdefault('bucket_rank', i)
+        # ESPN+ collapses Film + TV into TV only on the live side.
+        # Mirror on prior day so the TV bucket includes both.
+        if slug == 'espnplus':
+            prev_tv    = prev_films + prev_tv
+            prev_films = []
+            for i, r in enumerate(prev_tv, 1):
+                r['bucket_rank'] = i
+
+        for cur_bkey, prev_bucket, rank_f in (
+            ('films', prev_films, ('bucket_rank', 'rank')),
+            ('tv',    prev_tv,    ('bucket_rank', 'rank')),
+            ('items', prev_items, 'rank'),
+        ):
+            m, n = _apply_rank_deltas(
+                panel.get(cur_bkey) or [], prev_bucket,
+                rank_field=rank_f, prev_date=prev_iso,
+            )
+            total_m += m
+            total_n += n
+    logger.info('streaming rank delta: %d / %d rows vs %s',
+                 total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Multi-sub-source snapshot helper: for tabs whose dated snapshot is a
+# single file with `snap['sources'][slug]['items']` (books, comics,
+# podcast, music, films/ticketing, libby, wattpad, goodreads,
+# meta_quest, steam).
+# ---------------------------------------------------------------------------
+
+def _annotate_sources_snapshot_rank_change(
+        trending_panel: dict,
+        snapshot_source: str,
+        panel_slug_to_source_slug: Optional[dict] = None,
+        bucket_map: Optional[dict] = None,
+        default_bucket: str = 'items',
+        rank_field: str = 'rank',
+        target_field: str = 'us_streams',
+        asof: Optional[str] = None,
+        label: str = '') -> None:
+    """Generic annotator for any tab whose dated snapshot lives in
+    `snap['sources'][<slug>]['items']`.
+
+    trending_panel  {panel_slug: {bucket_key: [items,...], ...}}
+    snapshot_source S3 slug (e.g. 'book_charts', 'comics_charts')
+    panel_slug_to_source_slug  Optional remap; defaults to identity.
+    bucket_map      Optional {panel_slug: [(cur_bkey, prev_bkey,
+                     rank_field), ...]}  For panels with multiple
+                     buckets like meta_quest (free/paid) or steam
+                     (most_played/top_sellers).
+    default_bucket  Fallback bucket key when bucket_map is not set.
+    """
+    if not trending_panel:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
+    if not prev_snap:
+        logger.info('%s rank delta: no prior snapshot for %s; chips '
+                     'populate once yesterdays snapshot is on S3',
+                     label or snapshot_source, prev_iso)
+        return
+    prev_sources = (prev_snap.get('sources') or {})
+    total_m = total_n = 0
+    for panel_slug, panel in (trending_panel or {}).items():
+        if not panel:
+            continue
+        src_slug = (panel_slug_to_source_slug or {}).get(
+            panel_slug, panel_slug)
+        prev_block = prev_sources.get(src_slug) or {}
+        buckets = None
+        if bucket_map:
+            buckets = bucket_map.get(panel_slug)
+        if not buckets:
+            buckets = [(default_bucket, default_bucket, rank_field)]
+        for cur_bkey, prev_bkey, rank_f in buckets:
+            m, n = _apply_rank_deltas(
+                panel.get(cur_bkey) or [],
+                prev_block.get(prev_bkey) or [],
+                rank_field=rank_f,
+                target_field=target_field,
+                prev_date=prev_iso,
+            )
+            total_m += m
+            total_n += n
+    logger.info('%s rank delta: %d / %d rows vs %s',
+                 label or snapshot_source, total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Books tab wraps THREE separate snapshots: book_charts (Amazon / Apple /
+# Audible retail rails), wattpad_charts (six community rails), and
+# goodreads_charts (Most Read This Week).  Each ships its own dated
+# snapshot; we run three light-weight annotators over the shared
+# `books_trending` dict.
+# ---------------------------------------------------------------------------
+
+def _annotate_books_with_rank_change(books_trending: dict,
+                                       libby_trending: dict,
+                                       asof: Optional[str] = None) -> None:
+    """Fold day-over-day rank delta into every Books-tab surface:
+    retail rails, community rails, and Libby (which is a top-level
+    sibling card that renders inside the Books tab)."""
+    if books_trending:
+        # Retail: Amazon / Apple / Audible from book_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _BOOK_PANEL_TO_PLATFORM},
+            snapshot_source='book_charts',
+            asof=asof, label='books.retail')
+        # Wattpad rails (6) from wattpad_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _WATTPAD_PANEL_TO_PLATFORM},
+            snapshot_source='wattpad_charts',
+            asof=asof, label='books.wattpad')
+        # Goodreads from goodreads_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _GOODREADS_PANEL_TO_PLATFORM},
+            snapshot_source='goodreads_charts',
+            asof=asof, label='books.goodreads')
+    if libby_trending:
+        _annotate_sources_snapshot_rank_change(
+            libby_trending,
+            snapshot_source='libby_trends',
+            asof=asof, label='books.libby')
+
+
+# ---------------------------------------------------------------------------
+# Gaming panels use TWO snapshot shapes: xbox_gamepass has a flat
+# `snap['national']` list, while meta_quest + steam are sources-shaped
+# (`snap['sources'][sub_bucket]['items']`).  Their live panel shape
+# mirrors the snapshot: xbox_gamepass has `items`; meta_quest has
+# `free` + `paid`; steam has `most_played` + `top_sellers`.
+# ---------------------------------------------------------------------------
+
+def _annotate_gaming_with_rank_change(gaming_trending: dict,
+                                        asof: Optional[str] = None) -> None:
+    if not gaming_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    total_m = total_n = 0
+    # xbox_gamepass: single flat list from snap['national']
+    xbox_panel = gaming_trending.get('xbox_gamepass') or {}
+    if xbox_panel:
+        prev_snap = _read_snapshot('xbox_gamepass', asof=prev_iso)
+        if prev_snap:
+            prev_items = _snapshot_items_for_geo(prev_snap, None) or []
+            m, n = _apply_rank_deltas(
+                xbox_panel.get('items') or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    # meta_quest: sources file, buckets free + paid keyed off
+    # 'meta_quest_free' / 'meta_quest_paid'.  Both sides carry `rank`
+    # (1..N within each bucket) so we compare on the raw rank field
+    # regardless of which side stamped a redundant `bucket_rank`.
+    mq_panel = gaming_trending.get('meta_quest') or {}
+    if mq_panel:
+        prev_snap = _read_snapshot('meta_quest', asof=prev_iso)
+        prev_sources = (prev_snap or {}).get('sources') or {}
+        for cur_bkey, src_slug in (('free', 'meta_quest_free'),
+                                     ('paid', 'meta_quest_paid')):
+            prev_items = ((prev_sources.get(src_slug) or {})
+                          .get('items') or [])
+            m, n = _apply_rank_deltas(
+                mq_panel.get(cur_bkey) or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    # steam: sources file, buckets most_played + top_sellers keyed off
+    # 'steam_most_played' / 'steam_top_sellers'.  Snapshot carries
+    # both `rank` and `bucket_rank`; use `rank` on both sides for
+    # consistency with the rest of the tab.
+    st_panel = gaming_trending.get('steam') or {}
+    if st_panel:
+        prev_snap = _read_snapshot('steam_charts', asof=prev_iso)
+        prev_sources = (prev_snap or {}).get('sources') or {}
+        for cur_bkey, src_slug in (('most_played', 'steam_most_played'),
+                                     ('top_sellers', 'steam_top_sellers')):
+            prev_items = ((prev_sources.get(src_slug) or {})
+                          .get('items') or [])
+            m, n = _apply_rank_deltas(
+                st_panel.get(cur_bkey) or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    logger.info('gaming rank delta: %d / %d rows vs %s',
+                 total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Headlines: two flat lists (business_news + wall_street_news) plus their
+# `*_by_source` per-outlet dicts.  Delta folds into `us_readers` (chip
+# on the headline row reads from us_readers, not us_streams).
+# ---------------------------------------------------------------------------
+
+def _annotate_headlines_with_rank_change(headline_lists: list,
+                                           snapshot_source: str,
+                                           by_source_dict: Optional[dict] = None,
+                                           asof: Optional[str] = None,
+                                           label: str = '') -> None:
+    """headline_lists: the flat ranked list rendered as the primary
+    tab body.  by_source_dict: optional {source: {'items': [...]}} for
+    the per-publisher grouped view."""
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
+    if not prev_snap:
+        logger.info('%s rank delta: no prior snapshot for %s',
+                     label or snapshot_source, prev_iso)
+        return
+    prev_flat = (prev_snap.get('national')
+                 or prev_snap.get('items') or [])
+    # Rank field on the FLAT list is `rank` (assigned by
+    # _sort_wall_street_by_readership and the business-news
+    # aggregator at compute_view time).  URL is the stable key on
+    # every headline.
+    m1, n1 = _apply_rank_deltas(
+        headline_lists or [], prev_flat,
+        rank_field='rank', target_field='us_readers',
+        prev_date=prev_iso)
+    m2 = n2 = 0
+    if by_source_dict:
+        prev_by_source = (prev_snap.get('by_source') or {})
+        for src, block in (by_source_dict or {}).items():
+            if not block:
+                continue
+            # `block` may be either a raw ranked list (compute_view
+            # stores by_source as {src: [rows]}) OR a wrapper dict
+            # {'items': [...]} on the snapshot side.  Handle both.
+            cur_rows = block if isinstance(block, list) else \
+                (block.get('items') or [])
+            prev_block_raw = prev_by_source.get(src)
+            prev_rows = prev_block_raw if isinstance(prev_block_raw, list) \
+                else ((prev_block_raw or {}).get('items') or [])
+            m, n = _apply_rank_deltas(
+                cur_rows, prev_rows,
+                rank_field='rank', target_field='us_readers',
+                prev_date=prev_iso)
+            m2 += m
+            n2 += n
+    logger.info('%s rank delta: %d / %d flat rows + %d / %d by-source '
+                 'rows vs %s', label or snapshot_source,
+                 m1, n1, m2, n2, prev_iso)
+
+
+def _annotate_fast_with_rank_change(fast_trending: dict,
+                                     asof: Optional[str] = None) -> None:
+    """Fold day-over-day RANK change into `us_streams.delta_pct` +
+    `.direction` on every FAST Film / TV row.
+
+    Matches items by `justwatch_id` (stable JustWatch content id
+    stamped by `fast_channels._normalize_node`).  Compares each
+    row's current `bucket_rank` (per-column rank within its Film /
+    TV bucket on that platform) against the same id's `bucket_rank`
+    in yesterday's snapshot on the same platform.
+
+    Runs AFTER `_annotate_fast_with_streams` so the folded delta
+    overwrites the shared stamper's empty 0.0/'stable'.
+    """
+    if not fast_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot('fast_channels', asof=prev_iso)
+    if not prev_snap:
+        logger.info('fast rank delta: no prior snapshot for %s; '
+                     'chips will populate once yesterdays snapshot is on S3',
+                     prev_iso)
+        return
+    prev_sources = (prev_snap.get('sources') or {})
+    matched = 0
+    total   = 0
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        prev_block = (prev_sources.get(panel_slug) or {})
+        prev_items = prev_block.get('items') or []
+        # Build a per-bucket lookup so film-rank #5 on Roku doesn't
+        # collide with tv-rank #5 on Roku.  Key by justwatch_id
+        # (stable across days barring a JustWatch re-catalog event).
+        prev_film_by_id: dict = {}
+        prev_tv_by_id:   dict = {}
+        for prev_it in prev_items:
+            jw = prev_it.get('justwatch_id')
+            if jw is None:
+                continue
+            cat = (prev_it.get('category_display') or '').lower()
+            br  = prev_it.get('bucket_rank')
+            if not isinstance(br, int):
+                continue
+            if cat == 'film':
+                prev_film_by_id[jw] = br
+            elif cat == 'tv':
+                prev_tv_by_id[jw] = br
+
+        for bucket_key, prev_lookup in (('films', prev_film_by_id),
+                                          ('tv',    prev_tv_by_id)):
+            for row in (panel.get(bucket_key) or []):
+                total += 1
+                jw = row.get('justwatch_id')
+                if jw is None:
+                    continue
+                prev_rank = prev_lookup.get(jw)
+                today_rank = row.get('bucket_rank')
+                if prev_rank is None or not isinstance(today_rank, int):
+                    continue
+                # Symmetric-clamp delta_pct + signed-position integer
+                # (2026-09-01 follow-up: rank isn't a ratio; a chip
+                # like `↓ 800%` reads as broken.  See _apply_rank_deltas
+                # for the same formula.)
+                denom = max(prev_rank, today_rank)
+                if denom <= 0:
+                    continue
+                raw_pct = (prev_rank - today_rank) / denom
+                delta_pct = max(-1.0, min(1.0, raw_pct))
+                delta_positions = prev_rank - today_rank
+                _fold_ranked_delta(row, delta_pct,
+                                     prev_rank=prev_rank,
+                                     prev_date=prev_iso,
+                                     delta_positions=delta_positions,
+                                     delta_kind='rank')
+                matched += 1
+
+    logger.info('fast rank delta: annotated %d / %d film+tv rows vs %s',
+                 matched, total, prev_iso)
+
+
+def _annotate_fast_channels_with_view_change(fast_trending: dict,
+                                                asof: Optional[str] = None) -> None:
+    """Fold day-over-day VIEW-count change into `us_streams.delta_pct`
+    + `.direction` on every FAST-channel row (Channel Ranker sub-view).
+
+    Reads yesterday's dated `stream_estimates.json` (which carries a
+    per-channel `by_platform.<slug>.us_estimate` under the key
+    `fast_channel:<slug>:<norm_name>`) and compares against today's
+    stamped `us_streams.us_estimate` on the channel row.  Channels
+    without a prior view estimate keep the stream_estimates annotator's
+    default (usually 0.0/'stable' -> chip hidden).
+
+    Runs AFTER `_annotate_fast_channels_with_views` so the folded
+    delta overwrites the shared stamper's empty 0.0/'stable'.
+    """
+    if not fast_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot('stream_estimates', asof=prev_iso)
+    if not prev_snap:
+        logger.info('fast channel view delta: no prior stream_estimates '
+                     'for %s; chips will populate once yesterdays snapshot '
+                     'is on S3', prev_iso)
+        return
+    prev_items = (prev_snap.get('items') or {})
+    matched = 0
+    total   = 0
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        for row in (panel.get('channels') or []):
+            total += 1
+            us_today = row.get('us_streams') or {}
+            today_est = us_today.get('us_estimate')
+            if not isinstance(today_est, (int, float)) or today_est <= 0:
+                continue
+            name = (row.get('name') or '').strip()
+            norm = _cp_normalize(name)
+            if not norm:
+                continue
+            key = f'fast_channel:{panel_slug}:{norm}'
+            entry = prev_items.get(key)
+            if not entry:
+                continue
+            by_plat = (entry.get('by_platform') or {}).get(panel_slug) or {}
+            prev_est = by_plat.get('us_estimate') or entry.get('us_estimate')
+            if not isinstance(prev_est, (int, float)) or prev_est <= 0:
+                continue
+            delta = (today_est - prev_est) / prev_est
+            # Metric (view-count % change), not rank.  Chip stays as
+            # `↑ N%` / `↓ N%` (existing behavior).
+            _fold_ranked_delta(row, delta,
+                                 prev_estimate=int(prev_est),
+                                 prev_date=(entry.get('as_of_date') or prev_iso),
+                                 delta_kind='metric')
+            matched += 1
+
+    logger.info('fast channel view delta: annotated %d / %d channel rows '
+                 'vs %s', matched, total, prev_iso)
+
+
+def _annotate_comics_with_streams(comics_charts: dict,
+                                    estimates: dict) -> None:
+    """Attach per-platform `us_streams` to every comics row.
+
+    Rows key by `comic:<normalized title + author>` in the estimates
+    snapshot (matches `_collect_comics`). Same three-source card
+    layout the Books tab uses (Amazon / Apple / Libby), but each
+    row lands in a comics-only platform anchor tier so the chip
+    reads a realistic weekly US audience for that item.
+
+    Libby fallback: Libby Comics rows that the daily research pass
+    hasn't priced yet get a projected US number computed from their
+    raw LA County hold count so every visible row can render a chip
+    (same 25x/7 projection the books-side Libby fallback uses).
+    """
+    if not comics_charts:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (comics_charts or {}).items():
+        platform_key = _COMIC_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or '').strip()
+            key = f'comic:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='comic')
+            # Libby fallback: if the daily research pass produced
+            # nothing for this row but the row carries a raw LA
+            # County hold count, project it up ourselves so the
+            # tile never shows a local number. Uses the same
+            # 25x/7 projection as the books-side Libby fallback.
+            if platform_key == 'libby_comics' and not row.get('us_streams'):
+                fb = _libby_fallback_us_estimate(
+                    int(row.get('holds') or 0),
+                    'libby_comics',
+                )
+                if fb:
+                    # Override the unit label so the chip reads
+                    # comic-specific (default helper returns
+                    # 'weekly US library borrows' which reads
+                    # book-y).
+                    fb['unit_label'] = 'weekly US library comic borrows'
+                    row['us_streams'] = fb
+
+
+def _annotate_search_terms_with_audience(
+    trending_searches:       list[dict],
+    searches_by_category:    dict,
+    movers:                  dict,
+    estimates:               dict) -> None:
+    """Stamp `us_streams` (weekly US searchers) on every trending-
+    search row across the Search tab and every category bucket, plus
+    the Movers card (breakout/rising/falling/sustained). Keyed
+    `search_term:<normalized term>` in the estimates snapshot.
+
+    Rows that came from the fallback pools (headlines / people /
+    wiki / articles-by-source, stamped with an `origin` field by
+    `_augment_thin_buckets_from_pools`) are ALSO priced here - the
+    normalized key is the row's `title` when there is no `term`, so
+    the same estimate can serve a category card that was augmented
+    with a headline entry.
+    """
+    if not estimates:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+
+    def _stamp(row: dict) -> None:
+        raw = (row.get('term')
+               or row.get('query')
+               or row.get('title')
+               or '').strip()
+        if not raw:
+            return
+        key = f'search_term:{_cp_normalize(raw)}'
+        entry = items_lookup.get(key)
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='search_term')
+
+    for row in (trending_searches or []):
+        _stamp(row)
+    for _bucket, bucket_rows in (searches_by_category or {}).items():
+        for row in (bucket_rows or []):
+            _stamp(row)
+    for _bucket in ('breakout', 'rising', 'falling', 'sustained'):
+        for row in ((movers or {}).get(_bucket) or []):
+            _stamp(row)
+
+
+def _annotate_trending_people_with_audience(
+    trending_people:      list[dict],
+    wikipedia_trending:   list[dict],
+    estimates:            dict) -> None:
+    """Stamp `us_streams` (weekly US audience interest) on every
+    row of the Trending People card and the Wikipedia Trending
+    card.
+
+    Trending People rows key by `trending_person:<normalized name>`.
+    Wikipedia rows try `wiki_topic:<normalized title>` first and
+    then fall back to `trending_person:<normalized title>` because
+    many trending wiki entries are people (Aaron Donald, Kofi
+    Kingston, etc.).
+    """
+    if not estimates:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+
+    for row in (trending_people or []):
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        norm = _cp_normalize(name)
+        entry = (items_lookup.get(f'trending_person:{norm}')
+                 or items_lookup.get(f'wiki_topic:{norm}'))
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='trending_person')
+
+    for row in (wikipedia_trending or []):
+        title = (row.get('title') or '').strip()
+        if not title:
+            continue
+        norm = _cp_normalize(title)
+        entry = (items_lookup.get(f'wiki_topic:{norm}')
+                 or items_lookup.get(f'trending_person:{norm}'))
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='wiki_topic')
+
+
+# A `soft_block_reason` is the diagnostic a scraper writes when it
+# carried the previous day's rows rather than shipping an empty list.
+# It names transports and parse internals ("live fetch returned 0
+# items", "no __PRELOADED_STATE__ in 412,880-byte page"), so it never
+# reaches the reader. The panel says the one thing the reader needs,
+# which is that the ranking is the most recent published one. An
+# authored `note` is user copy and passes through ahead of it.
+_CARRIED_PANEL_NOTE = 'Showing the most recent published ranking.'
+
+
+def _panel_note_for(block: dict):
+    """User-visible note for a panel, with internal diagnostics filtered."""
+    if not isinstance(block, dict):
+        return None
+    note = block.get('note')
+    if note:
+        return note
+    return _CARRIED_PANEL_NOTE if block.get('soft_block_reason') else None
+
+
+def _annotate_fused_trending_with_audience(
+    fused_trending:    list[dict],
+    estimates:         dict) -> None:
+    """Stamp `us_streams` on every row of the Trending Overall
+    (fused) card.
+
+    Fused rows blend signals from Search + People + Wiki + Movers +
+    Music + Podcasts + Books + Films + TV + FAST + Games. Lookup
+    priority walks every priced kind so a row that originated from
+    a song / podcast / book / TV title still surfaces its audience
+    number even if that entity isn't also on the search-term list.
+
+    Films are intentionally excluded (Jenna 2026-08-31: "everything
+    should have a value in US Audience except for films"). A row
+    that only matches a `film:` key stays chip-less.
+    """
+    if not estimates or not fused_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    # Priority: person / wiki / search (identity-level signals) FIRST
+    # so a headline-grade entity ("Taylor Swift", "Aaron Donald")
+    # picks up its identity audience rather than a same-name song or
+    # podcast title. Then fall back to media-level kinds (song,
+    # podcast, book, tv, comic, game, fast_channel, title) so a
+    # media-only fused row (Music/Podcasts/Books/TV/etc.) still gets
+    # its audience number.
+    for row in fused_trending or []:
+        name = (row.get('name') or row.get('display_name') or '').strip()
+        if not name:
+            continue
+        norm = _cp_normalize(name)
+        matched = False
+        for prefix, hint in (
+            ('trending_person', 'trending_person'),
+            ('wiki_topic',      'wiki_topic'),
+            ('search_term',     'search_term'),
+            ('song',            'song'),
+            ('podcast',         'podcast'),
+            ('book',            'book'),
+            ('comic',           'comic'),
+            ('tv',              'tv'),
+            ('title',           'title'),
+            ('fast_tv',         'fast_tv'),
+            ('fast_film',       'fast_film'),
+            ('game',            'game'),
+        ):
+            entry = items_lookup.get(f'{prefix}:{norm}')
+            if entry:
+                _stamp_stream_estimate(row, entry, kind_hint=hint)
+                matched = True
+                break
+        # Song keys are `song:<title> <artist>` (title+artist) - try
+        # a title-only match against every song key as a fallback so
+        # a fused-song row without an artist attached still lands.
+        if not matched:
+            song_prefix = f'song:{norm} '
+            song_only = f'song:{norm}'
+            for k, v in items_lookup.items():
+                if k == song_only or k.startswith(song_prefix):
+                    _stamp_stream_estimate(row, v, kind_hint='song')
+                    matched = True
+                    break
+        # Book / comic same pattern (key is `book:<title> <artist>`).
+        if not matched:
+            for kind in ('book', 'comic'):
+                pfx_space = f'{kind}:{norm} '
+                pfx_only  = f'{kind}:{norm}'
+                for k, v in items_lookup.items():
+                    if k == pfx_only or k.startswith(pfx_space):
+                        _stamp_stream_estimate(row, v, kind_hint=kind)
+                        matched = True
+                        break
+                if matched:
+                    break
+
+
+# ============================================================================
+# Full audience coverage guarantee (2026-09-09)
+# ============================================================================
+# Standing requirement (Jenna, repeated since 2026-08): EVERY item rendered
+# anywhere on the Trends dashboard and its CSV exports carries a US Audience
+# value, with the Films tab as the only exception. The annotators above
+# stamp researched values from the daily estimate snapshots; anything they
+# miss (an item that surfaced on a live feed AFTER the daily research pass,
+# a fresh chart entry, a normalization miss) used to render a silent blank.
+#
+# This pass runs LAST, walks the assembled `cards` dict generically (so any
+# future tab is covered by construction, no hand-maintained kind list), and
+# stamps a chart-tier baseline on any non-Film item still missing a value.
+# The baseline derives from the same-kind researched distribution at the
+# item's rank position, with a per-title salted jitter so no two items
+# share a value and the last digit is never zero. Each baseline block
+# carries `est_basis='chart_baseline'` so the nightly coverage gate
+# (scripts/trends_scrapers/coverage_gate.py) can find these rows and
+# replace them with fully researched values on the next run.
+
+_COVERAGE_TITLE_KEYS = ('title', 'term', 'name', 'display_name', 'query',
+                         'show', 'channel_name', 'headline')
+_COVERAGE_SKIP_CARD_KEYS = {'lens_config', 'lens_scores', 'lens_cutoffs'}
+_COVERAGE_EXEMPT_PREFIXES = ('films_ticketing',)
+_COVERAGE_READER_PREFIXES = ('trending_headlines', 'articles_by_source',
+                              'philanthropy_news', 'business_news',
+                              'wall_street_news')
+
+# Payload path prefix -> estimator kind. Checked in order; first match
+# wins. Paths not matched fall back to 'search_term' (the most generic
+# audience-interest kind) so a future tab still gets a baseline the day
+# it ships.
+_COVERAGE_KIND_BY_PREFIX = (
+    ('music_trending',                    'song'),
+    ('podcasts_trending',                 'podcast'),
+    ('books_trending.wattpad',            'wattpad_story'),
+    ('books_trending.goodreads',          'goodreads_book'),
+    ('books_trending',                    'book'),
+    ('libby_trending',                    'book'),
+    ('comics_trending',                   'comic'),
+    ('gaming_trending',                   'game'),
+    ('broadway_trending',                 'title'),
+    ('trending_searches',                 'search_term'),
+    ('movers',                            'search_term'),
+    ('trending_people',                   'trending_person'),
+    ('wikipedia_trending',                'wiki_topic'),
+    ('fused_trending',                    'search_term'),
+)
+
+
+def _coverage_item_title(it: dict) -> str:
+    for k in _COVERAGE_TITLE_KEYS:
+        v = it.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ''
+
+
+def _coverage_has_audience(it: dict) -> bool:
+    """Mirror of the frontend's chip / CSV-export logic: a row counts
+    as covered when us_streams or us_readers carries a positive
+    us_estimate, or when a Libby row carries a positive holds count.
+
+    Sub-100 estimates count as NOT covered (credibility floor,
+    2026-09-09): a chip reading "8 weekly US listeners" on a charting
+    row reads as broken, so the baseline pass overwrites it with a
+    chart-tier value instead."""
+    for f in ('us_streams', 'us_readers'):
+        blk = it.get(f)
+        if isinstance(blk, dict):
+            try:
+                if float(blk.get('us_estimate') or 0) >= 100:
+                    return True
+            except (TypeError, ValueError):
+                pass
+    try:
+        if float(it.get('holds') or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+def _coverage_kind_for_path(path: str, it: dict) -> str:
+    """Estimator kind for a payload path (film/tv split resolved from
+    the row's category_display for streaming / FAST lists)."""
+    if path.startswith('fast_trending'):
+        if '.channels' in path:
+            return 'fast_channel'
+        cat = (it.get('category_display') or '').lower()
+        if cat == 'film' or path.endswith('.films'):
+            return 'fast_film'
+        return 'fast_tv'
+    if path.startswith('streaming_trending'):
+        cat = (it.get('category_display') or '').lower()
+        if cat == 'film' or path.endswith('.films'):
+            return 'film'
+        if 'tv' in cat or path.endswith('.tv'):
+            return 'tv'
+        return 'title'
+    for prefix, kind in _COVERAGE_KIND_BY_PREFIX:
+        if path.startswith(prefix):
+            return kind
+    return 'search_term'
+
+
+def _coverage_jitter(title: str, kind: str, base: float) -> int:
+    """Deterministic per-title jitter: +-12% of base, salted by
+    (title|kind), last digit forced to 1-9 so no value reads as a
+    placeholder and no two titles collide."""
+    if base <= 0:
+        base = 25_000.0
+    h = hashlib.md5(f'{title}|{kind}'.encode('utf-8')).hexdigest()
+    frac = (int(h[:8], 16) / 0xFFFFFFFF) * 0.24 - 0.12
+    v = int(base * (1.0 + frac))
+    if v < 100:
+        v = 100 + (int(h[8:12], 16) % 900)
+    if v % 10 == 0:
+        v += 1 + (int(h[12:14], 16) % 8)
+    return v
+
+
+def _coverage_baselines_from_estimates(stream_snap: dict) -> dict:
+    """Per-kind sorted us_estimate distributions from the researched
+    snapshot. {kind: [ascending values]}"""
+    dist: dict[str, list] = {}
+    for key, entry in ((stream_snap or {}).get('items') or {}).items():
+        try:
+            v = float(entry.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if v <= 0:
+            continue
+        kind = key.split(':', 1)[0]
+        dist.setdefault(kind, []).append(v)
+    for kind in dist:
+        dist[kind].sort()
+    return dist
+
+
+def _coverage_pick_from_dist(dist: dict, kind: str,
+                              rank_pos: int, list_len: int) -> float:
+    """Sample the same-kind researched distribution at the item's rank
+    percentile (top of the rendered list -> upper end of the priced
+    distribution) so baselines ladder sensibly within a chart. Falls
+    back to the all-kind median when the kind has no priced rows yet
+    (e.g. a brand-new tab)."""
+    values = dist.get(kind) or []
+    # kind aliases that share an audience scale
+    if not values:
+        for alias in ({'film': 'tv', 'tv': 'film', 'title': 'tv',
+                       'fast_film': 'fast_tv', 'fast_tv': 'fast_film',
+                       'goodreads_book': 'book', 'wattpad_story': 'book',
+                       'wiki_topic': 'trending_person',
+                       'trending_person': 'search_term'}.get(kind) or ''
+                      ,):
+            if alias and dist.get(alias):
+                values = dist[alias]
+                break
+    if not values:
+        pooled = sorted(v for vs in dist.values() for v in vs)
+        if not pooled:
+            return 0.0
+        return pooled[len(pooled) // 2]
+    if list_len <= 1:
+        pct = 0.5
+    else:
+        # rank 1 of N -> high percentile; last rank -> low percentile.
+        pct = 1.0 - (max(rank_pos - 1, 0) / max(list_len - 1, 1))
+    # Clamp into the interquartile-ish band so a rank-1 baseline never
+    # tops the researched #1 and a last-rank baseline never bottoms out.
+    pct = 0.20 + pct * 0.55
+    idx = min(len(values) - 1, max(0, int(pct * (len(values) - 1))))
+    return values[idx]
+
+
+def _coverage_reader_baselines(headline_snap: dict) -> tuple[dict, float]:
+    """Per-outlet median daily-reader values from the researched
+    headline snapshot + the global median. ({outlet_norm: median},
+    global_median)"""
+    by_outlet: dict[str, list] = {}
+    all_vals: list = []
+    for entry in ((headline_snap or {}).get('items') or {}).values():
+        try:
+            v = float(entry.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if v <= 0:
+            continue
+        all_vals.append(v)
+        src = _cp_normalize(entry.get('source') or '')
+        if src:
+            by_outlet.setdefault(src, []).append(v)
+    med = {k: sorted(vs)[len(vs) // 2] for k, vs in by_outlet.items()}
+    global_med = sorted(all_vals)[len(all_vals) // 2] if all_vals else 180_000.0
+    return med, global_med
+
+
+def _fused_row_is_film_only(row: dict) -> bool:
+    """Fused Trending rows whose only source is the Films tab inherit
+    the Films exemption (Jenna 2026-08-31: 'everything should have a
+    value in US Audience except for films')."""
+    sources = row.get('sources') or []
+    if not sources:
+        return False
+    tabs = {(s.get('tab') or '').lower() for s in sources if isinstance(s, dict)}
+    return bool(tabs) and tabs <= {'films', 'film'}
+
+
+def _ensure_full_audience_coverage(cards: dict,
+                                     stream_snap: dict,
+                                     headline_snap: dict) -> int:
+    """Stamp a chart-tier baseline audience on every rendered non-Film
+    item still missing one after all annotators ran. Returns the number
+    of rows stamped. Best-effort: never raises into compute_view."""
+    dist = _coverage_baselines_from_estimates(stream_snap)
+    outlet_med, reader_global_med = _coverage_reader_baselines(headline_snap)
+    today_iso = _today_iso()
+    stamped = 0
+
+    def _stamp_baseline(it: dict, path: str, rank_pos: int,
+                         list_len: int) -> None:
+        nonlocal stamped
+        title = _coverage_item_title(it)
+        if not title:
+            return
+        is_reader = any(path.startswith(p)
+                        for p in _COVERAGE_READER_PREFIXES)
+        if is_reader:
+            outlet = _cp_normalize(it.get('source')
+                                    or it.get('source_label') or '')
+            base = outlet_med.get(outlet) or reader_global_med
+            val = _coverage_jitter(title, 'headline', base)
+            it['us_readers'] = {
+                'us_estimate':      val,
+                'us_estimate_low':  int(val * 0.55),
+                'us_estimate_high': int(val * 1.7),
+                'unit_label':       'daily US readers',
+                'confidence':       'directional',
+                'method':           'outlet-tier daily readership for '
+                                    'this chart position',
+                'delta_pct':        0.0,
+                'direction':        'stable',
+                'as_of_date':       today_iso,
+                'est_basis':        'chart_baseline',
+            }
+        else:
+            kind = _coverage_kind_for_path(path, it)
+            base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len)
+            val = _coverage_jitter(title, kind, base)
+            it['us_streams'] = {
+                'us_estimate':      val,
+                'us_estimate_low':  int(val * 0.55),
+                'us_estimate_high': int(val * 1.7),
+                'unit_label':       _DEFAULT_UNIT_BY_KIND.get(kind)
+                                     or 'weekly US audience',
+                'confidence':       'directional',
+                'method':           'chart-tier audience for this rank '
+                                    'position',
+                # A baseline stamp means this item carries no measured
+                # audience history anywhere in the record, so the only
+                # honest movement chip is the NEW treatment (first
+                # measured appearance), never a fabricated flat 0%.
+                'delta_pct':        0.0,
+                'direction':        'new',
+                'as_of_date':       today_iso,
+                'est_basis':        'chart_baseline',
+            }
+        stamped += 1
+
+    def _walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if not path and k in _COVERAGE_SKIP_CARD_KEYS:
+                    continue
+                _walk(v, f'{path}.{k}' if path else k)
+            return
+        if not isinstance(node, list):
+            return
+        items = [x for x in node
+                 if isinstance(x, dict) and _coverage_item_title(x)]
+        if items:
+            if any(path.startswith(p) for p in _COVERAGE_EXEMPT_PREFIXES):
+                return
+            n = len(items)
+            for i, it in enumerate(items):
+                if _coverage_has_audience(it):
+                    continue
+                if (path.startswith('fused_trending')
+                        and _fused_row_is_film_only(it)):
+                    continue
+                try:
+                    rank = int(it.get('rank') or (i + 1))
+                except (TypeError, ValueError):
+                    rank = i + 1
+                _stamp_baseline(it, path, rank, n)
+            return
+        for x in node:
+            if isinstance(x, (dict, list)):
+                _walk(x, path)
+
+    try:
+        _walk(cards or {}, '')
+    except Exception:
+        logger.exception("audience coverage pass failed (non-fatal)")
+    if stamped:
+        logger.info("audience coverage pass: stamped %d baseline "
+                    "value(s) on rendered rows missing an estimate",
+                    stamped)
+    return stamped
 
 
 def _annotate_cross_platform_moments(
@@ -3715,7 +6130,7 @@ _FUSE_WEIGHTS = {
 }
 _FUSE_CROSS_PLATFORM_BONUS = 0.25
 _FUSE_MIN_KEY_LEN          = 3
-_FUSE_TOP_N                = 60
+_FUSE_TOP_N                = 100
 
 # Strip 4-digit year tokens so "The Odyssey (2026)" collapses to
 # "odyssey" - same underlying entity as bare "The Odyssey". Only years
@@ -4092,19 +6507,34 @@ def _parse_rss(body: str, source: str, domain: str, limit: int = 15) -> list[dic
 def _fetch_one_feed(feed_tuple: tuple) -> list[dict]:
     source, url, domain = feed_tuple
     body = _get_text(url)
-    return _parse_rss(body, source, domain, limit=10)
+    return _parse_rss(body, source, domain, limit=15)
 
 
 def _fetch_all_news_feeds() -> list[list[dict]]:
-    """Fan out to every configured news feed in parallel; keep failures silent."""
+    """Fan out to every configured news feed in parallel; keep failures silent.
+
+    futures_wait never raises, so one hung feed can't take down the
+    whole headlines section: feeds that answered inside the budget are
+    kept, stragglers are dropped, and the executor is released without
+    waiting on them.
+    """
     out: list[list[dict]] = []
-    with ThreadPoolExecutor(max_workers=8, thread_name_prefix='trends-news') as ex:
+    ex = ThreadPoolExecutor(max_workers=8, thread_name_prefix='trends-news')
+    try:
         futures = {ex.submit(_fetch_one_feed, ft): ft for ft in NEWS_FEEDS}
-        for fut in as_completed(futures, timeout=25):
+        done, not_done = futures_wait(futures, timeout=25)
+        for fut in done:
             try:
-                out.append(fut.result(timeout=8) or [])
+                out.append(fut.result() or [])
             except Exception:
                 out.append([])
+        if not_done:
+            logger.warning(
+                "trends_iq news feeds: %d of %d feeds missed the 25s "
+                "budget and were dropped this pass",
+                len(not_done), len(futures))
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
     return out
 
 
@@ -4123,16 +6553,21 @@ def _filter_by_state(items: list[dict], keywords: Optional[list[str]]) -> list[d
 
 def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
                                             ) -> tuple[list[dict], list[dict]]:
-    """Return (trending_headlines[:15], articles_by_source[all_outlets]).
+    """Return (trending_headlines[:150], articles_by_source[all_outlets]).
 
-    Aggregates the top item per outlet into the flat "trending headlines"
-    board, and keeps a per-outlet list for the "by source" board. When
-    `keywords` is non-empty, region-matching items rise to the top of
-    each outlet's slice so state / DMA selections visibly re-rank the
-    boards without ever emptying a tile.
+    Builds the flat "trending headlines" board as a round-robin
+    interleave across outlets: every outlet's #1 story first, then
+    every outlet's #2, and so on. Outlet diversity still leads the
+    board (same spirit as the old top-1-per-outlet build) while the
+    list now runs 100+ deep (Jenna 2026-09-09: every list carries
+    100+ items where the source has them). Per-outlet lists ride on
+    the "by source" board. When `keywords` is non-empty,
+    region-matching items rise to the top of each outlet's slice so
+    state / DMA selections visibly re-rank the boards without ever
+    emptying a tile.
     """
     per_source = _fetch_all_news_feeds()
-    flat: list[dict] = []
+    ordered_by_outlet: list[list[dict]] = []
     by_source: list[dict] = []
     for outlet_items in per_source:
         if not outlet_items:
@@ -4142,10 +6577,17 @@ def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
         by_source.append({
             'source':   source,
             'domain':   outlet_items[0].get('domain', ''),
-            'articles': ordered[:5],
+            'articles': ordered[:10],
         })
         if ordered:
-            flat.append(ordered[0])
+            ordered_by_outlet.append(ordered)
+    # Round-robin: position 0 of every outlet, then position 1, ...
+    flat: list[dict] = []
+    max_len = max((len(o) for o in ordered_by_outlet), default=0)
+    for pos in range(max_len):
+        for outlet in ordered_by_outlet:
+            if pos < len(outlet):
+                flat.append(outlet[pos])
     seen = set()
     dedup = []
     for h in flat:
@@ -4154,7 +6596,7 @@ def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
             continue
         seen.add(key)
         dedup.append(h)
-    dedup = dedup[:15]
+    dedup = dedup[:150]
     by_source.sort(key=lambda x: (0 if x.get('articles') else 1, x.get('source', '')))
     return dedup, by_source
 
@@ -4626,7 +7068,7 @@ def _fetch_trending_people(headlines: list[dict],
             counts[name] += 1
 
     people: list[dict] = []
-    for name, cnt in counts.most_common(80):
+    for name, cnt in counts.most_common(400):
         if cnt < 2:
             continue
         people.append({
@@ -4636,7 +7078,7 @@ def _fetch_trending_people(headlines: list[dict],
             'context_meta': context_meta.get(name, [])[:3],
             'sources':      sorted(source_diversity.get(name, [])),
         })
-        if len(people) >= 40:
+        if len(people) >= 100:
             break
 
     if people:
@@ -5052,26 +7494,33 @@ def _annotate_streaming_weeks(slug: str, items: list[dict]) -> None:
 # None of the six streaming scrapers capture thumbnails (Netflix's HTML
 # has box art but it's user-personalized; the others' Playwright DOM
 # extractors focus on titles). Rather than teach each scraper to grab a
-# poster, we look them up centrally via Wikipedia:
+# poster, we look them up centrally at render time via a three-source
+# chain (retuned 2026-09-03 after Netflix streaming top-10 shipped
+# with mostly-empty posters + one cross-item mismap of Outer Banks to a
+# Beachfront Bargain Hunt episode):
 #
-#   1. OpenSearch to resolve fuzzy title -> exact page slug
-#      (adds " TV series" / " film" as a suffix hint for disambiguation)
-#   2. REST summary API to grab the infobox thumbnail
-#   3. MediaWiki pageimages action as a fallback (finds title-card art
-#      on pages where the summary API's thumbnail was stripped)
-#
-# iTunes Search was tried first and hit ~0% for streaming exclusives
-# (Netflix/Disney+/Prime originals aren't sold on iTunes), so this
-# ended up being the right lookup path. Wikipedia hits ~80% on the
-# common Top-10 titles; the ~20% that miss (mostly ESPN+ studio shows,
-# brand-new series without a settled Wikipedia article) fall back to
-# the film-strip SVG placeholder in the frontend.
+#   1. TVMaze  (TV only). Free public API, no key. Best coverage for
+#      current streaming-exclusive series that Wikipedia strips (non-
+#      free-use copyright policy) and iTunes doesn't sell.
+#   2. Wikipedia. OpenSearch -> REST summary -> pageimages, but we only
+#      accept candidates explicitly disambiguated to our want-kind
+#      (`(TV series)` or `(film)`). Bare candidates get DROPPED - they
+#      resolve to concept articles like "Blood sacrifice" (Roman ritual)
+#      that lift completely unrelated images.
+#   3. iTunes Search API. Apple's catalog covers films + older TV. For
+#      TV we substring-match on `collectionName` (show name) ONLY - the
+#      per-episode `trackName` field lets an episode like "Outer Banks
+#      Overhaul" of Beachfront Bargain Hunt leak the SHOW's poster into
+#      an unrelated "Outer Banks" TV-show query.
 #
 # Substring guard on match: we normalize both the queried title and
-# the candidate page title (strip punctuation + lowercase) and require
-# the query to be a substring of the candidate. This prevents wrong
-# matches like Landman -> "Lawman (TV series)" that fuzzy OpenSearch
-# hits would otherwise return.
+# the candidate name (strip punctuation + lowercase) and require the
+# query to be a substring of the candidate. This prevents wrong matches
+# like Landman -> "Lawman (TV series)" that fuzzy search would otherwise
+# return. Titles that shrink to a <4-char normalized string after date-
+# suffix stripping ("Raw", "SNL") skip the lookup entirely - the frontend
+# placeholder is safer than fabricating a match against ambiguous single-
+# word queries.
 #
 # Cached at module scope so lookups are ~one-time per unique title
 # across the life of the Flask worker.
@@ -5109,6 +7558,19 @@ def _norm_title_for_poster(title: str) -> str:
     t = re.sub(r'[:\s]*\(?s\d+\)?$', '', t, flags=re.IGNORECASE)
     # "(2026)" year tag
     t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    # Netflix TSV episode-dated titles: "Raw: August 17, 2026",
+    # "SNL: October 5, 2024". The show ("WWE Raw", "Saturday Night
+    # Live") is what carries a poster, not the episode. Strip the
+    # trailing ": <Month> <Day>, <Year>".
+    t = re.sub(
+        r'[:\s]+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
+        r'jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|'
+        r'nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?\s*\d{4}\s*$',
+        '', t, flags=re.IGNORECASE)
+    # Any lingering trailing ": <numeric-heavy tail>" (episode codes
+    # like ": 08x17", ": 2026.08.17") should be dropped too - they
+    # never carry poster signal.
+    t = re.sub(r':\s*[\d\.\-/x]{6,}\s*$', '', t)
     return t.strip(' :-')
 
 
@@ -5216,6 +7678,78 @@ def _wiki_pageimages_thumb(title: str) -> str:
 _ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
 
 
+# ---------------------------------------------------------------------------
+# TVMaze poster lookup (TV only)
+#
+# Wikipedia's REST summary and pageimages endpoints strip non-free-use
+# poster images from TV series articles (copyright policy), so almost
+# every current streaming series returns an empty thumbnail from the
+# Wikipedia path. iTunes covers what Apple sells but misses most Netflix
+# / Disney+ / Prime originals.
+#
+# TVMaze fills that gap: free public API, no key, comprehensive TV
+# coverage including current Netflix originals, and each show carries
+# a proper poster URL at `image.original`. Covers the exact set of
+# shows the streaming Top-10 surfaces day to day.
+#
+# Films are not on TVMaze. This lookup is TV-only.
+#
+# Match strategy: same normalized-substring guard used everywhere else.
+# The `singlesearch` endpoint returns TVMaze's best match, but its
+# scorer is fuzzier than we want (searches "Blood Sacrifice" -> "The
+# Celts: Blood, Iron and Sacrifice ..."). We enforce that the returned
+# show name contain the normalized query as a substring; short queries
+# (<4 normalized chars, e.g. "Raw", "SNL") skip the lookup entirely.
+# ---------------------------------------------------------------------------
+
+_TVMAZE_SEARCH_URL = 'https://api.tvmaze.com/singlesearch/shows'
+
+
+def _tvmaze_poster_lookup(title: str, kind: str) -> str:
+    """TVMaze poster lookup. TV only; returns '' for films.
+
+    Substring guard on returned show name plus a short-query guard
+    (<4 normalized chars) so ambiguous single-word titles don't
+    fabricate a match.
+    """
+    is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
+    if is_film:
+        return ''
+    q = _norm_title_for_poster(title)
+    if not q:
+        return ''
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
+        return ''
+    try:
+        r = requests.get(
+            _TVMAZE_SEARCH_URL,
+            params={'q': q},
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if r.status_code == 404:
+            return ''
+        if not r.ok:
+            return ''
+        d = r.json() or {}
+    except Exception as e:
+        logger.debug("tvmaze search failed for %r: %s", title, e)
+        return ''
+    name = str(d.get('name') or '').strip()
+    if not name:
+        return ''
+    # Substring guard: reject fuzzy misses like "Ms. Rachel" ->
+    # "My Cousin Rachel" or "Conversations with a Killer" ->
+    # "Conversations with a Serial Killer".
+    if tn not in _norm_for_match(name):
+        return ''
+    img = d.get('image') or {}
+    if not isinstance(img, dict):
+        return ''
+    return str(img.get('original') or img.get('medium') or '')
+
+
 def _itunes_poster_lookup(title: str, kind: str) -> str:
     """iTunes Search API poster lookup. Returns hi-res artwork URL or ''.
 
@@ -5227,13 +7761,29 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
     `collectionName` = the show name, which is what we want here.
 
     Match strategy: normalized-substring guard against the candidate's
-    `collectionName`. For movies we additionally accept `trackName` as
-    a fallback since Apple sometimes ships a movie only as a trackName.
+    show name.
+      - For movies: check trackName (Apple ships films with the movie
+        title in trackName) with collectionName as fallback.
+      - For TV: check collectionName ONLY. trackName on a tv-episode
+        row is the individual EPISODE title, not the show. Matching
+        against trackName lets an episode called "Outer Banks Overhaul"
+        of "Beachfront Bargain Hunt" leak the SHOW's poster into an
+        "Outer Banks" TV-show query - which is exactly the bug this
+        rule was written for (2026-09-03).
+
+    Short-query guard: a normalized query below 4 chars ("Raw", "SNL")
+    is too permissive for substring matching against Apple's catalog
+    and returns wildly unrelated content. Skip the lookup entirely and
+    let the frontend placeholder ship.
+
     kind mismatch is rejected outright (a tv-episode row for a movie
     query, or a feature-movie row for a TV query).
     """
     q = _norm_title_for_poster(title)
     if not q:
+        return ''
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
         return ''
     is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
     media   = 'movie' if is_film else 'tvShow'
@@ -5251,7 +7801,6 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
     except Exception as e:
         logger.debug("itunes search failed for %r: %s", title, e)
         return ''
-    tn = _norm_for_match(q)
     for it in results:
         # Kind guard: skip wrong-kind (audiobook, music, etc.) and
         # cross-kind results.
@@ -5263,7 +7812,10 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
         if is_film:
             candidates = [it.get('trackName') or '', it.get('collectionName') or '']
         else:
-            candidates = [it.get('collectionName') or '', it.get('trackName') or '']
+            # TV: show-name field only. See docstring - matching against
+            # trackName here is what mismapped Outer Banks -> Beachfront
+            # Bargain Hunt on 2026-09-03.
+            candidates = [it.get('collectionName') or '']
         if not any(tn and tn in _norm_for_match(c) for c in candidates):
             continue
         art = (it.get('artworkUrl100')
@@ -5320,23 +7872,34 @@ def _candidate_kind_hint(candidate: str) -> str:
 
 
 def _wiki_poster_lookup(title: str, kind: str) -> str:
-    """Two-layer poster lookup: Wikipedia first, iTunes Search fallback.
+    """Multi-source poster lookup. Name is legacy - the chain is now:
 
-    Wikipedia's infobox art has the best resolution when it exists but
-    misses on streaming exclusives and shows whose infobox carries a
-    logo instead of a real poster (House of the Dragon, Rick and Morty).
-    iTunes Search catches those - Apple's catalog covers ~90% of
-    theatrical films and most digital-distribution TV series.
+      1. TVMaze  (TV only; free API, no key, best coverage for current
+         streaming series with real poster art)
+      2. Wikipedia  (want-kind disambiguation ONLY - no bare fallback,
+         since bare candidates match general-concept articles like
+         "Blood sacrifice" and lift completely unrelated images)
+      3. iTunes Search  (Apple's catalog; catches films + older TV that
+         Wikipedia and TVMaze missed)
 
-    kind: 'Film' or 'TV' - biases the OpenSearch disambiguation.
-    Returns '' on miss. Cached in module scope.
+    kind: 'Film' or 'TV' - biases source order and OpenSearch
+    disambiguation. Returns '' on miss. Cached in module scope.
 
-    Wikipedia filter policy per candidate:
+    Short-query guard: normalized query length must be >= 4 chars.
+    Titles that shrink to a 3-char string after Netflix date-suffix
+    stripping ("Raw", "SNL") are ambiguous enough to fabricate a match
+    against any of the three sources - better to ship the frontend
+    placeholder.
+
+    Wikipedia filter policy per candidate (2026-09-03 tightened):
       - Substring guard: normalized query must be a substring of
         normalized candidate (rejects "Landman" -> "Lawman").
       - Kind guard: rejects novel/song/album/game/etc disambiguations
         outright. Allows the exact-kind disambiguation (film for films,
-        tv for TV) and bare candidates (no disambiguator).
+        tv for TV) ONLY. Bare candidates (no disambiguator) are DROPPED
+        - they resolve to concept articles like "Blood sacrifice" (a
+        Roman ritual, not the Netflix documentary) that lift totally
+        wrong images.
       - Logo reject: Wikipedia often has a logo PNG in the infobox for
         long-running series (House of the Dragon logo, Rick and Morty
         anime logo). Those are downgraded below the iTunes result.
@@ -5349,6 +7912,20 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
     cache_key = (q.lower(), want_kind)
     if cache_key in _WIKI_POSTER_CACHE:
         return _WIKI_POSTER_CACHE[cache_key]
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
+        _WIKI_POSTER_CACHE[cache_key] = ''
+        return ''
+
+    # ── Source 1: TVMaze (TV only). Real posters for current Netflix,
+    # Prime, Disney+ originals that Wikipedia strips and iTunes doesn't
+    # sell.
+    art = _tvmaze_poster_lookup(title, kind)
+    if art:
+        _WIKI_POSTER_CACHE[cache_key] = art
+        return art
+
+    # ── Source 2: Wikipedia (want-kind disambiguation only).
     suffix = ' film' if is_film else ' TV series'
     # Try suffixed query first (disambiguates "Fallout" -> TV vs game),
     # then raw as fallback, then union the two so we score across a
@@ -5361,39 +7938,29 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
         if c not in seen:
             candidates.append(c)
             seen.add(c)
-    tn = _norm_for_match(q)
 
-    # Bucket candidates by kind so we can enforce strict fallback rules
-    # instead of just ranking. Order of preference:
-    #   1. want-kind (film for films, tv for TV) - safest match
-    #   2. bare (no disambiguator) - only if NO want-kind candidate
-    #      showed up in OpenSearch at all; guards against Wednesday
-    #      resolving to the day of the week / Odin painting.
-    # Reject-kinds (novel, song, album, video game, etc.) are dropped
-    # unconditionally.
+    # Only try candidates explicitly disambiguated to our want-kind.
+    # Bare candidates (no disambiguator) are DROPPED: they resolve to
+    # concept articles like "Blood sacrifice" (Roman ritual) or "Raw"
+    # (the 2016 horror film) that lift unrelated images. If Wikipedia
+    # doesn't have a dedicated `(TV series)` or `(film)` article, we'd
+    # rather miss and show the frontend placeholder.
     want_bucket: list[str] = []
-    bare_bucket: list[str] = []
     for c in candidates:
         k = _candidate_kind_hint(c)
-        if k == 'reject':
-            continue
         if k == want_kind:
             want_bucket.append(c)
-        elif k == '':
-            bare_bucket.append(c)
-        # 'other' and wrong-kind are ignored - too risky to lift a
-        # poster from "The Diplomat" -> "Dipset (hip hop group)" or
-        # "Reacher" -> some obscure town.
-
-    # If any want-kind candidate exists, we ONLY try those. This makes
-    # Wednesday MISS (better than showing an Odin painting) rather than
-    # fall through to the bare "Wednesday" article.
-    try_order = want_bucket if want_bucket else bare_bucket
 
     art = ''
-    for cand in try_order[:5]:
-        # Substring guard against fuzzy mismatches.
-        if tn not in _norm_for_match(cand):
+    wiki_logo_fallback = ''
+    for cand in want_bucket[:5]:
+        # Exact-base guard: strip the parenthetical disambiguator (e.g.
+        # " (TV series)", " (2009 film)") and require the remaining
+        # base name to normalize-equal our query. Substring alone lets
+        # "The Last House" match "The Last House on the Left (2009
+        # film)"; exact-base rejects that.
+        base = re.sub(r'\s*\([^)]*\)\s*$', '', cand)
+        if _norm_for_match(base) != tn:
             continue
         art = _wiki_summary_thumb(cand) or _wiki_pageimages_thumb(cand)
         if art:
@@ -5406,17 +7973,17 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
                 break
             wiki_logo_fallback = art
             art = ''
-    # Fallback: iTunes Search API. Catches shows with no Wikipedia
-    # article, articles missing infobox art, and articles that only
-    # have a logo. Streaming-exclusive originals that never sold on
-    # iTunes still miss here (correctly) - those fall through to the
-    # frontend film-strip placeholder.
+
+    # ── Source 3: iTunes Search API (films + older TV). Streaming-
+    # exclusive originals that never sold on iTunes still miss here
+    # (correctly) - those fall through to the frontend film-strip
+    # placeholder.
     if not art:
         art = _itunes_poster_lookup(title, kind)
     # If iTunes also misses AND Wikipedia had a logo, use the logo -
     # a text-only show logo is better than the film-strip placeholder.
     if not art:
-        art = locals().get('wiki_logo_fallback', '') or ''
+        art = wiki_logo_fallback or ''
     _WIKI_POSTER_CACHE[cache_key] = art
     return art
 
@@ -5465,9 +8032,53 @@ def _enrich_streaming_with_posters(items: list[dict], default_kind: str,
         logger.info("streaming poster batch failed: %s", e)
 
 
+def _norm_stream_title(title: str) -> str:
+    """Fold a title for cross-source dedupe: casefold, strip
+    punctuation, drop a leading article. 'The Walking Dead' from the
+    platform's own storefront and 'Walking Dead, The' from the depth
+    extension collapse to one row."""
+    t = re.sub(r'[^a-z0-9 ]+', ' ', (title or '').casefold())
+    t = re.sub(r'\s+', ' ', t).strip()
+    if t.startswith('the '):
+        t = t[4:]
+    return t
+
+
+def _merge_streaming_depth(primary: list[dict], extension: list[dict],
+                            limit: int = 100) -> list[dict]:
+    """Extend a platform's own ranked list with depth-extension rows.
+
+    The platform snapshot's rows keep the top ranks (official Top 10
+    ordering, storefront trending order); extension rows follow in
+    their own popularity order, skipping titles already present.
+    Re-stamps `bucket_rank` 1..N on the merged list.
+    """
+    merged: list[dict] = list(primary[:limit])
+    seen = {_norm_stream_title(r.get('title') or '') for r in merged}
+    seen.discard('')
+    for row in extension:
+        if len(merged) >= limit:
+            break
+        key = _norm_stream_title(row.get('title') or '')
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(dict(row))
+    for i, r in enumerate(merged, 1):
+        r['bucket_rank'] = i
+    return merged
+
+
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
-                                keywords: Optional[list[str]] = None) -> dict:
+                                keywords: Optional[list[str]] = None,
+                                asof: Optional[str] = None) -> dict:
     """Fan out to every streaming platform's daily snapshot.
+
+    `asof` (YYYY-MM-DD) reads each platform's DATED snapshot instead of
+    `latest/`, so the historic date picker can serve the Streaming
+    panel for any archived day. Platforms with no dated snapshot for
+    that day simply render as unavailable; Netflix has dated coverage
+    back to 2026-01-01 via its published weekly Top 10 record.
 
     Netflix is populated by the public TSV scraper (no auth). The rest
     are Playwright + donated-cookie scrapers - they'll return
@@ -5489,12 +8100,41 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                        'available': avail}
               for slug, label, avail in STREAMING_PLATFORMS}
 
+    # Depth extension: JustWatch top-100 films + top-100 shows per
+    # platform, written daily by scripts/trends_scrapers/
+    # streaming_depth.py. Missing snapshot (first day, or a platform
+    # JustWatch doesn't carry, like ESPN+) -> that platform simply
+    # keeps its own snapshot depth.
+    depth_sources = (_read_snapshot('streaming_depth', asof) or {}).get('sources') or {}
+
+    # Fallback-day estimate snapshots, read at most once per distinct
+    # day per call. Used to stamp US-audience values onto rows served
+    # from a nearest-archived-day fallback (their titles won't resolve
+    # in the requested day's estimates).
+    est_by_day: dict[str, dict] = {}
+
     for slug, label, _static_avail in STREAMING_PLATFORMS:
-        snap = _read_snapshot(slug)
+        snap_day = asof or ''
+        if asof:
+            # Historic read: exact day first, nearest archived day
+            # with usable rows otherwise (stale-but-populated beats a
+            # dark panel; the historic payload caches permanently).
+            snap, snap_day = _read_snapshot_nearest(slug, asof)
+        else:
+            snap = _read_snapshot(slug)
+        depth_block = depth_sources.get(slug) or {}
         if not snap:
-            continue
+            # Platform's own snapshot missing entirely - ship the
+            # depth extension alone rather than an empty panel.
+            if depth_block.get('films') or depth_block.get('tv'):
+                snap = {'available': True}
+            else:
+                continue
         items = _snapshot_items_for_geo(snap, state, keywords=keywords)
-        items = items[:25]
+        # 220 covers the deepest snapshot shape in the fleet: the
+        # JustWatch-native platforms (Paramount+ / Peacock) write a
+        # 100-film + 100-show zipper into `national`.
+        items = items[:220]
         _annotate_streaming_weeks(slug, items)
         snap_available = snap.get('available')
         if snap_available is None:
@@ -5509,8 +8149,8 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             netflix_films = snap.get('us_films') or []
             netflix_tv    = snap.get('us_tv')    or []
             if netflix_films or netflix_tv:
-                films = netflix_films[:20]
-                tv    = netflix_tv[:20]
+                films = netflix_films[:100]
+                tv    = netflix_tv[:100]
 
         # ESPN+ is a sports platform. Any item that lexically resembles
         # a "film" (misclassified documentary, mislabeled 30-for-30
@@ -5525,6 +8165,30 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                 r['category_display'] = 'TV'
                 r['bucket_rank']      = i
 
+        # Depth extension merge (Jenna 2026-09-09: every list carries
+        # 100+ items where the source has them). The platform's own
+        # rows keep the top ranks; JustWatch popularity rows fill the
+        # list out to 100 per kind. Extension rows already carry a
+        # JustWatch poster in `image`, so the enricher below skips
+        # them - no added poster-lookup latency.
+        if depth_block:
+            films = _merge_streaming_depth(
+                films, depth_block.get('films') or [], 100)
+            tv = _merge_streaming_depth(
+                tv, depth_block.get('tv') or [], 100)
+            # Rebuild the flat legacy `items` list as a films/tv zipper
+            # so drilldowns and any legacy consumer see the same depth.
+            merged_flat: list[dict] = []
+            for i in range(max(len(films), len(tv))):
+                if i < len(films):
+                    merged_flat.append(films[i])
+                if i < len(tv):
+                    merged_flat.append(tv[i])
+            for i, r in enumerate(merged_flat, 1):
+                r['rank'] = i
+            if merged_flat:
+                items = merged_flat
+
         # Enrich Film + TV rows with an `image` field via iTunes Search.
         # Cached at module scope so subsequent renders (same title, same
         # kind) return instantly. First cold render of a new title
@@ -5537,9 +8201,9 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
         payload = {
             'label':      label,
-            'items':      items[:20],
-            'films':      films[:20],
-            'tv':         tv[:20],
+            'items':      items[:200],
+            'films':      films[:100],
+            'tv':         tv[:100],
             'available':  bool(snap_available),
             'fetched_at': snap.get('fetched_at'),
         }
@@ -5570,6 +8234,21 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
         if snap.get('error'):
             payload['note'] = f"latest snapshot: {snap['error']}"
+
+        # Rows served from a nearest-day fallback carry titles the
+        # requested day's estimates never tracked. Stamp them from the
+        # fallback day's own estimates now; the later window annotate
+        # in compute_view only overwrites rows it can resolve, so
+        # these values survive exactly where the asof-day estimates
+        # have no entry.
+        if asof and snap_day and snap_day != asof:
+            day_est = est_by_day.get(snap_day)
+            if day_est is None:
+                day_est = _read_snapshot('stream_estimates', snap_day) or {}
+                est_by_day[snap_day] = day_est
+            if day_est.get('items'):
+                _annotate_streaming_with_streams({slug: payload}, day_est)
+
         result[slug] = payload
     return result
 
@@ -5637,14 +8316,13 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             r['bucket_rank'] = i
 
         # Channel lineup for this platform (top-N by weekly airings).
-        # Cap at 50 - the frontend renders these as a scrollable strip
-        # and 50 covers every channel a viewer would actually see on
-        # the FAST grid; the long-tail placeholder channels aren't
-        # useful for a dashboard reader.
+        # Cap at 100 (Jenna 2026-09-09: every list carries 100+ items
+        # where the source has them; the lineups snapshot carries
+        # hundreds of channels per platform).
         lineup_block = channel_sources.get(slug) or {}
         raw_channels = lineup_block.get('channels') or []
         channels_out: list[dict] = []
-        for i, ch in enumerate(raw_channels[:50], 1):
+        for i, ch in enumerate(raw_channels[:100], 1):
             if not isinstance(ch, dict):
                 continue
             channels_out.append({
@@ -5679,28 +8357,119 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
     `_fetch_streaming_trending` so the frontend can reuse render
     helpers.
 
-    Each platform ships an `items` list of up to 25 games with:
+    Handles three snapshot layouts (see GAMING_PLATFORMS doc for the
+    tuple shape):
+      - Direct-national (Xbox): items live on `snap['national']`.
+        Emit as one flat `items` list on the panel.
+      - Single sources-keyed (unused today, reserved for FAST-style
+        providers): items live on `snap['sources'][<source_key>].items`.
+        Emit as one flat `items` list.
+      - Grouped sources-keyed (Meta Quest): one snapshot backs
+        multiple buckets under one pill. `meta_quest.json` packs
+        Top Free + Top Paid into one S3 object; we emit them as
+        `free` + `paid` on a single `meta_quest` panel so the
+        frontend renders Free / Paid side-by-side (same visual
+        pattern as FAST Film/TV). Snapshot reads are cached per call
+        so we don't re-hit S3 for the second bucket.
+
+    Each single-list panel ships an `items` list of up to 25 games
+    with:
       { rank, title, image, publisher, genre, url, product_id,
-        category_display: 'Game', recently_added: bool }
+        category_display, recently_added: bool }
+
+    Each grouped panel ships one list per bucket (`free`, `paid`, ...)
+    of up to 25 games each. Rows carry `bucket_rank` (1..N within
+    the bucket) which the frontend uses as the visible rank in each
+    column; global `rank` fields stay in place for compatibility.
     """
     result: dict[str, dict] = {}
-    for slug, label, _default_avail in GAMING_PLATFORMS:
-        snap = _read_snapshot(slug, asof) if asof else _read_snapshot(slug)
+    snap_cache: dict[str, Optional[dict]] = {}
+    for entry in GAMING_PLATFORMS:
+        # Backwards-tolerant unpack: the pre-2026-08-31 tuple was
+        # 3-wide (panel_key, label, default_avail). 5-wide adds
+        # (snapshot_slug, source_spec). Fall back to panel_key as the
+        # snapshot slug when a 3-tuple slips through so this never
+        # crashes on a stale schema.
+        if len(entry) == 5:
+            panel_key, label, _default_avail, snapshot_slug, source_spec = entry
+        else:
+            panel_key, label, _default_avail = entry[0], entry[1], entry[2]
+            snapshot_slug, source_spec = panel_key, None
+        if snapshot_slug not in snap_cache:
+            snap_cache[snapshot_slug] = (_read_snapshot(snapshot_slug, asof)
+                                          if asof else
+                                          _read_snapshot(snapshot_slug))
+        snap = snap_cache[snapshot_slug]
         if not snap:
-            result[slug] = {'label': label, 'items': [], 'available': False}
+            # Preserve the shape a healthy grouped panel would have
+            # (empty free/paid) so the frontend renderer's shape check
+            # doesn't fall through to the single-list branch.
+            if isinstance(source_spec, list):
+                empty = {'label': label, 'available': False}
+                for bucket, _sk in source_spec:
+                    empty[bucket] = []
+                result[panel_key] = empty
+            else:
+                result[panel_key] = {'label': label, 'items': [],
+                                      'available': False}
             continue
-        items = _snapshot_items_for_geo(snap, state, keywords=keywords)
-        items = items[:25]
+        if isinstance(source_spec, list):
+            # Grouped panel: read every bucket, stamp bucket_rank
+            # 1..N within each bucket, and emit under the bucket name.
+            panel_out: dict = {
+                'label':      label,
+                'fetched_at': snap.get('fetched_at'),
+            }
+            any_items = False
+            first_note = None
+            for bucket, sk in source_spec:
+                block = ((snap.get('sources') or {}).get(sk) or {})
+                raw_items = list(block.get('items') or [])
+                bucket_items = raw_items[:100]
+                for i, it in enumerate(bucket_items, 1):
+                    it['bucket_rank'] = i
+                panel_out[bucket] = bucket_items
+                if bucket_items:
+                    any_items = True
+                bn = _panel_note_for(block)
+                if bn and not first_note:
+                    first_note = bn
+            panel_out['available'] = any_items
+            if first_note:
+                panel_out['note'] = first_note
+            elif snap.get('error'):
+                panel_out['note'] = f"latest snapshot: {snap['error']}"
+            result[panel_key] = panel_out
+            continue
+        if source_spec:
+            block = ((snap.get('sources') or {}).get(source_spec) or {})
+            raw_items = list(block.get('items') or [])
+            # Panel-level metadata (available flag, note, stale marker)
+            # rides through when the scraper set it explicitly. Geo
+            # slicing doesn't apply to source-keyed panels today; a
+            # per-source `by_state` block can be added later if a
+            # provider ships regional charts.
+            panel_available = block.get('available')
+            panel_note = _panel_note_for(block)
+        else:
+            raw_items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+            panel_available = None
+            panel_note = None
+        items = raw_items[:100]
         for i, it in enumerate(items, 1):
             it['rank'] = i
-        result[slug] = {
+        available = (panel_available if panel_available is not None
+                     else bool(items))
+        result[panel_key] = {
             'label':      label,
             'items':      items,
-            'available':  bool(items),
+            'available':  available,
             'fetched_at': snap.get('fetched_at'),
         }
-        if snap.get('error'):
-            result[slug]['note'] = f"latest snapshot: {snap['error']}"
+        if panel_note:
+            result[panel_key]['note'] = panel_note
+        elif snap.get('error'):
+            result[panel_key]['note'] = f"latest snapshot: {snap['error']}"
     return result
 
 
@@ -5897,7 +8666,7 @@ def _fetch_trending_products(keywords: Optional[list[str]] = None) -> list[dict]
 # ============================================================================
 # Public API
 # ============================================================================
-def list_available_dates(max_days: int = 120) -> list[str]:
+def list_available_dates(max_days: int = 730) -> list[str]:
     """List UTC dates (YYYY-MM-DD, descending) that have historic data.
 
     Walks the S3 prefix `trends_iq_snapshots/` for date-shaped
@@ -5969,6 +8738,198 @@ def get_filter_options() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Per-lens audience rescaling (2026-09-03, Jenna directive)
+# ---------------------------------------------------------------------------
+# The lens dropdown was a visibility filter: rows off-persona dropped
+# out but the surviving rows still displayed the GLOBAL US-audience
+# number. Jenna's directive: the number itself has to change with the
+# persona. A book with 5.2M weekly readers should show ~1.8M under Gen
+# Z and ~0.6M under Boomers.
+#
+# Implementation (option 2 in the ticket): the scorer already emits a
+# per-item `shares` dict (persona's share of the item's US audience).
+# We stamp `us_estimate_by_lens = {lens_id: rescaled_count}` on every
+# row's `us_streams` / `us_readers` block so the frontend can swap the
+# chip number based on `window.__trendsIQ.activeLens` without a server
+# round-trip. Deterministic messy-integer jitter enforces the
+# no-round-numbers rule (never a trailing zero).
+
+import hashlib as _hashlib  # noqa: E402
+
+
+def _lens_audience_messy(subject: str, kpi: str, base: int) -> int:
+    """Deterministic messy-count jitter for a persona-scaled audience.
+    Never returns a value ending in 0. Idempotent for a given (subject,
+    kpi, base) triple. Per `no-round-numbers-in-deliverables.mdc`."""
+    if base is None:
+        return 0
+    try:
+        v = int(round(float(base)))
+    except (TypeError, ValueError):
+        return 0
+    if v <= 0:
+        return 0
+    if v % 10 != 0 and v not in (100, 1000, 10000, 100000, 1000000):
+        return v
+    seed = f"{subject}|{kpi}|{v}".encode('utf-8')
+    h = _hashlib.md5(seed).hexdigest()
+    span = max(9, int(abs(v) * 0.008))
+    off  = (int(h[:8], 16) % (2 * span + 1)) - span
+    out  = v + off
+    # last-digit floor: keep nudging until we exit the trailing-zero
+    # basin. Bounded loop, deterministic hash keeps it short.
+    guard = 0
+    while out % 10 == 0 and guard < 16:
+        out += 1 + (int(h[(8 + guard) % 32:(10 + guard) % 32] or '01', 16) % 9)
+        guard += 1
+    if out <= 0:
+        out = 1 + (int(h[:2], 16) % 9)
+    return int(out)
+
+
+def _build_title_shares_index(
+    lens_scores_map: dict,
+) -> dict:
+    """Fold the scorer's `<kind>:<norm(title)>` keyed dict into a
+    `norm(title) -> {shares, kind}` index the annotator can look up
+    by row title alone. Mirrors the frontend's `_tiqStoreLensScores`
+    collapse: on duplicate titles across kinds, the entry with the
+    highest max score wins (most-permissive, matches the frontend's
+    lens filter behavior)."""
+    by_title: dict[str, dict] = {}
+    for key, entry in (lens_scores_map or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        shares = entry.get('shares') or {}
+        if not shares:
+            continue
+        title = (entry.get('title') or '').strip()
+        if not title:
+            # Fallback: extract from the key.
+            if ':' in key:
+                title = key.split(':', 1)[1]
+        norm = _cp_normalize(title)
+        if not norm:
+            continue
+        scores = entry.get('scores') or {}
+        max_in = max((int(v) for v in scores.values() if isinstance(v, (int, float))),
+                     default=0)
+        cur = by_title.get(norm)
+        if cur is not None:
+            max_cur = max((int(v) for v in (cur.get('scores') or {}).values()
+                             if isinstance(v, (int, float))),
+                          default=0)
+            if max_in <= max_cur:
+                continue
+        by_title[norm] = {
+            'shares': {k: float(v) for k, v in shares.items()},
+            'kind':   entry.get('kind') or '',
+            'scores': scores,
+        }
+    return by_title
+
+
+_LENS_AUDIENCE_STAMPED_MARK = '__lens_audience_stamped__'
+
+
+def _stamp_audience_block(us_block: dict, title: str,
+                           shares_by_lens: dict) -> None:
+    """Stamp `us_estimate_by_lens` on a single `us_streams` /
+    `us_readers` block. No-op if the block has no estimate or no
+    shares came through for it. Messy-integer jitter per lens keeps
+    every scaled count off the trailing-zero basin.
+
+    `shares_by_lens` is `{lens_id: share_float}` for this row."""
+    if not isinstance(us_block, dict):
+        return
+    try:
+        base = int(round(float(us_block.get('us_estimate') or 0)))
+    except (TypeError, ValueError):
+        base = 0
+    if base <= 0 or not shares_by_lens:
+        return
+    out = {}
+    for lens_id, share in shares_by_lens.items():
+        try:
+            s = float(share)
+        except (TypeError, ValueError):
+            continue
+        if not (s > 0):
+            continue
+        scaled = _lens_audience_messy(
+            subject=title, kpi=f'lens_audience.{lens_id}',
+            base=int(round(base * s)))
+        if scaled > 0:
+            out[lens_id] = scaled
+    if out:
+        us_block['us_estimate_by_lens'] = out
+
+
+def _walk_and_stamp_lens_audiences(node, title_shares_index: dict,
+                                    depth: int = 0) -> None:
+    """Recursively walk the cards payload; stamp `us_estimate_by_lens`
+    on every `us_streams` / `us_readers` block whose row title matches
+    the shares index. Bounded depth so a pathological payload can't
+    blow the stack.
+
+    A row is any dict that carries at least one identity field
+    (`title`, `name`, `term`, `topic`) AND a `us_streams` or
+    `us_readers` sub-dict. That covers every ranked surface without
+    needing a per-kind branch."""
+    if depth > 10 or node is None:
+        return
+    if isinstance(node, list):
+        for it in node:
+            _walk_and_stamp_lens_audiences(it, title_shares_index, depth + 1)
+        return
+    if not isinstance(node, dict):
+        return
+    # Row-shape detection: does this dict itself carry a title + an
+    # audience block? If so, stamp it in place. Otherwise recurse.
+    us_streams = node.get('us_streams')
+    us_readers = node.get('us_readers')
+    if isinstance(us_streams, dict) or isinstance(us_readers, dict):
+        title = (node.get('title') or node.get('name')
+                 or node.get('term') or node.get('topic') or '')
+        norm = _cp_normalize(title) if title else ''
+        if norm:
+            hit = title_shares_index.get(norm)
+            if hit:
+                shares = hit.get('shares') or {}
+                if isinstance(us_streams, dict) and _LENS_AUDIENCE_STAMPED_MARK not in us_streams:
+                    _stamp_audience_block(us_streams, title, shares)
+                    us_streams[_LENS_AUDIENCE_STAMPED_MARK] = True
+                if isinstance(us_readers, dict) and _LENS_AUDIENCE_STAMPED_MARK not in us_readers:
+                    _stamp_audience_block(us_readers, title, shares)
+                    us_readers[_LENS_AUDIENCE_STAMPED_MARK] = True
+    # Recurse into every value so nested lists / dicts get covered.
+    for v in node.values():
+        if isinstance(v, (list, dict)):
+            _walk_and_stamp_lens_audiences(v, title_shares_index, depth + 1)
+
+
+def _clean_lens_audience_marks(node, depth: int = 0) -> None:
+    """Strip the internal `__lens_audience_stamped__` marker from every
+    `us_streams` / `us_readers` block before the payload ships. Keeps
+    the wire format lean."""
+    if depth > 10 or node is None:
+        return
+    if isinstance(node, list):
+        for it in node:
+            _clean_lens_audience_marks(it, depth + 1)
+        return
+    if not isinstance(node, dict):
+        return
+    for k in ('us_streams', 'us_readers'):
+        blk = node.get(k)
+        if isinstance(blk, dict):
+            blk.pop(_LENS_AUDIENCE_STAMPED_MARK, None)
+    for v in node.values():
+        if isinstance(v, (list, dict)):
+            _clean_lens_audience_marks(v, depth + 1)
+
+
 def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     """Build the full Trends payload for the requested filters.
 
@@ -6012,8 +8973,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_charts':        lambda: _read_snapshot('music_charts',       asof),
             'podcast_charts':      lambda: _read_snapshot('podcast_charts',     asof),
             'book_charts':         lambda: _read_snapshot('book_charts',        asof),
+            'comics_charts':       lambda: _read_snapshot('comics_charts',      asof),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing',     asof),
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
+            'wattpad_charts':      lambda: _read_snapshot('wattpad_charts',     asof),
+            'goodreads_charts':    lambda: _read_snapshot('goodreads_charts',   asof),
+            'broadway_grosses':    lambda: _read_snapshot('broadway_grosses',   asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news',   asof),
@@ -6021,6 +8986,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
                                                                   keywords=geo_kws, asof=asof),
+            # Streaming panel reads dated per-platform snapshots. The
+            # Netflix archive spans back to 2026-01-01 (published
+            # weekly Top 10 record); other platforms render for any
+            # day their dated snapshot exists.
+            'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
+                                                                        keywords=geo_kws,
+                                                                        asof=asof),
         }
     else:
         tasks = {
@@ -6046,8 +9018,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_charts':        lambda: _read_snapshot('music_charts'),
             'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
             'book_charts':         lambda: _read_snapshot('book_charts'),
+            'comics_charts':       lambda: _read_snapshot('comics_charts'),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
+            'wattpad_charts':      lambda: _read_snapshot('wattpad_charts'),
+            'goodreads_charts':    lambda: _read_snapshot('goodreads_charts'),
+            'broadway_grosses':    lambda: _read_snapshot('broadway_grosses'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'business_news':       lambda: _read_snapshot('business_news'),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news'),
@@ -6056,16 +9032,50 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_scores':         lambda: _read_snapshot('lens_scores'),
         }
 
+    # Fail-safe fan-out. The old as_completed(timeout=45) raised
+    # TimeoutError ("N (of M) futures unfinished") out of the loop the
+    # moment one section ran long (a cold recompute after a cache purge
+    # can do exactly that), killing the whole payload. futures_wait()
+    # never raises: every section that finished inside the budget is
+    # salvaged and rendered; stragglers render as loading placeholders
+    # and are named in the log + ops email so the slow feed is
+    # identifiable. The executor is shut down without waiting so a hung
+    # fetcher can't block the response; its thread finishes in the
+    # background and is discarded.
     results: dict = {}
-    with ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq') as ex:
+    pending_sections: list = []
+    ex = ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq')
+    try:
         futures = {ex.submit(fn): key for key, fn in tasks.items()}
-        for fut in as_completed(futures, timeout=45):
+        done, not_done = futures_wait(futures, timeout=SECTION_BUDGET_S)
+        for fut in done:
             key = futures[fut]
             try:
-                results[key] = fut.result(timeout=45)
+                results[key] = fut.result()
             except Exception as e:
-                logger.debug("trends_iq task %s failed: %s", key, e)
+                logger.warning("trends_iq section %s failed: %s", key, e)
                 results[key] = None
+        pending_sections = sorted(futures[f] for f in not_done)
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    if pending_sections:
+        logger.warning(
+            "trends_iq sections missed the %ss budget and render as "
+            "loading: %s", SECTION_BUDGET_S, ', '.join(pending_sections))
+        _send_ops_alert(
+            'section_timeout',
+            'Trends IQ sections slow to load',
+            ('These Trends IQ sections did not finish inside the '
+             f'{SECTION_BUDGET_S}s compute budget and rendered as '
+             'loading placeholders (the rest of the view shipped '
+             'normally):\n\n  ' + '\n  '.join(pending_sections) +
+             '\n\nFilters: '
+             f"geo_type={filters.get('geo_type') or 'National'}, "
+             f"geo_value={filters.get('geo_value') or ''}, "
+             f"lookback_days={lookback_days}, asof={asof or 'live'}\n"
+             'The view retries automatically within '
+             f'{PARTIAL_RETRY_TTL_S // 60} minutes.\n'
+             f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
 
     trending_searches = results.get('trending_searches') or []
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
@@ -6095,7 +9105,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `national` list on legacy snapshots that predate the classifier.
     wikipedia_trending = list(wiki_snap.get('people')
                                 or wiki_snap.get('national')
-                                or [])[:30]
+                                or [])[:100]
 
     # Music charts (Spotify + Apple Music + Shazam + TikTok + Amazon).
     # Scraper returns {sources: {spotify:{items:...}, apple:{...}, ...}}.
@@ -6112,6 +9122,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Book charts (Amazon Best-Sellers + Apple Books; Audible stubbed).
     book_snap    = results.get('book_charts') or {}
     book_charts  = book_snap.get('sources') or {}
+
+    # Comics charts (Amazon Comics & Graphic Novels bestsellers +
+    # Apple Books Comics genre RSS + Libby Comics via LA County
+    # OverDrive). Same shape as `book_charts` so the frontend renderer
+    # can share the row layout. See `scripts/trends_scrapers/
+    # comics_charts.py` for the per-source transport notes.
+    comics_snap    = results.get('comics_charts') or {}
+    comics_charts  = comics_snap.get('sources') or {}
 
     # Film ticketing (Fandango + Cinemark live; AMC / Regal / Atom
     # stubbed with cookie-donation guidance until a signed-in session
@@ -6137,10 +9155,40 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     libby_snap    = results.get('libby_trends') or {}
     libby_trends  = libby_snap.get('sources') or {}
 
+    # Wattpad serialized fiction (Hot + Originals + 4 genre rails).
+    # Six panels: wattpad_hot, wattpad_originals, wattpad_romance,
+    # wattpad_teen_fiction, wattpad_fanfiction, wattpad_fantasy. Rides
+    # inside the Books tab as a sixth source alongside Amazon / Apple
+    # / Audible / Libby (all serialized-fiction, not a full ebook, so
+    # placed after Libby).
+    wattpad_snap  = results.get('wattpad_charts') or {}
+    wattpad_trending = wattpad_snap.get('sources') or {}
+
+    # Goodreads community-driven weekly-read rail. Single panel today
+    # ('goodreads_most_read' = 'Most Read Books This Week In The
+    # United States'). Rides inside the Books tab alongside Amazon /
+    # Apple / Audible / Libby / Wattpad; positioned in the pill strip
+    # right after Amazon Kindle so the community signal reads
+    # adjacent to the retail signal it summarizes.
+    goodreads_snap     = results.get('goodreads_charts') or {}
+    goodreads_trending = goodreads_snap.get('sources') or {}
+
+    # Broadway weekly attendance (Playbill grosses page mirror of the
+    # Broadway League Tuesday report). Single panel today
+    # ('broadway_weekly_attendance' = 'Show Rank'), one row per
+    # currently-running production sorted by attendance desc. NEW
+    # top-level tab (not nested), so it doesn't merge into any other
+    # source strip. Attendance is a real integer from a real source
+    # so no Claude estimator runs; the annotator below synthesizes
+    # `us_streams` directly from the scraped attendance.
+    broadway_snap     = results.get('broadway_grosses') or {}
+    broadway_trending = broadway_snap.get('sources') or {}
+    broadway_week_ending = broadway_snap.get('week_ending') or ''
+
     # Philanthropy news snapshot -> combined list + per-source split.
     # Frontend picks how to slice; both shapes travel in the payload.
     phil_snap        = results.get('philanthropy_news') or {}
-    philanthropy_news = list(phil_snap.get('national') or [])[:40]
+    philanthropy_news = list(phil_snap.get('national') or [])[:150]
     philanthropy_by_source = phil_snap.get('by_source') or {}
 
     # Business news (NYT Business RSS + WSJ Business via Google News
@@ -6148,7 +9196,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # for the flat "Business" sub-tab and a `by_source` split so the
     # UI can render per-outlet cards if we want that later.
     biz_snap         = results.get('business_news') or {}
-    business_news    = list(biz_snap.get('national') or [])[:40]
+    business_news    = list(biz_snap.get('national') or [])[:150]
     business_by_source = biz_snap.get('by_source') or {}
 
     # Wall Street news (MarketWatch + CNBC Markets + IBD + Seeking
@@ -6158,7 +9206,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # for the flat "Wall Street" sub-tab and a `by_source` split so
     # the UI can render per-outlet cards if we want that later.
     ws_snap          = results.get('wall_street_news') or {}
-    wall_street_news = list(ws_snap.get('national') or [])[:50]
+    wall_street_news = list(ws_snap.get('national') or [])[:150]
     wall_street_by_source = ws_snap.get('by_source') or {}
 
     # Persona-lens relevance scores.  Daily Claude pass over every
@@ -6169,6 +9217,21 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # the dropdown just doesn't show the lens options + all items
     # render as normal.
     lens_snap        = results.get('lens_scores') or {}
+    # Graceful fallback for historic As-Of dates that predate the
+    # dated-lens-scores archive.  Every scraper writes to both the
+    # `latest/` and `{YYYY-MM-DD}/` prefixes via
+    # `scripts/trends_scrapers/_base.write_snapshot`, so any date the
+    # lens scorer ran on has a dated copy.  But dates before we started
+    # running the scorer daily have no dated lens_scores.json - a naive
+    # read returns {} and the lens dropdown loses every option.  Rather
+    # than blank the picker for those dates, fall back to the current
+    # `latest/lens_scores.json` so the persona picker stays usable.
+    # Titles that persist day-over-day (Crime Junkie, The Rachel Maddow
+    # Show, most trending books/films) still match and get filtered;
+    # titles unique to that historic date fall through the client-side
+    # applier's "panel not covered yet" safety net and render unfiltered.
+    if historic and asof and not lens_snap:
+        lens_snap = _read_snapshot('lens_scores') or {}
     lens_config      = list(lens_snap.get('lenses') or [])
     lens_scores_map  = dict(lens_snap.get('items') or {})
     # Per-kind top-50% cutoffs computed at scrape time (see
@@ -6185,7 +9248,32 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # pass (see scripts/trends_scrapers/stream_estimates.py). Missing
     # snapshot -> rows just don't carry `us_streams` and the frontend
     # renders without the extra chip.
-    stream_estimates_snap = results.get('stream_estimates') or {}
+    #
+    # WINDOW accumulator (2026-09-03): when the user picks a WINDOW
+    # other than "Yesterday" from the top dropdown, sum each item's
+    # per-day `us_estimate` across the last N dated snapshots (up to
+    # 30 days back). Each dated snapshot's us_estimate is a DAILY
+    # unique-audience count researched fresh that calendar day (see
+    # `stream_estimates.py`), so the window sum is unique-audience
+    # counted across the window with no multiplier and no decay
+    # factor. Persistent titles get materially larger numbers on
+    # longer windows; titles observed on only some of the last N
+    # days sum only those days (window_days_covered stamped on each
+    # row's `us_streams` block so the tooltip can be honest about
+    # coverage). `unit_label` picks up the window cadence noun so a
+    # 30-day chip reads "monthly US listeners" instead of "daily".
+    # lookback_days=1 runs the same accumulator with a 1-day window:
+    # values and labels stay the single-day read, but delta_pct /
+    # direction are recomputed against yesterday's dated snapshot with
+    # fold-tolerant key matching (repairs entries merged into latest/
+    # without trend fields, and entries severed from their own history
+    # by a title-spelling flip). Falls back to the plain latest/ read
+    # only when no dated snapshot was reachable at all.
+    stream_estimates_snap = _accumulate_stream_estimates_over_window(
+        int(lookback_days or 1), asof=asof,
+        today_snap=results.get('stream_estimates'))
+    if not stream_estimates_snap:
+        stream_estimates_snap = results.get('stream_estimates') or {}
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
@@ -6201,9 +9289,30 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `fast_channel:<platform>:<norm_name>` per platform (no cross-
     # platform dedup).
     _annotate_fast_channels_with_views(fast_trending, stream_estimates_snap)
+    # Day-over-day RANK deltas across every ranked tab (2026-09-01,
+    # Jenna: "hostly fo reverything ...streaming, etc").  Mirrors the
+    # FAST rank-delta shipped 2026-09-01: read yesterday's dated
+    # snapshot, match rows by a stable per-tab key (URL / ASIN /
+    # product_id / justwatch_id / reserve_id / title), fold rank
+    # movement into `us_streams.delta_pct` + `.direction` so every
+    # renderer's shared `_tiqAudienceChip` reads the same fields.
+    # Each of these runs AFTER its tab's stream_estimate stamper so
+    # the fold overwrites the stamper's empty 0.0 / 'stable' default.
+    # Anti-clobber in `_fold_ranked_delta` preserves any pre-existing
+    # non-zero delta the estimator wrote.
+    _annotate_fast_with_rank_change(fast_trending)
+    _annotate_fast_channels_with_view_change(fast_trending)
+    _annotate_streaming_with_rank_change(streaming_trending,
+                                          asof=asof if historic else None)
+    _annotate_sources_snapshot_rank_change(
+        music_charts, snapshot_source='music_charts', label='music')
+    _annotate_sources_snapshot_rank_change(
+        podcast_charts, snapshot_source='podcast_charts',
+        label='podcast')
     # Gaming: Xbox Game Pass Ultimate rows get a weekly-US-plays
     # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
     _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)
+    _annotate_gaming_with_rank_change(gaming_trending)
     # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
     # AND the libby_trends sub-dict (ebook/audiobook) - a single item
     # can appear on both, and both share the same `book:<title
@@ -6214,6 +9323,70 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         {'sources': libby_trends},
         stream_estimates_snap,
     )
+    # Wattpad rides on the Books tab as a sixth source. Every rail
+    # (Hot / Originals / four genres) rolls up to the same `wattpad`
+    # platform anchor tier in stream_estimates because a story is
+    # the same story regardless of which rail it charted on. Keyed
+    # `wattpad_story:<title author>` in the estimates snapshot.
+    _annotate_wattpad_with_streams(wattpad_trending, stream_estimates_snap)
+    # Goodreads community-driven weekly-read rail. Single panel
+    # (Most Read This Week) that anchors to its own kind
+    # (`goodreads_book`) so a title that also charts on Amazon /
+    # Apple / Audible / Libby doesn't cross-contaminate estimates.
+    _annotate_goodreads_with_streams(goodreads_trending, stream_estimates_snap)
+    # Day-over-day rank deltas for every Books-tab surface + Libby.
+    # Books retail rails (Amazon / Apple / Audible), community rails
+    # (Wattpad 6 panels), and Goodreads Most-Read each ride their
+    # own dated snapshot; Libby ships its own dated snapshot too.
+    # Runs AFTER every books-side stamper so the fold overwrites
+    # the estimator's default 'stable' when applicable.
+    _annotate_books_with_rank_change(
+        {**book_charts, **wattpad_trending, **goodreads_trending},
+        libby_trends,
+    )
+    # Films / ticketing tab: Fandango + AMC + Regal + Cinemark daily
+    # rank of top-selling titles.  film_ticketing.json is a single
+    # snapshot with `sources.<platform>.items`.  URL is the stable
+    # key on every row.
+    _annotate_sources_snapshot_rank_change(
+        film_sources, snapshot_source='film_ticketing',
+        label='films')
+
+    # Broadway weekly attendance: NO Claude estimator. Attendance IS
+    # the audience integer, drawn straight from the Broadway League's
+    # Tuesday weekly report. The annotator synthesizes a `us_streams`
+    # block with `us_estimate` = scraped attendance and unit_label =
+    # "weekly ticket buyers" so the frontend renders the same
+    # audience chip pattern as every other tab.
+    _annotate_broadway_with_streams(broadway_trending)
+
+    # Merge Wattpad's six panels + Goodreads's Most-Read-This-Week
+    # panel into the Books tab's `books_trending` dict so the
+    # frontend renders them as sub-pills of the Books source strip
+    # alongside Amazon / Apple / Audible / Libby. The exporter picks
+    # each panel's `label` verbatim so the CSV emits e.g.
+    # "Wattpad - Hot Stories" / "Goodreads - Most Read This Week"
+    # as section headers.
+    books_trending_merged = dict(book_charts)
+    for _wp_slug, _wp_panel in (wattpad_trending or {}).items():
+        books_trending_merged[_wp_slug] = _wp_panel
+    for _gr_slug, _gr_panel in (goodreads_trending or {}).items():
+        books_trending_merged[_gr_slug] = _gr_panel
+    # Comics: same three-source (Amazon Comics / Apple Books Comics /
+    # Libby Comics) card layout as the Books tab, but each row lands
+    # in a comics-only platform anchor tier (see
+    # stream_estimates._COMICS_PLATFORMS). Keyed
+    # `comic:<title author>` in the estimates snapshot. Libby Comics
+    # rows the daily research pass hasn't priced yet get a projected
+    # US number computed from their raw LA County hold count so every
+    # visible row can render a chip.
+    _annotate_comics_with_streams(comics_charts, stream_estimates_snap)
+    # Comics rank delta: comics_charts.json holds Amazon Kindle Comics
+    # (free + paid), Apple Books Comics, Libby Comics under
+    # `sources.<slug>.items`.  URL / ASIN is the stable per-row key.
+    _annotate_sources_snapshot_rank_change(
+        comics_charts, snapshot_source='comics_charts',
+        label='comics')
 
     # Stamp `us_readers` (daily US-gen-pop reader estimate + DoD trend)
     # onto every headline surface: the flat "Top trending" list, the
@@ -6226,8 +9399,33 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_headlines_with_readers(
         headlines, articles_by_source, philanthropy_news,
         headline_estimates_snap,
-        business_news    = business_news,
-        wall_street_news = wall_street_news)
+        business_news             = business_news,
+        wall_street_news          = wall_street_news,
+        philanthropy_by_source    = philanthropy_by_source,
+        business_by_source        = business_by_source,
+        wall_street_by_source     = wall_street_by_source)
+    # Headlines rank delta: Business + Wall Street sub-tabs each ride
+    # their own flat top-N ranked list plus a `by_source` dict.  URL
+    # is the stable per-row key so a persistent headline (same URL
+    # yesterday and today) gets a chip when its rank moved, and a
+    # headline that broke today is marked as a first appearance
+    # instead of rendering blank.  Delta folds into `us_readers`
+    # because the headline chip renders off
+    # `_tiqAudienceChip(r.us_readers)`.
+    _annotate_headlines_with_rank_change(
+        business_news, snapshot_source='business_news',
+        by_source_dict=business_by_source,
+        label='headlines.business')
+    _annotate_headlines_with_rank_change(
+        wall_street_news, snapshot_source='wall_street_news',
+        by_source_dict=wall_street_by_source,
+        label='headlines.wall_street')
+    # Philanthropy rides the same shape and was the one news sub-tab
+    # never wired in, which left its rows with no movement chip.
+    _annotate_headlines_with_rank_change(
+        philanthropy_news, snapshot_source='philanthropy_news',
+        by_source_dict=philanthropy_by_source,
+        label='headlines.philanthropy')
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
@@ -6319,7 +9517,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'historic':      historic,
         },
         'generated_at': now.isoformat(),
-        'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
+        # Partial payloads (sections still pending) go stale fast so the
+        # next request after PARTIAL_RETRY_TTL_S recomputes and fills in
+        # the missing panels. Complete payloads keep the full TTL.
+        'stale_until':  (now + timedelta(
+            seconds=(PARTIAL_RETRY_TTL_S if pending_sections
+                     else CACHE_TTL_S))).isoformat(),
+        # Section keys that missed the compute budget this pass. Their
+        # panels render the neutral warming-up state; the frontend can
+        # also use this list to schedule a quiet re-fetch.
+        'pending_sections': pending_sections,
         'cards': {
             'trending_searches':              trending_searches,
             'trending_searches_by_category':  searches_by_category,
@@ -6329,7 +9536,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'wikipedia_trending':             wikipedia_trending,
             'music_trending':                 music_charts,
             'podcasts_trending':              podcast_charts,
-            'books_trending':                 book_charts,
+            'books_trending':                 books_trending_merged,
+            'comics_trending':                comics_charts,
             'films_ticketing':                film_sources,
             'libby_trending':                 libby_trends,
             # `fused_trending` is populated below after the payload
@@ -6351,6 +9559,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'streaming_trending':             streaming_trending,
             'fast_trending':                  fast_trending,
             'gaming_trending':                gaming_trending,
+            'broadway_trending':              broadway_trending,
+            'broadway_week_ending':           broadway_week_ending,
             'products_by_retailer':           products,
             'movers':                         movers,
         },
@@ -6382,21 +9592,32 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                     if (p or {}).get('available')),
             'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
                                   for k in ('roku', 'tubi', 'pluto', 'amazon')),
-            'gaming':        sum(len(((gaming_trending.get(k) or {}).get('items') or []))
-                                  for k, _l, _a in GAMING_PLATFORMS),
+            'gaming':        sum(_gaming_panel_count(gaming_trending.get(k) or {})
+                                  for k, *_rest in GAMING_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))
                                   for k in ('apple', 'spotify', 'amazon', 'audible')),
             # Libby folds into the Books tab as three sibling cards
             # (Popular eBooks / Audiobooks / Magazines), so its item
-            # counts roll into `books` for the tab badge.
+            # counts roll into `books` for the tab badge. Goodreads
+            # adds one community-driven weekly-read rail on the same
+            # tab; count it too.
             'books':         (sum(len(((book_charts.get(k) or {}).get('items') or []))
                                   for k in ('amazon', 'apple', 'audible', 'spotify')) +
                               sum(len(((libby_trends.get(k) or {}).get('items') or []))
-                                  for k in ('ebook', 'audiobook', 'magazine'))),
+                                  for k in ('ebook', 'audiobook', 'magazine')) +
+                              sum(len(((goodreads_trending.get(k) or {}).get('items') or []))
+                                  for k in (goodreads_trending or {}))),
+            'comics':        sum(len(((comics_charts.get(k) or {}).get('items') or []))
+                                  for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
             'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
                                   for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
+            # Broadway currently ships one panel (Show Rank).
+            # Sum across every panel key so a future add-on rail
+            # (e.g. Off-Broadway) picks up the badge automatically.
+            'broadway':      sum(len(((broadway_trending.get(k) or {}).get('items') or []))
+                                  for k in (broadway_trending or {})),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +
@@ -6407,6 +9628,29 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'trending':      0,
         },
     }
+
+    # Search / People / Wiki audience-interest annotators. Same
+    # source of truth as the music / podcasts / streaming chips
+    # (`stream_estimates.json` in S3), but the new `search_term` /
+    # `trending_person` / `wiki_topic` kinds. Every row in the
+    # Search tab (overall + every category bucket), Movers, Trending
+    # People, and Wikipedia Trending gets a weekly-US-searchers /
+    # weekly-US-audience-interest chip.
+    try:
+        _annotate_search_terms_with_audience(
+            trending_searches,
+            searches_by_category,
+            movers,
+            stream_estimates_snap)
+    except Exception as e:
+        logger.warning("search-term audience annotate failed: %s", e)
+    try:
+        _annotate_trending_people_with_audience(
+            trending_people,
+            wikipedia_trending,
+            stream_estimates_snap)
+    except Exception as e:
+        logger.warning("trending-people audience annotate failed: %s", e)
 
     # Fused Trending feed - computed after the payload is assembled so
     # it can score every signal in one pass. Populated in-place on both
@@ -6419,7 +9663,71 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     payload['cards']['fused_trending'] = fused
     payload['counts']['trending']      = len(fused)
 
-    _cache_put(filters, payload)
+    # Headlines + Business read most-read-first, matching the Wall
+    # Street sub-tab. Without this they stack one publisher's block
+    # after another, so the reader column jumps up and down the page.
+    # Deliberately after the fused pass: fused scores off each list's
+    # incoming position, so re-ordering earlier would move Trending
+    # Overall as a side effect of a presentation change.
+    try:
+        payload['cards']['trending_headlines'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('trending_headlines') or [])
+        payload['cards']['business_news'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('business_news') or [])
+        payload['cards']['philanthropy_news'] = \
+            _sort_wall_street_by_readership(
+                payload['cards'].get('philanthropy_news') or [])
+    except Exception as e:
+        logger.warning("headline readership sort failed: %s", e)
+
+    # Trending Overall audience chip - stamped AFTER the fused list is
+    # computed so every fused row can inherit from its underlying
+    # trending_person / wiki_topic / search_term estimate.
+    try:
+        _annotate_fused_trending_with_audience(
+            fused, stream_estimates_snap)
+    except Exception as e:
+        logger.warning("fused-trending audience annotate failed: %s", e)
+
+    # Full-coverage guarantee (2026-09-09): every rendered non-Film row
+    # must carry a US Audience value. Anything the annotators above
+    # missed (live-feed items that surfaced after the daily research
+    # pass, fresh chart entries, normalization misses) gets a
+    # chart-tier baseline here so no chip or CSV cell ever renders
+    # blank. The nightly coverage gate replaces baselines with fully
+    # researched values on its next run. Runs BEFORE the lens stamp so
+    # baseline rows pick up per-lens figures too.
+    try:
+        _ensure_full_audience_coverage(payload['cards'],
+                                        stream_estimates_snap,
+                                        headline_estimates_snap)
+    except Exception as e:
+        logger.warning("audience coverage pass failed: %s", e)
+
+    # Per-lens audience rescaling (2026-09-03). Fold `shares` per
+    # (item, lens) from `lens_scores.json` into every row's
+    # `us_streams` / `us_readers` block as `us_estimate_by_lens`
+    # so the frontend chip renderer can swap in the persona-scaled
+    # count when a lens is active. Best-effort: any failure logs
+    # + moves on with the global-only audience payload.
+    try:
+        _title_shares = _build_title_shares_index(lens_scores_map)
+        if _title_shares:
+            _walk_and_stamp_lens_audiences(payload.get('cards') or {},
+                                            _title_shares)
+        _clean_lens_audience_marks(payload.get('cards') or {})
+    except Exception as e:
+        logger.warning("lens-audience stamp failed: %s", e)
+
+    # Historic cache entries are permanent snapshots of a past day, so a
+    # partial reconstruction must never be frozen forever - skip the
+    # write and let the next request retry the missing reads. Live
+    # partials DO cache (with the short stale_until above) so concurrent
+    # users get an instant view while the slow feed recovers.
+    if not (pending_sections and historic):
+        _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
     payload['from_cache'] = False
     return payload

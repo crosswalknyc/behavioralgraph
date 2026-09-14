@@ -59,11 +59,12 @@ from datetime import datetime, timedelta, timezone
 BUCKET = "dashboard-inputs"
 STATE_KEY = "system/pending_hold_notices.json"
 
-# Debounce window: how long a hold may sit pending before the notice
-# sends. 80 minutes sits inside the mandated 75-90 minute band and
-# comfortably covers the observed auto-repair cycle (~2h worst case was
-# quarantine -> rebuild -> republish; the rebuild itself lands well
-# inside 80 min, and the daily dedupe absorbs a second block).
+# Debounce window: how long a notice may sit pending before it sends.
+# NO-REBUILD POLICY (2026-08-31): built frames are always corrected in
+# place and published, so no publish path records a hold here anymore.
+# This module is now reachable only from the local operator override /
+# read-only audit surface; the window remains so a same-run in-place
+# correction still cancels a pending audit notice via cancel_on_publish.
 DEBOUNCE_MINUTES = 80
 
 # On a send failure the claimed entry is re-queued this far out.
@@ -74,7 +75,11 @@ RESEND_BACKOFF_MINUTES = 10
 SENT_RETENTION_DAYS = 3
 LOG_CAP = 200
 
-REPAIR_LINE = "Automatic repair was attempted and did not clear it."
+# Appended only to a local-override / audit notice that outlived the
+# debounce window. Built frames auto-correct in place and never record a
+# hold, so this never rides a publish-path notice. Deliberately says
+# nothing about rebuilding or rerunning (no-rebuild policy).
+REPAIR_LINE = "This file is flagged for local operator review."
 
 _TS_SUFFIX_RE = re.compile(r"[_\s]\d{2}[_\s]\d{2}[_\s]\d{4}.*$")
 
@@ -108,9 +113,9 @@ def _parse_ts(value):
 def deliverable_identity(s3_key) -> str:
     """Stable identity for a deliverable: subject+cohort, independent of
     the build timestamp. 'YMCA_-_Avid_Fan_08_25_2026_14_30.csv' and a
-    rebuilt 'YMCA_-_Avid_Fan_08_25_2026_16_10.csv' share one identity,
-    so a rebuild under a fresh timestamp still cancels the pending
-    notice recorded against the blocked attempt."""
+    later 'YMCA_-_Avid_Fan_08_25_2026_16_10.csv' share one identity, so
+    a republish under a fresh timestamp still cancels any pending
+    local-review notice recorded against the earlier attempt."""
     base = os.path.basename(str(s3_key or "").strip())
     if base.lower().endswith(".csv"):
         base = base[:-4]
@@ -241,7 +246,7 @@ def _send_ses(payload, extra_line=None):
                                          ["jenna@crosswalknyc.com"])},
         Message={
             "Subject": {"Data": str(payload.get("subject_line") or
-                                    "Profile held before delivery")},
+                                    "Profile flagged for local review")},
             "Body": {"Text": {"Data": body}},
         },
     )

@@ -1,0 +1,262 @@
+{
+  "lens_id": "gen_x",
+  "display_name": "Gen X (Ages 45-60)",
+  "emoji": "\ud83d\udcfc",
+  "source_profile": "Aggregated panel signal across Shark Tank - Gen X (2026-08-26) and cross-file 45-54 / 55-64 index reads.",
+  "one_line": "US adults 45 to 60. Latchkey generation grown up. Peak-earning, peak-caregiving (both kids and aging parents), still on Facebook, still watches cable, still buys the CD equivalent. Alt-rock, classic-rock, and Nashville-country stack. F1 and Formula-adjacent, NHL, college football. Costco and Trader Joe's same-cart. Fidelity and Vanguard, not Robinhood.",
+
+  "demographics": {
+    "age_range": "45 to 60. Density in 45-54 (idx 442) and 55-64 (idx 343). 65+ and 35-44 fall below 6.",
+    "gender_skew": "Roughly 50 male / 47 female. Non-binary and trans identifiers present but at a much lower share than any younger generation. Read as gender-binary on the surface, slight female pull on wellness / cooking / craft and slight male pull on finance / sports / motorsports.",
+    "income_band": "Every band sits near 100 to 104. Peak-earning decade. HHI median leans $95K to $135K. Meaningful upper-tail at $250K-plus. Real assets: home equity, 401(k), college savings, second-property adjacency.",
+    "education": "Some College / Associate 140, Bachelors 118, Graduate 96, HS or less 68. Mixed college and trade generation.",
+    "occupation_skew": "Management / business / professional 115, Healthcare 84, STEM 106, Trade and skilled labor over-represented vs Millennials.",
+    "ethnicity_skew": "White 104, Hispanic 94, Black 94, Asian 90. Read as majority-white with meaningful minority representation, less diverse than Millennials or Gen Z.",
+    "life_stage": "Married 135, Divorced 174 (this is the peak-divorce decade), Single 40, In a relationship 113. Has children under 12 idx 166 (many are late-in-life parents plus blended-family parents), also a heavy teen-and-college-age-parent load. Sandwich generation: caregiving both up and down.",
+    "geo_skew": ["New York Ny", "Los Angeles Ca", "Chicago Il", "Philadelphia Pa", "Dallas Ft Worth Tx", "Houston Tx", "Detroit Mi", "Cleveland Oh", "Pittsburgh Pa", "Atlanta Ga (broader suburban and Rust Belt lean than Millennials)"]
+  },
+
+  "psychographics": {
+    "values": [
+      "Self-reliance and skepticism. Grew up with divorce, MTV, no seatbelts, and Watergate replay. Trusts what they can measure.",
+      "Peak-earning-plus-peak-caregiving braid. Aging parents plus teenage kids plus college-tuition bills plus a mortgage all at once. Sandwich-generation stress is real.",
+      "Cable still on. Facebook still open. LinkedIn 214, Facebook 174 (heaviest social of any generation), Pinterest 181 for the recipe stack.",
+      "Cash-flow-first finance posture. Fidelity 376, Vanguard 245, Charles Schwab 438, Edward Jones 418. This is the traditional-broker generation.",
+      "Alt-rock, classic-rock, and Nashville-country stack. Led Zeppelin (672), Journey (489), Blondie (549), Limp Bizkit (456), Tool (407), Pantera (390), Rascal Flatts (409), Dierks Bentley (355), Darius Rucker (354).",
+      "Formula 1 crossover fandom (Porsche Racing, F1 TV). NHL loyalty (Nashville Predators, Islanders, Wild). College football and NASCAR adjacency.",
+      "Costco loyalty (COSTCO OPTICAL 1,641, COSTCO 374). QVC (828) actually watched, not ironic.",
+      "Read privacy-and-tech news through a slightly-suspicious frame. On Truth Social (405) or Parler (710) in a non-trivial share (Fox / conservative-media pull is stronger here than in Millennials or Gen Z)."
+    ],
+    "aesthetics": [
+      "Casual-dining and steakhouse (Outback 118, Cheesecake Factory 117, Longhorn 117, LongHorn 117)",
+      "Costco warehouse fits (Costco Optical, Costco tires, Costco winter jacket)",
+      "REI-and-Patagonia outdoors lean (REI 578)",
+      "Golf and tennis (On Par Golf 1,538, Golf Magazine 217, Tennis Channel 149)",
+      "Wine club and specialty spirits (Goose Island 257, Gosling's Rum 415, whiskey clubs)",
+      "Home renovation (Magnolia 160, HGTV pull, Home Depot / Lowe's every weekend)",
+      "Casetify-and-Oura beginning-of-tech curiosity (Oura Ring in this cohort at meaningful lift)"
+    ],
+    "tone_they_respond_to": "Dry, understated, ironic without being performative. Willing to be direct. Speaks to competence and craft. Prestige podcast register. Long-read New York Magazine / New Yorker essayism. Sports-analyst voice.",
+    "tone_they_reject": "Gen Z hyper-native slang, TikTok-first framing, alpha-bro grindset, evangelical prosperity, MLM, Gen Alpha kid content, meme-first framing without a substantive read underneath."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "The New York Times", "The Wall Street Journal", "The Economist", "The Atlantic", "New York Magazine",
+      "Bloomberg (150)", "Barron's", "Kiplinger", "Investors Business Daily",
+      "Entrepreneur (243)", "Inc. Magazine (212)", "Harvard Business Review", "Fortune",
+      "The Athletic", "The Ringer", "ESPN.com", "Sports Illustrated backlist"
+    ],
+    "reads_soft": [
+      "TheBump (269)", "Today's Parent (252)", "EatingWell (238)", "Parade (228)", "Women's Day (227)", "Health (225)", "Everyday Health (222)", "Eat This Not That (216)",
+      "Golf Magazine (217)", "Garden & Gun", "Southern Living", "This Old House",
+      "AARP Magazine adjacency (still not core, coming for later years)"
+    ],
+    "watches": {
+      "streaming": ["Netflix (idx 200)", "Amazon Prime Video (191)", "HBO Max (166)", "Disney+/Hulu (221)", "Apple TV+ (202)", "Peacock (222)", "MGM+ (258)", "Acorn TV (255)", "Discovery+ (176)", "UFC Fight Pass (484)", "ESPN (350)", "F1 TV (146)"],
+      "fast": ["Pluto TV", "Tubi", "Freevee", "Xumo", "Roku Channel"],
+      "film": ["Slow Horses", "The Diplomat", "The Morning Show", "Succession", "Silo", "Foundation", "Severance (edge)", "Bosch", "Reacher", "Jack Ryan", "Yellowstone and 1883 / 1923", "Ted Lasso", "The Bear", "Landman", "Lioness", "MobLand", "The Old Man", "Lincoln Lawyer", "Ozark", "Peaky Blinders", "Yellowjackets", "The Last of Us"],
+      "cable": ["CNBC (306)", "Fox Business (195)", "Bravo (176)", "A&E (152)", "USA Network (143)", "Hallmark Channel (144)", "Magnolia (160)", "History (144)", "Tennis Channel (149)", "MLBLive (146)", "F1 TV (146)"]
+    },
+    "listens": {
+      "podcasts": [
+        "The Daily",
+        "The Bill Simmons Podcast",
+        "Pardon My Take",
+        "The Ringer NFL Show",
+        "Pod Save America",
+        "The Ezra Klein Show",
+        "The New Yorker Radio Hour",
+        "Fresh Air",
+        "Serial",
+        "This American Life",
+        "Radiolab",
+        "SmartLess",
+        "Armchair Expert",
+        "Freakonomics Radio",
+        "Planet Money",
+        "How I Built This",
+        "Diary of a CEO",
+        "The Tim Ferriss Show",
+        "Huberman Lab",
+        "Peter Attia Drive",
+        "Rich Roll",
+        "Revisionist History",
+        "60 Minutes",
+        "Rachel Maddow (edge)",
+        "Prosecuting Donald Trump"
+      ],
+      "music_artists": [
+        "Led Zeppelin", "The Rolling Stones", "Fleetwood Mac", "Bruce Springsteen", "U2", "Tom Petty", "Journey",
+        "R.E.M.", "Nirvana", "Pearl Jam", "Soundgarden", "Alice in Chains", "Foo Fighters",
+        "Tool", "Pantera", "Metallica", "Rage Against the Machine", "Limp Bizkit", "Incubus",
+        "The Cranberries", "No Doubt", "Sarah McLachlan", "Sinead O'Connor", "Sara Bareilles",
+        "Dierks Bentley", "Darius Rucker", "Rascal Flatts", "Florida Georgia Line", "Chris Stapleton", "Zach Bryan",
+        "Norah Jones", "Adele", "Amy Winehouse",
+        "Beyonce", "Alicia Keys", "John Legend", "Jay-Z", "Kanye pre-2018", "OutKast",
+        "Taylor Swift (crossover)", "Bruce Springsteen"
+      ],
+      "music_genres": ["classic rock", "alt-rock and 90s grunge", "90s hip-hop", "adult contemporary", "Nashville country (Rascal Flatts / Florida Georgia Line / Dierks Bentley / Zach Bryan)", "modern country-rock (Chris Stapleton)", "adult R&B (Alicia Keys, John Legend)", "some jazz-adjacent (Norah Jones)"]
+    },
+    "reads_books": {
+      "formats": ["hardcover for the shelf", "Kindle for travel", "audiobook (Audible idx 375) for the commute", "library hardback"],
+      "genres": [
+        "prestige nonfiction (biography, business, political history)",
+        "literary fiction (Franzen, Chabon, Whitehead, Patchett, Strout)",
+        "spy thrillers (Baldacci, Silva, Clancy backlist, Grisham)",
+        "police procedurals (Connelly / Bosch series, Louise Penny)",
+        "prestige memoir (Springsteen, Obama, Bono, Matthew McConaughey)",
+        "personal-finance and retirement planning (Ramit Sethi, Suze Orman edge, John Bogle canon)",
+        "parenting-of-teens (Untangled by Lisa Damour)",
+        "true-crime narrative (Michael Finkel, Patrick Radden Keefe)"
+      ],
+      "authors_or_titles": [
+        "John Grisham", "David Baldacci", "Daniel Silva", "Michael Connelly", "Louise Penny",
+        "Jonathan Franzen", "Michael Chabon", "Colson Whitehead", "Ann Patchett", "Elizabeth Strout",
+        "Barack Obama", "Michelle Obama", "Bruce Springsteen (Born to Run)", "Bono (Surrender)",
+        "Patrick Radden Keefe (Empire of Pain, Say Nothing)",
+        "Erik Larson (The Devil in the White City backlist, The Demon of Unrest)",
+        "Malcolm Gladwell",
+        "Walter Isaacson (Musk, Einstein, Jobs)",
+        "James Clear (Atomic Habits)",
+        "Peter Attia (Outlive)"
+      ]
+    },
+    "plays": [
+      "Wordle and NYT Games idx 1,240 to 1,400 (highest of any generation)",
+      "GeoGuessr, Chess.com, NYT Connections, Spelling Bee",
+      "Xbox / PS5 / Nintendo Switch (Age of Empires 1,079, Star Wars 1,298, LEGO 645, Tony Hawk 635 for the nostalgia set)",
+      "EA FC / Madden (EA SPORTS NFL 974), NBA 2K, MLB The Show",
+      "Fortnite as parent-plus-teen co-op, Minecraft (673) same",
+      "Fantasy football league (in-league draft, Sleeper, Yahoo, ESPN Fantasy)",
+      "Poker (WSOP app, WPT), some daily-fantasy DraftKings / FanDuel"
+    ],
+    "shops": [
+      "Costco every-two-weeks (Costco Optical 1,641), Sam's Club",
+      "Trader Joe's (617), Whole Foods (351), H-E-B if Texas",
+      "REI (578) for the gear and the annual dividend, Academy Sports (440), Bass Pro / Cabela's",
+      "QVC (828) actually watched",
+      "Nordstrom, Nordstrom Rack (373), Macy's, Kohl's",
+      "Home Depot / Lowe's every weekend for the ongoing project",
+      "IPSY (1,433) and Sephora as gift-cards to daughter",
+      "Chewy (352) for the pet, plus the veterinary specialty pet food"
+    ],
+    "eats_at": [
+      "Outback Steakhouse (118), Longhorn Steakhouse (117), Cheesecake Factory (117), Carrabbas",
+      "Panera, Chipotle (117), Cava, Panda Express",
+      "Cracker Barrel (edge), IHOP, Denny's",
+      "Chick-fil-A (140), Dunkin (157), Starbucks",
+      "Local wine bar or brewery",
+      "Fine-dining occasionally (steakhouse or omakase, business dinner)"
+    ],
+    "buys": [
+      "Oura Ring adopting, Whoop, Apple Watch, Fitbit, Garmin",
+      "Costco brands (Kirkland everything), Yeti coolers, Yeti tumblers",
+      "Non Alcoholic craft beer (Athletic, Guinness 0.0), specialty spirits, wine club",
+      "Home improvement (Milwaukee tools, Ryobi, Traeger grill, Weber, Yeti coolers)",
+      "Gaming console for the family room, Xbox Game Pass, PlayStation Plus",
+      "OTC medical alert adjacency (One Call Alert, LifeFone, Medical Guardian) for aging parents",
+      "Golf equipment (Callaway, TaylorMade, Titleist), tennis gear",
+      "Pet supplements and specialty food (JustFoodForDogs 1,482, Farmers Dog, BarkBox)"
+    ],
+    "follows_talent": [
+      "Taraji P Henson", "Dax Shepard", "Connie Britton", "Mariska Hargitay", "Sarah Jessica Parker",
+      "Julia Roberts", "Sandra Bullock", "Reese Witherspoon", "Jennifer Aniston", "Jennifer Garner",
+      "Denzel Washington", "Tom Hanks", "Brad Pitt", "George Clooney", "Julia Louis-Dreyfus",
+      "Tina Fey", "Amy Poehler", "Steve Carell",
+      "Kevin Costner", "Billy Bob Thornton", "Danny DeVito", "Nick Offerman", "Aubrey Plaza",
+      "Tim Duncan", "Peyton Manning", "Tom Brady", "Serena Williams",
+      "Lewis Hamilton", "Max Verstappen", "Toto Wolff",
+      "Bruce Springsteen", "U2", "Foo Fighters", "Chris Stapleton", "Dierks Bentley",
+      "Ina Garten", "Alton Brown", "Guy Fieri",
+      "Kara Swisher", "Ezra Klein", "Michael Barbaro", "Rachel Maddow"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "career-peak, retirement planning (401(k), IRA rollover, backdoor Roth, HYSA, index funds)",
+    "college-tuition planning (529, financial aid), teen-parenting (screen time, driver's ed, first-job)",
+    "aging-parent caregiving (memory care, hospice, POA, Medicare enrollment for a parent)",
+    "prestige TV with a slower burn (Slow Horses, Diplomat, Morning Show, Silo, Foundation, Old Man, Bosch, Yellowstone, Lincoln Lawyer)",
+    "sports as full-season commitment (fantasy football, Sunday NFL, Sunday golf, weekday college football, F1 Sundays, NHL playoffs, Masters, US Open)",
+    "home improvement and craft (kitchen renovation, backyard smoker, wine cellar, tools, gardening)",
+    "podcast-first news (The Daily, Ezra Klein, Pod Save, Ringer, Simmons, Fresh Air)",
+    "wellness stack starting to matter (Oura, Whoop, sleep hygiene, protein-per-meal, resistance training, sober-curious)",
+    "travel is more mid-luxury: Hyatt, Marriott, Ritz, boutique hotels, international once a year",
+    "AI as a work tool (Copilot, ChatGPT, Notion AI) plus curiosity about kids using it",
+    "concert-tour purchases (Springsteen, U2, Foo Fighters, Chris Stapleton, Zach Bryan)",
+    "casual-dining and steakhouse (Outback, Longhorn, Cheesecake Factory, Cracker Barrel)"
+  ],
+  "themes_they_avoid": [
+    "TikTok-first framing without a substantive read",
+    "hyper-native Gen Z slang",
+    "K-pop unless it is the mainstream Newjeans / BTS moment",
+    "BookTok romantasy as PRIMARY (a slice of Gen X reads it, but the tab-wide read is not core)",
+    "manga / anime (Hazbin Hotel / Helluva Boss / Genshin-tier content)",
+    "cryptocurrency and meme-stock trading (Robinhood over-indexes for Gen Z but Gen X reads as under-index vs Fidelity / Vanguard / Schwab)",
+    "MLM and hustle-bro grindset",
+    "reality-dating on cable (Love Island, Bachelor, 90 Day) as PRIMARY content",
+    "Great American Family, Pure Flix, TBN, evangelical-prosperity market",
+    "youth-influencer content (Kai Cenat, Alix Earle, Nara Aziza, Salish Matter)"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP items headlined by Gen X-coded talent: Julia Roberts, Sandra Bullock, Reese Witherspoon, Jennifer Aniston, Denzel Washington, Tom Hanks, Brad Pitt, George Clooney, Kevin Costner, Nick Offerman, Aubrey Plaza, Tina Fey, Amy Poehler, Julia Louis-Dreyfus, Steve Carell, Billy Bob Thornton, Danny DeVito, Connie Britton, Mariska Hargitay, Taraji P Henson, Sarah Jessica Parker, Jennifer Garner, Chris Rock.",
+    "KEEP prestige slower-burn TV: Slow Horses, The Diplomat, The Morning Show, Silo, Foundation, The Old Man, Bosch, Reacher, Jack Ryan, Yellowstone, 1883, 1923, Landman, Lioness, Tulsa King, MobLand, Ted Lasso, The Bear, Only Murders, White Lotus, Yellowjackets, Beef, Severance, Succession, Bridgerton (edge), Ozark, Lincoln Lawyer, Peaky Blinders, The Last of Us, House of the Dragon.",
+    "KEEP prestige nonfiction, biography, political history: Erik Larson, Walter Isaacson, Patrick Radden Keefe, Ron Chernow, Ken Burns adjacent, Doris Kearns Goodwin. KEEP spy thrillers: Baldacci, Silva, Grisham, Michael Connelly, Louise Penny. KEEP prestige literary fiction: Franzen, Chabon, Patchett, Strout, Whitehead, George Saunders. KEEP finance-and-retirement: John Bogle canon, Ramit Sethi, Peter Attia (Outlive), James Clear (Atomic Habits).",
+    "KEEP classic-rock and 90s-alt-rock canon: Led Zeppelin, Fleetwood Mac, Bruce Springsteen, U2, Tom Petty, R.E.M., Nirvana, Pearl Jam, Soundgarden, Foo Fighters, Tool, Metallica, Rage Against the Machine, Cranberries, No Doubt, Sarah McLachlan. KEEP Nashville-country: Chris Stapleton, Zach Bryan, Dierks Bentley, Darius Rucker, Rascal Flatts, Florida Georgia Line, Morgan Wallen. KEEP adult R&B and 90s hip-hop: Alicia Keys, John Legend, Jay-Z, OutKast, Kanye pre-2018, Beyonce. KEEP Norah Jones, Adele, Bonnie Raitt, Brandi Carlile.",
+    "KEEP prestige podcasts and Gen X-core hosts: The Daily, Ezra Klein, New Yorker Radio Hour, Fresh Air, Freakonomics, Planet Money, How I Built This, Tim Ferriss, Huberman, Peter Attia, Rich Roll, Bill Simmons, Ringer NFL Show, Pardon My Take, Pod Save America, Prosecuting Donald Trump, Rachel Maddow (edge), SmartLess, Armchair Expert, Revisionist History, 60 Minutes.",
+    "KEEP sports as full-season commitment: Sunday NFL, Sunday golf (Masters, US Open, PGA Championship, LPGA Solheim), fantasy football coverage, F1 Sundays (Drive to Survive, Netflix Full Speed), NHL Playoffs, MLB Playoffs, NBA Playoffs, college football (SEC / Big Ten), US Open Tennis, Wimbledon.",
+    "KEEP Formula 1 / motorsports: any F1 race coverage, Porsche Racing, IndyCar, Le Mans, NASCAR Chase Elliott / Kyle Larson stories.",
+    "KEEP home-improvement / craft: HGTV shows, Magnolia Network programming, backyard smoker (Traeger, Big Green Egg), Yeti product news, Milwaukee / Ryobi / DeWalt tool news, kitchen renovation, wine club news, whiskey and bourbon.",
+    "KEEP travel: Hyatt / Marriott / Ritz / Four Seasons news, boutique hotel launches, Michelin Guide announcements, cruise lines (edge; Viking and Holland America read more for Boomers), F1 destination weekends.",
+    "KEEP peak-earning / retirement finance: 401(k) news, IRA rollover, backdoor Roth, HYSA, index funds, Vanguard / Fidelity / Charles Schwab / Edward Jones product news, Bogleheads-style content, real-estate rate news, home-equity line stories.",
+    "KEEP wellness stack: Oura Ring, Whoop, Apple Watch, sleep hygiene, protein-per-meal, resistance training, cold plunge, sober-curious (Athletic Brewing, Ghia, Cann), Huberman / Peter Attia protocols.",
+    "KEEP AI-at-work stories: Microsoft Copilot, ChatGPT, Claude, Perplexity, Notion AI, Salesforce Einstein. Drop AI stories that read as Gen Z homework tools or gaming AI.",
+    "KEEP casual-dining and steakhouse news (Outback, Longhorn, Cheesecake Factory, Carrabbas, LongHorn, Cracker Barrel edge). KEEP QSR mass-consumer news (Chick-fil-A, Dunkin, Starbucks, Panera, Cava, Chipotle).",
+    "KEEP puzzle games: Wordle, NYT Games, Connections, Spelling Bee, Chess.com, GeoGuessr. KEEP franchise gaming for the nostalgia / co-op-with-teen: Star Wars, Age of Empires, LEGO, Tony Hawk, Halo, Call of Duty (as parent-teen co-op).",
+    "KEEP prestige stand-up and comedy features: Chris Rock, Jerry Seinfeld, Bill Burr, John Mulaney, Ali Wong, Nate Bargatze, Jim Gaffigan, Sarah Silverman.",
+    "KEEP aging-parent-caregiver stories: memory-care, hospice, POA, Medicare enrollment for a parent, sandwich-generation coverage. This surface is genuinely useful for Gen X.",
+    "DROP hyper-Gen Z content: TikTok-first framing without substantive read, hyper-native Gen Z slang, Kai Cenat, Alix Earle, Nara Aziza, Salish Matter as PRIMARY items.",
+    "DROP K-pop and anime as PRIMARY (Hazbin Hotel, Helluva Boss, KPop Demon Hunters, Genshin Impact deep-cuts). K-pop mainstream (Newjeans, BTS) can pass as MID.",
+    "DROP BookTok romantasy as PRIMARY (a slice reads it, but the majority does not). Sarah J. Maas, Rebecca Yarros pass at MID at best; Ana Huang, Colleen Hoover fall further.",
+    "DROP reality-dating on cable as PRIMARY (Bachelor, Love Island, 90 Day Fiance).",
+    "DROP crypto-and-meme-stock trading content. Coinbase feature news is fine; 'why crypto will save you' takes are not. Robinhood coverage passes only if it is a policy or safety story.",
+    "DROP youth-influencer creator news (MrBeast is OK because he crosses over; PewDiePie, Markiplier fall to MID; Kai Cenat, Livvy Dunne, Salish Matter drop).",
+    "DROP evangelical-prosperity market: TBN, Pure Flix, 700 Club, Great American Family, Kirk Cameron content, Christian Nationalist framing.",
+    "DROP AARP / Medicare Supplement / retirement-community coverage as PRIMARY (starts to matter more late-Gen-X but not core yet). Life-alert, senior-caregiver-for-self is DROP.",
+    "DROP hustle-bro grindset, Andrew Tate, alpha-bro, wall-street-alpha, get-rich-quick trading-guru content.",
+    "DROP openly conservative culture-war messaging (Ben Shapiro, Charlie Kirk, Matt Walsh, Candace Owens, PragerU, Turning Point USA). Note: a slice of Gen X reads this content but the tab-wide bar is DROP unless the item is genuinely news.",
+    "DROP kids-only franchises without adult-crossover (Paw Patrol, Peppa Pig, Bluey) unless the parent-comedy angle is the story.",
+    "TIE-BREAK when unsure: does this touch peak-career money, prestige-slower-burn TV, full-season sports fandom, classic / alt rock / country, home / craft / wine / whiskey, aging-parent caregiving, or a Gen X-coded talent? If yes, lean KEEP. If it reads as content aimed at their teen or their grandma, lean DROP."
+  ],
+
+  "expected_kept_share_per_tab": "25-45% of items per tab. Prestige TV and slower-burn film should retain a healthy share. Podcasts skew high because Gen X is one of the heaviest prestige-podcast cohorts. BookTok and K-pop drag Books and Songs lower. Headlines and Searches narrow the hardest because a lot of youth-culture-first items fall out.",
+
+  "reasoned_from_profile": {
+    "profile_key": "Shark Tank - Gen X.csv (2026-08-26)",
+    "note": "Shark Tank cast rows (Lori Greiner, Barbara Corcoran, Mark Cuban, Kevin O'Leary, Daymond John) are Shark Tank contamination. Public research anchors: Pew Research American Trends Panel on Gen X (2024, 2025), Federal Reserve Survey of Consumer Finances, AARP Sandwich Generation research, MRI-Simmons Gen X reads.",
+    "notable_index_signals": [
+      "AGE 45-54 idx 442, 55-64 idx 343",
+      "INCOME uniform ~100-104 across bands (peak-earning)",
+      "EDUCATION Some College 140, Bachelors 118, Graduate 96",
+      "MARRIED 135, DIVORCED 174 (peak-divorce decade), HAS CHILDREN 166",
+      "SOCIAL FACEBOOK 174 (heaviest), LINKEDIN 214, PINTEREST 181, PATREON 327, LETTERBOXD 306",
+      "APP SKYPE 2,789, WEIGHT WATCHERS 860, HELLOFRESH 996, HEADSPACE 866, INTUIT / TURBOTAX 315, MLB TV 581, CALM 545, GROUPON 426, ANGI 383, AUDIBLE 375, GOODRX 326, QUICKBOOKS 285",
+      "SEARCH AI METAGER 1,704, SEAMLESS AI 1,386, EXA AI 1,153, DEEP SEEK 451, GROK 361, PERPLEXITY 286",
+      "STREAMING UFC FIGHT PASS 484, ESPN 350, MUBI 288, MGM+ 258, ACORN TV 255, PEACOCK 222, APPLE TV+ 202, NETFLIX 200, PRIME 191",
+      "MEDIA THEBUMP 269, TODAYS PARENT 252, ENTREPRENEUR 243, EATINGWELL 238, GOLF MAGAZINE 217, EAT THIS NOT THAT 216",
+      "BROADCAST CNBC 306, FOX BUSINESS 195, A&E 152, USA 143, HALLMARK 144, HISTORY 144, TENNIS CHANNEL 149, MAGNOLIA 160",
+      "MUSIC LED ZEPPELIN 672, BLONDIE 549, JOURNEY 489, LIMP BIZKIT 456, BEE GEES 454, TOOL 407, PANTERA 390, CRANBERRIES 376, INCUBUS 367, RASCAL FLATTS 409, DIERKS BENTLEY 355, FLORIDA GEORGIA LINE 354, DARIUS RUCKER 354",
+      "MPB MAXBONE 21,794, LITTLE HUNTER 19,277, MAEV 11,218, ALBERTA FERRETTI 2,113, ROGUE TERRITORY 2,002, PUBLIC REC 1,725, ON PAR GOLF 1,538, JUSTFOODFORDOGS 1,482",
+      "SHOP COSTCO OPTICAL 1,641, COSTCO 374, IPSY 1,433, JOURNEYS 852, QVC 828, TRADER JOES 617, ROSS 591, REI 578, H-E-B 449, ACADEMY SPORTS 440, DOLLAR GENERAL 417, GNC 359, CHEWY 352, WHOLE FOODS 351",
+      "GAMES INDIANA JONES 1,690, WORDLE 1,402, STAR WARS 1,298, NYT GAMES 1,125, AGE OF EMPIRES 1,079, EA SPORTS NFL 974, GEOGUESSR 834, MORTAL KOMBAT 798, LEGO 645, TONY HAWK 635",
+      "WORKOUT EAST BANK CLUB 55,025, LEKFIT 54,888, DOGPOUND 50,050, SLT 47,312, Y7 30,875, EQUINOX 10,552, BARRY'S 9,918",
+      "TRAVEL HYATT VACATION 395, VENETIAN LAS VEGAS 310, WALDORF ASTORIA 308, BREAKERS PALM BEACH 306, HYATT REGENCY 313",
+      "TECH NATIVE UNION 1,070, ONE CALL ALERT 602, AVOCADO 522, LIFEFONE 374, OURA (in cohort at lift)",
+      "BANKING TD BANK 406, CITIBANK 355, PNC 310, US BANK 282, BofA 259, CHASE 243, TRUIST 240, WELLS FARGO 224",
+      "INVEST FIDELITY 376, CHARLES SCHWAB 438, EDWARD JONES 418, VANGUARD 245, E TRADE 844, TRADESTATION 756, ROBINHOOD 264, ACORNS 131",
+      "CREDIT FREEDOM MORTGAGE 1,047, GM FINANCIAL 756, AMEX 368, CARECREDIT 222, DISCOVER 184"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+[Unit]
+# Daily Microdramas IQ scrape (Peacock + ReelShort + DramaBox + GoodShort +
+# NetShort).
+#
+# Migrated from Render cron `microdramas-scrapers-cron` (crn-d9kebinavr4c73aqtfag).
+# Runs the scrapers directly on this box - no HTTP round-trip through the
+# web service. Writes fresh snapshots to:
+#   s3://dashboard-inputs/microdramas_iq/snapshots/latest/
+#   s3://dashboard-inputs/microdramas_iq/snapshots/{YYYY-MM-DD}/
+# and merges them into microdramas_iq/catalog.json.
+#
+# Each per-source fetch() has a curated baseline fallback so the catalog
+# date always advances even when datacenter egress is challenged.
+
+Description=Daily Microdramas IQ scrape (Peacock, ReelShort, DramaBox, GoodShort, NetShort)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/bg-webapp
+# Load AWS creds + region from bg-webapp env (SES + S3 dashboard-inputs).
+EnvironmentFile=/etc/bg-webapp/env
+# 30-minute timeout; the scrapers themselves finish in ~5-10 min but
+# individual fetch retries can extend the window.
+TimeoutStartSec=1800
+ExecStart=/opt/bg-webapp/.venv/bin/python -m scripts.microdramas_scrapers.run_all
+StandardOutput=append:/var/log/microdramas-scrapers.log
+StandardError=append:/var/log/microdramas-scrapers.log
+
+[Install]
+WantedBy=multi-user.target

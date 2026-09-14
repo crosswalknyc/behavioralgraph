@@ -83,10 +83,12 @@ _FEEDS: list[tuple[str, str, str, str]] = [
 ]
 
 
-# Per-feed cap keeps NYT (50 items) and WSJ-via-GN (100 items) from
-# fighting for a fixed slot count in the combined view.
-_PER_FEED_CAP = 20
-_TOTAL_CAP    = 40
+# Per-feed cap keeps NYT (50 items) and WSJ-via-GN (100 items) roughly
+# balanced in the combined view while letting the Business list carry
+# 100+ real rows (Jenna 2026-09-09: every list 100+ where the source
+# has them).
+_PER_FEED_CAP = 60
+_TOTAL_CAP    = 150
 
 
 def _fetch_body(url: str, *, timeout: int = 15) -> str:

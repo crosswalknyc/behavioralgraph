@@ -5,7 +5,7 @@
 # required `validate` check pending and unmergeable. Someone with `workflow`
 # scope should broaden the workflow's pull_request trigger to run on all PRs.
 # (Until that lands, non-index.html PRs touch this file to trigger the check.)
-# Trigger touch: JIQ second-screen cluster label nudges + robust rename.
+# Trigger touch: Trends Digest daily-move fixes (dash for steady/unknown).
 """Validate structural invariants of ``templates/index.html``.
 
 This file has been silently broken multiple times in a single week by
@@ -149,6 +149,12 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "SPE Cross-Window story-mode case card (Journey IQ)"),
     ('id="jiqAmcCaseCard"',
      "AMC story-mode case card (Journey IQ)"),
+    ('id="brandTrackingIQView"',
+     "Brand Tracking product view (CNBC Pro competitive set)"),
+    ('showBrandTrackingIQ',
+     "Brand Tracking showBrandTrackingIQ() entry point"),
+    ('value="brandTrackingIQ"',
+     "Brand Tracking SELECT PRODUCT dropdown option"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives). Left empty for
@@ -495,3 +501,5 @@ if __name__ == "__main__":
 
 # trigger touch: force the validate workflow to run for app.py-only PRs
 # (see fix/profile-image-hyphen-space - profile image hyphen/space lookup)
+# (feat/profile-family-grouping 2026-09-08 - data-cut family sync + audit)
+# (fix/bpiq-superadmin-journeys 2026-09-08 - super_admin resolves to '*')

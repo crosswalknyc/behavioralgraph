@@ -68,11 +68,18 @@ Verdict handling
                  chain recompute, re-sort, mechanical ship gate re-run
                  on the corrected bytes, publish. Ledger records what
                  changed.
-  FAIL, any finding needing judgment
-              -> quarantine to _quarantine/ + plain-language hold
-                 email (same flow as the mechanical gate) + raise
-                 PreShipVettingError (a ShipGateError subclass, so
-                 every existing caller's hold handling applies).
+  FAIL, any finding needing judgment (structural signatures)
+              -> NO-REBUILD POLICY (2026-08-31): the finding routes to
+                 its deterministic mechanical re-spread (top-cluster
+                 convergence / ladder), the chain recomputes, the frame
+                 is re-sorted and re-gated (report-only), and the
+                 corrected frame publishes IN PLACE. It is never
+                 quarantined and PreShipVettingError is never raised on
+                 the publish path. The correction is transactional: a
+                 post-fix frame that breaks the mechanical gate reverts
+                 to the gate-approved frame and ships THAT. The only
+                 non-ship is a genuine upstream BUILD failure, surfaced
+                 before any frame exists.
 
 Fail-open posture on INFRASTRUCTURE only: if the reasoner is
 unreachable, times out, or returns unparseable output, the file
@@ -131,6 +138,7 @@ import io
 import json
 import os
 import re
+import statistics
 import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -198,6 +206,48 @@ MIRROR_FAMILY_CATS = {
     "SOCCER", "AL", "NL", "AFC", "NFC", "AL/NL", "AFC/NFC",
     "WESTERN CONFERENCE", "EASTERN CONFERENCE",
 }
+
+# ---------------------------------------------------------------------------
+# Impossible-index autocorrect thresholds (Jenna 2026-08-31: "I dont
+# need emails if it is automatically fixing it, just if it cant
+# actually launch it. Ideally it would fix then launch and we would be
+# none the wiser"). An absurd Index vs Gen Pop is a broken ratio, not a
+# real audience signal, and it is ALWAYS correctable to a shippable
+# state, so it must auto-fix silently, never hold the whole file.
+#
+# IMPOSSIBLE_INDEX_CEIL: an index above this is not a credible over-
+# index for a single brand and is treated as an artifact to correct.
+# Engaged / niche audiences legitimately reach 3-10x (index 300-1000)
+# and a title's own subject / host can run higher, but those ride on a
+# SOLID Gen Pop denominator (the peer test below never flags them). 15x
+# sits comfortably above sustained real over-indices while catching the
+# broken-ratio range (50x-40000x) that a tiny / near-zero denominator
+# produces. It is a nomination line, not a blind clamp: the peer-aware
+# classifier decides whether each flagged row is a denominator artifact
+# (adopt a peer-median baseline), a coverage gap (blank the index), a
+# numerator artifact (clamp the reach), or a real over-index (leave it
+# for the reasoner) - so a solid-denominator high index is never
+# clamped by magnitude alone.
+IMPOSSIBLE_INDEX_CEIL = 1500.0
+# A Gen Pop penetration below this (~<33K US people) is treated as no
+# reliable baseline: the index is a coverage gap, not a real ratio.
+NEAR_ZERO_BASELINE_PEN = 0.01
+# A row whose own baseline is more than this many times below its
+# category peer median is an anomalously-low (artifact) denominator.
+BASELINE_SUSPECT_RATIO = 10.0
+# Peers needed in a category before its median baseline is trusted.
+MIN_PEERS_FOR_MEDIAN = 5
+# Only rescue a suspect denominator (adopt the peer median) for brands
+# with real audience traction; below this, blank as a long-tail gap.
+MIN_BP_TO_ADOPT = 2.0
+# Ignore baselines below this when computing a category peer median, so
+# other artifacts in the same column do not drag the median down.
+PEER_BASELINE_FLOOR = 0.05
+# Where per-file Gen Pop baseline anomalies are recorded for the Gen Pop
+# worker to reconcile the global baseline (non-contended with the Gen
+# Pop CSV itself and with the registration JSONs). Append-only, silent,
+# never emails (per Jenna's directive above).
+GENPOP_ANOMALY_PREFIX = "system/genpop_baseline_anomalies"
 
 # ---------------------------------------------------------------------------
 # Benchmark bands (2026-08-26 audit gap 4). Index vs Gen Pop bands for
@@ -534,9 +584,18 @@ def _youth_share(demo_summary):
     return 0.0
 
 
-def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
+def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True,
+                           s3_client=None):
     """All-local scan. Returns the facts dict fed to the reasoner and
-    the ledger. Never raises; partial results carry an 'errors' list."""
+    the ledger. Never raises; partial results carry an 'errors' list.
+
+    2026-09-04 (test-mock leak fix): threads `s3_client` through to
+    `scan_frame_for_constants` so a FakeS3() mock in the test harness
+    is honored instead of the scanner silently falling back to a live
+    boto3 client and pulling real ledger rows (which downgraded PASS
+    verdicts to BORDERLINE in the test suite). Production is unchanged:
+    callers still pass the real `s3c` resolved in `run_pre_ship_vetting`.
+    """
     facts = {
         "benchmark_candidates": [],
         "genpop_gaps": {"n_brand_rows": 0, "n_missing": 0, "examples": []},
@@ -699,7 +758,7 @@ def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
                 scan_frame_for_constants,
             )
         facts["cross_file_constants"] = scan_frame_for_constants(
-            df, subject, s3_key, cols, genpop_map)
+            df, subject, s3_key, cols, genpop_map, s3_client=s3_client)
     except Exception as e:
         facts["errors"].append(f"cross-file constant scan: {e}")
 
@@ -937,17 +996,22 @@ composition fact, or the competitive-context fact). A RAISE corrects a \
 depression the composition cannot explain. A TRIM corrects an over-read \
 that a concrete fact (eligibility gating, single-homing rivalry, carriage \
 impossibility) makes wrong for this audience; never trim expected \
-avid/fan intensity. A fix without a citable fact_basis will not be \
-applied; it becomes a review item. For findings that require \
-rebuild-level judgment (wrong audience definition, contaminated \
-qualifier, structural artifacts you cannot re-level row by row), set \
-fixable=false.
+avid/fan intensity. A fix without a citable fact_basis is not applied \
+as a reasoned re-level; the row falls back to its deterministic \
+mechanical correction and still ships. Set fixable=false when the right \
+correction is a deterministic mechanical repair rather than a per-row \
+reasoned value (a structural signature the detectors below already name, \
+or an out-of-band index with no citable anchor): fixable=false means \
+"hand this row to the mechanical fixer," never "hold the file." Every \
+built file is corrected in place and published; there is no \
+rebuild-level judgment.
 
 6. SYNTHETIC SIGNATURES. You are given the outputs of mechanical detectors \
 (shared-suffix value ladders, cross-grid duplicate values, top-cluster \
 convergence, cross-file constants, coverage gaps). Do not re-detect; judge. \
 A ladder group above threshold that survived to this stage is a FAIL with \
-fixable=false (the repair is a re-draw, not a re-level). A handful of \
+fixable=false; the repair is the deterministic downstream re-salt, applied \
+in place. A handful of \
 shared suffixes below threshold is BORDERLINE at most. Cross-grid \
 duplicates outside required mirror families are BORDERLINE unless \
 systematic. A TOP-CLUSTER CONVERGENCE (3+ category leaders within ~0.15 \
@@ -958,8 +1022,10 @@ deterministic downstream). A CROSS-FILE CONSTANT (this file's value for a \
 ubiquitous brand sitting inside a tight index window that 3+ unrelated \
 recent files also shipped) is likewise mechanical: independent audiences \
 do not agree to within ~2 index points; address it with a per-audience \
-reasoned fix (fixable=true with fact_basis) or flag fixable=false if the \
-right level needs a rebuild.
+reasoned fix (fixable=true with fact_basis) or flag fixable=false to hand \
+it to the deterministic per-audience re-level. In every case fixable=false \
+routes the row to a deterministic mechanical repair that ships in place; \
+it never holds the file or asks for a rebuild.
 
 7. LANGUAGE. Write every "plain" string for a client reader: plain English, \
 specific, no internal tooling or vendor or model names, no hedging \
@@ -1614,6 +1680,345 @@ def _ledger_append(entry, s3_client, verbose=True):
 # Public API
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Impossible-index autocorrect (Jenna 2026-08-31)
+# ---------------------------------------------------------------------------
+
+def _gp_native_cat(c):
+    """The exact category normalizer the Gen Pop map is keyed by, so an
+    override lands under the same key _gp_get and append_genpop_columns
+    resolve. Falls back to the local normalizer if the twin is
+    unavailable."""
+    try:
+        try:
+            from migration.genpop_baseline import _norm_cat as _n
+        except ImportError:
+            from genpop_baseline import _norm_cat as _n  # type: ignore
+        return _n(c)
+    except Exception:
+        return _norm_cat(c)
+
+
+def _flush_genpop_baseline_anomalies(records, s3_client, verbose=True):
+    """Append per-file baseline anomalies to a dated, append-only S3
+    sink for the Gen Pop worker to reconcile the GLOBAL baseline.
+
+    Non-contended: distinct key prefix from Gen_Pop_2026.csv and the
+    registration JSONs. Silent and best-effort - never emails, never
+    raises, never blocks a publish (per Jenna 2026-08-31: no email when
+    the pipeline auto-fixes)."""
+    if not records:
+        return
+    try:
+        s3c = _s3(s3_client)
+    except Exception:
+        return
+    try:
+        day = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        key = f"{GENPOP_ANOMALY_PREFIX}/{day}.jsonl"
+        existing = b""
+        try:
+            existing = s3c.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+        except Exception:
+            existing = b""
+        lines = [json.dumps(r, ensure_ascii=False) for r in records]
+        body = existing + ("\n".join(lines) + "\n").encode("utf-8")
+        s3c.put_object(Bucket=BUCKET, Key=key, Body=body,
+                       ContentType="application/x-ndjson")
+        if verbose:
+            print(f"  [pre-ship-vetting] flagged {len(records)} Gen Pop "
+                  f"baseline anomaly record(s) -> s3://{BUCKET}/{key}")
+    except Exception as e:
+        if verbose:
+            print(f"  [pre-ship-vetting] baseline-anomaly flag skipped "
+                  f"({type(e).__name__}: {e})")
+
+
+def autocorrect_impossible_index(df, subject, gp_map, s3_key, *,
+                                 verbose=True):
+    """Deterministically neutralize impossible Index vs Gen Pop values
+    BEFORE the reasoned review, so a broken ratio auto-fixes and ships
+    instead of holding the whole file.
+
+    Index = profile Brand Penetration / Gen Pop Penetration * 100. An
+    index above IMPOSSIBLE_INDEX_CEIL is almost always a broken ratio
+    driven by a tiny / near-zero Gen Pop denominator, not a real
+    audience signal. Each flagged (category, brand) is classified by
+    comparing its own baseline to its category peers:
+
+      * DENOMINATOR ARTIFACT (adopt): the brand's baseline is >10x below
+        its category peer median AND its reach is meaningful (>=2%). The
+        brand is real but under-baselined in Gen Pop (e.g. a premium
+        brand the panel under-observes). Adopt the category peer median
+        as the baseline across ALL the brand's rows (mirror-coherent),
+        which lands the index in a sane range. Reach is untouched. Flag
+        the global Gen Pop baseline for reconciliation.
+
+      * COVERAGE GAP (blank): the baseline is near-zero (<0.01%), OR
+        suspect-low with sub-2% reach (obscure long-tail). No reliable
+        denominator exists, so the index is a gap: blank both baseline
+        cells (remove the map entry so append leaves them empty). Reach
+        is untouched. Flag it.
+
+      * NUMERATOR ARTIFACT (clamp): suspect-low denominator, meaningful
+        reach, but even the adopted peer median leaves the index above
+        the ceiling (a degenerate peer set). Rather than discard a
+        meaningful reach's index, clamp the reach to the ceiling-implied
+        level given the adopted baseline (subject-salted jitter, no
+        pinning), recompute the chain, and flag it. Rare.
+
+      * REAL OVER-INDEX (leave): the denominator is plausible relative
+        to peers (not suspect, not near-zero). A high index here rides
+        on a solid baseline and is a genuine composition effect (a
+        show's own host / a hyper-relevant niche among its own viewers).
+        It is left for the reasoner, which weighs composition and
+        relevance and whose above-band direction guard downgrades any
+        unfounded trim to borderline. Deterministically clamping these
+        by magnitude alone would destroy legitimate signal - exactly
+        the wrong-direction fix the workspace rules forbid.
+
+    Returns a dict:
+      df              - frame with any numerator clamps applied + chain
+                        recomputed (unchanged when only baselines moved)
+      eff_gp_map      - gp_map with per-(cat, brand) overrides applied on
+                        a COPY (the shared cache is never mutated); the
+                        reasoner, prescan, prompt, and final append all
+                        consume this so corrected indices are what ships
+      baseline_changed- bool: adopt / blank overrides were made
+      bp_clamped      - bool: a numerator clamp changed reach
+      corrections     - list of per-brand correction records (report)
+      gap_flags       - list of records for the Gen Pop anomaly sink
+
+    Never raises: any failure returns the inputs unchanged so a defect
+    in this pass can never wedge a publish.
+    """
+    result = {
+        "df": df, "eff_gp_map": gp_map, "baseline_changed": False,
+        "bp_clamped": False, "corrections": [], "gap_flags": [],
+    }
+    try:
+        if not gp_map or df is None or len(df) == 0:
+            return result
+        cols = _detect_cols(df)
+        if not cols["cat"] or not cols["val"] or not cols["bp"]:
+            return result
+
+        from collections import defaultdict
+        rows = []
+        for idx in df.index:
+            cu = _norm_cat(df.at[idx, cols["cat"]])
+            if not cu or cu in META_CATS or cu in DEMO_CATS or cu in FAN_CATS:
+                continue
+            bp = _num(df.at[idx, cols["bp"]])
+            if bp is None:
+                continue
+            brand = str(df.at[idx, cols["val"]]).strip()
+            bn = _norm_brand(brand)
+            if not bn:
+                continue
+            gp_hit = _gp_get(gp_map, cu, bn)
+            if not gp_hit or not gp_hit[0] or gp_hit[0] <= 0:
+                continue
+            base = float(gp_hit[0])
+            rows.append({"idx": idx, "cu": cu, "brand": brand, "bn": bn,
+                         "bp": bp, "base": base,
+                         "index": bp / base * 100.0})
+
+        candidates = [r for r in rows
+                      if r["index"] > IMPOSSIBLE_INDEX_CEIL]
+        if not candidates:
+            return result
+
+        # Peer median EXCLUDES the impossible-index rows themselves, so a
+        # brand's own artifact baseline can never bias the median used to
+        # correct it (a suspect brand at 0.069% would otherwise drag its
+        # category median down and under-correct the index).
+        cand_idxs = {r["idx"] for r in candidates}
+        cat_baselines = defaultdict(list)
+        for r in rows:
+            if r["idx"] in cand_idxs:
+                continue
+            if r["base"] >= PEER_BASELINE_FLOOR:
+                cat_baselines[r["cu"]].append(r["base"])
+        peer_median = {}
+        for cu, bases in cat_baselines.items():
+            if len(bases) >= MIN_PEERS_FOR_MEDIAN:
+                peer_median[cu] = statistics.median(bases)
+
+        all_by_brand = defaultdict(list)
+        for r in rows:
+            all_by_brand[r["bn"]].append(r)
+        cand_brands = {}
+        for r in candidates:
+            cand_brands.setdefault(r["bn"], r["brand"])
+
+        eff = dict(gp_map)
+        baseline_changed = False
+        bp_clamped = False
+        corrections = []
+        gap_flags = []
+        ts = datetime.now(timezone.utc).isoformat()
+        base_name = os.path.basename(str(s3_key or ""))
+
+        for bn, brand_disp in cand_brands.items():
+            brand_rows = all_by_brand[bn]
+            cats = sorted({r["cu"] for r in brand_rows})
+            pms = [peer_median[c] for c in cats if c in peer_median]
+            best_pm = max(pms) if pms else None
+            target_pm = statistics.median(pms) if pms else None
+            own_base = min(r["base"] for r in brand_rows)
+            rep_bp = max(r["bp"] for r in brand_rows)
+            worst_idx = max(r["index"] for r in brand_rows
+                            if r["index"] > IMPOSSIBLE_INDEX_CEIL)
+
+            near_zero = own_base < NEAR_ZERO_BASELINE_PEN
+            suspect = (best_pm is not None
+                       and own_base < best_pm / BASELINE_SUSPECT_RATIO)
+
+            # Real over-index: plausible denominator, leave for reasoner.
+            if not suspect and not near_zero:
+                continue
+
+            # Denominator artifact: adopt peer median (mirror-coherent).
+            if (suspect and rep_bp >= MIN_BP_TO_ADOPT and target_pm
+                    and (rep_bp / target_pm * 100.0) <= IMPOSSIBLE_INDEX_CEIL):
+                new_idx = rep_bp / target_pm * 100.0
+                for c in cats:
+                    eff[(_gp_native_cat(c), bn)] = (
+                        target_pm, f"{target_pm:.4f}%")
+                baseline_changed = True
+                corrections.append({
+                    "brand": brand_disp, "categories": cats,
+                    "kind": "adopt_peer_baseline",
+                    "before": {"bp": round(rep_bp, 4),
+                               "baseline": round(own_base, 4),
+                               "index": round(worst_idx, 1)},
+                    "after": {"bp": round(rep_bp, 4),
+                              "baseline": round(target_pm, 4),
+                              "index": round(new_idx, 1)},
+                })
+                gap_flags.append({
+                    "ts": ts, "s3_key": base_name, "subject": subject,
+                    "brand": brand_disp, "categories": cats,
+                    "action": "adopt_peer_baseline",
+                    "current_genpop_pen": round(own_base, 4),
+                    "peer_median_pen": round(target_pm, 4),
+                    "note": ("Gen Pop baseline is >10x below category "
+                             "peers; per-file adopted the peer median so "
+                             "the index is credible. Reconcile the "
+                             "global Gen Pop baseline for this brand."),
+                })
+                continue
+
+            # Numerator artifact: suspect denom, meaningful reach, but
+            # even the peer median leaves the index absurd. Clamp reach.
+            if (suspect and rep_bp >= MIN_BP_TO_ADOPT and target_pm):
+                jit = (_unit(f"{subject}|{bn}|impossible_index") - 0.5) * 0.02
+                clamped_bp = max(
+                    0.0001,
+                    (IMPOSSIBLE_INDEX_CEIL * target_pm / 100.0) * (1.0 + jit))
+                mirror_idxs = [r["idx"] for r in brand_rows
+                               if abs(r["bp"] - rep_bp) < 1e-6]
+                for i in mirror_idxs:
+                    _write_cell_like(df, i, cols["bp"], clamped_bp)
+                for c in cats:
+                    eff[(_gp_native_cat(c), bn)] = (
+                        target_pm, f"{target_pm:.4f}%")
+                bp_clamped = True
+                baseline_changed = True
+                corrections.append({
+                    "brand": brand_disp, "categories": cats,
+                    "kind": "clamp_reach",
+                    "before": {"bp": round(rep_bp, 4),
+                               "baseline": round(own_base, 4),
+                               "index": round(worst_idx, 1)},
+                    "after": {"bp": round(clamped_bp, 4),
+                              "baseline": round(target_pm, 4),
+                              "index": round(clamped_bp / target_pm * 100.0,
+                                             1)},
+                })
+                gap_flags.append({
+                    "ts": ts, "s3_key": base_name, "subject": subject,
+                    "brand": brand_disp, "categories": cats,
+                    "action": "clamp_reach",
+                    "current_genpop_pen": round(own_base, 4),
+                    "peer_median_pen": round(target_pm, 4),
+                    "note": ("Suspect-low Gen Pop baseline with a "
+                             "degenerate peer set; clamped reach to the "
+                             "index ceiling. Reconcile the global Gen "
+                             "Pop baseline for this brand."),
+                })
+                continue
+
+            # Coverage gap: near-zero or suspect-low with thin reach.
+            for c in cats:
+                eff.pop((_gp_native_cat(c), bn), None)
+                eff.pop((c, bn), None)
+            baseline_changed = True
+            corrections.append({
+                "brand": brand_disp, "categories": cats,
+                "kind": "blank_gap_baseline",
+                "before": {"bp": round(rep_bp, 4),
+                           "baseline": round(own_base, 4),
+                           "index": round(worst_idx, 1)},
+                "after": {"bp": round(rep_bp, 4),
+                          "baseline": None, "index": None},
+            })
+            gap_flags.append({
+                "ts": ts, "s3_key": base_name, "subject": subject,
+                "brand": brand_disp, "categories": cats,
+                "action": "blank_gap_baseline",
+                "current_genpop_pen": round(own_base, 4),
+                "peer_median_pen": (round(target_pm, 4)
+                                    if target_pm else None),
+                "note": ("Near-zero / unreliable Gen Pop baseline; "
+                         "blanked the index as a coverage gap. Add a "
+                         "credible global Gen Pop baseline for this "
+                         "brand."),
+            })
+
+        if bp_clamped:
+            try:
+                try:
+                    from migration.post_generation_enforcers import (
+                        apply_recompute_category_share,
+                        recompute_raw_and_projection,
+                    )
+                except ImportError:
+                    from post_generation_enforcers import (  # type: ignore
+                        apply_recompute_category_share,
+                        recompute_raw_and_projection,
+                    )
+                df, _ = recompute_raw_and_projection(df, subject,
+                                                     verbose=False)
+                df, _ = apply_recompute_category_share(df, subject,
+                                                       verbose=False)
+                result["df"] = df
+            except Exception as e:
+                if verbose:
+                    print(f"  [pre-ship-vetting] post-clamp recompute "
+                          f"skipped ({type(e).__name__}: {e})")
+
+        result["eff_gp_map"] = eff if baseline_changed else gp_map
+        result["baseline_changed"] = baseline_changed
+        result["bp_clamped"] = bp_clamped
+        result["corrections"] = corrections
+        result["gap_flags"] = gap_flags
+        if verbose and corrections:
+            kinds = defaultdict(int)
+            for c in corrections:
+                kinds[c["kind"]] += 1
+            summary = ", ".join(f"{k}={v}" for k, v in sorted(kinds.items()))
+            print(f"  [pre-ship-vetting] {base_name}: impossible-index "
+                  f"autocorrect ({summary})")
+        return result
+    except Exception as e:
+        if verbose:
+            print(f"  [pre-ship-vetting] impossible-index autocorrect "
+                  f"skipped ({type(e).__name__}: {e})")
+        return result
+
+
 def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                          s3_client=None,
                          claude_call: Optional[Callable] = None,
@@ -1622,11 +2027,15 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                          sort_fn=None, ledger=True, verbose=True):
     """Reasoned pre-publish review. Returns (df, report).
 
-    enforce=True: a FAIL verdict with judgment-required findings
-    quarantines the frame, records a debounced hold notice (emails only
-    if the hold outlives the window; see hold_notice_debounce), and
-    raises PreShipVettingError (a ShipGateError subclass). enforce=False
-    (audits, dry runs, local ops override) reports without holding.
+    NO-REBUILD POLICY (2026-08-31): a built frame is never held here.
+    A FAIL verdict with judgment-required findings routes those findings
+    to their deterministic mechanical re-spread and publishes the
+    corrected frame in place - no quarantine, no hold email, and
+    PreShipVettingError is never raised on this path (transactional
+    revert to the gate-approved frame if a fix breaks an invariant). The
+    `enforce` parameter is kept for signature stability; it can no longer
+    hold a built frame. Only a genuine upstream BUILD failure (surfaced
+    before any frame exists) is a non-ship.
 
     is_new: True forces the review (cut engines: a re-derived cut is
     new reasoning even on an existing key); False skips it; None
@@ -1688,8 +2097,31 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                 s3c = None
 
         gp_map = _load_genpop(genpop_map, s3c, verbose)
+
+        # Deterministic impossible-index autocorrect (Jenna 2026-08-31):
+        # neutralize broken Index vs Gen Pop ratios BEFORE the reasoned
+        # review so a fixable artifact (a tiny / near-zero baseline)
+        # auto-corrects and ships silently instead of holding the file.
+        # The reasoner, prescan, prompt, and final baseline re-append
+        # all consume the returned effective map, so the corrected
+        # indices are what the review sees AND what ships. The frame may
+        # carry a reach clamp (rare); baseline moves never touch reach.
+        ac = autocorrect_impossible_index(df, subject, gp_map, key,
+                                          verbose=verbose)
+        df = ac["df"]
+        gp_map = ac["eff_gp_map"]
+        if ac["corrections"]:
+            report["index_autocorrect"] = ac["corrections"]
+            report["index_autocorrect_bp_clamped"] = ac["bp_clamped"]
+            # Thread the corrected map so vet_before_publish re-appends
+            # the baseline columns from it (never the stale global map).
+            if ac["baseline_changed"]:
+                report["_effective_genpop_map"] = gp_map
+            _flush_genpop_baseline_anomalies(ac["gap_flags"], s3c,
+                                             verbose=verbose)
+
         facts = _deterministic_prescan(df, subject, key, gp_map,
-                                       verbose=verbose)
+                                       verbose=verbose, s3_client=s3c)
         report["prescan"] = {
             "benchmark_candidates": len(facts["benchmark_candidates"]),
             "genpop_missing": facts["genpop_gaps"]["n_missing"],
@@ -1945,17 +2377,32 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
         if fail_findings:
             fixable = [f for f in fail_findings if f.get("fixable")]
             judgment = [f for f in fail_findings if not f.get("fixable")]
-            # 2026-08-27 (Liz avid Visa constant): the fix gate used to
-            # require the OVERALL verdict to be FAIL, so a fail-severity
-            # finding with a benchmark target under a PASS/BORDERLINE
-            # verdict was silently dropped (Alofoke avid Visa @ index 68
-            # carried a fail finding on a PASS verdict and shipped
-            # unfixed). Fixable fail-severity findings now apply on any
-            # verdict; judgment holds still require a reasoner-level
-            # FAIL so a PASS with a judgment note never quarantines.
-            hold = verdict == "FAIL" and (
-                bool(judgment) or len(fixable) > MAX_AUTOFIX_ROWS)
-            if (not hold) and 0 < len(fixable) <= MAX_AUTOFIX_ROWS:
+            # NO-REBUILD POLICY (2026-08-31, Jenna: "there should never
+            # be a rebuild level correction ... fix everything and never
+            # need rebuild"). A built frame is NEVER held here. Every
+            # fixable finding applies (no row cap - the old 40-row
+            # MAX_AUTOFIX_ROWS gate is retired), and every structural
+            # judgment finding (fixable=false: shared-suffix ladders,
+            # top-cluster convergence, cross-file constants) routes to its
+            # deterministic mechanical re-spread below. The whole
+            # correction is transactional: if the post-fix frame breaks
+            # the mechanical gate we revert to the gate-approved frame and
+            # ship THAT, never quarantine. `hold` stays False on every
+            # publish path; it survives as a name only for the dead
+            # branch that documents the retired behavior.
+            hold = False
+            if fixable or judgment:
+                # TRANSACTIONAL SNAPSHOT (2026-08-29 Automotive avid,
+                # run fbb-KZmN3eNsQw): the frame entering this branch
+                # already PASSED the mechanical gate. Vetting fixes are
+                # all-or-nothing - if the re-gate below rejects the
+                # fixed frame, we publish THIS frame, never the mutated
+                # one. (The old flow let the re-gate's ShipGateError
+                # fall through to the internal-error fallback, which
+                # published the mutated frame: VISA lift + three micro
+                # rows the post-fix safety net had drifted back across
+                # their subset raw ceilings.)
+                _gate_passed_df = df
                 df = df.copy()
                 # Strip baseline columns so the fixes and the chain
                 # recompute see the canonical frame; re-appended by the
@@ -1972,19 +2419,53 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     df = strip_genpop_columns(df)
                 except Exception:
                     pass
-                df, applied, rejected_fixes = _apply_fixes(
-                    df, fixable, subject, gp_map, verbose=verbose)
+                applied, rejected_fixes = [], []
+                if fixable:
+                    df, applied, rejected_fixes = _apply_fixes(
+                        df, fixable, subject, gp_map, verbose=verbose)
+                # Deterministic mechanical re-spread for structural
+                # judgment findings (fixable=false: shared-suffix ladders,
+                # top-cluster convergence) AND for any fixable row whose
+                # reasoned fix was rejected for want of a citable anchor.
+                # Runs on every fail frame; a no-op when no structural
+                # signature is present. This is what turns a former
+                # judgment HOLD into an in-place correction that ships -
+                # the re-spread is deterministic downstream, exactly as
+                # the vetting prompt now tells the reasoner.
+                try:
+                    try:
+                        from migration.post_generation_enforcers import (
+                            respread_top_cluster_convergence,
+                            dejitter_fractional_ladders,
+                        )
+                    except ImportError:
+                        from post_generation_enforcers import (  # type: ignore
+                            respread_top_cluster_convergence,
+                            dejitter_fractional_ladders,
+                        )
+                    df, _nrc = respread_top_cluster_convergence(
+                        df, subject, verbose=verbose)
+                    df, _nrl = dejitter_fractional_ladders(
+                        df, subject, verbose=verbose)
+                    if (_nrc or _nrl):
+                        report["structural_respread"] = {
+                            "convergence_rows": int(_nrc or 0),
+                            "ladder_rows": int(_nrl or 0),
+                        }
+                except Exception as _rs_err:
+                    print(f"[pre-ship-vetting] structural re-spread "
+                          f"raised ({type(_rs_err).__name__}: {_rs_err})")
                 report["autofix"] = applied
                 report["autofix_rejected"] = [
                     {"finding": f.get("code"), "reason": r}
                     for f, r in rejected_fixes]
-                if rejected_fixes and not applied:
-                    # Every proposed fix failed sanity: on a reasoner-
-                    # level FAIL this is a judgment hold, not an
-                    # autofix; on PASS/BORDERLINE it stays a logged
-                    # finding (the reasoner did not fail the file).
+                if False:  # no-rebuild: a rejected reasoned fix never
+                    # holds the file. The deterministic re-spread above
+                    # already corrected any structural cause in place, so
+                    # the frame ships. Kept as a dead branch only to
+                    # preserve the indentation of the shared recompute
+                    # path in the `else` below.
                     judgment = fixable
-                    hold = verdict == "FAIL"
                 else:
                     # Recompute the chain from the corrected BPs and
                     # re-run the mechanical gate on the fixed bytes.
@@ -2001,6 +2482,60 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     except Exception as e:
                         print(f"[pre-ship-vetting] post-fix safety net "
                               f"raised ({type(e).__name__}: {e})")
+                    # Derived cuts only: the safety net's direction-
+                    # blind 4dp dejitter can push a micro row back
+                    # across its parent subset raw ceiling (the exact
+                    # drift that fails the re-gate as I12). Re-cap to
+                    # convergence with ARITHMETIC-ONLY reconciles in
+                    # between, mirroring cut_write_gate step 2.5.
+                    if " - " in os.path.basename(str(key)):
+                        try:
+                            try:
+                                from migration.avid_fan_row_by_row \
+                                    import enforce_avid_subset_coherence
+                                from migration.final_ship_gate import (
+                                    _resolve_parent_tu,
+                                )
+                                from migration.post_generation_enforcers \
+                                    import (
+                                        apply_recompute_category_share,
+                                        recompute_raw_and_projection,
+                                    )
+                            except ImportError:
+                                from avid_fan_row_by_row import (  # type: ignore
+                                    enforce_avid_subset_coherence,
+                                )
+                                from final_ship_gate import (  # type: ignore
+                                    _resolve_parent_tu,
+                                )
+                                from post_generation_enforcers import (  # type: ignore
+                                    apply_recompute_category_share,
+                                    recompute_raw_and_projection,
+                                )
+                            _pk, _pb = _resolve_parent_tu(
+                                key, verbose=False)
+                            if _pb:
+                                import pandas as _pd_recap
+                                _pdf = _pd_recap.read_csv(
+                                    io.BytesIO(_pb), dtype=str,
+                                    keep_default_na=False)
+                                for _rr in range(3):
+                                    df, _cs = \
+                                        enforce_avid_subset_coherence(
+                                            df, _pdf, subject,
+                                            verbose=False,
+                                            cap_only=True)
+                                    if not int(_cs.get("capped_up", 0)
+                                               or 0):
+                                        break
+                                    df, _ = recompute_raw_and_projection(
+                                        df, subject, verbose=False)
+                                    df, _ = apply_recompute_category_share(
+                                        df, subject, verbose=False)
+                        except Exception as e:
+                            print(f"[pre-ship-vetting] post-fix subset "
+                                  f"re-cap raised "
+                                  f"({type(e).__name__}: {e})")
                     if sort_fn is None:
                         try:
                             try:
@@ -2018,6 +2553,12 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                             df = sort_fn(df)
                         except Exception:
                             pass
+                    # Re-gate REPORT-ONLY: a violation here must not
+                    # quarantine the fixed frame or raise - it means
+                    # the fixes (or the post-fix reconcile) broke an
+                    # invariant, and the remedy is the transactional
+                    # revert to the frame the gate already approved.
+                    _regate_ok = True
                     try:
                         try:
                             from migration.final_ship_gate import (
@@ -2029,43 +2570,46 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                             )
                         buf = io.StringIO()
                         df.to_csv(buf, index=False)
-                        run_final_ship_gate(
+                        _ok2, _viol2 = run_final_ship_gate(
                             buf.getvalue().encode("utf-8"), key,
-                            subject, enforce=enforce, s3_client=s3c,
+                            subject, enforce=False, s3_client=s3c,
                             verbose=verbose,
                         )
+                        _regate_ok = bool(_ok2)
                     except ImportError:
                         pass
-                    report["verdict"] = (
-                        "FAIL_AUTOFIXED" if verdict == "FAIL"
-                        else f"{verdict}_AUTOFIXED")
-                    if verbose:
-                        print(f"[pre-ship-vetting] {base}: {verdict} "
-                              f"with {len(applied)} benchmark-backed "
-                              f"fix(es) applied; re-checked and "
-                              f"publishing")
-            if hold:
-                hold_findings = judgment or fail_findings
-                report["verdict"] = "FAIL_HELD"
-                if ledger:
-                    _ledger_append({
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "s3_key": key, "subject": subject,
-                        "verdict": "FAIL_HELD",
-                        "summary": report.get("summary"),
-                        "findings": findings[:40],
-                        "prescan": report["prescan"],
-                        "elapsed_s": round(time.time() - t0, 1),
-                    }, s3c, verbose=verbose)
-                if enforce:
-                    buf = io.StringIO()
-                    df.to_csv(buf, index=False)
-                    qkey = _quarantine_bytes(
-                        buf.getvalue().encode("utf-8"), key, s3c,
-                        verbose)
-                    _email_hold_notice(key, hold_findings, qkey, verbose)
-                    raise PreShipVettingError(key, hold_findings,
-                                              quarantine_key=qkey)
+                    if not _regate_ok:
+                        df = _gate_passed_df
+                        report["autofix_reverted"] = applied
+                        report["autofix"] = []
+                        # Clear the re-serialize triggers: the reverted
+                        # frame IS the gate-approved input, so the caller
+                        # must return the original body unchanged.
+                        report.pop("structural_respread", None)
+                        report["verdict"] = f"{verdict}_FIXES_REVERTED"
+                        print(f"[pre-ship-vetting] {base}: post-fix "
+                              f"frame failed the mechanical re-gate; "
+                              f"{len(applied)} fix(es) reverted, "
+                              f"publishing the gate-approved frame")
+                    else:
+                        report["verdict"] = (
+                            "FAIL_AUTOFIXED" if verdict == "FAIL"
+                            else f"{verdict}_AUTOFIXED")
+                        if verbose:
+                            print(f"[pre-ship-vetting] {base}: "
+                                  f"{verdict} with {len(applied)} "
+                                  f"benchmark-backed fix(es) applied; "
+                                  f"re-checked and publishing")
+            # NO-REBUILD POLICY: there is no hold branch. `hold` is always
+            # False, so a built frame is always corrected in place above
+            # and published - it is never quarantined, no hold email
+            # fires, and PreShipVettingError is never raised on this path.
+            # The only non-ship is a genuine upstream BUILD failure,
+            # surfaced BEFORE any frame exists (CoverageShortfallError /
+            # PersonaResearchError), not here. _quarantine_bytes,
+            # _email_hold_notice, and PreShipVettingError survive only for
+            # the local ops override / read-only audit surfaces.
+            if hold:  # pragma: no cover - dead under the no-rebuild policy
                 return df, report
 
         if ledger:
@@ -2116,9 +2660,25 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
         print(f"[pre-ship-vetting] wrapper error "
               f"({type(e).__name__}: {e}); publishing original bytes")
         return df, body, {"error": str(e)}
-    if report.get("autofix"):
+    # Re-serialize when a reasoner autofix OR the deterministic
+    # impossible-index autocorrect changed the frame. The autocorrect
+    # can move baselines / blank indices / clamp a reach with no
+    # reasoner fix at all, and those corrections must reach the shipped
+    # bytes (otherwise the file keeps the broken index the review just
+    # neutralized).
+    # structural_respread: a deterministic re-spread (top-cluster
+    # convergence / ladder) can change the frame with no reasoner autofix
+    # at all, and that correction must reach the shipped bytes. On a
+    # transactional revert the frame equals the gate-approved input, so
+    # `autofix` is cleared and we fall through to returning the original
+    # body unchanged.
+    if (report.get("autofix") or report.get("index_autocorrect")
+            or report.get("structural_respread")):
         # Re-append the Gen Pop baseline columns the writer added at
-        # step 6.5 (the fix pass stripped them), then re-serialize.
+        # step 6.5 (the fix / autocorrect pass may have stripped or
+        # invalidated them), sourcing from the corrected effective map
+        # when the autocorrect moved a baseline, so the shipped index is
+        # the corrected one, never the stale global-map value.
         try:
             try:
                 from migration.genpop_baseline import (
@@ -2128,8 +2688,9 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
                 from genpop_baseline import (  # type: ignore
                     append_genpop_columns,
                 )
-            df2 = append_genpop_columns(df2, s3_client=s3_client,
-                                        verbose=False)
+            df2 = append_genpop_columns(
+                df2, genpop_map=report.get("_effective_genpop_map"),
+                s3_client=s3_client, verbose=False)
         except Exception as e:
             print(f"[pre-ship-vetting] baseline re-append skipped: {e}")
         buf = io.StringIO()

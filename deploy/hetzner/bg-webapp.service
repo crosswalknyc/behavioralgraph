@@ -1,0 +1,105 @@
+[Unit]
+# bg-webapp (Flask + gunicorn) on Hetzner.
+#
+# Serves the Prometheus / Profile IQ / Subscriber IQ / Trends IQ /
+# Digital Journey IQ dashboard behind nginx on 127.0.0.1:8000.
+# Migrated from Render pro_ultra to this box on <cutover date>, ~$472/mo
+# saved at ~$0 marginal since ClickHouse and the build queue worker
+# already live here.
+#
+# Environment values are loaded from /etc/bg-webapp/env (mode 0600,
+# owned by root). SECRET_KEY must be byte-identical to the value that
+# was live on Render, else every session cookie is invalidated.
+#
+# The service is capped with CPUWeight + MemoryMax so a heavy synth
+# build burst on the queue worker can not starve web requests. Nginx
+# handles TLS + HSTS in front; gunicorn listens only on 127.0.0.1:8000.
+
+Description=bg-webapp (Flask + gunicorn) on Hetzner
+Documentation=https://github.com/crosswalknyc/behavioralgraph
+After=network-online.target clickhouse-server.service
+Wants=network-online.target
+# clickhouse-server is not strictly required (the app tolerates CH
+# being down for /healthz + login), but pairing them makes ordering
+# predictable during reboots.
+Requires=network-online.target
+
+[Service]
+# gunicorn does not speak sd_notify by default; use Type=simple so systemd
+# considers the service started as soon as the ExecStart process is spawned.
+# A dedicated health check + nginx front-door is what actually gates traffic.
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/bg-webapp
+
+# All secrets live outside the repo. The `-` prefix means the unit
+# still starts if the file is missing (systemd will complain loudly);
+# in practice this should always exist.
+EnvironmentFile=-/etc/bg-webapp/env
+
+# Bound to 127.0.0.1 - nginx is the only public entry.
+# Mirrors the live Render start.sh: 3 workers x 4 threads, 600s timeout,
+# graceful-timeout 30, keep-alive 5, warning-level logs, no
+# --max-requests (the in-process job queue would be killed by worker
+# recycling; see bg-webapp/start.sh for the full rationale).
+ExecStart=/opt/bg-webapp/.venv/bin/gunicorn app:app \
+    --bind 127.0.0.1:${PORT} \
+    --workers ${GUNICORN_WORKERS} \
+    --threads ${GUNICORN_THREADS} \
+    --timeout ${GUNICORN_TIMEOUT} \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level warning
+
+# SIGHUP triggers a graceful worker refresh (gunicorn native behaviour).
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy: on failure, wait a beat, come back up.
+Restart=on-failure
+RestartSec=5
+# Give gunicorn 5 min to start up (weasyprint + heavy imports).
+TimeoutStartSec=300
+# 30s graceful stop matches gunicorn's --graceful-timeout, then SIGKILL.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=45
+
+# ----- Resource limits -----------------------------------------------------
+# CPUWeight=100 is the default; the queue worker units run at
+# CPUWeight=50 (lower) so under contention the web service wins CPU
+# scheduling. If the queue worker is not weighted, adjust after load
+# testing. Never lower this below 100.
+CPUWeight=100
+
+# 8 GiB is a wide margin: the live Render pro_ultra box peaks around
+# 1.5 GiB total across all three workers. Cap prevents a runaway
+# memory leak from eating into ClickHouse RAM.
+MemoryMax=8G
+# Soft warning at 6 GiB (systemd will log but not enforce).
+MemoryHigh=6G
+
+# File descriptor + task limits (weasyprint + PDF generation opens a
+# lot of temporary handles).
+LimitNOFILE=65536
+TasksMax=4096
+
+# ----- Sandboxing (light; app needs to write to /tmp + hit outbound
+# API) ---------------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+# Allow writing to the venv (for pip installs on deploy) and to the
+# repo for git pulls.
+ReadWritePaths=/opt/bg-webapp /var/log /tmp
+
+# ----- Logging -------------------------------------------------------
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bg-webapp
+
+[Install]
+WantedBy=multi-user.target

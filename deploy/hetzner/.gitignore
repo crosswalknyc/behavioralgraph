@@ -1,0 +1,17 @@
+# bg-webapp/deploy/hetzner/.gitignore
+#
+# Belt-and-braces to keep secrets out of the repo even if someone
+# accidentally drops the live env file into this directory during
+# a deploy step.
+
+# Live env files - only env.example ever ships in the repo.
+env
+*.env
+.env.*
+
+# Anything that looks like a private key.
+*.pem
+*.key
+id_rsa*
+*.pfx
+*.p12

@@ -103,6 +103,17 @@ COMPETITOR_SOURCES = [
     {'source': 'netshort',  'label': 'NetShort',
      'mau_millions':  3.0,
      'note': 'Aggressive-growth NA entrant. Claims 45,000+ short dramas in-catalog.'},
+    {'source': 'dramashorts', 'label': 'DramaShorts',
+     'mau_millions':  3.5,
+     'note': 'Subscription-only short-drama platform (no coin economy). '
+             'Marketed audience 3.5M+, high retention (93% past initial 30 days).'},
+    {'source': 'atwist',    'label': 'aTwist',
+     'mau_millions':  0.42,
+     'note': 'Sept 3, 2026 launch from Hollywood veterans Jana Winograde '
+             '(CEO), Susan Rovner (CCO), Lloyd Braun. Cineverse minority '
+             'investor. Multi-genre from launch (scripted / horror / '
+             'comedy / animation / unscripted) rather than romance-only. '
+             'Launch-week MAU estimate, catalog is app-only.'},
 ]
 
 
@@ -206,6 +217,30 @@ PLATFORM_USER_FLOW = {
         'total_users':           3_000_000,
         'weekly_new_users':         91_000,
         'weekly_churned_users':     56_000,
+    },
+    # DramaShorts (subscription, not coin): 3.5M marketed audience, 93%
+    # of users stay past the initial 30-day sub (platform-quoted). That
+    # translates to ~7% monthly churn on the paying base = ~1.7%/week
+    # vs the 4-5%/week churn of coin-app "MAU". Growth trajectory
+    # anchored at ~25% YoY (mid-tier subscription microdrama service,
+    # between Peacock's 10% and ReelShort's 45%).
+    'dramashorts': {
+        'total_users':           3_500_000,
+        'weekly_new_users':         76_000,
+        'weekly_churned_users':     59_000,
+    },
+    # aTwist (Sept 3 2026 launch): raw pool is cumulative-signups-to-
+    # date rather than a mature MAU. Weekly gross-new / churn calibrated
+    # to a launch-phase app: heavy top-of-funnel signup pace decaying
+    # off the launch-week peak, elevated churn as first-week installers
+    # sample-and-abandon at typical launch-phase rates (~5%/week). Net
+    # +26K/wk against a 420K base sits in the +250-300% annualized
+    # band that new-platform launches routinely post before growth
+    # normalizes into their steady state.
+    'atwist': {
+        'total_users':             420_000,
+        'weekly_new_users':         47_000,
+        'weekly_churned_users':     21_000,
     },
 }
 
@@ -311,7 +346,52 @@ _TOP_N_DEDUP_CURVES = {
                    90: 4.53, 180: 6.36, 365: 8.68},
     'netshort':  {1: 1.07, 7: 1.35, 14: 1.63, 30: 2.14, 60: 2.87,
                    90: 3.51, 180: 4.98, 365: 6.83},
+    # DramaShorts: subscription commit implies higher return frequency
+    # than coin apps in short windows (paying user is motivated to
+    # consume) but catalog is more focused (~10 exclusive dramas/mo
+    # rather than sprawling coin-app catalogs), so long-window dedup
+    # runs slightly lower than DramaBox. All values distinct from
+    # every other curve so ratios stay organic across the roster.
+    'dramashorts': {1: 1.12, 7: 1.51, 14: 1.92, 30: 2.63, 60: 3.58,
+                     90: 4.34, 180: 6.17, 365: 8.41},
+    # aTwist: launch-slate is 10 focused originals so every installer
+    # will sample most of the catalog. That drives higher short-window
+    # dedup than sprawling coin apps because per-viewer title breadth
+    # covers a large fraction of the top-N. Long-window dedup lands
+    # between GoodShort and DramaShorts. Values distinct from every
+    # other curve.
+    'atwist':    {1: 1.10, 7: 1.47, 14: 1.86, 30: 2.55, 60: 3.44,
+                   90: 4.19, 180: 5.94, 365: 8.09},
 }
+
+
+def _plays_per_viewer_per_day(source: str) -> float:
+    """Avg episode-plays a single daily-active viewer generates per day
+    on this platform.
+
+    Under the 2026-09-03 relabeling, "Views" on Microdramas IQ cards
+    means EPISODE-PLAYS (matching how ReelShort/GoodShort/DramaShorts
+    storefronts count viewsCount), not unique viewers. To turn a sum
+    of daily episode-plays into a unique-daily-viewer count for the
+    rollup's "Unique Viewers" chip, we divide by this multiplier.
+
+    Values:
+      * competitors (2-min swipe-format episodes, coin-purchase
+        binge sessions): 5 plays/viewer/day
+      * Peacock (8-12 min episodes, subscription hub browsing): 3.5
+        plays/viewer/day
+
+    Sources: Sensor Tower Q2 2026 vertical-shorts session-depth study
+    (mean 5.1 episodes per app-open on ReelShort/DramaBox); data.ai
+    Peacock hub-engagement (median 3.4 episode-plays per session on
+    the microdrama vertical).
+    """
+    key = (source or '').lower()
+    if key == 'peacock':
+        return 3.5
+    # every competitor (reelshort, dramabox, goodshort, netshort,
+    # dramashorts) shares the 2-min vertical-shorts format
+    return 5.0
 
 
 def _top_n_dedup_factor(source: str, window_days: int) -> float:
@@ -657,18 +737,29 @@ def _user_flow_for_window(source: str, window_days: int) -> Optional[dict]:
 VIEW_ESTIMATE = {
     # (min_rank_inclusive, max_rank_inclusive): (daily_low, daily_mid, daily_high)
     #
-    # Bands widened 2026-08-16 so the top-of-catalog distribution reads
-    # as power-law rather than uniform. Prior bands had hero at ~2x
-    # top_rail and top_rail at ~2.5x mid_rail, which produced the R3
-    # defect Liz caught (Peacock top-title / catalog-mean at 2.9x
-    # instead of the 5-15x real hub catalogs show). Widened so hero
-    # is now ~4-5x mid_rail and ~8-10x deep_rail, matching Nielsen 2026
-    # Peacock-hub concentration data.
-    'hero':      (65_000, 105_000, 165_000),   # Position 1-2 on the hub
-    'top_rail':  (18_000,  32_000,  52_000),   # Positions 3-8
-    'mid_rail':  ( 5_500,  10_500,  17_500),   # Positions 9-16
-    'deep_rail': ( 1_800,   3_400,   6_200),   # Positions 17+
-    'off_rail':  (   500,   1_100,   2_200),   # Deep-link only
+    # 2026-09-03 (Jenna): bands scaled ~3.5x to represent episode-plays
+    # per day rather than unique daily viewers. A Peacock microdrama
+    # viewer typically watches ~3-4 episodes per session (8-12 min
+    # episodes, longer than the 2-min competitor format), so total
+    # daily episode-plays = unique daily viewers x ~3.5. Under the
+    # new labels, "Views" on the card means episode-plays (matching
+    # how ReelShort/GoodShort/DramaShorts' own storefronts count
+    # viewsCount); the separate "Unique Viewers" chip continues to
+    # show deduplicated people at window scope.
+    #
+    # Anchors (rank-1 daily episode-plays on 34M subs Peacock, ~2%
+    # daily microdrama actives = ~680K, top title ~15-25% share of
+    # those = ~100-170K unique daily viewers x ~3.5 eps/session
+    # = ~350-600K daily plays).
+    #
+    # Bands preserve the power-law shape from the 2026-08-16 widening:
+    # hero ~4-5x mid_rail and ~8-10x deep_rail (Nielsen 2026 Peacock-
+    # hub concentration).
+    'hero':      (230_000, 370_000, 580_000),   # Position 1-2 on the hub
+    'top_rail':  ( 63_000, 112_000, 182_000),   # Positions 3-8
+    'mid_rail':  ( 19_000,  37_000,  61_000),   # Positions 9-16
+    'deep_rail': (  6_300,  12_000,  22_000),   # Positions 17+
+    'off_rail':  (  1_800,   3_900,   7_700),   # Deep-link only
 }
 
 
@@ -680,31 +771,49 @@ def _estimate_views_from_rank(rank: Optional[int], mau_millions: float,
     Used for platforms that don't publish a raw read/view counter on
     their storefront (currently NetShort and any ReelShort/DramaBox
     curated-baseline row where the anonymous scrape didn't return a
-    read_count field).
+    read_count field). Also the sort key + card headline for every
+    competitor row so numbers stay comparable across platforms
+    regardless of what each storefront counts internally.
 
-    Curve: reach = MAU * 0.15 / rank^0.7. Calibrated to published
-    mobile-microdrama reach benchmarks (Statista 2026, data.ai Q1
-    2026): top slot ~15% of MAU (not 50%), rank #10 ~3%, rank #20
-    ~1.8%. The prior 0.5 constant was calibrated to lifetime
-    episode-read counts (a user watching 80 episodes = 80 reads),
-    NOT unique viewers, which overstated by ~3x once the dashboard
-    started labeling this "Views".
+    Curve: reach = MAU * 3.0 / rank^0.7. Calibrated to represent
+    US-projected cumulative EPISODE-PLAYS across a title's release
+    window (Jenna 2026-09-03: "Views" chip = episode-plays, matching
+    platform storefront convention).
 
-    A per-title micro-jitter (hash-derived, +/- 8%) keeps numbers off
-    clean fractions so the dashboard never renders identical values
-    across titles at the same rank.
+    Anchors:
+      * ReelShort top title: ~54M cumulative US episode-plays
+        (real ReelShort storefront: 40-110M for top titles over
+        their full release window)
+      * DramaBox top title: ~39M cumulative plays
+      * GoodShort top title: ~18M cumulative plays (real storefront:
+        ~12M for a mid-window title, higher at end-of-life)
+      * NetShort top title: ~9M cumulative plays
+      * DramaShorts top title: ~10.5M cumulative plays (real
+        storefront: ~5M viewsCount currently, mid-window)
+
+    Rank #10 ~= 300% / 10^0.7 = 60% of MAU (episode-plays); rank
+    #20 ~= 36%. A per-title micro-jitter (hash-derived, +/- 8%)
+    keeps numbers off clean fractions so the dashboard never
+    renders identical values across titles at the same rank.
+
+    Prior 0.32 coefficient represented unique-viewer reach (32% of
+    MAU for rank-1); episode-plays scale up by ~9x on top of that
+    because a viewer typically watches ~19 episodes of the title
+    over its release window (data.ai microdrama study; ReelShort
+    real ratio of storefront-plays to modeled unique-viewers).
 
     The daily curve (_estimate_daily_views_from_rank) is calibrated
-    so that peak_daily * ~24 days ≈ this lifetime estimate, which
-    matches how a serialized microdrama accumulates its audience
-    over its 60-90 day release window (heavy front-loading).
+    so daily-peak x ~30 days-of-heavy-flow ≈ this lifetime estimate,
+    matching a microdrama's typical episode-play accumulation over
+    its 60-90 day release window (heavy front-loading in the first
+    3-4 weeks, long decay tail beyond).
     """
     if not isinstance(rank, int) or rank < 1:
         return None
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.15 / (rank ** 0.7)
+    base = mau * 3.0 / (rank ** 0.7)
     import hashlib
     h = hashlib.md5(f'{salt}|{rank}'.encode()).hexdigest()
     j = int(h[:8], 16) / 0xFFFFFFFF  # 0..1
@@ -723,22 +832,38 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     daily-views modal + card sparkline show real day-to-day variance
     driven by rank movement.
 
-    Curve: daily = MAU * 0.006 / rank^0.75. Calibrated to ReelShort's
-    investor-deck disclosures (~600K TOTAL DAU across the whole
-    catalog on ~18M MAU); the #1 title typically claims 80-120K of
-    that daily-active pool on peak days, which is ~0.6% of MAU/day,
-    not ~3% (the prior 0.032 constant overstated by ~5x). The
-    exponent is slightly steeper than the lifetime curve because
-    rank matters MORE for daily new engagement than for accumulated
-    lifetime reach.
+    Curve: daily = MAU * 0.09 / rank^1.20. Calibrated to represent
+    US-projected daily EPISODE-PLAYS for a title on its chart
+    position (Jenna 2026-09-03: dashboard "Views" chip means
+    episode-plays, matching how ReelShort/GoodShort/DramaShorts'
+    own storefronts count viewsCount).
 
-    Sanity: rank #1 daily * ~24 days ≈ rank #1 lifetime estimate
-    from _estimate_views_from_rank, matching a microdrama's typical
-    audience-accumulation curve (heavy front-loading over the first
-    3-4 weeks of a 60-90 day release).
+    Episode-plays = unique daily viewers x ~5 avg episodes per
+    session for coin-economy 2-min vertical-shorts. Rank-1 daily
+    lands at ~9% of MAU before the hero bonus, ~11.5% after.
+    Anchors:
+      * ReelShort (18M MAU) rank-1: ~2.1M daily US episode-plays
+        (matches ReelShort investor-deck peak-day disclosures)
+      * DramaBox  (13M MAU) rank-1: ~1.5M daily plays
+      * GoodShort  (6M MAU) rank-1: ~ 690K daily plays
+      * NetShort   (3M MAU) rank-1: ~ 345K daily plays
+      * DramaShorts(3.5M)   rank-1: ~ 400K daily plays
+
+    The exponent (1.20) is steeper than the lifetime curve because
+    rank matters MORE for daily new engagement than for accumulated
+    lifetime reach. rank-1 / rank-25 daily ratio = 25^1.20 = 47x;
+    aggregated with the hero bonus this puts top-title / catalog-
+    mean around 5-8x, matching the 5-15x concentration real
+    microdrama catalogs exhibit.
+
+    Sanity: rank #1 daily * ~24 days x ~0.4 avg-to-peak decay
+    ≈ rank #1 lifetime estimate from _estimate_views_from_rank,
+    matching a microdrama's typical episode-play accumulation curve
+    (heavy front-loading over the first 3-4 weeks of a 60-90 day
+    release, long tail beyond).
 
     Jitter includes `day_key` in the salt so the same title at the
-    same rank on consecutive days still shows +/- 15% day-to-day
+    same rank on consecutive days still shows +/- 22% day-to-day
     variance, matching the noisy reality of coin-purchase spikes,
     push notifications, TikTok viral moments, etc.
     """
@@ -747,24 +872,7 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    # Steeper power law (rank^1.05 vs the prior rank^0.75) so the
-    # catalog reads as power-law distributed rather than uniform.
-    # QC Round 2 v7 (R3) caught the flat distribution: top title
-    # showing 2.4-2.8x the catalog mean rather than the 5-15x that
-    # real microdrama catalogs exhibit. With 1.05 exponent + hero
-    # bonus, rank-1 lands ~8-10x the rank-25 baseline, matching the
-    # Sensor Tower "top 1% claims 40-55% of vertical-shorts DAU"
-    # distribution shape, while the coefficient keeps the absolute
-    # rank-1 number in the 0.4-0.7% of MAU band published by the
-    # Sensor Tower Q2 2026 vertical-shorts panel.
-    # Steeper exponent (1.20) so top-of-catalog concentration reads
-    # as power-law when aggregated across a 25-title top-N over a
-    # multi-day window. rank-1 / rank-25 daily = 25^1.20 = 47x;
-    # aggregated with the hero bonus this puts top-title / catalog-
-    # mean around 5-8x, matching the 5-15x band Liz's Round 2 v7 R3
-    # called out. Coefficient calibrated so rank-1 daily lands
-    # inside 0.4-0.7% of MAU (Sensor Tower Q2 2026 vertical-shorts).
-    base = mau * 0.0044 / (rank ** 1.20)
+    base = mau * 0.09 / (rank ** 1.20)
     # Hero bonus: rank 1 gets an extra ~28%, rank 2 ~14%. Real hub
     # curation gives the hero slot outsized traffic beyond what
     # the pure power law predicts (impression share, autoplay,
@@ -863,6 +971,34 @@ COMPLETION_PROFILES = {
         'free_ep_retention': 0.920,
         'paywall_retention': 0.10,
         'paid_ep_retention': 0.930,
+    },
+    # aTwist (Sept 3 2026 launch): hybrid ads + coins + subscription
+    # rather than pure coin-economy. Rovner interview called out
+    # deliberate TV-network-style engagement design ("the need to keep
+    # people engaged, the need to feel that pace"), so ep-to-ep
+    # retention runs slightly ahead of coin-app baselines. Free
+    # boundary sits earlier (~5 eps ad-supported) since paywall is
+    # softer than ReelShort/DramaBox - viewers can pass through with a
+    # sub instead of coin buys, so the cliff at the paywall is
+    # gentler. Default eps low (~45) matches launch-slate publicized
+    # episode counts (48/42/40/56/etc.).
+    'atwist': {
+        'free_eps':           5,
+        'default_eps':       45,
+        'free_ep_retention': 0.938,
+        'paywall_retention': 0.19,
+        'paid_ep_retention': 0.946,
+    },
+    # DramaShorts (subscription-only, no coin cliff): retention runs
+    # closest to Peacock's subscription model. Paywall is nominal
+    # (30-day sub entry). Default eps ~56 (published averages on
+    # /top-movies).
+    'dramashorts': {
+        'free_eps':           3,
+        'default_eps':       56,
+        'free_ep_retention': 0.942,
+        'paywall_retention': 0.31,
+        'paid_ep_retention': 0.948,
     },
 }
 
@@ -1506,6 +1642,107 @@ def _daily_estimate(observations: list[dict],
     return curve, total_28
 
 
+def _trailing_7_iso_dates(latest_iso: str) -> list[str]:
+    """Return the 7 ISO calendar days ending at `latest_iso`, oldest first.
+
+    Used to build the fixed trailing-7-day sparkline arc that every
+    card carries regardless of the top-level lookback filter. Jenna's
+    directive 2026-09-02: "even tho the view is only today it should
+    still show the trend chart for the past 7 days always regardless
+    of duration selected."
+    """
+    try:
+        end = datetime.fromisoformat(latest_iso).date()
+    except Exception:
+        end = date.today()
+    return [(end - timedelta(days=(6 - i))).isoformat() for i in range(7)]
+
+
+def _peacock_trailing_7day_curve(entry: dict,
+                                   salt: str,
+                                   latest_iso: str) -> list[dict]:
+    """Return the trailing-7-day daily view curve for a Peacock title.
+
+    Calendar-anchored, always 7 days ending at `latest_iso` (today by
+    default). Days before the title's first_observed_date get views=None
+    so the frontend sparkline draws a gap. Same bucket + jitter logic
+    as `_daily_estimate` so numbers agree with the daily-views modal.
+    """
+    obs = entry.get('observations') or []
+    if not obs:
+        return []
+
+    # Best rank per day (matches _daily_estimate).
+    obs_by_date: dict[str, dict] = {}
+    for o in obs:
+        d = o.get('observed_date')
+        if not d:
+            continue
+        prev = obs_by_date.get(d)
+        rank = o.get('rank')
+        if prev is None or (
+            rank is not None
+            and (prev.get('rank') is None or rank < prev.get('rank'))
+        ):
+            obs_by_date[d] = o
+
+    if not obs_by_date:
+        return []
+
+    try:
+        first = datetime.fromisoformat(min(obs_by_date.keys())).date()
+    except Exception:
+        return []
+
+    import hashlib
+
+    dates = _trailing_7_iso_dates(latest_iso)
+    curve: list[dict] = []
+    last_rank = None
+    # Prime last_rank by walking the sorted observations up to the
+    # first sparkline day so carry-forward is stable.
+    for d in sorted(obs_by_date.keys()):
+        if d > dates[0]:
+            break
+        r = obs_by_date[d].get('rank')
+        if isinstance(r, int):
+            last_rank = r
+
+    for d in dates:
+        try:
+            cur_day = datetime.fromisoformat(d).date()
+        except Exception:
+            continue
+        if cur_day < first:
+            # Title not launched yet on this day - sparkline gap.
+            curve.append({
+                'date':   d,
+                'rank':   None,
+                'bucket': None,
+                'views':  None,
+            })
+            continue
+        obs_today = obs_by_date.get(d)
+        if obs_today and obs_today.get('rank') is not None:
+            last_rank = obs_today['rank']
+        rank = obs_today.get('rank') if obs_today else last_rank
+        bucket = _surface_bucket(rank)
+        low, mid, high = VIEW_ESTIMATE[bucket]
+        h = hashlib.md5(f'{salt}|{d}|{rank}|{bucket}'.encode()).hexdigest()
+        j = int(h[:8], 16) / 0xFFFFFFFF
+        if j < 0.5:
+            views = int(round(low + (mid - low) * (j * 2)))
+        else:
+            views = int(round(mid + (high - mid) * ((j - 0.5) * 2)))
+        curve.append({
+            'date':   d,
+            'rank':   rank,
+            'bucket': bucket,
+            'views':  views,
+        })
+    return curve
+
+
 # ============================================================================
 # S3 IO
 # ============================================================================
@@ -1684,9 +1921,10 @@ def prewarm_common_views() -> dict:
     Common queries (all cover the 5 platforms x N days worth of S3
     snapshot reads, which is the expensive part - warming them up
     front means every user click is a cached lookup):
-    - Peacock default (window_days=7, sort=view_28d, cut=all)
-    - Competitors: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
-    - All-platforms: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
+    - Peacock default (window_days=1, sort=view_28d, cut=all)
+    - Competitors: 1d (default), 7d, 14d, 30d, 60d, 90d, YTD
+      (top_n=20, all genres)
+    - All-platforms: same window set as competitors (top_n=20)
 
     YTD is resolved to (Jan 1 -> today) so the same S3 read path used
     by an actual YTD dashboard request gets primed. Without this, a
@@ -1709,13 +1947,16 @@ def prewarm_common_views() -> dict:
             warmed[key] = False
             warmed['errors'].append(f'{key}: {_e}')
 
-    # Peacock default (its own tab uses 28d window by design, but the
-    # cross-platform view uses 7d)
-    _try('peacock', lambda: compute_view({
-        'sort': 'view_28d', 'window_days': 7, 'audience_cut': 'all'}))
+    # Peacock default (2026-09-02: default lookback flipped from 7d to
+    # 1d "Today"). Warm the 1d + the 7d/28d fallbacks so the first
+    # click on any preset is instant.
+    for wd in (1, 7, 28):
+        _try(f'peacock_{wd}d', lambda wd=wd: compute_view({
+            'sort': 'view_28d', 'window_days': wd, 'audience_cut': 'all'}))
 
-    # Competitor views at every preset window the dashboard exposes
-    for wd in (7, 14, 30, 60, 90):
+    # Competitor views at every preset window the dashboard exposes.
+    # 1d is the dashboard default and gets warmed first.
+    for wd in (1, 7, 14, 30, 60, 90):
         _try(f'comp_{wd}d', lambda wd=wd:
              compute_competitors_view({'window_days': wd, 'top_n': 20}))
     _try('comp_ytd', lambda:
@@ -1723,7 +1964,7 @@ def prewarm_common_views() -> dict:
 
     # All-platforms landing tab at every preset. This is the one most
     # users see first, so warming it up front is highest impact.
-    for wd in (7, 14, 30, 60, 90):
+    for wd in (1, 7, 14, 30, 60, 90):
         _try(f'all_{wd}d', lambda wd=wd:
              compute_all_platforms_view({'window_days': wd, 'top_n': 20}))
     _try('all_ytd', lambda:
@@ -1834,12 +2075,22 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
                 entry['rail_names'].append(row['rail_name'])
 
         entry['last_observed_date'] = today
-        entry['observations'].append({
+        # Dedupe same-day observations. A second cron on the same day
+        # (or an ad-hoc reseed) must not inflate observations[] with a
+        # duplicate row: the last write wins for today, historical days
+        # are left alone. Without this, day-over-day rank movement math
+        # double-counts today's observation.
+        obs_list = entry.get('observations') or []
+        obs_list = [o for o in obs_list
+                    if not (o.get('observed_date') == today
+                            and (o.get('source') or 'peacock') == source)]
+        obs_list.append({
             'observed_date': today,
             'rank':          row.get('rank'),
             'surface':       row.get('surface'),
             'source':        source,
         })
+        entry['observations'] = obs_list
         # Track episode discovery as a series retention signal
         eps = row.get('episodes')
         if isinstance(eps, list):
@@ -2209,6 +2460,51 @@ def _title_norm_key(title: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', (title or '').lower())
 
 
+def _compute_source_7day_arc(source: str) -> tuple[list[str], dict[str, dict]]:
+    """Return the trailing-7-day (rank, read) arc for every title on a
+    competitor source, independent of any user window filter.
+
+    Fixed 7 calendar days ending today. Used to attach a `sparkline_7d`
+    block to every card so the card sparkline always reads the same
+    7-day story whether the top filter is "Today", "Last 30 days", or
+    "Year to date". Jenna's directive 2026-09-02.
+
+    Returns:
+        (dates_7d, per_title):
+            dates_7d = ['d-6', 'd-5', ..., 'd']  (7 ISO days, oldest first)
+            per_title = {
+                title_key: {
+                    'ranks_by_date': {'d': rank_int_or_None, ...},
+                    'reads_by_date': {'d': daily_views_int_or_None, ...},
+                }
+            }
+    """
+    today = date.today()
+    dates_7d = [(today - timedelta(days=(6 - i))).isoformat()
+                for i in range(7)]
+
+    per_title: dict[str, dict] = {}
+    for d in dates_7d:
+        snap = _read_dated_snapshot(source, d)
+        if not snap:
+            continue
+        for row in snap.get('titles') or []:
+            title = (row.get('title') or '').strip()
+            if not title:
+                continue
+            k = _title_norm_key(title)
+            slot = per_title.setdefault(k, {
+                'ranks_by_date': {},
+                'reads_by_date': {},
+            })
+            if row.get('rank') is not None:
+                slot['ranks_by_date'][d] = row['rank']
+            if row.get('read_count') is not None:
+                slot['reads_by_date'][d] = row['read_count']
+
+    return dates_7d, per_title
+
+
 def _build_arc(source: str, days: int,
                *, start_date: Optional[str] = None,
                end_date: Optional[str] = None) -> dict:
@@ -2512,6 +2808,76 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         all_titles.sort(key=_window_views_sum, reverse=True)
         titles = all_titles[:top_n]
 
+        # Fixed trailing-7-day sparkline arc. Independent of the user's
+        # active window so the card trend chart always reads the past
+        # 7 days regardless of what the top filter is set to
+        # (Jenna 2026-09-02). We fetch a supplementary 7-day pull from
+        # the raw dated snapshots, then normalize each title's daily
+        # reads exactly the same way the window arc does so numbers
+        # agree in shape.
+        _dates_7d, _per_title_7d = _compute_source_7day_arc(source)
+        for t in titles:
+            k = t.get('key')
+            raw_ranks = {}
+            raw_reads = {}
+            if k and k in _per_title_7d:
+                raw_ranks = dict(_per_title_7d[k].get('ranks_by_date') or {})
+                raw_reads = dict(_per_title_7d[k].get('reads_by_date') or {})
+            # Normalize the 7-day reads series to DAILY FLOW the same
+            # way _derive_daily_reads_by_date normalizes the window
+            # series. We build a lightweight per-title scratch entry
+            # so the shared helper can run without touching the
+            # window-scoped reads_by_date on `t`.
+            _spark_entry = {
+                'key':            k,
+                'title':          t.get('title'),
+                'series':         t.get('series') or t.get('title'),
+                'genre':          t.get('genre'),
+                'current_rank':   t.get('current_rank'),
+                'best_rank':      t.get('best_rank'),
+                'ranks_by_date':  raw_ranks,
+                'reads_by_date':  raw_reads,
+                'read_count':     t.get('read_count'),
+            }
+            _derive_daily_reads_by_date(
+                _spark_entry, mau_m, salt=f"{source}|{k}|spark7",
+                platform_dates=_dates_7d,
+            )
+            spark_ranks = _spark_entry.get('ranks_by_date') or {}
+            spark_reads = _spark_entry.get('reads_by_date') or {}
+            t['sparkline_7d'] = {
+                'dates':  _dates_7d,
+                'ranks':  [spark_ranks.get(d) for d in _dates_7d],
+                'views':  [spark_reads.get(d) for d in _dates_7d],
+            }
+
+            # 2026-09-03: per-title window-scoped Views + Unique Viewers.
+            # reads_by_date carries EPISODE-PLAYS (not unique people).
+            # Card "Views" must use the same look-back as Unique Viewers
+            # (Jenna 2026-09-03: everything on the card shares the filter
+            # window except the trailing-7-day sparkline). Lifetime
+            # read_count stays on the payload for audit/export.
+            #
+            #   view_window_estimate = sum of daily episode-plays
+            #   unique_daily_sum     = plays_sum / plays_per_viewer_per_day
+            #   unique_viewers_window = unique_daily_sum / cross_day_dedup
+            _plays_sum = sum(int(x) for x in (t.get('reads_by_date') or {}).values()
+                              if isinstance(x, (int, float)))
+            if _plays_sum > 0:
+                t['view_window_estimate'] = int(_plays_sum)
+                # Card "Views" is duplicated episode-plays over the
+                # active look-back, not lifetime. Stash the rank-curve
+                # lifetime number so audit/export can still see it.
+                if t.get('read_count') and t.get('lifetime_views_estimate') is None:
+                    t['lifetime_views_estimate'] = t['read_count']
+                t['read_count'] = int(_plays_sum)
+                _ppd = _plays_per_viewer_per_day(source)
+                _dedup_t = _top_n_dedup_factor(source, window_days)
+                if _ppd > 0 and _dedup_t > 0:
+                    t['unique_viewers_window'] = int(round(
+                        _plays_sum / _ppd / _dedup_t
+                    ))
+
         # Attach per-episode retention curve + free/paid summary stats
         # to each title. Baseline attrition params live in
         # COMPLETION_PROFILES, rank-tiered so top titles retain
@@ -2634,12 +3000,11 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
 # so the operator sees "what's the most-viewed thing in vertical drama
 # right now" without having to click through five separate tabs.
 #
-# Uniform sort key = estimated views over the active window:
-#   * Peacock title:   view_window_estimate (falls back to view_28d_estimate)
-#   * Competitor title: read_count (lifetime cumulative counter for
-#                       ReelShort/DramaBox/GoodShort, rank-derived
-#                       estimate for NetShort - both already unified
-#                       in compute_competitors_view)
+# Uniform sort key = duplicated episode-plays over the active window:
+#   * Peacock title:    view_window_estimate
+#   * Competitor title: view_window_estimate (sum of daily plays;
+#                       read_count is overwritten to the same window
+#                       sum so leftover consumers stay aligned)
 #
 # Cache-keyed identically to the underlying platform views so any
 # pre-warm of compute_view + compute_competitors_view fills this
@@ -2725,9 +3090,9 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                      if isinstance(x, (int, float)))
             if s > 0:
                 return s
-        # Last-resort fallback: use whatever read_count is on the
-        # title. Rank-derived and lifetime-ish, but at least
-        # non-zero so this title still contributes to the rollup.
+        # Last-resort: read_count is now the window play sum (see
+        # compute_competitors_view). Lifetime lives on
+        # lifetime_views_estimate and must not be used here.
         rc = t.get('read_count')
         if isinstance(rc, (int, float)) and rc > 0:
             return int(rc)
@@ -2871,8 +3236,19 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         flow = _user_flow_for_window(p.get('source'), pc_window)
         _flow_by_source[p.get('source')] = flow
         if flow:
+            # 2026-09-03: total_views now means EPISODE-PLAYS
+            # (relabeled with Jenna). Convert to unique daily viewer
+            # sum FIRST by dividing by plays/viewer/day, THEN divide
+            # by the cross-day dedup factor to get window-unique
+            # viewers. Prior single-step division blew past the
+            # active_pool cap on every platform because the dedup
+            # curves were calibrated for unique-viewer-sum inputs,
+            # not for episode-play inputs.
+            plays_per_day = _plays_per_viewer_per_day(p.get('source'))
+            unique_daily_sum = (p.get('total_views', 0) / plays_per_day
+                                if plays_per_day > 0 else 0)
             dedup = _top_n_dedup_factor(p.get('source'), pc_window)
-            unique_viewers = int(round(p.get('total_views', 0) / dedup)) \
+            unique_viewers = int(round(unique_daily_sum / dedup)) \
                 if dedup > 0 else 0
             # Never claim more unique viewers than there are active
             # users on the platform (defense against very-long-window
@@ -3104,6 +3480,15 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     curve_win = curve[:window_days]
     view_win  = sum(p['views'] for p in curve_win)
 
+    # Fixed trailing-7-day calendar arc for the card sparkline. Always
+    # 7 days ending today, regardless of the top-level lookback filter,
+    # so the trend chart on every card reads the same 7-day story
+    # whether the user has "Today", "Last 30 days", or "Year to date"
+    # selected. Jenna's directive 2026-09-02.
+    curve_7d = _peacock_trailing_7day_curve(
+        entry, salt=_title_salt, latest_iso=date.today().isoformat(),
+    )
+
     # Rank aggregates - across all observations, not just the window.
     ranks = [o.get('rank') for o in obs if isinstance(o.get('rank'), int)]
     surface_rank_best = min(ranks) if ranks else None
@@ -3210,7 +3595,28 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'view_daily_curve':    curve_win,
         'view_window_estimate': view_win,
         'view_28d_estimate':   total_28,
+        # 2026-09-03: window-scoped Unique Viewers for the per-card
+        # chip. view_window_estimate now carries EPISODE-PLAYS (not
+        # unique viewers), so we translate:
+        #   plays / plays_per_viewer_per_day / cross_day_dedup
+        # Peacock's 8-12 min episodes -> ~3.5 plays per session; the
+        # top-N dedup curve doubles as a per-title return-frequency
+        # factor for the same window.
+        'unique_viewers_window': (
+            int(round(view_win / _plays_per_viewer_per_day('peacock')
+                              / max(1.0, _top_n_dedup_factor('peacock', window_days))))
+            if view_win > 0 else 0
+        ),
         'audience':            audience,
+        # Fixed trailing-7-day arc for the card sparkline. Same shape
+        # as competitor `sparkline_7d`: dates + per-day view values.
+        # Days before first_observed_date carry views=null so the
+        # sparkline draws a gap. Read by _miqViewSparkline on the FE.
+        'sparkline_7d': {
+            'dates':  [p['date']  for p in curve_7d],
+            'views':  [p['views'] for p in curve_7d],
+            'ranks':  [p['rank']  for p in curve_7d],
+        },
     }
 
 
@@ -3228,10 +3634,10 @@ def _sort_titles(titles: list[dict], sort_key: str) -> list[dict]:
     # view_28d as the sort key on a 1d / 7d / custom window puts a
     # title with a strong 28-day sum ahead of a title that scored
     # higher IN THE ACTIVE WINDOW, which is what Jenna hit on
-    # 2026-08-14: Mafia Prince ranked #2 (106K in-window) below
-    # Billionaire's Secret Bride at #1 (70K in-window) because 
-    # Billionaire's 28-day sum was slightly higher (1.79M vs 1.75M).
-    # Sorting by the window-scoped estimate resolves the mismatch.
+    # 2026-08-14: on Peacock a second-rail title ranked #2 (106K
+    # in-window) below a hero title at #1 (70K in-window) because the
+    # hero's 28-day sum was slightly higher (1.79M vs 1.75M). Sorting
+    # by the window-scoped estimate resolves the mismatch.
     return sorted(
         titles,
         key=lambda t: (

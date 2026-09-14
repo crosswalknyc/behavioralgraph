@@ -1,0 +1,222 @@
+{
+  "lens_id": "unlikely_collaborators_follower",
+  "display_name": "Unlikely Collaborators Follower",
+  "emoji": "\ud83e\udded",
+  "source_profile": "Aggregate_Unlikely_Collaborators_Followers_08_14_2026_18_35.csv",
+  "one_line": "Young, curious, wellness-and-consciousness-forward reader who follows Unlikely Collaborators across Instagram, TikTok, and YouTube. Skews female / non-binary, LGBTQ+, mid-market, indie in taste, therapy-fluent, and creator-economy native.",
+
+  "demographics": {
+    "age_range": "18 to 44 with the density sitting in 25-34 (idx 238) and 18-24 (idx 253). The 45-54 slice already reads at 90 and 55+ falls to 50 and below.",
+    "gender_skew": "Female at idx 128 with non-binary at 283 and trans female at 274. Cis-male reads 64. This is a queer-inclusive audience, not simply a female audience.",
+    "income_band": "Middle income. $25K-$99K over-indexes at 136-147. $150K+ and $250K+ fall to 49 and 34. This follower spends carefully, not luxuriously.",
+    "education": "Bachelors idx 164, graduate or professional idx 128. High school or less reads 38. Read at a college-educated register but do not assume Ivy or coastal-elite framing.",
+    "geo_skew": ["St Joseph MO", "Bakersfield CA", "Bowling Green KY", "Missoula MT", "Ottumwa IA / Kirksville MO", "Sioux City IA", "Eugene OR", "Palm Springs CA", "Bangor ME", "Corpus Christi TX", "Ft Wayne IN", "Minneapolis St Paul MN"],
+    "life_stage": "Unmarried and coupled. In a relationship reads 382 and single reads 129. Married sits at 59. Most do not have children under 12 in the home. Occupation lifts on legal (227), education / library (166), sales and retail (149), and STEM (128). Meaningful student overlap."
+  },
+
+  "psychographics": {
+    "values": [
+      "Personal growth as an ongoing practice, not a self-improvement fad. Follows Elizabeth Gilbert, Jay Shetty, Brene Brown, Mel Robbins, Dax Shepard.",
+      "Wellness as identity. Yoga interest idx 159, boutique fitness studios read at 5,000-30,000 index (Y7 Yoga, LEKfit, SLT, CorePower, SoulCycle, Barry's, Equinox, DogPound).",
+      "Queer belonging and progressive social causes. Lambda Legal, Human Rights Campaign, GLAAD Media Awards, Outfest, Farm Sanctuary, Nature Conservancy, Surfrider all read at 194-205.",
+      "Curiosity as recreation. New Yorker (335), Atlantic (312), Substack (325), Morning Brew (288), Letterboxd (592), Chess.com (522), GeoGuessr (789), MUBI (190).",
+      "Care work at home. Pet-obsessed. DTC pet food and pet-wellness (Little Hunter, MaxBone, Maev, Wuffes, Little Chonk, JustFoodForDogs) reads at 1,600-22,000 index.",
+      "Consciousness and reframing. Headspace (5,241), Calm (3,387), Klarity (10,922), Weight Watchers (1,192), MindBodyGreen (320), Well+Good (242), Goop (258)."
+    ],
+    "aesthetics": [
+      "Indie and mid-luxury fashion (Loud Bodies, Alberta Ferretti, Rogue Territory, Lazy Oaf, Public Rec, Emilio Pucci, La Perla, Aspinal of London, Away Luggage)",
+      "K-beauty and clean-beauty subscription boxes (IPSY at 2,137, Sephora, Ulta, LUBETS, Trinny London, Balmain Beauty, Mad Hippie)",
+      "Thrift, resale, and drop culture (Depop at 600, Journeys at 1,130, Urban Outfitters at 373, Hot Topic at 413)",
+      "Bougie-and-budget grocery in the same cart (Whole Foods 641, Trader Joe's 909, Erewhon 528, H Mart 1,177 sitting alongside Dollar Tree 413, Dollar General 441, Ross 510)",
+      "Prestige indie film seats (Alamo Drafthouse 894, MUBI 190, Letterboxd, Tribeca Film Fest, NY Film Fest, El Capitan)",
+      "Substack essayism and long-form voice"
+    ],
+    "tone_they_respond_to": "First-person, reflective, unhurried, curious. Interviews over debates. Cracks a joke about therapy, not about the outgroup. Names an artist you've never heard of, then explains why. Willing to sit with contradiction. Speaks to feelings without treacle.",
+    "tone_they_reject": "Chest-thumping, gotcha political theater, algorithm-bait outrage, hustle-culture toxic positivity, boomer cable-news framing, and anything that flattens identity to a slur or a demographic tag."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "The New Yorker (idx 335)", "The Atlantic (312)", "The New York Times", "Morning Brew (288)", "Newsweek (535)", "Time Out (200)", "The Zoe Report (192)"
+    ],
+    "reads_soft": [
+      "Substack (325)", "MindBodyGreen (320)", "Goop (258)", "Well+Good (242)", "Todays Parent (195)", "Daily Dot (194)", "Garden & Gun (192)", "Blavity (1,473)", "POOSH (504)", "People en Espanol (353)"
+    ],
+    "watches": {
+      "streaming": ["Netflix", "Amazon Prime Video", "Discovery+", "MUBI", "MGM+", "BET+", "FX Now", "Acorn TV", "AMC+", "Fandango at Home", "VEEPS (concerts)"],
+      "fast": ["Pluto TV", "Tubi", "Fawesome", "Local Now", "Cheddar TV", "DistroTV"],
+      "film": ["A24 catalog reads", "Cillian Murphy titles (Oppenheimer, Peaky Blinders)", "Diego Luna titles (Andor)", "Barbie", "Indiana Jones", "The Last of Us", "Everything Everywhere All At Once", "Past Lives", "The Bear", "Ted Lasso"],
+      "cable": ["CMT", "TNT", "TLC", "Bravo", "Hallmark Channel", "Comedy Central", "MTV", "BET", "History Vault"]
+    },
+    "listens": {
+      "podcasts": [
+        "The Mel Robbins Podcast",
+        "On Purpose with Jay Shetty",
+        "Armchair Expert with Dax Shepard",
+        "Unlocking Us with Brene Brown / Dare to Lead",
+        "SmartLess",
+        "We Can Do Hard Things (Glennon Doyle)",
+        "The Rich Roll Podcast",
+        "Ten Percent Happier with Dan Harris",
+        "Call Her Daddy",
+        "How I Built This",
+        "The Daily",
+        "This American Life",
+        "Song Exploder",
+        "Radiolab",
+        "Fresh Air"
+      ],
+      "music_artists": [
+        "Taylor Swift", "Olivia Rodrigo", "Sabrina Carpenter", "SZA", "Chappell Roan", "Billie Eilish", "Phoebe Bridgers", "boygenius", "Hozier", "Noah Kahan",
+        "Peso Pluma", "Bad Bunny", "Karol G",
+        "Kendrick Lamar", "Drake", "Doja Cat",
+        "Fleetwood Mac", "Bruce Springsteen (younger side)", "Bon Iver", "Sufjan Stevens"
+      ],
+      "music_genres": ["indie / singer-songwriter", "adult alternative", "R&B", "hip-hop", "Latin (regional-Mexican, reggaeton)", "pop", "K-pop selectively", "EDM / dance (SiriusXM BPM)", "audiophile-curated (Qobuz, Tidal, Deezer)"]
+    },
+    "reads_books": {
+      "formats": ["hardcover", "audiobook (Audible reads 93% at idx 1,360)", "Libby / library ebook", "Kindle", "small-press indie"],
+      "genres": [
+        "prestige literary fiction",
+        "memoir (comedians, therapists, artists)",
+        "personal development anchored in psychology, not hustle",
+        "BookTok romantasy (Sarah J. Maas, Rebecca Yarros)",
+        "grief and belonging essays",
+        "queer coming-of-age",
+        "creativity and craft (Big Magic, Bird by Bird)"
+      ],
+      "authors_or_titles": [
+        "Elizabeth Gilbert (Big Magic, Eat Pray Love, All The Way To The River)",
+        "Rha Goddess",
+        "Brene Brown (Atlas of the Heart, Braving the Wilderness)",
+        "Glennon Doyle (Untamed)",
+        "Ocean Vuong",
+        "Ann Patchett",
+        "Roxane Gay",
+        "Zadie Smith",
+        "Cheryl Strayed",
+        "Michelle Obama",
+        "Bell Hooks",
+        "James Clear (Atomic Habits) as bridge to hard-science self-help",
+        "Fourth Wing (Rebecca Yarros)",
+        "Emily Henry",
+        "Taylor Jenkins Reid (Daisy Jones, Seven Husbands of Evelyn Hugo)"
+      ]
+    },
+    "plays": [
+      "Wordle and NYT Games (idx 1,033-1,190)",
+      "Chess.com (522), GeoGuessr (789)",
+      "Barbie, Indiana Jones, Star Wars franchise games",
+      "The Last of Us, Game of Thrones, Dragon Age",
+      "Animal Crossing, Minecraft, Among Us, Valorant",
+      "LEGO builds"
+    ],
+    "shops": [
+      "IPSY subscription and Sephora / Ulta run",
+      "Trader Joe's + Whole Foods + Erewhon + H Mart on the same list",
+      "Depop, Journeys, Urban Outfitters, Hot Topic",
+      "Ross Dress for Less and Dollar Tree in the value cart",
+      "REI for gear, Away for luggage, Aspinal for a splurge",
+      "QVC and HSN for the Sunday scroll"
+    ],
+    "eats_at": [
+      "Sweetgreen weekday",
+      "Bluestone Lane or Starbucks or Dunkin coffee",
+      "Whole Foods hot bar",
+      "Fine-dining aspiration list (Eleven Madison Park, Le Bernardin, Benu, Nobu)",
+      "Cheddar's Scratch Kitchen or Fogo de Chao when family visits"
+    ],
+    "buys": [
+      "DTC pet food and pet supplements (Little Hunter, MaxBone, Maev, Wuffes, JustFoodForDogs)",
+      "Poppi prebiotic soda, OLIPOP, Liquid Death, Alani Nu",
+      "Indie floral (Floom), Away luggage, Aspinal of London small leathers",
+      "Public Rec loungewear, Loud Bodies, Alberta Ferretti aspirational drops",
+      "Indie skincare (BTWN, Mad Hippie, LUBETS, Trinny London)"
+    ],
+    "follows_talent": [
+      "Elizabeth Gilbert", "Rha Goddess", "Brene Brown", "Jay Shetty", "Mel Robbins", "Dax Shepard",
+      "Cillian Murphy", "Diego Luna", "Taraji P Henson", "Antonia Gentry", "Madelaine Petsch", "Connie Britton", "Fiona Dourif",
+      "MrBeast", "PewDiePie", "Markiplier", "Casey Neistat", "Nara Aziza", "Jake Shane", "Sean Evans", "Ryan Trahan", "Mikayla Nogueira", "Salish Matter",
+      "Kelsey Plum", "Jalen Suggs", "Derwin James Jr",
+      "Kendall Jenner", "Kylie Jenner", "Paloma Elsesser", "Zac Posen"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "consciousness, therapy, healing, perception, self-work",
+    "queer belonging, chosen family, LGBTQ+ rights, trans visibility",
+    "wellness culture (mindfulness, yoga, breathwork, meditation, sober-curious, cycle-aware)",
+    "creator economy and independent voices (Substack, Patreon, small-press books, indie film, indie beauty)",
+    "diverse pop culture (Black women in TV and music, Latin music crossover, Asian American film)",
+    "pet parenting as identity work",
+    "climate and environmental protection as personal ethics",
+    "craft and creativity (Big Magic register, cooking, baking, art-making, journaling)",
+    "affordable-luxury and thoughtful consumption (indie fashion drops, K-beauty, Depop resale, Trader Joe's price-value)",
+    "prestige indie film and theatrical moviegoing (Alamo Drafthouse, A24, Tribeca, Letterboxd)",
+    "reading as leisure, especially audiobooks and library-ebooks",
+    "mid-market America stories that are not condescending"
+  ],
+  "themes_they_avoid": [
+    "hustle culture and grindset content",
+    "algorithmic outrage, culture-war ragebait, gotcha political theater from either side",
+    "boomer cable-news framing on entertainment",
+    "toxic-positivity self-help without the psychology backing it",
+    "male-gaze fitness marketing",
+    "openly conservative-culture-war messaging (evangelical prosperity, anti-LGBTQ+ takes, MAGA-branded merch)",
+    "MLM / prosperity-gospel content",
+    "reality-dating and unscripted trash-TV as a primary read (mid-tier at best)",
+    "wall-street-alpha and crypto-bro content",
+    "senior-focused topics (Medicare supplement, retirement communities, AARP framing)"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP items that touch consciousness, therapy, personal-growth, mindfulness, spirituality, or perception reframing. Elizabeth Gilbert, Rha Goddess, Jay Shetty, Brene Brown, Mel Robbins, Dax Shepard, Glennon Doyle, Cheryl Strayed, Michelle Obama book news, Big Magic style essays.",
+    "KEEP items about queer belonging, LGBTQ+ storylines, trans-visibility, Outfest, GLAAD, Lambda Legal, Human Rights Campaign, Pride news, queer books, queer film.",
+    "KEEP wellness and boutique-fitness content: yoga, meditation, breathwork, cold plunge, cycle awareness, boutique studios (SoulCycle, CorePower, Barry's, SLT, Y7 Yoga), Headspace / Calm feature releases, sober-curious content.",
+    "KEEP indie-culture and creator-economy stories: Substack launches, Patreon news, independent film (A24, Neon, MUBI), Letterboxd chatter, indie bookstore launches, small-press releases, K-beauty drops, indie fashion drops (Loud Bodies, Alberta Ferretti, Rogue Territory, Public Rec, Emilio Pucci, La Perla, Away).",
+    "KEEP prestige TV and prestige indie film. Titles headlined by Cillian Murphy, Diego Luna, Taraji P Henson, Antonia Gentry, Madelaine Petsch, Connie Britton, Fiona Dourif. Barbie, Indiana Jones, Star Wars, The Last of Us franchise. The Bear, Ted Lasso, Only Murders, Bridgerton, White Lotus. Any A24 title.",
+    "KEEP mainstream and Latin and hip-hop pop that reads for young women and non-binary listeners: Taylor Swift, Sabrina Carpenter, Olivia Rodrigo, Chappell Roan, SZA, Doja Cat, Billie Eilish, Bad Bunny, Peso Pluma, Karol G, Kendrick Lamar, Drake, Hozier, Noah Kahan, Phoebe Bridgers, boygenius.",
+    "KEEP diverse pop culture: Black women in TV and music, Latin crossover, Asian American film, K-pop entering mainstream, drag culture, ballroom.",
+    "KEEP pet stories: DTC pet food (Little Hunter, MaxBone, Maev, Wuffes), pet-wellness, adoption stories, rescue features. Anthropomorphic pet content is core.",
+    "KEEP long-form essayism from The New Yorker, The Atlantic, Substack columns, Morning Brew, Time Out, Garden & Gun, Well+Good, MindBodyGreen, Goop.",
+    "KEEP puzzle and franchise gaming: Wordle, NYT Games, Chess.com, GeoGuessr, Animal Crossing, Minecraft, Barbie, LEGO, Valorant. Only KEEP violent-shooter titles when they are the tent-pole (Rust, Valorant); drop most milsim.",
+    "KEEP indie theatrical moviegoing venues: Alamo Drafthouse, IMAX, El Capitan. Tribeca, NY Film Fest, SXSW, Sundance news.",
+    "KEEP progressive nonprofit and cause coverage: Lambda Legal, HRC, GLAAD, Nature Conservancy, Surfrider, Farm Sanctuary, NAMI mental health, Common Cause, Baby2Baby.",
+    "KEEP mid-market America stories that are told with dignity: local businesses, small-town creators, regional theater, Palm Springs, Bangor Maine, Missoula, Bakersfield, mid-tier DMA subjects.",
+    "KEEP AI stories that touch creativity, education, journaling, or self-work (Perplexity, Claude, ChatGPT, Khanmigo). Drop AI stories that are purely enterprise-earnings or infrastructure.",
+    "KEEP Black-women-in-media and Latin-media coverage: Blavity, Essence Festival, BET Awards, NAACP Image Awards, BET+ originals.",
+    "DROP hustle-culture, grindset, Andrew Tate, alpha-bro, crypto-bro content. Drop most Joe Rogan, Bill Simmons, Pat McAfee, Colin Cowherd unless a specific episode headline is culturally-crossover.",
+    "DROP reality-dating (Bachelor, Love Island, 90 Day Fiance) and most unscripted trash-TV as primary items. They may pass as mid-tier if the celebrity involved is one this follower already follows.",
+    "DROP openly conservative culture-war content: Ben Shapiro, Tucker Carlson, Charlie Kirk, Candace Owens, Matt Walsh, PragerU, Turning Point USA, evangelical prosperity, Christian Nationalist framing.",
+    "DROP boomer cable-news anchor personality drama unless directly tied to a policy story this follower already tracks.",
+    "DROP AARP / Medicare supplement / retirement community / senior-daycare topics.",
+    "DROP wall-street alpha and meme-stock trading content. Drop most sports-book / DraftKings marketing except where it lands inside a story about a specific athlete this follower follows (WNBA, MLS, F1, NHL, women's boxing).",
+    "DROP pure-financial-services releases without a personal-finance-anxiety hook (mortgage rates, student loans, ETFs, HYSA are OK; earnings-call recaps are not).",
+    "DROP right-of-center faith-based programming (700 Club, PureFlix, Trinity Broadcasting Network).",
+    "DROP kids-only franchises (Paw Patrol, Peppa Pig, PBS Kids) except LEGO / Monster High / Miraculous Ladybug where adult crossover indexes high.",
+    "TIE-BREAK when unsure: does this touch identity, growth, or creativity? If yes, lean KEEP. If it reads as pure entertainment consumption with no self-reflection hook, MID at best."
+  ],
+
+  "expected_kept_share_per_tab": "20-40% of items per tab. The Search tab and Headlines tab should narrow the hardest because so many general searches are outgroup for this follower. Books, Podcasts, and Streaming should retain a healthier share because the follower is a heavy long-form consumer.",
+
+  "reasoned_from_profile": {
+    "profile_key": "Aggregate_Unlikely_Collaborators_Followers_08_14_2026_18_35.csv",
+    "sample_size_row": "Aggregate Unlikely Collaborators Followers (Total Universe cut across Instagram, TikTok, YouTube). Behavior window 2025-01-01 to 2025-12-31.",
+    "notable_index_signals": [
+      "AGE 18-34 idx 175-253, 45+ idx below 90",
+      "GENDER FEMALE 128, NON-BINARY 283, TRANS FEMALE 274",
+      "LGBTQ+ 238",
+      "IN A RELATIONSHIP 382",
+      "EDUCATION BACHELORS 164, GRAD 128, HS 38",
+      "MEDIA The New Yorker 335, Substack 325, MindBodyGreen 320, PBS 318, The Atlantic 312, HGTV 306, Morning Brew 288, Goop 258, Well+Good 242",
+      "SOCIAL Patreon 600, Letterboxd 592, BeReal 574, Twitch 298, Tumblr 254, Discord 250, Bluesky 177, TikTok 131",
+      "STREAMING VEEPS 1,417, FIFA+ 767, UFC Fight Pass 516, FX Now 339, MGM+ 252, BET+ 250, ESPN 236, Netflix 196, MUBI 190, Discovery+ 159",
+      "APP HEADSPACE 5,241, CALM 3,387, KLARITY 10,922, AUDIBLE 1,360, LETTERBOXD 978, WEIGHT WATCHERS 1,192, HELLO FRESH 1,262",
+      "BEAUTY LUBETS 1,685, LOCKS AND MANE 1,423, MOOM 1,260, SEIS 1,220, BTWN 1,095",
+      "MPB Little Hunter 22,086, MaxBone 21,328, Maev 9,297, Loud Bodies 4,038, Alberta Ferretti 3,526, Floom 2,589",
+      "TALENT Mel Robbins 413, Jay Shetty 373, Brene Brown 352, Dax Shepard 378, Taraji P Henson 442, Cillian Murphy 229, Diego Luna 234",
+      "EVENTS Broccoli City 2,851, Beautycon 2,797, Outfest 2,519, Complexcon 2,111, GLAAD Media Awards 696",
+      "MOVIE THEATER Alamo Drafthouse 894, IMAX 324, AMC 249"
+    ]
+  }
+}

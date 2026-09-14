@@ -10,21 +10,25 @@ The dashboard user picks a lens from a dropdown and the frontend
 instantly filters every card to just the rows the persona would
 actually be interested in.
 
-Two lenses ship today:
+Five lenses ship today (MS NOW Reader retired 2026-09-03):
 
-  - ms_now_reader : the MS NOW (formerly MSNBC) reader. College-
-                    educated, urban/suburban, Democratic-leaning
-                    (~85% D), skews 55+. Heavy on politics, foreign
-                    policy, cable-news personalities, Trump-era
-                    accountability journalism, media criticism, and
-                    progressive-adjacent podcasts.
-  - millennials   : ages 27-42 as of 2026 (born 1981-1996). Home-
-                    ownership + student-loan anxieties, nostalgic
-                    reboots (Cobra Kai, Barbie), heavy podcast
-                    consumption, migrating from Instagram to TikTok,
-                    DTC brands, index-fund investing, gaming
-                    (Nintendo / Zelda / Fortnite crossover), K-pop /
-                    Marvel / Star Wars.
+  - unlikely_collaborators_follower : the wellness / consciousness /
+                                Elizabeth Gilbert follower cohort.
+                                JSON-authored.
+  - gen_z                     : US adults 18-28. TikTok-first,
+                                identity-forward, BookTok, K-pop
+                                fluent, boutique-fitness curious.
+  - millennials               : US adults 29-44. Nostalgia-and-
+                                mortgage decade, prestige-TV loyal,
+                                heavy podcast reader.
+  - gen_x                     : US adults 45-60. Peak-earning-plus-
+                                peak-caregiving, cable still on,
+                                classic-rock + Nashville-country,
+                                F1 and college football.
+  - baby_boomers              : US adults 61-79. Retirement-and-
+                                legacy decade, cable-news anchor
+                                loyalist, cruise-and-Viking-River
+                                traveler, Costco and QVC shopper.
 
 Output shape (kind='meta'):
 
@@ -34,20 +38,22 @@ Output shape (kind='meta'):
       "fetched_at": "...",
       "generated_at": "...",
       "lenses": [
-        {"id": "ms_now_reader",
-         "label": "MS NOW Reader",
-         "emoji": "\U0001F4FA",
-         "description": "..."},
         {"id": "millennials",
          "label": "Millennials (Ages 27-42)",
          "emoji": "\u2615",
+         "description": "..."},
+        {"id": "gen_z",
+         "label": "Gen Z (Ages 18-28)",
+         "emoji": "\U0001F310",
          "description": "..."}
       ],
       "items": {
         "podcast:pod save america": {
           "kind":  "podcast",
           "title": "Pod Save America",
-          "scores": {"ms_now_reader": 92, "millennials": 68}
+          "scores": {"millennials": 68, "gen_x": 55, "baby_boomers": 62},
+          "tilts":  {"millennials": 1.4, "gen_x": 1.2, "baby_boomers": 1.6},
+          "shares": {"millennials": 0.302, "gen_x": 0.235, "baby_boomers": 0.338}
         },
         ...
       },
@@ -75,6 +81,8 @@ from typing import Any, Optional
 
 import boto3
 
+from scripts.trends_scrapers import _usage_tap  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,6 +96,65 @@ _CLAUDE_MODEL = (os.environ.get('LENS_RELEVANCE_MODEL')
 _CONCURRENCY  = int(os.environ.get('LENS_RELEVANCE_CONCURRENCY') or '4')
 _BATCH_SIZE   = int(os.environ.get('LENS_RELEVANCE_BATCH_SIZE')  or '25')
 _TIMEOUT_S    = int(os.environ.get('LENS_RELEVANCE_TIMEOUT_S')   or '120')
+
+
+# ---------------------------------------------------------------------------
+# Per-lens US adult-population baseline share (approximate).
+# Sum of the four generational shares is ~0.768 of adults 18-79; the
+# remainder is teens (<18) + very-elderly (80+), out of scope for the
+# audience-rescaling math. The Unlikely Collaborators Follower share is
+# the profile's own reach fraction (Elizabeth Gilbert follower cohort).
+#
+# Used by the frontend chip renderer to swap `us_estimate` -> a persona-
+# scaled `us_estimate_by_lens[lens_id]`:
+#
+#     share  = clamp(_PERSONA_POP_SHARE[lens] * tilt, 0.001, 0.90)
+#     lens_v = round(us_estimate * share) then messy-jittered
+#
+# where `tilt` is the per-item multiplier Claude returns alongside
+# `score` in the batch prompt.  A tilt of 1.0 means "this persona
+# consumes this item at their baseline population share"; > 1 means
+# over-index, < 1 means under-index.
+# ---------------------------------------------------------------------------
+_PERSONA_POP_SHARE: dict[str, float] = {
+    'gen_z':                            0.145,   # 18-28
+    'millennials':                      0.216,   # 29-44
+    'gen_x':                            0.196,   # 45-60
+    'baby_boomers':                     0.211,   # 61-79
+    'unlikely_collaborators_follower':  0.041,   # cohort reach, per profile
+}
+
+
+_TILT_MIN = 0.10
+_TILT_MAX = 4.0
+_SHARE_MIN = 0.001
+_SHARE_MAX = 0.90
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+
+
+def _persona_share(lens_id: str, tilt: float) -> float:
+    """Compute the persona's share-of-item audience given the model's
+    per-item tilt.  Result is clamped to [_SHARE_MIN, _SHARE_MAX] so
+    no downstream math produces a nonsense value.  Falls back to the
+    lens's baseline share when the tilt is missing or out of range."""
+    base = _PERSONA_POP_SHARE.get(lens_id)
+    if base is None:
+        return 0.0
+    try:
+        t = float(tilt)
+    except (TypeError, ValueError):
+        t = 1.0
+    if not (t > 0):
+        t = 1.0
+    t = _clamp(t, _TILT_MIN, _TILT_MAX)
+    return _clamp(base * t, _SHARE_MIN, _SHARE_MAX)
 
 
 # ---------------------------------------------------------------------------
@@ -124,152 +191,22 @@ def _key(kind: str, title: str, artist: str = '') -> str:
 # for any of the ~500 items the dashboard surfaces.
 # ---------------------------------------------------------------------------
 _LENSES: list[dict[str, Any]] = [
+    # NOTE: the inline `millennials` block was retired 2026-09-02.
+    # The full generational stack (gen_z / millennials / gen_x /
+    # baby_boomers) is now authored in data/personas/*.json alongside
+    # `unlikely_collaborators_follower` so operators can edit each
+    # persona brief without touching Python.  See _JSON_PERSONA_FILES
+    # below.  The `_retired_inline_millennials` placeholder that
+    # follows is a KEEP-OUT: `_LENSES.extend(...)` filters it out
+    # via `id.startswith('_retired')` before returning so it never
+    # appears in the LENS dropdown, but the persona text is preserved
+    # as historical reference for the JSON author.
     {
-        'id':          'ms_now_reader',
-        'label':       'MS NOW Reader',
-        'emoji':       '\U0001F4FA',                       # 📺
-        'description': ('Politics-forward center-left audience; core '
-                         'MS NOW (formerly MSNBC) viewer.'),
-        # Persona text is written kind-by-kind so Claude has a clear
-        # per-surface rubric.  Every kind that shows up on the
-        # dashboard (headlines / podcasts / songs / books / films /
-        # search / social / person) has at least one HIGH, MID, and
-        # LOW named example so Claude never has to guess "what would
-        # this cohort listen to?" or "what film would they watch?".
-        'persona': (
-            "MS NOW (formerly MSNBC) reader / viewer.\n"
-            "DEMOGRAPHIC: US adults skewing 55+, college-educated, "
-            "urban / inner-suburban, ~85% Democratic-leaning, ~65% "
-            "female, higher-income (median ~$85K HHI), heavy news "
-            "consumers, NPR / PBS pledgers, Sunday NYT subscribers.\n"
-            "\n"
-            "IDENTITY: they view themselves as informed, empathetic, "
-            "and defenders of institutions.  Consumption is oriented "
-            "around news, ideas, and culturally-serious "
-            "entertainment.  They still watch cable + linear TV.\n"
-            "\n"
-            "===================================================\n"
-            "SCORING BY KIND (use the full 0-100 range)\n"
-            "===================================================\n"
-            "\n"
-            "HEADLINES\n"
-            "  HIGH (85-100): Trump-administration accountability, "
-            "DOJ/FBI, Congressional hearings, Supreme Court "
-            "decisions, foreign policy (Ukraine, Israel/Gaza, "
-            "China), climate policy, voting rights, DEI-erasure, "
-            "reproductive rights, Democratic strategy, big-tech "
-            "antitrust, philanthropy accountability.\n"
-            "  MID (50-70): business coverage IF politically-charged "
-            "(Musk, Zuckerberg, banking crisis, OPEC), health-policy "
-            "stories, culturally-political entertainment coverage.\n"
-            "  LOW (5-25): pure market moves, individual company "
-            "earnings without political angle, celebrity gossip, "
-            "sports scores, tech product reviews without policy hook.\n"
-            "\n"
-            "PODCASTS\n"
-            "  HIGH (85-100): The Rachel Maddow Show, Pod Save "
-            "America, The Bulwark Daily, The Ezra Klein Show, The "
-            "Daily (NYT), Up First (NPR), Deadline White House, "
-            "Amicus (Slate), Prosecuting Donald Trump, The New "
-            "Yorker Radio Hour, Fresh Air, The Weekly Show with Jon "
-            "Stewart, Democracy Now.\n"
-            "  MID (45-65): Radiolab, This American Life, Serial, "
-            "Reveal, 60 Minutes, prestige-narrative shows.\n"
-            "  LOW (5-20): Joe Rogan, Ben Shapiro, Tucker Carlson, "
-            "Charlie Kirk, Matt Walsh, Candace Owens, Fearless with "
-            "Jason Whitlock, most sports-talk (Bill Simmons, Pat "
-            "McAfee), most true-crime, most gaming / anime "
-            "podcasts.\n"
-            "\n"
-            "SONGS - MS NOW readers DO listen to music, so DO NOT "
-            "cap songs artificially low.  Their consumption skews "
-            "singer-songwriter / classic-rock canon / Americana / "
-            "'NPR Tiny Desk' territory.\n"
-            "  HIGH (75-95): Joni Mitchell, James Taylor, Carole "
-            "King, Paul Simon, Fleetwood Mac, Bruce Springsteen, "
-            "Bonnie Raitt, Bob Dylan, Van Morrison, Neil Young, "
-            "Norah Jones, Brandi Carlile, Alison Krauss, Chris "
-            "Stapleton, Adele, John Prine, Emmylou Harris, Bon Iver, "
-            "Sufjan Stevens, Sara Bareilles.\n"
-            "  MID (45-65): mainstream rock canon (Journey, Tears "
-            "for Fears, U2, Elton John, Billy Joel), Adele, "
-            "Kacey Musgraves.\n"
-            "  LOW (5-25): current pop/hip-hop chart hits (Post "
-            "Malone, Doja Cat, Bad Bunny), K-pop, viral TikTok "
-            "sounds, EDM/DJ mixes, Morgan Wallen (a bit lower - "
-            "some MS NOW readers do NOT like his politics), Latin-"
-            "language reggaeton, most Spanish-language chart music.\n"
-            "\n"
-            "BOOKS\n"
-            "  HIGH (85-100): Trump-era accountability journalism "
-            "(Maggie Haberman, Bob Woodward, Michael Wolff, "
-            "Ronan Farrow), Patrick Radden Keefe, prestige "
-            "literary fiction (Ann Patchett, Elizabeth Strout, "
-            "George Saunders, Colson Whitehead), New Yorker / "
-            "Atlantic / NYRB compendiums, biographies of "
-            "presidents / justices / activists, climate books.\n"
-            "  MID (45-65): general literary fiction, memoirs, "
-            "prestige nonfiction.\n"
-            "  LOW (5-20): BookTok romantasy (Sarah J. Maas, "
-            "Rebecca Yarros, Colleen Hoover), YA fantasy, cozy "
-            "mysteries, sports biographies, self-help / "
-            "productivity, evangelical / conservative-imprint "
-            "(Regnery, Dinesh D'Souza), niche fandom / gaming "
-            "novelizations.\n"
-            "\n"
-            "FILMS / TV\n"
-            "  HIGH (80-95): prestige drama (Succession, The "
-            "Diplomat, Slow Horses, The Morning Show, The Crown), "
-            "docs and biopics of political / artistic figures, "
-            "Oscar-bait indie, historical drama, PBS Frontline / "
-            "Ken Burns, Handmaid's Tale, All The Light We Cannot "
-            "See, Oppenheimer.\n"
-            "  MID (45-65): high-quality genre with cultural weight "
-            "(The Last of Us, Yellowjackets, House of Cards, mid "
-            "Christopher Nolan).\n"
-            "  LOW (5-25): superhero tentpoles, YA fantasy "
-            "adaptations, reality dating (Love Island / The "
-            "Bachelor / 90 Day Fiancé), horror franchises, "
-            "kids/family animation, most action franchises.\n"
-            "\n"
-            "SEARCHES\n"
-            "  HIGH (75-95): politicians (AOC, Bernie, Kamala, "
-            "Trump), justice/legal terms (indictment, subpoena, "
-            "opinion, precedent), foreign-policy hotspots, climate "
-            "events (heatwave, flood, wildfire, IPCC), Supreme "
-            "Court cases, election terms.\n"
-            "  MID (40-65): business-adjacent politics (Musk, "
-            "Zuckerberg), health-policy terms.\n"
-            "  LOW (5-25): pop-culture beefs, sports box scores, "
-            "streamer names, meme stocks, celebrity-couple gossip, "
-            "Spanish-language sports queries, WWE / UFC results, "
-            "K-pop groups.\n"
-            "\n"
-            "PEOPLE (trending)\n"
-            "  HIGH (80-95): Democratic politicians, progressive "
-            "activists, prestige journalists, SCOTUS justices, "
-            "senior admin officials, foreign leaders in the news, "
-            "Nobel laureates.\n"
-            "  MID (40-65): major cultural figures with political "
-            "weight (Bruce Springsteen, Meryl Streep, Bill Gates).\n"
-            "  LOW (5-25): TikTok influencers, sports stars, "
-            "reality-TV cast, K-pop idols, gaming streamers.\n"
-            "\n"
-            "SOCIAL (Reddit / TikTok / YouTube posts)\n"
-            "  HIGH (70-90): posts about politics, breaking news, "
-            "SCOTUS, elections, climate.\n"
-            "  MID (40-60): general 'interesting news' posts, "
-            "clever observational humor.\n"
-            "  LOW (5-25): fandom posts, gaming clips, K-pop, "
-            "fitness / diet / hustle content, MLM content."
-        ),
-    },
-    {
-        'id':          'millennials',
-        'label':       'Millennials (Ages 27-42)',
+        'id':          '_retired_inline_millennials',
+        'label':       'Millennials (Ages 27-42) [retired inline]',
         'emoji':       '\u2615',                            # ☕
-        'description': ('Ages 27-42 as of 2026 (born 1981-1996). Home / '
-                         'career / nostalgia sweet spot.'),
+        'description': ('Retired inline copy.  See data/personas/'
+                         'millennials.json for the live brief.'),
         'persona': (
             "Millennial audience, ages 27-42 as of 2026 (born "
             "1981-1996).\n"
@@ -414,6 +351,174 @@ _LENSES: list[dict[str, Any]] = [
 
 
 # ---------------------------------------------------------------------------
+# JSON-authored personas (bg-webapp/data/personas/*.json)
+#
+# Some personas are rich enough that the operator wants to review the
+# brief as its own artifact, not just a Python string.  For those, the
+# JSON file is the source of truth: this loader reads the file and
+# builds the same shape of {id, label, emoji, description, persona}
+# entry the inline _LENSES dicts above use.  The persona prompt string
+# is composed section-by-section from the JSON (one_line +
+# demographics + psychographics + consumption_signals + themes +
+# filter_rules_for_agent) with headers Claude reads naturally.
+#
+# To add another JSON-authored persona: drop a new file in
+# data/personas/, add its stem to _JSON_PERSONA_FILES, and add
+# calibration anchors in the _ANCHORS dict below keyed by lens_id.
+# The frontend LENS dropdown picks the new entry up automatically
+# from the daily scraper's lens_scores.json.
+# ---------------------------------------------------------------------------
+_JSON_PERSONA_FILES: list[str] = [
+    'unlikely_collaborators_follower',
+    'gen_z',
+    'millennials',
+    'gen_x',
+    'baby_boomers',
+]
+
+# Data dir sits at repo-root / bg-webapp / data / personas.  The
+# scraper runs from the bg-webapp root on both local dev and Hetzner,
+# so a path anchored to __file__ resolves in both.
+import pathlib as _pathlib  # noqa: E402
+_PERSONA_DIR = (_pathlib.Path(__file__).resolve().parent.parent.parent
+                / 'data' / 'personas')
+
+
+def _bullet_lines(prefix: str, items: list) -> list[str]:
+    """Render a list of strings as a fixed-width bullet block."""
+    out: list[str] = []
+    for it in (items or []):
+        s = str(it).strip()
+        if not s:
+            continue
+        out.append(f"{prefix}- {s}")
+    return out
+
+
+def _compose_persona_prompt(doc: dict) -> str:
+    """Turn a JSON persona doc into the persona-prompt string Claude
+    reads at scoring time.  Mirrors the shape of the inline
+    (retired inline) millennials prompt so the batch prompt template
+    stays consistent.  Every section that appears in the JSON gets a
+    labeled block; missing keys are simply omitted."""
+    demo   = doc.get('demographics')       or {}
+    psych  = doc.get('psychographics')     or {}
+    cons   = doc.get('consumption_signals') or {}
+    care   = doc.get('themes_they_care_about') or []
+    avoid  = doc.get('themes_they_avoid')      or []
+    rules  = doc.get('filter_rules_for_agent') or []
+
+    lines: list[str] = []
+    label = doc.get('display_name') or doc.get('lens_id') or 'AUDIENCE'
+    lines.append(f"{label}.")
+    if doc.get('one_line'):
+        lines.append(str(doc['one_line']))
+    lines.append('')
+
+    if demo:
+        lines.append('DEMOGRAPHIC:')
+        for k, v in demo.items():
+            if isinstance(v, list):
+                lines.append(f"  {k}: {', '.join(str(x) for x in v)}")
+            else:
+                lines.append(f"  {k}: {v}")
+        lines.append('')
+
+    if psych:
+        lines.append('IDENTITY / TASTE:')
+        if psych.get('values'):
+            lines += _bullet_lines('  values ', psych['values'])
+        if psych.get('aesthetics'):
+            lines += _bullet_lines('  aesthetics ', psych['aesthetics'])
+        if psych.get('tone_they_respond_to'):
+            lines.append(f"  tone they respond to: {psych['tone_they_respond_to']}")
+        if psych.get('tone_they_reject'):
+            lines.append(f"  tone they reject:     {psych['tone_they_reject']}")
+        lines.append('')
+
+    if cons:
+        lines.append('CONSUMPTION SIGNALS (observed in this profile):')
+        for section, val in cons.items():
+            if isinstance(val, dict):
+                lines.append(f"  {section}:")
+                for sk, sv in val.items():
+                    if isinstance(sv, list):
+                        lines.append(f"    {sk}: {', '.join(str(x) for x in sv[:20])}")
+                    else:
+                        lines.append(f"    {sk}: {sv}")
+            elif isinstance(val, list):
+                lines.append(f"  {section}: {', '.join(str(x) for x in val[:20])}")
+            else:
+                lines.append(f"  {section}: {val}")
+        lines.append('')
+
+    if care:
+        lines.append('THEMES THEY CARE ABOUT:')
+        lines += _bullet_lines('  ', care)
+        lines.append('')
+
+    if avoid:
+        lines.append('THEMES THEY AVOID:')
+        lines += _bullet_lines('  ', avoid)
+        lines.append('')
+
+    if rules:
+        lines.append('=========================================================')
+        lines.append('SCORING RULES (apply to every item in the batch)')
+        lines.append('=========================================================')
+        lines.append('Use the FULL 0-100 range. HIGH (75-95) for items that '
+                     'directly land on a KEEP rule below.  LOW (5-25) for '
+                     'items that land on a DROP rule.  MID (35-55) for items '
+                     'that are plausible but not core.')
+        lines.append('')
+        lines += _bullet_lines('  ', rules)
+
+    return '\n'.join(lines)
+
+
+def _load_json_lenses() -> list[dict[str, Any]]:
+    """Read every JSON persona file in _JSON_PERSONA_FILES and return
+    the shape _LENSES expects.  Missing files log a warning and the
+    lens is simply skipped so the scraper never crashes on a bad
+    disk state - the frontend's response to a missing lens id is to
+    hide the option, which is the correct degraded behavior."""
+    out: list[dict[str, Any]] = []
+    for stem in _JSON_PERSONA_FILES:
+        path = _PERSONA_DIR / f'{stem}.json'
+        try:
+            doc = json.loads(path.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            logger.warning("lens_relevance: persona doc missing %s", path)
+            continue
+        except Exception as e:
+            logger.warning("lens_relevance: persona doc %s: %s", path, e)
+            continue
+        lens_id = doc.get('lens_id') or stem
+        out.append({
+            'id':          lens_id,
+            'label':       doc.get('display_name') or lens_id,
+            'emoji':       doc.get('emoji') or '\U0001F9ED',
+            'description': (doc.get('one_line') or '')[:200],
+            'persona':     _compose_persona_prompt(doc),
+        })
+    return out
+
+
+# Filter out any inline entries whose id starts with `_retired_`
+# (see the `_retired_inline_millennials` KEEP-OUT above) before we
+# extend with the JSON-authored set.  This keeps the dropdown clean
+# without deleting the inline persona-text history from source.
+_LENSES = [l for l in _LENSES if not str(l.get('id', '')).startswith('_retired_')]
+
+# Append JSON-authored personas to the inline set.  Order matters
+# only for the LENS dropdown ordering on the frontend (which mirrors
+# the order lens_config lands in the payload).  Current order (post
+# 2026-09-03 ms_now_reader retirement): unlikely_collaborators_follower,
+# gen_z, millennials, gen_x, baby_boomers.
+_LENSES.extend(_load_json_lenses())
+
+
+# ---------------------------------------------------------------------------
 # Anchor items - concrete calibration examples pinned at the top of
 # every batch prompt.  Claude scores these first (visible to itself as
 # already-decided) so it can peg the rest of the batch against a known
@@ -422,20 +527,6 @@ _LENSES: list[dict[str, Any]] = [
 # appears in the batch.
 # ---------------------------------------------------------------------------
 _ANCHORS: dict[str, list[dict[str, Any]]] = {
-    'ms_now_reader': [
-        {'kind': 'podcast',  'title': 'The Rachel Maddow Show',       'score': 98},
-        {'kind': 'podcast',  'title': 'Pod Save America',              'score': 92},
-        {'kind': 'headline', 'title': 'Trump DOJ moves to dismiss ...','score': 88},
-        {'kind': 'book',     'title': 'Regime Change (Haberman)',      'score': 95},
-        {'kind': 'song',     'title': 'The River (Bruce Springsteen)', 'score': 82},
-        {'kind': 'song',     'title': 'Landslide (Fleetwood Mac)',     'score': 78},
-        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',  'score': 22},
-        {'kind': 'film',     'title': 'Oppenheimer',                   'score': 82},
-        {'kind': 'film',     'title': 'Fast & Furious 12',             'score': 12},
-        {'kind': 'search',   'title': 'kamala harris',                 'score': 92},
-        {'kind': 'search',   'title': 'aces vs liberty',               'score': 12},
-        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',       'score': 5},
-    ],
     'millennials': [
         {'kind': 'podcast',  'title': 'SmartLess',                     'score': 95},
         {'kind': 'podcast',  'title': 'My Favorite Murder',            'score': 90},
@@ -450,6 +541,253 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'film',     'title': 'PBS Frontline: Ukraine',        'score': 18},
         {'kind': 'search',   'title': 'house of the dragon season 4',  'score': 92},
         {'kind': 'search',   'title': 'kamala harris',                 'score': 30},
+        # Gaming anchors. Millennials are the "grew up on consoles"
+        # cohort; Halo / Diablo / CoD are core, Fortnite is
+        # crossover-mainstream (kids + parents), Roblox / Gorilla
+        # Tag skew younger and score notably lower. Beat Saber sits
+        # mid-high on the wellness-adjacent VR overlap.
+        {'kind': 'game',     'title': 'Halo Infinite',                 'score': 78},
+        {'kind': 'game',     'title': 'Diablo IV',                     'score': 82},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',         'score': 74},
+        {'kind': 'game',     'title': 'Fortnite',                      'score': 58},
+        {'kind': 'game',     'title': 'Beat Saber',                    'score': 64},
+        {'kind': 'game',     'title': 'Roblox',                        'score': 32},
+        {'kind': 'game',     'title': 'Gorilla Tag',                   'score': 25},
+    ],
+    # Unlikely Collaborators Follower - young, queer-inclusive,
+    # wellness-and-consciousness-forward.  Anchors deliberately span
+    # the range: personal-growth podcasts and prestige indie score
+    # very high; hustle-culture and cable-news score very low; pop
+    # anchors (Taylor Swift, Sabrina Carpenter) sit high but not
+    # 100 because this follower's music taste is broader (Latin,
+    # hip-hop, audiophile) than a straight-Swift-core lens.
+    'unlikely_collaborators_follower': [
+        {'kind': 'podcast',  'title': 'On Purpose with Jay Shetty',            'score': 96},
+        {'kind': 'podcast',  'title': 'The Mel Robbins Podcast',               'score': 95},
+        {'kind': 'podcast',  'title': 'Armchair Expert with Dax Shepard',      'score': 92},
+        {'kind': 'podcast',  'title': 'Unlocking Us with Brene Brown',         'score': 94},
+        {'kind': 'podcast',  'title': 'We Can Do Hard Things',                 'score': 92},
+        {'kind': 'podcast',  'title': 'Ten Percent Happier',                   'score': 88},
+        {'kind': 'podcast',  'title': 'The Joe Rogan Experience',              'score': 12},
+        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',               'score': 5},
+        {'kind': 'song',     'title': 'The Fate of Ophelia (Taylor Swift)',    'score': 88},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 86},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 92},
+        {'kind': 'song',     'title': 'BIRDS OF A FEATHER (Billie Eilish)',    'score': 88},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 72},
+        {'kind': 'song',     'title': 'God\u2019s Country (Blake Shelton)',    'score': 22},
+        {'kind': 'book',     'title': 'All The Way To The River (Elizabeth Gilbert)', 'score': 98},
+        {'kind': 'book',     'title': 'Big Magic (Elizabeth Gilbert)',         'score': 96},
+        {'kind': 'book',     'title': 'Atlas of the Heart (Brene Brown)',      'score': 94},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 82},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',           'score': 68},
+        {'kind': 'book',     'title': 'Rich Dad Poor Dad',                     'score': 15},
+        {'kind': 'book',     'title': 'The Art of the Deal (Trump)',           'score': 5},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 92},
+        {'kind': 'film',     'title': 'Past Lives',                            'score': 94},
+        {'kind': 'film',     'title': 'Everything Everywhere All At Once',     'score': 93},
+        {'kind': 'film',     'title': 'Barbie',                                'score': 92},
+        {'kind': 'film',     'title': 'Oppenheimer',                           'score': 85},
+        {'kind': 'film',     'title': 'Andor',                                 'score': 90},
+        {'kind': 'film',     'title': 'The Bachelorette',                      'score': 30},
+        {'kind': 'film',     'title': 'Fast & Furious 12',                     'score': 20},
+        {'kind': 'headline', 'title': 'Elizabeth Gilbert launches new Perception Box workshop', 'score': 96},
+        {'kind': 'headline', 'title': 'Supreme Court hears LGBTQ+ workplace case', 'score': 88},
+        {'kind': 'headline', 'title': 'Federal Reserve leaves rates unchanged', 'score': 25},
+        {'kind': 'headline', 'title': 'Nvidia earnings beat analyst estimates', 'score': 18},
+        {'kind': 'search',   'title': 'jay shetty new podcast',                'score': 92},
+        {'kind': 'search',   'title': 'headspace app free trial',              'score': 88},
+        {'kind': 'search',   'title': 'best pilates studios near me',          'score': 86},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 8},
+        {'kind': 'search',   'title': 'nfl draft 2026',                        'score': 30},
+        {'kind': 'person',   'title': 'Elizabeth Gilbert',                     'score': 98},
+        {'kind': 'person',   'title': 'Brene Brown',                           'score': 94},
+        {'kind': 'person',   'title': 'Jay Shetty',                            'score': 92},
+        {'kind': 'person',   'title': 'Cillian Murphy',                        'score': 82},
+        {'kind': 'person',   'title': 'Tucker Carlson',                        'score': 5},
+        {'kind': 'person',   'title': 'Andrew Tate',                           'score': 3},
+        # Gaming anchors. Wellness-and-consciousness cohort is not
+        # a gaming-forward audience; mainstream shooters and battle
+        # royale score low. Mindfulness / rhythm / VR fitness titles
+        # (Beat Saber, Supernatural, meditation apps) score notably
+        # higher because they land inside the wellness KEEP rules.
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 65},
+        {'kind': 'game',     'title': 'Supernatural VR',                       'score': 68},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 22},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 12},
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 15},
+    ],
+
+    # -----------------------------------------------------------------
+    # Gen Z (US adults 18-28) - phone-native, TikTok-first, identity-
+    # forward, BookTok, K-pop and Latin-crossover fluent, boutique-
+    # fitness curious, wellness-app obsessed.  Anchors deliberately
+    # span the range: youth-culture and identity items score high;
+    # cable-news anchor drama, cruise travel, Medicare, and boomer-
+    # coded talent all score low.
+    # -----------------------------------------------------------------
+    'gen_z': [
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 94},
+        {'kind': 'podcast',  'title': 'Anything Goes with Emma Chamberlain',   'score': 95},
+        {'kind': 'podcast',  'title': 'Rotten Mango',                          'score': 88},
+        {'kind': 'podcast',  'title': 'Distractible (Markiplier)',             'score': 82},
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 32},
+        {'kind': 'podcast',  'title': 'The Ben Shapiro Show',                  'score': 6},
+        {'kind': 'podcast',  'title': '60 Minutes',                            'score': 10},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 95},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 94},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 90},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 86},
+        {'kind': 'song',     'title': 'God\u2019s Country (Blake Shelton)',    'score': 10},
+        {'kind': 'song',     'title': 'Fly Me to the Moon (Frank Sinatra)',    'score': 12},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 95},
+        {'kind': 'book',     'title': 'A Court of Thorns and Roses (Sarah J. Maas)', 'score': 94},
+        {'kind': 'book',     'title': 'Regime Change (Maggie Haberman)',       'score': 12},
+        {'kind': 'book',     'title': 'Being Ready When The Luck Happens (Ina Garten)', 'score': 15},
+        {'kind': 'film',     'title': 'Wednesday',                             'score': 94},
+        {'kind': 'film',     'title': 'Euphoria',                              'score': 93},
+        {'kind': 'film',     'title': 'Bottoms',                               'score': 90},
+        {'kind': 'film',     'title': 'Barbie',                                'score': 90},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 18},
+        {'kind': 'film',     'title': 'Downton Abbey: A New Era',              'score': 10},
+        {'kind': 'search',   'title': 'chappell roan tour',                    'score': 92},
+        {'kind': 'search',   'title': 'depop resellers',                       'score': 88},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 5},
+        {'kind': 'search',   'title': 'edward jones near me',                  'score': 8},
+        {'kind': 'search',   'title': 'viking river cruise',                   'score': 6},
+        {'kind': 'person',   'title': 'Chappell Roan',                         'score': 96},
+        {'kind': 'person',   'title': 'Alix Earle',                            'score': 94},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 90},
+        {'kind': 'person',   'title': 'Al Roker',                              'score': 10},
+        {'kind': 'person',   'title': 'Barbara Corcoran',                      'score': 12},
+        # Gaming anchors. Gen Z is the core cohort for Roblox,
+        # Fortnite, Gorilla Tag (Meta Quest) and the K-pop /
+        # anime-adjacent gaming stack. Boomer / dad-coded strategy
+        # titles score notably lower.
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 92},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 90},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 82},
+        {'kind': 'game',     'title': 'Genshin Impact',                        'score': 86},
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 74},
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 22},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 20},
+    ],
+
+    # -----------------------------------------------------------------
+    # Gen X (US adults 45-60) - peak-earning-plus-peak-caregiving,
+    # cable still on, classic-rock and Nashville-country, F1 and
+    # college football, Costco and Trader Joe's, Fidelity and
+    # Vanguard.  Anchors: prestige slower-burn TV and classic-rock
+    # canon score high; hyper-Gen-Z youth-influencer and BookTok
+    # romantasy score low.
+    # -----------------------------------------------------------------
+    'gen_x': [
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 92},
+        {'kind': 'podcast',  'title': 'The Bill Simmons Podcast',              'score': 90},
+        {'kind': 'podcast',  'title': 'Fresh Air',                             'score': 90},
+        {'kind': 'podcast',  'title': 'Pod Save America',                      'score': 82},
+        {'kind': 'podcast',  'title': 'Huberman Lab',                          'score': 85},
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 25},
+        {'kind': 'podcast',  'title': 'Anything Goes with Emma Chamberlain',   'score': 15},
+        {'kind': 'song',     'title': 'Stairway to Heaven (Led Zeppelin)',     'score': 95},
+        {'kind': 'song',     'title': 'Everlong (Foo Fighters)',               'score': 92},
+        {'kind': 'song',     'title': 'Tennessee Whiskey (Chris Stapleton)',   'score': 90},
+        {'kind': 'song',     'title': 'Something in the Orange (Zach Bryan)',  'score': 88},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 55},
+        {'kind': 'song',     'title': 'Super Shy (NewJeans)',                  'score': 15},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 30},
+        {'kind': 'book',     'title': 'Empire of Pain (Patrick Radden Keefe)', 'score': 94},
+        {'kind': 'book',     'title': 'A Time for Mercy (John Grisham)',       'score': 90},
+        {'kind': 'book',     'title': 'Outlive (Peter Attia)',                 'score': 92},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 28},
+        {'kind': 'book',     'title': 'Twisted Love (Ana Huang)',              'score': 15},
+        {'kind': 'film',     'title': 'Slow Horses',                           'score': 94},
+        {'kind': 'film',     'title': 'The Diplomat',                          'score': 92},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 90},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 88},
+        {'kind': 'film',     'title': 'Hazbin Hotel',                          'score': 8},
+        {'kind': 'film',     'title': 'KPop Demon Hunters',                    'score': 12},
+        {'kind': 'search',   'title': '401k rollover',                         'score': 90},
+        {'kind': 'search',   'title': 'masters golf leaderboard',              'score': 88},
+        {'kind': 'search',   'title': 'f1 miami grand prix',                   'score': 85},
+        {'kind': 'search',   'title': 'kai cenat live stream',                 'score': 10},
+        {'kind': 'search',   'title': 'livvy dunne',                           'score': 12},
+        {'kind': 'person',   'title': 'Bruce Springsteen',                     'score': 92},
+        {'kind': 'person',   'title': 'Nick Offerman',                         'score': 88},
+        {'kind': 'person',   'title': 'Aubrey Plaza',                          'score': 85},
+        {'kind': 'person',   'title': 'Salish Matter',                         'score': 5},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 12},
+        # Gaming anchors. Gen X is the "grew up on the Atari + PC"
+        # cohort - strategy, sim, and lifelong-franchise titles
+        # (Halo, Age of Empires, Flight Sim, Civ) still resonate.
+        # Kid-coded Roblox / Gorilla Tag and Gen Z battle royale
+        # score notably lower.
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 72},
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 74},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 68},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 32},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 18},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 12},
+    ],
+
+    # -----------------------------------------------------------------
+    # Baby Boomers (US adults 61-79) - retirement-and-legacy decade,
+    # cable-news anchor loyalist, cruise-and-Viking-River traveler,
+    # Costco and QVC shopper, AARP member, Fidelity and Edward Jones.
+    # Anchors: prestige slower-burn TV, classic music, and cable-news
+    # anchor drama score high; BookTok, K-pop, crypto trading, and
+    # youth-influencer creator content all score low.
+    # -----------------------------------------------------------------
+    'baby_boomers': [
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 92},
+        {'kind': 'podcast',  'title': '60 Minutes',                            'score': 96},
+        {'kind': 'podcast',  'title': 'Fresh Air',                             'score': 94},
+        {'kind': 'podcast',  'title': 'The New Yorker Radio Hour',             'score': 90},
+        {'kind': 'podcast',  'title': 'The Bill Simmons Podcast',              'score': 60},
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 8},
+        {'kind': 'podcast',  'title': 'Distractible (Markiplier)',             'score': 5},
+        {'kind': 'song',     'title': 'Fly Me to the Moon (Frank Sinatra)',    'score': 95},
+        {'kind': 'song',     'title': 'Stayin\u2019 Alive (Bee Gees)',         'score': 92},
+        {'kind': 'song',     'title': 'Believe (Cher)',                        'score': 90},
+        {'kind': 'song',     'title': 'Born to Run (Bruce Springsteen)',       'score': 92},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 18},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 10},
+        {'kind': 'song',     'title': 'Super Shy (NewJeans)',                  'score': 5},
+        {'kind': 'book',     'title': 'A Time for Mercy (John Grisham)',       'score': 92},
+        {'kind': 'book',     'title': 'The Demon of Unrest (Erik Larson)',     'score': 94},
+        {'kind': 'book',     'title': 'Being Ready When The Luck Happens (Ina Garten)', 'score': 90},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 12},
+        {'kind': 'book',     'title': 'It Ends With Us (Colleen Hoover)',      'score': 15},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 92},
+        {'kind': 'film',     'title': 'Blue Bloods',                           'score': 90},
+        {'kind': 'film',     'title': 'The Crown',                             'score': 92},
+        {'kind': 'film',     'title': 'Downton Abbey: A New Era',              'score': 90},
+        {'kind': 'film',     'title': 'Euphoria',                              'score': 8},
+        {'kind': 'film',     'title': 'Wednesday',                             'score': 22},
+        {'kind': 'film',     'title': 'Hazbin Hotel',                          'score': 5},
+        {'kind': 'search',   'title': 'medicare advantage plans',              'score': 92},
+        {'kind': 'search',   'title': 'viking river cruise',                   'score': 90},
+        {'kind': 'search',   'title': 'edward jones near me',                  'score': 88},
+        {'kind': 'search',   'title': 'kai cenat live stream',                 'score': 5},
+        {'kind': 'search',   'title': 'depop resellers',                       'score': 8},
+        {'kind': 'person',   'title': 'Ina Garten',                            'score': 94},
+        {'kind': 'person',   'title': 'Julia Roberts',                         'score': 92},
+        {'kind': 'person',   'title': 'Bruce Springsteen',                     'score': 90},
+        {'kind': 'person',   'title': 'Barbara Corcoran',                      'score': 85},
+        {'kind': 'person',   'title': 'Alix Earle',                            'score': 10},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 5},
+        {'kind': 'person',   'title': 'Livvy Dunne',                           'score': 8},
+        # Gaming anchors. Boomers are the least gaming-forward
+        # cohort on the panel. Bridge titles are the traditional
+        # "playing on the couch" long-tail (Flight Sim, Age of
+        # Empires, chess-like), never battle royale or VR. Even
+        # the highest game rarely breaks 30 for this audience.
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 28},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 22},
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 10},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 4},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 4},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 3},
     ],
 }
 
@@ -521,19 +859,37 @@ def _collect_all_items() -> list[dict]:
     # title as either film or tv; the platform is the source_label
     # so lens reasoning can differentiate ("Millennials love Netflix's
     # rewatch nostalgia titles but skip Disney+'s kids catalog").
-    for slug, label in (('netflix',    'Netflix'),
-                         ('disneyplus', 'Disney+'),
-                         ('hulu',       'Hulu'),
-                         ('max',        'HBO Max'),
-                         ('primevideo', 'Prime Video'),
-                         ('espnplus',   'ESPN+')):
+    for slug, label in (('netflix',       'Netflix'),
+                         ('disneyplus',    'Disney+'),
+                         ('hulu',          'Hulu'),
+                         ('max',           'HBO Max'),
+                         ('primevideo',    'Prime Video'),
+                         ('paramountplus', 'Paramount+'),
+                         ('peacock',       'Peacock'),
+                         ('britbox',       'BritBox'),
+                         ('mgmplus',       'MGM+'),
+                         ('starz',         'Starz'),
+                         ('espnplus',      'ESPN+')):
         snap = _read(slug) or {}
         for pool_key, kind in (('us_films', 'film'),
                                 ('us_tv',    'tv'),
                                 ('national', 'title')):
-            for it in (snap.get(pool_key) or [])[:20]:
+            for it in (snap.get(pool_key) or [])[:110]:
                 _add(kind, it.get('title') or '',
                       source_label=snap.get('label') or label)
+
+    # Streaming depth extension (scripts/trends_scrapers/
+    # streaming_depth.py): JustWatch top-100 films + shows per
+    # platform that trends_iq merges under each platform's own rows.
+    # Score them here so lens filtering covers the full 100-deep
+    # lists, not just the storefront-scraped top ranks.
+    depth = _read('streaming_depth') or {}
+    for slug, block in (depth.get('sources') or {}).items():
+        label = (block or {}).get('label') or slug
+        for pool_key, kind in (('films', 'film'), ('tv', 'tv')):
+            for it in ((block or {}).get(pool_key) or [])[:110]:
+                _add(kind, it.get('title') or '',
+                      source_label=label)
 
     # Films (ticketing)
     films = _read('film_ticketing') or {}
@@ -564,10 +920,10 @@ def _collect_all_items() -> list[dict]:
     # top headlines from GDELT don't have a separate snapshot file
     # (they're recomputed per-request), so we score the two topic
     # feeds we do have plus every article on their `by_source` breakouts.
-    for src in ('philanthropy_news', 'business_news'):
+    for src in ('philanthropy_news', 'business_news', 'wall_street_news'):
         snap = _read(src) or {}
         seen = set()
-        for it in (snap.get('national') or [])[:80]:
+        for it in (snap.get('national') or [])[:150]:
             t = (it.get('title') or '').strip()
             if not t or t in seen:
                 continue
@@ -576,7 +932,7 @@ def _collect_all_items() -> list[dict]:
                   extra=it.get('source_label') or it.get('source') or '',
                   source_label=snap.get('label') or src)
         for source_key, lst in (snap.get('by_source') or {}).items():
-            for it in (lst or [])[:20]:
+            for it in (lst or [])[:30]:
                 t = (it.get('title') or '').strip()
                 if not t or t in seen:
                     continue
@@ -590,7 +946,7 @@ def _collect_all_items() -> list[dict]:
     # This is by far the biggest coverage gap in the prior scraper:
     # searches was the first tab a user sees and NONE of it was scored.
     gw = _read('google_wide') or {}
-    for it in (gw.get('national') or [])[:120]:
+    for it in (gw.get('national') or [])[:320]:
         term = (it.get('term') or it.get('title') or '').strip()
         if not term:
             continue
@@ -615,7 +971,7 @@ def _collect_all_items() -> list[dict]:
             _add('person', title,
                   extra=(it.get('description') or '')[:180],
                   source_label='Wikipedia trending / people')
-    for it in (wiki.get('national') or [])[:40]:
+    for it in (wiki.get('national') or [])[:120]:
         title = it.get('title') or it.get('name') or ''
         if title and title not in wiki_seen:
             wiki_seen.add(title)
@@ -632,6 +988,88 @@ def _collect_all_items() -> list[dict]:
             _add('social', it.get('title') or it.get('topic') or '',
                   extra=snap.get('label') or key,
                   source_label=snap.get('label') or key)
+
+    # FAST platforms (Roku Channel, Tubi, Pluto TV, Amazon Freevee).
+    # Snapshot shape: sources.<slug>.items, one item per trending title
+    # on that FAST platform. Every item has category_display in
+    # {'Film', 'TV', ...}; use that to route the row into the same
+    # `film` / `tv` kinds the streaming snapshots write to, so the
+    # existing per-kind cutoffs still apply. A title that also trends
+    # on Netflix or Hulu folds into a single scoring row by
+    # `_key(kind, title)` - Claude only sees one Bad Sisters row even
+    # if six services carry it.
+    fast = _read('fast_channels') or {}
+    for slug, panel in (fast.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            cd = str(it.get('category_display') or '').lower()
+            kind = 'film' if cd in ('film', 'films', 'movie') else 'tv'
+            # Preserve year / short synopsis as context so Claude can
+            # distinguish "Steel Magnolias" (1989) from a same-titled
+            # remake, and can lean on the description for niche titles.
+            bits: list[str] = []
+            if it.get('year'):
+                bits.append(f'({it["year"]})')
+            if it.get('genres'):
+                gs = it['genres']
+                if isinstance(gs, list) and gs:
+                    bits.append(', '.join(str(g) for g in gs[:3]))
+            if it.get('description'):
+                bits.append(str(it['description'])[:160])
+            _add(kind, title,
+                  extra=' - '.join(bits)[:220],
+                  source_label=panel.get('label') or slug)
+
+    # Gaming (Xbox Game Pass Ultimate, Meta Quest Free + Paid, Steam).
+    # New `game` kind - not previously scored. Xbox has a flat
+    # `national` list; Meta Quest has sources.meta_quest_free +
+    # sources.meta_quest_paid; Steam is planned but not always live.
+    xbox = _read('xbox_gamepass') or {}
+    for it in (xbox.get('national') or []):
+        title = it.get('title') or ''
+        if not title:
+            continue
+        ctx: list[str] = []
+        if it.get('publisher'):
+            ctx.append(str(it['publisher'])[:80])
+        if it.get('genre'):
+            ctx.append(str(it['genre'])[:60])
+        _add('game', title,
+              extra=' - '.join(ctx)[:180],
+              source_label=xbox.get('label') or 'Xbox Game Pass Ultimate')
+
+    quest = _read('meta_quest') or {}
+    for slug, panel in (quest.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            _add('game', title,
+                  extra=panel.get('label') or slug,
+                  source_label=panel.get('label') or slug)
+
+    # Steam - snapshot may or may not be present depending on cookie
+    # health; treat as best-effort. Two shapes seen in the wild:
+    # sources.<slug>.items (most_played + top_sellers) OR a flat
+    # `national` list; support both.
+    steam = _read('steam_charts') or {}
+    for slug, panel in (steam.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            _add('game', title,
+                  extra=panel.get('label') or slug,
+                  source_label=panel.get('label') or slug)
+    for it in (steam.get('national') or []):
+        title = it.get('title') or ''
+        if not title:
+            continue
+        _add('game', title,
+              extra=steam.get('label') or 'Steam',
+              source_label=steam.get('label') or 'Steam')
 
     return list(per.values())
 
@@ -655,13 +1093,27 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
                 if a['kind'] in kinds_in_batch
                 or a['kind'] in ('podcast', 'song', 'book')]  # always keep music/podcast/book anchors as scale-anchors
 
+    pop_share = _PERSONA_POP_SHARE.get(lens['id'], 0.0)
+    pop_share_pct = round(pop_share * 100, 1)
     lines = [
         "You are an audience-strategist scoring items for a specific "
-        "persona.  For each item, output an integer 0-100 that answers: "
-        "'How likely is this exact persona to click on, stream, read, "
-        "watch, or otherwise engage with THIS specific item this week?'",
+        "persona.  For each item, output TWO numbers:",
+        "  1. `score` (0-100): how likely this exact persona is to click "
+        "on, stream, read, watch, or otherwise engage with THIS specific "
+        "item this week.  Use the FULL 0-100 range.",
+        "  2. `tilt` (0.10-4.0): how much this persona over- or under-"
+        "indexes on this item vs their share of US adults.  1.0 means "
+        "'this persona consumes this item at their baseline population "
+        "share'.  >1 means over-index (they punch above their weight - "
+        "e.g. Gen Z on Roblox is ~3.5), <1 means under-index (they "
+        "punch below - e.g. Boomers on Roblox is ~0.15).  This drives "
+        "the persona-scaled audience count downstream.",
         "",
-        "USE THE FULL 0-100 RANGE.  Do NOT compress everything into "
+        f"This persona is roughly {pop_share_pct}% of US adults 18-79 "
+        f"(baseline share).  A `tilt` of 2.0 means the persona is ~2x "
+        f"more concentrated in this item's audience than that baseline.",
+        "",
+        "USE THE FULL 0-100 SCORE RANGE.  Do NOT compress everything into "
         "the 30-55 band.  Items that are core-audience content for "
         "this persona SHOULD score 85-100.  Items the persona would "
         "actively avoid SHOULD score 5-20.  Items that are plausible "
@@ -674,6 +1126,20 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
         "adjacent, or anti-aligned within that kind?  A generic search "
         "term with no context should score 40-55 (unknown intent), NOT "
         "the middle of the persona's average.",
+        "",
+        "Tilt calibration (independent of score - a broadly-consumed "
+        "item can be a 60 score for this persona AND still have tilt "
+        "1.0 if their engagement matches their population share):",
+        "  ~3.0-4.0  persona dominates this item (Gen Z on Chappell Roan, "
+        "Boomers on Viking River Cruise, Gen X on classic-rock)",
+        "  ~1.5-2.5  persona over-indexes clearly (Millennials on "
+        "SmartLess, Gen X on Slow Horses)",
+        "  ~0.8-1.3  broad audience, matches baseline (mainstream news "
+        "story, top-40 pop hit for a mid-age cohort)",
+        "  ~0.3-0.6  persona under-indexes (Gen Z on Medicare terms, "
+        "Boomers on BookTok romantasy)",
+        "  ~0.10-0.25 persona rarely touches this item (Boomers on "
+        "Gorilla Tag VR, Gen Z on Downton Abbey)",
         "",
         "=========================================================",
         "PERSONA: " + lens['label'],
@@ -696,7 +1162,7 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
         "=========================================================",
         "Return a single JSON array with one object per input item, IN "
         "THE SAME ORDER.  Each object:",
-        '  { "id": <int>, "score": <int 0-100>, "why": "<8-14 word rationale specific to THIS item and THIS persona>" }',
+        '  { "id": <int>, "score": <int 0-100>, "tilt": <float 0.10-4.0>, "why": "<8-14 word rationale specific to THIS item and THIS persona>" }',
         "Return ONLY the JSON array, no prose before or after.",
         "",
         "=========================================================",
@@ -748,7 +1214,24 @@ def _parse_batch(text: str, batch_len: int) -> list[Optional[dict]]:
             score = 0
         score = max(0, min(100, score))
         why = (row.get('why') or '').strip()[:200]
-        by_id[rid] = {'score': score, 'why': why}
+        # `tilt` is optional (older prompts didn't request it).  Missing
+        # tilt -> derive one from score so the downstream share math
+        # still lands somewhere reasonable: score 85+ -> 2.0, 60-84 ->
+        # 1.4, 40-59 -> 1.0, 20-39 -> 0.6, <20 -> 0.3.  Deterministic,
+        # never surprises the operator.
+        tilt_raw = row.get('tilt')
+        try:
+            tilt = float(tilt_raw)
+        except (TypeError, ValueError):
+            tilt = None
+        if tilt is None or not (tilt > 0):
+            if   score >= 85: tilt = 2.0
+            elif score >= 60: tilt = 1.4
+            elif score >= 40: tilt = 1.0
+            elif score >= 20: tilt = 0.6
+            else:             tilt = 0.3
+        tilt = max(_TILT_MIN, min(_TILT_MAX, tilt))
+        by_id[rid] = {'score': score, 'tilt': tilt, 'why': why}
     out: list[Optional[dict]] = []
     for i in range(batch_len):
         out.append(by_id.get(i))
@@ -760,16 +1243,24 @@ def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
     try:
         # 4096 tokens gives Claude room to write a real why-string per
         # item (was 2048 which sometimes truncated mid-JSON).
+        # metadata.user_id + client-side _usage_tap.record_call together
+        # attribute this call to the Trends / Ranker line in the daily
+        # spend email (2026-09-03). The _bedrock_scorer shim client
+        # accepts and ignores the metadata kwarg (AWS bills the
+        # invocation, not Anthropic), and its response has no `usage`
+        # attribute so the tap becomes a no-op there.
         resp = client.messages.create(
             model=_CLAUDE_MODEL,
             max_tokens=4096,
             messages=[{'role': 'user', 'content': prompt}],
+            metadata=_usage_tap.metadata_dict(),
             timeout=_TIMEOUT_S,
         )
     except Exception as e:
         logger.info("lens_relevance %s batch (n=%d): %s",
                      lens['id'], len(batch), e)
         return [None] * len(batch)
+    _usage_tap.record_call(_CLAUDE_MODEL, resp)
     text = ''.join(getattr(b, 'text', '') for b in (resp.content or []))
     return _parse_batch(text, len(batch))
 
@@ -853,6 +1344,8 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             'kind':   it['kind'],
             'title':  it['title'],
             'scores': {},
+            'tilts':  {},   # {lens_id: 0.10-4.0}, tilt vs baseline pop share
+            'shares': {},   # {lens_id: 0.001-0.90}, share-of-item audience
             'why':    {},   # {lens_id: "8-14 word rationale"}
         }
         if it.get('artist'):
@@ -861,11 +1354,17 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             hit = lens_out.get(it['key'])
             if hit:
                 row['scores'][lens_id] = hit['score']
+                tilt = hit.get('tilt')
+                if tilt is not None:
+                    row['tilts'][lens_id] = round(float(tilt), 3)
+                    row['shares'][lens_id] = round(
+                        _persona_share(lens_id, tilt), 5)
                 if hit.get('why'):
                     row['why'][lens_id] = hit['why']
-        # Drop the `why` sub-dict if nothing landed (keeps payload lean).
-        if not row['why']:
-            row.pop('why', None)
+        # Drop empty sub-dicts to keep the payload lean.
+        for k in ('why', 'tilts', 'shares'):
+            if not row.get(k):
+                row.pop(k, None)
         if row['scores']:
             combined[it['key']] = row
 
@@ -887,8 +1386,9 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
 
 def _compute_cutoffs(items: dict[str, dict],
                       lens_ids: list[str],
-                      top_pct: float = 0.50,
-                      floor: int = 20) -> dict[str, dict[str, int]]:
+                      top_pct: float = 0.40,
+                      floor: int = 20,
+                      min_keep: int = 5) -> dict[str, dict[str, int]]:
     """For every (lens, kind) return the score threshold above which
     items should be considered 'in the persona's top N% for this kind'.
 
@@ -896,8 +1396,17 @@ def _compute_cutoffs(items: dict[str, dict],
     the persona's cohort simply scores that kind lower on average.
     Per-kind cutoffs preserve the relative ranking Claude produced.
 
-    A floor of 20 ensures we never show items that scored actively
-    anti-aligned (5-20 range) even if the whole kind is weak."""
+    Defaults tuned to keep roughly 25-45% of items per tab per lens
+    (2026-09-02): `top_pct=0.40` picks the score at the 40th-percentile
+    slot in descending order, so items >= that score make ~40% of the
+    tab.  The `floor` still gates out actively anti-aligned items in
+    the 5-19 band even when the whole kind is weak.
+
+    Empty-tab safeguard: if the computed cutoff would keep fewer than
+    `min_keep` items for a (lens, kind) pair, step the cutoff down 5
+    points at a time until at least `min_keep` items pass or the
+    cutoff hits 5.  This implements the "expand the cutoff by one
+    notch and try again" rule so a tab never ships empty."""
     from collections import defaultdict
     by_lens_kind: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
     for entry in items.values():
@@ -912,11 +1421,20 @@ def _compute_cutoffs(items: dict[str, dict],
             if not arr:
                 continue
             arr_sorted = sorted(arr, reverse=True)
-            # 50th percentile cutoff = the score at position N/2 in
-            # descending order.  Score >= this value is in the top half.
             idx = max(0, int(len(arr_sorted) * top_pct) - 1)
             cutoff = arr_sorted[idx] if arr_sorted else floor
-            out[lens_id][kind] = max(cutoff, floor)
+            cutoff = max(cutoff, floor)
+            # Anti-empty: if the cutoff excludes almost everything
+            # (very rare for broad personas, more common for narrow
+            # persona x niche-kind pairs like MS NOW x song), step
+            # down 5 points at a time until at least `min_keep`
+            # items pass, or we hit an absolute floor of 5.  The
+            # frontend never has to render an empty tab.
+            kept = sum(1 for s in arr_sorted if s >= cutoff)
+            while kept < min_keep and cutoff > 5:
+                cutoff = max(5, cutoff - 5)
+                kept = sum(1 for s in arr_sorted if s >= cutoff)
+            out[lens_id][kind] = cutoff
     return out
 
 
@@ -941,3 +1459,24 @@ if __name__ == '__main__':
            f"lenses={[l['id'] for l in result.get('lenses') or []]} "
            f"error={result.get('error')}",
            file=sys.stderr)
+
+    # A fresh lens_scores.json invalidates every live compute_view
+    # cache entry - those cached payloads still hold the OLD
+    # lens_config until their stale_until elapses (up to 24h away).
+    # The daily scraper cron self-heals via run_all.py's cache warm,
+    # but a standalone `python -m scripts.trends_scrapers.lens_relevance`
+    # run doesn't invalidate anything. Same guard as _bedrock_scorer.py;
+    # historic (asof=past-date) entries are never touched.
+    if not args.dry_run and not result.get('error'):
+        try:
+            import pathlib as _pathlib
+            _root = _pathlib.Path(__file__).resolve().parent.parent.parent
+            if str(_root) not in sys.path:
+                sys.path.insert(0, str(_root))
+            from trends_iq import invalidate_live_compute_view_caches  # noqa: E402
+            n = invalidate_live_compute_view_caches()
+            print(f"invalidated {n} live compute_view cache entries",
+                   file=sys.stderr)
+        except Exception as e:
+            print(f"WARN: compute_view cache invalidation failed: {e}",
+                   file=sys.stderr)

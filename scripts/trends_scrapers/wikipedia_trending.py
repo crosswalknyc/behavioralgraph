@@ -106,7 +106,7 @@ _DROP_REGEXES = [
 _MIN_VIEWS_FLOOR = 8_000
 
 # Cap how many articles we surface. Frontend renders up to ~30 anyway.
-_TOP_N = 30
+_TOP_N = 100
 
 
 # ────────────────────────────────────────────────────────────────────────────

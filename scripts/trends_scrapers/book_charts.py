@@ -148,25 +148,53 @@ _KINDLE_LIKE_RE = re.compile(
 )
 
 
-def _fetch_amazon_books(limit: int = 30) -> list[dict]:
+def _fetch_amazon_books(limit: int = 60) -> list[dict]:
     """Parse `amazon.com/gp/bestsellers/books` into the standard chart
-    row shape. ~30 titles per page; the page also carries the top
-    Fiction and top Non-fiction subrails but we only pick the primary
-    ranked list. Silent failure returns [].
+    row shape, paging across `?pg=1` and `?pg=2`.
+
+    Depth ceiling note (2026-09-09): Amazon server-renders only 30 of
+    each page's 50 ranks; the remaining 20 hydrate through an
+    authenticated ajax call that 404s without a session token. Two
+    pages therefore yield 60 real rows (ranks 1-30 + 51-80), the
+    legitimate scrape ceiling for this source. Rows re-rank 1..N in
+    Amazon's own order. Silent failure returns [].
     """
-    try:
-        r = requests.get(_AMAZON_BOOKS_URL,
-                         headers={'User-Agent': _UA,
-                                    'Accept-Language': 'en-US,en;q=0.9',
-                                    'Accept': 'text/html,application/xhtml+xml'},
-                         timeout=20)
-    except Exception as e:
-        logger.warning("amazon books: %s", e)
-        return []
-    if not r.ok:
-        logger.warning("amazon books: http %s", r.status_code)
-        return []
-    html = r.text or ''
+    items: list[dict] = []
+    seen_titles: set[str] = set()
+    for pg in (1, 2):
+        if len(items) >= limit:
+            break
+        url = _AMAZON_BOOKS_URL + ('' if pg == 1 else f'?pg={pg}')
+        try:
+            r = requests.get(url,
+                             headers={'User-Agent': _UA,
+                                        'Accept-Language': 'en-US,en;q=0.9',
+                                        'Accept': 'text/html,application/xhtml+xml'},
+                             timeout=20)
+        except Exception as e:
+            logger.warning("amazon books pg%d: %s", pg, e)
+            continue
+        if not r.ok:
+            logger.warning("amazon books pg%d: http %s", pg, r.status_code)
+            continue
+        page_items = _parse_amazon_books_page(r.text or '', limit - len(items))
+        for it in page_items:
+            key = (it.get('title') or '').lower().strip()
+            if not key or key in seen_titles:
+                continue
+            seen_titles.add(key)
+            items.append(it)
+
+    # Re-rank sequentially across pages (page 2 ranks arrive as 51-80;
+    # the dashboard list is a straight 1..N).
+    items.sort(key=lambda x: x.get('rank') or 999)
+    for i, it in enumerate(items, 1):
+        it['rank'] = i
+    return items
+
+
+def _parse_amazon_books_page(html: str, limit: int) -> list[dict]:
+    """Parse one bestseller page's server-rendered blocks."""
     items: list[dict] = []
     for block_m in _ASIN_BLOCK_RE.finditer(html):
         block = block_m.group(2)
@@ -497,7 +525,7 @@ def fetch() -> dict[str, Any]:
     is kept in the module (dead code) so re-enabling is a one-line
     change once a proxy is provisioned.
     """
-    amazon_items = _fetch_amazon_books(limit=50)
+    amazon_items = _fetch_amazon_books(limit=60)
     # Prefer paid chart when it's populated (books people are actually
     # buying); fall back to free (which is often padded with public-domain
     # classics + Amazon-published freebies).

@@ -245,6 +245,24 @@ def api_version():
 
 print("✅ Health check endpoints registered (/health, /healthz, /ready, /api/version) - ready for Render")
 
+
+# Billing / wallet blueprint (2026-09-08 Jenna: dashboard signup fee,
+# Buy Credits, admin card on file, Prometheus metered billing). All
+# routes gated on STRIPE_ENABLED env var; when disabled the routes
+# still register but every Stripe call short-circuits with a
+# "billing not configured" response. See bg-webapp/billing_schema.md.
+try:
+    from billing_routes import register_billing_blueprint
+    register_billing_blueprint(app)
+except Exception as _billing_import_err:
+    print(f"⚠️ Billing blueprint not registered: {_billing_import_err}")
+
+try:
+    from newsletter import register_newsletter_blueprint
+    register_newsletter_blueprint(app)
+except Exception as _newsletter_import_err:
+    print(f"⚠️ Newsletter blueprint not registered: {_newsletter_import_err}")
+
 # Global error handler for API routes - ensures JSON responses.
 # The partner surface (/api/v1/*) gets a fixed generic message with no
 # exception detail (2026-08-28 client finding #12: error paths must be
@@ -1787,15 +1805,32 @@ CREDITS_ECOMMERCE_IQ = 5
 CREDITS_FLYWHEEL_CONVERSION = 25
 CREDITS_BRAND_PARTNERSHIP_IQ = 15
 CREDITS_JOURNEY_IQ = 10
-# Chatbot (Prometheus / Brief Chat) surfaces. 2026-08-21 Jenna directive:
-# every pull is charged and recorded on ALL surfaces (dashboard, partner
-# API, chatbot) - including unlimited-credit users, whose credits_used +
-# usage history still increment even though their balance never depletes.
-# Profile builds launched from the chatbot price off _V1_CREDITS (same
-# tier table as the partner API); these two cover the lighter Claude-
-# backed chatbot deliverables.
-CREDITS_CHATBOT_ANALYZE = 1   # "Analyze this data" reasoning pass
-CREDITS_CHATBOT_DECK = 1      # PPTX deck build from on-screen data
+# Chatbot (Prometheus / Brief Chat) surfaces.
+#
+# 2026-09-09 (Jenna, verbatim: "Prometheus questions Shouldn't cost
+# anything? So like, analyze ask, wouldn't be a separate fee, that
+# would just fall into the meter usage charge. The only thing that
+# should really show up on the charges are if you're running a real
+# pipeline. So like, you're running build a profile or subscriber IQ,
+# things like that. But the general questions would just be metered
+# usage. So like building a deck, metered usage. I guess it would
+# really just be subscriber IQ and profile IQ right now. That would
+# have those prices on it."):
+#
+# Prometheus asks, "analyze this data", and "build a deck" are
+# session-metered - they never show up as a per-pull line item on the
+# bill. Only real pipeline runs (Profile IQ, Subscriber IQ, their
+# chatbot / partner-API twins) carry discrete prices. These two
+# constants stay at 0 so `consume_credit()` calls and preflight gates
+# are effectively no-ops; the metered spend rolls up through the
+# per-session Prometheus billing in pay_per_use.py (or is included in
+# a subscribed user's flat tier - either way, no per-ask charge).
+#
+# Profile-build price tiers (Chatbot Profile IQ, partner API v1) live
+# in _V1_CREDITS / _V1_USD_FALLBACK further down - those DO still
+# charge per pull.
+CREDITS_CHATBOT_ANALYZE = 0   # metered, not per-pull
+CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -2269,6 +2304,123 @@ def has_credits_for(username, amount):
     return credits_left >= amount
 
 
+def _sanitize_spend_scope(value):
+    """Coerce a raw spend-scope request field to a persistable value.
+
+    Accepts (from JSON / form / query):
+      - None / missing / empty string / "inherit"      -> "inherit"
+      - "*" / "all" / "any" / "unrestricted" / "star"  -> "*"
+      - list of strings                                -> deduped list
+        of stripped strings (empty list = explicit deny)
+      - comma-separated string                         -> parsed as list
+      - anything else                                  -> "inherit"
+        (fail-safe: never surface a corrupt value to storage)
+
+    Note: this only sanitizes the STORAGE shape; the RUNTIME evaluation
+    (see wallet._normalize_spend_scope + user_can_spend_from_company)
+    treats "inherit" as "defer to company default_spend_scope" and "*"
+    as "no restriction". Missing / unset stored value also resolves to
+    "inherit" at runtime, so the persistence + runtime layers agree.
+    """
+    if value is None:
+        return "inherit"
+    if isinstance(value, str):
+        s = value.strip()
+        low = s.lower()
+        if not s or low == "inherit":
+            return "inherit"
+        if low in ("*", "all", "any", "unrestricted", "star"):
+            return "*"
+        # Comma-separated list.
+        if "," in s:
+            parts = [p.strip() for p in s.split(",")]
+            return sorted({p for p in parts if p})
+        # Single tool_key.
+        return [s]
+    if isinstance(value, (list, tuple, set, frozenset)):
+        cleaned = {str(x).strip() for x in value if str(x).strip()}
+        return sorted(cleaned)
+    return "inherit"
+
+
+def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
+                         data=None, username=None):
+    """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
+
+    Called INSIDE the _consume mutator after internal credits (or the
+    company pool) fail to cover the pull. Only fires when the resolved
+    billing subject is a paying customer whose configured
+    `billing_mode` (and card on file, when applicable) authorizes the
+    deduction.
+
+    Company-shared wallet (Jenna 2026-09-09): when the user's
+    `billing_source == 'company'` and their `company` field names a
+    company that exists in `data['companies']`, the deduct routes to
+    the COMPANY record instead of the user record. Every user at the
+    company draws from the same pooled balance / card. See
+    wallet.resolve_billing_subject for the resolution rules.
+
+    Returns True when the wallet absorbed the pull (mutator should
+    commit the write), False otherwise (mutator should return None).
+
+    Never raises: any import/lookup/deduct error is logged and treated
+    as "wallet did not absorb", preserving the legacy insufficient-
+    credits behavior exactly.
+    """
+    try:
+        import wallet as _wallet  # local import so tests can stub
+        # Resolve subject BEFORE the paying-customer check so a user
+        # routing through a paying company gets charged even if the
+        # user record itself isn't flagged paying_customer.
+        subject, subject_kind, subject_key = (
+            _wallet.resolve_billing_subject(user, data or {}))
+        if not _wallet.is_paying_customer(subject):
+            return False
+        tool_key = _wallet.pull_type_to_tool_key(pull_type)
+        usd, mode = _wallet.should_charge_wallet(subject, tool_key)
+        if mode != 'wallet' or usd <= 0:
+            return False
+        # Per-member spend scope (Jenna 2026-09-09): when the subject is
+        # a company, check whether THIS user is authorized to spend the
+        # shared wallet on THIS tool_key. Company owners can restrict
+        # e.g. "profile_iq_build" to a subset of the team while letting
+        # everyone spend on "prometheus".
+        if subject_kind == 'company':
+            allowed, reason, _scope = _wallet.user_can_spend_from_company(
+                user, tool_key, subject)
+            if not allowed:
+                outcome['spend_scope_blocked'] = True
+                outcome['spend_scope_tool_key'] = tool_key
+                outcome['spend_scope_company'] = subject_key
+                return False
+        can, _reason = _wallet.wallet_can_absorb(subject, usd)
+        if not can:
+            return False
+        # billed_via_username stamps who triggered the pull when the
+        # subject is a company (so admins get per-user attribution).
+        billed_via = ''
+        if subject_kind == 'company':
+            billed_via = (username
+                          or user.get('email')
+                          or user.get('username')
+                          or '')
+        _wallet.apply_wallet_deduct(
+            subject, usd,
+            description=description or 'Usage',
+            tool_key=tool_key,
+            job_id=job_id or '',
+            billed_via_username=billed_via)
+        outcome['ok'] = True
+        outcome['wallet_charged_usd'] = usd
+        outcome['wallet_tool_key'] = tool_key
+        outcome['wallet_subject_kind'] = subject_kind
+        outcome['wallet_subject_key'] = subject_key
+        return True
+    except Exception as _e:
+        print(f"[wallet] fallback failed: {_e}")
+        return False
+
+
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
     """Consume credits from user and/or company pool.
     Returns True if successful.
@@ -2277,6 +2429,11 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     (see _users_cas_mutate): the debit arithmetic is always applied to
     the current balance, so a refund landed by the queue worker between
     our read and write is folded in on retry instead of clobbered.
+
+    Wallet fallback (Jenna 2026-09-08): when internal credits (personal
+    or company pool) don't cover the pull AND the user is a paying
+    customer, the wallet may absorb the pull instead. See
+    _try_wallet_fallback and bg-webapp/wallet.py.
     """
     used_at = datetime.now().isoformat()
     entry = {
@@ -2311,8 +2468,18 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
 
             if not pool_unlimited and pool_remaining < credits_used:
+                # Pool exhausted -> try wallet fallback for paying customers.
+                if _try_wallet_fallback(user, pull_type, description,
+                                       job_id, outcome, data=data,
+                                       username=username):
+                    return data
                 return None
             if ceiling != -1 and ceiling_remaining < credits_used:
+                # User's ceiling on this pool reached -> try wallet fallback.
+                if _try_wallet_fallback(user, pull_type, description,
+                                       job_id, outcome, data=data,
+                                       username=username):
+                    return data
                 return None
 
             user['credits_used'] = user.get('credits_used', 0) + credits_used
@@ -2327,6 +2494,11 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             return data
 
         if not user_unlimited and _numeric_credits_balance(user) < credits_used:
+            # Personal credits exhausted -> try wallet fallback for paying customers.
+            if _try_wallet_fallback(user, pull_type, description,
+                                   job_id, outcome, data=data,
+                                   username=username):
+                return data
             return None
 
         if not user_unlimited:
@@ -2344,6 +2516,34 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     except Exception:
         traceback.print_exc()
         return False
+
+    # Wallet post-hook: if the wallet absorbed this pull AND the
+    # subject's billing_mode is auto_reload AND the new balance
+    # dropped below the threshold, fire an off-session Stripe charge
+    # to top up. Runs OUTSIDE the CAS mutator because it makes a
+    # Stripe network call. Never blocks the pull - the deduction has
+    # already committed; auto-reload success or failure only affects
+    # the subject's next pull. Routes the top-up to the company card
+    # when the pull was billed through a company (Jenna 2026-09-09).
+    if outcome.get('ok') and outcome.get('wallet_charged_usd'):
+        try:
+            import wallet as _wallet
+            _subject_kind = outcome.get('wallet_subject_kind') or 'user'
+            _subject_key = outcome.get('wallet_subject_key') or username
+            # Re-read the subject snapshot post-CAS for the current
+            # balance + card metadata.
+            _post_data = load_users() or {}
+            if _subject_kind == 'company':
+                _post = (_post_data.get('companies') or {}
+                         ).get(_subject_key) or {}
+            else:
+                _post = (_post_data.get('users') or {}
+                         ).get(_subject_key) or {}
+            _wallet.try_auto_reload(_subject_key, _post,
+                                    subject_kind=_subject_kind)
+        except Exception as _ar_e:
+            print(f"[wallet] auto-reload skipped: {_ar_e}")
+
     return outcome['ok']
 
 
@@ -2502,30 +2702,52 @@ def requires_super_admin(f):
 # disabling these controls for non-super callers.
 _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_profile_iq_access', 'has_subscriber_iq_access',
-    'has_roas_iq_access', 'has_ecommerce_iq_access',
+    'has_ecommerce_iq_access',
     'has_ticket_sales_iq_access',
     'has_hedge_fund_iq_access', 'gets_hedge_fund_iq_emails',
     'hedge_fund_iq_tabs', 'hedge_fund_iq_tickers',
     'hedge_fund_iq_data_cutoff',
-    'has_analysis_iq_access', 'analysis_iq_modules',
+    'analysis_iq_modules',
     'has_ticket_sales_tracker_access',
     'has_rankers_iq_access', 'rankers_iq_options',
-    'has_llmo_iq_access', 'has_talent_fit_access',
-    'has_sf_conversion_access', 'has_flywheel_conversion_access',
-    'has_brand_partnership_iq_access', 'has_sentiment_iq_access',
+    'has_talent_fit_access',
+    'has_sf_conversion_access', 'sf_conversion_journeys',
+    'has_flywheel_conversion_access',
+    'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
+    'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
-    'has_workspace_access',
     'has_share_of_time_access', 'has_share_of_time_run_access',
     'has_blue_iq_access',
+    'has_brand_tracking_iq_access',
     'has_impact_iq_access', 'impact_iq_journeys',
     'has_trends_iq_access', 'has_microdramas_iq_access',
+    'allowed_lenses',
+    'allowed_trends_tabs', 'allowed_rankers_tabs',
     'has_chatbot_profile_iq_access',
     'prometheus_access',
+    # Prometheus mode (2026-09-03, Jenna): three-way per-user split so
+    # some accounts can be given analysis-only or pull-only Prometheus
+    # access. Sits ON TOP of has_chatbot_profile_iq_access (the master
+    # switch) and orthogonal to prometheus_access (the pay-per-use
+    # tier for analysis). Legal values: 'analysis', 'pull', 'both'.
+    # Missing / unknown resolves to 'both' at read time so every
+    # existing user record keeps today's behavior with no migration
+    # write.
+    'prometheus_mode',
     'auto_access_new',
 ])
 # 'role' drives the SA / A / U badge - the "user status" in the UI.
-SUPER_ADMIN_ONLY_USER_FIELDS = _PRODUCT_ACCESS_FIELDS | frozenset({'role'})
+# 2026-09-04 (Jenna, verbatim: "make sure admins can revoke and grant
+# access to certain things for users"). Partial loosen of the 2026-08-25
+# posture: product-access flags in _PRODUCT_ACCESS_FIELDS above are now
+# editable by ALL admins so any admin can grant / revoke a user's access
+# to any product. Only `role` remains super-admin-only so a regular
+# admin cannot self-promote or promote another user to admin /
+# super_admin. _PRODUCT_ACCESS_FIELDS is kept as documentation and for
+# potential future re-tightening -- do not delete without checking who
+# imports it.
+SUPER_ADMIN_ONLY_USER_FIELDS = frozenset({'role'})
 
 
 def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
@@ -2563,34 +2785,16 @@ def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
     return jsonify({
         'success': False,
         'error': (
-            "Only a super admin can grant product access or assign "
-            "user status. Restricted fields in this request: "
+            "Only a super admin can assign user status (role). "
+            "Restricted fields in this request: "
             + ", ".join(sorted(changing))
         ),
     }), 403
 
 
-def requires_purgatory_access(f):
-    """Decorator that allows admins, super_admins, and users with purgatory approval access."""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'username' not in session:
-            if request.path.startswith('/api/'):
-                return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
-            return redirect(url_for('login_page'))
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'User not found'}), 403
-        
-        role = user.get('role', '')
-        has_purgatory_approval = user.get('has_purgatory_approval', False)
-        
-        # Allow admins, super_admins, or users with purgatory approval
-        if role in ['admin', 'super_admin'] or has_purgatory_approval:
-            return f(*args, **kwargs)
-        
-        return jsonify({'success': False, 'error': 'Purgatory access required'}), 403
-    return decorated
+# requires_purgatory_access decorator retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore"). Every route
+# it wrapped has been deleted in the same change.
 
 
 # Store for job status and results
@@ -3307,8 +3511,16 @@ def validate_demographics_raw_totals(df, sample_size, fix_discrepancies=True):
     return is_valid, discrepancies, df
 
 
-def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True, bucket=None, category=None, source_type='profile_analysis'):
-    """Upload a result file to S3. By default uploads to purgatory/ for admin review before release."""
+def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=None, bucket=None, category=None, source_type='profile_analysis'):
+    """Upload a result file to S3. Publishes directly to the root key.
+
+    The `use_purgatory` kwarg is a deprecated no-op kept in the signature so
+    existing callers that still pass `use_purgatory=True` do not break. The
+    purgatory workflow (write-to-purgatory, admin approval, release-to-root)
+    was retired 2026-09-09 (Jenna, "remove ... purgatory since we dont
+    need it anymore") - every publish now lands at the root key
+    immediately.
+    """
     if not s3_client:
         return None
     try:
@@ -3318,7 +3530,7 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         safe_brand_name = re.sub(r'[\s\-/,]+', '_', (brand_name or '').strip())
         safe_brand_name = re.sub(r'_+', '_', safe_brand_name).strip('_') or 'Profile'
         base_key = f"{safe_brand_name}_{timestamp}.csv"
-        s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
+        s3_key = base_key
         s3_client.upload_file(file_path, target_bucket, s3_key)
 
         # Sidecar: agent-decision log written by run_full_pipeline next to the
@@ -3354,18 +3566,13 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         except Exception as _research_err:
             print(f"⚠️ Could not upload research sidecar: {_research_err}")
 
-        # If using purgatory, add to purgatory metadata for tracking
-        if use_purgatory and created_by:
-            add_to_purgatory(
-                s3_key=s3_key,
-                bucket=target_bucket,
-                created_by=created_by,
-                project_name=brand_name,
-                category=category or 'Uncategorized',
-                source_type=source_type
-            )
-            print(f"✅ Added to purgatory: {s3_key} (bucket: {target_bucket}, user: {created_by})")
-        
+        # Purgatory add-to-review tail retired 2026-09-09 (Jenna,
+        # "remove ... purgatory since we dont need it anymore").
+        # Every publish now lands at the root key directly; the queue
+        # worker's "profile ready" email path (see rule 6 in
+        # profile-iq-pipeline-rules.mdc) is what tells the caller their
+        # file is live in the dashboard.
+
         return s3_key
     except Exception as e:
         print(f"Error uploading to S3: {e}")
@@ -3598,10 +3805,14 @@ def admin_cloak():
         if not target_username:
             return jsonify({'success': False, 'error': 'Username required'}), 400
         users_data = load_users()
-        if target_username not in users_data.get('users', {}):
+        target_user = users_data.get('users', {}).get(target_username)
+        if not target_user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         original_username = session.get('username')
         session['username'] = target_username
+        # Impersonate their role too — leftover session['role'] from the
+        # super_admin would otherwise keep admin-only UI and APIs open.
+        session['role'] = _normalize_role(target_user.get('role', 'user'))
         session['cloaked_from'] = original_username
         return jsonify({'success': True, 'redirect': '/'})
     except Exception as e:
@@ -4892,8 +5103,30 @@ def create_user():
             'last_name': req_data.get('last_name', ''),
             'company': company,
             'department': req_data.get('department', ''),
+            # Company-shared wallet routing (Jenna 2026-09-09). Defaults
+            # to 'user' (own wallet); admin flips to 'company' when the
+            # user should draw from the shared company pool.
+            'billing_source': (
+                'company'
+                if str(req_data.get('billing_source') or '').strip().lower()
+                == 'company' else 'user'),
+            'company_billing_admin': bool(
+                req_data.get('company_billing_admin')),
+            # Per-member spend scope on the shared wallet (Jenna
+            # 2026-09-09). "inherit" (default), "*", or a list of
+            # tool_keys the member is allowed to spend the company
+            # wallet on. Only meaningful when billing_source='company'.
+            # See wallet.user_can_spend_from_company for full semantics.
+            'company_spend_scope': _sanitize_spend_scope(
+                req_data.get('company_spend_scope')),
             'role': role,
-            'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
+            # 2026-09-09 (Jenna, verbatim: 'default everyone to 0'). New
+            # users start at 0 credits. Wallet funding, unlimited access,
+            # and specified-dollar top-ups are managed exclusively from
+            # the Billing tab (/admin/billing?user=<username>). If the
+            # requesting admin explicitly passes 'credits' the value is
+            # honored; otherwise the company default (if any) wins, then 0.
+            'credits': req_data.get('credits', cd.get('credits', 0) if cd else 0),
             'credits_used': 0,
             # Consulting-hour pool (minutes; -1 = unlimited). Mirrors credits.
             # Company defaults may seed a starting pool for new hires.
@@ -4910,7 +5143,6 @@ def create_user():
             'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', cd.get('allowed_behavioral_categories', ['*']) if cd else ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', cd.get('has_profile_iq_access', True) if cd else True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', cd.get('has_subscriber_iq_access', False) if cd else False),
-            'has_roas_iq_access': req_data.get('has_roas_iq_access', cd.get('has_roas_iq_access', True) if cd else True),
             'has_ecommerce_iq_access': req_data.get('has_ecommerce_iq_access', cd.get('has_ecommerce_iq_access', True) if cd else True),
             'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
@@ -4918,30 +5150,69 @@ def create_user():
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'hedge_fund_iq_data_cutoff': req_data.get('hedge_fund_iq_data_cutoff', None),
-            'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
-            'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
+            'sf_conversion_journeys': req_data.get('sf_conversion_journeys', cd.get('sf_conversion_journeys', None) if cd else None),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
+            'brand_partnership_iq_journeys': req_data.get('brand_partnership_iq_journeys', cd.get('brand_partnership_iq_journeys', None) if cd else None),
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
             'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
             'allowed_intent_iq_runs': req_data.get('allowed_intent_iq_runs', cd.get('allowed_intent_iq_runs', ['*']) if cd else ['*']),
-            'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
+            'has_brand_tracking_iq_access': req_data.get('has_brand_tracking_iq_access', cd.get('has_brand_tracking_iq_access', False) if cd else False),
             'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
+            # Per-tab grants for Trends / Rankers (2026-09-03). ['*'] =
+            # every current and future tab. Missing defaults to ['*'] so
+            # existing product users keep seeing the full strip.
+            'allowed_trends_tabs': _store_tiq_tab_grant(
+                req_data['allowed_trends_tabs'] if isinstance(req_data.get('allowed_trends_tabs'), list)
+                else (cd.get('allowed_trends_tabs') if cd else None),
+                _TIQ_TRENDS_TAB_KEYS),
+            'allowed_rankers_tabs': _store_tiq_tab_grant(
+                req_data['allowed_rankers_tabs'] if isinstance(req_data.get('allowed_rankers_tabs'), list)
+                else (cd.get('allowed_rankers_tabs') if cd else None),
+                _TIQ_RANKERS_TAB_KEYS),
+            # Trends IQ per-user lens grant (2026-09-02). List of lens
+            # id strings or ['*'] for all. Missing / None means "defaults
+            # apply" - the user sees whichever lenses are default-visible
+            # via DEFAULT_HIDDEN_LENSES + the Live Features global-hide
+            # toggles. Only super admins may set this on create (gated by
+            # _reject_if_non_super_touches_restricted via _PRODUCT_ACCESS_FIELDS).
+            'allowed_lenses': (
+                list(req_data['allowed_lenses'])
+                if isinstance(req_data.get('allowed_lenses'), list)
+                else (list(cd.get('allowed_lenses')) if cd and isinstance(cd.get('allowed_lenses'), list) else None)
+            ),
             'has_chatbot_profile_iq_access': req_data.get('has_chatbot_profile_iq_access', cd.get('has_chatbot_profile_iq_access', False) if cd else False),
+            # 2026-09-09 (Jenna, verbatim: 'if you turn prometheus on it
+            # should AUTOMTICALLY turn billing on for that person'). When
+            # Chatbot Profile IQ (Prometheus) is enabled on create, the
+            # user is auto-flipped to paying_customer=True so wallet
+            # routing turns on. If the user has no funds their first
+            # Prometheus click gets the 402 top-up prompt; the super
+            # admin can also pre-configure unlimited access or a fixed
+            # dollar top-up via the Billing tab. If the admin explicitly
+            # passed paying_customer in req_data, that value wins.
+            'paying_customer': bool(
+                req_data.get(
+                    'paying_customer',
+                    req_data.get(
+                        'has_chatbot_profile_iq_access',
+                        (cd.get('has_chatbot_profile_iq_access', False) if cd else False))
+                )
+            ),
             # Prometheus tier (2026-08-26): 'full' (analysis and
             # everything else) unless the creating super_admin picked
             # 'pulls_only'. pay_per_use_enabled starts False; only the
@@ -4950,21 +5221,25 @@ def create_user():
                 'pulls_only'
                 if str(req_data.get('prometheus_access') or '').strip().lower()
                 == 'pulls_only' else 'full'),
+            # Prometheus mode (2026-09-03, Jenna): three-way per-user
+            # split (analysis / pull / both). Anything unrecognized
+            # resolves to 'both' - the safe default that preserves
+            # today's behavior for every existing account.
+            'prometheus_mode': (
+                str(req_data.get('prometheus_mode') or '').strip().lower()
+                if str(req_data.get('prometheus_mode') or '').strip().lower()
+                in ('analysis', 'pull', 'both')
+                else 'both'),
             'pay_per_use_enabled': False,
             'collab_team': req_data.get('collab_team', []),
-            'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
         }
         if not data['users'][username]['has_share_of_time_access']:
             data['users'][username]['has_share_of_time_run_access'] = False
-        
-        # Purgatory clearance: only super_admin can grant (or set on create)
-        if 'has_purgatory_approval' in req_data:
-            current_user = get_current_user()
-            if not current_user or current_user.get('role') != 'super_admin':
-                return jsonify({'success': False, 'error': 'Only a super admin can grant purgatory clearance'}), 403
-            data['users'][username]['has_purgatory_approval'] = req_data.get('has_purgatory_approval', False)
-        
+
+        # Purgatory clearance grant block retired 2026-09-09 (Jenna,
+        # "remove ... purgatory since we dont need it anymore"). The
+        # has_purgatory_approval field is silently ignored on create.
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -5029,6 +5304,21 @@ def update_user(username):
             user['company'] = req_data['company']
         if 'department' in req_data:
             user['department'] = req_data['department']
+        # Company-shared wallet routing (Jenna 2026-09-09). A user with
+        # billing_source='company' AND a valid `company` value routes
+        # every wallet operation through the company record instead of
+        # their individual wallet. Unknown values coerce to 'user' so
+        # the safe default is always the individual wallet.
+        if 'billing_source' in req_data:
+            _bs_raw = str(req_data.get('billing_source') or '').strip().lower()
+            user['billing_source'] = 'company' if _bs_raw == 'company' else 'user'
+        if 'company_billing_admin' in req_data:
+            user['company_billing_admin'] = bool(
+                req_data.get('company_billing_admin'))
+        # Per-member spend scope on the shared wallet (Jenna 2026-09-09).
+        if 'company_spend_scope' in req_data:
+            user['company_spend_scope'] = _sanitize_spend_scope(
+                req_data.get('company_spend_scope'))
         if 'role' in req_data:
             # Never allow downgrading the primary 'admin' account from super_admin
             if username == 'admin':
@@ -5071,8 +5361,6 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
-        if 'has_roas_iq_access' in req_data:
-            user['has_roas_iq_access'] = req_data['has_roas_iq_access']
         if 'has_ecommerce_iq_access' in req_data:
             user['has_ecommerce_iq_access'] = req_data['has_ecommerce_iq_access']
         if 'has_ticket_sales_iq_access' in req_data:
@@ -5087,8 +5375,6 @@ def update_user(username):
             user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
         if 'hedge_fund_iq_data_cutoff' in req_data:
             user['hedge_fund_iq_data_cutoff'] = req_data['hedge_fund_iq_data_cutoff'] or None
-        if 'has_analysis_iq_access' in req_data:
-            user['has_analysis_iq_access'] = bool(req_data['has_analysis_iq_access'])
         if 'analysis_iq_modules' in req_data:
             raw = req_data['analysis_iq_modules']
             user['analysis_iq_modules'] = list(raw) if isinstance(raw, list) else []
@@ -5098,16 +5384,30 @@ def update_user(username):
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
-        if 'has_llmo_iq_access' in req_data:
-            user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
         if 'has_talent_fit_access' in req_data:
             user['has_talent_fit_access'] = bool(req_data['has_talent_fit_access'])
         if 'has_sf_conversion_access' in req_data:
             user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
+        if 'sf_conversion_journeys' in req_data:
+            _cleaned, _err = _validate_journeys_payload(
+                req_data.get('sf_conversion_journeys'),
+                field_name='sf_conversion_journeys',
+            )
+            if _err:
+                return jsonify({'success': False, 'error': _err}), 400
+            user['sf_conversion_journeys'] = _cleaned
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
         if 'has_brand_partnership_iq_access' in req_data:
             user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
+        if 'brand_partnership_iq_journeys' in req_data:
+            _cleaned, _err = _validate_journeys_payload(
+                req_data.get('brand_partnership_iq_journeys'),
+                field_name='brand_partnership_iq_journeys',
+            )
+            if _err:
+                return jsonify({'success': False, 'error': _err}), 400
+            user['brand_partnership_iq_journeys'] = _cleaned
         if 'has_sentiment_iq_access' in req_data:
             user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
         if 'has_journey_iq_access' in req_data:
@@ -5133,20 +5433,55 @@ def update_user(username):
                 user['allowed_intent_iq_runs'] = list(raw)
             else:
                 user['allowed_intent_iq_runs'] = ['*']
-        if 'has_workspace_access' in req_data:
-            user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
             user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
         if 'has_share_of_time_run_access' in req_data:
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
+        if 'has_brand_tracking_iq_access' in req_data:
+            user['has_brand_tracking_iq_access'] = bool(req_data['has_brand_tracking_iq_access'])
         if 'has_trends_iq_access' in req_data:
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_microdramas_iq_access' in req_data:
             user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
+        if 'allowed_trends_tabs' in req_data:
+            user['allowed_trends_tabs'] = _store_tiq_tab_grant(
+                req_data['allowed_trends_tabs'], _TIQ_TRENDS_TAB_KEYS)
+        if 'allowed_rankers_tabs' in req_data:
+            user['allowed_rankers_tabs'] = _store_tiq_tab_grant(
+                req_data['allowed_rankers_tabs'], _TIQ_RANKERS_TAB_KEYS)
+        if 'allowed_lenses' in req_data:
+            # Per-user gate for Trends IQ LENS dropdown (2026-09-02).
+            # ['*'] = all lenses regardless of Live Features hides.
+            # Explicit list of lens id strings = union with the currently
+            # default-visible set. Missing / non-list / empty stores None
+            # so the resolver falls back to Live Features defaults.
+            raw = req_data['allowed_lenses']
+            if isinstance(raw, list) and len(raw) > 0:
+                if any(str(v) == '*' for v in raw):
+                    user['allowed_lenses'] = ['*']
+                else:
+                    user['allowed_lenses'] = [
+                        str(v) for v in raw if str(v) in TRENDS_IQ_LENS_IDS
+                    ]
+            else:
+                # empty list or non-list stores None -> defaults apply.
+                user['allowed_lenses'] = None
         if 'has_chatbot_profile_iq_access' in req_data:
-            user['has_chatbot_profile_iq_access'] = bool(req_data['has_chatbot_profile_iq_access'])
+            _chatbot_on = bool(req_data['has_chatbot_profile_iq_access'])
+            user['has_chatbot_profile_iq_access'] = _chatbot_on
+            # 2026-09-09 (Jenna, verbatim: 'if you turn prometheus on it
+            # should AUTOMTICALLY turn billing on for that person').
+            # Flipping Chatbot Profile IQ (Prometheus) ON forces
+            # paying_customer=True so wallet routing engages on the next
+            # pull; if they have no funds, the 402 top-up prompt fires.
+            # Turning Prometheus OFF does NOT auto-flip paying_customer
+            # to False - the admin might still want the user billed for
+            # other features. paying_customer stays admin-controlled via
+            # the Billing tab in that direction.
+            if _chatbot_on:
+                user['paying_customer'] = True
         if 'prometheus_access' in req_data:
             # Prometheus tier (2026-08-26): 'pulls_only' (Profile IQ /
             # Subscriber IQ builds only) or 'full' (analysis and
@@ -5167,6 +5502,21 @@ def update_user(username):
                 # 'pulls_only' means the user must opt in themselves.
                 user['pay_per_use_enabled'] = False
                 user.pop('pay_per_use_started_at', None)
+        if 'prometheus_mode' in req_data:
+            # Prometheus mode (2026-09-03, Jenna): 'analysis' (reads
+            # only), 'pull' (new profile builds only), or 'both' (full
+            # access, the backward-compat default). An unknown value
+            # is rejected outright so the users file cannot pick up a
+            # garbage state from a bad admin PATCH.
+            _pm_mode_raw = req_data.get('prometheus_mode')
+            _pm_mode = str(_pm_mode_raw or '').strip().lower()
+            if _pm_mode not in ('analysis', 'pull', 'both'):
+                return jsonify({
+                    'success': False,
+                    'error': ('Invalid Prometheus mode. Choose one of: '
+                              'analysis, pull, both.'),
+                }), 400
+            user['prometheus_mode'] = _pm_mode
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -5191,13 +5541,11 @@ def update_user(username):
         if 'activity_export_cadence' in req_data:
             cadence = (req_data['activity_export_cadence'] or '').strip().lower()
             user['activity_export_cadence'] = cadence if cadence in ACTIVITY_EXPORT_CADENCES else ''
-        # Purgatory clearance: only super_admin can grant or revoke
-        if 'has_purgatory_approval' in req_data:
-            current_user = get_current_user()
-            if not current_user or current_user.get('role') != 'super_admin':
-                return jsonify({'success': False, 'error': 'Only a super admin can grant or revoke purgatory clearance'}), 403
-            user['has_purgatory_approval'] = req_data['has_purgatory_approval']
-        
+        # Purgatory clearance grant/revoke block retired 2026-09-09
+        # (Jenna, "remove ... purgatory since we dont need it anymore").
+        # The has_purgatory_approval field is silently ignored on update;
+        # existing user records keep the field but nothing reads it.
+
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
         if new_username and new_username != username:
@@ -5712,26 +6060,25 @@ def restore_defaults_all_users():
             user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
             user['has_profile_iq_access'] = True
             user['has_subscriber_iq_access'] = False
-            user['has_roas_iq_access'] = True
             user['has_ecommerce_iq_access'] = True
             user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
             user['gets_hedge_fund_iq_emails'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
             user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
-            user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
-            user['has_llmo_iq_access'] = False
-            user['has_workspace_access'] = True
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
             user['has_blue_iq_access'] = False
+            user['has_brand_tracking_iq_access'] = False
             user['has_impact_iq_access'] = True
             user['impact_iq_journeys'] = ['*']
             user['has_trends_iq_access'] = False
             user['has_microdramas_iq_access'] = False
+            user['allowed_trends_tabs'] = ['*']
+            user['allowed_rankers_tabs'] = ['*']
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -5819,6 +6166,44 @@ def api_list_companies():
             ll = user.get('last_login')
             if ll and (c['last_active'] is None or ll > c['last_active']):
                 c['last_active'] = ll
+
+        # 30-day Prometheus rollup per company: action count + marked-up
+        # display cost. One read, fold per user -> company. Never raises:
+        # a fetch failure leaves every company at 0 for this window (the
+        # render_calls prefix is cache-backed so this is cheap on the
+        # second poll).
+        try:
+            import prometheus_usage_admin as pua
+            label_idx = _prometheus_usage_label_index(users)
+            per_user_summary = pua.fetch_all_users_summary(
+                label_idx, days=pua.DEFAULT_DAYS)
+            username_to_company = {}
+            for username, user in users.items():
+                co = (user.get('company') or '').strip()
+                if co:
+                    username_to_company[username] = co
+            for co in companies:
+                companies[co]['prometheus_actions_30d'] = 0
+                companies[co]['prometheus_cost_30d'] = 0.0
+            for username, summary in per_user_summary.items():
+                co = username_to_company.get(username)
+                if co and co in companies:
+                    companies[co]['prometheus_actions_30d'] += int(
+                        summary.get('actions') or 0)
+                    companies[co]['prometheus_cost_30d'] += float(
+                        summary.get('cost_display') or 0.0)
+            # Re-round the per-company cost so we don't ship 8dp float
+            # arithmetic drift to the browser.
+            for co in companies:
+                companies[co]['prometheus_cost_30d'] = round(
+                    float(companies[co]['prometheus_cost_30d']), 2)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            for co in companies:
+                companies[co].setdefault('prometheus_actions_30d', 0)
+                companies[co].setdefault('prometheus_cost_30d', 0.0)
+
         return jsonify({'success': True, 'companies': sorted(companies.values(), key=lambda x: x['name'].lower())})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -6593,24 +6978,25 @@ def api_set_company_defaults(company_name):
             'allowed_behavioral_categories': req.get('allowed_behavioral_categories', ['*']),
             'has_profile_iq_access': req.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req.get('has_subscriber_iq_access', False),
-            'has_roas_iq_access': req.get('has_roas_iq_access', True),
             'has_ecommerce_iq_access': req.get('has_ecommerce_iq_access', True),
             'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
             'gets_hedge_fund_iq_emails': req.get('gets_hedge_fund_iq_emails', False),
-            'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
-            'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
             'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
+            'brand_partnership_iq_journeys': _validate_journeys_payload(
+                req.get('brand_partnership_iq_journeys'),
+                field_name='brand_partnership_iq_journeys',
+            )[0],
             'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
-            'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
+            'has_brand_tracking_iq_access': req.get('has_brand_tracking_iq_access', False),
             'has_impact_iq_access': req.get('has_impact_iq_access', True),
             'impact_iq_journeys': req.get('impact_iq_journeys', ['*']) or ['*'],
             'has_trends_iq_access': req.get('has_trends_iq_access', False),
@@ -6665,24 +7051,21 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(cd.get('allowed_behavioral_categories', ['*']))
                 user['has_profile_iq_access'] = cd.get('has_profile_iq_access', True)
                 user['has_subscriber_iq_access'] = cd.get('has_subscriber_iq_access', False)
-                user['has_roas_iq_access'] = cd.get('has_roas_iq_access', True)
                 user['has_ecommerce_iq_access'] = cd.get('has_ecommerce_iq_access', True)
                 user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
                 user['gets_hedge_fund_iq_emails'] = cd.get('gets_hedge_fund_iq_emails', False)
-                user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
-                user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
                 user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
                 user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
-                user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
+                user['has_brand_tracking_iq_access'] = cd.get('has_brand_tracking_iq_access', False)
                 user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
                 user['impact_iq_journeys'] = list(cd.get('impact_iq_journeys', ['*']) or ['*'])
                 user['has_trends_iq_access'] = cd.get('has_trends_iq_access', False)
@@ -6695,24 +7078,21 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(global_behavioral) if isinstance(global_behavioral, list) else ['*']
                 user['has_profile_iq_access'] = True
                 user['has_subscriber_iq_access'] = False
-                user['has_roas_iq_access'] = True
                 user['has_ecommerce_iq_access'] = True
                 user['has_ticket_sales_iq_access'] = True
                 user['has_hedge_fund_iq_access'] = False
                 user['gets_hedge_fund_iq_emails'] = False
-                user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
-                user['has_llmo_iq_access'] = False
                 user['has_talent_fit_access'] = False
                 user['has_flywheel_conversion_access'] = False
                 user['has_brand_partnership_iq_access'] = False
                 user['has_sentiment_iq_access'] = False
                 user['has_journey_iq_access'] = False
-                user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
+                user['has_brand_tracking_iq_access'] = False
                 user['has_impact_iq_access'] = True
                 user['impact_iq_journeys'] = ['*']
                 user['has_trends_iq_access'] = False
@@ -7329,117 +7709,141 @@ def get_user_stats(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
-# Inactive user alert: email these when a user hasn't logged in for 7+ days
-INACTIVE_ALERT_RECIPIENTS = [
-    'liz@crosswalknyc.com',
-    'jessie@crosswalknyc.com',
-    'alexia@crosswalknyc.com',
-    'jenna@crosswalknyc.com',
-]
-INACTIVE_DAYS_THRESHOLD = 7
-INACTIVE_EMAIL_COOLDOWN_DAYS = 7  # don't send again for same user within this many days
+# ---------------------------------------------------------------------------
+# Prometheus usage rollup for the admin surfaces (2026-09-03).
+#
+# Every Prometheus surface (interpret, analysis, deck, corpus_select,
+# ask_classify) already auto-attributes the logged-in user via
+# _pm_attrib_extras() in _pm_claude_json, so the per-call records at
+# s3://dashboard-inputs/system/usage/render_calls/YYYY_MM_DD/ carry every
+# field the admin surface needs (ts, surface, cost_usd, duration_s,
+# user_email). These endpoints roll those records up per user and per
+# company for the User Details modal and the Company tab.
+#
+# Copy: "Prometheus", "actions", "reads", "analyses", "deck builds",
+# "compute cost". No exposure of models, providers, queues, or workers.
+# ---------------------------------------------------------------------------
 
 
-def _build_usage_snapshot_html(user, activity):
-    """Build HTML snippet for dashboard usage snapshot (feature usage, profiles viewed, sessions)."""
-    activity = activity or {}
-    feature_usage = activity.get('feature_usage') or {}
-    profiles_viewed = activity.get('profiles_viewed') or []
-    total_sessions = activity.get('total_sessions', 0)
-    recent_actions = activity.get('recent_actions') or []
-    rows = []
-    if feature_usage:
-        sorted_features = sorted(feature_usage.items(), key=lambda x: -x[1])[:15]
-        for name, count in sorted_features:
-            rows.append(f'<tr><td>{name}</td><td style="text-align:right;">{count}</td></tr>')
-    feature_table = ''
-    if rows:
-        feature_table = '<div class="email-card"><div class="email-card-title">Feature usage</div><table style="width:100%; border-collapse:collapse;"><thead><tr><th style="text-align:left;">Action</th><th style="text-align:right;">Count</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>'
-    profile_rows = []
-    for p in profiles_viewed[:10]:
-        name = (p.get('name') or p.get('key') or '—')
-        view_count = p.get('view_count', 1)
-        viewed_at = (p.get('viewed_at') or '')[:10]
-        profile_rows.append(f'<tr><td>{name}</td><td>{view_count}</td><td>{viewed_at}</td></tr>')
-    profile_table = ''
-    if profile_rows:
-        profile_table = '<div class="email-card"><div class="email-card-title">Profiles viewed (recent)</div><table style="width:100%; border-collapse:collapse;"><thead><tr><th style="text-align:left;">Profile</th><th>Views</th><th>Last viewed</th></tr></thead><tbody>' + ''.join(profile_rows) + '</tbody></table></div>'
-    return f'<p><strong>Sessions:</strong> {total_sessions} &nbsp;|&nbsp; <strong>Recent actions (logged):</strong> {len(recent_actions)}</p>{feature_table}{profile_table}'
+def _prometheus_usage_labels_for_user(user):
+    """Return the case-normalized label set that identifies one user in
+    the render_calls records. Every Prometheus call is tagged with
+    _pm_attrib_extras() which sets `user_email` = email or username and
+    `user` = username or email, so any of email / username should match.
+    """
+    if not user:
+        return set()
+    labels = set()
+    email = str(user.get('email') or '').strip().lower()
+    if email:
+        labels.add(email)
+    username = str(user.get('username') or '').strip().lower()
+    if username:
+        labels.add(username)
+    return labels
 
 
-def _check_and_send_inactive_user_emails():
-    """Find users inactive 7+ days, send one email per user to INACTIVE_ALERT_RECIPIENTS. Returns (count_emails_sent, list_inactive_usernames)."""
-    now = datetime.now()
-    cutoff = now - timedelta(days=INACTIVE_DAYS_THRESHOLD)
-    cooldown_cutoff = now - timedelta(days=INACTIVE_EMAIL_COOLDOWN_DAYS)
-    data = load_users()
-    users_data = data.get('users', {})
-    sent_count = 0
-    inactive_usernames = []
-    for username, user in users_data.items():
-        if user.get('is_super_admin') or user.get('cloaked_as'):
-            continue
-        last_login = user.get('last_login')
-        try:
-            last_login_dt = datetime.fromisoformat(last_login.replace('Z', '+00:00')) if last_login else None
-        except Exception:
-            last_login_dt = None
-        if last_login_dt and last_login_dt.tzinfo:
-            last_login_dt = last_login_dt.replace(tzinfo=None)
-        if last_login_dt and last_login_dt >= cutoff:
-            continue
-        last_sent = user.get('last_inactive_email_sent')
-        if last_sent:
-            try:
-                sent_dt = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
-                if sent_dt.tzinfo:
-                    sent_dt = sent_dt.replace(tzinfo=None)
-                if sent_dt > cooldown_cutoff:
-                    continue
-            except Exception:
-                pass
-        inactive_usernames.append(username)
-        first_name = (user.get('first_name') or '').strip() or username
-        last_name = (user.get('last_name') or '').strip()
-        full_name = f'{first_name} {last_name}'.strip() or username
-        last_login_display = last_login[:19].replace('T', ' ') if last_login else 'Never'
-        activity = user.get('activity') or {}
-        usage_html = _build_usage_snapshot_html(user, activity)
-        subject = f"Crosswalk IQ: {full_name} has been inactive for over a week"
-        body_content = f"""
-        <p>This user has not logged in for at least {INACTIVE_DAYS_THRESHOLD} days.</p>
-        <div class="email-card">
-            <div class="email-card-title">User</div>
-            <p><span class="email-label">Name</span><br><span class="email-value">{full_name}</span></p>
-            <p><span class="email-label">Username</span><br><span class="email-value">{username}</span></p>
-            <p><span class="email-label">Last login</span><br><span class="email-value">{last_login_display}</span></p>
-        </div>
-        <p><strong>Dashboard usage snapshot (before inactivity):</strong></p>
-        {usage_html}
-        """
-        html = _wrap_email_html(body_content, title='Inactive user alert')
-        text_content = f"User {full_name} ({username}) has been inactive for over a week. Last login: {last_login_display}.\n\nDashboard usage snapshot: see HTML version."
-        for to_email in INACTIVE_ALERT_RECIPIENTS:
-            ok, _ = send_email_via_gmail(to_email, subject, html, text_content=text_content)
-            if ok:
-                sent_count += 1
-        user['last_inactive_email_sent'] = now.isoformat()
-    if inactive_usernames:
-        save_users(data)
-    return sent_count, inactive_usernames
+def _prometheus_usage_label_index(users_dict):
+    """Build {normalized_label: username} across every user so a single
+    render_calls scan can attribute every record without a per-user
+    loop. Case-insensitive keys."""
+    idx = {}
+    for username, user in (users_dict or {}).items():
+        u_norm = str(username or '').strip().lower()
+        e_norm = str((user or {}).get('email') or '').strip().lower()
+        for lbl in (u_norm, e_norm):
+            if lbl and lbl not in idx:
+                idx[lbl] = username
+    return idx
 
 
+def _prometheus_usage_days_arg():
+    """Parse the ?days= query arg, defaulting + capping per the module."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception:
+        return 30
+    try:
+        raw = (request.args.get('days') or '').strip()
+    except Exception:
+        raw = ''
+    try:
+        val = int(raw or pua.DEFAULT_DAYS)
+    except (TypeError, ValueError):
+        val = pua.DEFAULT_DAYS
+    return max(1, min(val, pua.MAX_DAYS))
+
+
+@app.route('/api/admin/users/<username>/prometheus-usage', methods=['GET'])
+@requires_admin
+def get_user_prometheus_usage(username):
+    """Return the Prometheus action rollup for one user over the
+    trailing window (default 30 days, max 90)."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception as exc:
+        return jsonify({'success': False,
+                        'error': f'Prometheus rollup unavailable: {exc}'}), 500
+    try:
+        data = load_users()
+        if username not in data.get('users', {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        days = _prometheus_usage_days_arg()
+        labels = _prometheus_usage_labels_for_user({
+            'username': username, 'email': user.get('email')})
+        summary = pua.fetch_user_usage(user_emails=labels, days=days,
+                                       include_actions=True)
+        return jsonify({'success': True,
+                        'username': username,
+                        'company': (user.get('company') or '').strip(),
+                        'usage': summary})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/prometheus-usage',
+           methods=['GET'])
+@requires_admin
+def get_company_prometheus_usage(company_name):
+    """Return the Prometheus rollup for one company plus per-user rows."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception as exc:
+        return jsonify({'success': False,
+                        'error': f'Prometheus rollup unavailable: {exc}'}), 500
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        wanted = (company_name or '').strip().lower()
+        user_map = {}
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != wanted:
+                continue
+            labels = _prometheus_usage_labels_for_user({
+                'username': username, 'email': user.get('email')})
+            user_map[username] = list(labels)
+        days = _prometheus_usage_days_arg()
+        summary = pua.fetch_company_usage(user_map=user_map, days=days)
+        return jsonify({'success': True,
+                        'company': company_name,
+                        'user_count': len(user_map),
+                        'usage': summary})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Inactivity alerts retired 2026-09-03 per Jenna directive.
+# The endpoint below is kept as a no-op so any cached admin JS does
+# not error. Underlying last_login and activity tracking on the user
+# record is preserved; only the email send path is gone.
 @app.route('/api/admin/check-inactive-users', methods=['POST'])
 @requires_admin
 def check_inactive_users():
-    """DISABLED 2026-05-27 (per user request).
-
-    Previously called _check_and_send_inactive_user_emails(), which sent
-    one alert email per inactive user to liz/jessie/alexia/jenna.
-    The feature is now a no-op; the admin-UI button has been removed
-    from templates/admin.html. Hitting this endpoint returns success with
-    emails_sent=0 so any cached client code doesn't error.
-    """
     return jsonify({
         'success': True,
         'emails_sent': 0,
@@ -8181,6 +8585,11 @@ def get_admin_content():
                     key = obj['Key']
                     if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
                         continue
+                    # Never surface files that live under
+                    # `brand-partnership-iq/_backups/` - those are internal
+                    # pre-mutation snapshots, not browseable profiles.
+                    if _bpiq_is_backup_key(key):
+                        continue
                     bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                     name_without_ext = bare_key.replace('.json', '')
                     match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
@@ -8190,7 +8599,13 @@ def get_admin_content():
                         default_display = name_without_ext.replace('_', ' ')
                     meta = bpiq_metadata.get(bare_key, {})
                     project_name = (meta.get('display_name') or default_display).strip()
-                    category = (meta.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                    # BPIQ categories are canonical UPPERCASE (admin
+                    # dropdown starter is ['BEAUTY', 'AUTOMOTIVE', ...]).
+                    # Normalize so a mixed-case sidecar entry
+                    # ("beauty" vs "BEAUTY") doesn't fragment the admin
+                    # content list or the user-facing tree.
+                    raw_cat = (meta.get('category') or '').strip()
+                    category = raw_cat.upper() if raw_cat else 'Uncategorized'
                     image_url = meta.get('image_url') or ''
                     last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                     bpiq_files.append({
@@ -8849,6 +9264,106 @@ _ANALYSIS_IQ_MODULES_FULL = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Granular per-journey access (2026-09-03)
+# ---------------------------------------------------------------------------
+# Two products (Brand Partnership IQ + SF Conversion) support per-journey
+# access grants. Admin can grant "all journeys" ('*'), an explicit list of
+# journey ids (['jid1', 'jid2']), or no access (None / []). Legacy users
+# with only `has_X_access: true` are treated as '*' for backward compat.
+
+_GRANULAR_JOURNEY_PRODUCTS = {
+    'brand_partnership_iq': {
+        'field': 'brand_partnership_iq_journeys',
+        'legacy_flag': 'has_brand_partnership_iq_access',
+    },
+    'sf_conversion': {
+        'field': 'sf_conversion_journeys',
+        'legacy_flag': 'has_sf_conversion_access',
+    },
+}
+
+
+def _journeys_access_of(user, product_key):
+    """Resolve a per-journey allow-list for a granular product.
+
+    Returns one of:
+      '*'   - all journeys accessible
+      list  - explicit allow-list of journey ids (already deduped, non-empty)
+      None  - no access
+
+    product_key is one of the keys in _GRANULAR_JOURNEY_PRODUCTS.
+    """
+    cfg = _GRANULAR_JOURNEY_PRODUCTS.get(product_key)
+    if not cfg:
+        return None
+    # Super admins have blanket access to every journey. This mirrors
+    # compute_product_access_flags (which returns '*' for the super_admin
+    # role), but that resolver is NOT applied by get_current_user() — the
+    # callers here pass the RAW stored user record. Without this guard, a
+    # stale or scoped journeys field left on an admin's OWN record silently
+    # filters every result out, locking them out of their own product with an
+    # empty list rather than a 403 (see Brand Partnership empty-menu,
+    # 2026-09-08). Resolving super_admin -> '*' here restores the documented
+    # intent for every granular journey product.
+    if (user or {}).get('role') == 'super_admin':
+        return '*'
+    raw = (user or {}).get(cfg['field'])
+    if raw == '*':
+        return '*'
+    if isinstance(raw, list):
+        seen = []
+        for x in raw:
+            s = str(x).strip()
+            if s and s not in seen:
+                seen.append(s)
+        return seen or None
+    # Absent / None / unrecognized -> fall back to legacy boolean.
+    if bool((user or {}).get(cfg['legacy_flag'], False)):
+        return '*'
+    return None
+
+
+def _journey_access_effective(user, product_key, journey_id):
+    """True if user can open a specific journey under a granular product."""
+    resolved = _journeys_access_of(user, product_key)
+    if resolved == '*':
+        return True
+    if isinstance(resolved, list):
+        return str(journey_id).strip() in resolved
+    return False
+
+
+def _validate_journeys_payload(raw, field_name):
+    """Coerce + validate an incoming journeys payload from admin save.
+
+    Accepts:
+      '*'               -> passes through as '*'
+      None / '' / []    -> None (no access)
+      list[str]         -> deduped, stripped, non-empty strings only
+    Returns (cleaned_value, error_message). error_message is None on success.
+    """
+    if raw is None or raw == '' or raw == []:
+        return None, None
+    if raw == '*':
+        return '*', None
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, (str, int)):
+                return None, (
+                    f"Invalid {field_name}: list items must be journey id strings."
+                )
+        seen = []
+        for item in raw:
+            s = str(item).strip()
+            if s and s not in seen:
+                seen.append(s)
+        return (seen or None), None
+    return None, (
+        f"Invalid {field_name}: expected '*' (all), a list of journey ids, or null."
+    )
+
+
 def compute_product_access_flags(user, role):
     """Resolved module access for the main app (index + /api/me/product-access)."""
     if role == 'super_admin':
@@ -8856,11 +9371,10 @@ def compute_product_access_flags(user, role):
             'has_profile_iq_access': True,
             'has_subscriber_iq_access': True,
             'has_sf_conversion_access': True,
-            'has_roas_iq_access': True,
+            'sf_conversion_journeys': '*',
             'has_ecommerce_iq_access': True,
             'has_hedge_fund_iq_access': True,
             'hedge_fund_iq_tickers': ['*'],
-            'has_analysis_iq_access': True,
             'analysis_iq_modules': list(_ANALYSIS_IQ_MODULES_FULL),
             'allowed_behavioral_categories': ['*'],
             'allowed_categories': ['*'],
@@ -8869,16 +9383,17 @@ def compute_product_access_flags(user, role):
             'rankers_iq_options': ['*'],
             'has_ticket_sales_iq_access': True,
             'has_ticket_sales_tracker_access': True,
-            'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
             'has_brand_partnership_iq_access': True,
+            'brand_partnership_iq_journeys': '*',
             'has_sentiment_iq_access': True,
             'has_journey_iq_access': True,
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
+            'has_brand_tracking_iq_access': True,
             'has_intent_iq_access': True,
             'allowed_intent_iq_runs': ['*'],
             'has_impact_iq_access': True,
@@ -8886,48 +9401,89 @@ def compute_product_access_flags(user, role):
             'has_helm_iq_access': True,
             'has_trends_iq_access': True,
             'has_microdramas_iq_access': True,
+            'allowed_trends_tabs': ['*'],
+            'allowed_rankers_tabs': ['*'],
+            # Super admins bypass the lens-access gate entirely (they
+            # always see every lens); ['*'] communicates that to any
+            # caller that inspects the resolved access dict.
+            'allowed_lenses': ['*'],
             'has_chatbot_profile_iq_access': True,
             'prometheus_access': 'full',
+            # Prometheus mode (2026-09-03): super admins always
+            # resolve to 'both' - the three-way gate is bypassed
+            # anywhere `role == 'super_admin'`, but returning the
+            # value keeps admin surfaces consistent.
+            'prometheus_mode': 'both',
             'pay_per_use_enabled': False,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
     has_sot_run = bool(u.get('has_share_of_time_run_access', has_sot_view)) and has_sot_view
+    # 2026-09-03: Brand Partnership IQ + SF Conversion support per-journey
+    # access. Resolve each once; has_X_access is derived (True iff the
+    # user has any access at all), and the resolved journeys value ('*'
+    # or explicit list) is emitted so the frontend can render correctly.
+    _bp_journeys = _journeys_access_of(u, 'brand_partnership_iq')
+    _sf_journeys = _journeys_access_of(u, 'sf_conversion')
     return {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
-        'has_sf_conversion_access': bool(u.get('has_sf_conversion_access', False)),
-        'has_roas_iq_access': bool(u.get('has_roas_iq_access', True)),
+        'has_sf_conversion_access': _sf_journeys is not None,
+        'sf_conversion_journeys': _sf_journeys,
         'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
         'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
         'hedge_fund_iq_data_cutoff': u.get('hedge_fund_iq_data_cutoff', None),
-        'has_analysis_iq_access': bool(u.get('has_analysis_iq_access', False)),
         'analysis_iq_modules': list(u.get('analysis_iq_modules', []) or []),
         'allowed_behavioral_categories': u.get('allowed_behavioral_categories', ['*']) or ['*'],
         'allowed_categories': u.get('allowed_categories', ['*']) or ['*'],
-        'allowed_runs': u.get('allowed_runs', ['*']) or ['*'],
+        # Preserve an explicit empty list (zero profiles granted). The
+        # `or ['*']` form treated [] as missing and reopened the catalog.
+        'allowed_runs': (
+            list(u['allowed_runs'])
+            if isinstance(u.get('allowed_runs'), list)
+            else ['*']
+        ),
         'has_rankers_iq_access': bool(u.get('has_rankers_iq_access', False)),
         'rankers_iq_options': u.get('rankers_iq_options', []) or [],
         'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
-        'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
-        'has_brand_partnership_iq_access': bool(u.get('has_brand_partnership_iq_access', False)),
+        'has_brand_partnership_iq_access': _bp_journeys is not None,
+        'brand_partnership_iq_journeys': _bp_journeys,
         'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
-        'has_workspace_access': bool(u.get('has_workspace_access', True)),
+        # has_workspace_access retained ONLY as legacy plumbing for
+        # /api/collab/* deck-collab routes (2026-09-03 Workspace product
+        # retired from admin UI + dashboard). Hardcoded True: the flag no
+        # longer flows from users.json (removed from _PRODUCT_ACCESS_FIELDS
+        # + create_user + update_user etc.), so admin can no longer toggle
+        # it. Deck Builder Live Feature toggle handles collab availability
+        # globally.
+        'has_workspace_access': True,
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
+        'has_brand_tracking_iq_access': role == 'admin' or bool(u.get('has_brand_tracking_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'allowed_intent_iq_runs': list(u.get('allowed_intent_iq_runs', ['*']) or ['*']),
-        'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
-        'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
+        # has_impact_iq_access + impact_iq_journeys removed from product-access response
+        # 2026-09-09 (Impact IQ sunset). Fields persist on user records as dead data
+        # per silent-ignore choice; no consumer reads them anymore.
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
         'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
+        'allowed_trends_tabs': _emit_tiq_tab_grant(u.get('allowed_trends_tabs')),
+        'allowed_rankers_tabs': _emit_tiq_tab_grant(u.get('allowed_rankers_tabs')),
+        # Trends IQ per-user lens grant (2026-09-02). Preserve None so
+        # the resolver can distinguish "defaults apply" from an explicit
+        # empty list. Missing / non-list value falls through to None.
+        'allowed_lenses': (
+            list(u.get('allowed_lenses'))
+            if isinstance(u.get('allowed_lenses'), list)
+            else None
+        ),
         'has_chatbot_profile_iq_access': (
             role == 'super_admin' or bool(u.get('has_chatbot_profile_iq_access', False))
         ),
@@ -8938,16 +9494,30 @@ def compute_product_access_flags(user, role):
             if str(u.get('prometheus_access') or '').strip().lower()
             == 'pulls_only' else 'full'
         ),
+        # Prometheus mode (2026-09-03, Jenna): 'analysis' / 'pull' /
+        # 'both'. Missing / unknown resolves to 'both' so every
+        # existing user record keeps today's behavior with no
+        # migration write. Super admins bypass the gate entirely.
+        'prometheus_mode': (
+            'both' if role == 'super_admin' else (
+                str(u.get('prometheus_mode') or '').strip().lower()
+                if str(u.get('prometheus_mode') or '').strip().lower()
+                in ('analysis', 'pull', 'both')
+                else 'both'
+            )
+        ),
         'pay_per_use_enabled': bool(u.get('pay_per_use_enabled', False)),
     }
 
 
 def apply_cloak_product_access_overrides(access):
-    """Mutate access dict when admin is cloaked (Analysis IQ always on)."""
-    if session.get('cloaked_from'):
-        access = dict(access)
-        access['has_analysis_iq_access'] = True
-        access['analysis_iq_modules'] = list(_ANALYSIS_IQ_MODULES_FULL)
+    """Passthrough. Cloak is true impersonation.
+
+    Callers still wrap computed flags through here so a future cloak
+    tweak has one seam. Do not grant extra modules, tabs, or runs —
+    a cloaked super_admin must see the target user's dashboard, not
+    their own.
+    """
     return access
 
 
@@ -8969,12 +9539,10 @@ def api_me_product_access():
 
 
 def _current_user_has_llmo_iq_access():
-    user = get_current_user()
-    if not user:
-        return False
-    role = _normalize_role(user.get('role', 'user'))
-    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    return bool(acc.get('has_llmo_iq_access'))
+    """LLMO IQ retired 2026-09-03. Retained as a permanently-False
+    stub so existing /api/llmo-iq/* routes return 403 without needing
+    to delete the routes themselves."""
+    return False
 
 
 def _current_user_share_of_time_access():
@@ -9010,11 +9578,9 @@ def index():
     has_profile_iq = _acc['has_profile_iq_access']
     has_subscriber_iq = _acc['has_subscriber_iq_access']
     has_sf_conversion = _acc['has_sf_conversion_access']
-    has_roas_iq = _acc['has_roas_iq_access']
     has_ecommerce_iq = _acc['has_ecommerce_iq_access']
     has_hedge_fund_iq = _acc['has_hedge_fund_iq_access']
     hedge_fund_iq_tickers = _acc['hedge_fund_iq_tickers']
-    has_analysis_iq = _acc['has_analysis_iq_access']
     analysis_iq_modules = _acc['analysis_iq_modules']
     allowed_behavioral_categories = _acc['allowed_behavioral_categories']
     allowed_categories = _acc['allowed_categories']
@@ -9023,19 +9589,17 @@ def index():
     rankers_iq_options = _acc['rankers_iq_options']
     has_ticket_sales_iq = _acc['has_ticket_sales_iq_access']
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
-    has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_journey_iq = _acc.get('has_journey_iq_access', False)
-    has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
+    has_brand_tracking_iq = _acc.get('has_brand_tracking_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
-    has_impact_iq = _acc.get('has_impact_iq_access', True)
-    impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
+    # has_impact_iq / impact_iq_journeys derivation retired 2026-09-09 (Impact IQ sunset).
     has_helm_iq = _acc.get('has_helm_iq_access', False)
     has_trends_iq = _acc.get('has_trends_iq_access', False)
     has_microdramas_iq = _acc.get('has_microdramas_iq_access', False)
@@ -9043,8 +9607,9 @@ def index():
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
 
-    # Purgatory: only super_admins or users explicitly allowed to access/approve (has_purgatory_approval) see it in the dropdown
-    has_purgatory_access = role == 'super_admin' or (user.get('has_purgatory_approval', False) if user else False)
+    # has_purgatory_access derivation retired 2026-09-09 (Jenna,
+    # "remove ... purgatory since we dont need it anymore"). The
+    # dropdown option it gated is gone.
 
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
@@ -9073,11 +9638,9 @@ def index():
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
                            has_sf_conversion_access=has_sf_conversion,
-                           has_roas_iq_access=has_roas_iq,
                            has_ecommerce_iq_access=has_ecommerce_iq,
                            has_hedge_fund_iq_access=has_hedge_fund_iq,
                            hedge_fund_iq_tickers=hedge_fund_iq_tickers,
-                           has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
                            allowed_runs=allowed_runs,
@@ -9086,25 +9649,24 @@ def index():
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
-                           has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
-                           has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
+                           has_brand_tracking_iq_access=has_brand_tracking_iq,
                            has_intent_iq_access=has_intent_iq,
-                           has_impact_iq_access=has_impact_iq,
-                           impact_iq_journeys=impact_iq_journeys,
+                           # has_impact_iq_access / impact_iq_journeys template kwargs retired 2026-09-09.
                            has_helm_iq_access=has_helm_iq,
                            has_trends_iq_access=has_trends_iq,
                            has_microdramas_iq_access=has_microdramas_iq,
+                           allowed_trends_tabs=_acc.get('allowed_trends_tabs', ['*']),
+                           allowed_rankers_tabs=_acc.get('allowed_rankers_tabs', ['*']),
                            has_chatbot_profile_iq_access=bool(user.get('has_chatbot_profile_iq_access', False)) or role == 'super_admin',
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
-                           has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
@@ -9506,7 +10068,7 @@ def api_dispatch_pool():
 # with a clear error when no ANTHROPIC_API_KEY is configured.
 #
 # The prompts are deliberately HIGH-LEVEL: they hand Claude the panel basis
-# (n + projected U.S. HHs) and a structured menu of the 11 hand-authored
+# (n + projected U.S. Accounts) and a structured menu of the 11 hand-authored
 # Netflix pulls already in the deck, then ask Claude to choose which signals
 # resonate with the supplied brand and write the synthesized output in the
 # exact schema the frontend renderers consume.
@@ -9569,7 +10131,7 @@ NFLX_AGENT_EVIDENCE_MENU = """
    cart abandonment delta), decay curve from 1d to 60d, and incrementality %.
 
 8. INCREMENTALITY (nflx_incrementality): the matched-cohort study-design template +
-   pipeline (Total US Netflix HHs -> ad-tier eligible -> reached -> exposed ->
+   pipeline (Total US Netflix Accounts -> ad-tier eligible -> reached -> exposed ->
    matched control). 8-variable SMD balance diagnostic. 4 worked examples
    (Dove x Bridgerton, Toyota RAV4 x Squid Game, Capital One Venture x
    Wednesday, Booking.com x Emily in Paris) - each with 9-metric lift table
@@ -9588,7 +10150,7 @@ NFLX_AGENT_EVIDENCE_MENU = """
 
 10. MIGRATION (nflx_migration): 90d cross-platform streaming flow - Netflix vs
     Hulu / Max / Disney+ / Prime / YouTube / FAST. Sankey of inbound +
-    outbound HHs. Multi-sub stacking distribution (1 to 5+ SVODs). Cycling
+    outbound Accounts. Multi-sub stacking distribution (1 to 5+ SVODs). Cycling
     frequency. Ad-tier acquisition sources. Binge-and-cancel signatures.
     Title-triggered reactivations.
 
@@ -9599,8 +10161,8 @@ NFLX_AGENT_EVIDENCE_MENU = """
     top brands, proof point, sponsorship pack formats. Cross-genre heatmap of
     affinity vs 10 priority advertiser categories.
 
-PANEL BASIS (shared denominator): n=2,406,790 BehavioralGraph consumer-panel HHs
-matched to the Netflix profile, projected to 79.4M U.S. Netflix HHs via the
+PANEL BASIS (shared denominator): n=2,406,790 BehavioralGraph consumer-panel Accounts
+matched to the Netflix profile, projected to 79.4M U.S. Netflix Accounts via the
 32.99x dashboard projection factor. Every percentage in this deck ladders to
 the 79.4M projected base; every absolute count is the panel n times 32.99.
 """.strip()
@@ -10392,7 +10954,8 @@ def _generate_behavioral_summary_multi(profile_name, cohorts):
             "- When a behavior is shared across cohorts and the gap is small, you can note "
             "the shared baseline in one sentence, but spend most bullets on the DIFFERENCES.\n"
             "- Avoid 'should/recommend/consider' language. Stay descriptive.\n"
-            "- Each bullet 1-2 sentences max.\n\n"
+            "- Each bullet 1-2 sentences max.\n"
+            "- Write every bullet in sentence case. Never all-caps.\n\n"
             "Format: return ONLY a JSON array of strings (one bullet per element)."
         )
 
@@ -10548,6 +11111,7 @@ INSTRUCTIONS:
 - Highlight what makes them UNIQUE compared to the average person
 - Use analytical language that describes observed patterns (e.g., "{profile_name} panelists show strong affinity for..." or "{profile_name} panelists tend to engage with...")
 - Each bullet should be 1-2 sentences max
+- Write every bullet in sentence case. Never all-caps.
 - Do NOT include demographic stats - focus on behavioral insights
 - Do NOT use recommendation language (avoid "should", "recommend", "consider")
 
@@ -16059,10 +16623,10 @@ def _require_module_access(*flag_names, module_label: str = None):
 
     Order of checks:
       1. Session must be authenticated (401 otherwise).
-      2. Admin / super_admin bypass (always granted).
-      3. Cloaked admin session bypass (impersonating another user still
-         gets full access — matches Analysis IQ cloak behavior).
-      4. If ANY of the passed flag names resolves truthy on the user's
+      2. Admin / super_admin bypass when acting as themselves.
+         Cloaked sessions use the target user's record, so this does
+         not fire while impersonating a regular user.
+      3. If ANY of the passed flag names resolves truthy on the user's
          computed access dict, grant. Multi-flag support is used when a
          module has both a top-level flag and an Analysis IQ submodule
          alias (e.g. SF Conversion = has_sf_conversion_access OR
@@ -16078,8 +16642,6 @@ def _require_module_access(*flag_names, module_label: str = None):
         }), 401)
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
-        return True, None
-    if session.get('cloaked_from'):
         return True, None
     access = apply_cloak_product_access_overrides(
         compute_product_access_flags(user, role))
@@ -16107,26 +16669,25 @@ def _require_module_access(*flag_names, module_label: str = None):
 def _user_can_access_profile_run(user, s3_key: str) -> bool:
     """True if `user` can access the given Profile IQ S3 key.
 
-    Mirrors the same allowed_runs + allowed_categories logic used to tag
-    the `accessible` flag in /api/jobs so the UI and backend agree. Gen
-    Pop files are always accessible for authenticated users because the
-    dashboard's default cohort view needs them.
+    Mirrors the `accessible` flag in /api/jobs so the UI and backend
+    agree. Gen Pop files are always accessible for authenticated users
+    because the dashboard's default cohort view needs them.
 
-    Access sources (any grants):
-      * role in (admin, super_admin), or cloaked
+    Access sources:
+      * role in (admin, super_admin) acting as themselves
       * user.allowed_runs is None / contains '*'
-      * s3_key is in user.allowed_runs
-      * user.allowed_categories is None / contains '*'
-      * the profile's category (from s3_cache jobs metadata) is in
-        user.allowed_categories
+      * s3_key is in an explicit user.allowed_runs list
       * key contains 'gen_pop' (Gen Pop is universal)
+
+    Category Access is a subscription for auto-adding *new* profiles
+    onto allowed_runs. It does not unlock the rest of the catalog when
+    an admin has picked an explicit run list (the previous OR with
+    allowed_categories=['*'] made Run Access a no-op).
     """
     if not user:
         return False
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
-        return True
-    if session.get('cloaked_from'):
         return True
     key_lower = (s3_key or '').lower()
     if 'gen_pop' in key_lower:
@@ -16137,25 +16698,6 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
         return True
     if isinstance(allowed_runs, list) and s3_key in allowed_runs:
         return True
-    allowed_categories = user.get('allowed_categories')
-    if allowed_categories is None or (
-            isinstance(allowed_categories, list)
-            and '*' in allowed_categories):
-        return True
-    allowed_cats = {(c or '').upper()
-                    for c in (allowed_categories or [])
-                    if c}
-    if allowed_cats:
-        try:
-            for job in (s3_cache.get('jobs') or []):
-                jk = job.get('s3_key') or job.get('key')
-                if jk == s3_key:
-                    cat = (job.get('category') or '').upper()
-                    if cat and cat in allowed_cats:
-                        return True
-                    break
-        except Exception:
-            pass
     return False
 
 
@@ -16170,7 +16712,7 @@ def _require_profile_run_access(s3_key: str):
             'error': 'Not authenticated',
         }), 401)
     role = _normalize_role(user.get('role', 'user'))
-    if role in ('admin', 'super_admin') or session.get('cloaked_from'):
+    if role in ('admin', 'super_admin'):
         return True, None
     # Explicit umbrella deny (has_profile_iq_access default is True, so
     # this only fires when admin has flipped it off for that user).
@@ -16254,11 +16796,413 @@ def _require_trends_iq():
         return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
     role = _normalize_role(user.get('role', 'user'))
     acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    if not acc.get('has_trends_iq_access'):
+    # Trends and Rankers are independent products that happen to share this
+    # data pipeline: Trends serves the search/news/retail cards, Rankers
+    # serves the media cards (Music/Podcasts/Streaming/FAST/Gaming). EITHER
+    # flag admits the caller to these endpoints; /api/trends-iq/data then
+    # returns ONLY the card groups the user is entitled to (see
+    # _trends_iq_filter_payload), so a Trends-only user never receives media
+    # data and a Rankers-only user never receives Trends data.
+    if not (acc.get('has_trends_iq_access') or acc.get('has_rankers_iq_access')):
         return False, (jsonify({'success': False, 'error': 'Trends IQ access not enabled'}), 403)
     if _trends_iq is None:
         return False, (jsonify({'success': False, 'error': 'Trends IQ module not loaded'}), 500)
     return True, None
+
+
+# Card groups keyed to each product so /api/trends-iq/data only ever returns
+# what the caller is entitled to. Media cards belong to Rankers
+# (has_rankers_iq_access); everything else belongs to Trends
+# (has_trends_iq_access). Users with both flags see all of it.
+_TIQ_MEDIA_CARD_KEYS = ('music_trending', 'podcasts_trending',
+                        'streaming_trending', 'fast_trending', 'gaming_trending')
+_TIQ_MEDIA_COUNT_KEYS = ('music', 'podcasts', 'streaming', 'fast', 'gaming')
+_TIQ_TRENDS_CARD_KEYS = ('movers', 'trending_headlines', 'articles_by_source',
+                         'philanthropy_news', 'business_news', 'wall_street_news',
+                         'trending_searches', 'trending_searches_by_category',
+                         'trending_people', 'wikipedia_trending', 'books_trending',
+                         'libby_trending', 'comics_trending', 'broadway_trending',
+                         'broadway_week_ending', 'films_ticketing')
+_TIQ_TRENDS_COUNT_KEYS = ('searches', 'movers', 'headlines', 'people',
+                          'books', 'comics', 'broadway', 'films')
+
+_TIQ_TRENDS_TAB_KEYS = (
+    'searches', 'movers', 'headlines', 'people',
+    'books', 'comics', 'broadway', 'films', 'watchlist',
+)
+_TIQ_RANKERS_TAB_KEYS = ('fast', 'music', 'podcasts', 'streaming', 'gaming')
+_TIQ_TAB_CARD_KEYS = {
+    'searches':  ('trending_searches', 'trending_searches_by_category'),
+    'movers':    ('movers',),
+    'headlines': ('trending_headlines', 'articles_by_source',
+                  'philanthropy_news', 'business_news', 'wall_street_news'),
+    'people':    ('trending_people', 'wikipedia_trending'),
+    'books':     ('books_trending', 'libby_trending'),
+    'comics':    ('comics_trending',),
+    'broadway':  ('broadway_trending', 'broadway_week_ending'),
+    'films':     ('films_ticketing',),
+    'music':     ('music_trending',),
+    'podcasts':  ('podcasts_trending',),
+    'streaming': ('streaming_trending',),
+    'fast':      ('fast_trending',),
+    'gaming':    ('gaming_trending',),
+}
+_TIQ_TAB_COUNT_KEYS = {
+    'searches': ('searches',), 'movers': ('movers',),
+    'headlines': ('headlines',), 'people': ('people',),
+    'books': ('books',), 'comics': ('comics',),
+    'broadway': ('broadway',), 'films': ('films',),
+    'music': ('music',), 'podcasts': ('podcasts',),
+    'streaming': ('streaming',), 'fast': ('fast',),
+    'gaming': ('gaming',),
+}
+
+
+def _store_tiq_tab_grant(raw, catalog):
+    """Normalize a tab-grant payload for users.json.
+
+    ['*'] = every current and future tab. Explicit list is intersected
+    with the catalog. Missing / non-list defaults to ['*'] so existing
+    users are not locked out. An explicit empty list is stored as []
+    (product on, no tabs).
+    """
+    catalog = set(catalog)
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    return [str(v) for v in raw if str(v) in catalog]
+
+
+def _emit_tiq_tab_grant(raw):
+    """Resolved grant for compute_product_access_flags / the frontend.
+
+    Missing or non-list -> ['*'] (backward compatible). Empty explicit
+    list is preserved so an admin can grant the product with zero tabs.
+    """
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    return [str(v) for v in raw]
+
+
+def _trends_iq_filter_tabs(payload, trends_tabs, rankers_tabs):
+    """Strip card groups for tabs the user is not granted.
+
+    `trends_tabs` / `rankers_tabs` are either ['*'] or an explicit list
+    of tab keys. Copies cards/counts so the shared compute_view cache
+    is never mutated.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    t_all = (not isinstance(trends_tabs, list)) or any(str(v) == '*' for v in (trends_tabs or []))
+    r_all = (not isinstance(rankers_tabs, list)) or any(str(v) == '*' for v in (rankers_tabs or []))
+    if t_all and r_all:
+        return payload
+    t_set = set() if t_all else {str(v) for v in trends_tabs}
+    r_set = set() if r_all else {str(v) for v in rankers_tabs}
+    denied = []
+    if not t_all:
+        denied.extend(k for k in _TIQ_TRENDS_TAB_KEYS if k not in t_set)
+    if not r_all:
+        denied.extend(k for k in _TIQ_RANKERS_TAB_KEYS if k not in r_set)
+    if not denied:
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    counts = dict(out.get('counts') or {})
+    for tab in denied:
+        for ck in _TIQ_TAB_CARD_KEYS.get(tab, ()):
+            cards.pop(ck, None)
+        for ck in _TIQ_TAB_COUNT_KEYS.get(tab, ()):
+            if ck in counts:
+                counts[ck] = 0
+    out['cards'] = cards
+    out['counts'] = counts
+    return out
+
+
+def _trends_iq_entitlements():
+    """Return (has_trends, has_rankers) for the current user, honoring cloak."""
+    user = get_current_user()
+    if not user:
+        return False, False
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    return bool(acc.get('has_trends_iq_access')), bool(acc.get('has_rankers_iq_access'))
+
+
+def _trends_iq_filter_payload(payload, has_trends, has_rankers):
+    """Return a payload copy exposing only the card groups the user may see.
+
+    Media cards (Rankers) and Trends cards are stripped independently. Copies
+    are taken so the shared compute_view cache is never mutated.
+    """
+    if has_trends and has_rankers:
+        return payload
+    if not isinstance(payload, dict):
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    counts = dict(out.get('counts') or {})
+    if not has_rankers:
+        for _k in _TIQ_MEDIA_CARD_KEYS:
+            cards.pop(_k, None)
+        for _k in _TIQ_MEDIA_COUNT_KEYS:
+            if _k in counts:
+                counts[_k] = 0
+    if not has_trends:
+        for _k in _TIQ_TRENDS_CARD_KEYS:
+            cards.pop(_k, None)
+        for _k in _TIQ_TRENDS_COUNT_KEYS:
+            if _k in counts:
+                counts[_k] = 0
+    out['cards'] = cards
+    out['counts'] = counts
+    return out
+
+
+def _trends_iq_apply_lens_access(payload, allowed_lens_ids):
+    """Trim `cards.lens_config`, `cards.lens_scores`, and `cards.lens_cutoffs`
+    to only the lens ids this user is allowed to see.
+
+    Runs after `_trends_iq_filter_payload` so we're already working on a
+    shallow copy of `cards` (well, we take our own copy anyway so this
+    is idempotent regardless of caller). Never mutates the shared
+    compute_view cache.
+
+    `allowed_lens_ids` is a set of canonical lens id strings. If it's
+    None or contains every canonical id, the payload is returned as-is.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    if allowed_lens_ids is None:
+        return payload
+    all_ids = set(TRENDS_IQ_LENS_IDS)
+    allowed = set(allowed_lens_ids) & all_ids
+    if allowed == all_ids:
+        # Full access -> no scrub needed.
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    # 1. Lens config list: keep only allowed lens entries; preserve order.
+    lens_config = cards.get('lens_config') or []
+    if isinstance(lens_config, list):
+        cards['lens_config'] = [
+            l for l in lens_config
+            if isinstance(l, dict) and str(l.get('id') or '') in allowed
+        ]
+    # 2. Per-item scores map: each value is {kind, title, scores: {lens_id: ...},
+    #    why: {lens_id: ...}}; strip disallowed lens ids from each sub-dict.
+    lens_scores = cards.get('lens_scores') or {}
+    if isinstance(lens_scores, dict):
+        scrubbed_scores = {}
+        for item_key, row in lens_scores.items():
+            if not isinstance(row, dict):
+                continue
+            row_scores = row.get('scores') or {}
+            row_why = row.get('why') or {}
+            if isinstance(row_scores, dict):
+                row_scores = {
+                    lid: sc for lid, sc in row_scores.items()
+                    if lid in allowed
+                }
+            else:
+                row_scores = {}
+            if isinstance(row_why, dict):
+                row_why = {
+                    lid: w for lid, w in row_why.items()
+                    if lid in allowed
+                }
+            else:
+                row_why = {}
+            # Drop rows that no longer carry any allowed lens data so
+            # the client isn't paying to serialize noise it can't use.
+            if not row_scores and not row_why:
+                continue
+            new_row = dict(row)
+            new_row['scores'] = row_scores
+            new_row['why'] = row_why
+            scrubbed_scores[item_key] = new_row
+        cards['lens_scores'] = scrubbed_scores
+    # 3. Per-kind cutoffs map: {lens_id: {kind: cutoff_score}}.
+    lens_cutoffs = cards.get('lens_cutoffs') or {}
+    if isinstance(lens_cutoffs, dict):
+        cards['lens_cutoffs'] = {
+            lid: v for lid, v in lens_cutoffs.items() if lid in allowed
+        }
+    out['cards'] = cards
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Profile IQ momentum rail
+# ---------------------------------------------------------------------------
+# The Demographics page answers "who is this audience" and leaves "why does
+# it look like this right now" on the table. The rail fills that: a handful
+# of dated moments inside the profile's own window, each with one line on
+# what it means for the audience.
+#
+# Researched once per subject and cached in S3 for a week, so the page never
+# pays for a lookup and a popular subject is researched once for everyone.
+# Every failure path returns an empty list; the panel simply does not render.
+_MOMENTUM_CACHE_PREFIX = 'system/momentum_cache/'
+_MOMENTUM_TTL_DAYS = 7
+_MOMENTUM_MAX_EVENTS = 7
+
+
+def _momentum_cache_key(subject, start, end):
+    import hashlib
+    raw = '{}|{}|{}'.format(
+        (subject or '').strip().lower(), start or '', end or '')
+    digest = hashlib.sha256(raw.encode('utf-8')).hexdigest()[:20]
+    return '{}{}.json'.format(_MOMENTUM_CACHE_PREFIX, digest)
+
+
+def _momentum_read_cache(key):
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        payload = json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+    try:
+        from datetime import datetime as _dt, timedelta as _td
+        stamped = _dt.fromisoformat(str(payload.get('generated_at') or ''))
+        if _dt.utcnow() - stamped > _td(days=_MOMENTUM_TTL_DAYS):
+            return None
+    except Exception:
+        return None
+    return payload
+
+
+def _momentum_write_cache(key, payload):
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload).encode('utf-8'),
+            ContentType='application/json')
+    except Exception:
+        pass
+
+
+def _momentum_research(subject, category, start, end):
+    """One web-search call. Returns a list of {date, title, note}."""
+    try:
+        from claude_client import get_claude_client
+    except Exception:
+        return []
+    client = get_claude_client()
+    if client is None:
+        return []
+
+    window = 'between {} and {}'.format(start, end) if (start and end) else 'over the past year'
+    cat = (category or '').strip()
+    prompt = (
+        "Research " + subject + (" (" + cat + ")" if cat else "") + " and list the "
+        "notable public moments " + window + ".\n\n"
+        "Pick the moments an audience would actually have reacted to: a tour or "
+        "residency, a premiere or release, an awards appearance, a major "
+        "announcement, a brand partnership, a viral moment. Real, verifiable "
+        "events only. If you cannot verify a date, leave the event out.\n\n"
+        "Return ONLY a JSON array, at most " + str(_MOMENTUM_MAX_EVENTS) + " items, "
+        "oldest first:\n"
+        '[{"date":"YYYY-MM-DD","title":"short title, 8 words max",'
+        '"note":"one sentence on what this would mean for the people who follow them"}]\n\n'
+        "Rules for every note:\n"
+        "- One sentence, plain English, under 20 words.\n"
+        "- Write about the audience, not the person. Say what kind of attention "
+        "the moment would draw and who it would draw.\n"
+        "- Keep it directional. Say leans, skews, draws, widens, narrows. Never "
+        "state a number or a percentage.\n"
+        "- Never name a publication, outlet, or website.\n"
+        "- Never use an em dash.\n"
+        "- If you find nothing verifiable, return []."
+    )
+
+    text = ''
+    try:
+        resp = client.messages.create(
+            model=os.environ.get('MOMENTUM_MODEL', 'claude-sonnet-4-5'),
+            max_tokens=1600,
+            tools=[{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 4}],
+            messages=[{'role': 'user', 'content': prompt}],
+            timeout=55.0,
+        )
+        for block in (getattr(resp, 'content', None) or []):
+            if getattr(block, 'type', '') == 'text':
+                text += getattr(block, 'text', '') or ''
+    except Exception as e:
+        print('[momentum] research failed for {!r}: {}'.format(subject, e))
+        return []
+
+    import re as _re
+    match = _re.search(r'\[.*\]', text, _re.S)
+    if not match:
+        return []
+    try:
+        rows = json.loads(match.group(0))
+    except Exception:
+        return []
+
+    out = []
+    for row in (rows if isinstance(rows, list) else []):
+        if not isinstance(row, dict):
+            continue
+        date = str(row.get('date') or '').strip()[:10]
+        title = str(row.get('title') or '').strip()
+        note = str(row.get('note') or '').strip()
+        if not _re.match(r'^\d{4}-\d{2}-\d{2}$', date) or not title:
+            continue
+        out.append({
+            'date': date,
+            'title': title.replace('\u2014', '-').replace('\u2013', '-')[:90],
+            'note': note.replace('\u2014', '-').replace('\u2013', '-')[:180],
+        })
+    out.sort(key=lambda r: r['date'])
+    return out[:_MOMENTUM_MAX_EVENTS]
+
+
+@app.route('/api/profile-iq/momentum', methods=['GET'])
+@requires_auth
+def api_profile_iq_momentum():
+    """Dated moments for one subject. Always 200; empty list means no panel."""
+    subject = (request.args.get('subject') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    start = (request.args.get('start') or '').strip()
+    end = (request.args.get('end') or '').strip()
+    if not subject or len(subject) > 120:
+        return jsonify({'success': True, 'events': []})
+
+    key = _momentum_cache_key(subject, start, end)
+    cached = _momentum_read_cache(key)
+    if cached is not None:
+        return jsonify({
+            'success': True,
+            'subject': subject,
+            'cached': True,
+            'events': cached.get('events') or [],
+        })
+
+    try:
+        events = _momentum_research(subject, category, start, end)
+    except Exception:
+        traceback.print_exc()
+        events = []
+
+    if events:
+        from datetime import datetime as _dt
+        _momentum_write_cache(key, {
+            'subject': subject,
+            'generated_at': _dt.utcnow().isoformat(),
+            'events': events,
+        })
+    return jsonify({
+        'success': True,
+        'subject': subject,
+        'cached': False,
+        'events': events,
+    })
 
 
 @app.route('/api/trends-iq/filter-options', methods=['GET'])
@@ -16303,10 +17247,44 @@ def api_trends_iq_data():
         }
         force = bool(req.get('force_refresh'))
         payload = _trends_iq.compute_view(filters, force_refresh=force)
+        # Return only the card groups this user is entitled to (Trends vs
+        # Rankers, then per-tab grants). Filtered on a copy so the shared
+        # cache stays intact.
+        _tiq_user = get_current_user() or {}
+        _tiq_role = _normalize_role(_tiq_user.get('role', 'user'))
+        _tiq_access = apply_cloak_product_access_overrides(
+            compute_product_access_flags(_tiq_user, _tiq_role))
+        _tiq_has_trends = bool(_tiq_access.get('has_trends_iq_access'))
+        _tiq_has_rankers = bool(_tiq_access.get('has_rankers_iq_access'))
+        payload = _trends_iq_filter_payload(payload, _tiq_has_trends, _tiq_has_rankers)
+        payload = _trends_iq_filter_tabs(
+            payload,
+            _tiq_access.get('allowed_trends_tabs', ['*']),
+            _tiq_access.get('allowed_rankers_tabs', ['*']),
+        )
+        # 2026-09-02: per-user Trends IQ lens access. Filter lens_config /
+        # lens_scores / lens_cutoffs down to the lenses this user is
+        # allowed to see (super admins get everything). Payload copies are
+        # taken inside the helper so compute_view's shared cache stays intact.
+        if _tiq_role == 'super_admin':
+            _tiq_allowed_lens_ids = set(TRENDS_IQ_LENS_IDS)
+        else:
+            _tiq_allowed_lens_ids = _resolve_allowed_lens_ids(
+                _tiq_access, _load_hidden_lenses_map())
+        payload = _trends_iq_apply_lens_access(payload, _tiq_allowed_lens_ids)
         return jsonify(payload)
     except Exception as e:
+        # Never surface operator-facing error text in the dashboard: the
+        # frontend shows its neutral loading state and quietly retries.
+        # The detail goes to ops by email (jenna@ + jessie@, deduped to
+        # one send per day) so the failure is still actionable.
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        try:
+            if _trends_iq is not None:
+                _trends_iq.notify_compute_failure(f'{type(e).__name__}: {e}')
+        except Exception:
+            pass
+        return jsonify({'success': False, 'loading': True}), 200
 
 
 @app.route('/api/trends-iq/available-dates', methods=['GET'])
@@ -16478,10 +17456,10 @@ def api_microdramas_iq_all():
 
 @app.route('/api/cron/microdramas-scrapers', methods=['POST', 'GET'])
 def api_cron_microdramas_scrapers():
-    """Run the Microdramas IQ scrapers (Peacock + ReelShort + DramaBox) on
-    demand. Called by the `microdramas-scrapers-daily-cron` Render cron
-    at 05:30 UTC daily; also usable via curl to force an out-of-band
-    refresh:
+    """Run the Microdramas IQ scrapers (Peacock, ReelShort, DramaBox,
+    GoodShort, NetShort, DramaShorts) on demand. Called by the
+    `microdramas-scrapers-daily-cron` Render cron at 05:30 UTC daily;
+    also usable via curl to force an out-of-band refresh:
 
         curl -X POST 'https://.../api/cron/microdramas-scrapers?secret=$CRON_SECRET'
 
@@ -16499,11 +17477,13 @@ def api_cron_microdramas_scrapers():
         results = []
         total = 0
         for source, mod_path, label in [
-            ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
-            ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
-            ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
-            ('goodshort', 'scripts.microdramas_scrapers.goodshort', 'GoodShort'),
-            ('netshort',  'scripts.microdramas_scrapers.netshort',  'NetShort'),
+            ('peacock',     'scripts.microdramas_scrapers.peacock',     'Peacock'),
+            ('reelshort',   'scripts.microdramas_scrapers.reelshort',   'ReelShort'),
+            ('dramabox',    'scripts.microdramas_scrapers.dramabox',    'DramaBox'),
+            ('goodshort',   'scripts.microdramas_scrapers.goodshort',   'GoodShort'),
+            ('netshort',    'scripts.microdramas_scrapers.netshort',    'NetShort'),
+            ('dramashorts', 'scripts.microdramas_scrapers.dramashorts', 'DramaShorts'),
+            ('atwist',      'scripts.microdramas_scrapers.atwist',      'aTwist'),
         ]:
             try:
                 module = importlib.import_module(mod_path)
@@ -16537,6 +17517,56 @@ def api_cron_microdramas_scrapers():
             'total':      total,
             'per_source': results,
             'cache':      warm_summary,
+            'ran_at':     datetime.now(_tz.utc).isoformat(),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/trends-digest', methods=['POST', 'GET'])
+def api_cron_trends_digest():
+    """Send the daily Trends IQ watchlist digest email to every user who
+    has a non-empty watchlist. Called by the `trends-digest-daily-cron`
+    Render cron; also usable via curl to force an out-of-band send:
+
+        curl -X POST 'https://.../api/cron/trends-digest?secret=$CRON_SECRET'
+
+    Optional query params:
+        user=<user_slug>   only run for this user (testing)
+        dry_run=1          compute + render but do NOT send via SES
+
+    Runs inside the web service so it always executes current `main` code
+    and reuses the prod AWS + SES env - no separate cron build or
+    duplicated secrets. Replaces the legacy Hetzner crontab entry."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        import importlib
+        td = importlib.import_module('scripts.trends_digest')
+        dry_run = (request.args.get('dry_run') or '').lower() in ('1', 'true', 'yes')
+        only_user = (request.args.get('user') or '').strip() or None
+        if only_user:
+            users = [only_user]
+        else:
+            users = td.trends_watchlist.list_all_users()
+        results = []
+        for u in users:
+            try:
+                results.append(td.run_for_user(u, dry_run=dry_run))
+            except Exception as e:
+                traceback.print_exc()
+                results.append({'user_slug': u, 'sent': False, 'error': str(e)})
+        from datetime import timezone as _tz
+        return jsonify({
+            'success':    True,
+            'users':      len(users),
+            'sent':       sum(1 for r in results if r.get('sent')),
+            'with_moves': sum(1 for r in results if (r.get('alerts') or 0) > 0),
+            'dry_run':    dry_run,
+            'results':    results,
             'ran_at':     datetime.now(_tz.utc).isoformat(),
         })
     except Exception as e:
@@ -16683,7 +17713,7 @@ def _user_intent_iq_title_access(user):
 
     Mirrors _user_jiq_run_access(). Returns ``(is_admin, allow_all,
     allowed_slugs)``:
-      * ``is_admin`` — admin / super_admin / cloaked sessions see everything.
+      * ``is_admin`` — admin / super_admin acting as themselves see everything.
       * ``allow_all`` — non-admin with default-open policy
         (``allowed_intent_iq_runs`` missing, not a list, or contains ``'*'``).
         Preserves back-compat for users created before per-title gating.
@@ -16691,7 +17721,7 @@ def _user_intent_iq_title_access(user):
         open when ``allow_all`` is False. Empty set = explicitly revoked.
     """
     role = (user or {}).get('role')
-    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    is_admin = role in ('admin', 'super_admin')
     if is_admin:
         return True, True, set()
     raw = (user or {}).get('allowed_intent_iq_runs')
@@ -17885,6 +18915,82 @@ def get_ticket_sales_tracker_data(s3_key):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+# ============================================================================
+# BRAND TRACKING (CNBC Pro competitive set) - current + historic months
+# ============================================================================
+
+BRAND_TRACKING_S3_PREFIX = 'brand-tracking/'
+BRAND_TRACKING_CURRENT_KEY = 'brand-tracking/cnbc_pro_current.json'
+BRAND_TRACKING_INDEX_KEY = 'brand-tracking/index.json'
+_BRAND_TRACKING_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'brand-tracking')
+
+
+def _user_can_brand_tracking(user):
+    if not user:
+        return False
+    role = (user.get('role') or '').strip()
+    if role in ('super_admin', 'admin'):
+        return True
+    return bool(user.get('has_brand_tracking_iq_access'))
+
+
+def _brand_tracking_load_json(key: str):
+    """Prefer S3; fall back to the repo data tree shipped with the app."""
+    if s3_client:
+        try:
+            body = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+            return json.loads(body or b'{}')
+        except Exception as e:
+            print(f"[brand-tracking] S3 miss {key}: {e}")
+    # Local fallback: brand-tracking/cnbc_pro_current.json or history/YYYY-MM.json
+    rel = key[len(BRAND_TRACKING_S3_PREFIX):] if key.startswith(BRAND_TRACKING_S3_PREFIX) else key
+    local = os.path.join(_BRAND_TRACKING_LOCAL, rel)
+    if os.path.isfile(local):
+        with open(local, encoding='utf-8') as _bf:
+            return json.loads(_bf.read())
+    return None
+
+
+@app.route('/api/brand-tracking/index')
+@requires_auth
+def api_brand_tracking_index():
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    idx = _brand_tracking_load_json(BRAND_TRACKING_INDEX_KEY)
+    if not idx:
+        return jsonify({'success': False, 'error': 'Brand Tracking index unavailable'}), 404
+    return jsonify({'success': True, 'index': idx})
+
+
+@app.route('/api/brand-tracking/current')
+@requires_auth
+def api_brand_tracking_current():
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    payload = _brand_tracking_load_json(BRAND_TRACKING_CURRENT_KEY)
+    if not payload:
+        return jsonify({'success': False, 'error': 'Brand Tracking payload unavailable'}), 404
+    return jsonify({'success': True, 'payload': payload})
+
+
+@app.route('/api/brand-tracking/history/<ym>')
+@requires_auth
+def api_brand_tracking_history(ym):
+    """Return an immutable monthly close. ym = YYYY-MM."""
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    if not re.fullmatch(r'\d{4}-\d{2}', ym or ''):
+        return jsonify({'success': False, 'error': 'ym must be YYYY-MM'}), 400
+    key = f'brand-tracking/history/{ym}.json'
+    payload = _brand_tracking_load_json(key)
+    if not payload:
+        return jsonify({'success': False, 'error': f'No historic close for {ym}'}), 404
+    return jsonify({'success': True, 'payload': payload, 'ym': ym})
 
 
 # ============================================================================
@@ -20627,7 +21733,7 @@ def save_quick_selects():
 DEFAULT_LIVE_FEATURES = {
     'compare': True, 'segment': True, 'execSummary': True, 'keyInsightBuilder': True,
     'ecosystem': True, 'affinity': True, 'sponsorship': True, 'media': True,
-    'content': True, 'collaborate': True, 'deckBuilder': True, 'rankers': True,
+    'content': True, 'collaborate': False, 'deckBuilder': False, 'rankers': True,
     'overlapAnalysis': True, 'benchmarking': True, 'gapAnalysis': True,
     'insightsSummary': True, 'viewNumbers': True,
 }
@@ -20645,6 +21751,99 @@ DEFAULT_LIVE_FEATURES = {
 # value as a key here with default False (visible). The admin Live
 # Features tab grid in templates/admin.html must also be updated to
 # expose the toggle.
+# 2026-09-02 (Jenna): per-user Trends IQ lens access.
+# Canonical lens ids come from bg-webapp/scripts/trends_scrapers/lens_relevance.py
+# (see the `_LENSES` list) and are echoed here so the admin controls and
+# the payload filter don't need to import the scraper module.
+# ALWAYS keep this list in lock-step with lens_relevance._LENSES /
+# the persona docs under scripts/trends_scrapers/lens_personas/ AND the
+# hidden-lens grid in templates/admin.html.
+TRENDS_IQ_LENS_IDS = (
+    'unlikely_collaborators_follower',
+    'gen_z',
+    'millennials',
+    'gen_x',
+    'baby_boomers',
+)
+
+# Default global-hide state per lens (True = hidden from every non-super
+# admin unless the user has the lens id in their `allowed_lenses` list
+# or `allowed_lenses` is ['*']). Super admins always see all lenses.
+# Per Jenna 2026-09-02: Unlikely Collaborators Follower is hidden by
+# default; the four generational lenses are visible by default. Admins
+# can flip either direction from Live Features. (MS NOW Reader retired
+# 2026-09-03.)
+DEFAULT_HIDDEN_LENSES = {
+    'unlikely_collaborators_follower':  True,
+    'gen_z':                            False,
+    'millennials':                      False,
+    'gen_x':                            False,
+    'baby_boomers':                     False,
+}
+
+
+def _resolve_hidden_lenses_from_live(saved_hidden_lenses):
+    """Merge saved global-hide state with DEFAULT_HIDDEN_LENSES.
+
+    Unknown keys in the saved dict are dropped so a stale client can
+    never re-introduce a retired lens id.
+    """
+    merged = dict(DEFAULT_HIDDEN_LENSES)
+    if isinstance(saved_hidden_lenses, dict):
+        for _lid, _v in saved_hidden_lenses.items():
+            if _lid in DEFAULT_HIDDEN_LENSES:
+                merged[_lid] = bool(_v)
+    return merged
+
+
+def _resolve_allowed_lens_ids(user_access, hidden_lenses_map):
+    """Compute the set of lens ids this user can see.
+
+    * `user_access` is expected to expose an `allowed_lenses` field
+      (list of lens id strings, or ['*'], or missing / None). Missing
+      or empty means "defaults apply" (no explicit grant, no explicit
+      revoke).
+    * `hidden_lenses_map` is the DEFAULT_HIDDEN_LENSES-shape dict from
+      Live Features. A True value there means "globally hidden by
+      default" (still overridable per user via an explicit grant).
+
+    Wildcard rules:
+      - super admins never pass through this helper (they always see
+        all lenses; the caller shortcuts to `TRENDS_IQ_LENS_IDS`).
+      - `allowed_lenses == ['*']` -> all six lens ids, ignoring hides.
+      - explicit list -> default-visible ids UNION the explicit list.
+    """
+    all_ids = set(TRENDS_IQ_LENS_IDS)
+    raw = None
+    if isinstance(user_access, dict):
+        raw = user_access.get('allowed_lenses')
+    if isinstance(raw, list) and any(str(v) == '*' for v in raw):
+        return all_ids
+    default_visible = {
+        lid for lid in TRENDS_IQ_LENS_IDS
+        if not bool((hidden_lenses_map or {}).get(lid, DEFAULT_HIDDEN_LENSES.get(lid, False)))
+    }
+    if not isinstance(raw, list) or len(raw) == 0:
+        return default_visible
+    explicit = {str(v) for v in raw if str(v) in all_ids}
+    return default_visible | explicit
+
+
+def _load_hidden_lenses_map():
+    """Read the current Live Features `hidden_lenses` dict from S3.
+
+    Best-effort: returns DEFAULT_HIDDEN_LENSES on any failure so a
+    Live Features outage never opens or closes the lens dropdown by
+    accident.
+    """
+    try:
+        live_features = load_json_from_s3(LIVE_FEATURES_FILE) or {}
+        saved = live_features.get('hidden_lenses') or {}
+        return _resolve_hidden_lenses_from_live(saved)
+    except Exception:
+        return dict(DEFAULT_HIDDEN_LENSES)
+
+
 DEFAULT_HIDDEN_PRODUCTS = {
     'profileIQ': False,
     'subscriberIQ': False,
@@ -20660,19 +21859,16 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'trendsIQ': False,
     'blueIQ': False,
     'hedgeFundIQ': False,
-    'llmoIQ': False,
     'sfConversion': False,
     'intentIQ': False,
     'impactIQ': False,          # 2026-07-22 sync-gap fix (was in dropdown/admin, missing here)
-    'roasIQ': False,
     'brandPartnershipIQ': False,
     'flywheelConversion': False,
-    'customAnalysis': False,
     'shareOfTimeIQ': False,
-    'workspace': False,
     'helmIQ': False,
     'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
     'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
+    'brandTrackingIQ': False,   # 2026-09-03 added with <option value="brandTrackingIQ">
 }
 
 
@@ -20719,10 +21915,18 @@ def get_live_features():
         # Merge with defaults so new keys (e.g. viewNumbers) are always present; saved values override
         features = {**DEFAULT_LIVE_FEATURES, **saved}
         hidden_products = {**DEFAULT_HIDDEN_PRODUCTS, **saved_hidden}
+        # 2026-09-02: Trends IQ lens global-hide state. Same shape as
+        # hidden_products (lens_id -> bool). Unknown keys are dropped
+        # by _resolve_hidden_lenses_from_live so stale clients can't
+        # reintroduce retired lens ids.
+        hidden_lenses = _resolve_hidden_lenses_from_live(
+            live_features.get('hidden_lenses') or {}
+        )
         resp = jsonify({
             'success': True,
             'features': features,
             'hidden_products': hidden_products,
+            'hidden_lenses': hidden_lenses,
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
@@ -20733,6 +21937,7 @@ def get_live_features():
             'success': True,
             'features': dict(DEFAULT_LIVE_FEATURES),
             'hidden_products': dict(DEFAULT_HIDDEN_PRODUCTS),
+            'hidden_lenses': dict(DEFAULT_HIDDEN_LENSES),
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
@@ -20755,10 +21960,17 @@ def save_live_features():
         # doesn't re-introduce the broken key into S3 alongside the correct
         # 'cultureRankerIQ' one.
         hidden_products = _migrate_legacy_hidden_product_keys(hidden_products)
+        # 2026-09-02: Trends IQ lens global-hide state. Only keys that
+        # match a canonical lens id survive the resolver; unknown ids
+        # are dropped so a stale client can't seed a retired lens.
+        hidden_lenses = _resolve_hidden_lenses_from_live(
+            data.get('hidden_lenses') or {}
+        )
 
         live_features = {
             'features': features,
             'hidden_products': hidden_products,
+            'hidden_lenses': hidden_lenses,
             'updated_at': datetime.now().isoformat(),
             'updated_by': session.get('username', 'unknown')
         }
@@ -20770,7 +21982,7 @@ def save_live_features():
             print(f"❌ {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 500
         
-        print(f"✅ Live features saved by {session.get('username')}: features={features}, hidden_products={hidden_products}")
+        print(f"✅ Live features saved by {session.get('username')}: features={features}, hidden_products={hidden_products}, hidden_lenses={hidden_lenses}")
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Error saving live features: {e}")
@@ -22997,12 +24209,23 @@ def set_profile_image():
         cache_key = profile_name.lower().strip()
         
         # Store the entry we're about to add (so we don't lose it if cache gets reloaded)
+        # 2026-09-08 (Jenna): stamp the acting admin's username onto every
+        # new upload so we can answer "who uploaded this and when" from the
+        # cache alone. Older entries stay untouched (no backfill). The
+        # `uploaded_at` field duplicates `cached_at` on new entries but
+        # exists as a stable attribution timestamp so a future
+        # cache-refresh pass that touches `cached_at` won't lose the
+        # original upload moment.
+        _uploader = (session.get('username') if session else None) or 'unknown'
+        _upload_iso = datetime.now().isoformat()
         new_entry = {
             'image_url': image_url,
             'title': profile_name,
             'source': 'custom',
             'is_custom': True,
-            'cached_at': datetime.now().isoformat()
+            'cached_at': _upload_iso,
+            'uploaded_by': _uploader,
+            'uploaded_at': _upload_iso
         }
         
         # Add to cache (in-memory)
@@ -23130,12 +24353,19 @@ def remove_profile_image():
         
         # Remove from cache
         if cache_key in profile_image_cache:
+            # 2026-09-08 (Jenna): capture prior entry so the Render access
+            # log records both the acting admin AND the original uploader
+            # of the image being removed. No new cache field is written
+            # (the entry itself is going away); attribution lives in the
+            # per-request log line.
+            _prev_entry = profile_image_cache.get(cache_key) or {}
+            _actor = (session.get('username') if session else None) or 'unknown'
             del profile_image_cache[cache_key]
             profile_image_cache_dirty = True
             saved = save_profile_image_cache(deleted_keys={cache_key})
             if not saved:
                 print(f"   ⚠️ Warning: Cache save may have failed after removing {cache_key}")
-            print(f"   ✅ Removed from cache: {cache_key}")
+            print(f"   ✅ Removed from cache: {cache_key} (by={_actor} was_uploaded_by={_prev_entry.get('uploaded_by', '?')} was_uploaded_at={_prev_entry.get('uploaded_at', _prev_entry.get('cached_at', '?'))})")
         else:
             print(f"   ℹ️ Cache key not found: {cache_key}")
         
@@ -23276,6 +24506,236 @@ def set_profile_display_override():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Profile "family" grouping (Total Universe + its data cuts).
+#
+# Grouping in the Profile IQ selector keys off each file's DISPLAY name
+# (getProfileSuffixInfo in templates/index.html strips a trailing cut suffix
+# like "- Avid Fan" and rolls everything with the same leftover base under one
+# clickable title). Cuts are separate files, each carrying their own display
+# name, so renaming a base's display name in Admin leaves the cuts behind and
+# they split off into their own titles.
+#
+# The durable link between a base and its cuts is the FILE identity (the
+# on-disk filename subject), NOT the display name. These helpers derive a
+# family key + cut label from the filename so we can re-label drifted cuts as
+# "<base display> - <cut label>" and keep the family together. The suffix
+# regexes MIRROR the frontend (PROFILE_DASH_SUFFIX_REGEX / PROFILE_SUFFIX_REGEX
+# / _isBaseUniverseSuffix) so backend and frontend agree on what a "cut" is.
+# (Jessie 2026-09-08)
+# ---------------------------------------------------------------------------
+_FAM_DASH_SUFFIX_RE = re.compile(r'^(.+?)\s[\-\u2013\u2014]\s+(.+)$')
+_FAM_TOKEN_SUFFIX_RE = re.compile(
+    r'[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|'
+    r'Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$',
+    re.I)
+_FAM_BASE_UNIVERSE_RE = re.compile(r'^total universe(\s+\d{4})?$', re.I)
+
+
+def _fam_norm_ws(s):
+    return re.sub(r'\s+', ' ', str(s or '')).strip()
+
+
+def _fam_suffix_info(name):
+    """Return (canonical_base, suffix_label). Mirrors getProfileSuffixInfo:
+    dash suffix is checked first, then the cohort/year token allow-list. A
+    trailing "- Total Universe" descriptor is treated as the base (no cut)."""
+    name = _fam_norm_ws(name)
+    if not name:
+        return '', ''
+    dm = _FAM_DASH_SUFFIX_RE.match(name)
+    if dm:
+        base = _fam_norm_ws(dm.group(1))
+        suffix = _fam_norm_ws(dm.group(2))
+        if base and suffix:
+            if _FAM_BASE_UNIVERSE_RE.match(suffix):
+                return base, ''
+            return base, suffix
+    m = _FAM_TOKEN_SUFFIX_RE.search(name)
+    if not m:
+        return name, ''
+    base = _fam_norm_ws(name[:m.start()])
+    if not base:
+        return name, ''
+    suffix = _fam_norm_ws(m.group(1))
+    if _FAM_BASE_UNIVERSE_RE.match(suffix):
+        return base, ''
+    return base, suffix
+
+
+def _fam_file_rawname(s3_key):
+    """Filename subject: drop folder + .csv + trailing timestamp, then turn
+    underscores into spaces so it lines up with display-style names."""
+    stem = (s3_key or '').split('/')[-1]
+    if stem.lower().endswith('.csv'):
+        stem = stem[:-4]
+    try:
+        stem = remove_timestamp_from_name(stem)
+    except Exception:
+        pass
+    return _fam_norm_ws(stem.replace('_', ' '))
+
+
+def _fam_key_and_label(job):
+    """Durable (family_key, cut_label) derived from the FILE (display-name
+    independent). family_key is lowercased; cut_label is '' for a base/TU."""
+    key = job.get('s3_key') or job.get('key') or ''
+    canon, label = _fam_suffix_info(_fam_file_rawname(key))
+    return canon.lower(), label
+
+
+def _fam_display_name(job):
+    return (job.get('display_name') or job.get('project_name')
+            or job.get('name') or '').strip()
+
+
+def _fam_cut_label(job):
+    """Preferred cut label for building the new display name: the current
+    display's suffix if it has one, otherwise the filename's suffix."""
+    _, dlabel = _fam_suffix_info(_fam_display_name(job))
+    if dlabel:
+        return dlabel
+    _, flabel = _fam_key_and_label(job)
+    return flabel
+
+
+def _fam_build_families(jobs):
+    """Group ROOT dashboard-inputs csv profiles by durable family key.
+    Returns { family_key: {'bases': [...], 'cuts': [...]} }."""
+    fams = {}
+    for j in jobs or []:
+        key = j.get('s3_key') or j.get('key') or ''
+        if not _is_root_csv_key(key):
+            continue
+        fkey, label = _fam_key_and_label(j)
+        if not fkey:
+            continue
+        fam = fams.setdefault(fkey, {'bases': [], 'cuts': []})
+        (fam['cuts'] if label else fam['bases']).append(j)
+    return fams
+
+
+def _fam_orphans_for(fam):
+    """Given a family dict, return (base_job_or_None, [orphan,...]) where each
+    orphan is {'job','current','suggested','label'} for cuts whose display base
+    has drifted from the base's display name. Auto-fix requires exactly one
+    base whose own display carries no dash suffix (a dashed base can't cleanly
+    host dash-suffixed cuts under first-dash canonicalization)."""
+    bases = fam.get('bases') or []
+    cuts = fam.get('cuts') or []
+    if len(bases) != 1 or not cuts:
+        return (bases[0] if len(bases) == 1 else None), []
+    base = bases[0]
+    canonical = _fam_display_name(base)
+    if not canonical:
+        return base, []
+    _, base_own_suffix = _fam_suffix_info(canonical)
+    if base_own_suffix:
+        return base, []  # base present but not auto-fixable
+    canon_lc = _fam_norm_ws(canonical).lower()
+    out = []
+    for c in cuts:
+        label = _fam_cut_label(c)
+        if not label:
+            continue
+        cur = _fam_display_name(c)
+        cur_base, _ = _fam_suffix_info(cur)
+        if _fam_norm_ws(cur_base).lower() == canon_lc:
+            continue  # already grouped correctly
+        out.append({'job': c, 'current': cur,
+                    'suggested': canonical + ' - ' + label, 'label': label})
+    return base, out
+
+
+@app.route('/api/admin/family-sync', methods=['POST'])
+@requires_admin
+def family_sync():
+    """Keep a profile's data cuts labeled under its Total Universe. Given any
+    file key in a family, resolve the family's single base (TU) and re-label
+    each out-of-sync cut's display name to "<base display> - <cut label>".
+    Pass apply=false (default) for a dry run that just returns the pending
+    changes; apply=true to persist them to the profile cache."""
+    try:
+        data = request.get_json(silent=True) or {}
+        base_key = (data.get('base_key') or data.get('key') or '').strip()
+        apply = bool(data.get('apply'))
+        if not base_key:
+            return jsonify({'success': False, 'error': 'base_key required'}), 400
+        try:
+            load_persisted_cache()
+        except Exception:
+            pass
+        jobs = s3_cache.get('jobs', [])
+        target = None
+        for j in jobs:
+            if j.get('s3_key') == base_key or j.get('key') == base_key:
+                target = j
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': 'File not found in cache'}), 404
+        fkey, _ = _fam_key_and_label(target)
+        fam = _fam_build_families(jobs).get(fkey)
+        if not fam:
+            return jsonify({'success': True, 'base_display': None, 'applied': False, 'changes': []})
+        base, orphans = _fam_orphans_for(fam)
+        changes = [{'key': o['job'].get('s3_key') or o['job'].get('key'),
+                    'current': o['current'], 'suggested': o['suggested']} for o in orphans]
+        did_apply = bool(apply and orphans)
+        if did_apply:
+            for o in orphans:
+                c = o['job']
+                newname = o['suggested']
+                c['display_name'] = newname
+                c['project_name'] = newname
+                c['name'] = newname
+                if c.get('brand'):
+                    c['brand'] = newname
+            try:
+                save_persisted_cache()
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': 'Failed to persist changes'}), 500
+        return jsonify({'success': True,
+                        'base_display': _fam_display_name(base) if base else None,
+                        'applied': did_apply, 'changes': changes})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/family-audit', methods=['GET'])
+@requires_admin
+def family_audit():
+    """Read-only scan of every profile family for data cuts whose display name
+    has drifted from their Total Universe (so they'd split into a separate
+    title in the selector). Returns one entry per family with >=1 orphan."""
+    try:
+        try:
+            load_persisted_cache()
+        except Exception:
+            pass
+        jobs = s3_cache.get('jobs', [])
+        results = []
+        for _fkey, fam in _fam_build_families(jobs).items():
+            base, orphans = _fam_orphans_for(fam)
+            if base is None or not orphans:
+                continue
+            results.append({
+                'base_key': base.get('s3_key') or base.get('key'),
+                'base_display': _fam_display_name(base),
+                'cuts': [{'key': o['job'].get('s3_key') or o['job'].get('key'),
+                          'current': o['current'], 'suggested': o['suggested']} for o in orphans],
+            })
+        results.sort(key=lambda r: (r.get('base_display') or '').lower())
+        return jsonify({'success': True, 'families': results, 'count': len(results)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/admin/rename-file', methods=['POST'])
@@ -23625,224 +25085,25 @@ def send_svod_released_email(created_by, profile_name, released_s3_key):
     return send_email_via_gmail(email, subject, html, text)
 
 def load_purgatory_metadata():
-    """Load purgatory file metadata from S3."""
-    if not s3_client:
-        return {}
-    try:
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=PURGATORY_METADATA_KEY)
-        return json.loads(response['Body'].read().decode('utf-8'))
-    except:
-        return {}
+    """Retired 2026-09-09 no-op stub.
 
-def save_purgatory_metadata(metadata):
-    """Save purgatory file metadata to S3."""
-    if not s3_client:
-        return False
-    try:
-        s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=PURGATORY_METADATA_KEY,
-            Body=json.dumps(metadata, indent=2),
-            ContentType='application/json'
-        )
-        return True
-    except Exception as e:
-        print(f"Error saving purgatory metadata: {e}")
-        return False
-
-def get_purgatory_approvers():
-    """Get all users who can approve purgatory items (super_admins and users with has_purgatory_approval)."""
-    data = load_users()
-    approvers = []
-    
-    for username, user in data.get('users', {}).items():
-        email = user.get('email')
-        if not email:
-            continue
-            
-        # Super admins always get purgatory notifications
-        if user.get('role') == 'super_admin':
-            approvers.append({
-                'username': username,
-                'email': email,
-                'first_name': user.get('first_name', username),
-                'last_name': user.get('last_name', ''),
-                'is_super_admin': True
-            })
-        # Users with purgatory approval permission
-        elif user.get('has_purgatory_approval'):
-            approvers.append({
-                'username': username,
-                'email': email,
-                'first_name': user.get('first_name', username),
-                'last_name': user.get('last_name', ''),
-                'is_super_admin': False
-            })
-    
-    return approvers
-
-def send_purgatory_notification(created_by, project_name, purgatory_id):
-    """Send email notification to all purgatory approvers when a new item is added."""
-    # Get the user who created the profile
-    data = load_users()
-    creator = data.get('users', {}).get(created_by, {})
-    creator_first_name = creator.get('first_name', created_by)
-    creator_last_name = creator.get('last_name', '')
-    creator_company = creator.get('company', 'Unknown Company')
-    
-    creator_display = f"{creator_first_name} {creator_last_name}".strip() or created_by
-    if creator_company and creator_company != 'Unknown Company':
-        creator_display += f" ({creator_company})"
-    
-    # Get all approvers
-    approvers = get_purgatory_approvers()
-    
-    if not approvers:
-        print("⚠️ No purgatory approvers found to notify")
-        return
-    
-    # Build the purgatory review URL
-    # Use environment variable for base URL or default
-    base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
-    purgatory_url = f"{base_url}/admin#purgatory"
-    
-    subject = f"Purgatory: {project_name}"
-    
-    body = f"""
-        <p><strong>{creator_display}</strong> has pulled a profile for:</p>
-        <div class="email-card">
-            <div class="email-card-title">{project_name}</div>
-        </div>
-        <p style="color: #8892b0;">Please review and release this profile from purgatory.</p>
-        <p><a href="{purgatory_url}" class="email-btn">Review in Purgatory</a></p>
+    The purgatory workflow was removed (Jenna, "remove ... purgatory
+    since we dont need it anymore"). This function stays as a stub so
+    the two defensive read-side callers that look up display metadata
+    for any legacy `purgatory/`-prefixed CSVs still work without a
+    NameError. Every write path was deleted; nothing new lands in
+    purgatory/ anymore.
     """
-    html_content = _wrap_email_html(body, title="New Profile Awaiting Review")
-    
-    text_content = f"""
-New Profile Awaiting Review
-
-{creator_display} has pulled a profile for: {project_name}
-
-Please review and release this profile from purgatory.
-
-Review here: {purgatory_url}
-    """
-    
-    # Send email to each approver
-    for approver in approvers:
-        try:
-            success, msg = send_email_via_gmail(approver['email'], subject, html_content, text_content)
-            if success:
-                print(f"✅ Purgatory notification sent to {approver['email']}")
-            else:
-                print(f"⚠️ Failed to send purgatory notification to {approver['email']}: {msg}")
-        except Exception as e:
-            print(f"❌ Error sending purgatory notification to {approver['email']}: {e}")
-
-def add_to_purgatory(s3_key, bucket, created_by, project_name, category, source_type='profile_analysis'):
-    """Add a file to purgatory with metadata for admin review."""
-    metadata = load_purgatory_metadata()
-    
-    # Create unique ID for this purgatory item
-    purgatory_id = f"{bucket}:{s3_key}"
-    
-    metadata[purgatory_id] = {
-        's3_key': s3_key,
-        'bucket': bucket,
-        'created_by': created_by,
-        'project_name': project_name,
-        'category': category,
-        'source_type': source_type,  # 'profile_analysis' or 'svod_acquisition'
-        'created_at': datetime.now().isoformat(),
-        'status': 'pending',  # pending, approved, rejected
-        'image_url': None,
-        'title': project_name
-    }
-    
-    save_purgatory_metadata(metadata)
-    
-    # Send email notification to all purgatory approvers
-    try:
-        send_purgatory_notification(created_by, project_name, purgatory_id)
-    except Exception as e:
-        print(f"⚠️ Failed to send purgatory notification: {e}")
-    
-    return purgatory_id
-
-def release_from_purgatory(purgatory_id):
-    """Move a file from purgatory to the main bucket location."""
-    metadata = load_purgatory_metadata()
-    
-    if purgatory_id not in metadata:
-        return False, "Item not found in purgatory"
-    
-    item = metadata[purgatory_id]
-    bucket = item['bucket']
-    old_key = item['s3_key']
-    
-    # The old key should be in purgatory/ prefix
-    if not old_key.startswith(S3_PURGATORY_PREFIX):
-        return False, "Item is not in purgatory folder"
-    
-    # New key is without the purgatory/ prefix
-    new_key = old_key.replace(S3_PURGATORY_PREFIX, '', 1)
-    
-    try:
-        # Copy to new location
-        s3_client.copy_object(
-            Bucket=bucket,
-            CopySource={'Bucket': bucket, 'Key': old_key},
-            Key=new_key
-        )
-        
-        # Delete from purgatory
-        s3_client.delete_object(Bucket=bucket, Key=old_key)
-        
-        # Update metadata
-        item['status'] = 'approved'
-        item['released_at'] = datetime.now().isoformat()
-        item['released_key'] = new_key
-        save_purgatory_metadata(metadata)
-        
-        # Auto-add to qualifying users' allowed_runs based on their category subscriptions
-        profile_category = item.get('category', '')
-        auto_add_runs_to_all_users(new_key, key_category_map={new_key: profile_category})
-        auto_add_to_quick_selects(new_key)
-
-        # 2026-07-22 (Jenna): refresh this category's precomputed norm so
-        # the dashboard's "Show Category Norm" checkbox picks up the new
-        # profile immediately. Debounced per-category, daemon-threaded,
-        # never raises. See migration/category_norm_refresh.py.
-        try:
-            from migration.category_norm_refresh import schedule_recompute
-            schedule_recompute(profile_category)
-        except Exception as _norm_err:
-            print(f"⚠️  category-norm refresh scheduling failed on purgatory release: {_norm_err}")
-
-        print(f"✅ Released from purgatory: {old_key} -> {new_key}")
-        return True, new_key
-    except Exception as e:
-        print(f"❌ Error releasing from purgatory: {e}")
-        return False, str(e)
-
-def get_user_purgatory_items(username):
-    """Get purgatory items created by a specific user."""
-    metadata = load_purgatory_metadata()
-    user_items = []
-    
-    for purgatory_id, item in metadata.items():
-        if item.get('created_by') == username and item.get('status') == 'pending':
-            user_items.append({
-                'purgatory_id': purgatory_id,
-                **item
-            })
-    
-    return user_items
+    return {}
 
 def _add_user_profile(s3_key, created_by):
-    """Track user profile creation (legacy function - now handled by purgatory metadata)."""
-    # This is now handled by the purgatory metadata system
-    # Keeping as stub for backward compatibility
+    """Best-effort side effects after a profile CSV lands at its root S3 key.
+
+    Historically also fed a purgatory-metadata tracker; that path was
+    retired 2026-09-09 (Jenna, "remove ... purgatory since we dont need
+    it anymore"). Kept as the single place that provisions the IQ
+    Rankers tracker on new profile creation.
+    """
     print(f"📝 Profile created: {s3_key} by {created_by}")
     # Best-effort: auto-provision an IQ Rankers tracker so the new profile
     # starts feeding the Talent / Brands leaderboards on the next nightly
@@ -23869,301 +25130,13 @@ def _add_user_profile(s3_key, created_by):
         print(f"   ⚠️ iq_rankers auto-provision skipped: {_iqr_err}")
 
 
-# ============================================================================
-# PURGATORY API ENDPOINTS
-# ============================================================================
+# PURGATORY API ENDPOINTS block retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore"). Every admin
+# review route (/api/admin/purgatory/{get,update,release,reject}) has
+# been deleted; no UI reaches them.
 
-@app.route('/api/admin/purgatory', methods=['GET'])
-@requires_purgatory_access
-def get_purgatory_items():
-    """Get all items in purgatory for admin review."""
-    try:
-        metadata = load_purgatory_metadata()
-        items = []
-        
-        for purgatory_id, item in metadata.items():
-            if item.get('status') == 'pending':
-                # Get file info from S3
-                bucket = item.get('bucket', S3_BUCKET)
-                s3_key = item.get('s3_key', '')
-                
-                try:
-                    # Get file size and last modified
-                    response = s3_client.head_object(Bucket=bucket, Key=s3_key)
-                    file_size = response.get('ContentLength', 0)
-                    last_modified = response.get('LastModified')
-                    if last_modified:
-                        last_modified = last_modified.isoformat()
-                except:
-                    file_size = 0
-                    last_modified = item.get('created_at')
-                
-                items.append({
-                    'purgatory_id': purgatory_id,
-                    's3_key': s3_key,
-                    'bucket': bucket,
-                    'project_name': item.get('project_name', ''),
-                    'title': item.get('title', item.get('project_name', '')),
-                    'category': item.get('category', 'Uncategorized'),
-                    'created_by': item.get('created_by', 'unknown'),
-                    'created_at': item.get('created_at', ''),
-                    'source_type': item.get('source_type', 'profile_analysis'),
-                    'image_url': item.get('image_url'),
-                    'file_size': file_size,
-                    'last_modified': last_modified
-                })
-        
-        # Sort by created_at descending (newest first)
-        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"Error getting purgatory items: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/update', methods=['POST'])
-@requires_purgatory_access
-def update_purgatory_item():
-    """Update purgatory item metadata (title, category, image)."""
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        # Update allowed fields (title is the profile display name; keep project_name in sync)
-        if 'title' in data:
-            metadata[purgatory_id]['title'] = data['title']
-            metadata[purgatory_id]['project_name'] = data['title']
-        if 'category' in data:
-            metadata[purgatory_id]['category'] = data['category']
-        if 'image_url' in data:
-            metadata[purgatory_id]['image_url'] = data['image_url']
-        if 'project_name' in data:
-            metadata[purgatory_id]['project_name'] = data['project_name']
-        
-        save_purgatory_metadata(metadata)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Purgatory item updated'
-        })
-        
-    except Exception as e:
-        print(f"Error updating purgatory item: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/release', methods=['POST'])
-@requires_purgatory_access
-def release_purgatory_item():
-    """Release an item from purgatory to the main bucket."""
-    global s3_cache
-    
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        item = metadata[purgatory_id]
-        # Apply current title, category, and image from the request so edits stick when releasing (no separate Save required)
-        if data.get('title'):
-            item['title'] = data['title']
-            item['project_name'] = data['title']
-        if data.get('category'):
-            item['category'] = data['category']
-        if 'image_url' in data:
-            item['image_url'] = data['image_url'] or None
-        save_purgatory_metadata(metadata)
-        item = metadata[purgatory_id]
-        
-        success, result = release_from_purgatory(purgatory_id)
-        
-        if success:
-            # Update the profile image cache with the custom image if set
-            if item.get('image_url'):
-                cache_key = item.get('project_name', '').lower().strip()
-                if cache_key:
-                    profile_image_cache[cache_key] = {
-                        'image_url': item['image_url'],
-                        'title': item.get('title', item.get('project_name', '')),
-                        'source': 'custom',
-                        'is_custom': True,
-                        'cached_at': datetime.now().isoformat()
-                    }
-                    save_profile_image_cache()
-            
-            # Refresh cache to pick up the new file
-            smart_cache_update()
-            # Apply admin's display name and category to the new cache entry so dashboard shows them
-            display_name = item.get('title') or item.get('project_name', '')
-            if display_name and s3_cache.get('jobs'):
-                for i, job in enumerate(s3_cache['jobs']):
-                    if (job.get('s3_key') or job.get('key')) == result:
-                        s3_cache['jobs'][i]['display_name'] = display_name
-                        s3_cache['jobs'][i]['name'] = display_name
-                        s3_cache['jobs'][i]['project_name'] = display_name
-                        s3_cache['jobs'][i]['brand'] = display_name
-                        if item.get('category'):
-                            s3_cache['jobs'][i]['category'] = item['category']
-                        save_persisted_cache()
-                        break
-            
-            # For ticket_sales_tracker: persist image_url to metadata when released
-            source_type = item.get('source_type', 'profile_analysis')
-            if source_type == 'ticket_sales_tracker' and result and item.get('image_url'):
-                try:
-                    tst_meta = load_ticket_sales_tracker_metadata()
-                    if result not in tst_meta:
-                        tst_meta[result] = {}
-                    tst_meta[result]['image_url'] = item['image_url']
-                    save_ticket_sales_tracker_metadata(tst_meta)
-                    print(f"✅ Saved Ticket Sales Tracker image for {result}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save TST image: {e}")
-            # For SVOD: persist category to SVOD metadata so Subscriber IQ list and content list show the selected category
-            if source_type == 'svod_acquisition' and result:
-                try:
-                    svod_meta = load_svod_metadata()
-                    if result not in svod_meta:
-                        svod_meta[result] = {}
-                    svod_meta[result]['category'] = item.get('category') or 'SVOD Acquisition'
-                    save_svod_metadata(svod_meta)
-                    print(f"✅ Saved SVOD category for {result} -> {svod_meta[result]['category']}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save SVOD category: {e}")
-            # For Brand Partnership IQ: persist title / category / image to
-            # the BPIQ metadata sidecar so the released JSON inherits whatever
-            # was set during purgatory review without needing a second pass
-            # in Content Management.
-            if source_type == 'brand_partnership_iq' and result:
-                try:
-                    bare_key = result
-                    if bare_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
-                        bare_key = bare_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
-                    bpiq_meta_release = load_bpiq_metadata()
-                    if bare_key not in bpiq_meta_release:
-                        bpiq_meta_release[bare_key] = {}
-                    title_val = (item.get('title') or item.get('project_name') or '').strip()
-                    if title_val:
-                        bpiq_meta_release[bare_key]['display_name'] = title_val
-                    cat_val = (item.get('category') or '').strip()
-                    if cat_val and cat_val.lower() != 'brand partnership iq':
-                        bpiq_meta_release[bare_key]['category'] = cat_val.upper()
-                    if item.get('image_url'):
-                        bpiq_meta_release[bare_key]['image_url'] = item['image_url']
-                    save_bpiq_metadata(bpiq_meta_release)
-                    print(f"✅ Saved BPIQ metadata for {bare_key}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save BPIQ metadata: {e}")
-            if source_type in ('roas_iq', 'ecommerce_iq') and result:
-                print(f"✅ Released {source_type} result: {result}")
-            
-            # Notify the creator: in-dashboard notification (with source_type); email only for Profile IQ
-            created_by = item.get('created_by')
-            source_type = item.get('source_type', 'profile_analysis')
-            if created_by:
-                profile_name = display_name or item.get('project_name', 'Unknown Profile')
-                add_profile_released_notification(created_by, profile_name, result, source_type=source_type)
-                if source_type == 'profile_analysis':
-                    send_profile_released_email(created_by, profile_name, result)
-                elif source_type == 'svod_acquisition':
-                    send_svod_released_email(created_by, profile_name, result)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Item released from purgatory',
-                'new_key': result
-            })
-        else:
-            return jsonify({'success': False, 'error': result})
-        
-    except Exception as e:
-        print(f"Error releasing purgatory item: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/reject', methods=['POST'])
-@requires_purgatory_access
-def reject_purgatory_item():
-    """Reject and delete an item from purgatory."""
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        item = metadata[purgatory_id]
-        bucket = item.get('bucket', S3_BUCKET)
-        s3_key = item.get('s3_key', '')
-        
-        # Delete the file from S3
-        try:
-            s3_client.delete_object(Bucket=bucket, Key=s3_key)
-            print(f"🗑️ Deleted purgatory file: {bucket}/{s3_key}")
-        except Exception as e:
-            print(f"Warning: Could not delete S3 file: {e}")
-        
-        # Update metadata status
-        metadata[purgatory_id]['status'] = 'rejected'
-        metadata[purgatory_id]['rejected_at'] = datetime.now().isoformat()
-        save_purgatory_metadata(metadata)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Item rejected and deleted from purgatory'
-        })
-        
-    except Exception as e:
-        print(f"Error rejecting purgatory item: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/purgatory/check-access', methods=['GET'])
-@requires_auth
-def check_purgatory_access():
-    """Check if current user has purgatory approval access."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'has_access': False})
-        
-        role = user.get('role', '')
-        has_purgatory_approval = user.get('has_purgatory_approval', False)
-        
-        has_access = role in ['admin', 'super_admin'] or has_purgatory_approval
-        
-        return jsonify({
-            'success': True,
-            'has_access': has_access,
-            'is_admin': role in ['admin', 'super_admin'],
-            'has_purgatory_approval': has_purgatory_approval
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+# /api/purgatory/check-access retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
 
 @app.route('/api/settings/default-profile-photo', methods=['GET'])
@@ -24254,32 +25227,13 @@ def update_pricing_settings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/purgatory/my-items', methods=['GET'])
-@requires_auth
-def get_my_purgatory_items():
-    """Get purgatory items for the current user (visible only to them)."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'})
-        
-        username = session.get('username', '')
-        items = get_user_purgatory_items(username)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"Error getting user purgatory items: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+# /api/purgatory/my-items retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
 @app.route('/api/my-results', methods=['GET'])
 @requires_auth
 def get_my_results():
-    """Get all results created by the current user - both purgatory (pending) and released."""
+    """Get all results created by the current user - all released to the dashboard."""
     try:
         user = get_current_user()
         if not user:
@@ -24494,20 +25448,32 @@ def save_ticket_sales_tracker_metadata(metadata):
 def load_bpiq_metadata():
     """Load Brand Partnership IQ per-result metadata (display_name, category,
     image_url) from S3. Keys are bare S3 keys inside the BPIQ prefix (no
-    leading 'brand-partnership-iq/')."""
+    leading 'brand-partnership-iq/').
+
+    Defense in depth: strip any keys pointing into `_backups/` so a stale
+    sidecar entry can never resurface a snapshot as a browseable row."""
     if not s3_client:
         return {}
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=BPIQ_METADATA_KEY)
-        return json.loads(response['Body'].read().decode('utf-8'))
+        raw = json.loads(response['Body'].read().decode('utf-8')) or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {k: v for k, v in raw.items() if not _bpiq_is_backup_key(k)}
     except Exception:
         return {}
 
 def save_bpiq_metadata(metadata):
-    """Save Brand Partnership IQ metadata to S3."""
+    """Save Brand Partnership IQ metadata to S3.
+
+    Strips any `_backups/` keys before writing so a stale caller can
+    never re-introduce a snapshot into the sidecar."""
     if not s3_client:
         return False
     try:
+        if isinstance(metadata, dict):
+            metadata = {k: v for k, v in metadata.items()
+                        if not _bpiq_is_backup_key(k)}
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=BPIQ_METADATA_KEY,
@@ -24649,90 +25615,13 @@ def svod_pricing_api():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/user/purgatory', methods=['GET'])
-@requires_auth
-def get_user_purgatory():
-    """Get purgatory items for the current user (visible only to them until released)."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'})
-        
-        username = session.get('username', '')
-        items = get_user_purgatory_items(username)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"❌ Error getting user purgatory: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+# /api/user/purgatory retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
-def _get_purgatory_file_response(purgatory_id, disposition='attachment'):
-    """Fetch purgatory file from S3 and return a Response. disposition: 'attachment' (download) or 'inline' (view in browser)."""
-    user = get_current_user()
-    if not user:
-        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
-    
-    username = session.get('username', '')
-    is_admin = user.get('role') in ['admin', 'super_admin']
-    
-    metadata = load_purgatory_metadata()
-    
-    if purgatory_id not in metadata:
-        return jsonify({'success': False, 'error': 'Item not found'}), 404
-    
-    item = metadata[purgatory_id]
-    
-    if item.get('created_by') != username and not is_admin:
-        return jsonify({'success': False, 'error': 'Access denied'}), 403
-    
-    bucket = item.get('bucket', S3_BUCKET)
-    s3_key = item.get('s3_key', '')
-    
-    response = s3_client.get_object(Bucket=bucket, Key=s3_key)
-    content = response['Body'].read()
-    filename = s3_key.split('/')[-1]
-    
-    return Response(
-        content,
-        mimetype='text/csv',
-        headers={
-            'Content-Disposition': f'{disposition}; filename="{filename}"',
-            'Content-Type': 'text/csv; charset=utf-8'
-        }
-    )
-
-
-@app.route('/api/purgatory/download')
-@requires_auth
-def download_purgatory_file():
-    """Download a file from purgatory. Use ?purgatory_id=... (URL-encoded; may contain colons/slashes)."""
-    try:
-        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
-        return _get_purgatory_file_response(purgatory_id, disposition='attachment')
-    except Exception as e:
-        print(f"❌ Error downloading purgatory file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/purgatory/view')
-@requires_auth
-def view_purgatory_file():
-    """Open a purgatory CSV in the browser (inline). Use ?purgatory_id=... (URL-encoded)."""
-    try:
-        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
-        return _get_purgatory_file_response(purgatory_id, disposition='inline')
-    except Exception as e:
-        print(f"❌ Error viewing purgatory file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+# _get_purgatory_file_response + /api/purgatory/download + /api/purgatory/view
+# retired 2026-09-09 (Jenna, "remove ... purgatory since we dont need
+# it anymore"). Legacy CSVs under purgatory/ are inaccessible from the
+# UI; use `aws s3 cp` for any one-off inspection.
 
 
 @app.route('/api/admin/ticket-sales-image', methods=['POST'])
@@ -25056,14 +25945,10 @@ def change_file_category():
             from datetime import datetime, timezone
             new_last_modified = datetime.now(timezone.utc).isoformat()
         
-        # If this is a purgatory file, update purgatory metadata so category persists in admin list
-        if file_key.startswith(S3_PURGATORY_PREFIX):
-            purgatory_id = f"{S3_BUCKET}:{file_key}"
-            metadata = load_purgatory_metadata()
-            if purgatory_id in metadata:
-                metadata[purgatory_id]['category'] = new_category
-                save_purgatory_metadata(metadata)
-                print(f"🏷️ Updated purgatory metadata category for {file_key} to {new_category}")
+        # Purgatory-metadata category-sync branch retired 2026-09-09
+        # (Jenna, "remove ... purgatory since we dont need it anymore").
+        # Nothing new lands under purgatory/; the S3 file's own category
+        # column (below) is the source of truth going forward.
         
         # Update cache - find job in s3_cache and update its category AND last_modified
         # so smart_cache_update won't see it as "modified" and revert the category
@@ -25968,26 +26853,23 @@ def list_jobs():
         
         # Mark run access: tag each profile with 'accessible' flag instead of filtering
         allowed_runs = None
-        allowed_categories = None
-        u = None
         try:
             _users_data = load_users()
             u = _users_data.get('users', {}).get(session.get('username')) if session.get('username') else None
             if u is not None:
                 allowed_runs = u.get('allowed_runs')
-                allowed_categories = u.get('allowed_categories')
         except Exception:
             pass
-        has_all_access = allowed_runs is None or (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*')
-        # Category Access also grants access: if a user is subscribed to a category,
-        # all profiles in that category are accessible (not just future ones).
-        has_all_cats = (
-            allowed_categories is None
-            or (isinstance(allowed_categories, list) and '*' in allowed_categories)
+        has_all_access = (
+            allowed_runs is None
+            or (isinstance(allowed_runs, list) and '*' in allowed_runs)
         )
-        allowed_cats_upper = set()
-        if not has_all_cats and isinstance(allowed_categories, list):
-            allowed_cats_upper = {(c or '').upper() for c in allowed_categories if c}
+        # Explicit Run Access is the live allow-list. Category Access only
+        # auto-subscribes *new* profiles onto that list (see
+        # auto_add_runs_to_all_users); it must not reopen the catalog when
+        # an admin has picked specific profiles (allowed_categories
+        # defaults to ['*'] on new users, which previously made every
+        # profile accessible).
         if has_all_access:
             for e in job_list:
                 e['accessible'] = True
@@ -25995,10 +26877,7 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             for e in job_list:
                 sk = e.get('s3_key') or ''
-                cat_upper = (e.get('category') or '').upper()
                 if sk in allowed_set or 'gen_pop' in sk.lower():
-                    e['accessible'] = True
-                elif has_all_cats or (cat_upper and cat_upper in allowed_cats_upper):
                     e['accessible'] = True
                 else:
                     e['accessible'] = False
@@ -29521,9 +30400,6 @@ def user_can_run_analysis_module(user, module_key):
     """True if user can run the given Analysis IQ module (talent_search, svod, campaign, etc.)."""
     if not user:
         return False
-    # When admin is cloaked as another user, grant full Analysis IQ access
-    if session.get('cloaked_from'):
-        return True
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
         return True
@@ -29570,7 +30446,7 @@ def submit_talent_search():
         
         # Check access (Analysis IQ + Talent Search module)
         if not user_can_run_analysis_module(user, 'talent_search'):
-            return jsonify({'error': 'Analysis IQ access with Talent Search module required'}), 403
+            return jsonify({'error': 'Talent Search access required'}), 403
         
         data = request.json
         if not data:
@@ -29638,7 +30514,7 @@ def submit_talent_theater():
         
         # Check access (Analysis IQ + Ticket Sales / Talent Theater module)
         if not user_can_run_analysis_module(user, 'talent_theater'):
-            return jsonify({'error': 'Analysis IQ access with Ticket Sales module required'}), 403
+            return jsonify({'error': 'Ticket Sales access required'}), 403
         
         data = request.json
         if not data:
@@ -30026,7 +30902,10 @@ def talent_fit_assess():
             safe_brand = re.sub(r'[^a-zA-Z0-9_-]', '_', brand)[:50]
             safe_talents = '_'.join([re.sub(r'[^a-zA-Z0-9_-]', '_', t)[:20] for t in talents[:3]])
             filename = f"{safe_brand}_{safe_talents}_{timestamp}.json"
-            s3_key = TALENT_FIT_S3_PREFIX + filename
+            # 2026-09-09: publish directly at the root key (purgatory
+            # workflow retired). Legacy `TALENT_FIT_S3_PREFIX = 'purgatory/'`
+            # is no longer consulted for new files.
+            s3_key = filename
             
             s3_client.put_object(
                 Bucket=TALENT_FIT_S3_BUCKET,
@@ -30035,18 +30914,9 @@ def talent_fit_assess():
                 ContentType='application/json'
             )
             
-            username = session.get('username', 'unknown')
-            purgatory_id = add_to_purgatory(
-                s3_key=s3_key,
-                bucket=TALENT_FIT_S3_BUCKET,
-                created_by=username,
-                project_name=f"Talent Fit: {brand} x {', '.join(talents[:3])}",
-                category='talent_fit',
-                source_type='talent_fit'
-            )
-            
+            # 2026-09-09: add_to_purgatory retired. File published
+            # directly at s3_key above; no admin review step.
             result['s3_key'] = s3_key
-            result['purgatory_id'] = purgatory_id
             
         except Exception as e:
             print(f"⚠️ Failed to save to S3: {e}")
@@ -30451,7 +31321,7 @@ def submit_ticket_sales_tracker():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'ticket_sales_tracker'):
-            return jsonify({'error': 'Analysis IQ access with Ticket Sales Tracker module required'}), 403
+            return jsonify({'error': 'Ticket Sales Tracker access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -30588,7 +31458,7 @@ def submit_sf_lf_conversion():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'sf_lf_conversion'):
-            return jsonify({'error': 'Analysis IQ access with SF-LF Conversion module required'}), 403
+            return jsonify({'error': 'SF-LF Conversion access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -33078,7 +33948,15 @@ def list_sf_lf_conversion_results():
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
-        
+
+        # 2026-09-03: Per-journey access - filter the catalog to just
+        # the journeys this user was granted. Super admins and cloaked
+        # sessions resolve to '*' (see compute_product_access_flags),
+        # so the filter is a no-op for them.
+        _sf_journeys_grant = _journeys_access_of(get_current_user(), 'sf_conversion')
+        _sf_grant_all = (_sf_journeys_grant == '*')
+        _sf_grant_set = set(_sf_journeys_grant) if isinstance(_sf_journeys_grant, list) else set()
+
         results = []
         try:
             response = s3_client.list_objects_v2(Bucket=SF_LF_CONV_S3_BUCKET, Prefix='')
@@ -33086,7 +33964,13 @@ def list_sf_lf_conversion_results():
                 key = obj['Key']
                 if key.endswith('.csv'):
                     is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
-                    name = key.replace(S3_PURGATORY_PREFIX, '').replace('.csv', '').replace('_', ' ')
+                    bare_key = key.replace(S3_PURGATORY_PREFIX, '')
+                    # Journey id = bare filename without the .csv suffix
+                    # (stable identifier, matches admin-side catalog).
+                    journey_id = bare_key.replace('.csv', '')
+                    if not _sf_grant_all and journey_id not in _sf_grant_set:
+                        continue
+                    name = journey_id.replace('_', ' ')
                     results.append({
                         's3_key': key,
                         'name': name,
@@ -33096,11 +33980,27 @@ def list_sf_lf_conversion_results():
                     })
         except Exception as e:
             print(f"[SF-LF] Error listing S3: {e}")
-        
+
         results.sort(key=lambda x: x['last_modified'], reverse=True)
         return jsonify({'success': True, 'results': results})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _sf_conversion_journey_id_from_key(s3_key):
+    """Bare filename (no purgatory prefix, no .csv suffix) = journey id."""
+    bare = (s3_key or '').replace(S3_PURGATORY_PREFIX, '')
+    if bare.endswith('.csv'):
+        bare = bare[:-4]
+    return bare
+
+
+def _require_sf_conversion_journey(s3_key):
+    """403 if the current user isn't granted this specific SF journey."""
+    journey_id = _sf_conversion_journey_id_from_key(s3_key)
+    if _journey_access_effective(get_current_user(), 'sf_conversion', journey_id):
+        return None
+    return jsonify({'error': 'Access denied for this journey.'}), 403
 
 
 @app.route('/api/sf-lf-conversion/download/<path:s3_key>')
@@ -33113,6 +34013,9 @@ def download_sf_lf_conversion(s3_key):
         module_label='SF Conversion')
     if not ok:
         return err
+    denied = _require_sf_conversion_journey(s3_key)
+    if denied is not None:
+        return denied
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -33138,6 +34041,9 @@ def get_sf_lf_conversion_data(s3_key):
         module_label='SF Conversion')
     if not ok:
         return err
+    denied = _require_sf_conversion_journey(s3_key)
+    if denied is not None:
+        return denied
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -33486,7 +34392,7 @@ def submit_flywheel_conversion():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'flywheel_conversion'):
-            return jsonify({'error': 'Analysis IQ access with Flywheel Conversion module required'}), 403
+            return jsonify({'error': 'Flywheel Conversion access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -34356,21 +35262,13 @@ def _save_flywheel_results(job_id, results, job):
         print(f"[Flywheel] Saved results to {filepath}")
         
         if s3_client:
-            s3_key = S3_PURGATORY_PREFIX + filename
+            # 2026-09-09: purgatory workflow retired; publish directly at
+            # root key. add_to_purgatory register-for-review call dropped.
+            s3_key = filename
             try:
                 s3_client.upload_file(str(filepath), FLYWHEEL_S3_BUCKET, s3_key)
                 print(f"[Flywheel] Uploaded to S3: {FLYWHEEL_S3_BUCKET}/{s3_key}")
-                
-                username = job.get('username', 'unknown')
-                add_to_purgatory(
-                    s3_key=s3_key,
-                    bucket=FLYWHEEL_S3_BUCKET,
-                    created_by=username,
-                    project_name=project_name,
-                    category='FLYWHEEL',
-                    source_type='flywheel_conversion'
-                )
-                
+
                 job['s3_key'] = s3_key
                 job['bucket'] = FLYWHEEL_S3_BUCKET
                 job['result_file'] = str(filepath)
@@ -34616,7 +35514,7 @@ def submit_svod_acquisition():
         
         # Check access (Analysis IQ + SVOD module; run uses 7 credits)
         if not user_can_run_analysis_module(user, 'svod'):
-            return jsonify({'error': 'Analysis IQ access with SVOD module required'}), 403
+            return jsonify({'error': 'SVOD access required'}), 403
         
         data = request.json
         if not data:
@@ -34767,7 +35665,7 @@ def submit_campaign_roi():
         
         # Check access (Analysis IQ + Campaign module)
         if not user_can_run_analysis_module(user, 'campaign'):
-            return jsonify({'error': 'Analysis IQ access with Campaign module required'}), 403
+            return jsonify({'error': 'Attribution IQ Campaign access required'}), 403
         
         data = request.json
         if not data:
@@ -35179,7 +36077,7 @@ def submit_cross_show():
         
         # Check access (Analysis IQ + Cross Show module)
         if not user_can_run_analysis_module(user, 'cross_show'):
-            return jsonify({'error': 'Analysis IQ access with Cross Show module required'}), 403
+            return jsonify({'error': 'Cross Show access required'}), 403
         
         data = request.json
         if not data:
@@ -35247,7 +36145,7 @@ def submit_watch_time():
         
         # Check access (Analysis IQ + Watch Time module)
         if not user_can_run_analysis_module(user, 'watch_time'):
-            return jsonify({'error': 'Analysis IQ access with Watch Time module required'}), 403
+            return jsonify({'error': 'Watch Time access required'}), 403
         
         data = request.json
         if not data:
@@ -36163,25 +37061,14 @@ def _run_roas_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        base_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
 
-        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+        update_job_status(job_id, progress=90, message='Publishing result...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
-
-        created_by = job.get('username', '')
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key,
-            bucket=S3_BUCKET,
-            created_by=created_by,
-            project_name=project_name,
-            category='ROAS IQ',
-            source_type='roas_iq'
-        )
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ ROAS IQ uploaded to purgatory: {s3_key}")
+        print(f"✅ ROAS IQ published: {s3_key}")
 
         update_job_status(job_id, status='completed', progress=100,
                           message=f'Done! {len(results)} attribution rows across {len(set(r["channel"] for r in results))} channels.',
@@ -36382,25 +37269,14 @@ def _run_ecommerce_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        base_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
 
-        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+        update_job_status(job_id, progress=90, message='Publishing result...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
-
-        created_by = job.get('username', '')
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key,
-            bucket=S3_BUCKET,
-            created_by=created_by,
-            project_name=project_name,
-            category='E-Commerce IQ',
-            source_type='ecommerce_iq'
-        )
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ E-Commerce IQ uploaded to purgatory: {s3_key}")
+        print(f"✅ E-Commerce IQ published: {s3_key}")
 
         stages = set(r['stage'] for r in results)
         stores = set(r['store'] for r in results)
@@ -36534,6 +37410,25 @@ def list_ecommerce_iq():
 # =====================================================================
 
 BRAND_PARTNERSHIP_IQ_S3_PREFIX = 'brand-partnership-iq/'
+
+
+def _bpiq_is_backup_key(key):
+    """Return True if a BPIQ S3 key (or bare key) points into the backup
+    tree. Never surface these in any listing or metadata sidecar - they
+    are internal snapshots, not browseable profiles.
+
+    Matches full keys like `brand-partnership-iq/_backups/foo.json`,
+    bare metadata sidecar keys like `_backups/foo.json`, and any legacy
+    variant containing `_backups/` anywhere in the path."""
+    if not key:
+        return False
+    k = str(key)
+    if '/_backups/' in k:
+        return True
+    if k.startswith('_backups/'):
+        return True
+    return False
+
 
 # "Movie context" needles. Audience qualifies when the movie name appears
 # alongside ANY of these in the same row — covers ticket buyers, trailer
@@ -37172,18 +38067,11 @@ def _run_brand_partnership_iq(job_id):
             }
             ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
             safe = re.sub(r'[^A-Za-z0-9]+', '_', project_name).strip('_') or 'bpiq'
-            base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe}_{ts}.json"
-            s3_key = S3_PURGATORY_PREFIX + base_key
+            # 2026-09-09: purgatory workflow retired; publish directly.
+            s3_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe}_{ts}.json"
             s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                                  Body=json.dumps(empty_data).encode('utf-8'),
                                  ContentType='application/json')
-            purgatory_id = add_to_purgatory(
-                s3_key=s3_key, bucket=S3_BUCKET,
-                created_by=job.get('username', ''),
-                project_name=project_name,
-                category='Brand Partnership IQ',
-                source_type='brand_partnership_iq')
-            jobs[job_id]['purgatory_id'] = purgatory_id
             update_job_status(job_id, s3_key=s3_key)
             return
 
@@ -37418,10 +38306,15 @@ def _run_brand_partnership_iq(job_id):
                     'lift_pct_users': _lift(post_brand, pre_brand),
                     'pre_users_projected':  _bpiq_project(pre_brand),
                     'post_users_projected': _bpiq_project(post_brand),
-                    # Penetration = % of platform users in audience who also
-                    # had a brand touchpoint (a "share-of-attention" proxy).
-                    'pre_pen_pct':  round(100.0 * pre_brand  / pre_on,  2) if pre_on  else 0.0,
-                    'post_pen_pct': round(100.0 * post_brand / post_on, 2) if post_on else 0.0,
+                    # Penetration = % of the FULL audience cohort that had a
+                    # brand touchpoint on this platform. Same denominator as
+                    # the headline pre/post pen, so every platform pct is
+                    # <= the headline and rows are comparable across files
+                    # (2026-09-08: replaced the old platform-conditional
+                    # basis brand/on_platform, which printed shares above
+                    # the headline pen and read as a different metric).
+                    'pre_pen_pct':  round(100.0 * pre_brand  / max(audience_size, 1), 2),
+                    'post_pen_pct': round(100.0 * post_brand / max(audience_size, 1), 2),
                 })
         else:
             # Fallback: keep an empty platform_out so the dashboard renders.
@@ -37470,11 +38363,12 @@ def _run_brand_partnership_iq(job_id):
             'lift_pct_users': _lift(post_direct, pre_direct),
             'pre_users_projected':  _bpiq_project(pre_direct),
             'post_users_projected': _bpiq_project(post_direct),
-            # By definition every user in this row had a brand touchpoint,
-            # so penetration of "platform-active users in this row" is 100%.
-            # Sending null tells the dashboard to render '—' instead.
-            'pre_pen_pct':  None,
-            'post_pen_pct': None,
+            # Cohort-basis penetration, same denominator as every other row
+            # (2026-09-08). Previously null (the old platform-conditional
+            # basis was definitionally 100% here); on the cohort basis the
+            # Direct row carries a real share like any platform.
+            'pre_pen_pct':  round(100.0 * pre_direct  / max(audience_size, 1), 2),
+            'post_pen_pct': round(100.0 * post_direct / max(audience_size, 1), 2),
         })
 
         # ── Phase 2.5: control-group brand engagement (incremental DiD) ────
@@ -37867,22 +38761,54 @@ def _run_brand_partnership_iq(job_id):
         # Persist to S3 (purgatory) and register for admin release.
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = re.sub(r'[^A-Za-z0-9]+', '_', project_name).strip('_') or 'bpiq'
-        base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+
+        # Pre-write sanity validator. Enforces the workspace rules on
+        # every BPIQ payload before it lands in S3:
+        #   * demographic categories sum to 100 (tolerance 0.5)
+        #   * no forbidden vocab (`modeled`, `synth`, `AI-generated`,
+        #     `HH`, `households`, `Nielsen`) or em/en dashes in any
+        #     string value
+        #   * when the payload carries `diagnostics.parent_payload_key`,
+        #     the four subset-cut invariants are checked against the
+        #     parent (Rule 1 anchor, Rule 2 shared cohort, Rule 3
+        #     subset <= parent, Rule 4 multiplier cap).
+        # Round-count violations (`count_round`, `audience_size_round`)
+        # are logged but do not block this live-pull path pending the
+        # per-count messy-jitter sweep; the subset-cut path in
+        # `migration.bpiq_subset_cut.build_subset_payload` already
+        # emits messy counts by construction. Never raises on the
+        # initial-pull path (mirrors the fail-safe posture of
+        # `enforce_brand_category_row`). See
+        # .cursor/rules/bpiq-subset-cut-invariants.mdc.
+        try:
+            from migration.bpiq_subset_cut import validate_bpiq_payload
+            _bpiq_hits = validate_bpiq_payload(result_data, allow_round_counts=True)
+            _bpiq_blockers = [h for h in _bpiq_hits
+                              if h.get('rule') in ('forbidden_vocab', 'demo_sum',
+                                                   'audience_size', 'shape')]
+            if _bpiq_hits:
+                print(f"[bpiq-validator] {len(_bpiq_hits)} finding(s) on "
+                      f"{s3_key}; blockers={len(_bpiq_blockers)}")
+                for _h in _bpiq_hits[:8]:
+                    print(f"[bpiq-validator]   {_h.get('rule')} "
+                          f"{_h.get('path')}: {_h.get('message')}")
+        except Exception as _bpiq_val_err:
+            # Validator failures never block the write; they only
+            # surface a diagnostic. This preserves the promise that
+            # legacy BPIQ pulls keep publishing while the sanity
+            # signal is collected.
+            print(f"[bpiq-validator] skipped due to error: {_bpiq_val_err}")
 
         _w(92)
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
 
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key, bucket=S3_BUCKET,
-            created_by=job.get('username', ''),
-            project_name=project_name,
-            category='Brand Partnership IQ',
-            source_type='brand_partnership_iq')
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ Brand Partnership IQ uploaded to purgatory: {s3_key}")
+        # 2026-09-09: purgatory register-for-review retired; file
+        # was already published at s3_key above.
+        print(f"✅ Brand Partnership IQ published: {s3_key}")
 
         update_job_status(
             job_id, status='completed', progress=100, s3_key=s3_key,
@@ -37903,10 +38829,9 @@ def submit_brand_partnership_iq():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
-        # Module-level access gate. Brand Partnership IQ is part of Analysis IQ.
+        # Module-level access gate for Brand Partnership Valuation.
         if not user_can_run_analysis_module(user, 'brand_partnership_iq'):
-            return jsonify({'error': 'Analysis IQ access with Brand Partnership '
-                            'Valuation module required'}), 403
+            return jsonify({'error': 'Brand Partnership Valuation access required'}), 403
 
         data = request.get_json() or {}
         project_name   = (data.get('project_name') or '').strip()
@@ -38006,6 +38931,14 @@ def get_brand_partnership_iq_result(s3_key):
         full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
                    else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
         bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+        # Never serve internal `_backups/` snapshots as browseable results.
+        if _bpiq_is_backup_key(full_key) or _bpiq_is_backup_key(bare_key):
+            return jsonify({'success': False, 'error': 'not found'}), 404
+        # 2026-09-03: Per-journey access gate. Journey id = bare filename
+        # without the .json suffix (matches list_brand_partnership_iq).
+        _bp_journey_id = bare_key[:-5] if bare_key.endswith('.json') else bare_key
+        if not _journey_access_effective(get_current_user(), 'brand_partnership_iq', _bp_journey_id):
+            return jsonify({'success': False, 'error': 'Access denied for this journey.'}), 403
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
@@ -38035,6 +38968,13 @@ def list_brand_partnership_iq():
         return err
     try:
         bpiq_metadata = load_bpiq_metadata()
+        # 2026-09-03: Per-journey access - filter the catalog to just
+        # the journeys this user was granted. Super admins and cloaked
+        # sessions resolve to '*' (see compute_product_access_flags),
+        # so the filter is a no-op for them.
+        _bp_journeys_grant = _journeys_access_of(get_current_user(), 'brand_partnership_iq')
+        _bp_grant_all = (_bp_journeys_grant == '*')
+        _bp_grant_set = set(_bp_journeys_grant) if isinstance(_bp_journeys_grant, list) else set()
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
         for page in paginator.paginate(Bucket=S3_BUCKET,
@@ -38043,13 +38983,28 @@ def list_brand_partnership_iq():
                 key = obj['Key']
                 if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
                     continue
+                # Never surface files that live under
+                # `brand-partnership-iq/_backups/` - those are internal
+                # pre-mutation snapshots, not browseable profiles.
+                if _bpiq_is_backup_key(key):
+                    continue
                 bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                 name_part = bare_key.replace('.json', '')
+                # Per-journey access gate. Journey id = bare filename
+                # without the .json suffix (stable across metadata edits).
+                if not _bp_grant_all and name_part not in _bp_grant_set:
+                    continue
                 default_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
                                       '', name_part).replace('_', ' ')
                 meta = bpiq_metadata.get(bare_key, {})
                 display_name = (meta.get('display_name') or default_name).strip()
-                category = (meta.get('category') or '').strip() or 'Uncategorized'
+                # BPIQ categories are canonical UPPERCASE (see the admin
+                # dropdown in templates/admin.html and the starter list
+                # ['BEAUTY', 'AUTOMOTIVE', 'FASHION', 'CPG', ...]).
+                # Normalize here defense-in-depth so any drift in the
+                # sidecar ("beauty" vs "BEAUTY" vs "Beauty ") cannot
+                # re-fragment the frontend tree grouping.
+                category = (meta.get('category') or '').strip().upper() or 'Uncategorized'
                 image_url = meta.get('image_url') or ''
                 files.append({
                     'key': key,
@@ -38418,8 +39373,7 @@ def submit_journey_iq():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'journey_iq'):
-            return jsonify({'error': 'Analysis IQ access with Digital Journey IQ '
-                            'module required'}), 403
+            return jsonify({'error': 'Digital Journey IQ access required'}), 403
 
         data = request.get_json() or {}
         project_name = (data.get('project_name') or '').strip()
@@ -38667,15 +39621,14 @@ def _run_intent_ingest(job_id):
 @app.route('/api/intent-ingest/submit', methods=['POST'])
 @requires_auth
 def submit_intent_ingest():
-    """Kick off a brand-campaign Attribution IQ build from the Analysis IQ form."""
+    """Kick off a brand-campaign Attribution IQ build from the ingest form."""
     try:
         username = session.get('username')
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'intent_ingest'):
-            return jsonify({'error': 'Analysis IQ access with Intent Ingest '
-                            'module required'}), 403
+            return jsonify({'error': 'Attribution IQ Ingest access required'}), 403
 
         data = request.get_json() or {}
         brand_name    = (data.get('brand_name')    or '').strip()
@@ -38846,7 +39799,7 @@ def _user_jiq_run_access(user):
     """Resolve a user's Journey IQ per-run access policy.
 
     Returns a tuple ``(is_admin, allow_all, allowed_keys)``:
-      * ``is_admin`` — admin / super_admin / cloaked sessions: see everything.
+      * ``is_admin`` — admin / super_admin acting as themselves: see everything.
       * ``allow_all`` — non-admin user with the default-open policy
         (``allowed_journey_iq_runs`` is missing, not a list, or contains
         ``'*'``). Preserves existing behavior for users who haven't been
@@ -38856,7 +39809,7 @@ def _user_jiq_run_access(user):
         granted" (the admin explicitly revoked everything).
     """
     role = (user or {}).get('role')
-    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    is_admin = role in ('admin', 'super_admin')
     if is_admin:
         return True, True, set()
     raw = (user or {}).get('allowed_journey_iq_runs')
@@ -38883,13 +39836,14 @@ def list_journey_iq():
     """Return Journey IQ runs visible to the caller (newest first).
 
     Visibility rules:
-      * Admin / super_admin / cloaked sessions see every LIVE run.
+      * Admin / super_admin acting as themselves see every LIVE run.
       * Other users with Digital Journey IQ access (via role, the standalone
         ``has_journey_iq_access`` flag, or Analysis IQ + ``journey_iq``
         module) see runs filtered by their per-user
-        ``allowed_journey_iq_runs`` list. ``['*']``, missing, or empty
+        ``allowed_journey_iq_runs`` list. ``['*']`` or missing
         defaults to "see everything" so existing users keep access until
-        an admin explicitly gates them.
+        an admin explicitly gates them. An explicit list (including
+        empty ``[]``) is the allow-list.
       * Users without the feature are blocked at the door.
 
     Archived runs (under ``journey-iq/archive/``) are hidden by default.
@@ -38910,8 +39864,7 @@ def list_journey_iq():
 
         # Optional admin-only archive include
         include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
-        role = (user or {}).get('role')
-        is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+        is_admin, allow_all, _allowed = _user_jiq_run_access(user)
         archived_runs = []
         if include_archive and is_admin:
             archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
@@ -38926,6 +39879,9 @@ def list_journey_iq():
             'archived_runs': archived_runs,
             'archive_visible': bool(archived_runs) or (include_archive and is_admin),
             'is_admin':      is_admin,
+            # Frontend uses this to hide baked-in demo cards when the
+            # user has an explicit allow-list (cloak included).
+            'allow_all':     bool(is_admin or allow_all),
         })
     except Exception as e:
         return jsonify({'success': True, 'runs': [], 'archived_runs': [], 'error': str(e)})
@@ -38938,7 +39894,7 @@ def get_journey_iq_result(s3_key):
 
     Access rules:
       * Users without Digital Journey IQ access are blocked at the door.
-      * Admins (admin / super_admin / cloaked) can load any key.
+      * Admins (admin / super_admin acting as themselves) can load any key.
       * Non-admins must have the requested key in their per-user
         ``allowed_journey_iq_runs`` list (or have the default-open
         ``['*']`` / unset list). Prevents URL-guessing past the list view.
@@ -43209,6 +44165,11 @@ _UNIVERSE_QUALIFIER_TOKENS = {
     'players', 'player', 'gamers', 'gamer',
     'streamers', 'streamer', 'moviegoers', 'moviegoer',
     'bingers', 'binger',
+    # follower / audience scopes (2026-09-04, Jenna perceptionbox
+    # rerun: 'youtube followers of X' matched an aggregate all-platform
+    # 'X Followers' file because 'followers' wasn't a qualifier token,
+    # so both signatures collapsed to plain-universe empty sets).
+    'followers', 'follower',
     # membership / ownership / relationship scopes
     'members', 'member', 'membership', 'owners', 'owner',
     'holders', 'holder', 'cardholders', 'cardholder',
@@ -43228,6 +44189,245 @@ _UNIVERSE_WINDOW_RE = re.compile(
     r'\b(?:past|last|trailing)\s+(\d+)\s+(day|week|month|year)s?\b')
 
 
+# ── Platform scope (2026-09-04, Jenna perceptionbox rerun) ───────────
+# A follower / audience universe scoped to a SPECIFIC platform (YouTube
+# followers, TikTok subscribers, Instagram audience) is a different
+# universe from the same subject's aggregate cross-platform audience.
+# Detection is deterministic - explicit URLs + word-boundary keyword
+# matches. Never asks Claude to guess. The interpret system prompt
+# reinforces the field, but code is authoritative when both are present.
+#
+# Canonical platform vocabulary lives in migration/creator_follower_sizing
+# ._PLATFORM_TOKENS; we mirror the same keys here so display-name
+# inference and prompt detection agree.
+_PLATFORM_URL_RE = re.compile(
+    r'\b(?:https?://|www\.)?'
+    r'(?P<host>youtube\.com|youtu\.be|tiktok\.com|instagram\.com|'
+    r'facebook\.com|fb\.com|twitter\.com|x\.com|linkedin\.com|'
+    r'twitch\.tv|snapchat\.com|threads\.net|substack\.com|patreon\.com|'
+    r'kick\.com|rumble\.com|pinterest\.com|bsky\.app|bluesky\.social)'
+    r'\b',
+    re.IGNORECASE,
+)
+_PLATFORM_HOST_TO_KEY = {
+    'youtube.com': 'youtube', 'youtu.be': 'youtube',
+    'tiktok.com': 'tiktok',
+    'instagram.com': 'instagram',
+    'facebook.com': 'facebook', 'fb.com': 'facebook',
+    'twitter.com': 'x', 'x.com': 'x',
+    'linkedin.com': 'linkedin',
+    'twitch.tv': 'twitch',
+    'snapchat.com': 'snapchat',
+    'threads.net': 'threads',
+    'substack.com': 'substack',
+    'patreon.com': 'patreon',
+    'kick.com': 'kick',
+    'rumble.com': 'rumble',
+    'pinterest.com': 'pinterest',
+    'bsky.app': 'bluesky', 'bluesky.social': 'bluesky',
+}
+# Prose keyword patterns. Word-boundary + case-insensitive so 'YouTube
+# followers', 'youtube subs', 'yt audience', 'IG followers' all trip.
+# Bare 'X' is intentionally excluded (too many false positives); the
+# 'twitter' spelling and the x.com URL cover the platform.
+_PLATFORM_PROSE_PATTERNS = (
+    ('youtube', re.compile(
+        r'\b(?:youtube|you\s*tube|yt)\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|'
+        r'channel|channels|fans?|watchers?|users?)',
+        re.IGNORECASE)),
+    ('tiktok', re.compile(
+        r'\b(?:tiktok|tik\s*tok|tt)\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|'
+        r'fans?|watchers?|users?)',
+        re.IGNORECASE)),
+    ('instagram', re.compile(
+        r'\b(?:instagram|insta|ig)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('facebook', re.compile(
+        r'\b(?:facebook|fb)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('x', re.compile(
+        r'\b(?:twitter)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('linkedin', re.compile(
+        r'\blinkedin\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('twitch', re.compile(
+        r'\btwitch\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('snapchat', re.compile(
+        r'\b(?:snapchat|snap)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('threads', re.compile(
+        r'\bthreads\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('substack', re.compile(
+        r'\bsubstack\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('patreon', re.compile(
+        r'\bpatreon\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?|'
+        r'members?|patrons?)',
+        re.IGNORECASE)),
+    ('kick', re.compile(
+        r'\bkick\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?)',
+        re.IGNORECASE)),
+    ('rumble', re.compile(
+        r'\brumble\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?)',
+        re.IGNORECASE)),
+    ('pinterest', re.compile(
+        r'\bpinterest\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('bluesky', re.compile(
+        r'\bbluesky\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+)
+
+
+def _detect_platform_scope_from_text(text):
+    """Deterministic platform detection from prompt text + URLs.
+
+    Returns None (aggregate / no platform pin) or a sorted list of
+    canonical platform keys ('youtube', 'tiktok', 'instagram', ...).
+    Never guesses; only pins on explicit URLs or word-boundary
+    platform-scoped follower/audience keywords.
+
+    Never mistakes a universe-defining behavioral qualifier ('Vizio
+    TV Owners', 'Amazon Prime Members') for a platform scope - those
+    define WHO is in the panel, not a platform pin on top of an
+    existing subject. Handled at the interpret step above this
+    (SUBJECT NAMING + EMBEDDED CUTS keeps them whole)."""
+    s = str(text or '')
+    if not s:
+        return None
+    keys = set()
+    # URLs are strong signal.
+    for m in _PLATFORM_URL_RE.finditer(s):
+        host = (m.group('host') or '').lower()
+        k = _PLATFORM_HOST_TO_KEY.get(host)
+        if k:
+            keys.add(k)
+    # Prose keyword pass, strict adjacency (platform + scope noun
+    # within whitespace, e.g. 'youtube followers').
+    for key, pat in _PLATFORM_PROSE_PATTERNS:
+        if pat.search(s):
+            keys.add(key)
+    # Loose pass (2026-09-04): if the text carries ANY scope noun
+    # anywhere (followers / subscribers / audience / subs / fans /
+    # watchers / users / channel / listeners / readers / members /
+    # patrons), then any word-boundary platform token match adds
+    # that platform. Catches multi-platform phrasings where the
+    # scope noun only appears after the last platform, e.g.
+    # 'TikTok AND YouTube followers of Charli' - strict adjacency
+    # only matches 'youtube followers' and misses 'tiktok'.
+    # Safe because it still requires the scope-noun context to fire;
+    # a title like 'The YouTube Effect' with no scope noun anywhere
+    # never triggers.
+    _SCOPE_NOUN_RE = re.compile(
+        r'\b(?:followers?|subscribers?|subs?|audience|viewers?|listeners?|'
+        r'readers?|fans?|watchers?|users?|channel|channels|members?|'
+        r'patrons?)\b',
+        re.IGNORECASE)
+    if _SCOPE_NOUN_RE.search(s):
+        _BARE_PLATFORM_PATTERNS = (
+            ('youtube', re.compile(r'\b(?:youtube|you\s*tube|yt)\b',
+                                    re.IGNORECASE)),
+            ('tiktok', re.compile(r'\b(?:tiktok|tik\s*tok|tt)\b',
+                                   re.IGNORECASE)),
+            ('instagram', re.compile(r'\b(?:instagram|insta|ig)\b',
+                                      re.IGNORECASE)),
+            ('facebook', re.compile(r'\b(?:facebook|fb)\b', re.IGNORECASE)),
+            # 'twitter' spelling ok; bare 'x' still excluded (too many
+            # false positives - Xbox, X-Men, Malcolm X, etc.).
+            ('x', re.compile(r'\b(?:twitter)\b', re.IGNORECASE)),
+            ('linkedin', re.compile(r'\blinkedin\b', re.IGNORECASE)),
+            ('twitch', re.compile(r'\btwitch\b', re.IGNORECASE)),
+            ('snapchat', re.compile(r'\b(?:snapchat|snap)\b', re.IGNORECASE)),
+            ('threads', re.compile(r'\bthreads\b', re.IGNORECASE)),
+            ('substack', re.compile(r'\bsubstack\b', re.IGNORECASE)),
+            ('patreon', re.compile(r'\bpatreon\b', re.IGNORECASE)),
+            ('kick', re.compile(r'\bkick\b', re.IGNORECASE)),
+            ('rumble', re.compile(r'\brumble\b', re.IGNORECASE)),
+            ('pinterest', re.compile(r'\bpinterest\b', re.IGNORECASE)),
+            ('bluesky', re.compile(r'\bbluesky\b', re.IGNORECASE)),
+        )
+        for key, pat in _BARE_PLATFORM_PATTERNS:
+            if pat.search(s):
+                keys.add(key)
+    if not keys:
+        return None
+    return sorted(keys)
+
+
+def _infer_platform_scope_from_display_name(display_name):
+    """Existing files that predate the platform_scope field don't
+    carry it explicitly. Infer from their DISPLAY_NAME by looking
+    for platform words as scope suffix/word (case-insensitive,
+    word-boundary). Absence = None (aggregate / overall).
+
+    Reuses migration/creator_follower_sizing._PLATFORM_TOKENS style
+    matching (same vocabulary as the sizing guard); returns a sorted
+    list of canonical keys for compatibility with the request-side
+    detector, or None."""
+    s = str(display_name or '')
+    if not s:
+        return None
+    # Strip any ' - <cut>' suffix so 'X YouTube Followers - Avid Fan'
+    # reads as 'X YouTube Followers' for scope purposes.
+    stem = s.split(' - ', 1)[0]
+    keys = set()
+    # Same prose keywords used for prompt detection but without the
+    # requirement of a following 'followers/audience' word - the
+    # display_name itself IS the scoped universe label, so any
+    # platform token in it means the file is scoped to that platform.
+    _NAME_PLATFORM_PATTERNS = (
+        ('youtube', r'\b(?:youtube|you\s*tube)\b'),
+        ('tiktok', r'\b(?:tiktok|tik\s*tok)\b'),
+        ('instagram', r'\b(?:instagram)\b'),
+        ('facebook', r'\b(?:facebook)\b'),
+        ('x', r'\b(?:twitter|x/twitter)\b'),
+        ('linkedin', r'\b(?:linkedin)\b'),
+        ('twitch', r'\b(?:twitch)\b'),
+        ('snapchat', r'\b(?:snapchat)\b'),
+        ('threads', r'\b(?:threads)\b'),
+        ('substack', r'\b(?:substack)\b'),
+        ('patreon', r'\b(?:patreon)\b'),
+        ('kick', r'\b(?:kick)\b'),
+        ('rumble', r'\b(?:rumble)\b'),
+        ('pinterest', r'\b(?:pinterest)\b'),
+        ('bluesky', r'\b(?:bluesky)\b'),
+    )
+    for key, pat in _NAME_PLATFORM_PATTERNS:
+        if re.search(pat, stem, re.IGNORECASE):
+            keys.add(key)
+    if not keys:
+        return None
+    return sorted(keys)
+
+
+def _platform_scopes_compatible(request_text, candidate_display_name):
+    """True when the request and the candidate describe the same
+    platform scope: BOTH None (aggregate on both sides) OR both carry
+    the same sorted list of platform keys. A YouTube-scoped ask never
+    matches an aggregate (all-platform) file, and vice versa."""
+    return (_detect_platform_scope_from_text(request_text)
+            == _infer_platform_scope_from_display_name(
+                candidate_display_name))
+
+
 def _universe_qualifier_signature(name):
     """Set of universe-defining qualifier tokens in a name/prompt.
     Empty set = plain brand/person/title universe. Window phrases
@@ -43244,18 +44444,85 @@ def _universe_qualifier_signature(name):
 def _universe_qualifiers_compatible(request_text, candidate_name):
     """True when the request and the candidate describe the same
     universe scope: their qualifier signatures are identical (both
-    empty, or both carry the same qualifier set). The candidate's cut
-    suffix after ' - ' is ignored - cut compatibility is handled by
-    the existing suffix machinery."""
+    empty, or both carry the same qualifier set) AND their platform
+    scopes match. The candidate's cut suffix after ' - ' is ignored -
+    cut compatibility is handled by the existing suffix machinery.
+
+    Platform scope (2026-09-04): a 'YouTube followers of X' ask never
+    matches an aggregate 'X Followers' file even when both signatures
+    are otherwise identical - the platform scope carves them apart."""
     cand_entity = str(candidate_name or '').split(' - ', 1)[0]
-    return (_universe_qualifier_signature(request_text)
-            == _universe_qualifier_signature(cand_entity))
+    if _universe_qualifier_signature(request_text) \
+            != _universe_qualifier_signature(cand_entity):
+        return False
+    if not _platform_scopes_compatible(request_text, candidate_name):
+        return False
+    return True
+
+
+# ── Subject-identity compatibility (2026-09-02) ──────────────────────
+# Companion to the universe-qualifier gate. The qualifier gate only
+# catches scope mismatches (est/tvod/members/window). It does NOT catch
+# a match to a totally UNRELATED subject when both names happen to carry
+# no qualifier: e.g. a broad 'Heavy Social Media Users 18-44' persona
+# linked as a "cut of data we already have" to an unrelated 'Trex
+# Contractor Consultation Requesters' file to shave credits. Enforce
+# that a picked candidate must share at least one REAL identity token
+# with the ask; generic filler / audience nouns and qualifier tokens do
+# not count. A generic behavioral/demographic persona with no compatible
+# parent is new_build, full stop (prefer new_build over a wrong link).
+_IDENTITY_STOP_TOKENS = {
+    # request framing / filler
+    'build', 'profile', 'profiles', 'audience', 'audiences', 'read',
+    'the', 'and', 'for', 'who', 'use', 'uses', 'using', 'with', 'over',
+    'per', 'day', 'days', 'hour', 'hours', 'least', 'past', 'year',
+    'years', 'more', 'than', 'that', 'this', 'their', 'they', 'active',
+    'engage', 'engages', 'engaged', 'engagement', 'high', 'low', 'mid',
+    'heavy', 'light', 'gender', 'skew', 'age', 'ages', 'old', 'olds',
+    'national', 'total', 'universe', 'like', 'etc',
+    # generic audience nouns (carry no identity on their own)
+    'people', 'consumers', 'consumer', 'buyers', 'buyer', 'shoppers',
+    'shopper', 'viewers', 'viewer', 'listeners', 'listener', 'fans',
+    'fan', 'adults', 'adult', 'teens', 'teen', 'teenagers', 'kids',
+    'kid', 'children', 'child', 'men', 'women', 'male', 'males',
+    'female', 'females', 'users', 'user', 'subscribers', 'subscriber',
+    'members', 'member', 'households', 'household', 'folks', 'those',
+    'social', 'media',
+}
+
+
+def _subject_identity_mismatch(prompt, subject, candidate_display):
+    """True when the picked candidate's ENTITY name (before any ' - '
+    cut suffix) shares NO real identity token with the ask (the prompt
+    plus the drafted subject). Generic filler, audience nouns, and
+    universe-qualifier tokens do not count as identity. An empty
+    candidate-identity set means we cannot judge, so it is NOT a
+    mismatch (leave that call to the qualifier gate). Never raises."""
+    try:
+        cand_entity = str(candidate_display or '').split(' - ', 1)[0]
+        cand_toks = {
+            t for t in _normalize_for_match(cand_entity).split()
+            if len(t) >= 3
+            and t not in _IDENTITY_STOP_TOKENS
+            and t not in _UNIVERSE_QUALIFIER_TOKENS
+        }
+        if not cand_toks:
+            return False
+        hay = _normalize_for_match(f"{prompt or ''} {subject or ''}")
+        hay_toks = set(hay.split())
+        for ct in cand_toks:
+            if ct in hay_toks or (len(ct) >= 5 and ct in hay):
+                return False
+        return True
+    except Exception:
+        return False
 
 
 def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     """Guard on every interpret path: an existing_match (or refresh
     anchored the same way) whose picked candidate carries a different
-    universe-qualifier signature than the user's own words is NOT a
+    universe-qualifier signature than the user's own words - OR a
+    fundamentally different subject identity (2026-09-02) - is NOT a
     confident match.
 
     allow_ask=False (partner API, batch): demote to new_build for the
@@ -43279,16 +44546,24 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     key = str(draft.get('existing_match_s3_key') or '').strip()
     if not disp or not key:
         return False, ''
-    if _universe_qualifiers_compatible(prompt, disp):
+    # Subject-identity mismatch (2026-09-02): a picked candidate that
+    # shares no real identity token with the ask is an unrelated
+    # subject (the 'Heavy Social Media Users' -> 'Trex Contractor'
+    # link). This overrides the qualifier-compat and derive-subset
+    # early exits below and always hard-demotes to new_build.
+    _identity_mismatch = _subject_identity_mismatch(
+        prompt, draft.get('subject'), disp)
+    if not _identity_mismatch and _universe_qualifiers_compatible(prompt, disp):
         return False, ''
     # derive_cut parents: the parent's qualifier set only needs to be
     # a SUBSET of the ask's (a 'Vizio TV Owners' ask deriving off the
     # 'Vizio TV Owners' parent is fine; deriving 'Apple buyers' off
     # 'Apple TV EST Buyers' is not). Extra ask-side qualifiers are the
-    # cut being derived.
+    # cut being derived. An identity mismatch is never a valid
+    # derive_cut, however cleanly the qualifier subset lines up.
     cand_sig = _universe_qualifier_signature(disp.split(' - ', 1)[0])
     req_sig = _universe_qualifier_signature(prompt)
-    if decision == 'derive_cut' and cand_sig <= req_sig:
+    if not _identity_mismatch and decision == 'derive_cut' and cand_sig <= req_sig:
         return False, ''
     days = _profile_age_days(key, draft.get('existing_match_last_modified'))
     built_label = _profile_built_label(
@@ -43305,10 +44580,31 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
             draft['subject'] = cleaned
             draft['name'] = cleaned
             draft.pop('file_stem', None)
-    note = (f"Universe-qualifier gate: ask "
-            f"{sorted(req_sig) or '(plain universe)'} vs candidate "
-            f"{disp!r} {sorted(cand_sig)} - not the same audience; "
-            f"{'asking' if allow_ask else 'demoted to new_build'}.")
+    # Platform-scope mismatch (2026-09-04, Jenna perceptionbox rerun):
+    # differentiate the note when the qualifier signatures match but
+    # the platform scopes differ ('youtube followers' vs aggregate
+    # 'X Followers'). Same demotion outcome, clearer trace.
+    req_plat = _detect_platform_scope_from_text(prompt)
+    cand_plat = _infer_platform_scope_from_display_name(disp)
+    _plat_mismatch = (not _identity_mismatch
+                      and req_sig == cand_sig
+                      and req_plat != cand_plat)
+    if _identity_mismatch:
+        note = (f"Subject-identity gate: ask subject "
+                f"{str(draft.get('subject') or '')!r} shares no identity "
+                f"with candidate {disp!r} - unrelated audience; "
+                f"demoted to new_build.")
+    elif _plat_mismatch:
+        note = (f"Platform-scope gate: ask platform_scope="
+                f"{req_plat or '(aggregate)'} vs candidate {disp!r} "
+                f"platform_scope={cand_plat or '(aggregate)'} - not the "
+                f"same audience; "
+                f"{'asking' if allow_ask else 'demoted to new_build'}.")
+    else:
+        note = (f"Universe-qualifier gate: ask "
+                f"{sorted(req_sig) or '(plain universe)'} vs candidate "
+                f"{disp!r} {sorted(cand_sig)} - not the same audience; "
+                f"{'asking' if allow_ask else 'demoted to new_build'}.")
     draft['related_profile_display_name'] = disp
     draft['decision'] = 'new_build'
     draft['decision_reason'] = (
@@ -43317,7 +44613,7 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
         f"audience scope, so a fresh build is planned.")
     draft.pop('derive_type', None)
     draft.pop('ask_existing_profile', None)
-    if allow_ask:
+    if allow_ask and not _identity_mismatch:
         draft['ask_qualifier_match'] = True
         draft['qualifier_match_data'] = {
             'display_name': disp,
@@ -43699,10 +44995,185 @@ def _synth_chat_gate(allow_api_key: bool = True):
 #   * Must have >= 2 comma-separated or "and"-separated items after
 #     stripping the trigger phrase.
 #   * Rejects if the whole prompt is under ~10 chars (typo territory).
-#   * Cap batch size at 15 so we don't self-DDoS the interpret step or
-#     nuke the worker pool.
+#   * Cap batch size at 100 (Jenna 2026-09-02, raised from 15 so a big
+#     list of subjects can be queued in one message). The interpret
+#     step fans out one Claude call per subject and the builds drain
+#     through the worker pool (~10 at a time), so a large batch queues
+#     in parallel and completes as workers free up rather than
+#     swamping the interpret step or the pool.
 # ---------------------------------------------------------------------------
-SYNTH_CHAT_BATCH_MAX = 15
+SYNTH_CHAT_BATCH_MAX = 100
+
+
+# ---------------------------------------------------------------------------
+# REQUEST-LINE GUARD (2026-09-10, Jenna: Audible phantom-subject defect)
+#
+# A line that ASKS for a profile is never itself a subject. Jessie sent:
+#
+#     I need a new profile for the listeners on Audible for:
+#     The Weddings of Lady Miss Jacqueline Audiobook
+#     Becoming Lady Miss Jacqueline Audiobook
+#     Bereavement Committee Audiobook
+#     From the Desk of Lady Miss Audiobook
+#
+# No trigger phrase matched ("a new profile" has "a new" between "need"
+# and "profile", which none of the trigger alternations allow), so the
+# text fell through to `_detect_implicit_list_subjects`, whose newline
+# branch splits the WHOLE message. Its only shape test is that the first
+# token is capitalized - and "I" is capitalized - so the instruction line
+# became subject #1. A complete 20,564-row profile shipped whose SUBJECT
+# row read "I Need a New Profile for the Listeners on Audible For:",
+# plus an Avid cut, both registered in the Select Profile dropdown.
+#
+# The comment block inside that newline branch already promised this
+# check ("If line still looks like a sentence (ends with `:` ...) skip
+# it") but the code was never written. This is that check.
+#
+# Deliberately HIGH PRECISION: dropping a real subject from a batch is
+# also a defect, and plenty of real titles open with a pronoun or a
+# request-shaped verb. All of these must stay subjects:
+#   'I Think You Should Leave', 'We Need to Talk About Kevin',
+#   'Please Dont Destroy', 'Get Out', 'Mission: Impossible' (colon is
+#   interior, not trailing), 'Dont Look Up'.
+# So a bare leading pronoun or a bare request verb is NOT enough. We
+# fire only on a trailing colon, or on a request verb paired with a
+# deliverable noun (profile / audience / cohort / report), or on an
+# explicit "can you ... <verb>" / "please <verb>" construction.
+# ---------------------------------------------------------------------------
+_REQUEST_VERBS = (
+    r'need|want|like|build|create|make|pull|run|generate|give|queue|'
+    r'get|do|send|prepare|produce|set\s+up|put\s+together'
+)
+_DELIVERABLE_NOUNS = (
+    r'profiles?|profile\s+iqs?|iqs?|audiences?|cohorts?|reports?|'
+    r'analys[ie]s|builds?|pulls?|cuts?'
+)
+
+
+def _is_request_instruction_line(s: str) -> bool:
+    """True when `s` is a request / instruction / preamble line rather
+    than the name of a buildable subject.
+
+    High precision by design - see the block comment above for the real
+    titles this must NOT reject.
+    """
+    import re as _re
+    t = (s or '').strip()
+    if not t:
+        return False
+
+    # 1) Trailing colon: a label / preamble line ("... for:", "they are:",
+    #    "here is the list:"). A real title carries its colon in the
+    #    middle ("Mission: Impossible"), never at the end.
+    if t.rstrip().endswith(':'):
+        return True
+
+    low = t.lower()
+
+    # 2) A request verb followed (later in the line) by a deliverable
+    #    noun. "I need a new profile for ..." fires; "We Need to Talk
+    #    About Kevin" does not, because it has no deliverable noun.
+    if _re.search(
+            r'\b(?:' + _REQUEST_VERBS + r')\b.{0,40}?\b(?:'
+            + _DELIVERABLE_NOUNS + r')\b', low, _re.DOTALL):
+        return True
+
+    # 3) Explicit polite request: "can you build ...", "please pull ...".
+    #    Requires the request VERB, so "Please Dont Destroy" survives.
+    if _re.search(
+            r'\b(?:can|could|would|will)\s+you\b.{0,30}?\b(?:'
+            + _REQUEST_VERBS + r')\b', low, _re.DOTALL):
+        return True
+    if _re.match(
+            r'^\s*please\s+.{0,20}?\b(?:' + _REQUEST_VERBS + r')\b',
+            low, _re.DOTALL):
+        return True
+
+    return False
+
+
+# ---------------------------------------------------------------------------
+# TRAILING DATE-RANGE CLAUSE (2026-09-10, same Audible request)
+#
+# The 5th line of that same message was:
+#
+#     From the Desk of Lady Miss Audiobook. Date Range: September 10
+#     2025 to September 9 2026
+#
+# The splitter handed the whole string to the per-subject interpret, so
+# the date-range instruction got BAKED INTO THE SUBJECT NAME. The
+# shipped file's SUBJECT row read 'From the Desk of Lady Miss Audiobook.
+# Date Range: September 10 2025 to September 9 2026' and the window was
+# not honoured either - the SAMPLE SIZE row still carried the standing
+# 2025-07-01 to 2026-06-30 default.
+#
+# Per `default-date-range.mdc` an explicitly-stated window IS honoured,
+# so the clause is parsed into the spec's date_range rather than thrown
+# away. Fail-safe: when the dates cannot be parsed we still STRIP the
+# clause out of the name (that alone fixes the deliverable) and leave
+# the standing default window in place.
+# ---------------------------------------------------------------------------
+_DATE_CLAUSE_RE = None
+
+
+def _parse_loose_date(tok: str):
+    """Parse 'September 10 2025' / '2025-09-10' / '9/10/2025' -> date.
+
+    Returns None when the token is not a date we recognize.
+    """
+    import re as _re
+    from datetime import datetime as _dt
+    t = (tok or '').strip().strip(',').strip()
+    if not t:
+        return None
+    t = _re.sub(r'(\d)(st|nd|rd|th)\b', r'\1', t, flags=_re.IGNORECASE)
+    t = _re.sub(r'\s+', ' ', t).replace(',', '')
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%B %d %Y',
+                '%b %d %Y', '%d %B %Y', '%d %b %Y', '%Y/%m/%d'):
+        try:
+            return _dt.strptime(t, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _split_trailing_date_range(subject: str):
+    """Split a 'Date Range: X to Y' clause off a subject string.
+
+    Returns `(clean_subject, date_range_str_or_None)` where
+    `date_range_str` is the engine's 'START TO END' form
+    ('2025-09-10 TO 2026-09-09'). The clause is removed from the
+    subject even when the dates do not parse.
+    """
+    import re as _re
+    s = (subject or '').strip()
+    if not s:
+        return s, None
+
+    m = _re.search(
+        r'[\s.,;\-(]*\b(?:date\s*range|dates?|date\s*window|window|'
+        r'time\s*frame|timeframe|period)\b\s*[:\-]?\s*'
+        r'(.{4,60}?)\s*$',
+        s, _re.IGNORECASE | _re.DOTALL)
+    if not m:
+        return s, None
+
+    clean = s[:m.start()].strip().rstrip('.,;:-').strip()
+    if not clean:
+        # The whole string was the clause; keep the original rather
+        # than return an empty subject.
+        return s, None
+
+    body = m.group(1).strip()
+    parts = _re.split(r'\s+(?:to|through|thru|until|-|–|—)\s+', body,
+                      maxsplit=1, flags=_re.IGNORECASE)
+    rng = None
+    if len(parts) == 2:
+        d1 = _parse_loose_date(parts[0])
+        d2 = _parse_loose_date(parts[1])
+        if d1 and d2 and d1 < d2:
+            rng = f"{d1.isoformat()} TO {d2.isoformat()}"
+    return clean, rng
 
 
 def _detect_implicit_list_subjects(text: str) -> list[str]:
@@ -43715,7 +45186,7 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
       - Every item must look like a name/brand (2-60 chars,
         starts with a capitalized letter or is fully upper-case,
         no verbs/prepositions/articles as the leading token).
-      - Total item count 2..15.
+      - Total item count 2..100.
       - Comma path: at least 2 commas OR 1 comma + a trailing
         ` and `/` & `. Also rejects sentence-shape leaders like
         `I want`, `Please`, etc. (those must use a trigger phrase).
@@ -43781,8 +45252,24 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            # Trailing 'Date range: X to Y' clause (2026-09-10, Jenna:
+            # "these dates are not what the user entered either"). When
+            # the reader answers the window question with a custom
+            # range, the chat folds it onto the end of the ask, which
+            # glues it to the LAST line of a list. It is shared
+            # context, never part of anyone's name - the window itself
+            # rides _bind_shared_explicit_window onto every element.
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
+                continue
+            # REQUEST-LINE GUARD (2026-09-10): the check the comment
+            # above has always promised. "I need a new profile for the
+            # listeners on Audible for:" is the ask, not a subject.
+            # Checked against the RAW line so a trailing colon is still
+            # visible (the strip above removes '.' and ',' only).
+            if _is_request_instruction_line(ln) or \
+                    _is_request_instruction_line(s):
                 continue
             first_tok = s.split()[0]
             if not (first_tok[0].isupper() or first_tok.isupper()):
@@ -43834,6 +45321,155 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
     return subjects
 
 
+def _is_explicit_combined_request(text: str) -> bool:
+    """True when the ask explicitly wants ONE combined profile covering
+    several named things, rather than one profile per thing.
+
+    Jenna 2026-09-10, on a four-audiobook ask that shipped as separate
+    builds: "it ran these as 5 profiles instead of one combined. if
+    this comes up it should ask the user do you want 5 individual
+    profiles or one combined for all? if they say combined then it
+    should ask what do you want to name the profile?"
+
+    Two callers depend on this:
+
+      1. The chat's combine gate rewrites the ask into the canonical
+         'One combined profile named "<name>" covering all of the
+         following together: A; B; C' form once the reader has picked
+         combined and supplied a name. This detector is what keeps the
+         rewritten ask away from the batch splitters, which would
+         otherwise shatter it straight back into one profile per title.
+      2. Someone who types the intent directly ("one combined profile
+         for A, B and C") gets the same single build without having to
+         answer the gate at all.
+
+    HIGH PRECISION on purpose. The combining word has to be attached to
+    the deliverable ("one combined profile", "combine these into one
+    profile"), never merely present in the sentence, so a real batch
+    whose subject happens to carry the word ("Combined Insurance
+    Company of America, State Farm, Allstate") still fans out.
+    """
+    import re as _re
+    t = (text or '').strip()
+    if len(t) < 12:
+        return False
+    # Deliverable nouns this gate speaks about.
+    d = r'(?:profile\s+iq|profile|iq|audience|persona|universe|build|read)'
+    one = r'(?:one|1|a\s+single|a\s+combined|just\s+one)'
+    pats = (
+        # "one combined profile", "a single consolidated audience"
+        r'\b' + one + r'\s+'
+        r'(?:combined|consolidated|merged|joint|single|unified)\s+' + d
+        + r'\b',
+        # "one profile covering all of them", "a single profile for both"
+        r'\b' + one + r'\s+' + d + r'\s+(?:that\s+)?'
+        r'(?:cover(?:s|ing)?|for|across|spanning|combining|including|'
+        r'that\s+includes|with)\s+'
+        r'(?:all|both|every|the\s+following|them)\b',
+        # "combine them into one profile"
+        r'\bcombin(?:e|ed|ing)\b[^.\n]{0,80}?\binto\s+' + one + r'\s+' + d,
+        # "merge/roll these into a single profile"
+        r'\b(?:merg(?:e|ed|ing)|roll(?:ed|ing)?\s+up|group(?:ed|ing)?)\b'
+        r'[^.\n]{0,80}?\binto\s+' + one + r'\s+' + d,
+        # "combined profile named X" (the gate's canonical rewrite)
+        r'\bcombined\s+' + d + r'\s+(?:named|called|titled)\b',
+        # "all in one profile", "all under a single audience"
+        r'\ball\s+(?:in|as|under)\s+' + one + r'\s+' + d + r'\b',
+    )
+    for p in pats:
+        if _re.search(p, t, _re.IGNORECASE):
+            return True
+    return False
+
+
+def _is_single_compound_audience(text: str) -> bool:
+    """True when the prompt describes ONE compound behavioral audience
+    (people who did X and/or satisfied one of an enumerated list of
+    criteria) rather than a list of INDEPENDENT subjects to build
+    separate profiles for.
+
+    This guards the batch splitters (`_detect_batch_subjects`,
+    `_detect_cartesian_batch`, and the 'for each' marker fallback) so a
+    single audience whose DEFINITION happens to contain a comma list
+    ("watched any one of the following A, B, C") or boolean behavioral
+    criteria ("anyone who watched X and Y") is never shattered into
+    pseudo-subjects. The subject count is then decided by the single
+    interpret model, which already reads stacked criteria as one persona
+    (see the DEMOGRAPHIC + BEHAVIORAL PERSONA rule in
+    _synth_chat_interpret_prompts). Per profile-iq-pipeline-rules.mdc
+    section 2 ("reasoning > floors"), prefer the model's understanding
+    of the ask over a brittle delimiter split.
+
+    Deliberately CONSERVATIVE: fires only on strong single-audience
+    signals so genuine bare batches ("Nike, Adidas, Puma"; "run profiles
+    on VIZIO, Samsung, LG owners") are left untouched and still fan out.
+
+    Defect precedent (2026-09-02): "Run a Profile IQ on anyone who
+    watched Blair Witch or The Blair Witch Project and watched any one of
+    the following Paranormal Activity, V/H/S, The Conjuring, Insidious,
+    ..." was comma/and/or split into ~17 pseudo-subjects and run as a
+    garbage batch. It is ONE build.
+    """
+    import re as _re
+    t = (text or '').strip()
+    if len(t) < 12:
+        return False
+
+    # EXPLICIT COMBINED ASK (2026-09-10, Jenna). "one combined profile
+    # named X covering all of the following: A; B; C" is one build by
+    # definition. Checked first so the combine gate's rewritten ask, and
+    # anyone who types the same intent directly, never reaches the batch
+    # splitters that would shatter it back into one profile per title.
+    if _is_explicit_combined_request(t):
+        return True
+
+    # S1: audience relative clause - "<audience noun/pronoun> who ...".
+    # A batch of independent subjects never says "anyone who watched X"
+    # or "people who bought Y". This alone resolves the Blair Witch ask.
+    if _re.search(
+        r'\b(?:any\s?(?:one|body)|every\s?(?:one|body)|some\s?(?:one|body)'
+        r'|no\s?(?:one|body)|people|persons?|folks?|individuals?|humans?'
+        r'|users?|viewers?|watchers?|streamers?|listeners?|readers?'
+        r'|gamers?|players?|fans?|customers?|consumers?|shoppers?'
+        r'|buyers?|subscribers?|members?|households?|audiences?'
+        r'|those|anybody|everybody|somebody)\s+who\b',
+            t, _re.IGNORECASE):
+        return True
+
+    # Behavioral context: a consumption verb OR an audience-consumption
+    # noun. Used to qualify the enumerated-criteria signal below so a
+    # bare build list with no behavior ("profiles on any of the
+    # following: Nike, Adidas") is NOT swallowed.
+    behavioral_ctx = bool(_re.search(
+        r'\b(?:'
+        r'watch(?:ed|es|ing)?|view(?:ed|s|ing)?|stream(?:ed|s|ing)?'
+        r'|saw|seen|binge(?:d|s|ing)?|bought|buy|buys|buying'
+        r'|purchas(?:e|ed|es|ing)|shop(?:ped|s|ping)?'
+        r'|subscrib(?:e|ed|es|ing)|play(?:ed|s|ing)?'
+        r'|listen(?:ed|s|ing)?|visit(?:ed|s|ing)?|download(?:ed|s|ing)?'
+        r'|attend(?:ed|s|ing)?|follow(?:ed|s|ing)?|rent(?:ed|s|ing)?'
+        r'|clicked|searched|engag(?:e|ed|es|ing)'
+        # audience-consumption nouns (people already scoped by behavior)
+        r'|viewers?|watchers?|streamers?|buyers?|shoppers?|subscribers?'
+        r'|listeners?|readers?|gamers?|players?'
+        r')\b',
+        t, _re.IGNORECASE))
+
+    # S2: enumerated-criteria phrase in a behavioral context. "Any one
+    # of the following A, B, C" / "at least one of" / "one or more of" /
+    # "one of the following" is a CRITERIA list (satisfy any one of
+    # them), not a list of separate subjects. Deliberately EXCLUDES
+    # "each of the following" / "all of the following" - those ARE
+    # genuine batch phrasings and must keep fanning out.
+    if behavioral_ctx and _re.search(
+        r'\b(?:any\s+one\s+of|at\s+least\s+one\s+of|one\s+or\s+more\s+of'
+        r'|one\s+of\s+the\s+following)\b',
+            t, _re.IGNORECASE):
+        return True
+
+    return False
+
+
 def _detect_batch_subjects(user_text: str) -> list[str]:
     """Return a list of subject strings if the prompt is a batch request,
     otherwise []. See module-header for detection rules.
@@ -43854,6 +45490,16 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
     import re as _re
     text = (user_text or '').strip()
     if len(text) < 10:
+        return []
+
+    # SINGLE COMPOUND AUDIENCE GUARD (2026-09-02, Blair Witch defect):
+    # a single behavioral audience whose definition contains a comma
+    # list ("watched any one of the following A, B, C") or boolean
+    # criteria ("anyone who watched X and Y") is ONE build, not a batch.
+    # Bail so the prompt falls through to the single interpret, which
+    # already reads stacked criteria as one persona. See
+    # _is_single_compound_audience.
+    if _is_single_compound_audience(text):
         return []
 
     # Trigger phrases (case-insensitive). Ordered specific first.
@@ -43980,6 +45626,14 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             # Strip bulleted prefix "- ", "* ", "• ", "· "
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            # Trailing 'Date range: X to Y' clause (2026-09-10, Jenna:
+            # "these dates are not what the user entered either"). When
+            # the reader answers the window question with a custom
+            # range, the chat folds it onto the end of the ask, which
+            # glues it to the LAST line of a list. It is shared
+            # context, never part of anyone's name - the window itself
+            # rides _bind_shared_explicit_window onto every element.
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
                 continue
@@ -43987,6 +45641,14 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
                 continue
             if _re.match(r'^(for|with|during|over|since|in|by)\s',
                           s, _re.IGNORECASE):
+                continue
+            # REQUEST-LINE GUARD (2026-09-10). The trigger path already
+            # strips the matched trigger prefix, so a preamble rarely
+            # survives to here - but a SECOND request line further down
+            # the message would, and the cost of one leaking through is
+            # a shipped phantom profile. Cheap, so check every line.
+            if _is_request_instruction_line(ln) or \
+                    _is_request_instruction_line(s):
                 continue
             subjects.append(s)
 
@@ -44003,6 +45665,7 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', s)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
             s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
+            s = _split_trailing_date_range(s)[0] or s
             s = s.strip().strip('.').strip()
             if not s or len(s) > 120:
                 continue
@@ -44666,6 +46329,38 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "MS NOW in late 2025; a request for 'MSNBC' means MS NOW "
         "(existing profile 'MS NOW'). Echo the resolution in "
         "`identity_note` ('resolved to MS NOW, formerly MSNBC').\n"
+        "  * URLS AND DOMAINS (HARD RULE - Jenna 2026-09-08): a URL, "
+        "bare domain, or website is a FULLY VALID way to name the "
+        "subject. When the request is (or contains) something like "
+        "`www.heb.com`, `heb.com`, `https://www.heb.com/store-"
+        "locator/`, or the domain rides in the REQUESTER IDENTITY "
+        "CONTEXT block below as `domain: heb.com`, resolve the "
+        "domain to the underlying real-world entity and use the "
+        "CANONICAL BRAND NAME as `subject` and `resolved_title` - "
+        "NEVER the raw URL. Examples:\n"
+        "      `heb.com` or `www.heb.com`         -> HEB\n"
+        "      `wf.com`                           -> Wells Fargo\n"
+        "      `homedepot.com`                    -> The Home Depot\n"
+        "      `bofa.com`                         -> Bank of America\n"
+        "      `microsoft.com`                    -> Microsoft\n"
+        "      `walmart.com` or `www.walmart.com` -> Walmart\n"
+        "      `target.com`                       -> Target\n"
+        "      `tesla.com`                        -> Tesla\n"
+        "      `netflix.com`                      -> Netflix\n"
+        "      `nike.com`                         -> Nike\n"
+        "    Use the brand's own trade name as it commonly appears "
+        "in press and product packaging (spaces, punctuation, and "
+        "capitalization the same way the brand writes itself). Fold "
+        "the domain into `identity_note` as ONE line "
+        "('resolved from heb.com'). Set `identity_confident` = true "
+        "when you're confident which brand owns the domain and "
+        "false only when the domain is genuinely obscure or maps to "
+        "multiple candidates - in that unresolvable case keep the "
+        "user's own words, list options in `identity_versions`, and "
+        "let the flow ask. NEVER refuse the request or emit "
+        "`subject_verified` = false just because the input arrived "
+        "as a URL - a URL is a normal, expected way to identify a "
+        "brand and is treated as first-class subject input.\n"
         "  * RATIONALE DISCIPLINE: every free-text field (persona_notes, "
         "decision_reason, assumptions, category_note, cut labels and "
         "rationales) must be written from the RESOLVED identity only. "
@@ -44851,6 +46546,19 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Cohort / audience segment (churners, switchers, consumer of X): "
         "3,000 - 200,000 depending on TAM (Spectrum churners ~30-80K; "
         "Amazon Prime members ~5-7M).\n"
+        "  * Broad demographic + behavioral persona (a whole-population "
+        "slice defined by an age band + an activity / behavior level + "
+        "a gender or ethnicity skew, with NO named brand / person / "
+        "title - e.g. '18-44 heavy social users, female-skewed'): SIZE "
+        "TO US-POPULATION INCIDENCE, not the niche fandom bands above. "
+        "The anchor is the US population in the stated age band x the "
+        "behavioral incidence x the gender / ethnicity share (all "
+        "countable). These land in the HUNDREDS OF THOUSANDS to LOW "
+        "MILLIONS of panelists. Worked example: ~116M US adults 18-44 "
+        "x ~0.55 heavy-social incidence x ~0.70 female ~= 44.7M "
+        "projected -> subject_raw_tu ~= 1,355,000. Never size such a "
+        "persona like a niche fandom (a few thousand); that under-sizes "
+        "it by 10-100x.\n"
         "  * Avid cohort: 20-40% of TU sample.\n"
         "  * HARD CEILING: subject_raw_tu must be <= 9,500,000 "
         "(the panel is 10M; leave headroom).\n"
@@ -44959,6 +46667,37 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "follower_ceiling and follower_platforms as null - the cap "
         "does not apply.\n\n"
 
+        "PLATFORM SCOPE (2026-09-04 - identifies the platform the "
+        "audience is scoped to; part of the universe definition):\n"
+        "  * When the user names a specific platform for the audience "
+        "('YouTube followers of X', 'TikTok audience for Y', 'X's "
+        "Instagram subscribers') or supplies youtube.com/@channel, "
+        "tiktok.com/@handle, instagram.com/, or similar per-platform "
+        "channel URLs, the platform is PART of the universe definition. "
+        "Set `platform_scope` to a sorted list of canonical platform "
+        "keys in lowercase - one of: 'youtube', 'tiktok', 'instagram', "
+        "'facebook', 'x', 'linkedin', 'twitch', 'snapchat', 'threads', "
+        "'substack', 'patreon', 'kick', 'rumble', 'pinterest', "
+        "'bluesky'. Multiple platforms in ONE ask ('TikTok and YouTube "
+        "followers of X') = list of platforms, e.g. ['tiktok', "
+        "'youtube'].\n"
+        "  * An 'overall followers' / 'aggregate' / 'combined' ask, or "
+        "any request WITHOUT an explicit platform pin, has "
+        "`platform_scope: null`. That's the aggregate cross-platform "
+        "universe.\n"
+        "  * Two profiles describe the SAME universe only when their "
+        "`platform_scope` values match exactly. A YouTube-scoped ask "
+        "NEVER matches an aggregate 'X Followers' file, and vice "
+        "versa. Prefer new_build over reusing an aggregate file when "
+        "the ask is platform-scoped.\n"
+        "  * A universe-defining behavioral qualifier ('Vizio TV "
+        "Owners', 'Amazon Prime Members', 'EST Buyers', 'TVOD Renters', "
+        "'ISP Switchers') is NOT a platform_scope. Those define who is "
+        "in the panel; keep `platform_scope: null` for them.\n"
+        "  * When surfacing to the user (draft brief, confirmation "
+        "copy), phrase as 'YouTube followers' or 'TikTok audience', "
+        "NOT 'platform_scope = [\"youtube\"]'.\n\n"
+
         "CANONICAL DEMOGRAPHIC BUCKETS (use exactly these labels):\n"
         "  GENDER: MALE, FEMALE, NON-BINARY, TRANS FEMALE, TRANS MALE\n"
         "  AGE: 17 AND UNDER, 18-24, 25-34, 35-44, 45-54, 55-64, 65 OR OLDER\n"
@@ -44988,6 +46727,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Every bucket in every canonical category MUST appear in demos and "
         "the sum MUST be 100.0 (four decimals fine).\n\n"
 
+        "GENDER SKEW VOCABULARY (HARD MAPPING - Jenna 2026-09-02): when "
+        "a request uses a gender-skew word, translate it to a concrete "
+        "FEMALE share in tu_demos / avid_demos GENDER (MALE takes most "
+        "of the remainder; keep small NON-BINARY / TRANS buckets so the "
+        "category still sums to 100):\n"
+        "  * 'low skew' / 'slight' / 'fairly balanced': FEMALE under 50 "
+        "(pick ~40-49).\n"
+        "  * 'mid skew' / 'skews female' / 'female-leaning': FEMALE 60 "
+        "or more (default ~60-65).\n"
+        "  * 'mid-to-heavy' female: FEMALE 60-80 (default ~70).\n"
+        "  * 'heavy' / 'heavily female' / 'strongly female': FEMALE 75 "
+        "or more (~75-85).\n"
+        "The mirror words map to a MALE skew (swap FEMALE for MALE). "
+        "Pick a specific messy value inside the band (e.g. 71.4, never "
+        "a flat 70), and NEVER emit a value that contradicts the stated "
+        "direction - a 'mid-to-heavy female' persona must land FEMALE "
+        "between 60 and 80, never near 50/50.\n\n"
+
         # ── Subject naming + embedded-cut decomposition (2026-08-20,
         # Jenna directive after Go-GURT shipped as 'Go GURT Consumers
         # 18 24 - Total Universe' with AGE pinned to 18-24): the TU is
@@ -45000,6 +46757,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Universe deliverable is titled with exactly this name - "
         "never bake demographic qualifiers or generic audience nouns "
         "into it.\n"
+        "  * `subject` is NEVER the user's REQUEST. The words they "
+        "used to ask for the work are not an audience. If the ask is "
+        "'I need a new profile for the listeners on Audible for: "
+        "<titles>', the subject is the titles' audience - NEVER 'I "
+        "Need a New Profile for the Listeners on Audible For:'. Any "
+        "candidate subject that reads as an instruction, ends with a "
+        "colon, or contains a request verb next to a deliverable noun "
+        "('need a profile', 'build me an audience', 'pull a report', "
+        "'can you run') is the ask, not the entity. Re-read the "
+        "request and name the actual entity instead.\n"
+        "  * `subject` NEVER carries a date-range instruction. 'From "
+        "the Desk of Lady Miss Audiobook. Date Range: September 10 "
+        "2025 to September 9 2026' has subject 'From the Desk of Lady "
+        "Miss Audiobook' and the window goes in `date_range` with "
+        "`date_range_explicit` true. The same applies to any 'Dates:', "
+        "'Window:', 'Timeframe:' or 'Period:' clause.\n"
         "  * If the request embeds a demographic qualifier - an age "
         "band ('Go-GURT consumers (18-24)'), a gender ('female Nike "
         "shoppers'), a generation ('Gen Z Chipotle eaters'), or a "
@@ -45043,6 +46816,56 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "the BASE audiences differ ('a Nike profile and a Adidas "
         "profile').\n\n"
 
+        "DEMOGRAPHIC + BEHAVIORAL PERSONA = ONE build (HARD RULE, Jenna "
+        "2026-09-02, after a request for a SINGLE audience - 'age 18-44, "
+        "high social-platform activity, mid-to-heavy female skew' - was "
+        "wrongly split into two profiles):\n"
+        "  * When the ENTIRE ask is ONE audience described by STACKED "
+        "criteria - an age band AND/OR an activity / behavior level "
+        "AND/OR a gender or ethnicity skew - with NO underlying named "
+        "brand / person / title, it is exactly ONE new_build persona. "
+        "Return a SINGLE JSON object - NEVER an array, NEVER two "
+        "drafts. The criteria are ANDed traits of one group, not a "
+        "list of separate audiences. 'Age 18-44' + 'heavy social use' "
+        "+ 'mid-to-heavy female' is ONE persona, not two or three.\n"
+        "  * Bake the criteria straight into `tu_demos` (and "
+        "`avid_demos`): concentrate AGE in the stated band, set GENDER "
+        "to the stated skew (see GENDER SKEW VOCABULARY), tilt any "
+        "stated ethnicity. HERE the demographic shape IS the universe "
+        "definition. This is the OPPOSITE of SUBJECT NAMING + EMBEDDED "
+        "CUTS: that rule keeps demos full ONLY because a named entity "
+        "owns the universe and the qualifier rides as a downstream "
+        "cut. A bare persona has no such entity, so ITS demos carry "
+        "the criteria.\n"
+        "  * Do NOT emit addon_cuts for the defining criteria, and do "
+        "NOT build a 'full universe' TU that ignores them - the "
+        "criteria ARE the audience.\n"
+        "  * `subject` = a short human label for the persona (e.g. "
+        "'Heavy Social Users 18-44 Female-Skewed'); `audience_type` "
+        "stays 'general'; size per the 'Broad demographic + behavioral "
+        "persona' band in SAMPLE-SIZE HEURISTICS (hundreds of "
+        "thousands to low millions, NOT a niche fandom count).\n"
+        "  * DEFAULT TO NO ADD-ON CUTS. A simple single-persona ask "
+        "returns just that ONE profile (its size, credits, build time) "
+        "with `addon_cuts` = []. Do NOT auto-propose a ladder of "
+        "derived cuts (an age ladder, a gender cut, a market cut) the "
+        "user never asked for. Only populate `addon_cuts` when the user "
+        "EXPLICITLY asks for cuts, breakdowns, or segments ('break it "
+        "out by age', 'also give me the female cut'). Otherwise leave "
+        "`addon_cuts` empty; at most add a single optional line in "
+        "`assumptions` that cuts can be added later.\n"
+        "  * NEVER propose a DEGENERATE cut. Every cut must be a "
+        "STRICT, meaningful subset of the parent: an age cut spanning "
+        "the persona's whole age band ('Ages 18-44' on an 18-44 "
+        "universe) IS the whole universe and is pointless; a 'Female "
+        "only' cut on an audience already defined with a female skew is "
+        "redundant. Emit neither.\n"
+        "  * A generic behavioral / demographic persona is a new_build "
+        "unless a candidate genuinely shares its subject AND universe "
+        "(see SUBJECT-IDENTITY COMPATIBILITY). NEVER link it to an "
+        "unrelated existing profile as a 'cut of data we already have' "
+        "to shave credits; when unsure, prefer new_build.\n\n"
+
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
         "  \"subject\": \"Human-readable subject name\",\n"
@@ -45070,6 +46893,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "anchor x engaged_share / 32.99>,\n"
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
+        "  \"platform_scope\": [\"youtube\"] or [\"tiktok\", \"youtube\"] or null // see PLATFORM SCOPE. null = aggregate; sorted list of canonical platform keys = platform-scoped universe. Different platform_scope = different universe from any otherwise-matching candidate.,\n"
         "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
         "  \"resolved_title\": \"exact entity this draft is about (see SUBJECT IDENTITY RESOLUTION)\",\n"
         "  \"medium\": \"series|movie|podcast|game|book|album|franchise|person|brand|platform|cohort\" or null,\n"
@@ -45117,7 +46941,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
         "  \"existing_match_display_name\": \"<display name of the match>\",\n"
         "  \"existing_match_days_old\": <int or null>,\n"
-        "  \"derive_type\": \"<if derive_cut: avid|casual|avid_F|avid_M|casual_F|casual_M|gender_F|gender_M|generation_millennials|generation_gen_z|generation_gen_x|generation_boomer|other>\",\n"
+        "  \"derive_type\": \"<if derive_cut: avid|casual|avid_F|avid_M|casual_F|casual_M|gender_F|gender_M|generation_millennials|generation_gen_z|generation_gen_x|generation_boomer|other. USE 'other' for behavioral / platform / brand user cuts ('TikTok users', 'Instagram viewers', 'Netflix subscribers', 'Costco members'). AVID is for pure intensity ('superfans', 'heavy users' with no platform/brand qualifier), NEVER for platform-user cohorts. See rule 15.>\",\n"
         "  \"cut_label\": \"<if derive_cut/cut_needs_parent: the cohort being cut, e.g. 'EST Buyers', 'TVOD Renters', 'Marvel TVOD Renters -> EST Buyers'. The deliverable is named '{parent} - {cut_label}'.>\",\n"
         "  \"refresh_row_hypothesis\": \"<if time_shifted_refresh: 3-6 sentences on what would have realistically changed for each behavioral surface (brands, talent, platforms, retail, QSR, etc.) between the parent's last_modified date and today. Cite specific events, tour dates, product launches, controversies, macro trends. NOT a generic 'things change over time' - be concrete.>\",\n"
         "  \"clickstream_signals\": [\n"
@@ -45341,12 +47165,19 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  9. COMPARISONS: 'compare X fans vs Y fans' is one profile "
         "PER side, never one blended build. The dashboard asks; on "
         "one-shot surfaces it refuses with guidance.\n"
-        "  10. INTENSITY VOCABULARY: 'binge-watchers', 'superfans', "
-        "'die-hard', 'heavy users', 'top 10% most engaged', 'watch at "
-        "least 3x a week' map to the AVID tier (run_avid=true, or "
-        "derive_type='avid' on cuts); 'casual fans' / 'light users' "
-        "map to the Total Universe. Fill `intensity_note` with the "
-        "mapping in plain words.\n"
+        "  10. INTENSITY VOCABULARY: unqualified intensity terms - "
+        "'binge-watchers', 'superfans', 'die-hard', 'heavy users' "
+        "(with no platform/brand qualifier), 'top 10% most engaged', "
+        "'watch at least 3x a week' - map to the AVID tier "
+        "(run_avid=true, or derive_type='avid' on cuts); 'casual "
+        "fans' / 'light users' map to the Total Universe. A named "
+        "platform / brand qualifier BEATS the intensity read: "
+        "'TikTok users', 'Instagram viewers', 'Costco members', "
+        "'Netflix subscribers', 'YouTube audience' are BEHAVIORAL "
+        "cohorts (see rule 15), NEVER derive_type='avid' - the word "
+        "'users' after a platform name is a NOUN, not an intensity "
+        "modifier. Fill `intensity_note` with the mapping in plain "
+        "words.\n"
         "  11. USER-SUPPLIED NUMBERS: 'we have 2 million subscribers' "
         "- put the stated count in `user_supplied_anchor`. When "
         "plausible, size to it (universe_anchor = their number, "
@@ -45372,7 +47203,27 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "scope in `scope_note` and `assumptions`; the dashboard asks "
         "'whole service or persona'. Universe-defining device "
         "subjects ('Vizio TV Owners') stay whole per SUBJECT "
-        "NAMING.\n\n"
+        "NAMING.\n"
+        "  15. PLATFORM / BRAND USER CUTS: an ask phrased as 'cut by "
+        "<X> users', 'the <X> audience', '<X> viewers', '<X> "
+        "customers', '<X> subscribers', '<X> members', '<X> buyers', "
+        "'<X> followers', where <X> is a specific named platform or "
+        "brand (Instagram, TikTok, YouTube, Netflix, Costco, Vizio, "
+        "Amazon Prime, Spotify, ...) is a BEHAVIORAL cut, not an "
+        "intensity cut. Set derive_type='other' (the catch-all "
+        "behavioral type - the worker routes 'other' to the "
+        "behavioral cut engine, which pins <X> to a very high BP in "
+        "the derived audience by construction). NEVER set "
+        "derive_type='avid', 'casual', or any intensity or generation "
+        "value for a platform/brand user cut. Fill cut_label with "
+        "the platform/brand plus the appropriate noun (e.g. 'TikTok "
+        "Users', 'Netflix Subscribers', 'Instagram Users'). Fill "
+        "cohort_description with a plain-English description of who "
+        "the cohort is. Combined case: 'heavy TikTok users' - a "
+        "named platform WITH an intensity modifier - is STILL "
+        "behavioral (derive_type='other'), with cut_label reflecting "
+        "the intensity (e.g. 'Heavy TikTok Users'); the platform "
+        "pin wins over the intensity read.\n\n"
 
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
@@ -45476,6 +47327,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "mean the plain brand universe). The closest existing profile "
         "may be mentioned in decision_reason by display name only.\n\n"
 
+        "SUBJECT-IDENTITY COMPATIBILITY (HARD RULE - 2026-09-02, the "
+        "'cut of data we already have' defect): existing_match, "
+        "time_shifted_refresh, and derive_cut ALL require that the "
+        "candidate genuinely shares the requested SUBJECT identity, not "
+        "just an overlapping filler word. A broad behavioral / "
+        "demographic persona (e.g. heavy social media users 18-44 with "
+        "a female skew) is NOT a cut of an unrelated profile (e.g. a "
+        "contractor-consultation audience) - they share no real "
+        "subject. When no candidate shares the actual subject and "
+        "universe, the decision is new_build, full stop. NEVER "
+        "fabricate a parent link, a derive_cut, or an existing_match "
+        "just to price it at cut credits instead of a full build. When "
+        "unsure whether a candidate is truly the same subject, choose "
+        "new_build. This sits alongside UNIVERSE-QUALIFIER "
+        "COMPATIBILITY: that rule guards scope (buyers vs EST buyers), "
+        "this rule guards identity (subject A vs unrelated subject "
+        "B).\n\n"
+
         "SUBJECT VERIFICATION (HARD RULE - 2026-08-25): before "
         "anything else, attest whether the subject resolves to a "
         "real, verifiable entity - a brand, person, title, "
@@ -45573,6 +47442,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "The list may be sloppy - unclosed parentheses, trailing "
         "clauses, an example tacked on the end ('like Amazon Prime "
         "Video - EST Buyers') - parse out the real items anyway.\n"
+        "  7-ONE-PERSONA-VS-BATCH (HARD RULE - 2026-09-02): a persona "
+        "audience defined by a LIST OF EXAMPLE brands / tools / topics "
+        "is ONE profile, not several. 'Parents of kids 14-17 who are "
+        "active on social AND engage with digital safety content like "
+        "Common Sense Media, Life360, family location / safety tools, "
+        "etc.' is a SINGLE persona: the listed brands / tools are "
+        "QUALIFIERS / screening terms describing who is in the audience "
+        "- they populate that one profile's BRAND INPUT scrape terms, "
+        "they are NOT separate subjects. 'etc.' is NEVER a subject. "
+        "Return ONE JSON object here. Return an ARRAY only for a "
+        "GENUINE batch of distinct standalone subjects ('run profiles "
+        "on Nike, Adidas, and Puma' - three real, separate brands), up "
+        "to the batch cap. If the items are introduced as examples of a "
+        "behavior ('like ...', 'such as ...', 'things like ...', a "
+        "trailing 'etc.'), they are qualifiers for one persona, never a "
+        "batch.\n"
         "  7a. ARRAY ELEMENTS RUN THE FULL DECISION LOGIC EACH: check "
         "CANDIDATE PROFILES for every element independently. If the "
         "user asks for a cohort of each item as 'a cut of X if it "
@@ -45969,6 +47854,61 @@ def _bind_relative_window(draft, user_text, chat_history=None,
             if r_label else r_phrase
         _route_window_fields(draft, decision, r_start, r_end,
                              draft['date_window_label'], r_label)
+        return True
+    except Exception:
+        return False
+
+
+def _bind_shared_explicit_window(draft, user_text, decision=None):
+    """Bind an explicit 'Date range: X to Y' clause that applies to the
+    WHOLE request onto this draft.
+
+    Jenna 2026-09-10, on the Audible batch: "these dates are not what
+    the user entered either". The reader answered the window question
+    with "september 10 2025 to September 9 2026" and all five queued
+    profiles still went out on the standing default window.
+
+    Why: when the reader types a custom window instead of accepting the
+    default, the chat folds the answer onto the end of the original ask
+    as ". Date range: ...". On a batch that trailing clause is glued to
+    the LAST line, so the list splitter hands it to the last subject as
+    part of its name. That one subject could recover the window from
+    its own name (the _split_trailing_date_range guard in
+    _spec_from_draft); every other subject silently kept the default,
+    and the polluted name shipped as the subject.
+
+    A trailing clause on the whole message is shared context, so bind
+    it to every element. Only fires when the draft has no explicit
+    window of its own, so a confident event window, a relative phrase
+    ('trailing 6 months', handled by _bind_relative_window), or a
+    per-subject range always wins. Absolute dates only: an unparseable
+    clause yields nothing and the default stands.
+    """
+    try:
+        if draft.get('date_range_explicit'):
+            return False
+        _, rng = _split_trailing_date_range(str(user_text or ''))
+        if not rng or ' TO ' not in rng:
+            return False
+        start, end = [p.strip() for p in rng.split(' TO ', 1)]
+        if not start or not end:
+            return False
+        cur = draft.get('date_range') or {}
+        if (cur.get('start'), cur.get('end')) != (start, end):
+            try:
+                print(f"[shared-window] "
+                      f"{draft.get('subject') or draft.get('name')!r}: "
+                      f"request states {start} to {end} but draft window "
+                      f"was {cur.get('start')} to {cur.get('end')}; "
+                      f"binding to the stated window")
+            except Exception:
+                pass
+        draft['date_range'] = {'start': start, 'end': end}
+        draft['date_range_explicit'] = True
+        label = _ew_format_label(start, end)
+        draft['date_window_label'] = label or rng
+        _route_window_fields(draft, decision, start, end,
+                             draft['date_window_label'], label)
         return True
     except Exception:
         return False
@@ -46788,6 +48728,70 @@ def _sg_intersection_pins(hay):
     return pins, parts
 
 
+# 2026-09-08 (Jenna): the intersection guard misfired on "Cut this
+# Heavy Social Users Who Skew Female Profile by TikTok users" - the
+# haystack carried "Female" (from the parent profile's name) and "gen
+# z" (from an earlier user turn), which stacked to 2 demographic pins
+# and triggered the useless "combined or separate" clarify. But the
+# CURRENT ask is a single-brand behavioral cut ("by TikTok users"),
+# not a stacked demographic ambiguity. Two suppression rules on the
+# guard:
+#   1. First-class behavioral-cut phrasing in the CURRENT turn ("cut
+#      ... by <cohort> users/customers/subs/...", "cut ... who use/
+#      watch/stream/listen/rent/read/subscribe ...") means the user
+#      has already declared the cut dimension. Do not ask a stacked-
+#      qualifier clarify.
+#   2. If the CURRENT turn has fewer than 2 demographic pins on its
+#      own, the ambiguity lives in history (earlier turn), not in
+#      this ask. Don't re-ask a new clarify - the earlier turn either
+#      was already answered or is unrelated context.
+# Both suppressions skip only the NEW-clarify path; a follow-up that
+# says "combined" or "separate" still routes through the compound-
+# cut / separate-cuts branches below.
+_SG_IX_BEHAVIORAL_COHORT_NOUN_RE = re.compile(
+    r"\b(?:users?|customers?|subscribers?|subs|members?|fans?|"
+    r"shoppers?|viewers?|listeners?|players?|buyers?|watchers?|"
+    r"renters?|owners?|switchers?|streamers?|readers?|attendees?|"
+    r"consumers?|purchasers?|enthusiasts?|drinkers?|drivers?|"
+    r"gamers?|travelers?|voters?)\b",
+    re.IGNORECASE,
+)
+_SG_IX_BEHAVIORAL_VERB_RE = re.compile(
+    r"\bwho\s+(?:use|uses|used|watch|watches|watched|stream|streams|"
+    r"streamed|listen|listens|listened|shop|shops|shopped|buy|buys|"
+    r"bought|rent|rents|rented|read|reads|drive|drives|drove|own|"
+    r"owns|subscribe|subscribes|subscribed|attend|attends|attended)"
+    r"\b",
+    re.IGNORECASE,
+)
+_SG_IX_CUT_PREFIX_RE = re.compile(
+    r"\b(?:cut|filter|slice|carve|derive|split)\b",
+    re.IGNORECASE,
+)
+
+
+def _sg_is_behavioral_cut_ask(cur):
+    """True when the CURRENT turn is a first-class behavioral-cut ask
+    that has already declared its cut dimension (a brand, platform, or
+    behavior). Guards against parent-name descriptors ('Skew Female')
+    or historical mentions re-triggering the stacked-demographic
+    clarify."""
+    s = str(cur or '')
+    if not s or not _SG_IX_CUT_PREFIX_RE.search(s):
+        return False
+    if _SG_IX_BEHAVIORAL_VERB_RE.search(s):
+        return True
+    # "cut this X by/to <cohort> users" - noun-form cohort filter.
+    if not _SG_IX_BEHAVIORAL_COHORT_NOUN_RE.search(s):
+        return False
+    # Confirm the noun-form is paired with a "by/to/on <cohort>"
+    # clause so we're not catching a lone "cut for owners" prefix.
+    return bool(re.search(
+        r"\b(?:by|to|on|down\s+to|only|just)\s+(?:just\s+|only\s+"
+        r"|the\s+)?[a-z0-9]",
+        s, re.IGNORECASE))
+
+
 def _sg_guard_intersection(draft, text, history, allow_ask):
     hay = _sg_haystack(text, history)
     pins, parts = _sg_intersection_pins(hay)
@@ -46799,6 +48803,14 @@ def _sg_guard_intersection(draft, text, history, allow_ask):
         re.IGNORECASE))
     said_separate = bool(re.search(r"\bseparate\b", cur,
                                    re.IGNORECASE))
+    # 2026-09-08 behavioral-cut suppression (see notes above). Applies
+    # only when the user is NOT already answering an earlier clarify.
+    if not (said_combined or said_separate):
+        if _sg_is_behavioral_cut_ask(cur):
+            return None
+        cur_pins, _ = _sg_intersection_pins(cur)
+        if len(cur_pins) < 2:
+            return None
     if said_separate:
         draft['intersection_mode'] = 'separate'
         _append_identity_echo(
@@ -47672,14 +49684,26 @@ def _jitter_draft_est_sample(spec_draft):
 
 
 def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
-                                       history: list) -> dict:
+                                       history: list,
+                                       attrib_extras: dict = None) -> dict:
     """Run one Claude interpret call for a single subject inside a batch.
     Returns a dict with `success` + either `spec_draft`+`candidates` or
     `error`. Never raises - errors bubble up as `success: false`.
+
+    `attrib_extras` (2026-09-04 fix): the calling batch is dispatched
+    via a ThreadPoolExecutor whose worker threads have no Flask
+    request context, so _pm_attrib_extras() inside a worker returns
+    {} and every interpret record ships unattributed. The batch
+    captures attribution ONCE on the request thread and passes it
+    here; if None, falls back to the (usually-empty) request-context
+    lookup so behavior is unchanged when a caller invokes this
+    directly without pre-capturing.
     """
     per_prompt = subject.strip()
     if shared_context:
         per_prompt = f"{per_prompt} {shared_context}".strip()
+    _attrib = attrib_extras if attrib_extras is not None \
+        else (_pm_attrib_extras() or None)
     try:
         try:
             from iq_rankers import MASTER_CATEGORIES
@@ -47696,7 +49720,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
-            usage_tag=('interpret', 'chatbot'),
+            usage_tag=('interpret', 'chatbot', _attrib),
         )
         if not result.get('success'):
             return {
@@ -47831,6 +49855,9 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # Multi-cohort recovery: age cohorts named in the raw ask that
         # the interpreter dropped ride as additional cuts.
         _augment_multi_cohort_cuts(spec_draft, per_prompt)
+        # Drop degenerate cuts (whole-universe age band / skew-redundant
+        # gender) so a cut is always a strict, meaningful subset.
+        _drop_degenerate_addon_cuts(spec_draft)
         # Cuts-only promoter: existing TU parent -> derive the cuts
         # off it instead of rebuilding (3 x cuts, no base).
         try:
@@ -47939,6 +49966,11 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
                 spec_draft['event_window_query'] = _ew['query']
         if _ev_state != 'confident':
             _bind_relative_window(spec_draft, prompt_text, decision=_dn)
+            # Shared 'Date range: X to Y' clause (2026-09-10). On a
+            # batch the clause is glued to the last line, so without
+            # this only that one subject got the stated window.
+            _bind_shared_explicit_window(spec_draft, prompt_text,
+                                         decision=_dn)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
         # Semantic bind-or-ask guards (2026-08-25): array elements are
@@ -47976,6 +50008,7 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         _decompose_embedded_subject_cuts(spec_draft, prompt_text)
         if prompt_text:
             _augment_multi_cohort_cuts(spec_draft, prompt_text)
+        _drop_degenerate_addon_cuts(spec_draft)
         if catalog is not None:
             try:
                 _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
@@ -48145,10 +50178,13 @@ def _union_shortlist_for_multi(user_text: str, catalog) -> list:
 def _synth_chat_interpret_batch(user_text: str, subjects: list,
                                   history: list,
                                   shared_context_override: str = None):
-    """Fan-out interpret across a list of subjects. Runs up to 5 Claude
+    """Fan-out interpret across a list of subjects. Runs up to 10 Claude
     calls concurrently (well under our Anthropic key pool ceiling) and
     stitches the results into a single response with a `batch: true`
-    flag so the frontend can render N approval cards.
+    flag so the frontend can render N approval cards. Concurrency was
+    raised from 5 to 10 on 2026-09-02 alongside the SYNTH_CHAT_BATCH_MAX
+    100 cap so a large batch drains fast enough to return before the
+    HTTP request times out.
 
     `shared_context_override` (optional): when the caller has already
     computed the right per-subject context (e.g. the Cartesian
@@ -48164,11 +50200,21 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     print(f"[synth-chat interpret batch] subjects={subjects} "
           f"shared_context={shared_context!r}")
 
+    # Capture per-user attribution NOW while we are on the Flask
+    # request thread. The ThreadPoolExecutor workers below run in
+    # separate threads with no request context, so a per-worker
+    # _pm_attrib_extras() call returns {} and every interpret record
+    # ships unattributed. Pre-capturing here and passing through to
+    # each worker keeps attribution intact (2026-09-04 fix; matches
+    # the deck-job pattern that stashes attribution at kickoff).
+    _batch_attrib = _pm_attrib_extras() or None
+
     results_by_index: dict = {}
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=10) as pool:
         futs = {
             pool.submit(_synth_chat_interpret_one_subject,
-                         subj, shared_context, history): idx
+                         subj, shared_context, history,
+                         _batch_attrib): idx
             for idx, subj in enumerate(subjects)
         }
         for fut in as_completed(futs):
@@ -48229,7 +50275,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                 max_tokens=32000, temperature=0.4,
                 model=_SYNTH_CHAT_INTERPRET_MODEL,
                 salvage_arrays=True,
-                usage_tag=('interpret', 'chatbot'))
+                usage_tag=('interpret', 'chatbot', _batch_attrib))
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -49478,6 +51524,88 @@ def _augment_multi_cohort_cuts(draft, user_text):
         print(f'[multi-cohort-augment] non-fatal: {_e}')
 
 
+def _drop_degenerate_addon_cuts(draft):
+    """Remove add-on cuts that are not a strict, meaningful subset of
+    the parent universe (Jenna 2026-09-02):
+      - an AGE cut whose buckets cover EVERY populated AGE bucket of the
+        universe is the whole universe, not a cut ('Ages 18-44' on an
+        18-44 persona).
+      - a GENDER cut matching a gender the universe is already defined
+        to skew toward (that bucket >= 60 in tu_demos) is redundant with
+        the persona's own shape ('Female only' on a female-skewed
+        persona).
+    A cut must be a strict subset of the parent. Reprices
+    estimated_credits = base + 3 x remaining cuts. Mutates in place;
+    never raises."""
+    try:
+        cuts = draft.get('addon_cuts')
+        if not isinstance(cuts, list) or not cuts:
+            return
+
+        def _f(v):
+            try:
+                return float(str(v).replace('%', '').replace(',', '').strip())
+            except (TypeError, ValueError):
+                return None
+
+        demos = draft.get('tu_demos') if isinstance(
+            draft.get('tu_demos'), dict) else {}
+        age = {str(k).upper(): _f(v)
+               for k, v in (demos.get('AGE') or {}).items()}
+        populated_age = {k for k, v in age.items()
+                         if v is not None and v >= 1.0}
+        gender = {str(k).upper(): _f(v)
+                  for k, v in (demos.get('GENDER') or {}).items()}
+        skew_gender = None
+        if gender:
+            top_k, top_v = max(gender.items(),
+                               key=lambda kv: (kv[1] or 0.0))
+            if (top_v or 0.0) >= 60.0:
+                if top_k.startswith('FEMALE'):
+                    skew_gender = 'female'
+                elif top_k.startswith('MALE'):
+                    skew_gender = 'male'
+
+        kept, dropped = [], []
+        for c in cuts:
+            if not isinstance(c, dict):
+                continue
+            pin_cat = str(c.get('pin_category') or '').upper()
+            cid = str(c.get('cut_id') or '').lower()
+            cbuckets = {str(b).upper() for b in (c.get('pin_buckets') or [])}
+            # whole-universe AGE cut (age_band or generation on AGE)
+            if pin_cat == 'AGE' and populated_age and cbuckets \
+                    and populated_age <= cbuckets:
+                dropped.append(c)
+                continue
+            # gender cut redundant with a defined skew
+            if pin_cat == 'GENDER' and skew_gender \
+                    and (cid == skew_gender
+                         or cbuckets == {skew_gender.upper()}):
+                dropped.append(c)
+                continue
+            kept.append(c)
+
+        if not dropped:
+            return
+        draft['addon_cuts'] = kept
+        base = draft.get('base_credits')
+        try:
+            base = int(base) if base is not None else (
+                int(draft.get('estimated_credits') or 5)
+                - ADDON_CUT_CREDITS * len(cuts))
+        except (TypeError, ValueError):
+            base = 5
+        base = max(base, 5)
+        draft['base_credits'] = base
+        draft['estimated_credits'] = base + ADDON_CUT_CREDITS * len(kept)
+        labels = ', '.join(str(c.get('name_label') or c.get('label')
+                               or c.get('cut_id')) for c in dropped)
+        print(f"[degenerate-cut-filter] dropped: {labels}")
+    except Exception as _e:
+        print(f"[degenerate-cut-filter] non-fatal: {_e}")
+
+
 def _parse_addon_cuts_answer(answer_text, subject):
     """Parse a free-text add-on cuts answer into validated cut defs.
     Supports catalog cuts (gender / generations), explicit age bands
@@ -49978,10 +52106,26 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
             payload_str = str(payload)[:2000]
         ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
         subject_line = f"Chatbot error: {route}"
+        # Surface the user's ask explicitly (it also lives inside the
+        # payload dump, but a labeled line is faster to read). Defensive:
+        # any extraction failure just yields '(unavailable)' so the email
+        # still sends.
+        query_text = '(unavailable)'
+        try:
+            _pl = payload if isinstance(payload, dict) else {}
+            _sd = (_pl.get('spec_draft')
+                   if isinstance(_pl.get('spec_draft'), dict) else {})
+            query_text = (str(_pl.get('prompt') or '').strip()
+                          or str(_sd.get('user_prompt') or '').strip()
+                          or str(_sd.get('subject') or '').strip()
+                          or '(unavailable)')[:1500]
+        except Exception:
+            query_text = '(unavailable)'
         body_text = (
             f"Timestamp: {ts}\n"
             f"Route: {route}\n"
             f"User: {user_email or '(unknown)'}\n"
+            f"Query: {query_text}\n"
             f"Error: {err_name}: {err_text}\n\n"
             f"Request payload (truncated):\n{payload_str}\n\n"
             f"Traceback:\n{str(tb)[:12000]}\n"
@@ -50144,15 +52288,54 @@ def api_chatbot_client_error():
     never saw (network drop mid-request, unparseable reply). Fires the
     same ops email as a server-side failure, with the same dedupe.
     Always answers 200 so the beacon itself can never surface anything;
-    the frontend also drops beacon failures silently."""
+    the frontend also drops beacon failures silently.
+
+    2026-09-03 (Jenna): forward the user's current ask + subject
+    context from the beacon body so the operator email's top Query:
+    slot renders instead of falling back to '(unavailable)'. The
+    frontend attaches `question` (last user turn), `subject`
+    (current draft), and optionally `job_id` when the failure happened
+    while polling a specific run. Any missing field is fine; the
+    email extractor reads `prompt` first so we mirror the beacon's
+    question into `prompt` for the top-slot render."""
     try:
         body = request.get_json(silent=True) or {}
         route = str(body.get('route') or 'client')[:120]
         message = str(body.get('message') or '')[:1000]
+        # Priority: explicit `question`, then `prompt` (fallback name
+        # some older widgets may use). Cap at 300 chars, matching the
+        # brief-chat/verify site convention (see 3581e51e).
+        question = (str(body.get('question') or '').strip()
+                    or str(body.get('prompt') or '').strip())[:300]
+        subject = str(body.get('subject') or '').strip()[:200]
+        job_id = (str(body.get('job_id') or '').strip()
+                  or str(body.get('run_id') or '').strip())[:120]
+        # Build the payload the email helper renders. `prompt` drives
+        # the top Query: slot; `question`/`subject`/`job_id` ride the
+        # payload dump below so the trail is complete.
+        payload = {'route': route, 'message': message}
+        if question:
+            payload['prompt'] = question
+            payload['question'] = question
+        if subject:
+            payload['subject'] = subject
+        if job_id:
+            payload['job_id'] = job_id
+        # 502s from the browser almost always mean the request was
+        # drained by a Render redeploy or hit its per-request timeout.
+        # A one-line hint saves the ops reader a round-trip.
+        tb_text = ('(client-side beacon; the failure happened in the '
+                   'browser before a backend response landed)')
+        if 'status 502' in message.lower() or '(502)' in message:
+            tb_text += (
+                '\n\nHint: 502 typically means a Render redeploy '
+                'drained the request mid-flight or the request hit '
+                'its timeout. Ask user to retry; if repeated, check '
+                'Render deploy activity.')
         _chatbot_error_email(
             f'client:{route}', message,
-            tb='(client-side beacon; the failure happened in the '
-               'browser before a backend response landed)')
+            payload=payload,
+            tb=tb_text)
     except Exception:
         traceback.print_exc()
     return jsonify({'success': True})
@@ -50913,6 +53096,25 @@ def api_synth_chat_clarify():
         chose_broad = bool(_re.search(
             r'\b(broad|engag|anyone|everyone|every one|all|standard|'
             r'wide|full|both|general)\w*\b', low))
+        # A season / film scope answer (2026-08-31 Love Island death-
+        # loop) only makes sense for the viewers universe - you never
+        # scope seasons for a broad engager audience. When the reply
+        # names a scope, treat it as the viewers pick and let the SAME
+        # answer bind in the viewer-scope chain below. This also rescues
+        # a stale client that keeps the step pinned at ip_scope: the
+        # reply resolves the build instead of re-asking broad-vs-viewers
+        # in a loop. Forced past the broad detector, which would else
+        # fire on the 'all' in 'all seasons'.
+        _scope_like = bool(_re.search(
+            r'\ball\s+seasons?\b|\bevery\s+season\b|\bmost\s+recent\b|'
+            r'\blatest\b|\bnewest\b|\bcurrent\s+season\b|'
+            r'\bspecific\s+season\b|\bthis\s+season\b|\bseason\s*\d|'
+            r'\bs\d{1,2}\b|\bwhole\s+franchise\b|\ball\s+films?\b|'
+            r'\bmost\s+recent\s+film\b|\bspecific\s+film\b|'
+            r'\blatest\s+film\b', low))
+        if _scope_like:
+            chose_consumers = True
+            chose_broad = False
         if chose_broad and not chose_consumers:
             _apply_ip_scope_to_draft(draft, 'broad')
             head = (f"Broad it is - the profile covers everyone who "
@@ -51118,6 +53320,7 @@ def api_synth_chat_clarify():
         # 'scope' -> 'pick' for the second ask.
         from migration.viewer_content_scope import (
             scope_from_text as _vs_from_text,
+            extend_series_seasons as _vs_extend_seasons,
         )
         data = draft.get('viewer_scope_data') or {}
         kind = str(data.get('kind') or 'series')
@@ -51169,7 +53372,7 @@ def api_synth_chat_clarify():
         def _vs_pick_question():
             opts = seasons if is_series else films
             lines = [f"Which {unit}?"]
-            for _i, _o in enumerate(opts[:24], start=1):
+            for _i, _o in enumerate(opts[:60], start=1):
                 lines.append(f"  {_i}. {_o.get('label')}")
             lines.append(f"Pick below, or reply with the {unit} "
                          f"(or all).")
@@ -51179,15 +53382,36 @@ def api_synth_chat_clarify():
         direct = _vs_from_text(answer, data)
         if direct and direct.get('mode') == 'specific':
             if is_series and direct.get('season') is not None:
+                want_n = int(direct['season'])
                 have = {int(s.get('number') or 0) for s in seasons}
-                if int(direct['season']) not in have:
-                    return jsonify({
-                        'success': True, 'draft': draft,
-                        'message': (f"Season {direct['season']} isn't "
-                                    f"in the researched run.\n"
-                                    + _vs_pick_question()),
-                        'next_step': 'viewer_scope',
-                    })
+                researched_max = max(have) if have else 0
+                if want_n not in have:
+                    # A season the researched list is behind on (a
+                    # just-aired / current season the cached structure
+                    # missed) must not be hard-rejected - that made the
+                    # current season impossible to pick when the list
+                    # was stale. Accept a number just beyond the
+                    # researched max: extend the structure so the label,
+                    # year, and sample sizing land right, then bind it.
+                    # Keep the helpful rejection only for a genuine
+                    # in-run gap or an implausibly high number.
+                    plausible_current = (
+                        researched_max > 0
+                        and want_n > researched_max
+                        and want_n <= researched_max + 6
+                        and want_n <= 60)
+                    if plausible_current:
+                        data = _vs_extend_seasons(data, want_n)
+                        draft['viewer_scope_data'] = data
+                        seasons = data.get('seasons') or seasons
+                    else:
+                        return jsonify({
+                            'success': True, 'draft': draft,
+                            'message': (f"Season {direct['season']} isn't "
+                                        f"in the researched run.\n"
+                                        + _vs_pick_question()),
+                            'next_step': 'viewer_scope',
+                        })
             return _vs_bind_and_continue(direct)
         if _re.search(r'\b(most\s+recent|latest|newest|current)\b', low):
             return _vs_bind_and_continue({'mode': 'latest'})
@@ -51350,6 +53574,35 @@ def api_synth_chat_clarify():
         # "Is this a cut of X data we already have?" (2026-08-20).
         # Candidates were stashed on the draft by the interpret step.
         cands = draft.get('parent_link_candidates') or []
+        # Defense-in-depth: filter any stashed candidate whose entity
+        # shares no real identity token with the ask, so a stale draft
+        # from a prior turn can't re-offer a mismatched parent
+        # (2026-09-02, companion to the _maybe_ask_parent_link gate).
+        _ask_subject_rp = draft.get('subject') or ''
+        # 2026-09-04 hotfix (Jenna live 500): _subject_identity_mismatch
+        # takes (prompt, subject, candidate_display) and the 2026-09-02
+        # author left a bare `prompt` reference that was never bound in
+        # this branch (NameError at runtime). The user's natural-language
+        # ask is stashed on the draft during interpret via
+        # spec_draft['user_prompt'] (see line ~54237). Fall back through
+        # a couple of legacy field names, then to the subject itself as
+        # a last resort so the identity-mismatch helper never sees None
+        # (empty first arg still works: helper does `prompt or ''`,
+        # ORs both args together, and its whole body is wrapped in
+        # try/except Exception -> False, so a stale draft cannot re-500
+        # here regardless).
+        _clarify_prompt = str(
+            body.get('prompt')
+            or draft.get('user_prompt')
+            or draft.get('prompt')
+            or draft.get('original_prompt')
+            or draft.get('question')
+            or _ask_subject_rp
+            or ''
+        )
+        cands = [c for c in cands
+                 if not _subject_identity_mismatch(
+                     _clarify_prompt, _ask_subject_rp, c.get('display_name'))]
         low = answer.lower().strip()
         declined = bool(_re.match(
             r'^(no|none|neither|nope|fresh|new|not a cut|'
@@ -51383,6 +53636,19 @@ def api_synth_chat_clarify():
                         best, best_ov = c, ov
                 if best is not None and best_ov > 0:
                     picked = best
+        # Identity gate on the picked candidate (2026-09-02,
+        # defense-in-depth): if the picked candidate shares no real
+        # identity token with the ask, drop the link and route to the
+        # build-fresh branch below instead of committing derive_cut.
+        # Catches stale drafts whose candidates were stashed before
+        # the identity gate landed. 2026-09-04 hotfix: reuse the
+        # _clarify_prompt bound at the top of this branch (bare
+        # `prompt` was a NameError; see the note above).
+        if picked is not None and _subject_identity_mismatch(
+                _clarify_prompt, draft.get('subject') or '',
+                picked.get('display_name')):
+            picked = None
+            declined = True
         if picked is None and not declined:
             opts = "\n".join(
                 f"  {i}. {c.get('display_name')}"
@@ -51607,6 +53873,30 @@ def _ask_infer_route_outcome(surface, payload, status_code):
     return route, outcome, subject
 
 
+# Views where the subject describes what the ask is ABOUT. Elsewhere
+# the handlers still resolve a subject in order to answer (page
+# context, cross-session memory), but it is whatever the reader had
+# open last rather than the topic of this question.
+_ASK_SUBJECT_VIEWS = {'profileIQ', 'subscriberIQ', 'journeyIQ'}
+
+_ASK_SUBJ_STOP = {'the', 'a', 'an', 'and', 'of', 'show', 'series',
+                  'movie', 'audience', 'fans', 'viewers', 'profile'}
+
+
+def _ask_mentions_subject(question, subject):
+    """The ask names the subject, so recording it is meaningful even
+    on a view that does not own one ("how is Shark Tank trending" in
+    Trends IQ). Any distinctive subject token is enough."""
+    try:
+        q = re.sub(r'[^a-z0-9 ]+', ' ', str(question or '').lower())
+        toks = [t for t in re.sub(r'[^a-z0-9 ]+', ' ',
+                                  str(subject or '').lower()).split()
+                if len(t) >= 4 and t not in _ASK_SUBJ_STOP]
+        return any(t in q for t in toks)
+    except Exception:
+        return True
+
+
 def _ask_logged(surface):
     """Wrap a chatbot route so every question is recorded to the ask
     log with route, outcome, and response time. Fire-and-forget."""
@@ -51649,6 +53939,19 @@ def _ask_logged(surface):
                 outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
                 subject = getattr(_g, '_pm_ask_subject', None) or subject
                 mode = getattr(_g, '_pm_ask_mode', None) or mode
+                # Do not record a subject the view cannot own
+                # (2026-09-14). Week 2026-W37 filed three Trends IQ
+                # asks about DNC news coverage under subject 'shark
+                # tank' and two about MMA under 'the twilight saga',
+                # because the field held the last profile the reader
+                # opened. The weekly review then grouped them and
+                # proposed teaching replay on those pairs, which would
+                # have served a Shark Tank read to a news question.
+                # An ask that names the subject keeps it, and an
+                # unknown view keeps it rather than lose real data.
+                if subject and view and view not in _ASK_SUBJECT_VIEWS \
+                        and not _ask_mentions_subject(question, subject):
+                    subject = None
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=(session.get('username') or 'unknown'),
@@ -51696,6 +53999,13 @@ def api_synth_chat_interpret():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): the interpret step is
+    # the entry point for a new profile pull, so an 'analysis'-only
+    # user is blocked here. The router deflection to a read pass
+    # never fires for such a user because the frontend hides the
+    # build-oriented chips and the backend refuses the pull entry.
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -51885,8 +54195,15 @@ def api_synth_chat_interpret():
     # Samsung, LG)") defers to the plain splitter's cleaner
     # one-entity slices.
     # ------------------------------------------------------------------
-    _batch_subjects = _detect_batch_subjects(text)
-    _cart = _detect_cartesian_batch(text)
+    # A single compound behavioral audience ("anyone who watched X and
+    # any one of the following A, B, C on streaming") is ONE build, not
+    # a batch - never let the list OR Cartesian splitters shatter it
+    # into pseudo-subjects. Fall through to the single interpret, which
+    # already reads stacked criteria as one persona. See
+    # _is_single_compound_audience + profile-iq-pipeline-rules.mdc s2.
+    _single_compound = _is_single_compound_audience(text)
+    _batch_subjects = [] if _single_compound else _detect_batch_subjects(text)
+    _cart = None if _single_compound else _detect_cartesian_batch(text)
     _cart_wins = bool(_cart) and (
         (len(_cart) >= 4 and _cart[3] == 'B')
         or (len(_cart) >= 3 and _cart[2] >= 2))
@@ -51953,7 +54270,8 @@ def api_synth_chat_interpret():
     # (empty subject list routes straight to its direct-retry path,
     # which finalizes each draft and returns the standard batch
     # payload).
-    if re.search(r'\bfor each\b|\bone (?:profile )?per\b'
+    if not _single_compound and re.search(
+                 r'\bfor each\b|\bone (?:profile )?per\b'
                  r'|\bprofiles? for each\b|\bper (?:platform|retailer'
                  r'|brand|market|title)\b', text, re.IGNORECASE):
         try:
@@ -52353,6 +54671,7 @@ def api_synth_chat_interpret():
         # interpreter sometimes collapses them into a single mangled
         # subject - rescan the raw ask and merge any missing cohorts.
         _augment_multi_cohort_cuts(spec_draft, text)
+        _drop_degenerate_addon_cuts(spec_draft)
         # Cuts-only promoter (2026-08-20): if the cleaned subject
         # already has a full-universe TU in the catalog, skip the
         # rebuild - flip to derive_cut/addon_cuts and charge 3 x cuts.
@@ -52379,6 +54698,8 @@ def api_synth_chat_interpret():
             # a confident event window wins when both are present.
             _bind_relative_window(spec_draft, text, chat_history=history,
                                   decision=_dec_norm)
+            _bind_shared_explicit_window(spec_draft, text,
+                                         decision=_dec_norm)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         # Subscriber IQ dates/season guard (2026-08-25): researches the
         # real air window, flags a season still in progress as 'Season
@@ -52536,6 +54857,65 @@ def api_synth_chat_interpret():
             _scrub_draft_prose_dashes(spec_draft)
         except Exception:
             pass
+        # Thread the user's exact natural-language ask onto the draft so
+        # it round-trips back on approve and lands on the queued job. If
+        # the build later fails, the ops failure email can quote what the
+        # user actually asked. Best-effort; never blocks the response.
+        try:
+            if isinstance(spec_draft, dict) and text:
+                spec_draft['user_prompt'] = str(text)[:4000]
+        except Exception:
+            pass
+        # Chip pair for existing_match (2026-09-04, Jenna verbatim: "it
+        # shouldnt just say is this the one you want yes or no and then
+        # you click the chip and if yes it would have retunred that one
+        # and if I said no it would run the one I asked"). Two chips
+        # replace the free-text "approve or send another message"
+        # nudge, one click each:
+        #   Yes, use this        -> hand back the matched existing file
+        #                           at 0 credits (the current approve
+        #                           path for a decision=existing_match
+        #                           draft)
+        #   No, run what I asked -> flip the draft to a fresh new_build
+        #                           and take the normal build path
+        #                           (session-only force_new_build flag
+        #                           on /api/brief-chat/approve; the
+        #                           partner API `/api/v1/*` never sees
+        #                           these fields, per
+        #                           no-external-overrides.mdc: chatbot
+        #                           chips are a user-driven session
+        #                           flow, not a wire-protocol override).
+        # Existing_match-only. Other verdicts already have their own
+        # approve/adjust chip flows and stay unchanged.
+        _chip_options = None
+        _chip_targets = None
+        if _dec_norm == 'existing_match':
+            _fresh_new_credits = int(_V1_CREDITS.get(
+                'new_build', CREDITS_PROFILE_ANALYSIS))
+            _chip_options = [
+                {'id': 'use_existing', 'label': 'Yes, use this'},
+                {'id': 'run_new', 'label': 'No, run what I asked'},
+            ]
+            _chip_targets = {
+                'use_existing': {
+                    'action': 'approve',
+                    'endpoint': '/api/brief-chat/approve',
+                    'credits': 0,
+                },
+                'run_new': {
+                    'action': 'approve',
+                    'endpoint': '/api/brief-chat/approve',
+                    'credits': _fresh_new_credits,
+                    'force_new_build': True,
+                },
+            }
+            # Surface the fresh-build cost so the cost line can read
+            # "0 credits to reuse, or N credits for a fresh build"
+            # instead of just "0 credits (reusing the existing file)".
+            try:
+                spec_draft['estimated_credits_new_build'] = _fresh_new_credits
+            except Exception:
+                pass
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -52557,6 +54937,10 @@ def api_synth_chat_interpret():
             # Plain-language window this build/cut will run with
             # (ECHO RULE 2026-08-24). '' only for existing_match.
             'date_window': _draft_window_field(spec_draft, _dec_norm),
+            # Chip pair for existing_match. None on every other verdict
+            # so the frontend can no-op cleanly.
+            'chip_options': _chip_options,
+            'chip_targets': _chip_targets,
         })
     except Exception as e:
         traceback.print_exc()
@@ -52883,6 +55267,44 @@ def _spec_from_draft(draft):
     subject = draft.get('subject') or draft.get('name') or 'Unknown Subject'
     subject = _scrub(subject, field='subject', subject=str(subject)[:80],
                      max_len=200, single_line=True) or 'Unknown Subject'
+    # ---- Phantom-subject + date-clause choke point (2026-09-10, Jenna:
+    # Audible defect). This runs on EVERY external surface - the
+    # dashboard chatbot approve route and partner API v1 both mint their
+    # spec here - so it is the one place that catches a bad subject
+    # regardless of which interpret path produced it.
+    #
+    # (a) Strip a trailing 'Date Range: X to Y' clause out of the name
+    #     and route the window into spec['date_range'] instead. The
+    #     shipped defect baked the clause into the subject AND ignored
+    #     the window.
+    _dr_from_subject = None
+    try:
+        _subj_no_dr, _dr_from_subject = _split_trailing_date_range(subject)
+        if _subj_no_dr and _subj_no_dr != subject:
+            print(f"[spec-guard] stripped date clause from subject: "
+                  f"{subject!r} -> {_subj_no_dr!r} "
+                  f"(window={_dr_from_subject or 'unparsed, default kept'})")
+            subject = _subj_no_dr
+    except Exception:
+        pass
+    # (b) A request / instruction line is not a buildable subject. Both
+    #     callers are exception-safe (the chatbot approve route is
+    #     wrapped by _chatbot_route_guard, the v1 path has its own
+    #     try/except returning 'could not interpret prompt'), so
+    #     raising here surfaces as a calm partner-safe message and no
+    #     frame is ever created. This is the "genuine upstream build
+    #     failure surfaced BEFORE a frame exists" case from
+    #     no-rebuild-level-correction.mdc, not a held file.
+    try:
+        _is_req = _is_request_instruction_line(subject)
+    except Exception:
+        _is_req = False
+    if _is_req:
+        print(f"[spec-guard] REJECT phantom subject (request line): "
+              f"{subject!r}")
+        raise ValueError(
+            f"refusing to build: subject looks like a request line, "
+            f"not an audience: {subject!r}")
     # Canonical-casing choke point (2026-08-24 SHARKNINJA directive):
     # subject + file_stem minted here flow verbatim into the worker's
     # TU key and avid display name, so fixing the casing here fixes
@@ -53359,6 +55781,35 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    # ---- Platform scope passthrough (2026-09-04, Jenna perceptionbox
+    # rerun). Normalized here so the engine host sees a validated list
+    # of canonical platform keys or None. Draft may set the field or
+    # leave it absent (older drafts). Reject garbage silently to None
+    # so a bad value never blocks a build.
+    _ps_raw = draft.get('platform_scope')
+    _ps_norm = None
+    _CANONICAL_PLATFORMS = {
+        'youtube', 'tiktok', 'instagram', 'facebook', 'x', 'linkedin',
+        'twitch', 'snapchat', 'threads', 'substack', 'patreon', 'kick',
+        'rumble', 'pinterest', 'bluesky',
+    }
+    _PLATFORM_ALIASES = {
+        'yt': 'youtube', 'ig': 'instagram', 'tt': 'tiktok',
+        'fb': 'facebook', 'twitter': 'x', 'x/twitter': 'x',
+    }
+    if isinstance(_ps_raw, str):
+        _ps_raw = [_ps_raw]
+    if isinstance(_ps_raw, (list, tuple)) and _ps_raw:
+        _clean = set()
+        for _p in _ps_raw:
+            _pk = str(_p or '').strip().lower()
+            _pk = _PLATFORM_ALIASES.get(_pk, _pk)
+            if _pk in _CANONICAL_PLATFORMS:
+                _clean.add(_pk)
+        if _clean:
+            _ps_norm = sorted(_clean)
+    if _ps_norm:
+        spec['platform_scope'] = _ps_norm
     # ---- Date window passthrough (2026-08-24, Rosie O'Donnell / JKL
     # defect). Resolved event/explicit windows finally reach the
     # engine: `date_range` ('START TO END') stamps the SAMPLE SIZE row
@@ -53371,6 +55822,17 @@ def _spec_from_draft(draft):
         spec['date_range'] = _scrub(draft['engine_date_range'],
                                     field='date_range', subject=subject,
                                     max_len=60, single_line=True)
+    elif _dr_from_subject:
+        # A 'Date Range: X to Y' clause the user wrote into the subject
+        # line itself (2026-09-10 Audible defect). The interpret step
+        # never turned it into a window, so it would otherwise be lost
+        # AND pollute the name. Honour it per default-date-range.mdc
+        # ("if the user says any explicit date ... use their range").
+        # Only applies when the draft carries no resolved window, so an
+        # explicitly-interpreted range always wins.
+        spec['date_range'] = _dr_from_subject
+        print(f"[spec-guard] date_range recovered from subject clause: "
+              f"{_dr_from_subject}")
     if draft.get('cut_date_range'):
         spec['cut_date_range'] = _scrub(draft['cut_date_range'],
                                         field='cut_date_range',
@@ -53636,7 +56098,154 @@ def _spec_from_draft(draft):
             })
         if normalized:
             spec['persona_doc'] = {'clickstream_signals': normalized}
+
+    # Caller-supplied competitor brands (2026-08-31): the set of brands
+    # the caller wants represented inside this subject's profile. Rides
+    # from the partner API /run body or a chatbot draft; folded onto the
+    # spec here so the research phase (build_persona_brief) can reason
+    # them into the relevant categories at real values. Cleaned + apos-
+    # stripped + capped again here so a chatbot-sourced list is held to
+    # the same bar as the partner API one. Fresh builds only - derived
+    # cuts inherit their brand set from the parent and never carry this.
+    cb_seed = draft.get('competitor_brands') or []
+    if isinstance(cb_seed, list) and cb_seed:
+        cb_clean = []
+        cb_seen = set()
+        for entry in cb_seed:
+            name = _scrub(str(entry or ''), field='competitor_brand',
+                          subject=subject, max_len=80, single_line=True)
+            for _ap in ("'", '\u2019', '\u2018', '\u02bc', '`'):
+                name = name.replace(_ap, '')
+            name = ' '.join(name.split()).strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in cb_seen:
+                continue
+            cb_seen.add(key)
+            cb_clean.append(name)
+            if len(cb_clean) >= 50:
+                break
+        if cb_clean:
+            spec['competitor_brands'] = cb_clean
     return spec
+
+
+@app.route('/api/brief-chat/rebind-window', methods=['POST'])
+@app.route('/api/synth-chat/rebind-window', methods=['POST'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/rebind-window')
+def api_synth_chat_rebind_window():
+    """Apply an answered time window to drafts the reader already has.
+
+    Week 2026-W37 showed 26% of all chat latency (539s of 2100s) going
+    into re-reading asks that had already been read. Cause: when the
+    reader answers the window question with their own range instead of
+    taking the default, the chat used to fold the answer onto the end
+    of the original ask and start over from scratch. That second pass
+    cost 57s to 147s and produced exactly the same subjects, the same
+    decisions, and the same sizes as the first. The only thing that
+    actually changed was the window.
+
+    So change only the window. The drafts are already in the reader's
+    hands (the approve route has always taken spec_draft straight from
+    the client), so this adds no new trust surface, and it is strictly
+    narrower than approve: it edits one field group and queues nothing.
+    No model call, so the answer comes back in milliseconds.
+
+    This is not a behaviour override per no-external-overrides.mdc. The
+    caller states no decision and passes no flags. It answers a
+    question the product asked, and the window is parsed server side by
+    the same _split_trailing_date_range the interpret step uses, then
+    applied by the same _bind_shared_explicit_window. An answer this
+    cannot parse returns unparsed=True so the caller falls back to a
+    full re-read rather than guessing.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    answer = str(body.get('text') or '').strip()
+    drafts = body.get('spec_drafts')
+    if not isinstance(drafts, list):
+        one = body.get('spec_draft')
+        drafts = [one] if isinstance(one, dict) else []
+    drafts = [d for d in drafts if isinstance(d, dict)]
+    if not answer or not drafts:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    # Parse through the interpret step's own reader so a window that
+    # binds here is exactly the window a full re-read would have bound.
+    #
+    # That reader splits a TRAILING clause off a carrier string and
+    # deliberately declines when the whole string is the clause (it
+    # refuses to leave an empty subject behind). A bare reply is all
+    # clause, so give it an inert carrier. 'Run it' is chosen because
+    # it contains none of the words the reader triggers on (date,
+    # dates, date range, date window, window, time frame, timeframe,
+    # period) - a carrier carrying one of those would match at index 0
+    # and leave nothing in front of the clause again. The carrier is
+    # never shown or stored; only the parsed window survives.
+    bare = re.sub(
+        r'^\s*(?:date\s*range|dates?|date\s*window|window|'
+        r'time\s*frame|timeframe|period)\s*[:\-]?\s*',
+        '', answer, flags=re.IGNORECASE).strip()
+    probe = f'Run it. Date range: {bare or answer}'
+    try:
+        _, rng = _split_trailing_date_range(probe)
+    except Exception:
+        rng = None
+    if not rng or ' TO ' not in rng:
+        # Relative phrasing ("trailing 6 months"), an event window, or
+        # anything else we cannot resolve deterministically. Say so and
+        # let the caller re-read the ask properly.
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    bound = 0
+    for d in drafts:
+        # Clear the flag first: these drafts already carry a window
+        # (the default we proposed), and the binder deliberately yields
+        # to anything already marked explicit.
+        d.pop('date_range_explicit', None)
+        try:
+            if _bind_shared_explicit_window(
+                    d, probe, decision=d.get('decision')):
+                bound += 1
+        except Exception:
+            pass
+    if not bound:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    # Same per-line window suffix the interpret step renders, so a
+    # rebound card and a re-read card are indistinguishable.
+    try:
+        _annotate_drafts_date_window(drafts)
+    except Exception:
+        pass
+
+    start, end = [p.strip() for p in rng.split(' TO ', 1)]
+    try:
+        label = _ew_format_label(start, end) or rng
+    except Exception:
+        label = rng
+    try:
+        print(f"[rebind-window] {user}: {bound} draft(s) -> {rng} "
+              f"(no re-read)")
+    except Exception:
+        pass
+    return jsonify({
+        'success': True,
+        'bound': bound,
+        'date_range': {'start': start, 'end': end},
+        'date_window_label': label,
+        'spec_drafts': drafts,
+    })
 
 
 @app.route('/api/brief-chat/approve', methods=['POST'])
@@ -53652,6 +56261,11 @@ def api_synth_chat_approve():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): the approve step
+    # confirms and queues a new profile build. 'analysis'-only users
+    # cannot queue a build.
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         _chatbot_error_email('brief-chat/approve',
                              'profile engine not configured '
@@ -53671,6 +56285,49 @@ def api_synth_chat_approve():
                              'approve called without a spec_draft',
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
+
+    # Chip pair override (2026-09-04, Jenna existing_match UX). The
+    # session-only 'No, run what I asked' chip flips an existing_match
+    # draft into a fresh new_build in one click. Semantically the
+    # same as the user typing 'no, build me a new one' as free text
+    # and letting the interpret step re-decide - but without the
+    # extra Claude round-trip.
+    #
+    # Session-only per no-external-overrides.mdc: chatbot chips are
+    # a user-driven session flow, not a wire-protocol override. The
+    # partner API `/api/v1/*` (via `/api/v1/profiles/run`) never
+    # touches `force_new_build`; only this session route
+    # `/api/synth-chat/approve` (alias `/api/brief-chat/approve`) does.
+    # Ops-side forcing still lives in migration/local_override_profile.py.
+    #
+    # Guardrails:
+    #   * Only mutates when the draft's own decision is 'existing_match'.
+    #     A new_build / derive_cut / refresh draft with a stray
+    #     force_new_build=true flag is a no-op (chips only render on
+    #     existing_match, so a stray flag from any other origin is
+    #     rejected here as well).
+    #   * Strips ALL existing_match_* pointers so the normalized-match
+    #     backstop in _normalize_v1_decision cannot flip it BACK to
+    #     existing_match on entity-match fuzz.
+    #   * Re-prices estimated_credits to the new_build tier so the
+    #     credit preflight below charges the right amount.
+    #   * Idempotency store still keys on the mutated spec; a rapid
+    #     double-click on the chip does not double-queue (the standard
+    #     hostname-scoped idempotency + queue-side dedupe handles it).
+    if bool(body.get('force_new_build')) and \
+            str(draft.get('decision') or '').strip().lower() == 'existing_match':
+        for _emk in ('existing_match_s3_key', 'existing_match_display_name',
+                     'existing_match_days_old', 'existing_match_last_modified'):
+            draft.pop(_emk, None)
+        draft['decision'] = 'new_build'
+        try:
+            _fresh_credits = int(
+                _V1_CREDITS.get('new_build', CREDITS_PROFILE_ANALYSIS))
+            draft['estimated_credits'] = _fresh_credits
+            draft['base_credits'] = _fresh_credits
+            draft.pop('estimated_credits_new_build', None)
+        except Exception:
+            pass
 
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
@@ -53798,15 +56455,28 @@ def api_synth_chat_approve():
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': (f'Not enough credits for this run ({price} needed, '
-                      f'{_left} remaining). Use the credits button in the '
-                      'top bar to request more.'),
+            'error': (f"You're out of credits for this run - {price} needed, "
+                      f"{_left} remaining. Top up to keep going."),
             'credits_required': price,
             'credits_remaining': _left,
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
 
+    # Thread the commissioning user + their exact ask onto the job so a
+    # failed build's ops email can name who asked and quote what they
+    # asked. The prompt round-trips on the draft (stamped at interpret);
+    # fall back to the subject so the field is never empty.
+    _approve_username = (session.get('username') or user.get('username')
+                         or '').strip()
+    _approve_prompt = (str(body.get('prompt')
+                           or draft.get('user_prompt')
+                           or draft.get('subject')
+                           or spec.get('name') or '').strip())[:4000]
     payload = {
         'user_email': user.get('email') or user.get('username') or 'unknown',
+        'username': _approve_username or (user.get('username') or ''),
+        'prompt': _approve_prompt,
         'run_avid': run_avid,
         'email_to': email_to,
         'spec': spec,
@@ -54157,6 +56827,40 @@ def api_synth_chat_active_runs():
     })
 
 
+# Queue-health blip gate (2026-08-29): the box code-sync restarts the
+# listener whenever new code lands on main, and a badge poll racing
+# that restart (or a momentarily loaded box) can miss one 5s window.
+# One missed poll self-resolves and is not an incident - the 00:53 UTC
+# blip emailed a full ReadTimeout traceback for a listener that was
+# back in milliseconds. Email ops only when the failure PERSISTS:
+# 3+ consecutive failed polls, at most one email per 30 minutes
+# (per-worker counters; the badge polls often enough that a real
+# outage crosses the bar within a couple of minutes).
+_QUEUE_HEALTH_BLIP = {'consec': 0, 'last_email_ts': 0.0}
+_QUEUE_HEALTH_EMAIL_AFTER = 3
+_QUEUE_HEALTH_EMAIL_COOLDOWN_S = 1800
+
+
+def _queue_health_blip_email(err, tb=None):
+    """Gate a queue-health failure email behind persistence: bump the
+    consecutive-failure counter and email only past the threshold and
+    outside the cooldown. Reset on any healthy poll."""
+    st = _QUEUE_HEALTH_BLIP
+    st['consec'] = int(st.get('consec') or 0) + 1
+    if st['consec'] < _QUEUE_HEALTH_EMAIL_AFTER:
+        return
+    now = time.time()
+    if now - float(st.get('last_email_ts') or 0.0) \
+            < _QUEUE_HEALTH_EMAIL_COOLDOWN_S:
+        return
+    st['last_email_ts'] = now
+    _chatbot_error_email(
+        'brief-chat/health',
+        f"queue health failing {st['consec']} consecutive poll(s): "
+        f"{err}",
+        tb=tb)
+
+
 @app.route('/api/brief-chat/health', methods=['GET'])
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
@@ -54197,25 +56901,37 @@ def api_synth_chat_health():
     try:
         import requests as _requests
         params = {} if (want_global or not user_id) else {'user': user_id}
-        resp = _requests.get(
-            f"{SYNTH_QUEUE_URL}/synth/health",
-            params=params,
-            timeout=5,
-        )
+        # One quick retry rides out the listener's restart-on-new-code
+        # window before the poll counts as failed at all.
+        resp, _hc_last = None, None
+        for _attempt, _tmo in ((0, 5), (1, 6)):
+            try:
+                resp = _requests.get(
+                    f"{SYNTH_QUEUE_URL}/synth/health",
+                    params=params,
+                    timeout=_tmo,
+                )
+                break
+            except Exception as e:
+                _hc_last = e
+                if _attempt == 0:
+                    time.sleep(1.5)
+        if resp is None:
+            raise _hc_last
         if resp.status_code == 200:
+            _QUEUE_HEALTH_BLIP['consec'] = 0
             body = resp.json()
             body['scope'] = 'global' if (want_global or not user_id) else 'user'
             return jsonify({'success': True, 'configured': True,
                              'queue': body})
-        _chatbot_error_email('brief-chat/health',
-                             f'queue health check returned '
-                             f'{resp.status_code}',
-                             tb=str(resp.text or '')[:1200]
-                             or '(empty reply)')
+        _queue_health_blip_email(f'queue health check returned '
+                                 f'{resp.status_code}',
+                                 tb=str(resp.text or '')[:1200]
+                                 or '(empty reply)')
         return jsonify(_chatbot_calm_payload(configured=True))
     except Exception as _hc_err:
         traceback.print_exc()
-        _chatbot_error_email('brief-chat/health', _hc_err)
+        _queue_health_blip_email(_hc_err)
         return jsonify(_chatbot_calm_payload(configured=True))
 
 
@@ -54257,9 +56973,13 @@ _pm_resolved_model = {'name': None}
 # classification can never break on model naming.
 _PM_CLASSIFY_MODEL_ENV = (os.environ.get('PROMETHEUS_CLASSIFY_MODEL')
                           or '').strip()
+# 2026-09-04: dated ID first per Anthropic's Feb-2026 retirement of
+# claude-3-5-haiku-20241022. Migration notice explicitly recommends
+# the dated haiku-4-5-20251001 form. Alias kept as legacy fallback so
+# analytics keyed on the family name still resolve.
 _PM_CLASSIFY_CANDIDATES = (
     ([_PM_CLASSIFY_MODEL_ENV] if _PM_CLASSIFY_MODEL_ENV else [])
-    + ['claude-haiku-4-5', 'claude-haiku-4-5-20251001'])
+    + ['claude-haiku-4-5-20251001', 'claude-haiku-4-5'])
 _PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify'))
 _pm_resolved_classify = {'name': None}
 _PM_DECK_PREFIX = 'system/prometheus_decks/'
@@ -54278,9 +56998,15 @@ def _pm_classify_chain():
     naming. The winning fast model is cached for the process lifetime
     in its own slot - it must never leak into the analysis chain (a
     label model cannot own the reasoning calls)."""
+    # Read the resolved slot under the lock, then build the chain
+    # OUTSIDE it: _pm_model_chain() takes the same non-reentrant lock,
+    # so calling it while held self-deadlocks the second classify call
+    # of the process and every model call queues behind it (found
+    # 2026-08-28 via a hung read-job smoke).
     with _pm_model_lock:
-        if _pm_resolved_classify['name']:
-            return [_pm_resolved_classify['name']] + _pm_model_chain()
+        resolved = _pm_resolved_classify['name']
+    if resolved:
+        return [resolved] + _pm_model_chain()
     return _PM_CLASSIFY_CANDIDATES + _pm_model_chain()
 
 
@@ -54317,6 +57043,19 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
         system_prompt = _pmk.with_canon(system_prompt,
                                         s3_client=s3_client,
                                         bucket=S3_BUCKET)
+    except Exception:
+        pass
+    # Per-user attribution (2026-09-02): tag every dashboard chat call
+    # with the logged-in user so the daily spend email can break
+    # Prometheus cost out per user. _pm_attrib_extras() never sets
+    # pay_per_use, so billing and the credit gate (which key off
+    # _pm_usage_extras) are untouched; any real pay-as-you-go fields
+    # ride in via the caller's usage_extras and win the merge. The deck
+    # job runs on a background thread with no request context, so
+    # _pm_attrib_extras() is a no-op there and the caller's explicit
+    # usage_extras carries the enqueue-time attribution instead.
+    try:
+        usage_extras = _pm_merge_extras(_pm_attrib_extras(), usage_extras)
     except Exception:
         pass
     last = None
@@ -54436,21 +57175,19 @@ def _pm_validate_page_context(page_context):
 
 
 def _pm_charge_async(username, description):
-    """Record a chatbot-analysis charge without blocking the response.
+    """No-op stub retained for callsite compatibility.
 
-    The debit is a ~10MB users.json read-modify-write on S3; both call
-    sites already ignored its return value and swallowed failures, so
-    moving it to a daemon thread changes nothing semantically - it
-    just takes the write off the user's wait. consume_credit runs a
-    fresh CAS read internally and needs no request context."""
-    def _charge():
-        try:
-            consume_credit(username, description=description, job_id='',
-                           pull_type='Chatbot Analysis',
-                           credits_used=CREDITS_CHATBOT_ANALYZE)
-        except Exception:
-            traceback.print_exc()
-    threading.Thread(target=_charge, daemon=True).start()
+    2026-09-09 (Jenna): chatbot asks and analyze / deck actions are
+    session-metered, not per-pull charged. This function used to
+    async-record a `Chatbot Analysis` credit debit; that behaviour is
+    retired because CREDITS_CHATBOT_ANALYZE is now 0. Kept as a
+    no-op so existing callers don't need to change shape - the
+    metered usage rolls up through pay_per_use.py at session close,
+    or is included in the subscribed tier for full-tier users."""
+    # Deliberately does nothing. Do not restore the credit debit here
+    # without a fresh explicit directive: it violates the metered-only
+    # pricing policy documented above CREDITS_CHATBOT_ANALYZE.
+    return
 
 
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
@@ -54490,6 +57227,97 @@ def _pm_ask_stage(key, t0=None, ms=None, count=None):
             stages[str(key)[:40]] = int((time.monotonic() - t0) * 1000)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Prometheus per-user mode gate (2026-09-03, Jenna).
+#
+# `prometheus_mode` is a three-way per-user field:
+#   'analysis' -> reads / analyze / deck OK; new profile pulls blocked
+#   'pull'     -> new profile pulls OK; reads / analyze / deck blocked
+#   'both'     -> full access (backward-compat default)
+#
+# The field sits ON TOP of the `has_chatbot_profile_iq_access` master
+# switch. When the master switch is off, `_synth_chat_gate` rejects
+# before either of these helpers runs. When the caller is a super
+# admin, both helpers return True unconditionally.
+#
+# Missing / unknown values resolve to 'both' at read time so existing
+# user records keep today's behavior with no migration write. New user
+# records default to 'both' at create time.
+#
+# `_pm_gate_analyze` and `_pm_gate_pull` return True when the caller
+# may proceed. When they return False, the callers below build a
+# partner-safe 403 payload via `_pm_gate_refusal` so the frontend
+# renders the friendly bubble.
+# ---------------------------------------------------------------------------
+
+_PROMETHEUS_MODE_VALID = ('analysis', 'pull', 'both')
+
+
+def _prometheus_mode_of(user):
+    """Return the caller's Prometheus mode string.
+
+    Accepts a user dict (from `get_current_user` or `_synth_chat_gate`).
+    Returns one of 'analysis' / 'pull' / 'both'. Anything missing,
+    unknown, or non-string resolves to 'both' so a stale record on
+    users.json cannot lock a legitimate caller out of the product."""
+    if not isinstance(user, dict):
+        return 'both'
+    mode = str(user.get('prometheus_mode') or '').strip().lower()
+    if mode not in _PROMETHEUS_MODE_VALID:
+        return 'both'
+    return mode
+
+
+def _pm_gate_analyze(user):
+    """True when the user may hit an analysis / read / deck route.
+
+    Super admins bypass. Everyone else must resolve to 'analysis' or
+    'both'. Callers hitting the master switch off never reach this
+    helper because `_synth_chat_gate` rejects first."""
+    if not isinstance(user, dict):
+        return False
+    if str(user.get('role') or '').strip().lower() == 'super_admin':
+        return True
+    return _prometheus_mode_of(user) in ('analysis', 'both')
+
+
+def _pm_gate_pull(user):
+    """True when the user may hit a new-profile-pull route.
+
+    Super admins bypass. Everyone else must resolve to 'pull' or
+    'both'. Callers hitting the master switch off never reach this
+    helper because `_synth_chat_gate` rejects first."""
+    if not isinstance(user, dict):
+        return False
+    if str(user.get('role') or '').strip().lower() == 'super_admin':
+        return True
+    return _prometheus_mode_of(user) in ('pull', 'both')
+
+
+def _pm_gate_refusal(kind):
+    """Build a partner-safe 403 for a mode-blocked chatbot request.
+
+    `kind` is 'analyze' when the caller tried to reach a read / deck
+    surface but their mode is 'pull'; 'pull' when they tried to reach
+    a new-build surface but their mode is 'analysis'. The reply carries
+    `guidance=True` so the widget renders it as a plain agent bubble
+    (see the `data.guidance && data.error` branch in the analyze /
+    approve / interpret handlers). No internal vocabulary."""
+    if kind == 'analyze':
+        msg = ('This account covers new profile pulls only. To '
+               'unlock analysis of existing profiles, please '
+               'contact your account manager.')
+    else:
+        msg = ('This account covers analysis only. To unlock the '
+               'ability to pull new profiles, please contact your '
+               'account manager.')
+    return jsonify({
+        'success': False,
+        'guidance': True,
+        'error': msg,
+    }), 403
 
 
 def _pm_access_gate(user):
@@ -54546,6 +57374,46 @@ def _pm_usage_extras(user):
     except Exception:
         traceback.print_exc()
         return None
+
+
+def _pm_attrib_extras():
+    """Always-on per-user attribution for a dashboard (Prometheus) model
+    call, independent of pay-as-you-go billing.
+
+    Returns {'user', 'user_email'} for the logged-in user when a request
+    context is present, else {} (background threads such as the deck job
+    have no request context and pass attribution explicitly instead).
+
+    This tags every Prometheus chat record with WHO caused it so the
+    daily spend email can break Prometheus cost out per user. It NEVER
+    sets pay_per_use, so billing and the credit gate (both keyed off
+    _pm_usage_extras returning None for subscribed users) are untouched.
+    Never raises."""
+    try:
+        from flask import has_request_context
+        if not has_request_context():
+            return {}
+        u = get_current_user() or {}
+        email = (u.get('email') or '').strip().lower()
+        uname = (session.get('username') or u.get('username') or '').strip()
+        if not (email or uname):
+            return {}
+        return {'user': uname or email, 'user_email': email or uname}
+    except Exception:
+        return {}
+
+
+def _pm_merge_extras(*parts):
+    """Merge attribution dicts left-to-right (later parts win on key
+    collisions). Returns a dict, or None when nothing merged (None keeps
+    the untagged code path in _run_nflx_claude_agent). Never raises."""
+    out = {}
+    for p in parts:
+        if isinstance(p, dict):
+            for k, v in p.items():
+                if v is not None:
+                    out[k] = v
+    return out or None
 
 
 _PM_BASE_GENERIC_TOKENS = {
@@ -54809,15 +57677,11 @@ def _pm_search_demand_response(user, text, history):
     _pm_ask_hint(route='search_demand')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _pm_ppu = _pm_usage_extras(user)
-    if _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        _pm_ask_hint(outcome='declined_credits')
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
-        }), 402
+    # Prometheus asks are session-metered (2026-09-09 Jenna). No
+    # per-pull credit gate on this route: pay-per-use accounts still
+    # bill via the session close, subscribed accounts are covered by
+    # their tier. Real pipeline pulls (Profile IQ, Subscriber IQ)
+    # remain credit-gated elsewhere.
     led = {'block': '', 'exact': None, 'entries': []}
     _t_ledger = time.monotonic()
     try:
@@ -55036,15 +57900,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     _pm_ask_hint(route='reasoned_metrics')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _pm_ppu = _pm_usage_extras(user)
-    if not charge_done and _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        _pm_ask_hint(outcome='declined_credits')
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
-        }), 402
+    # Prometheus reasoned-metrics reads are session-metered
+    # (2026-09-09 Jenna). No per-pull credit gate here - the metered
+    # spend rolls up through the Prometheus session bill or is
+    # included in the subscribed tier. `charge_done` is kept in the
+    # function signature for callsite compatibility but no longer
+    # matters for gating.
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
     # Confirmed memory referent (2026-08-27, Jenna: "know context
@@ -55203,6 +58064,16 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # generation, not the server failing).
     if async_fresh is None:
         async_fresh = True
+    # Capture per-user attribution NOW while we are on the Flask
+    # request thread. The async path spawns a background thread with
+    # no request context; the sync path stays on the request thread
+    # but re-merging here keeps behavior uniform between the two.
+    # Merged with _pm_ppu so pay-as-you-go billing fields (session
+    # id, request id, pay_per_use flag) are preserved. 2026-09-04 fix:
+    # before this, background read jobs for full-tier users had no
+    # attribution because _pm_ppu was None and the bg thread's
+    # _pm_attrib_extras() returned {} from missing request context.
+    _pm_read_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
     if async_fresh:
         job_id = uuid.uuid4().hex[:12]
         _pm_read_status_write(job_id, {
@@ -55211,7 +58082,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'question': text[:300], 'started_at': time.time()})
         threading.Thread(
             target=_pm_run_read_job,
-            args=(job_id, _pm_user, _pm_ppu, text,
+            args=(job_id, _pm_user, _pm_read_extras, text,
                   list(history or [])[-10:], mr, base, digest_block,
                   anchors_block, led),
             daemon=True).start()
@@ -55219,14 +58090,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         return jsonify({
             'success': True, 'action': 'answer',
             'read_job_id': job_id,
-            'reply': ('On it. This one takes a real look at the data '
-                      'plus some research, so give me a moment - the '
+            'reply': ('On it. This one takes a real look at the data, '
+                      'so give me a moment - the '
                       'read will land right here when it is ready.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
-        led=led, pm_user=_pm_user, pm_ppu=_pm_ppu)
+        led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras)
     try:
         if not payload.pop('_held', False):
             _pm_csv_point(payload.get('profile'), text,
@@ -55298,7 +58169,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     narrate progress. Returns the response payload dict (plus internal
     '_family', '_verify', '_held' when applicable, and '_stages_ms', a
     per-stage wall-clock breakdown the callers route to the ask log /
-    the read-job JSON)."""
+    the read-job JSON).
+
+    `pm_ppu` (2026-09-04): historically this only carried pay-as-you-go
+    billing extras (session id, request id, pay_per_use flag). It now
+    ALSO carries the requesting user's attribution (user, user_email)
+    pre-captured on the request thread by the caller and merged with
+    the PPU dict. This function runs request-context free, so any
+    _pm_attrib_extras() call inside its model calls would return {};
+    passing the pre-merged dict through the existing pm_ppu slot keeps
+    every per-call render_calls record attributed to the right user
+    without a signature change."""
     import prometheus_analysis as pma
     import insights_ledger as il
 
@@ -55467,6 +58348,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     verdict, verify_revised = None, False
+    # 2026-09-03 (Jenna, no-rebuild-level-correction.mdc): silent
+    # verify auto-correct. Set True below when a second corrective
+    # pass turns a would-be HELD read into a shippable one; drives
+    # stages['verify_outcome'] = 4 and _pm_ask_hint outcome='corrected'
+    # at the ship point.
+    _pm_auto_corrected = False
     if pmv is not None:
         try:
             _v_lookup = pmv.load_base_lookup(
@@ -55515,18 +58402,90 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         except Exception:
             traceback.print_exc()
         if not revised_ok:
+            # Auto-correct pass (2026-09-03, Jenna standing rule from
+            # no-rebuild-level-correction.mdc: "an agent should fix
+            # everything and never need rebuild"). The self-revision
+            # above failed. Give the model ONE more attempt with the
+            # strongest corrective framing available: the verify
+            # findings already name the measured figure the reply got
+            # wrong ("The reply cites Netflix at 71.3% but the base
+            # file measures 99.4578%. Use the measured figure or drop
+            # the claim."). Feed those findings back with explicit
+            # instruction to obey and re-verify. Cap: ONE retry per
+            # read, never a loop. If this attempt raises, log
+            # server-side and fall through to the HELD path with the
+            # original findings only. The retry call routes through
+            # _pm_claude_json so per-user attribution + cost
+            # accounting flow unchanged.
+            _retry_findings = []
+            try:
+                _findings_now = (verdict or {}).get('findings') or []
+                corrective_block = (
+                    'AUTO-CORRECT PASS - USE MEASURED FIGURES ONLY\n'
+                    '=============================================\n'
+                    'Your prior reply had these verify findings:\n'
+                    + '\n'.join(f'- {f}'
+                                 for f in _findings_now[:8])
+                    + '\n\nRewrite the reply using the MEASURED '
+                    'figures from the base file above. If a '
+                    "claim's measured value contradicts your prior "
+                    'claim, either use the measured value or drop '
+                    'the claim entirely. Do not introduce any new '
+                    'claims that were not in the prior reply. '
+                    'Keep every claim that was already correct.'
+                )
+                rev_prompt2 = user_prompt + '\n\n' + corrective_block
+                result3 = _pm_claude_json(
+                    pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt2,
+                    max_tokens=11000, temperature=0.1,
+                    usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
+                if result3.get('success'):
+                    data3 = result3.get('data') or {}
+                    if isinstance(data3, list):
+                        data3 = next((d for d in data3
+                                      if isinstance(d, dict)), {})
+                    if str(data3.get('action') or '').strip().lower() \
+                            != 'decline':
+                        res3 = pma.enforce_metrics_coherence(data3)
+                        reply3 = pma.format_generated_metrics_reply(
+                            res3)
+                        fam3 = ('strategy' if is_strategy
+                                else res3.get('metric_family'))
+                        verdict3 = pmv.verify_read(
+                            reply=reply3, res=res3, family=fam3,
+                            base_lookup=_v_lookup,
+                            prior_entries=_pm_verify_prior_entries(
+                                res3, fam3, led))
+                        if verdict3.get('ok'):
+                            data, res, reply = data3, res3, reply3
+                            fam0, verdict = fam3, verdict3
+                            verify_revised = True
+                            revised_ok = _pm_auto_corrected = True
+                        else:
+                            _retry_findings = (
+                                verdict3.get('findings') or [])
+            except Exception:
+                traceback.print_exc()
+        if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)
             stages['verify_outcome'] = 2   # held
             _findings = (verdict or {}).get('findings') or []
+            _findings_text = (
+                ' | '.join(str(f) for f in _findings)
+                or 'no findings recorded')
+            if _retry_findings:
+                _findings_text += (
+                    ' || auto-correct retry findings: '
+                    + ' | '.join(str(f) for f in _retry_findings))
             _chatbot_error_email(
                 'brief-chat/verify',
                 'generated read HELD after failed verification '
                 '(not banked, not delivered): '
-                + (' | '.join(str(f) for f in _findings)[:1200]
-                   or 'no findings recorded'),
+                + _findings_text[:1600],
                 user_email=pm_user,
-                payload={'question': text[:300],
+                payload={'prompt': text[:300],
+                         'question': text[:300],
                          'subject': res.get('subject'),
                          'base': base.get('s3_key')})
             _pm_ask_hint(outcome='held')
@@ -55540,9 +58499,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
     # 0 = clean pass, 1 = passed after one revision, 2 = held (above),
-    # 3 = pass unavailable (verification infrastructure trouble).
+    # 3 = pass unavailable (verification infrastructure trouble),
+    # 4 = auto-corrected then shipped (2026-09-03, silent in-place
+    #     correction per no-rebuild-level-correction.mdc).
     stages['verify_outcome'] = (3 if verdict is None
                                 else (1 if verify_revised else 0))
+    if _pm_auto_corrected:
+        stages['verify_outcome'] = 4
     _verify_stamp = None
     if pmv is not None and verdict is not None:
         try:
@@ -55596,7 +58559,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
     _pm_remember_ask(pm_user, text, subject=res.get('subject'),
                      cohort=res.get('cohort'), route='generated')
-    _pm_ask_hint(outcome='answered', subject=res.get('subject'))
+    _pm_ask_hint(
+        outcome=('corrected' if _pm_auto_corrected else 'answered'),
+        subject=res.get('subject'))
     if pm_user and pm_ppu is None:
         _pm_charge_async(
             pm_user,
@@ -55622,6 +58587,222 @@ def _pm_read_status_write(job_id, payload):
         ContentType='application/json')
 
 
+# ------------------------------------------------------------------
+# "Email me when it is ready" for long tasks (2026-09-02).
+#
+# A generated read (analyze background job) and a deck build each take
+# a few minutes. When one starts, the chat offers to email the
+# finished OUTPUT to the requester. The opt-in is captured AFTER
+# kickoff (the offer is the ack's follow-up), so the email address is
+# threaded to the background thread through an S3 side-file keyed by
+# job id - the same job-id side-channel idea deck attribution uses at
+# enqueue, but S3-backed so the confirm POST and the worker thread can
+# land on different workers.
+#
+# On completion both jobs ALSO append the finished output to the
+# requester's chat thread (the existing per-user history store), so
+# the read / deck link is waiting when they return even if the tab
+# that started it is gone. The chat re-hydration is unconditional; the
+# email is the opt-in extra.
+# ------------------------------------------------------------------
+_PM_NOTIFY_PREFIX = 'system/prometheus_notify/'
+_PM_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+
+def _pm_iso_now():
+    return time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+
+
+def _pm_clean_notify_email(raw):
+    """First syntactically valid address from a raw string, or ''."""
+    for part in re.split(r'[,;\n]+', str(raw or '')):
+        addr = part.strip()
+        if addr and _PM_EMAIL_RE.match(addr) and len(addr) <= 254:
+            return addr
+    return ''
+
+
+def _pm_notify_write(job_id, payload):
+    """Persist a requester's email opt-in for one background job."""
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_notify_read(job_id):
+    """Read the email opt-in for a job, or None when none was set."""
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json")
+        return json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _pm_notify_delete(job_id):
+    try:
+        s3_client.delete_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json")
+    except Exception:
+        pass
+
+
+def _pm_send_output_email(kind, to_email, data):
+    """Email the finished OUTPUT of a long task to the requester.
+
+    Owned first-party voice, no internal vocabulary. `kind` is 'read'
+    or 'deck': a read carries the read itself in the body, a deck
+    carries its title and a download link. Reuses the same SES path
+    the rest of the chatbot uses (us-east-2, jenna@crosswalknyc.com).
+    The send runs on a daemon thread; never raises."""
+    import html as _html
+    to_email = _pm_clean_notify_email(to_email)
+    if not to_email:
+        return False
+    kind = 'deck' if str(kind) == 'deck' else 'read'
+    if kind == 'deck':
+        title = str((data or {}).get('title')
+                    or (data or {}).get('filename') or 'Your deck')[:200]
+        slides = (data or {}).get('slides')
+        url = str((data or {}).get('url') or '')
+        slide_note = (f" ({slides} slides)"
+                      if isinstance(slides, int) and slides else '')
+        subject_line = f"{title} is ready"
+        link_html = ''
+        if url.lower().startswith('https://'):
+            link_html = (
+                f'<p><a href="{_html.escape(url)}" '
+                'style="display:inline-block;background:#66d9ef;'
+                'color:#0a1929;padding:12px 24px;border-radius:6px;'
+                'text-decoration:none;font-weight:bold;margin-top:8px;">'
+                'Download the deck</a></p>')
+        body_html = _wrap_email_html(
+            f"<p>{_html.escape(title)}{slide_note} is ready.</p>"
+            f"{link_html}"
+            "<p>The link is good for 7 days. It is also waiting in the "
+            "chat on your dashboard.</p>"
+            "<p>Crosswalk IQ</p>",
+            title="Your deck is ready")
+        body_text = (
+            f"{title}{slide_note} is ready.\n\n"
+            + (f"Download the deck: {url}\n\n" if url else "")
+            + "The link is good for 7 days. It is also waiting in the "
+              "chat on your dashboard.\n\nCrosswalk IQ\n")
+    else:
+        reply = str((data or {}).get('reply') or '').strip()
+        if not reply:
+            return False
+        subject_line = "Your read is ready"
+        reply_html = _html.escape(reply).replace('\n', '<br>')
+        body_html = _wrap_email_html(
+            f"<p>{reply_html}</p>"
+            "<p>You can also pick this up in the chat on your "
+            "dashboard.</p>"
+            "<p>Crosswalk IQ</p>",
+            title="Your read is ready")
+        body_text = (
+            f"{reply}\n\n"
+            "You can also pick this up in the chat on your "
+            "dashboard.\n\nCrosswalk IQ\n")
+
+    def _send():
+        try:
+            ses = boto3.client('ses', region_name='us-east-2')
+            ses.send_email(
+                Source='Crosswalk IQ <jenna@crosswalknyc.com>',
+                Destination={'ToAddresses': [to_email]},
+                Message={'Subject': {'Data': subject_line[:200]},
+                         'Body': {'Html': {'Data': body_html},
+                                  'Text': {'Data': body_text}}})
+            print(f"[pm-notify] output email sent to {to_email} ({kind})")
+        except Exception as e:
+            print(f"[pm-notify] SES send failed: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
+
+
+def _pm_flush_notify(job_id, kind, data):
+    """On successful completion: if the requester opted in, email them
+    the output, then clear the opt-in. No-op when none was set."""
+    try:
+        opt = _pm_notify_read(job_id)
+        if opt and opt.get('email'):
+            _pm_send_output_email(kind, opt.get('email'), data)
+    except Exception:
+        traceback.print_exc()
+    finally:
+        _pm_notify_delete(job_id)
+
+
+def _pm_history_has_job_turn(history, meta_key, job_id):
+    for t in (history or []):
+        try:
+            if (t or {}).get('meta', {}).get(meta_key) == job_id:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _pm_append_read_to_history(username, job_id, payload):
+    """Append a finished read to the requester's chat thread so it is
+    waiting when they return, even if the tab that started it is gone.
+    Uses the existing per-user history store; idempotent by
+    read_job_id so it never doubles a turn the widget also delivered."""
+    if not username:
+        return
+    try:
+        reply = str((payload or {}).get('reply') or '').strip()
+        if not reply:
+            return
+        history = _load_synth_chat_history(username) or []
+        if _pm_history_has_job_turn(history, 'read_job_id', job_id):
+            return
+        followups = [f for f in ((payload or {}).get('followups') or [])
+                     if isinstance(f, str)][:6]
+        history.append({
+            'role': 'agent', 'text': reply, 'ts': _pm_iso_now(),
+            'meta': {'read_job_id': job_id, 'kind': 'read',
+                     'options': [{'label': f, 'send': f}
+                                 for f in followups]}})
+        _save_synth_chat_history(username, history)
+    except Exception:
+        traceback.print_exc()
+
+
+def _pm_append_deck_to_history(username, job_id, status):
+    """Append a finished deck (title + download link) to the
+    requester's chat thread. Idempotent by deck_job_id."""
+    if not username:
+        return
+    try:
+        url = str((status or {}).get('url') or '')
+        if not url.lower().startswith('https://'):
+            return
+        history = _load_synth_chat_history(username) or []
+        if _pm_history_has_job_turn(history, 'deck_job_id', job_id):
+            return
+        title = str((status or {}).get('title')
+                    or (status or {}).get('filename')
+                    or 'Profile IQ deck')
+        slides = (status or {}).get('slides')
+        slide_note = (f" ({slides} slides)"
+                      if isinstance(slides, int) and slides else '')
+        history.append({
+            'role': 'agent',
+            'text': (f"Deck ready: {title}{slide_note}. "
+                     "The link is good for 7 days."),
+            'ts': _pm_iso_now(),
+            'meta': {'deck_job_id': job_id, 'kind': 'deck',
+                     'link': {'url': url,
+                              'label': 'Download the deck'}}})
+        _save_synth_chat_history(username, history)
+    except Exception:
+        traceback.print_exc()
+
+
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led):
     """Background body of one generated read. Writes the finished
@@ -55629,7 +58810,14 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
     phone or reloaded tab picks the read up when it returns. As the
     read advances, each phase transition lands on the job JSON as a
     user-safe `stage` (one tiny S3 put per transition) so the widget
-    can narrate progress (2026-08-28, p1-staged-progress)."""
+    can narrate progress (2026-08-28, p1-staged-progress).
+
+    `pm_ppu` (2026-09-04): now carries the pre-captured request-thread
+    user attribution (user, user_email) merged with pay-as-you-go
+    billing extras. Threaded through to _pm_generate_read_core so
+    every model call inside the read attributes to the requesting
+    user, even though this function runs on a background thread with
+    no Flask request context."""
     head = {'job_id': job_id, 'user': pm_user,
             'question': text[:300], 'started_at': time.time()}
 
@@ -55659,8 +58847,19 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             if isinstance(_verify, dict) and _verify:
                 _done['verify'] = _verify
             _pm_read_status_write(job_id, _done)
+            # Land the finished read in the requester's chat thread so
+            # it is waiting when they return, and (if they opted in)
+            # email them the read itself. A held read still lands in
+            # the thread as its calm one-liner, but carries no output
+            # to email, so only a clean read fires the notify.
+            _pm_append_read_to_history(pm_user, job_id, payload)
+            if not held:
+                _pm_flush_notify(job_id, 'read', payload)
+            else:
+                _pm_notify_delete(job_id)
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
+            _pm_notify_delete(job_id)
         print(f"[pm-loop] read {job_id} "
               f"{'held' if held else 'done' if payload.get('success') else 'failed'} "
               f"for {pm_user}")
@@ -55674,6 +58873,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
         except Exception:
             pass
+        _pm_notify_delete(job_id)
 
 
 @app.route('/api/brief-chat/read-status/<job_id>', methods=['GET'])
@@ -55701,6 +58901,82 @@ def api_synth_chat_read_status(job_id):
     return jsonify({'success': True, **payload})
 
 
+@app.route('/api/brief-chat/notify-when-done', methods=['POST'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/notify-when-done')
+def api_synth_chat_notify_when_done():
+    """Opt in to an email when a long read / deck finishes.
+
+    Called after the task's ack, once the user confirms the offer with
+    an address. The finished output always lands in the chat thread on
+    return; this endpoint is only the opt-in email extra. The address
+    rides an S3 side-file keyed by job id so the background thread
+    picks it up on completion regardless of which worker serves this
+    request. If the job already finished, the output email is sent
+    right away instead of queued.
+
+    Session-authenticated dashboard users only."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    # Prometheus mode gate (2026-09-03, Jenna): notify-when-done is
+    # only ever wired to a read / deck job the user already kicked
+    # off, both of which are analysis-tier surfaces. Pull-only users
+    # never see the offer chip on the frontend; this is defense in
+    # depth.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({'success': False, 'error': 'bad request'}), 400
+    job_id = str(body.get('job_id') or '').strip()
+    kind = 'deck' if str(body.get('kind') or '') == 'deck' else 'read'
+    email = _pm_clean_notify_email(body.get('email'))
+    if not re.fullmatch(r'[0-9a-f]{12}', job_id):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    if not email:
+        return jsonify({'success': False,
+                        'error': 'enter a valid email'}), 400
+    uname = (user.get('username') or user.get('email') or '').strip()
+    prefix = _PM_DECK_PREFIX if kind == 'deck' else _PM_READ_PREFIX
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{prefix}{job_id}.json")
+        status = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    if (status.get('user') and status.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    st = str(status.get('status') or '').strip().lower()
+    # Already finished: send the output now (a held read / any error
+    # has no output to send, so those just confirm without a send).
+    if kind == 'read' and st in ('done', 'held', 'error'):
+        sent = False
+        if st == 'done':
+            sent = _pm_send_output_email('read', email,
+                                         status.get('payload') or {})
+        return jsonify({'success': True, 'already_done': True,
+                        'sent': bool(sent)})
+    if kind == 'deck' and st in ('done', 'error'):
+        sent = False
+        if st == 'done':
+            sent = _pm_send_output_email('deck', email, status)
+        return jsonify({'success': True, 'already_done': True,
+                        'sent': bool(sent)})
+    # Still running: stash the opt-in for the worker to pick up.
+    try:
+        _pm_notify_write(job_id, {'job_id': job_id, 'kind': kind,
+                                  'email': email, 'user': uname,
+                                  'requested_at': time.time()})
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                        'error': 'could not save your request'}), 500
+    return jsonify({'success': True, 'queued': True})
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
@@ -55713,6 +58989,12 @@ def api_synth_chat_analyze():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): analyze is the primary
+    # read surface; 'pull'-only users are blocked here. Runs before
+    # the JSON body parse so an empty pull-only request also gets the
+    # friendly refusal instead of the calm-fallback line.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -55906,20 +59188,12 @@ def api_synth_chat_analyze():
                       'want included), or open a view with data on '
                       'screen, then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    # Credit preflight (2026-08-21): chatbot analyses are tracked usage
-    # like every other pull. Unlimited users always pass; the charge
-    # itself lands after a successful analysis so failures cost nothing.
-    # Pay-as-you-go users skip credits entirely - their usage is billed
-    # in dollars per session instead.
+    # 2026-09-09 Jenna: "Analyze this data" is session-metered, not
+    # per-pull charged. Pay-per-use accounts bill via the session
+    # close; subscribed accounts are covered by their tier. Real
+    # pipeline pulls (Profile IQ, Subscriber IQ) remain credit-gated
+    # in their own routes.
     _pm_user = (session.get('username') or user.get('username') or '').strip()
-    if _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
-        }), 402
     try:
         import prometheus_analysis as pma
     except Exception as e:
@@ -56157,6 +59431,52 @@ def _pm_deck_status_write(job_id, payload):
 _PM_DECK_FILE_PREFIX = 'generated_decks/'
 
 
+def _pm_deck_fuzzy_suggestions(query):
+    """Closest-catalog deck suggestions for a subject / ask that did not
+    resolve to one exact profile (Jenna 2026-08-31: fuzzy-match the typed
+    name and suggest the similar-named profiles instead of a generic
+    punt). Reuses the interpret path's token-overlap shortlister
+    (_shortlist_profile_matches) and layers per-user access gating; the
+    grouping, family-set binding, and chip payloads live in
+    prometheus_analysis (pure + unit-tested).
+
+    Returns a list of confirm-chip payloads
+    ({kind, label, subtitle, bind}); [] when nothing is close enough."""
+    import prometheus_analysis as pma
+    q = str(query or '').strip()
+    if not q:
+        return []
+    try:
+        catalog = _profile_catalog_for_chat()
+    except Exception:
+        traceback.print_exc()
+        return []
+    # Only ever suggest profiles this user can actually run.
+    accessible = []
+    for c in (catalog or []):
+        k = str((c or {}).get('s3_key') or '').strip()
+        if not k:
+            continue
+        try:
+            ok, _err = _require_profile_run_access(k)
+        except Exception:
+            ok = False
+        if ok:
+            accessible.append(c)
+    if not accessible:
+        return []
+    try:
+        ranked = _shortlist_profile_matches(
+            q, accessible, max_candidates=SYNTH_CHAT_MAX_CANDIDATES)
+    except Exception:
+        ranked = None
+    try:
+        return pma.build_deck_suggestions(q, accessible, ranked=ranked)
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
 def _pm_resolve_deck_subject(text, ctx):
     """Resolve a typed deck ask to a profile in the catalog.
 
@@ -56286,11 +59606,35 @@ def _pm_resolve_deck_subject(text, ctx):
         return ({'ctx': new_ctx, 'subject': subject,
                  'partner': resolved_partner, 'clarify': None}, None)
 
+    # Fuzzy suggestions (2026-08-31, Jenna): a NAMED subject that did not
+    # resolve to one exact profile offers the closest catalog profiles as
+    # confirm chips (including a whole-family set), not a generic punt.
+    # An explicitly named subject wins even over an open profile, since
+    # the user asked for something specific by name.
+    if wanted:
+        suggestions = _pm_deck_fuzzy_suggestions(wanted)
+        if suggestions:
+            return ({'clarify': {
+                'question': (f'I could not find an exact match for '
+                             f'"{wanted}". Did you mean one of these?'),
+                'suggestions': suggestions}}, None)
+
     if ctx and ctx.get('primary'):
         name = str((ctx.get('primary') or {}).get('name') or '').strip()
         subject = name.split(' - ')[0].strip() or name or 'this audience'
         return ({'ctx': ctx, 'subject': subject,
                  'partner': resolved_partner, 'clarify': None}, None)
+
+    # No named subject and nothing open: recover a profile name from the
+    # raw ask itself (the extractor can miss a name inside a long,
+    # multi-part project brief). Same confirm-chip suggestions.
+    if not wanted and text:
+        suggestions = _pm_deck_fuzzy_suggestions(text)
+        if suggestions:
+            return ({'clarify': {
+                'question': ('Here are the closest profiles in the '
+                             'library. Which should the deck cover?'),
+                'suggestions': suggestions}}, None)
 
     if wanted:
         return None, (jsonify({
@@ -56420,6 +59764,14 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         except Exception:
             traceback.print_exc()
         print(f"[prometheus] deck {job_id} done for {username}: {fname}")
+        # Land the finished deck in the requester's chat thread so the
+        # download link is waiting when they return, and (if they
+        # opted in) email them the link.
+        _deck_status = {'url': url, 'filename': fname,
+                        'title': plan.get('title'),
+                        'slides': len(plan.get('slides') or [])}
+        _pm_append_deck_to_history(username, job_id, _deck_status)
+        _pm_flush_notify(job_id, 'deck', _deck_status)
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/deck-job', e,
@@ -56428,12 +59780,13 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                                       'angle': str(angle)[:200]})
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
+        _pm_notify_delete(job_id)
+        # 2026-09-09 Jenna: decks are session-metered, not per-pull
+        # charged, so there is no per-pull refund to issue on
+        # failure. `charge_user` is always empty in the new flow;
+        # branch retained as a defensive no-op for legacy callers.
         if charge_user:
-            try:
-                refund_credit(charge_user, credits=CREDITS_CHATBOT_DECK,
-                              reason=f'deck build {job_id} failed')
-            except Exception:
-                traceback.print_exc()
+            pass
 
 
 @app.route('/api/brief-chat/deck', methods=['POST'])
@@ -56448,6 +59801,10 @@ def api_synth_chat_deck():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): decks are analysis
+    # outputs. Pull-only users cannot kick off a deck build.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -56485,33 +59842,21 @@ def api_synth_chat_deck():
     deck_partner = resolution.get('partner') or ''
     job_id = uuid.uuid4().hex[:12]
     username = (user.get('username') or user.get('email') or '').strip()
-    # Credit preflight + charge (2026-08-21): deck builds are tracked
-    # usage on every account including unlimited ones. Charged up front
-    # with the deck job id; the background job refunds on failure.
-    # Pay-as-you-go users skip credits: their deck's model usage is
-    # billed per session in dollars instead.
-    _charge_user = '' if _pm_ppu else (session.get('username')
-                                       or user.get('username') or '').strip()
-    if _charge_user and not has_credits_for(_charge_user,
-                                            CREDITS_CHATBOT_DECK):
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ('No credits remaining for a deck build. Use the '
-                      'credits button in the top bar to request more.'),
-        }), 402
-    if _charge_user:
-        try:
-            consume_credit(
-                _charge_user,
-                description=f'Chatbot Deck - {angle[:120]}',
-                job_id=job_id,
-                pull_type='Chatbot Deck',
-                credits_used=CREDITS_CHATBOT_DECK)
-        except Exception:
-            traceback.print_exc()
-    if _pm_ppu:
-        _PM_DECK_PPU_EXTRAS[job_id] = _pm_ppu
+    # 2026-09-09 Jenna: deck builds are session-metered, not per-pull
+    # charged. Pay-per-use accounts bill via the session close;
+    # subscribed accounts are covered by their tier. `_charge_user` is
+    # kept as an empty string for downstream compatibility (the refund
+    # path below reads it and no-ops when empty), but no per-pull
+    # credit is deducted for a deck.
+    _charge_user = ''
+    # Attribute the deck's model spend to the enqueuing user for ALL
+    # users (not just pay-as-you-go), so the daily spend email's
+    # per-user Prometheus breakdown captures deck builds. The bg thread
+    # has no request context, so identity is captured here at enqueue;
+    # any pay-as-you-go billing fields in _pm_ppu are preserved.
+    _deck_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+    if _deck_extras:
+        _PM_DECK_PPU_EXTRAS[job_id] = _deck_extras
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
@@ -56984,7 +60329,25 @@ def _scrub_v1_status(raw_status: dict | None) -> dict:
         out['reason'] = _reason or _V1_FAILED_REASON
         _cr = raw_status.get('credits_refunded')
         if isinstance(_cr, (int, float)) and _cr > 0:
-            out['credits_refunded'] = int(_cr)
+            _cr_int = int(_cr)
+            out['credits_refunded'] = _cr_int
+            # Prefer an explicit engine-side USD refund if present,
+            # otherwise convert the credit refund via the current
+            # decision-tier USD table (2026-09-09).
+            _ru = raw_status.get('refund_usd')
+            if isinstance(_ru, (int, float)) and _ru > 0:
+                out['refund_usd'] = round(float(_ru), 2)
+            else:
+                # Map the credit count back to a USD figure using the
+                # decision the engine recorded. Fall back to new_build
+                # (safe upper) when the decision field is absent.
+                _dec = str(raw_status.get('decision') or '').strip().lower()
+                if _dec:
+                    out['refund_usd'] = _v1_price_usd_for(_dec, 0)
+                else:
+                    # 3 credits -> derive_cut, 5+ -> new_build tier.
+                    out['refund_usd'] = _v1_price_usd_for(
+                        'derive_cut' if _cr_int <= 3 else 'new_build', 0)
     return out
 
 
@@ -57044,6 +60407,116 @@ _V1_CREDITS = {
     'cut_needs_parent':     CREDITS_PROFILE_ANALYSIS + 3,   # 8
     'subscriber_iq':        CREDITS_SVOD,                   # 10
 }
+
+
+# USD prices for the partner-facing v1 API (2026-09-09 Jenna directive:
+# the API must speak in dollars, not internal credits). Values default
+# to MODULE_CATALOG rows in bg-webapp/wallet.py:
+#   api_chatbot_profile_iq_build -> $500  (partner API v1 fresh build)
+#   api_profile_iq_cut           -> $100
+#   api_subscriber_iq_build      -> $1000
+# and can be overridden per-workspace via system/pricing.json (the same
+# knob the admin billing pricing panel writes to). Fallbacks live inline
+# so a wallet import failure at boot never removes pricing.
+#
+# Note (2026-09-09 consolidation): the price quote reads
+# `api_chatbot_profile_iq_build` - the same key `pull_type_to_tool_key`
+# routes every partner-API-driven build to. The legacy
+# `api_profile_iq_build` row is retired; keeping the quote and the
+# debit on one key means an admin edit to that one row updates BOTH
+# what the partner sees in /check and what they get charged in /run,
+# with zero drift risk.
+_V1_USD_FALLBACK = {
+    'existing_match':       0.0,
+    'derive_cut':           100.0,
+    'time_shifted_refresh': 500.0,
+    'new_build':            500.0,
+    'cut_needs_parent':     600.0,   # parent build + cut
+    'subscriber_iq':        1000.0,
+}
+
+_V1_USD_ADDON_CUT_FALLBACK = 100.0   # api_profile_iq_cut
+
+
+def _v1_tool_price_usd(tool_key: str, default: float) -> float:
+    """Read the current admin-configured USD price for a tool_key from
+    wallet.tool_price_usd(). Silently falls back to `default` if the
+    wallet layer or pricing.json is unavailable, so the API surface
+    keeps quoting a stable number even during a boot race."""
+    try:
+        import wallet as _w
+        val = float(_w.tool_price_usd(tool_key))
+        if val > 0.0:
+            return val
+    except Exception:
+        pass
+    return float(default)
+
+
+def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
+    """USD price a partner would pay for one v1 run at `decision` tier
+    with `cut_count` embedded addon cuts. This is the ONLY place the
+    API surface converts an internal decision into a dollar amount -
+    every /check, /run, /status response reads through it, so a
+    per-workspace pricing.json edit propagates everywhere at once."""
+    d = (decision or '').strip().lower()
+    cut_count = max(int(cut_count or 0), 0)
+    cut_each = _v1_tool_price_usd(
+        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK)
+    if d == 'existing_match':
+        return 0.0
+    if d == 'subscriber_iq':
+        base = _v1_tool_price_usd(
+            'api_subscriber_iq_build', _V1_USD_FALLBACK['subscriber_iq'])
+        return round(base + cut_each * cut_count, 2)
+    if d == 'derive_cut':
+        # Cut-only derive: the addon cut counter and the decision-tier
+        # already both charge for the cut - never double count. Price
+        # is a single cut_each.
+        return round(cut_each, 2)
+    if d == 'cut_needs_parent':
+        # Parent build + one cut, and any additional addon cuts stack
+        # on top the same as new_build.
+        base = _v1_tool_price_usd(
+            'api_chatbot_profile_iq_build',
+            _V1_USD_FALLBACK['new_build'])
+        # First cut is baked into the tier; every extra cut is +cut_each.
+        extra_cuts = max(cut_count - 1, 0) if cut_count > 0 else 0
+        return round(base + cut_each + cut_each * extra_cuts, 2)
+    # new_build, time_shifted_refresh, and everything else default to
+    # the api_chatbot_profile_iq_build tier - the same key
+    # pull_type_to_tool_key routes every partner API run to, so quote
+    # and debit always match.
+    base = _v1_tool_price_usd(
+        'api_chatbot_profile_iq_build',
+        _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']))
+    return round(base + cut_each * cut_count, 2)
+
+
+def _v1_balance_usd(username: str) -> float:
+    """Partner's dollar wallet balance. Reads through wallet.py so
+    unlimited accounts and company-shared wallets both surface the
+    correct number. Falls back to 0.0 on any error - the caller only
+    reads this for display, never for gating (the credit preflight
+    still owns the actual permit-to-run decision)."""
+    try:
+        import wallet as _w
+        data = load_users()
+        subject = _w.resolve_billing_subject(username, data)
+        rec = subject.get('record') or {}
+        if _w.is_unlimited(rec):
+            return -1.0
+        return round(float(_w.wallet_balance(rec)), 2)
+    except Exception:
+        return 0.0
+
+
+def _v1_price_usd_for_cut() -> float:
+    """USD price for a single embedded addon cut, exposed for schema
+    display + addon_cuts[].price_usd. Cheap wrapper so the schema
+    reads live from pricing.json too."""
+    return round(_v1_tool_price_usd(
+        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK), 2)
 
 # --------------------------------------------------------------------
 # Partner-API rate limiter (2026-08-18 security hardening, fix #2).
@@ -57284,6 +60757,13 @@ def _partner_credit_preflight(username: str, min_credits: int):
     """Confirm the partner has at least `min_credits` credits before
     we spend a Claude call on their behalf. Returns (None, None) on
     allow, (jsonify_response, 402) on reject.
+
+    Response includes both credit and USD framings (2026-09-09):
+      * balance_usd, price_usd_minimum   - the primary partner-facing
+        numbers.
+      * credits_required_minimum,
+        credits_remaining                - kept for backward compat
+        with existing integrations.
     """
     if min_credits <= 0:
         return None, None
@@ -57294,17 +60774,34 @@ def _partner_credit_preflight(username: str, min_credits: int):
         # If the credit lookup blows up, fail closed - don't spend Claude.
         return jsonify({
             'success': False,
-            'error': 'credit balance temporarily unavailable',
+            'error': 'balance temporarily unavailable',
         }), 503
     try:
         _, remaining = check_user_credits(username)
     except Exception:
         remaining = 0
+    # Convert the internal min-credit gate to its USD equivalent so
+    # the partner sees the number in the currency they top up in.
+    # min_credits 3 -> derive_cut ($100), min_credits 5 -> new_build
+    # ($500); anything else routes through new_build as a safe upper
+    # bound so a partner is never quoted less than they'll actually
+    # need at run time.
+    if min_credits <= 3:
+        _price_usd_min = _v1_price_usd_for('derive_cut', 0)
+    else:
+        _price_usd_min = _v1_price_usd_for('new_build', 0)
+    _bal_usd = _v1_balance_usd(username)
     resp = jsonify({
         'success': False,
-        'error': (f'insufficient credits: this endpoint requires at '
-                  f'least {min_credits} credit balance to run '
-                  f'(current balance: {remaining}).'),
+        'error': (f"insufficient balance: this endpoint requires at "
+                  f"least ${_price_usd_min:.2f} on hand to run "
+                  f"(current balance: "
+                  f"{'unlimited' if _bal_usd == -1.0 else f'${_bal_usd:.2f}'})."),
+        # USD framing (primary going forward).
+        'price_usd_minimum': _price_usd_min,
+        'balance_usd': _bal_usd,
+        # Legacy credit framing (kept so existing integrations that
+        # key off these two field names keep working).
         'credits_required_minimum': min_credits,
         'credits_remaining': remaining,
     })
@@ -58268,6 +61765,18 @@ def _maybe_ask_parent_link(draft, prompt, catalog):
                                                 min_score=0.30)
         cut_label = str(draft.get('cut_label')
                         or draft.get('subject') or '').strip()
+    # Subject-identity gate (parity with _apply_universe_qualifier_gate,
+    # which only guards existing_match/derive_cut and never this path):
+    # drop any candidate that shares no real identity token with the ask
+    # so a generic behavioral/demographic persona is never offered as a
+    # "cut" of an unrelated audience (Heavy Social Users -> Trex Deck
+    # Build Planners defect, Jenna 2026-09-02). Prefer build-fresh over
+    # a wrong link. Legitimate "{Subject} Female"-style cuts survive
+    # because they share the real subject token.
+    _ask_subject = draft.get('subject') or cut_label or ''
+    cands = [c for c in cands
+             if not _subject_identity_mismatch(
+                 prompt, _ask_subject, c.get('display_name'))]
     if not cands:
         return draft
     draft['parent_link_candidates'] = [
@@ -59037,12 +62546,36 @@ def _identity_tokens_missing_from_prompt(subject, prompt):
     return missing
 
 
+_INTERNAL_FIELD_NAMES_IN_PROSE = (
+    'identity_confident', 'is_ip_content', 'identity_note',
+    'identity_qualifier', 'resolved_identity', 'resolved_title',
+)
+
+
 def _scrub_identity_dashes(s):
     """Em/en dashes never ship in user-facing identity copy (workspace
     rule). Model output flows straight into the approval card and the
-    /check response, so scrub here deterministically."""
+    /check response, so scrub here deterministically. Also strips any
+    internal draft-field-name references the model may have written
+    into prose (e.g. 'see identity_confident flag') per
+    no-modeled-or-source-language.mdc."""
     out = str(s or '').replace('\u2014', ' - ').replace('\u2013', ' - ')
-    return re.sub(r'  +', ' ', out).strip()
+    # Strip trailing "- see <field_name> flag" clauses and any bare
+    # mention of an internal draft field name.
+    for _fn in _INTERNAL_FIELD_NAMES_IN_PROSE:
+        # "- see identity_confident flag" or "; see identity_confident flag"
+        # to end of string (case-insensitive, tolerant of surrounding spaces).
+        out = re.sub(
+            r'\s*[-;,]\s*see\s+' + re.escape(_fn) + r'\s+flag\b\.?',
+            '', out, flags=re.IGNORECASE)
+        # Bare token anywhere (belt and suspenders).
+        out = re.sub(r'\b' + re.escape(_fn) + r'\b', '',
+                     out, flags=re.IGNORECASE)
+    # Normalize whitespace and clean up trailing punctuation artefacts
+    # left by the removal (e.g. dangling "; " or " - " at end).
+    out = re.sub(r'  +', ' ', out)
+    out = re.sub(r'\s*[-;,]\s*$', '', out)
+    return out.strip()
 
 
 def _set_resolved_identity_line(draft):
@@ -60594,7 +64127,8 @@ def _v1_build_brief_summary(draft, decision, d_type=None, cuts=None,
     return text
 
 
-def _v1_conclude(prompt, run_avid=True, identity_context=None):
+def _v1_conclude(prompt, run_avid=True, identity_context=None,
+                 competitor_brands=None):
     """THE single decision function for /api/v1/profiles/check and
     /api/v1/profiles/run. Runs interpret -> promoters -> normalize ->
     spec construction -> enqueue-validation mirror, identically for
@@ -60604,6 +64138,11 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
     identity_context (optional dict of domain/category/description)
     is subject-identity disambiguation only - it feeds interpret and
     subject verification, never decision semantics (no-overrides).
+
+    competitor_brands (optional list of brand names) is a research
+    INPUT seed only. It is attached to the draft AFTER every decision /
+    promoter / demotion step below, so it can never influence the
+    verdict; _spec_from_draft folds it onto spec['competitor_brands'].
 
     Returns (conclusion_dict, None) on success or (None,
     (flask_response, http_status)) when the prompt could not be
@@ -60638,6 +64177,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
         pass
     _decompose_embedded_subject_cuts(draft, prompt)
     _augment_multi_cohort_cuts(draft, prompt)
+    _drop_degenerate_addon_cuts(draft)
     _maybe_promote_embedded_cuts_to_parent(draft,
                                            allow_existing_match=False)
 
@@ -60800,8 +64340,9 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
         if _sv_suggest:
             _sv_msg += (f". Did you mean '{_sv_suggest}'? If so, ask "
                         f"for it under that exact name; if not, "
-                        f"include the subject's website domain in the "
-                        f"request to confirm the spelling.")
+                        f"include the subject's website (e.g. "
+                        f"`www.example.com`) so we can confirm the "
+                        f"spelling.")
         return {
             'draft': draft,
             'candidates': candidates,
@@ -60862,6 +64403,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
             draft['event_window_query'] = _ew['query']
     if _ev_state != 'confident':
         _bind_relative_window(draft, prompt, decision=decision)
+        _bind_shared_explicit_window(draft, prompt, decision=decision)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
     # `cuts` was computed above (deliverable defs only), BEFORE the
@@ -60945,6 +64487,16 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
         except Exception:
             pass
         return conclusion, None
+
+    # Caller-supplied competitor brands (2026-08-31): attached here,
+    # AFTER every decision/promoter/demotion step above, so it can
+    # never influence the verdict (no-external-overrides rule: input
+    # fields like target audience are allowed; override flags are not).
+    # _spec_from_draft reads draft['competitor_brands'] and folds it
+    # onto spec['competitor_brands'] for the research phase.
+    if competitor_brands:
+        draft['competitor_brands'] = [b for b in competitor_brands
+                                      if isinstance(b, str) and b.strip()]
 
     if decision != 'existing_match':
         # Build the spec on BOTH routes. This is where audience sizing
@@ -61047,41 +64599,157 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
 # --------------------------------------------------------------------
 
 _V1_BODY_KNOWN_FIELDS = ('prompt', 'text', 'run_avid', 'domain',
-                         'category', 'description')
+                         'category', 'description', 'competitor_brands')
+
+# Max competitor brand names accepted per request, and per-name length
+# cap (2026-08-31). A caller-supplied INPUT seed for research only.
+_V1_COMPETITOR_MAX = 50
+_V1_COMPETITOR_NAME_MAX = 80
+
+
+def _v1_clean_competitor_name(raw):
+    """Strip apostrophes (they never appear in clickstream) and collapse
+    whitespace on a single competitor brand name. Returns '' if empty."""
+    name = str(raw or '')
+    for _ap in ("'", '\u2019', '\u2018', '\u02bc', '`'):
+        name = name.replace(_ap, '')
+    return re.sub(r'\s+', ' ', name).strip()
+
+
+# URL / domain detection in the prompt itself (Jenna 2026-09-08). A
+# partner or user was told "we do not work off URLs" - but the
+# canonical way to identify a brand IS its website. If the caller
+# types `www.heb.com` or `https://heb.com/store-locator/` as the
+# prompt, we extract the bare host, keep the original prompt intact
+# for interpret context, and promote the host into identity_context
+# so the interpret step has the same domain grounding a partner would
+# have gotten if they had passed `domain` as a side-input field. The
+# SUBJECT IDENTITY RESOLUTION rule in _synth_chat_interpret_prompts
+# is updated in the same change to teach Claude to resolve a URL to
+# the underlying entity (heb.com -> HEB, wf.com -> Wells Fargo).
+
+# Full URL with a scheme: unambiguous.
+_V1_URL_WITH_SCHEME_RE = re.compile(
+    r'\b(?P<scheme>https?)://'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})'
+    r'(?::\d+)?'
+    r'(?:/[^\s]*)?',
+    flags=re.IGNORECASE,
+)
+
+# www.<host>.<tld> anywhere in the prompt: unambiguous.
+_V1_URL_WWW_RE = re.compile(
+    r'\bwww\.'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})'
+    r'(?:/[^\s]*)?',
+    flags=re.IGNORECASE,
+)
+
+# Bare `label.tld` shape used ONLY when the whole prompt is a single
+# domain-like token (so we don't accidentally match "i.e." or "P.M."
+# inside a sentence). Common TLDs are the safe bet; a full IANA list
+# would over-match on things like "e.g." matching "eg" as a TLD.
+_V1_BARE_HOST_RE = re.compile(
+    r'^\s*'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+'
+    r'(?:com|net|org|co|io|us|app|ai|tv|store|shop|inc|club|gov|edu|'
+    r'biz|info|dev|xyz|me|us|uk|ca|au|de|fr|it|es|jp|kr|cn|in|br|mx|'
+    r'nl|se|no|dk|fi|be|ch|at|ie|nz|za|sg|hk|tw|il|ru|pl|cz|gr|pt|'
+    r'tr|hu|ro|ua|kz|by|lt|lv|ee|is|ar|cl|co|pe|ve|cr|do|ec|gt|hn|'
+    r'ni|pa|py|sv|uy|ao|dz|cm|ci|eg|et|gh|ke|ma|ng|sn|tn|ug|zm|zw))'
+    r'(?:/[^\s]*)?'
+    r'\s*$',
+    flags=re.IGNORECASE,
+)
+
+
+def _v1_normalize_host(host):
+    """Trim scheme, path, query, port, www.; lowercase; strip trailing dots.
+    Return '' if the result isn't a plausible domain."""
+    v = str(host or '').strip()
+    if not v:
+        return ''
+    v = re.sub(r'^[a-z][a-z0-9+.-]*://', '', v, flags=re.I)
+    v = v.split('/', 1)[0]
+    v = v.split('?', 1)[0]
+    v = v.split('#', 1)[0]
+    v = v.split(':', 1)[0]  # drop :port
+    v = v.strip().strip('.').lower()
+    if v.startswith('www.'):
+        v = v[4:]
+    if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,63}$', v):
+        return ''
+    return v
+
+
+def _v1_extract_domain_from_prompt(prompt):
+    """Return a bare host if `prompt` contains an unambiguous URL/domain,
+    else ''. Recognizes:
+      * `https://heb.com/...`, `http://example.co.uk`         (scheme)
+      * `www.heb.com/store-locator`                            (www.)
+      * `heb.com`, `www.heb.com` when the whole prompt IS that (bare)
+
+    We deliberately do NOT extract bare `foo.com` embedded inside a
+    longer sentence - too many false positives (abbreviations,
+    filenames, etc.). If a partner wants us to grab a bare domain
+    mid-sentence, they can include `https://` or `www.`.
+    """
+    p = str(prompt or '').strip()
+    if not p:
+        return ''
+    m = _V1_URL_WITH_SCHEME_RE.search(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    m = _V1_URL_WWW_RE.search(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    m = _V1_BARE_HOST_RE.match(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    return ''
 
 
 def _v1_parse_check_run_body(body):
     """Validate a /check or /run JSON body. Returns
-    (prompt, run_avid, identity_context, error_response_or_None)."""
+    (prompt, run_avid, identity_context, competitor_brands,
+    error_response_or_None). competitor_brands is a cleaned list of
+    brand-name strings (or None when absent) - a research INPUT seed
+    only, never a decision override."""
     if not isinstance(body, dict):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'request body must be a JSON object'}), 400)
     for k in body.keys():
         if k not in _V1_BODY_KNOWN_FIELDS:
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': (f'unknown field: "{k}". Accepted fields: '
                           'prompt (required), run_avid, domain, '
-                          'category, description. See GET '
-                          '/api/v1/schema.')}), 400)
+                          'category, description, competitor_brands. '
+                          'See GET /api/v1/schema.')}), 400)
     prompt_raw = body.get('prompt', body.get('text'))
     if prompt_raw is not None and not isinstance(prompt_raw, str):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': '"prompt" must be a string'}), 400)
     prompt = (prompt_raw or '').strip()
     if not prompt:
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'required field: "prompt"'}), 400)
     if len(prompt) > 4000:
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'prompt exceeds 4000 characters'}), 400)
     run_avid_raw = body.get('run_avid', True)
     if not isinstance(run_avid_raw, bool):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': '"run_avid" must be a boolean'}), 400)
     ictx = {}
@@ -61091,28 +64759,81 @@ def _v1_parse_check_run_body(body):
         if v is None:
             continue
         if not isinstance(v, str):
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': f'"{k}" must be a string'}), 400)
         v = v.strip()
         if not v:
             continue
         if len(v) > cap:
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': f'"{k}" exceeds {cap} characters'}), 400)
         if k == 'domain':
-            # Normalize a pasted URL down to the bare host.
-            v = re.sub(r'^[a-z][a-z0-9+.-]*://', '', v, flags=re.I)
-            v = v.split('/', 1)[0].split('?', 1)[0].strip().lower()
-            v = v[4:] if v.startswith('www.') else v
-            if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,}$', v):
-                return None, True, None, (jsonify({
+            v = _v1_normalize_host(v)
+            if not v:
+                return None, True, None, None, (jsonify({
                     'success': False,
                     'error': ('"domain" must be a website domain like '
                               'example.com')}), 400)
         ictx[k] = v
-    return prompt, run_avid_raw, (ictx or None), None
+
+    # URL / domain in the prompt itself (Jenna 2026-09-08). A partner
+    # who types `www.heb.com` or `https://heb.com/store-locator` as
+    # the prompt should get resolved to the underlying brand (HEB)
+    # instead of being told "we do not work off URLs". If the caller
+    # ALSO passed a `domain` side-input, we keep the side-input as
+    # authoritative and just record the in-prompt host for logging.
+    _prompt_domain = _v1_extract_domain_from_prompt(prompt)
+    if _prompt_domain and 'domain' not in ictx:
+        ictx['domain'] = _prompt_domain
+
+    # competitor_brands (2026-08-31): optional array of brand names the
+    # caller wants represented inside this subject's profile. Cleaned
+    # here, folded onto the spec by _spec_from_draft, and threaded into
+    # research by build_persona_brief. It is an INPUT, not a behavior
+    # flag: it never touches the decision / existing_match / cut path.
+    competitor_brands = None
+    cb_raw = body.get('competitor_brands')
+    if cb_raw is not None:
+        if not isinstance(cb_raw, list):
+            return None, True, None, None, (jsonify({
+                'success': False,
+                'error': '"competitor_brands" must be a list of brand '
+                         'names'}), 400)
+        if len(cb_raw) > _V1_COMPETITOR_MAX:
+            return None, True, None, None, (jsonify({
+                'success': False,
+                'error': (f'"competitor_brands" accepts at most '
+                          f'{_V1_COMPETITOR_MAX} entries')}), 400)
+        cleaned = []
+        seen = set()
+        for entry in cb_raw:
+            if not isinstance(entry, str):
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': '"competitor_brands" entries must be '
+                             'strings'}), 400)
+            name = _v1_clean_competitor_name(entry)
+            if not name:
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': '"competitor_brands" entries must be '
+                             'non-empty brand names'}), 400)
+            if len(name) > _V1_COMPETITOR_NAME_MAX:
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': (f'"competitor_brands" entries must be '
+                              f'{_V1_COMPETITOR_NAME_MAX} characters or '
+                              f'fewer')}), 400)
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(name)
+        competitor_brands = cleaned or None
+
+    return prompt, run_avid_raw, (ictx or None), competitor_brands, None
 
 
 # Caveats surfaced on /check for run-side conditions that genuinely
@@ -61133,13 +64854,18 @@ def _v1_check_caveats():
 
 @app.route('/api/v1/profiles/check', methods=['POST'])
 def api_v1_profiles_check():
-    """Preview what a run would do without charging credits or enqueuing.
+    """Preview what a run would do without charging or enqueuing.
 
     Response includes:
       * decision (see /run for the five values)
       * existing_match_* fields (when applicable)
-      * credits_would_charge (0 for existing_match, 3 for derive_cut,
-        5 for time_shifted_refresh / new_build, 8 for cut_needs_parent)
+      * price_usd (primary, 2026-09-09) - USD a /run at this decision
+        would charge. 0 for existing_match, $100 for derive_cut, $500
+        for time_shifted_refresh / new_build, $600 for cut_needs_parent
+        (per-workspace overrides published live in
+        GET /api/v1/schema.pricing_usd).
+      * credits_would_charge (kept for legacy integrations) - the
+        internal credit count for the same charge.
       * download_url if existing_match (24h S3 pre-signed URL) - the
         partner can just fetch and save without ever calling /run
     """
@@ -61162,7 +64888,8 @@ def api_v1_profiles_check():
         traceback.print_exc()
         return jsonify({'success': False,
                          'error': 'invalid JSON body'}), 400
-    prompt, run_avid, identity_ctx, body_err = _v1_parse_check_run_body(body)
+    prompt, run_avid, identity_ctx, competitor_brands, body_err = \
+        _v1_parse_check_run_body(body)
     if body_err is not None:
         return body_err
 
@@ -61179,7 +64906,8 @@ def api_v1_profiles_check():
     # the same prompt, including the audience-size bounds the engine
     # host enforces at enqueue time.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
-                                        identity_context=identity_ctx)
+                                        identity_context=identity_ctx,
+                                        competitor_brands=competitor_brands)
     if err_resp is not None:
         return err_resp
 
@@ -61199,6 +64927,9 @@ def api_v1_profiles_check():
             'decision': decision,
             'refusal_code': conclusion['refusal_code'],
             'refusal_reason': conclusion['refusal_message'],
+            # USD is the primary framing (2026-09-09). credits kept
+            # for existing integrations; both are 0 on a refusal.
+            'price_usd': 0.0,
             'credits_would_charge': 0,
             'subject_verified': bool(
                 conclusion.get('subject_verified', True)),
@@ -61208,7 +64939,13 @@ def api_v1_profiles_check():
         'success': True,
         'buildable': True,
         'decision': decision,
-        'decision_reason': draft.get('decision_reason') or '',
+        # Fail-closed scrub of interpret-step prose (2026-09-08): the
+        # server-composed and Claude-composed decision_reason /
+        # brief_summary strings read clean by construction, but the
+        # runtime scrub is defense in depth against future prompt drift
+        # (any banned token = empty string, safer than a leak).
+        'decision_reason': _scrub_v1_freetext(
+            draft.get('decision_reason') or '', cap=400),
         'subject': draft.get('subject'),
         # Resolved identity line (2026-08-24 Furious defect): callers
         # see exactly which real-world entity the build is about
@@ -61224,9 +64961,13 @@ def api_v1_profiles_check():
         # Null permanently (standing decision 2026-08-25: in-place
         # corrections are part of the product; revisions not exposed).
         'existing_match_last_modified': None,
+        # USD is the primary framing going forward. `credits_would_charge`
+        # is retained so existing integrations keep working.
+        'price_usd': _v1_price_usd_for(decision, len(_v1_cuts or [])),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
-        'brief_summary': conclusion['brief_summary'],
+        'brief_summary': _scrub_v1_freetext(
+            conclusion.get('brief_summary') or '', cap=700),
         # Plain-language window the run would use (ECHO RULE
         # 2026-08-24). Null only for existing_match reuse.
         'date_window': _draft_window_field(draft, decision) or None,
@@ -61249,8 +64990,10 @@ def api_v1_profiles_check():
         resp['estimated_audience_low'] = _est['low']
         resp['estimated_audience_high'] = _est['high']
     if _v1_cuts:
+        _cut_usd_each = _v1_price_usd_for_cut()
         resp['addon_cuts'] = [
             {'label': c.get('name_label') or c.get('label') or c['cut_id'],
+             'price_usd': _cut_usd_each,
              'credits': ADDON_CUT_CREDITS} for c in _v1_cuts]
     if decision == 'existing_match' and ex_key:
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
@@ -61284,17 +65027,21 @@ def api_v1_profiles_run():
     prevents partners and dashboard users from accidentally
     double-pulling or bypassing existing-match detection.
 
-    Credit tiers by decision:
-      * existing_match       0 credits (returns download_url immediately)
-      * derive_cut           3 credits (cut derived from an existing parent)
-      * time_shifted_refresh 5 credits (rebuild anchored to older parent)
-      * new_build            5 credits (fresh build from scratch)
-      * cut_needs_parent     8 credits (parent build + cut derivation)
+    Price tiers by decision (USD is the primary framing 2026-09-09;
+    credits are kept as a mirror so existing integrations that key off
+    credits_charged / credits_remaining continue to work):
+      * existing_match       $0    / 0 credits (returns download_url now)
+      * derive_cut           $100  / 3 credits (cut off existing parent)
+      * time_shifted_refresh $500  / 5 credits (rebuild anchored older)
+      * new_build            $500  / 5 credits (fresh build from scratch)
+      * cut_needs_parent     $600  / 8 credits (parent build + cut)
+    Values above are defaults; the current per-workspace numbers are
+    published live in `pricing_usd` on GET /api/v1/schema.
 
     Response fields depend on decision. On existing_match, the response
-    includes `download_url` and `credits_charged: 0` - no run_id needed.
-    On every other decision, `run_id` + `status_url` are returned for
-    polling GET /api/v1/profiles/<run_id>.
+    includes `download_url`, `charge_usd: 0`, and `credits_charged: 0`
+    - no run_id needed. On every other decision, `run_id` + `status_url`
+    are returned for polling GET /api/v1/profiles/<run_id>.
     """
     user, err = _synth_chat_gate()
     if err:
@@ -61320,7 +65067,8 @@ def api_v1_profiles_run():
         return jsonify({'success': False,
                          'error': 'invalid JSON body'}), 400
 
-    prompt, run_avid, identity_ctx, body_err = _v1_parse_check_run_body(body)
+    prompt, run_avid, identity_ctx, competitor_brands, body_err = \
+        _v1_parse_check_run_body(body)
     if body_err is not None:
         return body_err
 
@@ -61351,7 +65099,8 @@ def api_v1_profiles_run():
     # _v1_conclude, so this route cannot reach a different verdict than
     # the /check the partner quoted from.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
-                                        identity_context=identity_ctx)
+                                        identity_context=identity_ctx,
+                                        competitor_brands=competitor_brands)
     if err_resp is not None:
         return err_resp
 
@@ -61372,6 +65121,9 @@ def api_v1_profiles_run():
             'decision': decision,
             'error': conclusion['refusal_message'],
             'refusal_code': conclusion['refusal_code'],
+            # USD is the primary framing (2026-09-09). credits kept
+            # for legacy integrations. Both zero on a refusal.
+            'charge_usd': 0.0,
             'credits_charged': 0,
             'subject_verified': bool(
                 conclusion.get('subject_verified', True)),
@@ -61382,12 +65134,20 @@ def api_v1_profiles_run():
     # tier that exceeds the partner's balance, refuse cleanly.
     if price > 0 and not has_credits_for(username, price):
         _, credits_left = check_user_credits(username)
+        _price_usd_tier = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+        _bal_usd = _v1_balance_usd(username)
+        _bal_str = ('unlimited' if _bal_usd == -1.0
+                    else f"${_bal_usd:.2f}")
         return jsonify({
             'success': False,
-            'error': (f'insufficient credits: this decision ({decision}) '
-                      f'costs {price} and this key has {credits_left} '
-                      'remaining'),
+            'error': (f"insufficient balance: this run ({decision}) costs "
+                      f"${_price_usd_tier:.2f} and this key has {_bal_str} "
+                      f"on hand."),
             'decision': decision,
+            # USD framing (primary going forward).
+            'price_usd': _price_usd_tier,
+            'balance_usd': _bal_usd,
+            # Legacy credit fields for existing integrations.
             'credits_required': price,
             'credits_remaining': credits_left,
         }), 402
@@ -61396,16 +65156,23 @@ def api_v1_profiles_run():
     if decision == 'existing_match':
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         _, credits_left = check_user_credits(username)
+        _bal_usd = _v1_balance_usd(username)
         resp_body = {
             'success': True,
             'decision': 'existing_match',
-            'decision_reason': draft.get('decision_reason') or '',
+            # Fail-closed prose scrub (2026-09-08 defense in depth).
+            'decision_reason': _scrub_v1_freetext(
+                draft.get('decision_reason') or '', cap=400),
             'reused_existing': True,
             'subject': draft.get('existing_match_display_name') or draft.get('subject'),
             's3_key': ex_key,
             'profile_name': ex_key.rsplit('/', 1)[-1],
             'download_url': url,
             'download_expires_seconds': 86400 if url else None,
+            # USD is the primary framing (2026-09-09). credits kept for
+            # existing integrations. An existing_match is always free.
+            'charge_usd': 0.0,
+            'balance_usd': _bal_usd,
             'credits_charged': 0,
             'credits_remaining': credits_left,
             'subject_verified': True,
@@ -61430,6 +65197,10 @@ def api_v1_profiles_run():
 
     payload = {
         'user_email': user.get('email') or username,
+        'username': username,
+        # The partner's exact natural-language ask, so a failed build's
+        # ops email can quote what they asked (same as dashboard runs).
+        'prompt': (str(prompt or '').strip())[:4000],
         'run_avid': run_avid,
         'email_to': '',
         'spec': spec,
@@ -61520,10 +65291,17 @@ def api_v1_profiles_run():
             charged = False
         if not charged:
             _, credits_left = check_user_credits(username)
+            _price_usd_tier = _v1_price_usd_for(
+                decision, len(_v1_run_cuts or []))
+            _bal_usd = _v1_balance_usd(username)
             return jsonify({
                 'success': False,
-                'error': 'credit charge failed - no run started',
+                'error': 'charge failed - no run started',
                 'decision': decision,
+                # USD framing (primary going forward).
+                'price_usd': _price_usd_tier,
+                'balance_usd': _bal_usd,
+                # Legacy credit fields for existing integrations.
                 'credits_required': price,
                 'credits_remaining': credits_left,
             }), 402
@@ -61598,6 +65376,8 @@ def api_v1_profiles_run():
     _record_run_owner(run_id, username)
 
     _, credits_left = check_user_credits(username)
+    _charge_usd = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+    _bal_usd = _v1_balance_usd(username)
 
     # PRE-BUILD scope summary (2026-08-24): programmatic, plans only,
     # no measured-sounding numbers. Previously this echoed the interpret
@@ -61612,18 +65392,30 @@ def api_v1_profiles_run():
     resp_body = {
         'success': True,
         'decision': decision,
-        'decision_reason': draft.get('decision_reason') or '',
+        # Fail-closed prose scrub (2026-09-08 defense in depth) - both
+        # decision_reason (Claude-composed on the fresh path, server-
+        # composed on catalog matches) and brief_summary (server-
+        # composed by _v1_build_brief_summary) read clean today, but
+        # any future prompt drift that puts a banned token into these
+        # fields is now safely wiped to '' at the response layer.
+        'decision_reason': _scrub_v1_freetext(
+            draft.get('decision_reason') or '', cap=400),
         'run_id': run_id,
         'subject': spec.get('name'),
         'brand_category': spec.get('brand_category'),
         'run_avid': run_avid,
         'parent_s3_key': ex_key or None,
         'derive_type': d_type or None,
+        # USD framing (primary going forward). credits kept for
+        # existing integrations - the two always describe the same
+        # charge in different currencies.
+        'charge_usd': _charge_usd,
+        'balance_usd': _bal_usd,
         'credits_charged': price,
         'credits_remaining': credits_left,
         'estimated_run_minutes': _estimate_run_minutes(decision, run_avid),
         'status_url': status_url,
-        'brief_summary': brief_summary,
+        'brief_summary': _scrub_v1_freetext(brief_summary or '', cap=700),
         # Plain-language window this run uses (ECHO RULE 2026-08-24).
         'date_window': _draft_window_field(draft, decision) or None,
         # Subject resolved to a real, verifiable entity (2026-08-25).
@@ -61811,12 +65603,26 @@ def api_v1_schema():
                         'type': 'string', 'required': False,
                         'description': ('one-line description of the '
                                         'subject entity')},
+                    'competitor_brands': {
+                        'type': 'array of strings', 'required': False,
+                        'max_items': 50, 'max_item_length': 80,
+                        'description': ('brand names that should appear '
+                                        'inside this profile (the '
+                                        "subject's competitive set). We "
+                                        'fold them into our research so '
+                                        'they show up in the output. '
+                                        'Plain names, e.g. ["Holley", '
+                                        '"FiTech"]. Apostrophes are '
+                                        'stripped. Absent = default '
+                                        'behavior.')},
                 },
                 'notes': ('Unknown top-level fields are rejected with '
                           'HTTP 400 naming the field. domain / category '
                           '/ description identify WHICH entity the '
                           'subject is; they never change decision '
-                          'logic or pricing.'),
+                          'logic or pricing. competitor_brands is a '
+                          'research input only; it never changes the '
+                          'decision or price.'),
                 'response': {
                     'success': 'boolean',
                     'buildable': 'boolean',
@@ -61826,7 +65632,12 @@ def api_v1_schema():
                     'decision_reason': 'string',
                     'subject': 'string',
                     'resolved_identity': 'string or null',
-                    'credits_would_charge': 'integer',
+                    'price_usd': ('number - USD price a /run at this '
+                                  'decision would charge (primary '
+                                  'framing going forward)'),
+                    'credits_would_charge': ('integer - legacy credit '
+                                             'framing kept for existing '
+                                             'integrations'),
                     'existing_match_s3_key': 'string or null',
                     'existing_match_display_name': 'string or null',
                     'existing_match_days_old': ('integer or null - file '
@@ -61838,8 +65649,8 @@ def api_v1_schema():
                     'subject_verified': 'boolean',
                     'estimated_audience_low': 'integer (when applicable)',
                     'estimated_audience_high': 'integer (when applicable)',
-                    'addon_cuts': ('array of {label, credits} (when '
-                                   'the ask carries derived cuts)'),
+                    'addon_cuts': ('array of {label, price_usd, credits} '
+                                   '(when the ask carries derived cuts)'),
                     'date_window': 'string or null',
                     'download_url': ('string (existing_match only, '
                                      '24h expiry)'),
@@ -61857,6 +65668,23 @@ def api_v1_schema():
                     'Idempotency-Key': ('optional - same key within 24h '
                                         'returns the original response '
                                         'instead of re-charging')},
+                # USD is the primary pricing surface (2026-09-09).
+                # `credit_tiers` is kept as a mirror for existing
+                # integrations that key off it. Numbers here are the
+                # current admin-configured values, so a pricing.json
+                # edit shows up in this response immediately.
+                'pricing_usd': {
+                    'existing_match': _v1_price_usd_for(
+                        'existing_match', 0),
+                    'derive_cut': _v1_price_usd_for('derive_cut', 0),
+                    'time_shifted_refresh': _v1_price_usd_for(
+                        'time_shifted_refresh', 0),
+                    'new_build': _v1_price_usd_for('new_build', 0),
+                    'cut_needs_parent': _v1_price_usd_for(
+                        'cut_needs_parent', 1),
+                    'addon_cut_each': _v1_price_usd_for_cut(),
+                    'currency': 'USD',
+                },
                 'credit_tiers': {
                     'existing_match': _V1_CREDITS.get('existing_match', 0),
                     'derive_cut': _V1_CREDITS.get('derive_cut', 3),
@@ -61873,8 +65701,16 @@ def api_v1_schema():
                     'run_id': ('string (absent on existing_match - the '
                                'file returns immediately)'),
                     'status_url': 'string',
-                    'credits_charged': 'integer',
-                    'credits_remaining': 'integer',
+                    'charge_usd': ('number - USD debited from the '
+                                   'balance for this run (primary '
+                                   'framing going forward)'),
+                    'balance_usd': ('number - USD balance remaining '
+                                    'after the charge, or -1 on an '
+                                    'unlimited key'),
+                    'credits_charged': ('integer - legacy credit '
+                                        'framing kept for existing '
+                                        'integrations'),
+                    'credits_remaining': 'integer - legacy credit framing',
                     'estimated_run_minutes': 'integer',
                     'existing_match_days_old': ('integer or null (on '
                                                 'existing_match)'),
@@ -61901,7 +65737,10 @@ def api_v1_schema():
                     'within_estimate': ('boolean (when the delivered '
                                         'audience was verified against '
                                         'the quote)'),
-                    'credits_refunded': 'integer (on failed runs)',
+                    'refund_usd': ('number (on failed runs - USD '
+                                   'refunded to the balance)'),
+                    'credits_refunded': ('integer (on failed runs - '
+                                         'legacy credit framing)'),
                 },
             },
             'GET /api/v1/genpop': {

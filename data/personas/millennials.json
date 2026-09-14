@@ -1,0 +1,250 @@
+{
+  "lens_id": "millennials",
+  "display_name": "Millennials (Ages 29-44)",
+  "emoji": "\u2615",
+  "source_profile": "Aggregated panel signal across Shark Tank - Millennials (2026-08-26), Peloton - Millennials (2026-08-26), Furious Viewers - Millennials (2026-08-28), HAZBIN HOTEL / HELLUVA BOSS / KPOP DEMON HUNTERS / CHILLING ADVENTURES OF SABRINA - Millennials cuts.",
+  "one_line": "US adults 29 to 44. Nostalgia-forward, career-and-mortgage-and-daycare anxious, prestige-TV loyal, heavy podcast consumer, AmEx-and-Chase-Sapphire spender, DTC-and-Costco shopper, Peloton / Oura / Whoop wearer, still on Instagram but pulled to TikTok, Bluey parent.",
+
+  "demographics": {
+    "age_range": "29 to 44. Density in 35-44 (idx 439) with a strong 25-34 tail (idx 245). 18-24 and 45+ fall below 3.",
+    "gender_skew": "Roughly 50 male / 47 female, with non-binary and trans identifiers present but at lower share than Gen Z. Read as gender-balanced with a slight female pull on wellness, parenting, and BookTok surfaces and a slight male pull on sports-fandom, gaming, and finance-podcast surfaces.",
+    "income_band": "Every income band sits near index 100 to 105. This is the peak spender-power decade: mortgages, daycare, salary progression, DINK dual-income and single-parent both present. HHI median leans $85K to $110K with a fat long tail into $150K-plus.",
+    "education": "Bachelors idx 142, Graduate idx 139, Some College 113, HS or less 48. Read as college-educated majority with graduate-degree lift, but keep the trade-and-associate slice honest (they exist).",
+    "occupation_skew": "Management, business, and professional idx 123, STEM idx 135, Healthcare 82. Read as the career-building decade. Sales / service under-indexes vs Gen Z because the cohort has aged out of those roles.",
+    "ethnicity_skew": "White 96, Hispanic 121, Black 109, Asian 104. Read as a majority-non-white-adjacent cohort, more diverse than Gen X but less than Gen Z.",
+    "life_stage": "Married 122, In a relationship 222, Single 66. Has children under 12 in the home idx 148. This is the daycare, first-house, first-real-vacation, first-real-401k decade. Also the peak divorce-and-restart decade (idx 65 for divorced trending up into Gen X).",
+    "geo_skew": ["New York Ny", "Los Angeles Ca", "Chicago Il", "Dallas Ft Worth Tx", "Philadelphia Pa", "Houston Tx", "Atlanta Ga", "Washington Dc", "San Francisco Ca", "Seattle Wa"]
+  },
+
+  "psychographics": {
+    "values": [
+      "Nostalgia as identity. Grew up with the 90s and 2000s. Cobra Kai / Barbie / Marvel / Star Wars / HOTD / Ted Lasso were built for them.",
+      "Anxiety-first framing. Mortgage rates, daycare costs, IVF, student-loan payments, screen-time guilt, sandwich-generation caregiving all real.",
+      "Wellness-informed but tired. Oura Ring 245, Whoop, Peloton, Barry's, F45, Weight Watchers 811, Headspace 1,116, Calm 703 all over-index. Sober-curious rising.",
+      "DTC-and-Costco same-cart. Little Hunter and Purina both in the cabinet, Whole Foods for the parts that photograph well, Costco for the parts that do not.",
+      "Podcast-first news habit. The Daily, SmartLess, Armchair Expert, Call Her Daddy, Huberman, Diary of a CEO, How I Built This, Ringer NBA network.",
+      "Career-plus-parent identity braid. LinkedIn 239 and TheBump 474 and Instagram 182 all on the same phone."
+    ],
+    "aesthetics": [
+      "Mid-luxury and affordable-luxury (Public Rec 2,558, Aspinal 2,017, Away Luggage 1,238, Rogue Territory 3,430, Loud Bodies 4,576, Alberta Ferretti 3,200)",
+      "Athleisure everywhere (Lululemon, Vuori, Alo, Peloton branded, Barry's fits)",
+      "Costco-plus-Trader-Joe's-plus-Whole-Foods weekend cart (Trader Joe's idx 722, Whole Foods 399, Costco 374, H-E-B 415 in Texas)",
+      "Casetify / Native Union / Oura / Whoop / Apple Watch / AirPods layered on",
+      "Squishmallows / LEGO / Lovevery for the kids (Lovevery idx 290, Squishmallows 244)",
+      "Nostalgia merch (Cobra Kai, Stranger Things, Bluey, Barbie, Nintendo Switch)"
+    ],
+    "tone_they_respond_to": "First-person, self-deprecating, slightly-tired, aware of the meme. Willing to admit the mortgage payment is scary and the daycare bill is scarier. Cracks a joke about therapy, not about anyone else. Prestige-TV recap voice. Podcast-host register.",
+    "tone_they_reject": "Boomer cable-news anchor voice, gotcha political theater, Gen Z hyper-native slang without a Millennial rearticulation, evangelical prosperity, MLM, alpha-bro grindset, Andrew Tate style content, Fox News framing on entertainment or parenting."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "The New York Times", "The Skimm (idx 406)", "The Athletic", "The Ringer", "New York Magazine",
+      "Entrepreneur (365)", "Inc. Magazine (297)", "Harvard Business Review", "Fast Company",
+      "Vulture", "Variety", "Deadline", "The Hollywood Reporter"
+    ],
+    "reads_soft": [
+      "TheBump (474)", "Today's Parent (347)", "Fatherly (327)", "Mom Spark (306)", "The Mom Edit (303)",
+      "Design Mom", "Love and Lemons (360)", "Gimme Some Oven (398)", "The Zoe Report (347)",
+      "Cup of Jo", "Apartment Therapy", "Kitchn", "Delish", "Bustle"
+    ],
+    "watches": {
+      "streaming": ["Netflix (idx 210)", "Amazon Prime Video (211)", "Disney+/Hulu (221)", "HBO Max (199)", "Apple TV+ (257)", "Peacock (238)", "Paramount+", "BET+ (242)", "MGM+ (238)", "MUBI (336)", "Fandango at Home (234)"],
+      "fast": ["Pluto TV", "Tubi", "Freevee", "Roku Channel"],
+      "film": ["Barbie", "Oppenheimer", "The Bear", "Ted Lasso", "Only Murders in the Building", "Severance", "The Last of Us", "House of the Dragon", "Yellowjackets", "Beef", "White Lotus", "Bridgerton", "Reacher", "Fallout", "Andor", "Ahsoka", "Loki", "Deadpool", "Wednesday", "Stranger Things final season", "Cobra Kai", "Bluey (parent watch), Ms. Rachel"],
+      "cable": ["CNBC (241)", "Fox Business (210)", "Bravo (177)", "Magnolia (191)", "Comedy Central", "Nickelodeon (parent-driven)", "Disney Now (parent-driven)", "TLC", "MTV", "F1 TV (147)", "DraftKings Network"]
+    },
+    "listens": {
+      "podcasts": [
+        "SmartLess",
+        "Armchair Expert with Dax Shepard",
+        "Call Her Daddy",
+        "The Mel Robbins Podcast",
+        "On Purpose with Jay Shetty",
+        "Huberman Lab",
+        "The Diary of a CEO",
+        "How I Built This",
+        "The Daily",
+        "The Bill Simmons Podcast",
+        "The Ringer NBA Show",
+        "Pardon My Take",
+        "My Favorite Murder",
+        "Crime Junkie",
+        "Serial",
+        "Morbid",
+        "Ten Percent Happier",
+        "Office Ladies",
+        "The Rewatchables",
+        "Anna Faris Is Unqualified",
+        "This American Life",
+        "Radiolab",
+        "The Ezra Klein Show",
+        "Fresh Air"
+      ],
+      "music_artists": [
+        "Taylor Swift", "Olivia Rodrigo", "Sabrina Carpenter", "Chappell Roan", "Beyonce",
+        "Post Malone", "Morgan Wallen", "Zach Bryan", "Kendrick Lamar", "Drake", "Doja Cat", "Ariana Grande", "Bad Bunny", "Billie Eilish", "SZA", "Dua Lipa",
+        "Bruno Mars", "The Weeknd", "Miley Cyrus", "Lana Del Rey",
+        "Hozier", "Noah Kahan", "Phoebe Bridgers", "boygenius",
+        "Fall Out Boy", "Paramore", "Kanye pre-2018", "One Direction backlist", "Rihanna backlist",
+        "Fleetwood Mac (renaissance)",
+        "Peso Pluma", "Karol G", "J Balvin",
+        "Brent Faiyaz", "PARTYNEXTDOOR", "Don Toliver", "Summer Walker", "Teddy Swims", "Jorja Smith", "DJ Khaled"
+      ],
+      "music_genres": ["pop", "hip-hop and R&B", "country-pop (Morgan Wallen / Zach Bryan / Post Malone country)", "adult alternative (Hozier, Noah Kahan)", "2000s and 2010s nostalgia rotations", "Latin (regional-Mexican, reggaeton)", "some K-pop (Newjeans, TWICE, BTS backlist)"]
+    },
+    "reads_books": {
+      "formats": ["hardcover for the shelf", "Kindle for the commute", "Audible idx 414 for the drive", "Libby / library ebook", "BookTok viral titles"],
+      "genres": [
+        "BookTok romantasy (Sarah J. Maas, Rebecca Yarros, Colleen Hoover backlist)",
+        "prestige literary fiction (Ann Patchett, Elizabeth Strout, George Saunders, Colson Whitehead)",
+        "memoirs (comedians, therapists, athletes)",
+        "self-help anchored in psychology (Mel Robbins, Brene Brown, James Clear, Nedra Tawwab)",
+        "personal-finance (Ramit Sethi, Psychology of Money, Bogleheads)",
+        "parenting (Emily Oster, Big Little Feelings, Dr. Becky)",
+        "prestige nonfiction (Bad Blood, Educated, Empire of Pain, Killers of the Flower Moon)"
+      ],
+      "authors_or_titles": [
+        "Sarah J. Maas (ACOTAR)",
+        "Rebecca Yarros (Fourth Wing, Iron Flame, Onyx Storm)",
+        "Colleen Hoover, Emily Henry, Taylor Jenkins Reid",
+        "Ann Patchett, Elizabeth Strout, George Saunders, Colson Whitehead",
+        "Brene Brown, Mel Robbins, Glennon Doyle, Cheryl Strayed",
+        "James Clear (Atomic Habits), Morgan Housel (Psychology of Money), Ramit Sethi",
+        "Emily Oster (Cribsheet, Expecting Better)",
+        "Michelle Obama, Trevor Noah, Bob Iger"
+      ]
+    },
+    "plays": [
+      "Wordle and NYT Games (idx 1,016 to 1,240)",
+      "GeoGuessr, Chess.com, NYT Connections",
+      "Nintendo Switch (Zelda, Mario, Animal Crossing 632)",
+      "PS5 / Xbox (The Last of Us, God of War, Elden Ring, Cyberpunk, Baldur's Gate 3)",
+      "EA FC, Madden (EA SPORTS NFL idx 883), NBA 2K, MLB The Show",
+      "Fortnite (as parent-plus-kid co-op), Minecraft (675), LEGO builds (606)",
+      "Star Wars franchise (1,300), Indiana Jones (1,314), Harry Potter (659), Barbie (881)",
+      "Hearthstone, Marvel Snap, Balatro on lunch break"
+    ],
+    "shops": [
+      "Costco for the pantry (idx 374), Trader Joe's for the fun (722), Whole Foods for the parts on Instagram (399), Aldi for the value cart",
+      "Target run once a week, Amazon Prime for one-click",
+      "REI (657) for gear, Away (1,238) for the once-a-year splurge",
+      "Nordstrom Rack (373), Anthropologie, Everlane, Madewell, Vuori, Alo",
+      "Costco Optical (1,546), one.n.only for glasses",
+      "Etsy for the personalized gifts, Chewy (352) for the pet",
+      "IPSY (2,801) and Sephora (370) monthly",
+      "Home Depot / Lowe's for the ongoing home project"
+    ],
+    "eats_at": [
+      "Sweetgreen weekday (idx 260), Chipotle (117), Cava",
+      "Starbucks or Bluestone Lane (1,916), Philz (294)",
+      "Salt & Straw (315), Van Leeuwen, Jeni's (253), Magnolia Bakery (267)",
+      "Torchy's Tacos (278), Bonchon, Jinya Ramen (449)",
+      "Cheesecake Factory (117) for family reunion",
+      "Fine-dining aspiration list (Le Bernardin, Eleven Madison, Alinea, Benu)"
+    ],
+    "buys": [
+      "DTC pet food (MaxBone 38,914, Little Hunter 22,900, Maev 14,019, Farmers Dog 1,060, BarkBox 1,509)",
+      "Poppi, OLIPOP (234), Liquid Death (232), Athletic Brewing, Ghia, Cann",
+      "Native Deodorant, Function of Beauty, Rare Beauty, Charlotte Tilbury, Glossier",
+      "Lovevery (290), Squishmallows (244), Melissa & Doug, Magna-Tiles for the kid",
+      "Oura Ring (245), Whoop, Apple Watch, Peloton, Tonal, Mirror",
+      "Le Creuset, Our Place, Great Jones, Caraway, Made In cookware"
+    ],
+    "follows_talent": [
+      "Taraji P Henson", "Dax Shepard", "Kristen Bell", "Chrissy Teigen", "John Legend",
+      "Ryan Reynolds", "Blake Lively", "Zendaya", "Timothee Chalamet", "Sydney Sweeney", "Jenna Ortega",
+      "Pedro Pascal", "Kieran Culkin", "Jeremy Allen White", "Bill Hader", "Ali Wong",
+      "Sabrina Carpenter", "Chappell Roan", "Olivia Rodrigo", "Taylor Swift",
+      "Travis Kelce", "Caitlin Clark", "Angel Reese", "Patrick Mahomes", "LeBron James", "Steph Curry",
+      "MrBeast", "Alix Earle", "Emma Chamberlain", "Nara Aziza", "Brittany Broski", "Sean Evans",
+      "Brene Brown", "Mel Robbins", "Jay Shetty", "Andrew Huberman", "Rich Roll",
+      "Barack and Michelle Obama"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "career and money (student loans, mortgage rates, high-yield savings, index funds, side hustles)",
+    "parenting (screen-time, IVF, daycare, Bluey, Emily Oster, Dr. Becky, sleep training)",
+    "wellness stack (Oura, Whoop, Peloton, Barry's, Weight Watchers, Headspace, Calm, Huberman protocols, sober-curious)",
+    "nostalgia franchises (Star Wars, Marvel, Harry Potter, Cobra Kai, Barbie, Nintendo, Cartoon Network throwbacks)",
+    "prestige TV recap culture (Succession, Severance, The Bear, Only Murders, White Lotus, Yellowjackets, Beef, Bridgerton, HOTD, The Last of Us)",
+    "podcast consumption as primary news + entertainment",
+    "DTC and craft-brand loyalty (Warby, Casper, Allbirds, Away, Peloton, Oura, Ninja, Yeti, Vuori, Rothy's)",
+    "sports as fandom, not policy (Chiefs / Travis-Taylor, WNBA, F1 Netflix, MLS Messi, NBA Finals, US Open)",
+    "mid-luxury travel (Hyatt, Marriott Bonvoy, boutique properties, once-a-year international)",
+    "food-culture (Bon Appetit test-kitchen, Salt Fat Acid Heat, Michelin trip planning, Half Baked Harvest)",
+    "financial-anxiety political stories (mortgage rates, student loans, health-insurance, childcare policy)",
+    "AI as productivity aid (ChatGPT, Claude, Perplexity for work; Notion AI, GitHub Copilot for the STEM slice)"
+  ],
+  "themes_they_avoid": [
+    "boomer cable-news anchor personality drama (unless it hits the Ringer / Ezra Klein register)",
+    "openly conservative culture-war messaging (Ben Shapiro, Tucker Carlson, Charlie Kirk, evangelical prosperity, MAGA-branded merch)",
+    "MLM and hustle-bro grindset content",
+    "senior-focused topics (AARP, Medicare Supplement, life alerts, cruise lines, retirement communities)",
+    "reality-dating on cable as PRIMARY content (though Love Is Blind and White Lotus-adjacent Bravo pulls read as a MID)",
+    "legacy country outside the pop-crossover moment (Morgan Wallen / Zach Bryan / Kane Brown crosses; Rascal Flatts / Florida Georgia Line does not for most)",
+    "NASCAR unless it is the Netflix Full Speed moment",
+    "wall-street alpha and trading-guru content (Bogleheads-style index-fund posture is fine)",
+    "Great American Family, Hallmark evangelical programming, Pure Flix, TBN",
+    "Gen Z hyper-native slang without a Millennial rearticulation"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP items headlined by a Millennial-coded talent: Taylor Swift, Sabrina Carpenter, Olivia Rodrigo, Chappell Roan, Beyonce, Ariana Grande, Doja Cat, Zendaya, Timothee Chalamet, Ryan Reynolds, Blake Lively, Pedro Pascal, Jeremy Allen White, Jenna Ortega, Sydney Sweeney, Ali Wong, Bill Hader, Dax Shepard, Kristen Bell, Chrissy Teigen, Taraji P Henson, John Legend, Travis Kelce, Patrick Mahomes, Caitlin Clark, LeBron James, Steph Curry.",
+    "KEEP BookTok titles and prestige-fiction: Sarah J. Maas, Rebecca Yarros (Fourth Wing / Iron Flame / Onyx Storm), Colleen Hoover backlist, Emily Henry, Taylor Jenkins Reid, Ann Patchett, Elizabeth Strout, Bonnie Garmus, Fredrik Backman. KEEP finance / self-help anchor titles: Atomic Habits, Psychology of Money, Ramit Sethi, Mel Robbins, Brene Brown, Glennon Doyle. KEEP parenting: Emily Oster, Dr. Becky, Big Little Feelings.",
+    "KEEP prestige TV and nostalgia franchises: Star Wars (Andor, Ahsoka, Mando), Marvel (Deadpool, Loki, Agatha All Along), House of the Dragon, The Last of Us, Severance, Succession, The Bear, Ted Lasso, Only Murders in the Building, White Lotus, Beef, Yellowjackets, Bridgerton, Cobra Kai, Stranger Things final, Wednesday, Fallout, Reacher, Slow Horses, Diplomat, Morning Show, Handmaid's Tale, Sex Lives of College Girls.",
+    "KEEP Bluey and Ms. Rachel and any parenting-of-under-12 content. KEEP LEGO, Squishmallows, Lovevery, Magna-Tiles product news.",
+    "KEEP franchise gaming: Zelda, Mario, Animal Crossing, Star Wars games, Harry Potter (Hogwarts Legacy), Fortnite, Minecraft, LEGO, EA FC, Madden, NBA 2K, MLB The Show, Baldur's Gate 3, Elden Ring, The Last of Us game, God of War, Cyberpunk. KEEP puzzle: Wordle, NYT Games, Connections, Chess.com, GeoGuessr, Marvel Snap, Balatro.",
+    "KEEP wellness stack: Oura Ring, Whoop, Peloton, Barry's, F45, Orangetheory, Equinox, Weight Watchers, Headspace, Calm, Huberman Lab, cold plunge, sober-curious content, Athletic Brewing / Ghia / Cann releases.",
+    "KEEP finance-anxiety and personal-money stories: mortgage rate news, student loan forgiveness, high-yield savings (Ally, SoFi, Marcus, Wealthfront), Apple Card, BILT card, Chase Sapphire, AmEx Platinum, Chime, index funds, Vanguard, Fidelity, Roth IRA content.",
+    "KEEP parenting-adjacent stories (IVF, daycare cost, Pre-K news, school shooter policy from a parent-anxiety angle, screen-time debate, ADHD in kids).",
+    "KEEP DTC and craft-brand news: Warby Parker, Casper, Allbirds, Away, Rothy's, Vuori, Alo, Bombas, Athletic Greens / AG1, Function of Beauty, Rare Beauty, Native, Public Rec, Yeti, Ninja, Solo Stove.",
+    "KEEP Costco / Trader Joe's / Whole Foods viral moments. KEEP Sweetgreen, Chipotle, Cava, Erewhon, Chick-fil-A menu drops.",
+    "KEEP prestige podcasts and Millennial-core hosts: SmartLess, Armchair Expert, Call Her Daddy, Mel Robbins, Jay Shetty, Huberman, Diary of a CEO, How I Built This, The Daily, Bill Simmons, Ringer NBA, Pardon My Take, My Favorite Murder, Crime Junkie, Morbid, Serial, Office Ladies, The Rewatchables, Ten Percent Happier.",
+    "KEEP sports as fandom: Chiefs, WNBA (Aces, Fever, Sky, Liberty), F1 (Drive to Survive lens), MLS (Messi, Inter Miami), Sunday NFL, NBA Finals, Masters / US Open, US Open Tennis, women's soccer (NWSL, USWNT).",
+    "KEEP AI stories that touch productivity, work, journaling, or family (ChatGPT, Claude, Perplexity, Notion AI, GitHub Copilot). Drop AI stories that are pure enterprise-earnings or GPU-supply-chain.",
+    "KEEP Latin crossover (Bad Bunny, Karol G, Peso Pluma) and Black-women-in-media (Taraji P Henson, Ayo Edebiri, Coco Jones, Halle Bailey, Simone Biles, Angel Reese, WNBA coverage).",
+    "KEEP Netflix / Hulu / HBO Max / Apple TV+ / Peacock / Prime Video release calendar items whose lead cast reads as prestige TV. Drop kids-only animation without adult crossover unless it is Bluey-tier.",
+    "DROP hustle-culture, grindset, Andrew Tate, alpha-bro, wall-street-alpha, get-rich-quick trading-guru content.",
+    "DROP openly conservative culture-war messaging: Ben Shapiro, Tucker Carlson, Matt Walsh, Charlie Kirk, Candace Owens, PragerU, Turning Point USA, evangelical prosperity, Christian Nationalist framing.",
+    "DROP boomer cable-news anchor personality drama (Sean Hannity, Jesse Watters, Greg Gutfeld) unless it hit the Ringer / Ezra Klein register.",
+    "DROP AARP, Medicare Supplement, retirement community, life-alert, senior-caregiver content, cruise-line marketing (Viking, Holland America, Princess).",
+    "DROP Great American Family, Hallmark Channel, TBN, Pure Flix, 700 Club, and Christian-market book coverage.",
+    "DROP NASCAR unless it is the Netflix Full Speed moment, Trackhouse Racing collabs, or a Chase Elliott / Kyle Larson crossover story.",
+    "DROP legacy country outside the pop-crossover moment: Morgan Wallen, Post Malone country, Zach Bryan pass; Rascal Flatts, Florida Georgia Line, Dierks Bentley, Blake Shelton do not for most.",
+    "DROP Fox Business / Newsmax / NewsNation framing on any topic. Drop CNBC unless the item is personal-finance or a specific tech-earnings the cohort cares about (Apple, Nvidia, Netflix).",
+    "TIE-BREAK when unsure: does this item touch nostalgia, parenting, mortgage-and-money, wellness stack, prestige TV, or a Millennial-coded talent? If yes, lean KEEP. If it reads as content aimed at their grandparents or their toddler, lean DROP."
+  ],
+
+  "expected_kept_share_per_tab": "30-50% of items per tab. Podcasts, songs, books, films, and streaming all skew higher because this is the peak-consumption decade. Headlines and searches narrow harder because a lot of the philanthropy and business-earnings items are not core-audience.",
+
+  "reasoned_from_profile": {
+    "profile_key": "Shark Tank - Millennials.csv (2026-08-26) triangulated with Peloton - Millennials, Furious Viewers - Millennials, HAZBIN HOTEL / HELLUVA BOSS / KPOP DEMON HUNTERS / CHILLING ADVENTURES OF SABRINA - Millennials cuts.",
+    "note": "Shark Tank cast rows (Lori Greiner, Barbara Corcoran, Mark Cuban, Kevin O'Leary, Daymond John) are Shark Tank contamination. Public research anchors: Pew Research American Trends Panel on Millennials (2024, 2025), Kaiser Family Foundation on Millennial healthcare, Federal Reserve Consumer Credit reports, NerdWallet Millennial Money Study, Edison Podcast Consumer.",
+    "notable_index_signals": [
+      "AGE 35-44 idx 439, 25-34 idx 245",
+      "INCOME uniform ~100-105 across bands (peak spender-power)",
+      "EDUCATION Bachelors 142, Graduate 139",
+      "MARRIED 122, HAS CHILDREN 148",
+      "OCCUPATION MANAGEMENT / PROFESSIONAL 123, STEM 135",
+      "APP HELLOFRESH 1,266, HEADSPACE 1,116, WEIGHT WATCHERS 811, CALM 703, AUDIBLE 414, INSTACART 379, HINGE 359, UBER EATS 355, GOODRX 348",
+      "SOCIAL PATREON 411, LETTERBOXD 408, BEREAL 413, LINKEDIN 239, INSTAGRAM 182, TIKTOK 167, PINTEREST 168",
+      "SEARCH AI KHANMIGO 2,178, EXA AI 2,707, PHIND AI 1,998, DEEP SEEK 898, SYNTHESIA 817",
+      "STREAMING APPLE TV+ 257, PEACOCK 238, BET+ 242, MGM+ 238, MUBI 336, NETFLIX 210, PRIME 211, HBO MAX 199",
+      "MEDIA THEBUMP 474, SKIMM 406, ENTREPRENEUR 365, INC 297, TODAYS PARENT 347, FATHERLY 327",
+      "BROADCAST CNBC 241, FOX BUSINESS 210, BRAVO 177, MAGNOLIA 191, DISNEY NOW (parent-driven) 267",
+      "MPB MAXBONE 38,914, LITTLE HUNTER 22,900, MAEV 14,019, FARMERS DOG 1,060, BARKBOX 1,509",
+      "SHOP TRADER JOES 722, WHOLE FOODS 399, COSTCO 374, IPSY 2,801, REI 657, NORDSTROM RACK 373, DEPOP 726",
+      "GAMES INDIANA JONES 1,314, STAR WARS 1,300, WORDLE 1,240, NYT GAMES 1,016, EA SPORTS NFL 883, MINECRAFT 675, LEGO 606",
+      "WORKOUT DOGPOUND 137,385, LEKFIT 115,342, SLT 91,216, BARRY'S 22,593",
+      "MOVIE ALAMO 1,166, AMC 292",
+      "TECH OURA 245, ECHELON 331, AVOCADO GREEN MATTRESS 841",
+      "CPG POPPI 272, OLIPOP 234, LIQUID DEATH, CHOMPS, DUDE WIPES, SQUATTY POTTY 277",
+      "TOYS PAW PATROL 600, BARBIE 366, LOVEVERY 290, SQUISHMALLOWS 244",
+      "BANKING SOFI 471, CHIME 956, ALLY 688, BILT 616, VENMO 259, APPLE PAY 340",
+      "CREDIT APPLE CREDIT 612, AMEX 459, AFFIRM 362, CAPITAL ONE 146",
+      "INVEST ROBINHOOD 485, VANGUARD 177, FIDELITY 177, CHARLES SCHWAB 241, ACORNS 344"
+    ]
+  }
+}

@@ -49,6 +49,13 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     "BRAND": [
         "ACCESSORIES", "ACTIVEWEAR", "AMUSEMENT PARKS", "APPAREL",
         "APPAREL/FOOTWEAR", "AUTOMOBILE",
+        # 2026-09-01 (Jenna): AUTOMOTIVE PARTS is a sub-cut of AUTOMOBILE
+        # (hostmap SECTION "Automobile, Automotive Parts"), mirroring
+        # AUTOMOBILE's values the same way CPG mirrors MOST PURCHASED
+        # BRANDS. Parts brands (Edelbrock, K&N Filters, JEGS, Bilstein,
+        # Fox Shocks, Flowmaster, aFe Power, ...) land in AUTOMOBILE +
+        # AUTOMOTIVE PARTS at one identical value.
+        "AUTOMOTIVE PARTS",
         # 'BANK' is the canonical value the Profile-IQ pipeline writes into
         # the BRAND CATEGORY row for traditional retail banks (Bank of
         # America, Citibank, Wells Fargo, BMO, Bread Financial, ...). Older
@@ -691,7 +698,8 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT DISTINCT profile_subject, anyHeavy(project_name) "
+            "SELECT profile_subject, anyHeavy(project_name), "
+            "anyHeavy(category), anyHeavy(subcategory) "
             "FROM reference.profile_iq_daily_metrics "
             "GROUP BY profile_subject"
         )
@@ -701,9 +709,73 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
             conn.close()
         except Exception:
             pass
-    jobs = [{"profile_subject": (s or ""), "project_name": (p or "")}
-            for s, p in rows]
+    jobs = [{"profile_subject": (s or ""), "project_name": (p or ""),
+             "category": (c or ""), "subcategory": (sc or "")}
+            for s, p, c, sc in rows]
     return _build_covered_single_names(jobs)
+
+
+_ARTIFACT_NAME_TOKENS = (".bak", "prepatch", "pre_patch", "_backups/")
+
+# A profile_subject carrying an embedded dated-filename stamp
+# (`..._08_28_2026_04_00`, anywhere in the name) is an ingestion
+# artifact: the subject should be the clean entity name, and the same
+# entity usually exists again under a different timestamp
+# (AMASS_CUSTOMERS appears twice; Home_Internet_Shopping carries the
+# stamp mid-name), which renders duplicate leaderboard rows. The full
+# five-component MM_DD_YYYY_HH_MM shape never occurs in a real entity
+# name, so matching anywhere is safe.
+_ARTIFACT_TS_SUFFIX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}")
+
+
+def _is_backup_artifact_name(*parts: str) -> bool:
+    """True when any of the given name/key fragments looks like a backup
+    file artifact rather than a real profile. A bad ingest on 2026-06-01
+    swept ~225 `<Subject>_<TS>.prepatch.bak` files into
+    `reference.profile_iq_daily_metrics`; their multi-word cleaned names
+    then wrongly 'covered' real single-word subjects (the Paramount+
+    disappearance). Artifacts must never be processed by the nightly
+    cron, never cover a sibling, and never render on the leaderboard.
+    """
+    for p in parts:
+        low = (p or "").lower()
+        if any(tok in low for tok in _ARTIFACT_NAME_TOKENS):
+            return True
+        if _ARTIFACT_TS_SUFFIX.search(low):
+            return True
+    return False
+
+
+# Master bucket + subcategory labels that identify a PERSON profile.
+# The covered-singles suppression below only ever applies to people:
+# a bare first-name profile ("Anthony") duplicates the fallback match
+# surface of its multi-word siblings ("Anthony Mackie"). A single-word
+# BRAND / CONTENT / PLATFORM name ("Netflix", "Marriott", "Power") is a
+# complete entity in its own right and must rank alongside its more
+# specific cohort siblings ("Netflix AVOD Subscribers") - Jenna
+# 2026-09-04. s3_cache jobs carry the subcategory-level label in
+# `category` (ACTOR, ATHLETE, ...); ClickHouse rows carry the master
+# bucket in `category` (TALENT) and the label in `subcategory`, so the
+# check accepts either spelling on either field.
+_PERSON_CATEGORY_KEYS = frozenset(
+    {"TALENT"}
+    | {c.strip().upper() for c in MASTER_CATEGORIES.get("TALENT", [])}
+    | {"CREATOR/INFLUENCER"}
+)
+
+
+def _is_person_profile(job: dict) -> bool:
+    """True when the job's category labels identify a person profile.
+
+    Unknown / empty categories count as person so legacy rows with no
+    category keep the historical suppression behavior (never let an
+    unlabeled bare first name surface as a duplicate).
+    """
+    labels = [(job.get("category") or "").strip().upper(),
+              (job.get("subcategory") or "").strip().upper()]
+    if not any(labels):
+        return True
+    return any(v in _PERSON_CATEGORY_KEYS for v in labels if v)
 
 
 def _build_covered_single_names(jobs: list[dict]) -> set[str]:
@@ -722,6 +794,25 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
     Profile IQ CSV, and any historical metrics rows for these subjects
     are left intact -- only the Ranker's view filter / nightly cron is
     affected.
+
+    ONLY PERSON PROFILES can be covered (Jenna 2026-09-04): "parent
+    brands should appear alongside their more specific sibling
+    profiles". A single-word BRAND / CONTENT / PLATFORM subject
+    ("Netflix", "Marriott", "Power", "YouTube") always ranks even when
+    a multi-word sibling shares its first word ("Netflix AVOD
+    Subscribers", "YouTube TV"). The suppression is a person-name
+    dedupe and nothing more; `_is_person_profile` holds the category
+    check.
+
+    A derived cut NEVER covers its own base profile (fixed 2026-09-04).
+    Cut files follow the "{Subject} - {Cut}" naming convention
+    ("Paramount+ - Avid Fan", "Peacock - Female"), so only the subject
+    part before the first " - " decides whether a name is a genuine
+    multi-word entity. Before this fix, "Paramount+ - Avid Fan" cleaned
+    to "Paramount Avid Fan" (multi-word, first word "paramount") and
+    wrongly covered the single-word "Paramount+" profile it was cut
+    from, which silently dropped Paramount+, Peacock, and every other
+    single-word brand with an Avid cut out of the nightly ranker.
     """
     multiword_first_words: set[str] = set()
     singles_by_word: dict[str, list[str]] = {}
@@ -731,12 +822,24 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
         subj = j.get("profile_subject") or ""
         if not pn or not subj:
             continue
-        clean = re.sub(r"[^a-zA-Z0-9 ]+", " ", pn).strip()
+        # Backup-file artifacts (e.g. "Paramount+_..._23_00.prepatch.bak")
+        # are not profiles and must not cover anything.
+        if _is_backup_artifact_name(subj, pn):
+            continue
+        # Judge single vs multi-word on the subject part only, so a
+        # "{Subject} - {Cut}" sibling can't cover its own parent.
+        base = pn.split(" - ", 1)[0].strip() or pn
+        clean = re.sub(r"[^a-zA-Z0-9 ]+", " ", base).strip()
         words = [w for w in clean.split() if w]
         if len(words) >= 2:
             multiword_first_words.add(words[0].lower())
         elif len(words) == 1:
-            singles_by_word.setdefault(words[0].lower(), []).append(subj)
+            # Only PERSON profiles are candidates for coverage (Jenna
+            # 2026-09-04): parent brands, titles, and platforms rank
+            # alongside their cohort siblings; bare first names stay
+            # suppressed by their multi-word person siblings.
+            if _is_person_profile(j):
+                singles_by_word.setdefault(words[0].lower(), []).append(subj)
     covered: set[str] = set()
     for fw, subs in singles_by_word.items():
         if fw in multiword_first_words:
@@ -1168,6 +1271,15 @@ def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
             ("project_name", "display_name", "profile_subject", "s3_key")).lower()
         if "avid fan" in haystack:
             continue
+        # Backup-file artifacts must never get nightly metrics rows.
+        # Check NAME fields only, never the s3_key: every legitimate
+        # root profile key embeds the dated-filename stamp
+        # (Netflix_05_22_2026_21_45.csv), so running the timestamp
+        # pattern against the key would flag the entire catalog.
+        if _is_backup_artifact_name(j.get("profile_subject"),
+                                    j.get("project_name"),
+                                    j.get("display_name")):
+            continue
         # We dedupe on profile_subject so multi-year runs of the same person
         # only get one row per day.
         subject = j.get("profile_subject") or ""
@@ -1473,6 +1585,16 @@ def aggregate_leaderboard(
         "AND positionCaseInsensitive(project_name, 'avid fan')   = 0"
     )
 
+    # Backup-file artifacts (one bad ingest swept `.prepatch.bak` files
+    # into the metrics table) never render, whatever the date window.
+    where_no_artifacts = (
+        "AND positionCaseInsensitive(profile_subject, '.bak') = 0 "
+        "AND positionCaseInsensitive(profile_subject, 'prepatch') = 0 "
+        "AND positionCaseInsensitive(profile_subject, 'pre_patch') = 0 "
+        "AND NOT match(profile_subject, "
+        "'_[0-9]{2}_[0-9]{2}_[0-9]{4}_[0-9]{2}_[0-9]{2}')"
+    )
+
     # Single-word project names that are also a brand_term in some other
     # profile's daily-metrics row are duplicates: their pre-fix rows in
     # `profile_iq_daily_metrics` were computed against the broad "Anthony"
@@ -1627,6 +1749,7 @@ def aggregate_leaderboard(
           {where_sub}
           {where_search}
           {where_no_avid}
+          {where_no_artifacts}
           {where_no_covered}
         GROUP BY profile_subject
     ),
@@ -1656,6 +1779,7 @@ def aggregate_leaderboard(
           AND {where_master}
           {where_sub}
           {where_no_avid}
+          {where_no_artifacts}
           {where_no_covered}
         GROUP BY profile_subject
     )

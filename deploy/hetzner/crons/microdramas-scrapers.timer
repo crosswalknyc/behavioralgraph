@@ -1,0 +1,15 @@
+[Unit]
+Description=Fire microdramas-scrapers.service daily at 05:30 UTC
+Requires=microdramas-scrapers.service
+
+[Timer]
+# 05:30 UTC = 00:30 ET, before dashboard traffic peaks. Runs AFTER the
+# trends_scrapers crontab entry (which fires at 12:00 UTC) is deprecated
+# in favor of donated-cookie freshness pulled at scrape time.
+OnCalendar=*-*-* 05:30:00 UTC
+Persistent=true
+AccuracySec=1min
+Unit=microdramas-scrapers.service
+
+[Install]
+WantedBy=timers.target

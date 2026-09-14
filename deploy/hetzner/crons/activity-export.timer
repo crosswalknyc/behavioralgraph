@@ -1,0 +1,17 @@
+[Unit]
+Description=Fire activity-export.service daily at 06:00 UTC (currently disabled by default)
+Requires=activity-export.service
+
+[Timer]
+# 06:00 UTC matches the previous Render schedule.
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+AccuracySec=1min
+Unit=activity-export.service
+
+# NOTE: not in [Install] WantedBy=timers.target BY DEFAULT. This cron
+# is currently suspended on Render (Jenna 2026-06-05). Enable at
+# cutover with `systemctl enable --now activity-export.timer` only if
+# Jenna wants it running.
+[Install]
+WantedBy=timers.target

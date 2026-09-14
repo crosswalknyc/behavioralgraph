@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Billing - Crosswalk Admin</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    :root {
+      --graphite: #0C1618;
+      --slate: #15252A;
+      --off-white: #E9E8E1;
+      --olive: #5E7E12;
+      --amethyst: #8E3FA8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--off-white);
+      color: var(--graphite);
+      margin: 0;
+    }
+    header {
+      background: var(--graphite);
+      color: var(--off-white);
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header .brand { font-weight: 800; font-size: 20px; }
+    header a { color: var(--off-white); text-decoration: none;
+                font-size: 14px; margin-left: 20px; }
+    main { max-width: 1400px; margin: 0 auto; padding: 32px; }
+    h1 { font-size: 28px; margin: 0 0 20px 0; }
+    h2 { font-size: 18px; margin: 0 0 12px 0; }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 2px solid #E5E7EB;
+      margin-bottom: 24px;
+    }
+    .tab {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #6B7280;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-family: inherit;
+    }
+    .tab.active {
+      color: var(--graphite);
+      border-bottom-color: var(--graphite);
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .user-row {
+      display: grid;
+      grid-template-columns: 220px 160px 100px 120px 120px 120px 120px 1fr;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #F0F0EA;
+      font-size: 13px;
+      align-items: center;
+    }
+    .user-row.header {
+      background: #F9F9F5;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6B7280;
+      border-radius: 6px 6px 0 0;
+    }
+    .user-row .amount {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .user-row .amount.negative { color: #C43D2E; }
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tag.paying { background: #E8F5E8; color: var(--olive); }
+    .tag.non-paying { background: #F0F0F0; color: #6B7280; }
+    .tag.unlimited { background: #EAE3FF; color: #4A0080; }
+    .tag.auto_reload { background: #FFF3E5; color: #A05A00; }
+    .tag.prepay_only { background: #E5F0FF; color: #003D80; }
+    .tag.monthly_invoice { background: #F0E5FF; color: #4A0080; }
+    button, .btn {
+      padding: 6px 12px;
+      background: var(--graphite);
+      color: var(--off-white);
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary {
+      background: transparent;
+      color: var(--graphite);
+      border: 1px solid #D0D0D0;
+    }
+    button.danger {
+      background: #C43D2E;
+    }
+    input[type=text], input[type=number], input[type=email], select {
+      padding: 8px 10px;
+      border: 1px solid #D0D0D0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    label { font-size: 13px; color: #6B7280; display: block; margin: 8px 0 4px 0; }
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.55);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      max-width: 640px;
+      width: calc(100vw - 40px);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 28px;
+    }
+    .modal h3 { margin: 0 0 8px 0; font-size: 20px; }
+    .modal .close {
+      float: right;
+      background: none;
+      color: #6B7280;
+      font-size: 20px;
+      padding: 0 4px;
+    }
+    .stripe-el {
+      padding: 12px 14px;
+      border: 1px solid #D0D0D0;
+      border-radius: 8px;
+      background: white;
+    }
+    .banner {
+      padding: 14px 20px;
+      border-radius: 8px;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+    .banner.success { background: #E8F5E8; color: var(--olive); }
+    .banner.error { background: #FFECEB; color: #C43D2E; }
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 24px 0;
+      font-size: 13px;
+    }
+    .pricing-table th {
+      text-align: left;
+      padding: 10px 12px;
+      color: #6B7280;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #E9E8E1;
+      background: transparent;
+    }
+    .pricing-table th.num { text-align: right; }
+    .pricing-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #F3F2EC;
+      vertical-align: middle;
+    }
+    .pricing-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .pricing-table tr.section-row td {
+      background: #F7F6F0;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #0C1618;
+      padding: 10px 12px;
+      border-top: 1px solid #E9E8E1;
+      border-bottom: 1px solid #E9E8E1;
+    }
+    .pricing-table .tool-name {
+      font-weight: 500;
+      color: #0C1618;
+    }
+    .pricing-table .tool-flag {
+      display: block;
+      font-size: 10.5px;
+      color: #A9A9A0;
+      font-weight: 400;
+      margin-top: 2px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .pricing-table .usd-input-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #FFFFFF;
+      border: 1px solid #D6D4C8;
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    .pricing-table .usd-input-wrap:focus-within {
+      border-color: #0C1618;
+      box-shadow: 0 0 0 2px rgba(12, 22, 24, 0.08);
+    }
+    .pricing-table .usd-input-wrap span {
+      color: #6B7280;
+      font-size: 13px;
+    }
+    .pricing-table .usd-input-wrap input {
+      border: 0;
+      outline: 0;
+      padding: 0;
+      width: 90px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      background: transparent;
+      font-size: 13px;
+      color: #0C1618;
+    }
+    .pricing-table .usd-input-wrap input:disabled {
+      color: #B8B8B0;
+    }
+    .kv-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 12px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .txn-list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+    .txn-list th {
+      text-align: left;
+      color: #6B7280;
+      font-size: 10px;
+      text-transform: uppercase;
+      padding: 6px 8px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .txn-list td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #F5F5F0;
+    }
+    .txn-list td.amount {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .amount.positive { color: var(--olive); font-weight: 600; }
+    #search-box {
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Crosswalk / Admin / Billing</div>
+    <div>
+      <a href="/admin">Users</a>
+      <a href="/">Dashboard</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Billing</h1>
+    <div id="banner"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="users">Users</button>
+      <button class="tab" data-tab="companies">Companies</button>
+      <button class="tab" data-tab="pricing">Pricing</button>
+    </div>
+
+    <div id="tab-users" class="tab-panel">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; margin-bottom: 16px;">
+          <h2 style="margin: 0;">All Users</h2>
+          <input id="search-box" type="text" placeholder="Search by
+            email or username">
+        </div>
+        <div id="users-container"></div>
+      </div>
+    </div>
+
+    <div id="tab-companies" class="tab-panel" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin: 0;">Company-shared wallets</h2>
+            <p style="color: #6B7280; font-size: 13px;
+                      margin: 6px 0 0 0; max-width: 640px;">
+              One master account per company holds the card and
+              balance. Every teammate whose "Bill through" is set to
+              the company draws from this pool. Monthly access
+              charges bill this card once per month.
+            </p>
+          </div>
+          <input id="company-search-box" type="text"
+                 placeholder="Search companies">
+        </div>
+        <div id="companies-container"></div>
+      </div>
+    </div>
+
+    <div id="tab-pricing" class="tab-panel" style="display: none;">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between;
+                    align-items:flex-start; gap:16px; margin-bottom:8px;">
+          <div>
+            <h2 style="margin:0;">Per-Tool USD Prices</h2>
+            <p style="color: #6B7280; font-size: 13px; margin:8px 0 0 0;">
+              The wallet is charged these amounts when a paying
+              customer runs a pull and their internal allowance is
+              exhausted. <strong>Modules</strong> and
+              <strong>Rankers</strong> are the monthly-access product
+              lists (each row bills the / month price to users carrying
+              its access flag). <strong>Pulls</strong> is the per-pull
+              events list (each row bills its / pull price when the
+              event fires). Rows tagged
+              <span style="display:inline-block; padding:0 5px;
+                font-size:10px; font-weight:600;
+                background:#0C1618; color:#C7F23E;
+                border-radius:3px; letter-spacing:0.05em;
+                vertical-align:1px;">METERED</span>
+              are session-billed via the Prometheus session bill and
+              carry no per-pull line item.
+            </p>
+          </div>
+          <button id="btn-add-tool" style="flex-shrink:0;">
+            + Add tool
+          </button>
+        </div>
+        <div id="add-tool-form" style="display:none;
+             background:#F7F6F0; border:1px solid #E9E8E1;
+             border-radius:8px; padding:16px; margin-top:16px;">
+          <div style="display:grid;
+               grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+               gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="margin-top:0;">Display name</label>
+              <input id="new-tool-name" type="text"
+                     placeholder="e.g. Custom Sponsorship Deck"
+                     style="width:100%;">
+            </div>
+            <div>
+              <label style="margin-top:0;">Tool key (snake_case)</label>
+              <input id="new-tool-key" type="text"
+                     placeholder="e.g. custom_sponsorship_deck"
+                     style="width:100%;">
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Auto-generated from name if left blank.
+              </div>
+            </div>
+            <div>
+              <label style="margin-top:0;">Section</label>
+              <select id="new-tool-section" style="width:100%;">
+                <option value="modules">Modules (monthly access)</option>
+                <option value="pulls">Pulls (per-pull)</option>
+                <option value="rankers">Rankers</option>
+                <option value="api">Partner API</option>
+                <option value="subscription">Subscription</option>
+                <option value="custom" selected>Custom</option>
+              </select>
+            </div>
+            <div>
+              <label style="margin-top:0;">Monthly access $/mo</label>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="color:#6B7280;">$</span>
+                <input id="new-tool-monthly" type="number" step="1"
+                       min="0" value="0" style="width:100%;">
+              </div>
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Recurring, gated by access flag.
+              </div>
+            </div>
+            <div>
+              <label style="margin-top:0;">Per pull $</label>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="color:#6B7280;">$</span>
+                <input id="new-tool-usd" type="number" step="1"
+                       min="0" value="0" style="width:100%;">
+              </div>
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Deducted from wallet on each use.
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button class="secondary" onclick="hideAddToolForm()">
+              Cancel
+            </button>
+            <button id="btn-save-new-tool">Add tool</button>
+          </div>
+        </div>
+        <div id="pricing-body" style="margin-top:16px;"></div>
+        <div id="pricing-hidden-toggle" style="margin-top:16px;
+             padding-top:16px; border-top:1px solid #E9E8E1;
+             font-size:12px; color:#6B7280; display:none;">
+          <!-- Populated by renderPricing() when deleted built-ins
+               exist. Clicking flips the show_hidden state so
+               deleted rows appear with a Restore button. -->
+        </div>
+      </div>
+      <div class="card">
+        <h2>Prometheus Metered Billing</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
+          Prometheus sessions are billed by Anthropic-cost markup
+          (session close reads billed_usd from the render usage log).
+        </p>
+        <div class="kv-row">
+          <label style="margin: 0;">Markup multiplier:</label>
+          <div>
+            <input id="markup" type="number" step="0.01" min="1">
+            <button id="save-markup">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top-up Packs</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
+          Amounts shown as quick-select buttons on the user Wallet
+          page. Custom amount is always allowed above the minimum.
+        </p>
+        <div id="packs-body"></div>
+        <div class="kv-row" style="margin-top: 12px;">
+          <label style="margin: 0;">Minimum custom amount:</label>
+          <div>
+            $<input id="min-custom" type="number" step="1" min="1"
+                    style="width: 100px;">
+            <button id="save-packs">Save packs</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- User Billing Modal -->
+  <div id="user-modal" class="modal-backdrop">
+    <div class="modal">
+      <button class="close" onclick="closeModal()">&times;</button>
+      <h3 id="modal-title">User Billing</h3>
+      <div id="modal-subtitle" style="color: #6B7280; font-size: 13px;
+        margin-bottom: 20px;"></div>
+
+      <div id="modal-banner"></div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <div class="kv-row">
+          <label style="margin: 0;">Unlimited access</label>
+          <label style="margin: 0; display: flex; align-items: center;
+                        gap: 8px;">
+            <input id="m-unlimited" type="checkbox"
+                   onchange="onUnlimitedToggle()">
+            <span id="m-unlimited-hint" style="color: #6B7280;
+                        font-size: 12px;">
+              When enabled, this user is never charged. Turning it
+              off will set their internal credits to 0.
+            </span>
+          </label>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Paying customer</label>
+          <label style="margin: 0; display: flex; align-items: center;
+                        gap: 8px;">
+            <input id="m-paying" type="checkbox">
+            <span style="color: #6B7280; font-size: 12px;">
+              When enabled, this user's wallet may absorb charges
+              once internal credits drain.
+            </span>
+          </label>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Billing mode</label>
+          <select id="m-mode">
+            <option value="prepay_only">Prepay only</option>
+            <option value="auto_reload">Auto-reload</option>
+            <option value="monthly_invoice">Monthly invoice</option>
+          </select>
+        </div>
+        <div id="ar-fields" style="display: none;">
+          <div class="kv-row">
+            <label style="margin: 0;">Auto-reload threshold</label>
+            <div>$<input id="m-ar-threshold" type="number" step="1"
+                    min="0" style="width: 100px;"></div>
+          </div>
+          <div class="kv-row">
+            <label style="margin: 0;">Auto-reload top-up amount</label>
+            <div>$<input id="m-ar-amount" type="number" step="1"
+                    min="0" style="width: 100px;"></div>
+          </div>
+        </div>
+        <div id="mi-fields" style="display: none;">
+          <div class="kv-row">
+            <label style="margin: 0;">Monthly invoice limit</label>
+            <div>$<input id="m-mi-limit" type="number" step="100"
+                    min="0" style="width: 120px;"></div>
+          </div>
+        </div>
+        <!-- Company default spend scope (Jenna 2026-09-09).
+             Only visible when the current subject is a company. Sets
+             which tools the whole company can spend the shared wallet
+             on by default. Individual members can override upward
+             (via the user admin modal) but never downward past this
+             list unless the admin sets an explicit narrower list on
+             their user record. -->
+        <div id="scope-fields" style="display: none;
+             border-top: 1px solid #E5E7EB; margin-top: 12px;
+             padding-top: 12px;">
+          <div class="kv-row">
+            <label style="margin: 0;">Default spend scope</label>
+            <select id="m-scope-mode">
+              <option value="*">All tools (unrestricted)</option>
+              <option value="list">Specific tools only</option>
+            </select>
+          </div>
+          <div id="m-scope-list-wrap" style="display: none; margin-top: 8px;">
+            <label style="display: block; margin-bottom: 6px;">
+              Tools members can spend the shared wallet on by default
+            </label>
+            <select id="m-scope-list" multiple
+                    style="width: 100%; min-height: 120px;
+                           font-size: 12px;">
+              <!-- Populated from /api/admin/tool_catalog -->
+            </select>
+            <div style="color: #6B7280; font-size: 11px; margin-top: 6px;">
+              Members whose user record has spend scope = "Inherit" (the
+              default) get this list. Billing admins can always spend on
+              any tool regardless of this setting. Individual members can
+              be granted "All tools" or a wider list on their user modal.
+            </div>
+          </div>
+        </div>
+        <div style="text-align: right; margin-top: 12px;">
+          <button id="m-save-config">Save configuration</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Card on file
+        </h3>
+        <div id="m-card-status"
+          style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">
+          No card on file.
+        </div>
+        <div id="m-card-form" style="display: none;">
+          <label>Card details</label>
+          <div id="card-element" class="stripe-el"></div>
+          <div style="margin-top: 8px; color: #6B7280; font-size: 11px;">
+            Card is stored securely with Stripe. Crosswalk never sees
+            the card number.
+          </div>
+          <div style="text-align: right; margin-top: 12px;">
+            <button class="secondary" onclick="hideCardForm()">
+              Cancel
+            </button>
+            <button id="m-save-card">Save card</button>
+          </div>
+        </div>
+        <div id="m-card-actions">
+          <button id="m-add-card">Add card</button>
+          <button id="m-remove-card" class="secondary"
+                  style="display: none;">Remove card</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Wallet
+        </h3>
+        <div class="kv-row">
+          <label style="margin: 0;">Balance</label>
+          <div id="m-balance" style="font-size: 24px; font-weight: 700;">
+            $0.00
+          </div>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Manual adjustment</label>
+          <div>
+            $<input id="m-adj-amount" type="number" step="0.01"
+                    style="width: 100px;">
+            <input id="m-adj-desc" type="text" placeholder="Note"
+                   style="width: 200px;">
+            <button id="m-adj-add">Credit</button>
+            <button id="m-adj-sub" class="secondary">Debit</button>
+          </div>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Charge card now</label>
+          <div>
+            $<input id="m-charge-amount" type="number" step="0.01"
+                    style="width: 100px;">
+            <input id="m-charge-desc" type="text" placeholder="Note"
+                   style="width: 200px;">
+            <button id="m-charge-btn">Charge</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Transaction history (last 50)
+        </h3>
+        <div id="m-txns"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    // HTML-escape for inline strings used in innerHTML fragments.
+    const esc = (s) => String(s == null ? '' : s).replace(
+      /[&<>"']/g, c => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
+         "'":'&#39;'}[c]));
+    const fmtUsd = (n) => {
+      const v = Number(n) || 0;
+      const sign = v < 0 ? '-' : '';
+      return sign + '$' + Math.abs(v).toLocaleString('en-US', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      });
+    };
+    const fmtDate = (iso) => {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric',
+          minute: '2-digit'
+        });
+      } catch (e) { return iso; }
+    };
+
+    let stripe = null, stripeElements = null, cardElement = null;
+    let currentUsername = null;
+    // Subject-aware billing (Jenna 2026-09-09 company-shared wallet).
+    // 'user' when the modal is showing a person, 'company' when the
+    // modal is showing a company record. subjectUrl() builds the
+    // right API path so every action handler works for both kinds.
+    let currentSubjectKind = 'user';
+    let currentSubjectKey = null;
+    let stripePublishableKey = null;
+    let allUsers = [];
+    let allCompanies = [];
+
+    function subjectUrl(path) {
+      // path is like 'config' or 'attach-card' - relative to
+      // /api/admin/<kind>/<key>/billing/. `remove-card` on user
+      // routes to `/billing/remove-card`; on company we use the
+      // same suffix ('detach-card' is the actual company route,
+      // but the user path has a `remove-card` alias) - handled
+      // at call sites where it matters.
+      const kind = currentSubjectKind;  // 'user' | 'company'
+      const key = encodeURIComponent(currentSubjectKey || '');
+      return `/api/admin/${kind}/${key}/billing/${path}`;
+    }
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x =>
+          x.classList.remove('active'));
+        t.classList.add('active');
+        document.querySelectorAll('.tab-panel').forEach(p =>
+          p.style.display = 'none');
+        $('tab-' + t.dataset.tab).style.display = 'block';
+        if (t.dataset.tab === 'companies') loadCompanies();
+        if (t.dataset.tab === 'pricing') loadPricing();
+      });
+    });
+
+    // Search
+    $('search-box').addEventListener('input', () => {
+      renderUsers();
+    });
+    $('company-search-box').addEventListener('input', () => {
+      renderCompanies();
+    });
+
+    async function loadUsers() {
+      const r = await fetch('/api/admin/users_billing', {
+        credentials: 'same-origin'
+      });
+      if (r.status === 401 || r.status === 403) {
+        $('banner').innerHTML =
+          '<div class="banner error">Admin login required.</div>';
+        return;
+      }
+      if (!r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner error">Could not load users.</div>';
+        return;
+      }
+      const j = await r.json();
+      allUsers = j.users || [];
+      stripePublishableKey = j.stripe_publishable_key || '';
+      if (stripePublishableKey && !stripe) {
+        stripe = Stripe(stripePublishableKey);
+      }
+      if (!j.stripe_enabled) {
+        $('banner').innerHTML =
+          '<div class="banner error">Stripe is not configured.' +
+          ' Set STRIPE_SECRET_KEY / STRIPE_PUBLISHABLE_KEY to enable' +
+          ' card operations.</div>';
+      }
+      renderUsers();
+      // 2026-09-09: deep-link support. If /admin/billing?user=<username>
+      // was called (from the user-edit modal in admin.html), open that
+      // user's billing modal automatically after the list renders.
+      const params = new URLSearchParams(window.location.search);
+      const deepUser = params.get('user');
+      if (deepUser) {
+        const hit = allUsers.find(u => (u.username || '') === deepUser);
+        if (hit) {
+          openModal(deepUser);
+        } else {
+          $('banner').innerHTML =
+            '<div class="banner error">User "' + deepUser +
+            '" not found. They may need to be created first.</div>';
+        }
+      }
+    }
+
+    function renderUsers() {
+      const q = ($('search-box').value || '').toLowerCase().trim();
+      const filtered = q ? allUsers.filter(u =>
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q)
+      ) : allUsers;
+      let html = '<div class="user-row header">';
+      html += '<div>User</div><div>Email</div><div>Paying</div>';
+      html += '<div>Mode</div><div>Card</div>';
+      html += '<div class="amount">Balance</div>';
+      html += '<div class="amount">Spend</div>';
+      html += '<div></div>';
+      html += '</div>';
+      filtered.forEach(u => {
+        const modeMap = {
+          prepay_only: 'Prepay',
+          auto_reload: 'Auto',
+          monthly_invoice: 'Invoice',
+        };
+        const balCls = u.wallet_balance_usd < 0 ? ' negative' : '';
+        html += '<div class="user-row">';
+        html += '<div>' + (u.username || '') + '</div>';
+        html += '<div style="color: #6B7280;">' +
+          (u.email || '') + '</div>';
+        if (u.unlimited) {
+          html += '<div><span class="tag unlimited">Unlimited</span></div>';
+          html += '<div style="color: #6B7280;">Not charged</div>';
+          html += '<div style="color: #B8B8B0;">-</div>';
+          html += '<div class="amount" style="color: #6B7280;">-</div>';
+        } else {
+          html += '<div>' + (u.paying_customer
+            ? '<span class="tag paying">Paying</span>'
+            : '<span class="tag non-paying">-</span>') + '</div>';
+          html += '<div>' + (u.paying_customer
+            ? '<span class="tag ' + u.billing_mode + '">' +
+              (modeMap[u.billing_mode] || u.billing_mode) + '</span>'
+            : '') + '</div>';
+          html += '<div>' + (u.has_card_on_file
+            ? (u.card_brand || 'card') + ' ****' + (u.card_last4 || '')
+            : '<span style="color: #B8B8B0;">-</span>') + '</div>';
+          html += '<div class="amount' + balCls + '">' +
+            fmtUsd(u.wallet_balance_usd) + '</div>';
+        }
+        html += '<div class="amount">' +
+          fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
+        html += '<div><button onclick="openModal(\'' +
+          esc(u.username) + '\', \'user\')">Manage</button></div>';
+        html += '</div>';
+      });
+      $('users-container').innerHTML = html;
+    }
+
+    async function loadCompanies() {
+      const r = await fetch('/api/admin/companies_billing', {
+        credentials: 'same-origin'
+      });
+      if (!r.ok) {
+        $('companies-container').innerHTML =
+          '<div class="banner error">Could not load companies.</div>';
+        return;
+      }
+      const j = await r.json();
+      allCompanies = j.companies || [];
+      renderCompanies();
+    }
+
+    function renderCompanies() {
+      const q = ($('company-search-box').value || '')
+        .toLowerCase().trim();
+      const rows = q
+        ? allCompanies.filter(c =>
+            (c.company || '').toLowerCase().includes(q))
+        : allCompanies;
+      if (!rows.length) {
+        $('companies-container').innerHTML =
+          '<div style="color:#6B7280; padding:16px; font-size:13px;">' +
+          'No companies yet. Companies appear here once a user is ' +
+          'assigned to one AND their "Bill through" is set to the ' +
+          'company in Admin - Users.</div>';
+        return;
+      }
+      let html = '<div class="user-row header">';
+      html += '<div>Company</div><div>Members</div><div>Paying</div>';
+      html += '<div>Mode</div><div>Card</div>';
+      html += '<div class="amount">Balance</div>';
+      html += '<div class="amount">Spend</div>';
+      html += '<div></div></div>';
+      const modeMap = {
+        prepay_only: 'Prepay',
+        auto_reload: 'Auto',
+        monthly_invoice: 'Invoice',
+      };
+      rows.forEach(c => {
+        const balCls = c.wallet_balance_usd < 0 ? ' negative' : '';
+        html += '<div class="user-row">';
+        html += '<div><strong>' + esc(c.company) + '</strong></div>';
+        html += '<div style="color:#6B7280;">' +
+          (c.member_count || 0) + '</div>';
+        if (c.unlimited) {
+          html += '<div><span class="tag unlimited">Unlimited</span>' +
+            '</div>';
+          html += '<div style="color:#6B7280;">Not charged</div>';
+          html += '<div style="color:#B8B8B0;">-</div>';
+          html += '<div class="amount" style="color:#6B7280;">-</div>';
+        } else {
+          html += '<div>' + (c.paying_customer
+            ? '<span class="tag paying">Paying</span>'
+            : '<span class="tag non-paying">-</span>') + '</div>';
+          html += '<div>' + (c.paying_customer
+            ? '<span class="tag ' + c.billing_mode + '">' +
+              (modeMap[c.billing_mode] || c.billing_mode) + '</span>'
+            : '') + '</div>';
+          html += '<div>' + (c.has_card_on_file
+            ? esc(c.card_brand || 'card') + ' ****' +
+              esc(c.card_last4 || '')
+            : '<span style="color:#B8B8B0;">-</span>') + '</div>';
+          html += '<div class="amount' + balCls + '">' +
+            fmtUsd(c.wallet_balance_usd) + '</div>';
+        }
+        html += '<div class="amount">' +
+          fmtUsd(c.wallet_lifetime_spend_usd) + '</div>';
+        html += '<div><button onclick="openModal(\'' +
+          esc(c.company) + '\', \'company\')">Manage</button></div>';
+        html += '</div>';
+      });
+      $('companies-container').innerHTML = html;
+    }
+
+    async function openModal(key, kind) {
+      currentSubjectKind = kind || 'user';
+      currentSubjectKey = key;
+      currentUsername = (currentSubjectKind === 'user') ? key : null;
+      $('modal-banner').innerHTML = '';
+      let u;
+      if (currentSubjectKind === 'company') {
+        u = allCompanies.find(x => x.company === key);
+      } else {
+        u = allUsers.find(x => x.username === key);
+      }
+      if (!u) return;
+      const label = (currentSubjectKind === 'company')
+        ? 'Company billing: ' + key
+        : 'Billing: ' + key;
+      $('modal-title').textContent = label;
+      const subtitleParts = [];
+      if (currentSubjectKind === 'company') {
+        const mc = u.member_count || 0;
+        subtitleParts.push(
+          'Shared wallet - ' + mc + ' teammate' +
+          (mc === 1 ? '' : 's') + ' route through this pool.');
+      } else {
+        subtitleParts.push(u.email || '');
+      }
+      if (u.unlimited) {
+        subtitleParts.push(
+          '<span class="tag unlimited" style="margin-left:8px;">' +
+          'Unlimited access - not charged</span>');
+      }
+      $('modal-subtitle').innerHTML = subtitleParts.join('');
+      $('m-unlimited').checked = !!u.unlimited;
+      $('m-paying').checked = !!u.paying_customer;
+      $('m-mode').value = u.billing_mode || 'prepay_only';
+      $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
+      $('m-ar-amount').value = u.auto_reload_amount_usd || 1000;
+      $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
+      updateModeFields();
+      onUnlimitedToggle();
+      // Company default spend scope: hydrate only for company subjects.
+      hydrateSpendScope(u);
+      $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+      if (u.wallet_balance_usd < 0)
+        $('m-balance').style.color = '#C43D2E';
+      else $('m-balance').style.color = '';
+      renderCardStatus(u);
+      renderTxns(u.wallet_transactions || []);
+      $('user-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      $('user-modal').classList.remove('open');
+      currentUsername = null;
+      currentSubjectKey = null;
+      currentSubjectKind = 'user';
+      hideCardForm();
+    }
+
+    async function reloadAfterMutation() {
+      // Refresh the list underlying the currently-open modal so
+      // wallet balances / card info stay in sync after an action.
+      if (currentSubjectKind === 'company') {
+        await loadCompanies();
+      } else {
+        await loadUsers();
+      }
+    }
+
+    function findCurrentSubject() {
+      if (currentSubjectKind === 'company') {
+        return allCompanies.find(x => x.company === currentSubjectKey);
+      }
+      return allUsers.find(x => x.username === currentSubjectKey);
+    }
+
+    function updateModeFields() {
+      const mode = $('m-mode').value;
+      $('ar-fields').style.display =
+        mode === 'auto_reload' ? 'block' : 'none';
+      $('mi-fields').style.display =
+        mode === 'monthly_invoice' ? 'block' : 'none';
+    }
+    $('m-mode').addEventListener('change', updateModeFields);
+
+    function onUnlimitedToggle() {
+      // Grey out the wallet-related config when unlimited is on,
+      // because it doesn't apply to a never-charged user. The values
+      // are still submitted (the backend translates unlimited into
+      // credits=-1) so admins don't lose their settings by flipping
+      // the toggle back and forth.
+      const on = $('m-unlimited').checked;
+      const dim = on ? 0.45 : 1.0;
+      ['m-paying', 'm-mode', 'm-ar-threshold', 'm-ar-amount',
+       'm-mi-limit'].forEach(id => {
+        const el = $(id);
+        if (el) {
+          el.disabled = on;
+          if (el.parentElement && el.parentElement.parentElement) {
+            el.parentElement.parentElement.style.opacity = dim;
+          }
+        }
+      });
+      $('m-unlimited-hint').textContent = on
+        ? 'This user has unlimited access. No charges apply. ' +
+          'Uncheck to enable metered billing.'
+        : 'When enabled, this user is never charged. Turning it ' +
+          'off will set their internal credits to 0.';
+    }
+
+    function renderCardStatus(u) {
+      if (u.has_card_on_file) {
+        $('m-card-status').innerHTML =
+          '<strong>' + (u.card_brand || 'Card') + ' ****' +
+          (u.card_last4 || '') + '</strong> on file.';
+        $('m-add-card').style.display = 'none';
+        $('m-remove-card').style.display = 'inline-block';
+      } else {
+        $('m-card-status').textContent = 'No card on file.';
+        $('m-add-card').style.display = 'inline-block';
+        $('m-remove-card').style.display = 'none';
+      }
+    }
+
+    function renderTxns(txns) {
+      if (!txns || !txns.length) {
+        $('m-txns').innerHTML =
+          '<div style="color: #B8B8B0; font-size: 13px;">' +
+          'No transactions.</div>';
+        return;
+      }
+      const kindLabels = {
+        topup: 'Top-up', auto_reload: 'Auto-reload',
+        deduct: 'Usage', refund: 'Refund',
+        adjustment: 'Adjustment',
+        monthly_access: 'Monthly access',
+      };
+      let html = '<table class="txn-list"><thead><tr>';
+      html += '<th>Date</th><th>Type</th><th>Description</th>';
+      html += '<th style="text-align:right;">Amount</th>';
+      html += '<th style="text-align:right;">Balance</th>';
+      html += '</tr></thead><tbody>';
+      txns.slice(0, 50).forEach(t => {
+        const amt = Number(t.amount_usd || 0);
+        const cls = amt >= 0 ? 'positive' : '';
+        const sign = amt >= 0 ? '+' : '';
+        html += '<tr>';
+        html += '<td>' + fmtDate(t.ts) + '</td>';
+        html += '<td>' + (kindLabels[t.kind] || t.kind) + '</td>';
+        html += '<td>' + (t.description || '') + '</td>';
+        html += '<td class="amount ' + cls + '">' + sign +
+          fmtUsd(Math.abs(amt)) + '</td>';
+        html += '<td class="amount">' + fmtUsd(t.balance_after_usd) +
+          '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      $('m-txns').innerHTML = html;
+    }
+
+    // -------- Company default spend scope (Jenna 2026-09-09) --------
+    let __scopeCatalogLoaded = false;
+    async function ensureScopeCatalog() {
+      if (__scopeCatalogLoaded) return;
+      const listEl = $('m-scope-list');
+      if (!listEl) return;
+      try {
+        const r = await fetch('/api/admin/tool_catalog',
+                              { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const tools = (data && data.tools) || [];
+        const prior = new Set(
+          Array.from(listEl.selectedOptions).map(o => o.value));
+        listEl.innerHTML = '';
+        const orderKey = t => {
+          if (t.tool_key === 'prometheus') return '0';
+          if (t.tool_key.startsWith('profile_iq')) return '1';
+          if (t.tool_key.startsWith('subscriber_iq')) return '2';
+          if (t.tool_key.startsWith('chatbot')) return '3';
+          return '4_' + (t.section || 'z') + '_' + t.tool_key;
+        };
+        tools.sort((a, b) =>
+          orderKey(a).localeCompare(orderKey(b)));
+        for (const t of tools) {
+          if (!t.tool_key) continue;
+          if (t.tool_key === 'monthly_service') continue;
+          const opt = document.createElement('option');
+          opt.value = t.tool_key;
+          opt.textContent = t.display_name || t.tool_key;
+          opt.selected = prior.has(t.tool_key);
+          listEl.appendChild(opt);
+        }
+        __scopeCatalogLoaded = true;
+      } catch (_) { /* best-effort */ }
+    }
+
+    function hydrateSpendScope(u) {
+      const wrap = $('scope-fields');
+      const modeEl = $('m-scope-mode');
+      const listEl = $('m-scope-list');
+      const listWrap = $('m-scope-list-wrap');
+      if (!wrap || !modeEl || !listEl) return;
+      // Only surface the control for company subjects. Solo user
+      // records have no shared wallet, so there's nothing to scope.
+      if (currentSubjectKind !== 'company') {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = '';
+      const raw = u.default_spend_scope;
+      let mode = '*';
+      let selected = new Set();
+      if (Array.isArray(raw)) {
+        mode = 'list';
+        for (const tk of raw) selected.add(String(tk));
+      } else {
+        mode = '*';
+      }
+      modeEl.value = mode;
+      // Populate + apply prior selection.
+      ensureScopeCatalog().then(() => {
+        for (const o of listEl.options) {
+          o.selected = selected.has(o.value);
+        }
+      });
+      listWrap.style.display = (mode === 'list') ? '' : 'none';
+    }
+
+    // Toggle the list picker when mode flips.
+    const _scopeModeEl = $('m-scope-mode');
+    if (_scopeModeEl) {
+      _scopeModeEl.addEventListener('change', () => {
+        const listWrap = $('m-scope-list-wrap');
+        if (!listWrap) return;
+        listWrap.style.display =
+          (_scopeModeEl.value === 'list') ? '' : 'none';
+        if (_scopeModeEl.value === 'list') ensureScopeCatalog();
+      });
+    }
+
+    $('m-save-config').addEventListener('click', async () => {
+      // Guardrail: if the admin is turning OFF unlimited, confirm -
+      // this flips the user from never-charged to metered and sets
+      // their internal credits to 0.
+      const currentUser = allUsers.find(
+        x => x.username === currentUsername) || {};
+      const wasUnlimited = !!currentUser.unlimited;
+      const wantsUnlimited = $('m-unlimited').checked;
+      if (wasUnlimited && !wantsUnlimited) {
+        if (!confirm(
+          'Turn off unlimited access for ' + currentUsername +
+          '?\n\nThis user will start being charged for pulls. ' +
+          'Their internal credits will be set to 0.')) {
+          return;
+        }
+      }
+      const body = {
+        unlimited: wantsUnlimited,
+        paying_customer: $('m-paying').checked,
+        billing_mode: $('m-mode').value,
+        auto_reload_threshold_usd:
+          Number($('m-ar-threshold').value || 500),
+        auto_reload_amount_usd:
+          Number($('m-ar-amount').value || 1000),
+        monthly_invoice_limit_usd:
+          Number($('m-mi-limit').value || 5000),
+      };
+      // Attach default_spend_scope only on company subjects.
+      if (currentSubjectKind === 'company') {
+        const modeEl2 = $('m-scope-mode');
+        const mode = modeEl2 ? String(modeEl2.value || '*') : '*';
+        if (mode === '*') {
+          body.default_spend_scope = '*';
+        } else {
+          const listEl2 = $('m-scope-list');
+          body.default_spend_scope = listEl2
+            ? Array.from(listEl2.selectedOptions)
+                .map(o => String(o.value || '').trim())
+                .filter(x => x)
+            : [];
+        }
+      }
+      const r = await fetch(
+        subjectUrl('config'),
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Save failed');
+        return;
+      }
+      showModalBanner('success', 'Configuration saved.');
+      await reloadAfterMutation();
+    });
+
+    $('m-add-card').addEventListener('click', showCardForm);
+    async function showCardForm() {
+      if (!stripe) {
+        showModalBanner('error',
+          'Stripe not configured. Cannot add a card.');
+        return;
+      }
+      $('m-card-form').style.display = 'block';
+      $('m-card-actions').style.display = 'none';
+      // Request a SetupIntent for this subject (user or company).
+      const r = await fetch(
+        subjectUrl('setup-intent'),
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Setup failed');
+        hideCardForm();
+        return;
+      }
+      if (!stripeElements) {
+        stripeElements = stripe.elements();
+        cardElement = stripeElements.create('card');
+        cardElement.mount('#card-element');
+      }
+      $('m-save-card').dataset.clientSecret = j.client_secret;
+    }
+    function hideCardForm() {
+      $('m-card-form').style.display = 'none';
+      $('m-card-actions').style.display = 'block';
+    }
+    $('m-save-card').addEventListener('click', async () => {
+      const cs = $('m-save-card').dataset.clientSecret;
+      if (!cs || !cardElement) return;
+      $('m-save-card').disabled = true;
+      const { setupIntent, error } = await stripe.confirmCardSetup(
+        cs, { payment_method: { card: cardElement } });
+      if (error) {
+        showModalBanner('error', error.message);
+        $('m-save-card').disabled = false;
+        return;
+      }
+      // Send payment_method to backend to attach + persist.
+      const r = await fetch(
+        subjectUrl('attach-card'),
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payment_method_id: setupIntent.payment_method
+          }) });
+      const j = await r.json();
+      $('m-save-card').disabled = false;
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Attach failed');
+        return;
+      }
+      showModalBanner('success', 'Card saved.');
+      hideCardForm();
+      cardElement.clear();
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
+      if (u) renderCardStatus(u);
+    });
+
+    $('m-remove-card').addEventListener('click', async () => {
+      if (!confirm('Remove card on file?')) return;
+      // User route is /billing/remove-card (alias for detach-card).
+      // Company route is /billing/detach-card. Route both.
+      const path = currentSubjectKind === 'company'
+        ? 'detach-card' : 'remove-card';
+      const r = await fetch(
+        subjectUrl(path),
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Remove failed');
+        return;
+      }
+      showModalBanner('success', 'Card removed.');
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
+      if (u) renderCardStatus(u);
+    });
+
+    async function adjust(sign) {
+      const amt = parseFloat($('m-adj-amount').value);
+      const desc = $('m-adj-desc').value || 'Manual adjustment';
+      if (!amt || amt <= 0) return;
+      const r = await fetch(
+        subjectUrl('adjust'),
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount_usd: amt * sign,
+            description: desc,
+          }) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Adjustment failed');
+        return;
+      }
+      showModalBanner('success',
+        (sign > 0 ? 'Credit' : 'Debit') + ' of ' + fmtUsd(amt) +
+        ' applied.');
+      $('m-adj-amount').value = '';
+      $('m-adj-desc').value = '';
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
+      if (u) {
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        renderTxns(u.wallet_transactions || []);
+      }
+    }
+    $('m-adj-add').addEventListener('click', () => adjust(1));
+    $('m-adj-sub').addEventListener('click', () => adjust(-1));
+
+    $('m-charge-btn').addEventListener('click', async () => {
+      const amt = parseFloat($('m-charge-amount').value);
+      const desc = $('m-charge-desc').value ||
+        'Admin-initiated charge';
+      if (!amt || amt <= 0) return;
+      if (!confirm('Charge ' + fmtUsd(amt) + ' to card on file?'))
+        return;
+      const r = await fetch(
+        subjectUrl('charge-card'),
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount_usd: amt,
+            description: desc,
+          }) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Charge failed');
+        return;
+      }
+      showModalBanner('success',
+        'Charge of ' + fmtUsd(amt) + ' succeeded.');
+      $('m-charge-amount').value = '';
+      $('m-charge-desc').value = '';
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
+      if (u) {
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        renderTxns(u.wallet_transactions || []);
+      }
+    });
+
+    function showModalBanner(kind, msg) {
+      $('modal-banner').innerHTML =
+        '<div class="banner ' + kind + '">' + msg + '</div>';
+      if (kind === 'success') {
+        setTimeout(() => {
+          $('modal-banner').innerHTML = '';
+        }, 3500);
+      }
+    }
+
+    // Pricing tab
+    async function loadPricing() {
+      const r = await fetch('/api/admin/pricing', {
+        credentials: 'same-origin'
+      });
+      if (!r.ok) return;
+      const p = await r.json();
+      renderPricing(p);
+    }
+
+    // Persist "Show hidden" toggle across renders in the same
+    // session. Off by default so admins see the clean panel.
+    let _showHidden = false;
+
+    function renderPricing(p) {
+      // Cache the latest payload so the show/hide toggle can re-
+      // render without an extra network call.
+      window._lastPricingPayload = p;
+      const tools = p.tools || {};
+      const sections = p.sections || {};
+      // Group tool keys by section, preserving MODULE_CATALOG order.
+      // 2026-09-09 (Jenna): iterate p.tool_order[] (server-authored
+      // catalog order) instead of Object.keys(tools) so within-section
+      // row order is deterministic - Flask's default JSON encoder can
+      // alphabetize dict keys, which would push 'rankers_iq_access'
+      // (ALL bundle) below every 'ranker_*' key. Fallback to
+      // Object.keys keeps the panel usable if an older backend sends
+      // no tool_order.
+      // Skip hidden built-ins here unless _showHidden is on. Custom
+      // tools are never hidden via this list (they're hard-deleted).
+      const bySection = {};
+      let hiddenCount = 0;
+      const iterKeys = Array.isArray(p.tool_order) && p.tool_order.length
+        ? p.tool_order
+        : Object.keys(tools);
+      iterKeys.forEach(key => {
+        const t = tools[key];
+        if (!t) return;
+        if (t.is_hidden) hiddenCount += 1;
+        if (t.is_hidden && !_showHidden) return;
+        const s = t.section || 'extras';
+        if (!bySection[s]) bySection[s] = [];
+        bySection[s].push(key);
+      });
+      const secOrder = Object.keys(bySection).sort((a, b) => {
+        const oa = (sections[a] && sections[a].order) || 100;
+        const ob = (sections[b] && sections[b].order) || 100;
+        return oa - ob;
+      });
+
+      // Escape helper - tool display names come from server data
+      // but sanitize anyway.
+      const esc = (s) => String(s || '').replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
+          "'":'&#39;'}[c]));
+
+      // 2026-09-09 (Jenna): rename Hide -> Delete throughout. The
+      // toggle labels the recoverable soft-delete set as "deleted
+      // tools" so admins recognise this as a restore hatch, not
+      // as a separate visibility mode.
+      const toggleEl = $('pricing-hidden-toggle');
+      if (hiddenCount > 0) {
+        toggleEl.style.display = 'block';
+        toggleEl.innerHTML =
+          '<label style="cursor:pointer; user-select:none;">' +
+          '<input type="checkbox" id="show-hidden-cb"' +
+          (_showHidden ? ' checked' : '') +
+          ' style="margin-right:6px; vertical-align:middle;">' +
+          'Show ' + hiddenCount + ' deleted tool' +
+          (hiddenCount === 1 ? '' : 's') +
+          '</label>';
+      } else {
+        toggleEl.style.display = 'none';
+        toggleEl.innerHTML = '';
+      }
+
+      let html = '<table class="pricing-table">';
+      html += '<thead><tr>';
+      html += '<th style="width: 44%;">Tool</th>';
+      html += '<th class="num" style="width: 22%;">' +
+        'Monthly access</th>';
+      html += '<th class="num" style="width: 22%;">Per pull</th>';
+      html += '<th style="width: 12%; text-align:right;"></th>';
+      html += '</tr></thead>';
+      html += '<tbody>';
+      secOrder.forEach(secKey => {
+        const secMeta = sections[secKey] || {};
+        const secLabel = secMeta.label ||
+          secKey.charAt(0).toUpperCase() + secKey.slice(1);
+        html += '<tr class="section-row"><td colspan="4">' +
+          esc(secLabel) + '</td></tr>';
+        bySection[secKey].forEach(key => {
+          const t = tools[key] || {};
+          const display = t.display_name || key;
+          const isCustom = !!t.is_custom;
+          const isHidden = !!t.is_hidden;
+          // 2026-09-09 (Jenna): metered tools (Prometheus, Analyze
+          // Ask, Deck Export) are session-billed, not per-pull
+          // priced. Render them with a METERED badge and a note in
+          // place of the per-month / per-pull price inputs so an
+          // admin can't accidentally set a price that would be
+          // silently ignored.
+          const isMetered = !!t.metered;
+          const rowStyle = isHidden
+            ? ' style="opacity:0.55; background:#FAFAF6;"'
+            : '';
+          html += '<tr data-tool="' + esc(key) + '"' +
+            ' data-credits="' + (Number(t.credits) || 0) + '"' +
+            ' data-custom="' + (isCustom ? '1' : '0') + '"' +
+            ' data-hidden="' + (isHidden ? '1' : '0') + '"' +
+            ' data-metered="' + (isMetered ? '1' : '0') + '"' +
+            rowStyle + '>';
+          html += '<td><div class="tool-name">' + esc(display);
+          if (isCustom) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#EAE3FF; color:#4A0080; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;">custom</span>';
+          }
+          if (isMetered) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#0C1618; color:#C7F23E; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;" ' +
+              'title="Session-metered. Billed via the Prometheus ' +
+              'session bill, never a per-pull line item.">' +
+              'metered</span>';
+          }
+          if (isHidden) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#F0D0D0; color:#8A1F1F; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;">deleted</span>';
+          }
+          html += '</div>';
+          if (t.access_flag) {
+            html += '<span class="tool-flag">' +
+              esc(t.access_flag) + '</span>';
+          } else if (isCustom) {
+            html += '<span class="tool-flag">' +
+              esc(key) + '</span>';
+          }
+          html += '</td>';
+          // 2026-09-09 (Jenna, verbatim: 'move these to a new section
+          // called PULLS ... the one in modules should be the one per
+          // month that is just accerss.' + 'rankers should all be
+          // monthly no pulls'). Modules AND Rankers rows show only
+          // the monthly cell; Pulls rows show only the per-pull cell.
+          // The suppressed cell renders an em-dash placeholder and a
+          // hidden input carrying the current stored value so
+          // saveTools() round-trips it unchanged (never silently
+          // zeros an existing price on a save-without-edit).
+          const isModulesRow = (secKey === 'modules');
+          const isPullsRow = (secKey === 'pulls');
+          const isRankersRow = (secKey === 'rankers');
+          const isMonthlyOnlyRow = isModulesRow || isRankersRow;
+          const monthlyCell =
+            '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-monthly" value="' +
+            (Number(t.monthly_usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ month</div></td>';
+          const perPullCell =
+            '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-usd" value="' +
+            (Number(t.usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ pull</div></td>';
+          const monthlyDashCell =
+            '<td class="num" style="color:#B8B8B0; ' +
+            'text-align:right; font-size:14px;" ' +
+            'title="Monthly access is priced on the MODULES row ' +
+            'for this feature.">' +
+            '<span>&mdash;</span>' +
+            '<input type="hidden" class="tool-monthly" value="' +
+            (Number(t.monthly_usd) || 0) + '">' +
+            '</td>';
+          const perPullDashCell =
+            '<td class="num" style="color:#B8B8B0; ' +
+            'text-align:right; font-size:14px;" ' +
+            'title="Per-pull events are priced on the PULLS row ' +
+            'for this feature.">' +
+            '<span>&mdash;</span>' +
+            '<input type="hidden" class="tool-usd" value="' +
+            (Number(t.usd) || 0) + '">' +
+            '</td>';
+          if (isMetered) {
+            // Metered rows span both price columns with a static
+            // note instead of price inputs. Prometheus sits in the
+            // PULLS section but its per-pull surface is a session
+            // bill, so neither the monthly nor the per-pull cell
+            // takes input from the admin.
+            html += '<td class="num" colspan="2" ' +
+              'style="color:#5C6560; font-size:12px; ' +
+              'font-style:italic; text-align:right;">' +
+              'Session-metered - rolls up in the ' +
+              'Prometheus session bill' +
+              '</td>';
+          } else if (isMonthlyOnlyRow) {
+            // Modules + Rankers: monthly access only.
+            html += monthlyCell + perPullDashCell;
+          } else if (isPullsRow) {
+            // Pulls: per-pull only.
+            html += monthlyDashCell + perPullCell;
+          } else {
+            // API / subscription / custom / extras: both sides editable.
+            html += monthlyCell + perPullCell;
+          }
+          // 2026-09-09 (Jenna, verbatim: "hide what does it do? there
+          // should be a delete, like ecommerce iq can be forever
+          // deleted" + "I dont see a meter toggle anywhere"): the
+          // action column now stacks a Metered checkbox above a
+          // Delete button. Metered is admin-toggleable per tool;
+          // locked defaults (Prometheus family) render as checked +
+          // disabled. Custom tools use the same Metered toggle plus
+          // their existing hard-Delete (removes the row from
+          // custom_tools[] entirely).
+          const isMeteredLocked = !!t.metered_locked;
+          html += '<td style="text-align:right;">';
+          const dispEsc = esc(display).replace(/'/g, "\\'");
+          const delBtnStyle = 'font-size:11px; padding:4px 10px; ' +
+            'color:#8A1F1F; border-color:#F0D0D0;';
+          // Metered toggle - first line of the action stack. Metering
+          // only applies to rows with a per-pull surface, so we skip
+          // the toggle on Modules AND Rankers rows (both monthly-
+          // access-only). Prometheus (locked-metered) sits in the
+          // Pulls section and DOES show the toggle so admins see its
+          // locked state.
+          if (!isMonthlyOnlyRow) {
+            html += '<div style="display:flex; align-items:center; ' +
+              'justify-content:flex-end; gap:6px; ' +
+              'margin-bottom:6px; font-size:11px; ' +
+              'color:#5C6560;">';
+            const toggleAttrs =
+              'type="checkbox" class="tool-metered-toggle" ' +
+              'data-tool="' + esc(key) + '" ' +
+              (isMetered ? 'checked ' : '') +
+              (isMeteredLocked ? 'disabled ' : '') +
+              'style="cursor:' +
+              (isMeteredLocked ? 'not-allowed' : 'pointer') + ';"';
+            const toggleTitle = isMeteredLocked
+              ? 'Prometheus is always metered by design.'
+              : (isMetered
+                  ? 'Metered - session-billed via Prometheus, no per-pull line item. Uncheck to switch back to per-pull priced.'
+                  : 'Toggle on to switch this tool to session-metered. Per-pull and monthly prices will be zeroed and hidden.');
+            html += '<label style="display:flex; align-items:center; ' +
+              'gap:4px; cursor:' +
+              (isMeteredLocked ? 'not-allowed' : 'pointer') + ';" ' +
+              'title="' + esc(toggleTitle) + '">' +
+              '<input ' + toggleAttrs + '>' +
+              'Metered' +
+              (isMeteredLocked
+                ? ' <span style="color:#B8B8B0; font-size:10px;">' +
+                  '(locked)</span>'
+                : '') +
+              '</label>';
+            html += '</div>';
+          }
+          // Delete / Restore button - second line of the action stack.
+          if (isCustom) {
+            html += '<button class="secondary" ' +
+              'onclick="deleteTool(\'' + esc(key) + '\', \'' +
+              dispEsc + '\')" ' +
+              'style="' + delBtnStyle + '" ' +
+              'title="Permanently remove this custom tool from ' +
+              'the catalog.">Delete</button>';
+          } else if (isHidden) {
+            html += '<button class="secondary" ' +
+              'onclick="unhideTool(\'' + esc(key) + '\', \'' +
+              dispEsc + '\')" ' +
+              'style="font-size:11px; padding:4px 10px;">' +
+              'Restore</button>';
+          } else {
+            html += '<button class="secondary" ' +
+              'onclick="hideTool(\'' + esc(key) + '\', \'' +
+              dispEsc + '\')" ' +
+              'style="' + delBtnStyle + '" ' +
+              'title="Delete removes this tool from the pricing ' +
+              'panel. Safe by default - if the tool ever fires, ' +
+              'it charges its configured price ($0 for anything ' +
+              'you have not priced). Recoverable from ' +
+              '\'Show N deleted tools\' below.">Delete</button>';
+          }
+          html += '</td>';
+          html += '</tr>';
+        });
+      });
+      html += '</tbody></table>';
+      html += '<div style="text-align: right; margin-top: 8px;">' +
+        '<button id="save-tools">Save all prices</button></div>';
+      $('pricing-body').innerHTML = html;
+      $('markup').value = (p.prometheus_markup ||
+        p.prometheus_markup_multiplier || 2.10);
+      renderPacks(p.top_up_packs_usd || []);
+      $('min-custom').value = p.top_up_min_custom_usd || 100;
+      $('save-tools').addEventListener('click', saveTools);
+    }
+
+    function renderPacks(packs) {
+      let html = '';
+      packs.forEach((amt, i) => {
+        html += '<div style="margin-bottom: 6px; display: flex;' +
+          ' gap: 8px; align-items: center;">' +
+          '$<input type="number" step="1" min="1" ' +
+          'value="' + amt + '" data-pack-idx="' + i +
+          '" style="width: 100px;" class="pack-input">' +
+          '<button class="secondary" onclick="removePack(' + i +
+          ')">Remove</button></div>';
+      });
+      html += '<button class="secondary" onclick="addPack()">' +
+        '+ Add pack</button>';
+      $('packs-body').innerHTML = html;
+    }
+
+    window.removePack = (idx) => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0));
+      arr.splice(idx, 1);
+      renderPacks(arr);
+    };
+    window.addPack = () => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0));
+      arr.push(500);
+      renderPacks(arr);
+    };
+
+    async function saveTools() {
+      const rows = document.querySelectorAll(
+        '#pricing-body tr[data-tool]');
+      const tools = {};
+      rows.forEach(r => {
+        const key = r.dataset.tool;
+        // 2026-09-09 (Jenna): metered rows render with no price
+        // inputs; skip them entirely so a stray null.value read
+        // doesn't blow up the save. The backend also force-zeros
+        // metered keys as defense in depth.
+        if (r.dataset.metered === '1') {
+          return;
+        }
+        // Credits are wired in MODULE_CATALOG (not admin-editable);
+        // we round-trip the value via data-credits so the backend
+        // still gets a coherent {credits, usd, monthly_usd} triple.
+        const credits = Number(r.dataset.credits || 0);
+        const usdEl = r.querySelector('.tool-usd');
+        const usd = usdEl ? Number(usdEl.value || 0) : 0;
+        const monthlyEl = r.querySelector('.tool-monthly');
+        const monthly = monthlyEl ? Number(monthlyEl.value || 0) : 0;
+        tools[key] = {
+          credits: credits,
+          usd: usd,
+          monthly_usd: monthly,
+        };
+      });
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tools: tools }),
+      });
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Prices saved.</div>';
+      } else {
+        const j = await r.json();
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Save failed') + '</div>';
+      }
+    }
+
+    // ---- Custom tools: add / delete (Jenna 2026-09-09) ----
+    function showAddToolForm() {
+      $('add-tool-form').style.display = 'block';
+      $('new-tool-name').value = '';
+      $('new-tool-key').value = '';
+      $('new-tool-section').value = 'custom';
+      $('new-tool-usd').value = 0;
+      $('new-tool-monthly').value = 0;
+      $('new-tool-name').focus();
+    }
+
+    function hideAddToolForm() {
+      $('add-tool-form').style.display = 'none';
+    }
+
+    // Auto-fill the key field from the name field as the admin types,
+    // unless they've already typed something in the key field.
+    function _slugify(s) {
+      return String(s || '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+    }
+
+    async function saveNewTool() {
+      const name = ($('new-tool-name').value || '').trim();
+      if (!name) {
+        $('banner').innerHTML =
+          '<div class="banner error">Display name is required.</div>';
+        return;
+      }
+      let key = ($('new-tool-key').value || '').trim();
+      if (!key) key = _slugify(name);
+      const section = $('new-tool-section').value || 'custom';
+      const usd = Number($('new-tool-usd').value || 0);
+      const monthly = Number($('new-tool-monthly').value || 0);
+      $('btn-save-new-tool').disabled = true;
+      const r = await fetch('/api/admin/pricing/tools', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool_key: key,
+          display_name: name,
+          section: section,
+          usd: usd,
+          monthly_usd: monthly,
+        }),
+      });
+      $('btn-save-new-tool').disabled = false;
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Added ' +
+          (j.tool && j.tool.display_name || name) + '.</div>';
+        hideAddToolForm();
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not add tool.') + '</div>';
+      }
+    }
+
+    window.deleteTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      if (!confirm('Delete "' + label + '"?\n\nThis removes the ' +
+                   'tool + its price from the pricing catalog. ' +
+                   'Any wallet transactions already recorded for ' +
+                   'this tool are preserved in transaction history.'))
+        return;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/delete',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Removed ' + label + '.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not delete tool.') + '</div>';
+      }
+    };
+
+    // Built-in tools are soft-deleted (kept in MODULE_CATALOG so the
+    // pipeline never crashes on a missing key, but removed from this
+    // panel). The tool_key stays on the hidden_tools[] set in
+    // pricing.json; the UI treats that as the "deleted" set. Live
+    // billing behaviour: if a deleted tool ever fires, it charges
+    // whatever price is configured for it - $0 for anything the
+    // admin never priced. Restore is available in the "Show N
+    // deleted tools" toggle at the bottom of the panel.
+    window.hideTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      if (!confirm('Delete "' + label + '" from your pricing panel?\n\n' +
+                   'The row disappears from Billing. If the tool ' +
+                   'ever fires a charge, it uses its configured ' +
+                   'price ($0 for tools you have not priced).\n\n' +
+                   'Recoverable from "Show N deleted tools" at ' +
+                   'the bottom of this panel.'))
+        return;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/hide',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Deleted ' + label +
+          ' from the pricing panel.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not delete tool.') + '</div>';
+      }
+    };
+
+    window.unhideTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/unhide',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Restored ' +
+          label + '.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not restore tool.') + '</div>';
+      }
+    };
+
+    // Wire the "Show N deleted tools" toggle. Event delegation on the
+    // parent because the checkbox is re-rendered on every
+    // renderPricing() call. Toggle flips _showHidden and re-renders
+    // from the cached payload (no round-trip).
+    (function wireShowHiddenToggle() {
+      const host = $('pricing-hidden-toggle');
+      if (!host) return;
+      host.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'show-hidden-cb') {
+          _showHidden = !!e.target.checked;
+          if (window._lastPricingPayload) {
+            renderPricing(window._lastPricingPayload);
+          } else {
+            loadPricing();
+          }
+        }
+      });
+    })();
+
+    // 2026-09-09 (Jenna): wire per-row Metered checkboxes with event
+    // delegation on the pricing body. Checkboxes re-render on every
+    // renderPricing() call, so binding once at the host is safer.
+    (function wireMeteredToggles() {
+      const host = $('pricing-body');
+      if (!host) return;
+      host.addEventListener('change', async (e) => {
+        const cb = e.target;
+        if (!cb || !cb.classList
+            || !cb.classList.contains('tool-metered-toggle')) {
+          return;
+        }
+        const tk = cb.dataset.tool;
+        if (!tk) return;
+        // Disable while the request is in flight so a double-click
+        // can't fire two mutations.
+        cb.disabled = true;
+        const path = cb.checked ? 'meter' : 'unmeter';
+        try {
+          const r = await fetch(
+            '/api/admin/pricing/tools/' +
+            encodeURIComponent(tk) + '/' + path,
+            { method: 'POST', credentials: 'same-origin' });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok) {
+            $('banner').innerHTML =
+              '<div class="banner success">' +
+              (cb.checked
+                ? 'Switched to session-metered.'
+                : 'Switched back to per-pull priced.') +
+              '</div>';
+            loadPricing();
+          } else {
+            // Server rejected (e.g. locked default). Revert the
+            // checkbox and surface the message.
+            cb.checked = !cb.checked;
+            cb.disabled = false;
+            $('banner').innerHTML =
+              '<div class="banner error">' +
+              (j.error || 'Could not update metered state.') +
+              '</div>';
+          }
+        } catch (err) {
+          cb.checked = !cb.checked;
+          cb.disabled = false;
+          $('banner').innerHTML =
+            '<div class="banner error">Could not reach the ' +
+            'server. Try again.</div>';
+        }
+      });
+    })();
+
+    // Wire the add-tool buttons. This script is inline at the bottom
+    // of <body> so the elements always exist by the time we run;
+    // attach immediately instead of waiting for DOMContentLoaded
+    // (which may or may not fire again depending on script order).
+    (function wireAddToolHandlers() {
+      const btnAdd = $('btn-add-tool');
+      const btnSave = $('btn-save-new-tool');
+      const nameInput = $('new-tool-name');
+      const keyInput = $('new-tool-key');
+      if (btnAdd) btnAdd.addEventListener('click', showAddToolForm);
+      if (btnSave) btnSave.addEventListener('click', saveNewTool);
+      // Live-slugify the tool_key field from the display name unless
+      // the admin has manually typed in the key field.
+      if (nameInput && keyInput) {
+        let keyTouched = false;
+        keyInput.addEventListener('input', () => { keyTouched = true; });
+        nameInput.addEventListener('input', () => {
+          if (!keyTouched) keyInput.value = _slugify(nameInput.value);
+        });
+      }
+    })();
+
+    $('save-markup').addEventListener('click', async () => {
+      const v = Number($('markup').value || 0);
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prometheus_markup: v }),
+      });
+      if (r.ok) $('banner').innerHTML =
+        '<div class="banner success">Markup saved.</div>';
+    });
+    $('save-packs').addEventListener('click', async () => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0))
+                       .filter(v => v > 0);
+      const minCustom = Number($('min-custom').value || 100);
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          top_up_packs_usd: arr,
+          top_up_min_custom_usd: minCustom,
+        }),
+      });
+      if (r.ok) $('banner').innerHTML =
+        '<div class="banner success">Packs saved.</div>';
+    });
+
+    loadUsers();
+    loadPricing();
+  </script>
+</body>
+</html>

@@ -367,6 +367,36 @@ _MUSIC_SUB_SOURCES = {'spotify', 'shazam', 'apple', 'tiktok'}
 _FAST_SUB_SOURCES = {'roku', 'tubi', 'pluto', 'amazon'}
 
 
+# Books-tab sub-sources. Every row on the Books tab is tagged
+# kind='book' by the frontend, but the rows live in FOUR different daily
+# snapshots (retail rails in book_charts.json, community rails in
+# wattpad_charts.json, Goodreads in goodreads_charts.json, and library
+# borrows in libby_trends.json) - each shaped like music/FAST with rows
+# under sources[<sub>].items. Map each frontend source slug to its
+# (snapshot_file, sources-key). The `amazon`/`apple` slugs collide with
+# the retailer scraper and the music sub-source respectively, so the
+# dispatcher MUST gate on kind=='book' before consulting _SCRAPER_KIND_MAP
+# (same disambiguation pattern music + FAST already use).
+_BOOK_SUB_TO_SNAPSHOT = {
+    'amazon':               ('book_charts',      'amazon'),
+    'apple':                ('book_charts',      'apple'),
+    'audible':              ('book_charts',      'audible'),
+    'goodreads_most_read':  ('goodreads_charts', 'goodreads_most_read'),
+    'wattpad_hot':          ('wattpad_charts',   'wattpad_hot'),
+    'wattpad_originals':    ('wattpad_charts',   'wattpad_originals'),
+    'wattpad_romance':      ('wattpad_charts',   'wattpad_romance'),
+    'wattpad_teen_fiction': ('wattpad_charts',   'wattpad_teen_fiction'),
+    'wattpad_fanfiction':   ('wattpad_charts',   'wattpad_fanfiction'),
+    'wattpad_fantasy':      ('wattpad_charts',   'wattpad_fantasy'),
+    # Libby cards prefix the frontend source with `libby-`; the snapshot
+    # keys them plainly under sources.{ebook,audiobook,magazine}.
+    'libby-ebook':          ('libby_trends',     'ebook'),
+    'libby-audiobook':      ('libby_trends',     'audiobook'),
+    'libby-magazine':       ('libby_trends',     'magazine'),
+}
+_BOOK_SUB_SOURCES = set(_BOOK_SUB_TO_SNAPSHOT.keys())
+
+
 def _gdelt_source_for_kind(kind: str) -> str:
     """Map the frontend `gdelt` source + kind pair to the actual
     snapshot file: headlines live in `gdelt.json`, people live in
@@ -579,6 +609,79 @@ def history_for_fast(sub: str, key: str, *,
                            key=key, geo=geo)
 
 
+def _find_book_row(rows: list, clicked_slug: str
+                   ) -> Optional[tuple[int, dict]]:
+    """Match a book row. Books are keyed by `title` + author, but the
+    author field is `artist` on retail/wattpad rows and `author` on
+    Goodreads rows. The clicked key is usually `"<title> - <author>"`.
+    Try combined-slug, then title-only, then substring either way."""
+    if not isinstance(rows, list) or not clicked_slug:
+        return None
+
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        title  = (r.get('title') or '').strip()
+        author = (r.get('artist') or r.get('author') or '').strip()
+        combined = f"{title} - {author}" if author else title
+        if _slug(combined) == clicked_slug or _slug(title) == clicked_slug:
+            return int(r.get('rank') or (i + 1)), r
+
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        title_slug = _slug(r.get('title') or '')
+        if not title_slug or len(title_slug) < 4:
+            continue
+        if title_slug in clicked_slug or clicked_slug in title_slug:
+            return int(r.get('rank') or (i + 1)), r
+    return None
+
+
+def history_for_books(sub: str, key: str, *,
+                      days: int = DEFAULT_DAYS,
+                      geo: str = 'National') -> dict:
+    """Reconstruct the arc for a Books-tab item. `sub` is a frontend
+    source slug (`amazon` / `apple` / `audible` / `goodreads_most_read`
+    / `wattpad_*` / `libby-ebook` / ...). It selects which daily snapshot
+    file to read and which `sources[<key>].items[]` block holds the rows
+    (see `_BOOK_SUB_TO_SNAPSHOT`). Rows carry `title` + author; the
+    clicked key is usually `"<title> - <author>"`."""
+    slug = _slug(key)
+    mapping = _BOOK_SUB_TO_SNAPSHOT.get(sub)
+    if not slug or not mapping:
+        return _empty_arc('book', sub, key, geo)
+    snapshot_file, sources_key = mapping
+    day_list = _iter_recent_days(days)
+    arc_days: list[dict] = []
+    for day_iso in day_list:
+        payload = _fetch_day(f"{_SCRAPER_DATED_PREFIX}", day_iso,
+                             suffix=snapshot_file)
+        rows: list = []
+        if isinstance(payload, dict):
+            sub_block = (payload.get('sources') or {}).get(sources_key) or {}
+            rows = sub_block.get('items') or []
+        hit = _find_book_row(rows, slug)
+        if hit is not None:
+            rank, r = hit
+            title  = (r.get('title') or '').strip()
+            author = (r.get('artist') or r.get('author') or '').strip()
+            arc_days.append({
+                'date':        day_iso,
+                'rank':        rank,
+                'score':       None,
+                'matched_key': f"{title} - {author}" if author else title,
+                'present':     True,
+                'url':         r.get('url') or r.get('book_url'),
+                'image':       r.get('image') or r.get('cover_url'),
+            })
+        else:
+            arc_days.append({'date': day_iso, 'rank': None,
+                             'score': None, 'present': False})
+    return _summarize_arc(arc_days, kind='book', source=sub,
+                           key=key, geo=geo)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ────────────────────────────────────────────────────────────────────────────
@@ -609,6 +712,13 @@ def history_for_item(kind: str, source: str, key: str, *,
     # daily snapshot under sources[sub].items (mirroring music).
     elif kind_l == 'fast' and source in _FAST_SUB_SOURCES:
         arc = history_for_fast(source, key, days=days, geo=geo)
+    # Books also short-circuit before the generic branch: the `amazon`
+    # slug collides with the retailer scraper and `apple` with the music
+    # sub-source, so kind='book' must route here first. Rows live under
+    # sources[<sub>].items across four snapshot files (book_charts,
+    # goodreads_charts, wattpad_charts, libby_trends).
+    elif kind_l == 'book' and source in _BOOK_SUB_SOURCES:
+        arc = history_for_books(source, key, days=days, geo=geo)
     elif source == 'google' or kind_l == 'search':
         arc = history_for_search(key, geo=geo, days=days)
     elif source == 'gdelt':

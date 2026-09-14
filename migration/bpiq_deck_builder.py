@@ -249,7 +249,12 @@ def _touchpoint_display_name(name: str) -> str:
         if i > 0 and wl in _TITLE_LOWERCASE_TOKENS:
             out.append(wl)
         else:
-            out.append(w[:1].upper() + w[1:].lower())
+            # Capitalize each hyphen-separated segment so all-lowercase
+            # compound brand names title-case correctly
+            # ("coca-cola" -> "Coca-Cola", not "Coca-cola").
+            out.append("-".join(
+                seg[:1].upper() + seg[1:].lower() if seg else seg
+                for seg in w.split("-")))
     return " ".join(out)
 
 
@@ -1152,18 +1157,24 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
               fmt_money(ctx.total_value),
               size=150, bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.85, align="left")
-    # "Attributable to Partnership" subtotal, C5-strict version.
-    # Reads from the payload's precomputed strict-attributable
-    # figure (Brand Lift + adjusted-lift-share of Conversion Value)
-    # so we don't double-count total observed conversions as if the
-    # entire post-window audience were incremental. Falls back to
-    # BLV + full CV only if the payload doesn't carry the strict
-    # figure (legacy payloads).
-    val = ctx.data.get("valuation") or {}
-    attributable = val.get("attributable_to_partnership")
-    if attributable is None:
-        attributable = ctx.blv + (ctx.cv if ctx.has_conversions else 0)
-    attributable = float(attributable)
+    # "Attributable to Partnership" subtotal.
+    # 2026-09-01 house standard: BLV + CV × min(1.0, max(0.0,
+    # adj_lift_pp / pre_baseline_pct)). See
+    # bg-webapp/migration/bpiq_attributable.py and
+    # .cursor/rules/bpiq-attributable-formula.mdc.
+    #
+    # Priority: read the payload's precomputed value first (keeps
+    # every shipped payload byte-stable when rebuilt); recompute via
+    # the helper when the payload carries the ingredients but not
+    # the field; fall back to BLV + full CV only for legacy payloads
+    # that pre-date the strict-attributable field entirely.
+    from .bpiq_attributable import resolve_attributable_from_payload
+    attributable = float(resolve_attributable_from_payload(
+        ctx.data,
+        fallback_blv=ctx.blv,
+        fallback_cv=ctx.cv,
+        fallback_has_conversions=ctx.has_conversions,
+    ))
     _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
               "OF WHICH ATTRIBUTABLE TO PARTNERSHIP",
               size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
@@ -1358,12 +1369,16 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
     # every platform in the fixed roster (not just the first 4)
     # since all 11 platforms need to be sourced explicitly per
     # Liz's C13.
-    payload_srcs = ((ctx.data.get("valuation") or {})
-                    .get("rate_sources", {})
-                    .get("emv_per_user")) or {}
-    # If every platform's rate source is the same string (as under
-    # the Crosswalk internal-convention relabel), collapse to a
-    # single sentence rather than repeating 11 times.
+    _raw_srcs = ((ctx.data.get("valuation") or {})
+                 .get("rate_sources", {})
+                 .get("emv_per_user"))
+    if isinstance(_raw_srcs, str):
+        _one_src = _raw_srcs
+        payload_srcs = {p: _one_src for p in display_roster}
+    elif isinstance(_raw_srcs, dict):
+        payload_srcs = _raw_srcs
+    else:
+        payload_srcs = {}
     unique_srcs = set()
     for plat in display_roster:
         rate = float(((ctx.data.get("valuation") or {})
@@ -1487,7 +1502,30 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     cg = ctx.data.get("control_group") or {}
     treat_dp   = float(cg.get("treat_delta_pp")   or 0)
     control_dp = float(cg.get("control_delta_pp") or 0)
-    incr_pp    = float(cg.get("incremental_lift_pp") or (treat_dp - control_dp))
+    # Honor an EXPLICIT incremental_lift_pp from the payload, including
+    # an explicit 0.0 (control-brand runs suppress the adjusted lift at
+    # zero by design). Only derive treat-minus-control when the field
+    # is genuinely absent. The old `or` fallback treated 0.0 as falsy
+    # and printed a nonzero (negative) lift on suppressed control
+    # decks, contradicting both the payload and the live dashboard
+    # (which renders `incremental_lift_pp || 0`).
+    _raw_incr = cg.get("incremental_lift_pp")
+    if _raw_incr is None:
+        incr_pp = treat_dp - control_dp
+    else:
+        incr_pp = float(_raw_incr or 0)
+    # Label: the standard case shows the subtraction. When the payload
+    # suppresses the adjusted lift at zero while control drift exceeds
+    # the treated delta, the subtraction label would contradict the
+    # printed +0.00pp, so state the reason instead.
+    if incr_pp == 0.0 and (treat_dp - control_dp) < -0.005:
+        lift_label = (f"Adjusted incremental lift  "
+                      f"(control {control_dp:+.2f}pp exceeded "
+                      f"treated {treat_dp:+.2f}pp)")
+    else:
+        lift_label = (f"Adjusted incremental lift  "
+                      f"(treated {treat_dp:+.2f}pp minus control "
+                      f"{control_dp:+.2f}pp)")
     # Calculator raised to y=2.85 AND row height tightened to 0.60"
     # so the 3-row math block + total bar clears the source line
     # anchored at y=6.30 (fixes C8). row_h=0.65 uses the calculator's
@@ -1495,8 +1533,7 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     _math_calculator(
         s, Inches(0.6), Inches(2.85), Inches(8.0),
         [
-            (f"Adjusted incremental lift  "
-             f"(treated {treat_dp:+.2f}pp minus control {control_dp:+.2f}pp)",
+            (lift_label,
              f"{incr_pp:+.2f}pp"),
             (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
              fmt_num(ctx.incr_users)),
@@ -1674,7 +1711,11 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     qualifier_type = str(ctx.data.get("qualifier_type") or "").lower()
     qualifier_val = ctx.data.get("qualifier_value")
     if isinstance(qualifier_val, list):
-        qualifier_name = ", ".join(str(v) for v in qualifier_val)
+        # Use only the first (primary) qualifier for display; the full
+        # variant list is a clickstream-slug convenience for the pipeline,
+        # not intended for reader-facing copy.
+        _clean = [str(v).strip() for v in qualifier_val if str(v).strip()]
+        qualifier_name = _clean[0] if _clean else ""
     else:
         qualifier_name = str(qualifier_val or "").strip()
     if qualifier_type in ("tv", "movie", "sporting event", "event", "show"):
@@ -1946,6 +1987,43 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _sig_floor_line(ctx: DeckCtx) -> str:
+    """Compose the panel-size-aware detection-floor line for slide 13.
+
+    Replaces a legacy hardcoded 'At n=10M the detection floor is roughly
+    a tenth of a percentage point' string that misread whenever a BPIQ
+    payload was scoped to a cohort smaller than the 10M panel construct
+    (e.g. Boomer / age cuts, DMA cuts). Reads panel_size + payload's own
+    detection_floor_pp so every rebuild speaks the payload's actual base.
+    """
+    n_panel = int(ctx.panel_size or 0)
+    diag_sig = ((ctx.data.get("diagnostics") or {})
+                .get("significance") or {})
+    floor = diag_sig.get("detection_floor_pp")
+    try:
+        floor_val = float(floor) if floor is not None else None
+    except (TypeError, ValueError):
+        floor_val = None
+    floor_txt = (f"approximately {floor_val:.2f}pp"
+                 if floor_val is not None else "computed per payload")
+    n_txt = f"{n_panel:,}" if n_panel else "the observed cohort"
+    if n_panel and n_panel >= 1_000_000:
+        # Large-panel language: p-value collapses, drop from slide.
+        return (
+            f"On the observed cohort of {n_txt} panelists, the detection "
+            f"floor is {floor_txt}; p-values are omitted on client-facing "
+            "slides because they collapse to zero for anything above the "
+            "floor and add no decision-relevant information."
+        )
+    # Smaller-panel language: p-value stays on slide 4.
+    return (
+        f"On the observed cohort of {n_txt} panelists, the detection "
+        f"floor is {floor_txt}; p-values are reported on slide 4 alongside "
+        "the point estimate and 95% CI because they remain decision "
+        "relevant at this cohort size."
+    )
+
+
 def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_DARK)
@@ -1990,11 +2068,8 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "Same-panel pre/post design. Primary test: pooled two-sample "
          "z on the paired marginals (conservative for a within-panel "
          "read). We report the point estimate, the z-score, and a 95% "
-         "confidence interval derived from the same variance. At n=10M "
-         "the detection floor is roughly a tenth of a percentage point; "
-         "p-values are omitted on client-facing slides because they "
-         "collapse to zero for anything above the floor and add no "
-         "decision-relevant information."),
+         "confidence interval derived from the same variance. "
+         + _sig_floor_line(ctx)),
     ]
     base_y = 2.35
     row_spacing = 0.75

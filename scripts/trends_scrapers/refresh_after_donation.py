@@ -68,6 +68,32 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     'mgmplus.com':      {'local': ['mgmplus']},
     'starz.com':        {'local': ['starz']},
     'xbox.com':         {'local': ['xbox_gamepass']},
+    # Meta Horizon Store (Top Free + Top Paid). Runs on Hetzner via
+    # run_all (anonymous curl_cffi impersonation is sufficient today).
+    # oculus.com listed alongside meta.com so a donation for either
+    # domain triggers the same refresh (Meta rebranded from Oculus
+    # but a few store paths still 302 through oculus.com).
+    'meta.com':         {'runall': ['meta_quest']},
+    'oculus.com':       {'runall': ['meta_quest']},
+    # YouTube podcasts (public HTML on youtube.com/podcasts). The
+    # scrape runs anonymously today so a donation is a no-op, but
+    # keeping the mapping in place means the operator's "just donated
+    # youtube" gesture triggers a `podcast_charts` refresh (YouTube
+    # Podcasts is one of its sources) without any additional wiring
+    # once youtube.com goes auth-gated for the podcasts surface.
+    # music.youtube.com and podcasts.youtube.com listed alongside so
+    # any of the three donation flows triggers the same refresh.
+    'youtube.com':          {'runall': ['podcast_charts']},
+    'music.youtube.com':    {'runall': ['podcast_charts']},
+    'podcasts.youtube.com': {'runall': ['podcast_charts']},
+    # Steam (Valve). All endpoints are public / anonymous so a
+    # donation is a no-op today, but keeping the map in place means
+    # a future auth requirement (login-gated storefront APIs) picks
+    # up the same refresh chain without a wiring change. Both the
+    # store host and the api host map to the same source key.
+    'steampowered.com': {'runall': ['steam_charts']},
+    'store.steampowered.com': {'runall': ['steam_charts']},
+    'api.steampowered.com':   {'runall': ['steam_charts']},
     # Film ticketing - one module scrapes all sites
     'amctheatres.com':  {'local': ['film_ticketing']},
     'regmovies.com':    {'local': ['film_ticketing']},
@@ -82,12 +108,37 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     # amazon.com session feeds Prime Video; music.amazon.com feeds the
     # Amazon Music chart + podcast rails (donated ad hoc, not in
     # DEFAULT_DOMAINS).
-    'amazon.com':       {'runall': ['primevideo']},
+    'amazon.com':       {'runall': ['primevideo', 'comics_charts']},
     'music.amazon.com': {'runall': ['music_charts', 'podcast_charts']},
     'audible.com':      {'runall': ['podcast_charts', 'book_charts']},
+    # Amazon.com session doesn't gate the Comics bestsellers endpoint
+    # (public HTML, no auth) but we run comics_charts anyway on an
+    # amazon.com donation so the operator's "just donated amazon"
+    # gesture refreshes every amazon-adjacent snapshot in one shot.
     # TikTok Creative Center session feeds the viral-songs chart
     # inside music_charts.
     'ads.tiktok.com':   {'runall': ['music_charts']},
+    # Wattpad serialized-fiction chart. Six rails (Hot / Originals /
+    # four genre rankings) rolled up into a single snapshot. Public
+    # browse surfaces + v3 API - no cookies required today, so a
+    # wattpad.com donation is a no-op, but keeping the map in place
+    # means a future auth-gated surface picks up the refresh chain
+    # without a wiring change.
+    'wattpad.com':      {'runall': ['wattpad_charts']},
+    # Goodreads community weekly-read rail. Most Read This Week
+    # renders publicly (no auth needed), so a goodreads.com donation
+    # is a no-op today - but keeping the map in place means a future
+    # auth-gated surface picks up the refresh chain automatically.
+    'goodreads.com':    {'runall': ['goodreads_charts']},
+    # Broadway weekly attendance. The Playbill grosses page mirrors
+    # the Broadway League Tuesday report and renders publicly, so
+    # cookies are never required today - but keeping every plausible
+    # Broadway-adjacent domain in the refresh map means a future
+    # auth-gated fallback (BroadwayWorld / IBDB / a Playbill member
+    # rail) picks up the refresh chain without a wiring change.
+    'playbill.com':         {'runall': ['broadway_grosses']},
+    'broadwayleague.com':   {'runall': ['broadway_grosses']},
+    'broadwayworld.com':    {'runall': ['broadway_grosses']},
 }
 
 # Lookback windows the dashboard UI exposes (templates/index.html

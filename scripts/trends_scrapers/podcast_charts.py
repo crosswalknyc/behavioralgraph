@@ -7,6 +7,15 @@ renders as one tab, mirroring the structure of `music_charts.py`.
 Sources (2026-07):
 
     Apple Podcasts Top 100 US    -> `rss.marketingtools.apple.com`, public JSON
+    YouTube Popular Podcasts     -> `www.youtube.com/podcasts`, public server-
+                                     rendered HTML with an embedded
+                                     `ytInitialData` JSON blob. The "Popular
+                                     podcasts" shelf is a lockupViewModel
+                                     grid of ~24 tiles (Joe Rogan, Rotten
+                                     Mango, MeidasTouch, Shawn Ryan Show,
+                                     etc.). Each tile carries title, channel
+                                     publisher, cover art, and a playlist
+                                     link. Public - no cookies.
     Spotify Podcast Charts       -> `podcastcharts.byspotify.com/api/charts/
                                      top-podcasts?region=us&limit=100`. Public
                                      JSON, no OAuth. Returns the same Top 200
@@ -58,6 +67,7 @@ Snapshot shape (kind='podcast'):
       "sources": {
         "apple":   {"label": "Apple Podcasts Top 100 (US)", "items": [{...}], "available": bool},
         "spotify": {"label": "Spotify Podcast Charts (US)", "items": [{...}], "available": bool},
+        "youtube_podcasts": {"label": "YouTube Popular Podcasts (US)", "items": [{...}], "available": bool},
         "amazon":  {"label": "Amazon Music Podcasts (US)",  "items": [],      "available": False, "sub": "..."},
         "audible": {"label": "Audible Podcasts (US)",       "items": [{...}], "available": bool},
         "netflix": {"label": "Netflix video podcasts",      "items": [{...}], "available": bool}
@@ -258,6 +268,264 @@ def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
             'move':        row.get('chartRankMove') or 'UNCHANGED',
         })
     return items, ''
+
+
+# ---------------------------------------------------------------------------
+# YouTube Popular Podcasts  (public HTML + embedded ytInitialData JSON)
+# ---------------------------------------------------------------------------
+# YouTube's dedicated podcasts landing page at `www.youtube.com/podcasts`
+# ships every popular-podcasts tile inlined as JSON inside the standard
+# `var ytInitialData = { ... };` bootstrap blob. Anonymous fetch works
+# from any IP (Hetzner datacenter included) - no cookies, no OAuth, no
+# Data API v3 key required. The "Popular podcasts" shelf is the tile grid
+# the YouTube podcasts homepage renders under that header and matches
+# what a signed-out user browsing to that URL sees.
+#
+# ytInitialData shape (2026-08):
+#   contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content
+#     .richGridRenderer.contents[]                           # per-shelf
+#       .richSectionRenderer.content.richShelfRenderer
+#         .title                                             # shelf title
+#         .contents[]                                        # per tile
+#           .richItemRenderer.content.lockupViewModel
+#             .contentId                                     # playlist id
+#             .metadata.lockupMetadataViewModel.title.content         # show title
+#             .metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel
+#               .metadataRows[0].metadataParts[0].text.content        # publisher
+#             .contentImage.collectionThumbnailViewModel
+#               .primaryThumbnail.thumbnailViewModel.image.sources[]  # covers
+#
+# `contentId` is a YouTube playlist ID (starts with `PL...`) representing
+# the show; we build the canonical `www.youtube.com/playlist?list=<id>`
+# deep-link so tapping a tile lands on the show's episode list.
+_YOUTUBE_PODCASTS_URL = 'https://www.youtube.com/podcasts'
+
+# YouTube serves EU datacenter IPs (Hetzner is in Germany) a
+# consent-gate shell instead of the real page. The shell carries
+# ~586KB of HTML, includes ~17 references to `consent.youtube.com`,
+# and contains ZERO `ytInitialData` - so every scrape from Hetzner
+# came back empty even though the request itself succeeded. Sending
+# these three cookies is the well-known bypass: `SOCS` tells Google
+# that consent choices were made, `CONSENT=YES+...` marks the user
+# as consented, and `PREF=tz=...&hl=en&gl=US` forces the US
+# storefront + English so the shelves render in the expected shape.
+# With the cookies set, the same request returns the full 2.2MB
+# page with `var ytInitialData = { ... };` matching (~1.46MB JSON).
+_YT_CONSENT_COOKIES = {
+    'SOCS':    ('CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2Vydm'
+                'VyXzIwMjMwODIyLjAyX3AwGgJlbiACGgYIgIPtqAY'),
+    'CONSENT': 'YES+cb.20240101-17-p0.en+FX+000',
+    'PREF':    'tz=America.New_York&hl=en&gl=US',
+}
+
+# Match the ytInitialData JSON blob. YouTube uses two formats
+# depending on the response variant: `var ytInitialData = { ... };`
+# and `window["ytInitialData"] = { ... };`.
+_YT_INITIAL_DATA_RE = re.compile(
+    r'(?:var\s+ytInitialData\s*=\s*|ytInitialData"\]\s*=\s*)'
+    r'(\{.*?\});\s*</script>',
+    re.DOTALL,
+)
+
+
+def _yt_text(obj: Any) -> str:
+    """Pull display text out of a YouTube text object (may be
+    `simpleText`, `content`, or `runs`)."""
+    if not isinstance(obj, dict):
+        return ''
+    if obj.get('simpleText'):
+        return obj['simpleText']
+    if obj.get('content'):
+        return obj['content']
+    runs = obj.get('runs') or []
+    if isinstance(runs, list) and runs:
+        return ''.join(r.get('text', '') for r in runs if isinstance(r, dict))
+    return ''
+
+
+def _yt_parse_podcast_tile(tile: dict):
+    """Extract title / publisher / image / url from one lockupViewModel
+    tile. Returns None if the tile doesn't carry a title."""
+    lv = ((tile.get('richItemRenderer') or {}).get('content') or {}).get('lockupViewModel') or {}
+    if not lv:
+        return None
+    mv = (lv.get('metadata') or {}).get('lockupMetadataViewModel') or {}
+    title = _yt_text(mv.get('title') or {}).strip()
+    if not title:
+        return None
+
+    # Publisher: first metadata row, first text part.
+    publisher = ''
+    rows = ((mv.get('metadata') or {}).get('contentMetadataViewModel') or {}).get('metadataRows') or []
+    if rows:
+        parts = rows[0].get('metadataParts') or []
+        if parts:
+            publisher = _yt_text(parts[0].get('text') or {}).strip()
+
+    # Cover art: prefer the largest resolution source.
+    image = ''
+    sources = ((((lv.get('contentImage') or {})
+                    .get('collectionThumbnailViewModel') or {})
+                    .get('primaryThumbnail') or {})
+                    .get('thumbnailViewModel') or {}).get('image', {}).get('sources') or []
+    if sources:
+        largest = max(sources, key=lambda s: (s.get('width') or 0) if isinstance(s, dict) else 0)
+        if isinstance(largest, dict):
+            image = largest.get('url') or ''
+
+    # URL: playlist link when contentId is a playlist, else fall back
+    # to the channel canonicalBaseUrl surfaced on the tile's rendererContext.
+    url = ''
+    content_id = lv.get('contentId') or ''
+    if content_id and content_id.startswith('PL'):
+        url = f'https://www.youtube.com/playlist?list={content_id}'
+    else:
+        be = ((((lv.get('rendererContext') or {}).get('commandContext') or {}).get('onTap') or {})
+              .get('innertubeCommand') or {}).get('browseEndpoint') or {}
+        cu = be.get('canonicalBaseUrl') or ''
+        if cu:
+            url = f'https://www.youtube.com{cu}'
+    return {
+        'title':     title,
+        'publisher': publisher,
+        'image':     image,
+        'url':       url,
+        'contentId': content_id,
+    }
+
+
+def _fetch_youtube_podcasts(limit: int = 50) -> tuple[list[dict], str]:
+    """Parse youtube.com/podcasts, walk the richGridRenderer shelves,
+    and return the flattened Popular Podcasts list (with the New shows
+    shelf folded on for a bit more depth). Returns `(items, sub)` where
+    `sub` is the operator-facing note used when items[] is empty
+    (transient failure only)."""
+    import json as _json
+    try:
+        r = requests.get(
+            _YOUTUBE_PODCASTS_URL,
+            # `hl=en&gl=US` on the URL doubles up with the PREF cookie
+            # so the US shelves render even if the cookie is somehow
+            # ignored.
+            params={'hl': 'en', 'gl': 'US'},
+            cookies=_YT_CONSENT_COOKIES,
+            headers={
+                'User-Agent':      _UA,
+                'Accept':          ('text/html,application/xhtml+xml,'
+                                     'application/xml;q=0.9,*/*;q=0.8'),
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            timeout=25,
+        )
+    except Exception as e:
+        logger.warning("youtube podcasts: %s", e)
+        return [], 'Warming up.'
+    if not r.ok:
+        logger.warning("youtube podcasts: http %s", r.status_code)
+        return [], 'Warming up.'
+    html = r.text or ''
+    if not html:
+        return [], 'Warming up.'
+
+    m = _YT_INITIAL_DATA_RE.search(html)
+    if not m:
+        # The consent gate is the historical failure mode on Hetzner
+        # (see _YT_CONSENT_COOKIES above). If we ever land here again,
+        # the shell has changed AGAIN, so log both the length and
+        # whether we hit the consent gate for fast triage.
+        consent_hit = 'consent.youtube.com' in html
+        logger.warning("youtube podcasts: no ytInitialData in response "
+                       "(len=%d, consent_gate=%s) - youtube may have "
+                       "changed the shell",
+                       len(html), consent_hit)
+        return [], 'Warming up.'
+    try:
+        data = _json.loads(m.group(1))
+    except Exception as e:
+        logger.warning("youtube podcasts: ytInitialData parse failed: %s", e)
+        return [], 'Warming up.'
+
+    tabs = ((((data.get('contents') or {}).get('twoColumnBrowseResultsRenderer') or {})
+                .get('tabs')) or [])
+    if not tabs:
+        return [], 'Warming up.'
+    tab0 = (tabs[0] or {}).get('tabRenderer') or {}
+    sections = (((tab0.get('content') or {}).get('richGridRenderer') or {}).get('contents')) or []
+
+    # We want SHOW tiles (lockupViewModel with a playlist contentId +
+    # publisher), not per-episode video tiles. The Popular podcasts
+    # shelf is the canonical source. Curated genre shelves ("Curious
+    # minds", "News & Politics", etc.) that carry the same tile shape
+    # are also included to reach the 30-50 range without dipping into
+    # episode-only shelves. The topical shelves ("Meditation",
+    # "Cold cases", "Wealth", "Finances", "Friendship", ...) that
+    # YouTube started emitting on the podcasts landing page as of
+    # ~2026-09 are folded in too so the panel stays deep even when
+    # the topical carousel rotates.
+    _SHELF_ALLOW = ('popular', 'curious', 'news', 'comedy', 'business',
+                    'sports', 'true crime', 'health', 'science',
+                    'society', 'talk', 'meditation', 'cold', 'civiliz',
+                    'wealth', 'finance', 'friendship', 'extraterrestrial',
+                    'history', 'politics', 'religion', 'spirituality',
+                    'true stories', 'philosophy', 'psychology',
+                    'relationships', 'food', 'travel', 'music')
+
+    items: list[dict] = []
+    seen: set[str] = set()
+
+    def _add_from_shelf(shelf: dict) -> None:
+        for c in shelf.get('contents') or []:
+            rec = _yt_parse_podcast_tile(c)
+            if not rec:
+                continue
+            title_key = rec['title'].strip().lower()
+            if not title_key or title_key in seen:
+                continue
+            seen.add(title_key)
+            items.append({
+                'rank':  len(items) + 1,
+                'title': rec['title'],
+                # Align on the "artist" field the podcast renderer +
+                # exporter already key off (matches Apple / Spotify /
+                # Audible / Netflix rows).
+                'artist':    rec['publisher'],
+                'publisher': rec['publisher'],
+                'url':       rec['url'],
+                'image':     rec['image'],
+            })
+
+    # Pass 1: every shelf whose title starts with "popular". YouTube
+    # currently emits "Popular episodes" BEFORE "Popular podcasts",
+    # and the episode shelf carries a different tile shape that
+    # `_yt_parse_podcast_tile` correctly skips - so iterating both
+    # is safe and picks up "Popular podcasts" no matter which order
+    # YouTube ships them in (2026-09-01: shelf reorder observed on
+    # Hetzner where "Popular episodes" is now shelf[0]).
+    for s in sections:
+        shelf = ((s.get('richSectionRenderer') or {}).get('content') or {}).get('richShelfRenderer') or {}
+        title_text = _yt_text(shelf.get('title') or {}).strip().lower()
+        if title_text.startswith('popular'):
+            _add_from_shelf(shelf)
+
+    # Pass 2: fold in additional podcast-genre shelves until we hit
+    # `limit`. Episode-only shelves ("New shows and episodes", "Live
+    # now") ship different tile shapes and get skipped naturally by
+    # `_yt_parse_podcast_tile` returning None on non-lockup tiles.
+    if len(items) < limit:
+        for s in sections:
+            shelf = ((s.get('richSectionRenderer') or {}).get('content') or {}).get('richShelfRenderer') or {}
+            title_text = _yt_text(shelf.get('title') or {}).strip().lower()
+            if not title_text or title_text.startswith('popular'):
+                continue
+            if not any(title_text.startswith(prefix) for prefix in _SHELF_ALLOW):
+                continue
+            _add_from_shelf(shelf)
+            if len(items) >= limit:
+                break
+
+    if not items:
+        return [], 'Warming up.'
+    return items[:limit], ''
 
 
 # ---------------------------------------------------------------------------
@@ -746,6 +1014,7 @@ def fetch() -> dict[str, Any]:
     """
     apple_items = _fetch_apple_podcasts(limit=100)
     spot_items, spot_sub = _fetch_spotify_podcasts(limit=100)
+    yt_items,   yt_sub   = _fetch_youtube_podcasts(limit=50)
     amz_items,  amz_sub  = _fetch_amazon_podcasts(limit=100)
     aud_items,  aud_sub  = _fetch_audible_podcasts(limit=100)
     nfx_items,  nfx_sub  = _fetch_netflix_podcasts(limit=60)
@@ -754,7 +1023,7 @@ def fetch() -> dict[str, Any]:
         # Mirror `national` off the biggest working source so the
         # standard summary in `_index.json` reports a real count.
         'national':  apple_items[:50],
-        'available': bool(apple_items or spot_items or amz_items or aud_items or nfx_items),
+        'available': bool(apple_items or spot_items or yt_items or amz_items or aud_items or nfx_items),
         'sources': {
             'apple': {
                 'label':     'Apple Podcasts Top 100 (US)',
@@ -767,6 +1036,12 @@ def fetch() -> dict[str, Any]:
                 'sub':       (spot_sub or 'The Spotify US Top 200 podcasts. Refreshes daily.'),
                 'items':     spot_items,
                 'available': bool(spot_items),
+            },
+            'youtube_podcasts': {
+                'label':     'YouTube Popular Podcasts (US)',
+                'sub':       (yt_sub or "YouTube's Popular Podcasts shelf. What US viewers are watching on youtube.com/podcasts right now."),
+                'items':     yt_items,
+                'available': bool(yt_items),
             },
             'netflix': {
                 'label':     'Netflix video podcasts',

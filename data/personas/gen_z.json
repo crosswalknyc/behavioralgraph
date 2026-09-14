@@ -1,0 +1,237 @@
+{
+  "lens_id": "gen_z",
+  "display_name": "Gen Z (Ages 18-28)",
+  "emoji": "\ud83c\udf10",
+  "source_profile": "Aggregated panel signal across Shark Tank - Gen Z (2026-08-26), Protein Enthusiasts - 18-24 (2026-08-26), The Wellness Curious Gen Z (2026-08-25), and cross-file 18-24 / 25-34 index reads.",
+  "one_line": "US adults 18 to 28. Phone-native, TikTok-first, indie-taste, thrift-and-drop shopper, K-pop and K-beauty and Latin-crossover fluent. Boutique fitness curious, wellness-app obsessed, queer-inclusive, HBCU / DEI-aware, still building a resume and a credit file.",
+
+  "demographics": {
+    "age_range": "18 to 28. Density in 18-24 (idx 456) with a strong 25-34 tail (idx 246). 35+ falls below 3.",
+    "gender_skew": "Roughly 50 female / 47 male in raw share, with non-binary and trans identifiers over-indexing (non-binary idx ~68 vs Gen Pop but a much higher share of the cohort's public identity than any older generation). Read as gender-fluid on the surface, still female-and-non-binary-led on beauty / wellness / drop culture.",
+    "income_band": "LESS THAN $25K over-indexes at 264. $100K+ bands sit at 83 to 85. Read as students, entry-level, gig-and-service workers. Rent burden, not luxury spend.",
+    "education": "In-school or recent grad. Some college / associate idx 187, HS or less idx 118, Bachelors idx 56, Graduate idx 11. This cohort does NOT read as 'college-educated' the way Millennials do; a lot of them are still in the college pipeline, and many will not finish.",
+    "occupation_skew": "Service and hospitality idx 153, Sales and retail idx 154. Management / STEM under-indexes (33 to 57). This is a shift-worker and retail-floor cohort with a small tech-and-creative sliver at the top.",
+    "ethnicity_skew": "White under-indexes (87). Hispanic (127), Black (115), Asian (114), and multiracial all over-index. Read as the most non-white generation in the US adult panel.",
+    "life_stage": "Single 188, In a relationship 349, Married 30. No children 143. Living at home, in dorms, in shared apartments. Most have no dependents.",
+    "geo_skew": ["New York Ny", "Los Angeles Ca", "Chicago Il", "Philadelphia Pa", "Dallas Ft Worth Tx", "Houston Tx", "Atlanta Ga (urban skew across the board)"]
+  },
+
+  "psychographics": {
+    "values": [
+      "Identity-first. Queer belonging, trans visibility, Black and Latin and Asian and multiracial pride, disability inclusion, neurodivergent framings all read at a much higher share than any older generation.",
+      "Mental health as a life-organizing frame. Headspace idx 1,056, Calm 707, Astrology.com 562, therapy language everywhere.",
+      "Anti-hustle but pro-side-hustle. Skeptical of grindset content, but reads Depop resellers, YouTube monetization stories, Twitch payout screenshots as aspirational.",
+      "Boutique-fitness and wellness curious even at rent-burdened income (Y7 Yoga, SLT, LEKfit, SoulCycle read at 30,000-plus index vs Gen Pop in aggregated Gen Z cuts).",
+      "Fandom as personality (K-pop stans, BookTok, Formula 1 girlies, Marvel / Star Wars canon defenders, Genshin Impact players).",
+      "Financial anxiety plus finance-app fluency. Chime, Cash App, Robinhood, Webull, Coinbase all over-index. This is a cohort that lives on Cash App but does not have a 401(k)."
+    ],
+    "aesthetics": [
+      "Thrift, resale, drop culture (Depop idx 1,195, Journeys 1,310, ASOS 929, Hot Topic 704, Urban Outfitters 612, SHEIN 394)",
+      "Y2K nostalgia, low-rise, cargo, indie-sleaze",
+      "K-beauty and clean-beauty (IPSY idx 2,875, Sephora 396, Trinny London 712, BTWN Skincare 2,071, Starface 1,117, Mad Hippie 1,095)",
+      "Mid-luxury and streetwear drops (Loud Bodies 5,432, Lazy Oaf 3,206, Rogue Territory 1,976, Public Rec 1,542, Alberta Ferretti aspirational 1,023)",
+      "Anime and cosplay adjacency (HIDIVE, Crunchyroll idx 714, Manga Plaza 1,474)",
+      "Boutique-fitness fits worn everywhere (Y7, SLT, LEKfit, Barry's, Equinox)"
+    ],
+    "tone_they_respond_to": "First-person, self-aware, ironic without being cruel. Willing to sit with contradiction. Cracks jokes about mental health, capitalism, and dating in the same paragraph. Speaks in memes and reads long-form Substack too. Treats identity as a fact, not a debate.",
+    "tone_they_reject": "Boomer-scold framing, gotcha political theater, hustle-bro grindset, Andrew Tate style alpha content, older-generation cable-news anchor voice, evangelical prosperity, MAGA-branded merch, senior-focused framing (Medicare, retirement, AARP)."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "Teen Vogue (idx 715)", "Hypebeast (556)", "Who What Wear (552)", "Vice News (393)", "Complex Magazine (371)", "Out Magazine (398)", "Gay Times (366)", "The Advocate (355)", "Bustle (391)", "The Onion (350)", "Blavity"
+    ],
+    "reads_soft": [
+      "Byrdie (469)", "Hypebae (430)", "Horoscope (350)", "Just Jared (350)", "Revry (345)", "The Zoe Report", "POOSH", "Cosmopolitan"
+    ],
+    "watches": {
+      "streaming": ["Netflix", "Disney+/Hulu (idx 221)", "HBO Max (228)", "Amazon Prime Video", "BET+ (372)", "Dropout TV (464)", "MUBI (347)", "HIDIVE (313)", "Crunchyroll", "Kick (349)", "UFC Fight Pass (535)", "KOCOWA+ (K-drama)", "Zeus Network"],
+      "fast": ["Pluto TV", "Tubi", "Fawesome"],
+      "film": ["A24 catalog", "prestige indie via MUBI", "K-drama and anime feature films", "Barbie", "Everything Everywhere All At Once", "Wednesday, Ginny & Georgia, Riverdale, Euphoria, Never Have I Ever, Heartstopper, Sex Education, Do Revenge, Sabrina"],
+      "cable": ["MTV (idx 184)", "Comedy Central (184)", "VH1 (194)", "BET Network (186)", "Cartoon Network (170)", "TBS Streaming", "F1 TV (175)", "DraftKings Network (186)"]
+    },
+    "listens": {
+      "podcasts": [
+        "Call Her Daddy",
+        "Anything Goes with Emma Chamberlain",
+        "The Viall Files",
+        "Rotten Mango",
+        "Distractible (Markiplier)",
+        "Chicken Shop Date",
+        "Sentimental Garbage",
+        "Fantasy Footballers",
+        "The Basement Yard",
+        "Trash Tuesday",
+        "Song Exploder",
+        "Radiolab",
+        "This American Life",
+        "Serial",
+        "TrueAnon",
+        "The Zach Sang Show",
+        "Las Culturistas",
+        "Chapo Trap House"
+      ],
+      "music_artists": [
+        "Olivia Rodrigo", "Sabrina Carpenter", "SZA", "Chappell Roan", "Billie Eilish", "Tyla", "Doja Cat", "Ariana Grande",
+        "Jack Harlow", "Kendrick Lamar", "Drake", "Central Cee", "GloRilla", "Sexyy Red", "Ice Spice", "Latto",
+        "Peso Pluma", "Bad Bunny", "Karol G", "Junior H", "Fuerza Regida", "Feid", "Rauw Alejandro",
+        "Newjeans", "LE SSERAFIM", "TWICE", "aespa", "Stray Kids", "Seventeen",
+        "Phoebe Bridgers", "boygenius", "beabadoobee", "Clairo", "Steve Lacy", "Tame Impala",
+        "Brent Faiyaz", "PARTYNEXTDOOR", "Don Toliver", "Summer Walker", "Mariah the Scientist", "Jorja Smith", "Teddy Swims", "NLE Choppa", "King Princess", "Flo Milli"
+      ],
+      "music_genres": ["pop", "rap and hip-hop", "regional-Mexican and reggaeton", "K-pop", "indie / bedroom pop", "R&B / alt-R&B", "hyperpop and glitchcore", "afrobeats", "some house / EDM"]
+    },
+    "reads_books": {
+      "formats": ["Kindle", "audiobook", "Libby / library ebook", "used bookstores and Depop resale", "BookTok viral hardcovers"],
+      "genres": [
+        "BookTok romantasy (Sarah J. Maas, Rebecca Yarros, Ana Huang)",
+        "smutty contemporary romance",
+        "queer coming-of-age",
+        "manga and light novels",
+        "prestige literary fiction if a friend recommends it",
+        "self-help anchored in psychology (Mel Robbins, Nedra Tawwab, Yung Pueblo)",
+        "essay collections from young voices"
+      ],
+      "authors_or_titles": [
+        "Sarah J. Maas (ACOTAR, Crescent City, Throne of Glass)",
+        "Rebecca Yarros (Fourth Wing, Iron Flame, Onyx Storm)",
+        "Ana Huang (Twisted, King of Wrath)",
+        "Colleen Hoover (backlist)",
+        "Emily Henry",
+        "Taylor Jenkins Reid (Seven Husbands of Evelyn Hugo)",
+        "Ocean Vuong",
+        "Nedra Glover Tawwab (Set Boundaries)",
+        "Yung Pueblo (Clarity & Connection, Inward)",
+        "Mel Robbins (The Let Them Theory)",
+        "Dolly Alderton, Coco Mellors, Raven Leilani",
+        "Tomi Adeyemi, Roshani Chokshi"
+      ]
+    },
+    "plays": [
+      "Wordle and NY Times Games (idx 797-1,000+)",
+      "GeoGuessr (1,055), Chess.com",
+      "Valorant (976), Rust (1,183), Fortnite, Genshin Impact (883), NBA 2K (701), EA FC",
+      "Roblox, Minecraft (889), Among Us (781), Animal Crossing",
+      "The Sims, Stardew Valley, Hades",
+      "Marvel Snap, Balatro, Vampire Survivors",
+      "Star Wars franchise (1,301), Harry Potter (823), Barbie (865), Monster High (821), LEGO"
+    ],
+    "shops": [
+      "Depop, Poshmark, Grailed, Vinted (resale)",
+      "IPSY subscription and Sephora / Ulta runs",
+      "SHEIN, ASOS, Hot Topic, Journeys, Urban Outfitters",
+      "Trader Joe's, Whole Foods, and Aldi in the same cart",
+      "Dollar Tree, Dollar General, Five Below, Ross for the price stack",
+      "Amazon and TikTok Shop for one-click impulse",
+      "Small-batch beauty (BTWN, Mad Hippie, Trinny London, Starface, Seis Cosmetics)",
+      "K-beauty and Asian-market pulls (H Mart adjacency, Manga Plaza, Kocowa)"
+    ],
+    "eats_at": [
+      "Chipotle, Sweetgreen weekday",
+      "Starbucks or Dunkin drive-through, Bluestone Lane if urban",
+      "Kung Fu Tea, Boba Guys, Chatime",
+      "MrBeast Burger, Insomnia Cookies, Magnolia Bakery, Jeni's",
+      "Halal Guys, Jollibee, Bonchon, Kyochon",
+      "Late-night Taco Bell and Wendy's",
+      "Salt & Straw, Van Leeuwen, Milk Bar"
+    ],
+    "buys": [
+      "Prime Drink, Poppi, OLIPOP, Liquid Death, Alani Nu, Celsius",
+      "Dude Wipes, Native Deodorant, Rare Beauty, e.l.f., Charlotte Tilbury minis",
+      "DTC pet food if they have a pet (MaxBone, Little Hunter, Maev)",
+      "Squishmallows, Sanrio, Hello Kitty, Jellycat, Sonny Angels",
+      "Vinyl records for the aesthetic, phone-case drops (Casetify, Native Union)"
+    ],
+    "follows_talent": [
+      "Brad Mondo", "Matilda Djerf", "Jackie Aina", "Aimee Song", "Sofia Richie Grainge",
+      "Antonia Gentry", "Madelaine Petsch", "Chloe Cherry", "Isabela Merced", "Emma Mackey", "Percy Hynes White", "Louis Partridge",
+      "Stephanie Soo", "Brittany Broski", "Wisdom Kaye", "Rickey Thompson", "Sam and Colby", "Dude Perfect",
+      "MrBeast", "Markiplier", "PewDiePie", "Sean Evans (Hot Ones)", "Nara Aziza", "Jake Shane", "Ryan Trahan", "Mikayla Nogueira", "Salish Matter", "Kai Cenat", "Kaia Gerber",
+      "Tyla", "Jack Harlow", "GloRilla", "Sexyy Red", "Peso Pluma", "Karol G", "Newjeans",
+      "Angel Reese", "Caitlin Clark", "JuJu Watkins", "Kelsey Plum", "Ilona Maher", "Sean O'Malley",
+      "Kendall and Kylie Jenner", "Alix Earle", "Emma Chamberlain"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "queer belonging, trans visibility, LGBTQ+ rights, chosen family",
+    "mental health, therapy access, medication normalization, ADHD and autism visibility",
+    "climate anxiety and climate action as identity, not just topic",
+    "creator-economy and self-employment (Depop store, Substack, Patreon, Twitch, OnlyFans as legitimate income)",
+    "reproductive rights and body autonomy",
+    "Black women in music and TV, Latin crossover in pop, Asian-American film, K-pop and K-drama mainstream lift",
+    "affordable fashion drops and thrift culture (Depop, Poshmark, Hot Topic, Urban Outfitters, SHEIN)",
+    "boutique fitness even at rent-burdened income (pilates girlies, spin, hot yoga)",
+    "prestige indie moviegoing (Alamo Drafthouse, A24 canon, MUBI)",
+    "wellness apps and cycle tracking (Headspace, Calm, Flo, Clue)",
+    "student-loan anxiety and the delayed-adulthood conversation",
+    "sports fandom skewed to WNBA, F1, MLS, women's soccer, UFC, women's boxing, college gymnastics"
+  ],
+  "themes_they_avoid": [
+    "hustle-culture grindset, alpha-bro content, Andrew Tate, Pat McAfee style yell-cast",
+    "boomer cable-news anchor personality drama",
+    "openly conservative culture-war messaging (Ben Shapiro, Charlie Kirk, Matt Walsh, PragerU, Turning Point USA)",
+    "evangelical prosperity and Christian Nationalist framing",
+    "MLM / prosperity-gospel",
+    "senior-focused topics (Medicare Supplement, retirement communities, life alerts, AARP)",
+    "NASCAR and legacy country outside the crossover moment (Morgan Wallen, Zach Bryan, Post Malone-country pass; Rascal Flatts / Florida Georgia Line does not)",
+    "wall-street alpha and trading-guru content",
+    "reality-dating on cable (Bachelor, 90 Day) as PRIMARY content, though Love Island and Are You The One get memed",
+    "Fox News and NewsNation framing on entertainment or identity"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP items headlined by a Gen Z coded talent: Olivia Rodrigo, Sabrina Carpenter, SZA, Chappell Roan, Billie Eilish, Tyla, Doja Cat, Jack Harlow, Kendrick Lamar, Drake, Central Cee, GloRilla, Sexyy Red, Peso Pluma, Bad Bunny, Karol G, Newjeans, LE SSERAFIM, Steve Lacy, boygenius, Phoebe Bridgers, Chappell Roan.",
+    "KEEP BookTok titles: any Sarah J. Maas / Rebecca Yarros / Ana Huang / Colleen Hoover / Emily Henry / Taylor Jenkins Reid release, plus any book being pushed by BookTok this week. KEEP Mel Robbins, Nedra Tawwab, Yung Pueblo, Dolly Alderton, Coco Mellors, Raven Leilani.",
+    "KEEP prestige-teen and Gen Z TV: Wednesday, Ginny & Georgia, Riverdale, Euphoria, Never Have I Ever, Heartstopper, Sex Education, Do Revenge, Do Revenge 2, Sabrina, Outer Banks, Percy Jackson, Bridgerton, XO Kitty, Sex Lives of College Girls, Physical 100, Squid Game.",
+    "KEEP any A24 title, Alamo Drafthouse programming, MUBI drop, K-drama or anime release, Studio Ghibli theatrical re-release. KEEP Barbie, Everything Everywhere All At Once, Past Lives, Aftersun, Bottoms, Bodies Bodies Bodies, Challengers, Anyone But You, It Ends With Us.",
+    "KEEP franchise tent-poles that still land for Gen Z: Star Wars (Andor, Ahsoka), Marvel (Deadpool, Loki), The Last of Us, House of the Dragon, Stranger Things final season, Wednesday season 2. Drop pure superhero comfort content that has aged out (mid Ant-Man style).",
+    "KEEP queer belonging and LGBTQ+ storylines, Pride news, trans-visibility stories, drag culture, ballroom, Outfest, GLAAD, HRC, Lambda Legal.",
+    "KEEP mental-health and wellness-app content: Headspace / Calm feature drops, Flo / Clue cycle-tracking news, therapy explainer content, ADHD and autism creators.",
+    "KEEP boutique fitness content: Pilates girlies, hot yoga, SoulCycle, SLT, LEKfit, Y7, Barry's, plus the F45 / Orangetheory outer ring.",
+    "KEEP creator-economy stories: Twitch / Kick payouts, Substack launches, Patreon news, TikTok Shop drops, Depop reseller features, OnlyFans policy news, YouTube monetization changes.",
+    "KEEP student-and-early-career finance content: student loan forgiveness news, Chime / Cash App / Robinhood / Webull / Coinbase feature releases, side-hustle explainers, BNPL (Affirm, Klarna, Afterpay) news.",
+    "KEEP sports and events that Gen Z actually watches: WNBA (Aces, Fever, Sky, Liberty), women's college basketball, F1, MLS, women's soccer (NWSL, USWNT), UFC / one-off Netflix boxing events, Coachella, Rolling Loud, Broccoli City, Beautycon, Complexcon.",
+    "KEEP puzzle and social-play games: Wordle, NYT Games, Chess.com, GeoGuessr, Roblox, Minecraft, Genshin Impact, Valorant, Fortnite, EA FC, NBA 2K, Marvel Snap, Balatro, Vampire Survivors, Stardew Valley.",
+    "KEEP K-beauty and indie-beauty stories, drop-culture fashion news, Sephora Sale coverage, Depop / Poshmark features, Trader Joe's viral drops.",
+    "KEEP AI stories that touch student-life, journaling, self-work, or homework (Perplexity, ChatGPT, Claude, Grok, Khanmigo, Deep Seek). Drop AI stories that read as enterprise-earnings or infrastructure inside-baseball.",
+    "KEEP diverse pop-culture: Black women in music and TV, Latin-language crossover, K-pop mainstream lift, Asian-American film, HBCU stories, Essence Festival, BET Awards.",
+    "KEEP any Selling Sunset / Vanderpump / Love is Blind meme moment, Real Housewives crossovers, but only when they cross the algorithm (Alix Earle level virality), not because the show aired.",
+    "DROP hustle-culture, grindset, Andrew Tate, alpha-bro, most crypto-bro content (Coinbase feature news is fine; 'why Bitcoin is the future' takes are not).",
+    "DROP openly conservative culture-war messaging: Ben Shapiro, Tucker Carlson, Matt Walsh, Charlie Kirk, Candace Owens, PragerU, Turning Point USA, evangelical prosperity, Christian Nationalist framing.",
+    "DROP boomer cable-news anchor personality drama unless it broke on TikTok first.",
+    "DROP AARP, Medicare Supplement, retirement community, life-alert, senior-caregiver content.",
+    "DROP legacy country outside the pop-crossover moment: Morgan Wallen / Post Malone country / Zach Bryan / Kane Brown pass; Rascal Flatts, Florida Georgia Line, Dierks Bentley, Blake Shelton do not.",
+    "DROP NASCAR unless it is the Netflix docuseries moment. Drop most legacy golf coverage.",
+    "DROP right-of-center faith broadcasting (TBN, 700 Club, PureFlix, Great American Family). Drop Hallmark Channel programming that reads as parent-of-parent content.",
+    "DROP older-consumer categories: home security systems, Medicare Advantage, cruise lines, senior travel, life insurance, estate planning, timeshare marketing.",
+    "DROP mass-boomer QSR anchor rows (Cracker Barrel, Golden Corral, Perkins, Denny's, Bob Evans, IHOP) unless the item is about a viral menu drop.",
+    "TIE-BREAK when unsure: does this item touch identity, mental health, creator-economy income, fandom, or a specific young-woman / young-queer voice? If yes, lean KEEP. If it reads as content aimed at their parents or grandparents, lean DROP."
+  ],
+
+  "expected_kept_share_per_tab": "25-45% of items per tab. Podcasts and songs should retain a healthy share because the pop / hip-hop / R&B / Latin / K-pop / indie surface is huge for this generation. Books skews narrower (BookTok is a specific slice). Headlines skew narrowest (a lot of business, philanthropy, senior-policy stories will fall out).",
+
+  "reasoned_from_profile": {
+    "profile_key": "Shark Tank - Gen Z.csv (2026-08-26) triangulated with The_Wellness_Curious_Gen_Z_08_12_2026_17_44.csv and Protein Enthusiasts - 18-24.csv",
+    "note": "Shark Tank cast rows (Lori Greiner, Barbara Corcoran, Mark Cuban, Kevin O'Leary, Daymond John) are Shark Tank contamination and were discounted in favor of pattern signal that showed up across all three Gen Z-cut profiles. Public research anchors: Pew Research American Trends Panel on Gen Z (2024, 2025), Piper Sandler Taking Stock With Teens, YPulse.",
+    "notable_index_signals": [
+      "AGE 18-24 idx 456, 25-34 idx 246",
+      "INCOME LESS THAN $25K idx 264",
+      "EDUCATION Some College / Associate 187, HS or less 118",
+      "ETHNICITY HISPANIC 127, BLACK 115, ASIAN 114, WHITE 87",
+      "SOCIAL YIK YAK 2,927, BEREAL 1,841, LETTERBOXD 593, DISCORD 372, PATREON 319, TWITCH 288",
+      "APP HEADSPACE 1,056, CALM 707, HINGE 725, CRUNCHYROLL 714, TINDER 627, ASTROLOGY 562, FACETUNE 608",
+      "SEARCH AI KHANMIGO 2,593, EDUAIDE 2,497, PHIND AI 2,197, DEEP SEEK 979, GROK 635",
+      "STREAMING UFC FIGHT PASS 535, DROPOUT TV 464, BET+ 372, KICK 349, MUBI 347, HIDIVE 313",
+      "MEDIA TEEN VOGUE 715, HYPEBEAST 556, WHO WHAT WEAR 552, BYRDIE 469, OUT MAGAZINE 398",
+      "BEAUTY IPSY 2,875, BTWN 2,071, STARFACE 1,117, MAD HIPPIE 1,095, TRINNY LONDON 712, SEIS 1,361",
+      "MPB MAXBONE 17,286, LITTLE HUNTER 15,675, MAEV 9,950, LOUD BODIES 5,432, LAZY OAF 3,206",
+      "SHOP IPSY 2,875, DEPOP 1,195, JOURNEYS 1,310, HOT TOPIC 704, URBAN OUTFITTERS 612, DOLLAR TREE 527, SHEIN 394",
+      "GAMES STAR WARS 1,301, RUST 1,183, GEOGUESSR 1,055, VALORANT 976, GENSHIN 883, MINECRAFT 889, WORDLE 797",
+      "WORKOUT DOGPOUND 145,971, LEKFIT 89,488, SLT 60,328, Y7 47,592, BARRY'S (in cohort)",
+      "MOVIE ALAMO DRAFTHOUSE 1,133, AMC 292",
+      "CPG PRIME DRINK 298, POPPI 295, DUDE WIPES 274, OLIPOP 234, LIQUID DEATH 232, CHAMBERLAIN COFFEE 240",
+      "BANKING SOFI 596, CHIME 1,066, ROBINHOOD 736, WEBULL 1,304, COINBASE 7,763, APPLE PAY 393, CASH APP 357"
+    ]
+  }
+}

@@ -517,7 +517,8 @@ def load_approval_csv(approval_id) -> str:
 
 
 def persist_approval(csv_text, csv_name, subject, requested_by="",
-                     dry_run: bool = False, base_url=None) -> dict:
+                     dry_run: bool = False, base_url=None,
+                     recipients=None) -> dict:
     """Stage a mapping CSV for one-click approval. Writes the CSV and a
     pending state JSON to S3 and returns
     {"id", "approve_url", "reject_url", "row_count"}.
@@ -526,6 +527,11 @@ def persist_approval(csv_text, csv_name, subject, requested_by="",
     email builder catches and sends without buttons (fail-safe).
     ``dry_run=True`` stages a state whose Approve click only REPORTS
     what would be inserted (used by format-test emails).
+
+    ``recipients`` is the full To+Cc list the proposal email went to. It
+    is stored on the state so a later Approve/Reject click can reply-all:
+    notify everyone that a decision was made so nobody else has to act
+    (Jenna 2026-08-31).
     """
     secret = approval_secret()
     if not secret:
@@ -551,6 +557,7 @@ def persist_approval(csv_text, csv_name, subject, requested_by="",
         "row_count": len(rows),
         "brand_count": len({fold_brand(r["BRAND"]) for r in rows}),
         "dry_run": bool(dry_run),
+        "recipients": _dedupe_emails(recipients),
     }
     s3.put_object(Bucket=APPROVAL_BUCKET, Key=_state_key(aid),
                   Body=json.dumps(state, indent=2).encode("utf-8"),
@@ -565,6 +572,92 @@ def persist_approval(csv_text, csv_name, subject, requested_by="",
         "reject_url": (f"{base}/api/hostmap-mapping/reject?id={aid}"
                        f"&token={sign_token(aid, 'reject', secret)}"),
     }
+
+
+def _dedupe_emails(recipients) -> list:
+    """Order-preserving, case-insensitive dedupe of an email list."""
+    seen: set = set()
+    out: list = []
+    for r in recipients or []:
+        e = str(r or "").strip()
+        k = e.lower()
+        if e and k not in seen:
+            seen.add(k)
+            out.append(e)
+    return out
+
+
+# Reply-all decision notifications are sent from the same address the
+# proposal email uses. Kept partner-safe: the copy never names internal
+# systems, only "mapping table" / "mapping additions" (the same vocabulary
+# the confirmation pages already use).
+_NOTIFY_FROM = "no_reply@crosswalknyc.com"
+
+
+def _send_group_email(recipients, subject_line, text_body, html_body) -> None:
+    """Send one email addressed to the whole recipient group. Never
+    raises; logs and returns on any failure."""
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    import boto3
+
+    recips = _dedupe_emails(recipients)
+    if not recips:
+        return
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject_line
+    msg["From"] = _NOTIFY_FROM
+    msg["To"] = ", ".join(recips)
+    msg.attach(MIMEText(text_body or "", "plain", "utf-8"))
+    if html_body:
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+    ses = boto3.client("ses", region_name=S3_REGION)
+    ses.send_raw_email(Source=_NOTIFY_FROM, Destinations=recips,
+                       RawMessage={"Data": msg.as_string()})
+    print(f"  [hostmap-ingest] decision notification sent to "
+          f"{len(recips)} recipient(s)")
+
+
+def _notify_decision(state, action) -> None:
+    """Reply-all on a decision: tell every original recipient that the
+    proposal was approved or rejected, so the rest of the group knows
+    they do not need to act (Jenna 2026-08-31). Fires exactly once (on
+    the CAS-claimed transition). Strictly fail-safe: a send failure never
+    blocks or breaks the approval flow."""
+    try:
+        recips = _dedupe_emails((state or {}).get("recipients"))
+        if not recips:
+            return
+        subject_name = (str((state or {}).get("subject") or "").strip()
+                        or "this profile")
+        n_rows = int((state or {}).get("row_count") or 0)
+        n_brands = int((state or {}).get("brand_count") or 0)
+        if action == "approve":
+            decided = "approved"
+            lead = (f"The mapping additions for {subject_name} were approved "
+                    f"and added to the mapping table "
+                    f"({n_rows} row(s) across {n_brands} brand(s)).")
+        else:
+            decided = "declined"
+            lead = (f"The mapping additions for {subject_name} were declined. "
+                    f"No changes were made to the mapping table.")
+        text_body = (
+            f"{lead}\n\n"
+            "No further action is needed from anyone on this thread.\n"
+        )
+        html_body = (
+            '<html><body style="font-family:-apple-system,Helvetica,Arial,'
+            'sans-serif;color:#333;">'
+            f'<p>{_esc(lead)}</p>'
+            '<p style="color:#555;">No further action is needed from anyone '
+            'on this thread.</p>'
+            '<p style="color:#999;font-size:12px;margin-top:24px;">'
+            'Behavioral Graph by Crosswalk</p></body></html>'
+        )
+        subject_line = f"Mapping additions for {subject_name}: {decided}"
+        _send_group_email(recips, subject_line, text_body, html_body)
+    except Exception as e:
+        print(f"  [hostmap-ingest] decision notify failed (non-fatal): {e}")
 
 
 def _claim_transition(approval_id, action) -> tuple:
@@ -647,6 +740,7 @@ def handle_approval_action(approval_id, action, token) -> tuple:
     if action == "reject":
         claimed, state = _claim_transition(aid, "reject")
         if claimed:
+            _notify_decision(state, "reject")
             return _page(
                 "Proposal rejected",
                 f"<p>The mapping proposal <b>{_esc(state.get('csv_name') or aid)}</b> "
@@ -667,6 +761,7 @@ def handle_approval_action(approval_id, action, token) -> tuple:
     claimed, state = _claim_transition(aid, "approve")
     if not claimed:
         return _already_processed_page(state), 200
+    _notify_decision(state, "approve")
     return _run_approved_ingest(aid, state)
 
 

@@ -1,0 +1,40 @@
+[Unit]
+# Nightly Talent / Brands ranker refresh.
+#
+# Migrated from Render cron `iq-rankers-daily-cron-dev` (crn-d85n22v7f7vs73cp25fg).
+# On Render this ran `python -c "urllib.request... POST APP_URL/api/cron/iq-rankers-daily?secret=CRON_SECRET"`
+# against the public web URL. On Hetzner we hit the local nginx front-door
+# so the request never leaves the box.
+#
+# Schedule: daily at 09:00 UTC (matches the Render schedule).
+# Payload: POST /api/cron/iq-rankers-daily runs Layer-1 sentiment for every
+# Profile IQ profile against yesterday's clickstream and writes one row per
+# (profile, day) into reference.profile_iq_daily_metrics so the Ranker IQ
+# leaderboards are ready by 04:00 ET.
+
+Description=Nightly IQ Rankers daily refresh (Talent + Brands sentiment)
+After=network-online.target bg-webapp.service
+Wants=network-online.target
+Requires=bg-webapp.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/bg-webapp/env
+# 4 hours wall-clock max (matches the Render timeout of 14400s).
+TimeoutStartSec=14400
+# The Render cron used `secret=${CRON_SECRET}` in the querystring; the
+# X-Cron-Secret header path is the newer pattern. The endpoint accepts both.
+ExecStart=/usr/bin/curl \
+    --silent --show-error --fail --location \
+    --max-time 14400 \
+    --request POST \
+    --header "X-Cron-Secret: ${CRON_SECRET}" \
+    --output /var/log/iq-rankers-daily.last-response.txt \
+    --write-out "HTTP %{http_code} in %{time_total}s\n" \
+    http://127.0.0.1/api/cron/iq-rankers-daily
+StandardOutput=append:/var/log/iq-rankers-daily.log
+StandardError=append:/var/log/iq-rankers-daily.log
+
+[Install]
+WantedBy=multi-user.target

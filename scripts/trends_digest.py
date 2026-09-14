@@ -24,7 +24,7 @@ Manual test (single user, no email send):
     python3 -m scripts.trends_digest --dry-run --user jenna_crosswalknyc_com
 
 Environment:
-    TRENDS_DIGEST_FROM   default 'BehavioralGraph <jenna@crosswalknyc.com>'
+    TRENDS_DIGEST_FROM   default 'Crosswalk <no_reply@crosswalknyc.com>'
     TRENDS_DIGEST_REGION default 'us-east-2'
     TRENDS_DIGEST_BUCKET default 'dashboard-inputs'
 """
@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import sys
+from html import escape as _html_escape
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -50,7 +51,65 @@ logger = logging.getLogger(__name__)
 BUCKET      = os.environ.get('TRENDS_DIGEST_BUCKET') or os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 STATE_PREFIX = 'trends_iq_alerts/'
 SES_REGION  = os.environ.get('TRENDS_DIGEST_REGION', 'us-east-2')
-SES_FROM    = os.environ.get('TRENDS_DIGEST_FROM',   'BehavioralGraph <jenna@crosswalknyc.com>')
+# Send as Crosswalk from the shared no_reply identity (a verified SES sender
+# in us-east-2, same one the newsletter uses). Using jenna@ made Gmail show
+# the personal contact name "Jenna Menking"; a non-personal address lets the
+# "Crosswalk" display name stand. Replies route to the general inbox.
+SES_FROM    = os.environ.get('TRENDS_DIGEST_FROM',   'Crosswalk <no_reply@crosswalknyc.com>')
+SES_REPLY_TO = os.environ.get('TRENDS_DIGEST_REPLY_TO', 'hello@crosswalknyc.com')
+# Public dashboard URL for the "manage your watchlist" link. The old
+# hardcoded www.behavioralgraph.com does not resolve (NXDOMAIN); the live
+# production host is the verified Render custom domain below. Overridable
+# via env so the dev/staging digest can point elsewhere.
+APP_URL     = (os.environ.get('TRENDS_DIGEST_APP_URL')
+               or os.environ.get('APP_URL')
+               or os.environ.get('PUBLIC_APP_URL')
+               or 'https://dashboard.crosswalknyc.com').rstrip('/')
+
+# Deep-link straight into the Trends IQ view (index.html reads ?view= on
+# boot) so the CTA lands the reader where the watchlist lives instead of
+# the default dashboard tab.
+CTA_URL     = f"{APP_URL}/?view=trendsIQ"
+
+# --- Crosswalk brand tokens (August 2026 system) --------------------------
+# This email is an Off-White (light) surface, so it follows the "twin rule":
+# Signal Green (#C7F23E) is dark-surface only and blows out on Off-White, so
+# the accent here is Signal Olive (#5E7E12) with the small-text link olive
+# (#547110). One accent, one job. Table-based single column, ~600px, inline
+# styles, no web fonts (Inter if the client has it, else a system stack).
+_FONT = ("'Inter 18pt','Inter',-apple-system,BlinkMacSystemFont,"
+         "'Segoe UI',Roboto,Helvetica,Arial,sans-serif")
+_BRAND = {
+    'page':   '#E9E8E1',   # Neutral Off-White ground
+    'card':   '#FFFFFF',   # raised light surface
+    'ink':    '#0C1618',   # Graphite Teal / primary text
+    'body':   '#5C6560',   # body + subhead grey
+    'muted':  '#888C89',   # source / count grey
+    'footer': '#5C6466',   # footer grey
+    'border': '#C9C6BA',   # hairline divider
+    'olive':  '#5E7E12',   # Signal Olive (light-surface accent)
+    'link':   '#547110',   # small-text olive, for links
+}
+
+
+def _brand_button(url: str, label: str) -> str:
+    """One bulletproof CTA. Signal Olive fill (matching the footer link)
+    with an Off-White label. VML fallback keeps the shape in Outlook."""
+    return (
+        "<!--[if mso]>"
+        f"<v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" "
+        f"xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"{url}\" "
+        "style=\"height:46px;v-text-anchor:middle;width:220px;\" arcsize=\"18%\" "
+        f"strokecolor=\"{_BRAND['link']}\" fillcolor=\"{_BRAND['link']}\">"
+        f"<w:anchorlock/><center style=\"color:{_BRAND['page']};"
+        "font-family:sans-serif;font-size:15px;font-weight:bold;\">"
+        f"{label}</center></v:roundrect><![endif]-->"
+        "<!--[if !mso]><!-- -->"
+        f"<a href=\"{url}\" style=\"display:inline-block;background:{_BRAND['link']};"
+        f"color:{_BRAND['page']};font-family:{_FONT};font-size:15px;font-weight:700;"
+        "line-height:46px;text-decoration:none;padding:0 30px;border-radius:8px;\">"
+        f"{label}</a><!--<![endif]-->"
+    )
 
 
 def _s3():
@@ -92,20 +151,54 @@ def _entry_slug(kind: str, source: str, key: str) -> str:
     return f"{kind}|{source}|{key}"
 
 
-def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dict]]:
-    """Return (alerts, new_state, watchlist_entries) for this user.
+def _latest_present_rank(arc: dict):
+    """Most recent day in the arc that actually has a rank.
+
+    The arc's raw `current_rank` is literally the last *calendar* day
+    (see trends_history._summarize_arc / _iter_recent_days, which always
+    make today the final day). The digest cron runs in the early UTC
+    morning, before today's snapshot has been scraped, so that last day
+    is `present:false` and `current_rank` is None on every run - which
+    made every watched item look unchanged and produced the perpetual
+    "no material movement" digest. Walk back to the newest day that has
+    real data so movement is measured off the latest available snapshot.
+    """
+    for d in reversed(arc.get('days') or []):
+        if d.get('present') and d.get('rank') is not None:
+            return d.get('rank')
+    return arc.get('current_rank')
+
+
+def _recent_two_present_ranks(arc: dict) -> tuple[Optional[int], Optional[int]]:
+    """(prev_rank, current_rank) from the two most recent days in the arc
+    that actually have a rank. Drives the 'Daily Move' column straight off
+    the item's own history, so it shows a delta even when the state-based
+    alert threshold reports 'no material movement'."""
+    ranks = [d.get('rank') for d in (arc.get('days') or [])
+             if d.get('present') and d.get('rank') is not None]
+    cur = ranks[-1] if ranks else None
+    prev = ranks[-2] if len(ranks) >= 2 else None
+    return prev, cur
+
+
+def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dict], list[dict]]:
+    """Return (alerts, new_state, watchlist_entries, watch_items) for this user.
 
     `alerts` = list of alert dicts fired today (only material movements).
     `new_state` = the arcs to persist as "yesterday" for the next run.
+    `watch_items` = every watched item with its current/best rank and the
+                    day-over-day move, so the digest can always show the full
+                    watchlist table regardless of whether any alert fired.
     """
     entries = trends_watchlist.load_watchlist(user_slug)
     if not entries:
-        return [], {}, []
+        return [], {}, [], []
     prior = _load_prior_state(user_slug)
     prior_arcs = prior.get('arcs', {}) if isinstance(prior, dict) else {}
 
     alerts: list[dict] = []
     new_arcs: dict[str, dict] = {}
+    watch_items: list[dict] = []
     for e in entries:
         kind   = e.get('kind') or ''
         source = e.get('source') or ''
@@ -113,6 +206,11 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
         geo    = e.get('geo') or 'National'
         slug   = _entry_slug(kind, source, key)
         curr = trends_history.history_for_item(kind, source, key, geo=geo, days=14, force_refresh=True)
+        # Normalize current_rank to the latest day that actually has data
+        # so classify_alert_transition compares real snapshots run-over-run
+        # (today's calendar day is usually unscraped at digest time).
+        curr['current_rank'] = _latest_present_rank(curr)
+        prev_day_rank, cur_day_rank = _recent_two_present_ranks(curr)
         new_arcs[slug] = {
             'current_rank': curr.get('current_rank'),
             'best_rank':    curr.get('best_rank'),
@@ -121,6 +219,22 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
             'momentum':     curr.get('momentum'),
         }
         prev = prior_arcs.get(slug)
+        # Daily move prior: prefer the item's own arc (its second-most-recent
+        # day with data); fall back to the rank saved on the last digest run.
+        # Sparse arcs (e.g. single-day Google search history) otherwise have no
+        # second day and were wrongly reading as "new" every morning.
+        daily_prev = prev_day_rank
+        if daily_prev is None:
+            daily_prev = (prev or {}).get('current_rank')
+        watch_items.append({
+            'label':        e.get('label') or key,
+            'kind':         kind,
+            'source':       source,
+            'geo':          geo,
+            'current_rank': curr.get('current_rank'),
+            'best_rank':    curr.get('best_rank'),
+            'prev_rank':    daily_prev,
+        })
         prev_wrapped = {
             'current_rank': (prev or {}).get('current_rank'),
             'days':         [{'rank': (prev or {}).get('current_rank'), 'present': (prev or {}).get('current_rank') is not None}] if prev else [],
@@ -135,76 +249,173 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'arcs':        new_arcs,
     }
-    return alerts, new_state, entries
+    return alerts, new_state, entries, watch_items
 
 
 def _render_email(user_slug: str, alerts: list[dict],
-                   entries: list[dict]) -> tuple[str, str, str]:
-    """Return (subject, html, text) for the digest email."""
+                   entries: list[dict],
+                   watch_items: Optional[list[dict]] = None) -> tuple[str, str, str]:
+    """Return (subject, html, text) for the digest email.
+
+    Styled to the Crosswalk brand system (August 2026): Off-White ground,
+    Inter 18pt, Signal Olive as the single light-surface accent, one
+    bulletproof CTA. Single-column table layout, inline styles only.
+
+    Always renders the full watchlist (item, current rank, best rank, and the
+    day-over-day move) so the digest is useful even when nothing crossed the
+    alert threshold.
+    """
+    watch_items = watch_items or []
     today = datetime.now(timezone.utc).strftime('%A, %b %-d')
-    n = len(alerts)
-    if n == 0:
-        subject = f"Trends IQ digest - {today} - no material moves"
+    B = _BRAND
+
+    watched = len(watch_items)
+    movers = sum(
+        1 for w in watch_items
+        if w.get('prev_rank') is not None and w.get('current_rank') is not None
+        and w.get('prev_rank') != w.get('current_rank')
+    )
+    if movers == 0:
+        subject = f"Trends IQ: no watchlist moves, {today}"
+        preheader = (f"Your {watched} watched item{'s' if watched != 1 else ''} held rank. "
+                     "Current and best inside.")
     else:
-        subject = f"Trends IQ digest - {today} - {n} watchlist move{'s' if n != 1 else ''}"
+        subject = f"Trends IQ: {movers} watchlist move{'s' if movers != 1 else ''}, {today}"
+        preheader = (f"{movers} of {watched} watched item{'s' if watched != 1 else ''} "
+                     "moved since yesterday.")
 
-    bucket = {
-        'BREAKOUT':  [], 'RISING':   [], 'FALLING': [],
-        'DROPPED_OFF': [], 'RETURNED': [], 'NEW': [],
-    }
-    for a in alerts:
-        bucket.setdefault(a.get('alert_type', 'NEW'), []).append(a)
+    def _rank(r) -> str:
+        return f"#{r}" if isinstance(r, int) else "-"
 
-    def _row_line(a: dict) -> str:
-        label = a.get('label') or a.get('key') or ''
-        cur = a.get('curr_rank')
-        prev = a.get('prev_rank')
-        if cur is not None and prev is not None:
-            return f"  {label}: was #{prev} -> now #{cur}"
-        if cur is not None:
-            return f"  {label}: now #{cur}"
-        if prev is not None:
-            return f"  {label}: dropped from #{prev}"
-        return f"  {label}"
+    def _move(prev, cur) -> tuple[str, str]:
+        """(plain, html) for the Daily Move cell. A positive delta means the
+        item moved up the chart (to a smaller rank number). When there's no
+        prior rank to compare against, or the rank held steady, show a dash
+        rather than a misleading '0' or 'new'."""
+        dash = ("-", f"<span style=\"color:{B['muted']};\">-</span>")
+        if cur is None or prev is None:
+            return dash
+        d = prev - cur
+        if d > 0:
+            return f"+{d}", f"<span style=\"color:{B['olive']};font-weight:700;\">&#9650;{d}</span>"
+        if d < 0:
+            return f"{d}", f"<span style=\"color:{B['body']};font-weight:700;\">&#9660;{abs(d)}</span>"
+        return dash
 
-    order = ['BREAKOUT', 'RISING', 'RETURNED', 'NEW', 'FALLING', 'DROPPED_OFF']
-    text_lines = [f"Trends IQ digest for {today}",
-                   f"You are watching {len(entries)} item(s).", ""]
-    html_lines = [
-        f"<p>Hey, here's your Trends IQ digest for <b>{today}</b>. You're watching <b>{len(entries)}</b> item(s).</p>",
+    # ---- plain-text part -------------------------------------------------
+    text_lines = [
+        "CROSSWALK / TRENDS IQ",
+        "",
+        "Good morning!",
+        f"Your Trends IQ Digest for {today} is here.",
+        "",
+        "Monitor and manage your watchlist in Trends IQ:",
+        CTA_URL,
+        "",
+        "YOUR WATCHLIST  (current / best / daily move)",
     ]
-    if not alerts:
-        text_lines.append("No material movement on any of your watched items today.")
-        html_lines.append("<p>No material movement on any of your watched items today.</p>")
-    else:
-        for tag in order:
-            items = bucket.get(tag) or []
-            if not items:
-                continue
-            text_lines.append(f"{tag} ({len(items)}):")
-            html_lines.append(f"<h3 style='margin-bottom:6px;'>{tag} <span style='opacity:0.65;font-weight:400;'>({len(items)})</span></h3><ul style='margin-top:0;'>")
-            for a in items:
-                text_lines.append(_row_line(a))
-                label = (a.get('label') or a.get('key') or '')
-                cur = a.get('curr_rank'); prev = a.get('prev_rank')
-                if cur is not None and prev is not None:
-                    detail = f"was #{prev} -> now <b>#{cur}</b>"
-                elif cur is not None:
-                    detail = f"now <b>#{cur}</b>"
-                elif prev is not None:
-                    detail = f"dropped from #{prev}"
-                else:
-                    detail = ''
-                html_lines.append(f"<li><b>{label}</b> {detail}</li>")
-            html_lines.append("</ul>")
-            text_lines.append("")
+    for w in watch_items:
+        mv_text, _ = _move(w.get('prev_rank'), w.get('current_rank'))
+        text_lines.append(
+            f"  {w.get('label') or ''}: "
+            f"current {_rank(w.get('current_rank'))}, "
+            f"best {_rank(w.get('best_rank'))}, "
+            f"move {mv_text}"
+        )
+    text_lines += ["", "--", "CROSSWALK / BEHAVIORAL INTELLIGENCE"]
 
-    text_lines.append("--")
-    text_lines.append("Open Trends IQ to manage your watchlist:")
-    text_lines.append("https://www.behavioralgraph.com/  (Trends section)")
-    html_lines.append("<hr style='margin:24px 0;border:0;border-top:1px solid #ddd;'/>")
-    html_lines.append("<p style='color:#666;font-size:0.9em;'>Manage your watchlist in Trends IQ: <a href='https://www.behavioralgraph.com/'>open the dashboard</a>.</p>")
-    return subject, ''.join(html_lines), '\n'.join(text_lines)
+    # ---- HTML watchlist table (always shown) -----------------------------
+    def _num_cell(content: str) -> str:
+        return (f"<td align=\"right\" style=\"padding:11px 0 11px 10px;"
+                f"border-top:1px solid {B['border']};font-size:14px;font-weight:700;"
+                f"color:{B['ink']};white-space:nowrap;vertical-align:top;\">{content}</td>")
+
+    item_rows = []
+    for w in watch_items:
+        label = _html_escape(w.get('label') or '')
+        sub_bits = [str(x) for x in (w.get('kind'), w.get('source'), w.get('geo')) if x]
+        sub = _html_escape(" \u00b7 ".join(sub_bits)).upper()
+        _, mv_html = _move(w.get('prev_rank'), w.get('current_rank'))
+        item_rows.append(
+            "<tr>"
+            f"<td style=\"padding:11px 0;border-top:1px solid {B['border']};vertical-align:top;\">"
+            f"<div style=\"font-size:14px;line-height:1.3;font-weight:700;color:{B['ink']};\">{label}</div>"
+            f"<div style=\"margin-top:3px;font-size:10px;letter-spacing:0.5px;"
+            f"text-transform:uppercase;color:{B['muted']};\">{sub}</div></td>"
+            + _num_cell(_rank(w.get('current_rank')))
+            + _num_cell(_rank(w.get('best_rank')))
+            + _num_cell(mv_html)
+            + "</tr>"
+        )
+
+    _col = "font-size:9px;letter-spacing:1px;text-transform:uppercase;color:" + B['muted'] + ";"
+    section_html = (
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"border-collapse:collapse;\">"
+        f"<tr><td colspan=\"4\" style=\"padding:0 0 2px;font-size:11px;letter-spacing:1px;"
+        f"text-transform:uppercase;font-weight:700;color:{B['ink']};\">Your watchlist</td></tr>"
+        f"<tr><td colspan=\"4\" style=\"padding:0 0 12px;font-size:12px;line-height:1.4;"
+        f"color:{B['body']};\">Current and best rank, with the move since yesterday.</td></tr>"
+        "<tr><td></td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Current</td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Best</td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Daily move</td></tr>"
+        + ''.join(item_rows) +
+        "</table>"
+    )
+
+    button = _brand_button(CTA_URL, "Open Trends IQ &rarr;")
+
+    html = (
+        "<!DOCTYPE html><html lang=\"en\"><head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<meta name=\"x-apple-disable-message-reformatting\">"
+        "<title>Crosswalk Trends IQ</title></head>"
+        f"<body style=\"margin:0;padding:0;background:{B['page']};\">"
+        f"<div style=\"display:none;max-height:0;overflow:hidden;opacity:0;\">{preheader}</div>"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"background:{B['page']};\"><tr><td align=\"center\" style=\"padding:32px 16px;\">"
+        "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"width:600px;max-width:600px;background:{B['card']};border:1px solid {B['border']};"
+        "border-radius:12px;\">"
+        # header row: eyebrow (olive dot + product) left, wordmark right
+        f"<tr><td style=\"padding:28px 32px 6px;font-family:{_FONT};\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
+        "<td align=\"left\" style=\"vertical-align:middle;\">"
+        f"<span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;"
+        f"background:{B['olive']};\"></span>"
+        f"<span style=\"padding-left:8px;font-size:11px;letter-spacing:2.6px;"
+        f"text-transform:uppercase;color:{B['body']};\">Trends IQ</span></td>"
+        f"<td align=\"right\" style=\"vertical-align:middle;font-size:16px;font-weight:800;"
+        f"letter-spacing:0.2px;color:{B['ink']};\">Crosswalk</td>"
+        "</tr></table></td></tr>"
+        # greeting + lead
+        f"<tr><td style=\"padding:16px 32px 0;font-family:{_FONT};\">"
+        f"<p style=\"margin:0;font-size:20px;line-height:1.3;font-weight:800;color:{B['ink']};\">"
+        "Good morning!</p>"
+        f"<p style=\"margin:8px 0 0;font-size:16px;line-height:1.4;color:{B['ink']};\">"
+        f"Your Trends IQ Digest for {today} is here.</p>"
+        f"<p style=\"margin:12px 0 0;font-size:15px;line-height:1.5;color:{B['body']};\">"
+        "Monitor and manage your watchlist in Trends IQ.</p></td></tr>"
+        # CTA
+        f"<tr><td style=\"padding:18px 32px 6px;font-family:{_FONT};\">{button}</td></tr>"
+        # divider
+        f"<tr><td style=\"padding:10px 32px 0;\"><div style=\"border-top:1px solid {B['border']};"
+        "font-size:0;line-height:0;\">&nbsp;</div></td></tr>"
+        # sections
+        f"<tr><td style=\"padding:22px 32px 4px;font-family:{_FONT};\">{section_html}</td></tr>"
+        # footer
+        f"<tr><td style=\"padding:18px 32px 28px;font-family:{_FONT};border-top:1px solid {B['border']};\">"
+        f"<div style=\"font-size:9px;letter-spacing:2px;text-transform:uppercase;color:{B['footer']};\">"
+        "Crosswalk &nbsp;/&nbsp; Behavioral intelligence</div>"
+        f"<div style=\"margin-top:8px;font-size:12px;line-height:1.5;color:{B['footer']};\">"
+        f"Manage your watchlist in <a href=\"{CTA_URL}\" style=\"color:{B['link']};"
+        "text-decoration:underline;\">Trends IQ</a>.</div></td></tr>"
+        "</table></td></tr></table></body></html>"
+    )
+
+    return subject, html, '\n'.join(text_lines)
 
 
 def _send_email(to_addr: str, subject: str, html: str, text: str, *, dry_run: bool) -> None:
@@ -217,6 +428,7 @@ def _send_email(to_addr: str, subject: str, html: str, text: str, *, dry_run: bo
     _ses().send_email(
         Source=SES_FROM,
         Destination={'ToAddresses': [to_addr]},
+        ReplyToAddresses=[SES_REPLY_TO] if SES_REPLY_TO else [],
         Message={
             'Subject': {'Data': subject, 'Charset': 'UTF-8'},
             'Body':    {'Html': {'Data': html, 'Charset': 'UTF-8'},
@@ -231,11 +443,11 @@ def run_for_user(user_slug: str, *, dry_run: bool = False) -> dict:
         logger.info("digest: no email for user_slug=%s (skipping)", user_slug)
         return {'user_slug': user_slug, 'sent': False, 'reason': 'no_email'}
 
-    alerts, new_state, entries = _compute_alerts_for_user(user_slug)
+    alerts, new_state, entries, watch_items = _compute_alerts_for_user(user_slug)
     if not entries:
         return {'user_slug': user_slug, 'sent': False, 'reason': 'empty_watchlist'}
 
-    subject, html, text = _render_email(user_slug, alerts, entries)
+    subject, html, text = _render_email(user_slug, alerts, entries, watch_items)
     try:
         _send_email(email, subject, html, text, dry_run=dry_run)
         sent = True

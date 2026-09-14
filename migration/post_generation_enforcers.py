@@ -513,13 +513,45 @@ def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
     # "Invalid value 'X' for dtype 'str'" when we assign a float. This bit
     # the G13 Lisa BLACKPINK auto-patch tonight (logged
     # "G13 auto-patch FAILED (Invalid value '100.0' for dtype 'str')").
-    # Coerce target columns to float64 once before assignment so every
-    # gate that calls _set_bp (G14, G17, G7 NEAR_TIE, ...) is safe.
+    # Coerce target columns to a dtype that accepts a subsequent
+    # `df.at[idx, col] = float_value` write so every gate that calls
+    # _set_bp (G14, G17, G7 NEAR_TIE, ...) is safe.
+    #
+    # 2026-09-04 (StringDtype NaN-corruption fix): the coercion used to
+    # be `pd.to_numeric(df[_dtcol], errors='coerce')`, which NaN-ified
+    # every `%`-suffixed cell (like `'39.5700%'`). Under default pandas
+    # today the guard didn't fire on the object-dtype BP column, but
+    # under `future.infer_string=True` (pandas 3.x default, or the
+    # nightly CI env) the guard fired and silently corrupted every
+    # untouched leader row (2 of 6 nightly test_pre_ship_vetting
+    # failures traced to this). Switch to `astype(object)`: object
+    # dtype accepts subsequent `df.at[idx, col] = float_value` writes
+    # while preserving every existing cell verbatim, so `%`-suffixed
+    # strings survive. Downstream `_bp` in this file already parses
+    # mixed object cells correctly (line ~379).
+    #
+    # Defense-in-depth per no-rebuild-level-correction.mdc ("an agent
+    # should fix everything and never need rebuild"): after the loop,
+    # revert any cell that became NaN but was non-empty pre-transform.
+    # This makes _set_bp self-healing against any future pandas dtype
+    # surprise: the enforcer never emits a NaN-tainted frame.
     for _dtcol in (bp_col, raw_col, proj_col):
-        if (_dtcol and _dtcol in df.columns
-                and df[_dtcol].dtype.name not in ('object', 'O',
-                                                  'float64', 'int64')):
-            df[_dtcol] = pd.to_numeric(df[_dtcol], errors='coerce')
+        if not _dtcol or _dtcol not in df.columns:
+            continue
+        _pre = df[_dtcol].copy()
+        if df[_dtcol].dtype.name not in ('object', 'O',
+                                         'float64', 'int64'):
+            df[_dtcol] = df[_dtcol].astype(object)
+        # Defense-in-depth: never introduce NaN silently.
+        if df[_dtcol].isna().any():
+            _mask = (df[_dtcol].isna()
+                     & _pre.notna()
+                     & (_pre.astype(str) != '')
+                     & (_pre.astype(str).str.lower() != 'nan'))
+            if _mask.any():
+                df.loc[_mask, _dtcol] = _pre[_mask]
+                print(f"[_set_bp] dtype-guard reverted {int(_mask.sum())} "
+                      f"NaN cells in {_dtcol} (defense-in-depth)")
     df.at[idx, bp_col] = round(float(new_bp), 4)
     new_raw = int(round(sample_size * new_bp / 100.0))
     if raw_col:
@@ -2851,8 +2883,9 @@ def ensure_subject_in_native_category(df, subject, verbose=True):
         # category here -- that's a bigger build-side issue (escalate).
         if verbose:
             print(f"   ⚠️ ensure_subject_in_native_category: BRAND CATEGORY "
-                  f"'{native_cat}' has no rows in profile -- skipping insert "
-                  f"(needs full-category re-pull, not row-level patch)")
+                  f"'{native_cat}' has no rows in profile -- skipping the "
+                  f"row-level insert (a wholly-absent category is a build "
+                  f"input, not an in-place row patch)")
         return df, 0
 
     val_u = df['Value'].astype(str).str.upper().str.strip()
@@ -3734,41 +3767,61 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
             continue
         _b = _norm_brand(str(df.at[_idx, 'Value'] or ''))
         mirror_twins.setdefault((_b, round(_v, 4)), []).append(_idx)
+    # 2026-08-31 (Big Brother I20 root cause): the old descent bounded
+    # itself at the first NON-cluster row (floor = max(below)). When the
+    # category head is a dense staircase, that row sits just outside the
+    # epsilon band, so headroom was tiny, the salted gaps scaled down to
+    # ~0.02 each, and the top-CONVERGENCE_MIN_CLUSTER span stayed inside
+    # the band -> the detector re-flagged (k=4 forever). The fix extends
+    # the downward re-spread PAST the first non-cluster row through the
+    # dense head until a natural gap appears, and forces the cumulative
+    # descent across the top MIN_CLUSTER rows to exceed the epsilon.
+    # Downward-only throughout (the avid subset invariant holds on cut
+    # frames), rank order preserved (processed in descending order), 4dp,
+    # salted (no pinning).
     n_changes = 0
     for cat, cluster in clusters:
-        # First non-cluster value = lower bound for the descent.
-        below = []
-        cluster_ids = {i for i, _, _ in cluster}
+        # Full descending list of eligible rows in the category; the
+        # cluster is its head and the re-spread region grows into this
+        # list as far as the dense staircase runs.
+        cat_rows = []
         for idx in df.index[col_u == cat]:
-            if idx in cluster_ids:
-                continue
             try:
                 v = float(str(df.at[idx, bp_col])
                           .replace('%', '').replace(',', '').strip())
             except (ValueError, TypeError):
                 continue
             if 0.0001 < v < 95.0:
-                below.append(v)
-        floor = max(below) if below else None
-
-        top_val = cluster[0][2]
-        gaps = []
-        for (idx, brand, _v) in cluster[1:]:
-            gaps.append(_jitter_for(subject, brand,
-                                    salt='convergence-respread',
-                                    lo=0.18, hi=0.85))
-        total_descent = sum(gaps)
-        if floor is not None:
-            headroom = top_val - floor - 0.05
-            if headroom <= 0.02 * len(gaps):
-                headroom = 0.02 * len(gaps) + 0.01
-            if total_descent > headroom:
-                scale = headroom / total_descent
-                gaps = [max(0.02, g * scale) for g in gaps]
+                cat_rows.append((idx, str(df.at[idx, 'Value']).strip(), v))
+        cat_rows.sort(key=lambda t: -t[2])
+        if len(cat_rows) < CONVERGENCE_MIN_CLUSTER:
+            continue
+        top_val = cat_rows[0][2]
+        # The top MIN_CLUSTER rows must end up spanning MORE than the
+        # detector epsilon. Salted so the exact span is never a cross-
+        # file constant.
+        span_target = CONVERGENCE_EPS_PP + _jitter_for(
+            subject, cat, salt='convergence-span', lo=0.04, hi=0.13)
 
         prev = top_val
-        for (idx, brand, old_v), gap in zip(cluster[1:], gaps):
+        cum = 0.0
+        for pos in range(1, len(cat_rows)):
+            idx, brand, old_v = cat_rows[pos]
+            gap = _jitter_for(subject, brand,
+                              salt='convergence-respread', lo=0.18, hi=0.85)
+            # Force the cumulative descent through the MIN_CLUSTER-th row
+            # to clear the band even when the salted gaps come in small
+            # (the dense-staircase case).
+            if pos < CONVERGENCE_MIN_CLUSTER:
+                need = (span_target - cum) / (CONVERGENCE_MIN_CLUSTER - pos)
+                if gap < need:
+                    gap = need
             new_v = round(prev - gap, 4)
+            # Past the guaranteed head, stop at the first NATURAL gap: a
+            # row already at/below the target keeps its real level and
+            # everything below it is left untouched (real adjacency).
+            if pos >= CONVERGENCE_MIN_CLUSTER and old_v <= new_v:
+                break
             if new_v <= 0.0102:
                 new_v = round(0.0102 + _jitter_for(
                     subject, brand, salt='convergence-floor',
@@ -3778,10 +3831,15 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                 new_v = round(new_v - _jitter_for(
                     subject, brand, salt='convergence-offgrid',
                     lo=0.0011, hi=0.0097), 4)
+            # Strictly below the previous row (downward-only, no tie).
+            if new_v >= prev:
+                new_v = round(prev - 0.0102 - _jitter_for(
+                    subject, brand, salt='convergence-mono',
+                    lo=0.0001, hi=0.0090), 4)
             if verbose:
                 print(f"   🪜 convergence re-spread [{cat}] {brand} "
-                      f"{old_v:.4f}% -> {new_v:.4f}% (top cluster of "
-                      f"{len(cluster)} within {CONVERGENCE_EPS_PP}pp)")
+                      f"{old_v:.4f}% -> {new_v:.4f}% (top cluster within "
+                      f"{CONVERGENCE_EPS_PP}pp)")
             _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
                     proj_col, sample_size)
             n_changes += 1
@@ -3796,6 +3854,7 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                 _set_bp(df, twin_idx, new_v, bp_col, cs_col, raw_col,
                         proj_col, sample_size)
                 n_changes += 1
+            cum = round(top_val - new_v, 4)
             prev = new_v
     return df, n_changes
 
@@ -7619,22 +7678,25 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
 
     # 2026-08-27 (Jenna): gap brands KEPT in the profile under the
     # proposed-mapping flow keep their reasoned BP - do not floor them.
-    # The purchase family (rule 0b) is excluded from the keep flow, so
-    # rows there still floor even if the brand was kept elsewhere.
+    # 2026-09-03 (Jenna, verbatim: "but they are all good suggestions
+    # and should ship and be added to the profile and the genpop file
+    # if the agent thinks it belongs in the profile"): the purchase
+    # family (MPB + rule 3b mirrors) now joins the keep flow too, so
+    # the floor-reset skip is universal for kept brands. The
+    # MPB_STRICT_CATEGORIES import is preserved as an empty-frozenset
+    # fallback so the skip logic reads uniformly across callers, but
+    # the branch that once excluded MPB is retired.
     try:
         from migration.hostmap_gap_mapping import (
             is_kept_gap_brand as _is_kept_gap,
-            MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
         )
     except ImportError:
         try:
             from hostmap_gap_mapping import (  # type: ignore
                 is_kept_gap_brand as _is_kept_gap,
-                MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
             )
         except ImportError:
             _is_kept_gap = None  # type: ignore[assignment]
-            _GAP_MPB_STRICT = frozenset()
 
     cats_u = {str(c).upper().strip() for c in categories}
     fixed = 0
@@ -7650,8 +7712,7 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
             continue
         if _is_in_hostmap(val_raw):
             continue
-        if (_is_kept_gap is not None and cat not in _GAP_MPB_STRICT
-                and _is_kept_gap(val_raw)):
+        if _is_kept_gap is not None and _is_kept_gap(val_raw):
             kept_gap_skips += 1
             continue
         old_bp = _bp(r.get(bp_col, 0))
@@ -9964,6 +10025,379 @@ def strip_youtube_from_wrong_category(df, subject, verbose=True):
 
 
 # ============================================================================
+# strip_reddit_from_social_media
+# ----------------------------------------------------------------------------
+# 2026-09-04 (Jenna, phone dictation): "Reddit is listed in social media on
+# any CSV files and delete it and make a pipeline rule no to never insert
+# Reddit in social media because it belongs in App/Platforms."
+#
+# Client observation: Reddit appeared in TWO categories on the same profile
+# (SOCIAL MEDIA + APP/PLATFORM) with different values (60.8% and 16.9% on
+# the Film Titles and Blair Witch Adjacencies cohorts). Reddit is a
+# read-and-comment community app; the workspace convention is that Reddit
+# belongs in APP/PLATFORM only, never in SOCIAL MEDIA.
+#
+# Enforcer behaviour (per rule 0a "fix in place, never re-pull"):
+#   1. Drop every SOCIAL MEDIA row whose Value normalizes to REDDIT.
+#   2. Renormalize Category Share within SOCIAL MEDIA so remaining rows
+#      still form a coherent share view.
+#   3. If Reddit is ALSO missing from APP/PLATFORM (or APP/PLATFORM USAGE)
+#      AND either of those columns already exists on the file, MOVE the
+#      SOCIAL MEDIA value across (preserves the audience-specific
+#      engagement signal). Recompute Raw + Projection off the file's
+#      sample size via _set_bp.
+#   4. If neither APP/PLATFORM nor APP/PLATFORM USAGE exists on the file
+#      (rare): drop the SOCIAL MEDIA row and log loudly. Rule #0 forbids
+#      inventing a new Column value.
+#
+# Idempotent: second run finds nothing to drop, no-op.
+# Hostmap-gated: Reddit is confirmed in reference.host_mapping (canonical
+# spelling `Reddit`), so the APP/PLATFORM insert side always passes
+# _is_in_hostmap(). Sanity check is defensive.
+# ============================================================================
+
+
+def strip_reddit_from_social_media(df, subject, verbose=True):
+    """Drop Reddit rows from SOCIAL MEDIA. If APP/PLATFORM(/USAGE) is
+    present on the file and Reddit is missing from it, move the dropped
+    value across so the audience signal is preserved. See section header
+    for the full contract.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if "Column" not in df.columns or "Value" not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cu = df["Column"].astype(str).str.strip().str.upper()
+    # _norm_brand: case + punctuation insensitive; catches 'reddit',
+    # 'Reddit', 'REDDIT', 'Reddit.com' (Rule #4 canonical spelling is
+    # 'Reddit'; hostmap sanity check via _is_in_hostmap below).
+    vu = df["Value"].apply(_norm_brand)
+    reddit_norm = _norm_brand("Reddit")
+
+    sm_mask = (cu == "SOCIAL MEDIA") & (vu == reddit_norm)
+    sm_idx = list(df[sm_mask].index)
+    if not sm_idx:
+        return df, 0
+
+    # Capture the highest-BP SOCIAL MEDIA Reddit value in case we need
+    # to move it to APP/PLATFORM.
+    best_bp = 0.0
+    dropped_details = []
+    for i in sm_idx:
+        try:
+            v = float(str(df.at[i, bp_col]).replace("%", "").strip())
+        except Exception:
+            v = 0.0
+        dropped_details.append((str(df.at[i, "Column"]),
+                                str(df.at[i, "Value"]), v))
+        if v > best_bp:
+            best_bp = v
+
+    # Is Reddit already present in APP/PLATFORM(/USAGE)?
+    app_platform_cols = {"APP/PLATFORM", "APP/PLATFORM USAGE"}
+    ap_mask = cu.isin(app_platform_cols) & (vu == reddit_norm)
+    ap_exists = bool(ap_mask.any())
+
+    # Which APP column spelling does this file use? None if neither.
+    app_col_spelling = None
+    for candidate in ("APP/PLATFORM", "APP/PLATFORM USAGE"):
+        if (cu == candidate).any():
+            app_col_spelling = str(df[cu == candidate].iloc[0]["Column"]).strip()
+            break
+
+    df = df.drop(index=sm_idx).reset_index(drop=True)
+    # SOCIAL MEDIA is NOT a demographic (rule #3) so we don't renormalize
+    # its BP total to 100. But dropping a row DOES change the category
+    # denominator, so sibling Category Share values are now stale. The
+    # StringDtype-safe helper _recompute_cs_for_cat recomputes CS ONLY.
+    # Raw + Projection on the survivors are BP*sample_size/100 and
+    # don't change - no need to touch them.
+    df = _recompute_cs_for_cat(df, "SOCIAL MEDIA", bp_col, cs_col)
+
+    moved = False
+    if not ap_exists and app_col_spelling and best_bp > 0:
+        # Rule #10 checklist: hostmap-gate the insert. Reddit is a well-
+        # known hostmap entry; failing this gate would be a hostmap
+        # regression, not a runtime issue. Skip the insert (drop-only)
+        # if the gate fails so we never invent an unknown brand row.
+        if _is_in_hostmap("Reddit"):
+            canonical = _hostmap_canonical("Reddit") or "Reddit"
+            # Build a new row shaped like the current file's columns.
+            new_row = {c: "" for c in df.columns}
+            new_row["Column"] = app_col_spelling
+            new_row["Value"] = canonical
+            df = pd.concat(
+                [df, pd.DataFrame([new_row])],
+                ignore_index=True,
+            )
+            new_idx = int(df.index[-1])
+            # _set_bp writes BP/Raw/Proj and internally recomputes CS
+            # for the whole APP/PLATFORM category via the StringDtype-
+            # safe _recompute_cs_for_cat helper. No second pass needed.
+            df = _set_bp(df, new_idx, best_bp, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            moved = True
+        else:
+            if verbose:
+                print("   ⚠️ strip_reddit_from_social_media: 'Reddit' not "
+                      "in hostmap cache; dropping SOCIAL MEDIA row without "
+                      "APP/PLATFORM move")
+
+    if verbose:
+        for col, val, bp in dropped_details:
+            print(f"   🚫 strip_reddit_from_social_media: dropped "
+                  f"{col} / {val!r}  BP={bp:.4f}  (belongs in APP/PLATFORM)")
+        if moved:
+            print(f"   ➡️  strip_reddit_from_social_media: moved value to "
+                  f"{app_col_spelling} at BP={best_bp:.4f}")
+        elif not app_col_spelling:
+            print("   ⚠️ strip_reddit_from_social_media: no APP/PLATFORM "
+                  "column on this file; SOCIAL MEDIA row dropped, audience "
+                  "signal not moved (Rule #0: never invent a new Column)")
+
+    return df, len(sm_idx) + (1 if moved else 0)
+
+
+# ============================================================================
+# Platform scope pin (2026-09-04, Jenna perceptionbox rerun)
+#
+# When a build's SUBJECT identifies a platform-scoped creator/follower
+# universe ('Perception.box YouTube Followers', 'MrBeast TikTok
+# Subscribers', 'Aggregate X Y Instagram Followers'), the defining
+# platform MUST be pinned to 100 on its row in the SOCIAL MEDIA column
+# (or APP/PLATFORM / APP/PLATFORM USAGE / STREAMING/PLATFORM as
+# fallback, in that order — the first appearing on this file wins).
+#
+# Precedent: Perception.box TikTok Followers (audit-approved 2026-09-04)
+# ships SOCIAL MEDIA -> TIKTOK at 100.0, with other platforms carrying
+# their real audience-specific engagement values. This enforcer makes
+# that pattern deterministic for every future platform-scoped build,
+# defense-in-depth against the row-by-row engine failing to elevate
+# the defining platform.
+#
+# The enforcer infers platform_scope from the SUBJECT string (case +
+# punctuation insensitive word-boundary match on the canonical
+# platform vocabulary). If the SUBJECT carries no platform token
+# (aggregate build, or non-follower universe) the enforcer no-ops.
+#
+# Never LOWERS a value — the pin is one-way to 100. Other platforms
+# on the same file keep their engine-reasoned values. Idempotent:
+# second run is a no-op when the target row is already at 100.
+# ============================================================================
+
+
+# Canonical platform vocabulary mirrors migration/creator_follower_sizing
+# ._PLATFORM_TOKENS. Kept local so the enforcer file stays importable
+# even if the creator_follower_sizing module isn't on the path.
+_PIN_PLATFORM_TOKENS = (
+    ('youtube', ('youtube', 'you tube', 'yt')),
+    ('tiktok', ('tiktok', 'tik tok', 'tt')),
+    ('instagram', ('instagram', 'insta', 'ig')),
+    ('facebook', ('facebook', 'fb')),
+    ('x', ('twitter', 'x/twitter')),
+    ('linkedin', ('linkedin',)),
+    ('twitch', ('twitch',)),
+    ('snapchat', ('snapchat', 'snap')),
+    ('threads', ('threads',)),
+    ('substack', ('substack',)),
+    ('patreon', ('patreon',)),
+    ('kick', ('kick',)),
+    ('rumble', ('rumble',)),
+    ('pinterest', ('pinterest',)),
+    ('bluesky', ('bluesky',)),
+)
+
+# Canonical DISPLAY spellings for the pin row's Value cell. These match
+# the hostmap-canonical casing used across profile files (see
+# `_hostmap_canonical` for the general path; these are the well-known
+# platform brands we hard-code because they're stable).
+_PIN_PLATFORM_DISPLAY = {
+    'youtube': 'YouTube',
+    'tiktok': 'TikTok',
+    'instagram': 'Instagram',
+    'facebook': 'Facebook',
+    'x': 'X',
+    'linkedin': 'LinkedIn',
+    'twitch': 'Twitch',
+    'snapchat': 'Snapchat',
+    'threads': 'Threads',
+    'substack': 'Substack',
+    'patreon': 'Patreon',
+    'kick': 'Kick',
+    'rumble': 'Rumble',
+    'pinterest': 'Pinterest',
+    'bluesky': 'Bluesky',
+}
+
+# Column preference order: creator/follower universes anchor in SOCIAL
+# MEDIA first (Perception.box TikTok Followers precedent). APP/PLATFORM
+# variants and STREAMING/PLATFORM are fallbacks for atypical files.
+_PIN_PLATFORM_COL_PREFERENCE = (
+    'SOCIAL MEDIA',
+    'APP/PLATFORM',
+    'APP/PLATFORM USAGE',
+    'STREAMING/PLATFORM',
+)
+
+
+def _infer_platform_scope_from_subject(subject):
+    """Return a list of canonical platform keys named in the subject
+    (case + punctuation insensitive word-boundary match), or [] when
+    no platform token appears. Multi-platform subjects ('X and Y
+    YouTube + TikTok Followers') return every distinct match."""
+    s = str(subject or '').lower()
+    if not s:
+        return []
+    # Normalize any hyphen / dot / slash into space so 'you-tube',
+    # 'you.tube', 'you/tube' all match. Keep alnum + space.
+    import re as _re_local
+    norm = _re_local.sub(r'[^a-z0-9 ]+', ' ', s)
+    norm = _re_local.sub(r'\s+', ' ', norm).strip()
+    padded = f' {norm} '
+    keys = set()
+    for key, toks in _PIN_PLATFORM_TOKENS:
+        for tok in toks:
+            # Require a space boundary on BOTH sides so 'ig' doesn't
+            # match inside 'signals' or 'fb' inside 'sofball'.
+            if f' {tok} ' in padded:
+                keys.add(key)
+                break
+    return sorted(keys)
+
+
+def pin_platform_scope_to_100(df, subject, verbose=True):
+    """Pin the platform's row to BP=100 when the SUBJECT identifies a
+    platform-scoped follower / audience universe. See section header
+    for the full contract.
+
+    Fires ONLY when:
+      * `subject` carries at least one canonical platform token, AND
+      * at least one of the preferred platform columns exists on the
+        file (SOCIAL MEDIA / APP/PLATFORM / APP/PLATFORM USAGE /
+        STREAMING/PLATFORM in that order), AND
+      * the file is a follower / audience universe (SUBJECT or BRAND
+        INPUT Value carries 'followers' / 'subscribers' / 'audience' -
+        i.e. we don't accidentally pin YouTube to 100 on 'YouTube
+        Music' or a title like 'The YouTube Effect').
+
+    Never lowers a value. Idempotent."""
+    if df is None or len(df) == 0:
+        return df, 0
+    if "Column" not in df.columns or "Value" not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    # Infer scope from subject.
+    scope = _infer_platform_scope_from_subject(subject)
+    if not scope:
+        return df, 0
+
+    # Follower / audience universe gate. Read from BOTH the passed-in
+    # `subject` (the argument this enforcer receives) AND the SUBJECT /
+    # BRAND INPUT rows on the file, so we catch every naming shape.
+    import re as _re_local
+    cu = df["Column"].astype(str).str.strip().str.upper()
+    follower_re = _re_local.compile(
+        r'\b(followers?|subscribers?|subs?|audience|viewers?|listeners?|users?)\b',
+        _re_local.IGNORECASE)
+    is_follower_universe = bool(follower_re.search(str(subject or '')))
+    if not is_follower_universe:
+        for col_up in ('SUBJECT', 'BRAND INPUT'):
+            _mask = cu == col_up
+            if _mask.any():
+                _val = str(df.loc[_mask].iloc[0].get('Value') or '')
+                if follower_re.search(_val):
+                    is_follower_universe = True
+                    break
+    if not is_follower_universe:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    # Pick the first preferred column that exists on this file.
+    target_col = None
+    for cand in _PIN_PLATFORM_COL_PREFERENCE:
+        if (cu == cand).any():
+            target_col = cand
+            break
+    if target_col is None:
+        if verbose:
+            print(f"   ⚠️ pin_platform_scope_to_100: subject {subject!r} "
+                  f"scopes to {scope} but no SOCIAL MEDIA / APP/PLATFORM / "
+                  f"STREAMING/PLATFORM column on this file; no-op "
+                  f"(Rule #0: never invent a new Column).")
+        return df, 0
+
+    # Row lookup is case + punctuation insensitive. Compare on
+    # _norm_brand so 'YOUTUBE' / 'YouTube' / 'You Tube' / 'you.tube'
+    # all resolve to the same target row.
+    vu = df["Value"].apply(_norm_brand)
+    col_mask = df["Column"].astype(str).str.strip() == target_col
+
+    n_pinned = 0
+    for pkey in scope:
+        pnorm = _norm_brand(_PIN_PLATFORM_DISPLAY.get(pkey, pkey))
+        row_mask = col_mask & (vu == pnorm)
+        # Alias: 'x' and 'twitter' fold together (same platform, two
+        # display spellings). If the file spells it 'Twitter' but our
+        # key is 'x', catch both.
+        if pkey == 'x':
+            row_mask = row_mask | (col_mask & (vu == _norm_brand('Twitter')))
+        idxs = list(df[row_mask].index)
+        if not idxs:
+            # Row doesn't exist on this file. Rule #0 forbids
+            # inventing a new Column, but a MISSING BRAND ROW inside
+            # an existing column IS a legitimate insert (hostmap-gated).
+            # Log the gap; don't force-insert - if the engine chose
+            # not to emit it, that's a per-run decision we don't
+            # override here. Layer 1 (interpret) already ensures the
+            # universe is scoped correctly.
+            if verbose:
+                print(f"   ℹ️ pin_platform_scope_to_100: subject {subject!r} "
+                      f"scopes to {pkey!r} but no matching row in "
+                      f"{target_col} column; skipped.")
+            continue
+        # Highest-BP row wins (usually the canonical spelling; the
+        # duplicate is a hostmap regression we'd fix separately).
+        best_idx = None
+        best_bp = -1.0
+        for i in idxs:
+            try:
+                v = float(str(df.at[i, bp_col]).replace('%', '').strip())
+            except (ValueError, TypeError):
+                v = 0.0
+            if v > best_bp:
+                best_bp = v
+                best_idx = i
+        if best_idx is None:
+            continue
+        if best_bp >= 100.0 - 1e-6:
+            # Already pinned; idempotent no-op.
+            continue
+        prior_bp = best_bp
+        df = _set_bp(df, best_idx, 100.0, bp_col, cs_col,
+                     raw_col, proj_col, sample_size)
+        n_pinned += 1
+        if verbose:
+            display_val = str(df.at[best_idx, 'Value']).strip()
+            print(f"   📌 pin_platform_scope_to_100: pinned "
+                  f"{target_col} / {display_val!r} 100.0 "
+                  f"(was {prior_bp:.4f}) for platform-scoped subject "
+                  f"{subject!r}")
+
+    return df, n_pinned
+
+
+# ============================================================================
 # Final format normalizer (2026-07-28 pipeline hardening rail #5)
 #
 # Catches the four defect classes flagged on WHEEL OF FORTUNE - Avid Fan.csv
@@ -10053,8 +10487,17 @@ def normalize_final_format(df, subject, verbose=True):
         if verbose:
             print(f'   [normalize_final] Fix 1b (CS %) failed: {e}')
 
-    # --- Fix 2: zero raw=0 / bp>0 phantom rows ---------------------------
+    # --- Fix 2: phantom raw=0 / bp>0 rows --------------------------------
+    # Split by category class (2026-08-29 Automotive Aftermarket hold):
+    # G12-exempt categories (metadata, demos, meta-cats like LOCATION)
+    # are ZEROED in place - their schema and sums must stay intact and
+    # the G12 detector skips them. Non-exempt brand rows are DROPPED
+    # instead: zeroing them used to mint the exact BP=0/Raw=0 signature
+    # the pre-publish gate blocks as G12 PHANTOM_ZERO, so the writer's
+    # strip pass was undone by the next safety-net normalize in an
+    # endless strip/recreate loop that ended in an upload refusal.
     zeroed_by_col = {}
+    dropped_by_col = {}
     try:
         if raw_col is not None:
             def _to_i(v):
@@ -10066,8 +10509,14 @@ def normalize_final_format(df, subject, verbose=True):
             bps  = df[bp_col].apply(_bp)
             phantom = (raws == 0) & (bps.fillna(0) > 0)
             if phantom.any():
+                _g12_exempt = METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                drop_idxs = []
                 for idx in df.index[phantom]:
                     cat = _norm_col_upper(df.at[idx, 'Column'])
+                    if cat not in _g12_exempt:
+                        dropped_by_col[cat] = dropped_by_col.get(cat, 0) + 1
+                        drop_idxs.append(idx)
+                        continue
                     zeroed_by_col[cat] = zeroed_by_col.get(cat, 0) + 1
                     # Assign strings throughout so we don't trip pandas 2.x's
                     # strict-dtype guard on object-typed columns
@@ -10080,14 +10529,26 @@ def normalize_final_format(df, subject, verbose=True):
                     df.at[idx, raw_col] = '0'
                     if proj_col is not None:
                         df.at[idx, proj_col] = '0'
-                n_zeroed = int(phantom.sum())
-                total += n_zeroed
+                if drop_idxs:
+                    df = df.drop(index=drop_idxs).reset_index(drop=True)
+                n_zeroed = sum(zeroed_by_col.values())
+                n_dropped = len(drop_idxs)
+                total += n_zeroed + n_dropped
                 if verbose:
-                    parts = ', '.join(
-                        f'{c}={n}' for c, n in sorted(zeroed_by_col.items())
-                    )
-                    print(f'   [normalize_final] zeroed {n_zeroed} phantom '
-                          f'raw=0/BP>0 row(s): {parts}')
+                    if n_zeroed:
+                        parts = ', '.join(
+                            f'{c}={n}'
+                            for c, n in sorted(zeroed_by_col.items())
+                        )
+                        print(f'   [normalize_final] zeroed {n_zeroed} '
+                              f'phantom raw=0/BP>0 exempt row(s): {parts}')
+                    if n_dropped:
+                        parts = ', '.join(
+                            f'{c}={n}'
+                            for c, n in sorted(dropped_by_col.items())
+                        )
+                        print(f'   [normalize_final] dropped {n_dropped} '
+                              f'phantom raw=0/BP>0 brand row(s): {parts}')
 
                 # Renormalize LOCATION back to 100 (LOCATION should sum to
                 # 100% by construction; zeroing phantom rows leaves a small
@@ -11494,6 +11955,8 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
         strip_url_variant_seed_rows,       # 2026-07-29 (Elton MUSICIAN/BAND) — hide URL-variant seed lists from category displays
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
+        strip_reddit_from_social_media,    # 2026-09-04 (Rule #4d, Jenna) — Reddit lives in APP/PLATFORM only, never SOCIAL MEDIA
+        pin_platform_scope_to_100,         # 2026-09-04 (Jenna perceptionbox rerun) — SOCIAL MEDIA platform row pinned to 100 on platform-scoped follower universes
         strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
         strip_corporate_parents,
@@ -17177,8 +17640,9 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     # writer blanks the entire BP column except for hard-pinned anchors,
     # leaving Category Share populated but penetration unusable. 5 files
     # in the 06-06 17:00-17:39 window had >99% of BP rows blank with
-    # samples in the 9K-35K range. Hard-fail so these never ship as
-    # "published" — they need a re-pull with a wider audience filter.
+    # samples in the 9K-35K range. Reported so the in-place repair
+    # repopulates BP from the preserved Category Share before publish
+    # (no-rebuild policy: a built frame is corrected, never re-pulled).
     try:
         n_rows = len(df)
         if n_rows >= 100:
@@ -17204,7 +17668,8 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                     f'G9 WRITER_BLANK_SMALL_SAMPLE: only '
                     f'{int(bp_populated)}/{n_rows} ({pct:.1f}%) BP rows '
                     f'populated, sample={max_sample:,} '
-                    f'(D114 writer-bug; needs re-pull with wider filter)'
+                    f'(D114 small-sample BP blanking; repopulated in place '
+                    f'from Category Share before publish)'
                 )
     except Exception as e:
         defects.append(f'G9 WRITER_BLANK_SMALL_SAMPLE: detector errored: {e}')

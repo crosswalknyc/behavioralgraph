@@ -555,9 +555,23 @@ def get_overview(title_slug: str) -> dict:
                     "phases": phases,
                     "source": "clickhouse",
                     **{k: reg_meta[k] for k in ("title_type", "terminology",
-                                                 "enabled_tabs", "brand_config")
+                                                 "enabled_tabs", "brand_config",
+                                                 "legacy_landing")
                        if k in reg_meta},
                 }
+                # `legacy_landing` (per-title opt-out from the new film
+                # landing) usually lives on the S3 snapshot's title dict,
+                # not on the registry entry. Merge it in from the snapshot
+                # when the CH path resolved the title but the registry
+                # didn't carry the flag, so the frontend gate sees it.
+                if "legacy_landing" not in out:
+                    try:
+                        _snap_for_flag = _load_normalized_snapshot(title_slug)
+                        _snap_title = ((_snap_for_flag or {}).get("title") or {})
+                        if _snap_title.get("legacy_landing") is True:
+                            out["legacy_landing"] = True
+                    except Exception:
+                        pass
                 return _apply_title_type_defaults(out)
         except Exception as e:
             logger.warning("Attribution IQ: get_overview CH failed: %s", e)
@@ -587,8 +601,15 @@ def get_overview(title_slug: str) -> dict:
             "fallback": True,
             # Snapshot carries title_type + terminology + enabled_tabs
             # when the ingest sets them (brand campaigns do; films may omit).
+            # legacy_landing is the per-title opt-out for the new film
+            # landing (Weekly Summary + Asset Table + Audience Response +
+            # Trend Module). Forwarded so the frontend gate
+            # `_iiqHasNewFilmLanding(ov)` can see it on
+            # `window.__intentIQ.overview` (introduced 2026-09-02 for
+            # Dhar Mann x Minions & Monsters).
             **{k: t.get(k) for k in ("title_type", "terminology",
-                                       "enabled_tabs", "brand_config")
+                                       "enabled_tabs", "brand_config",
+                                       "legacy_landing")
                if t.get(k) is not None},
         }
         return _apply_title_type_defaults(out)
