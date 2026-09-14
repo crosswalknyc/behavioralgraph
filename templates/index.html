@@ -123511,6 +123511,17 @@ https://www.instagram.com/p/..."></textarea>
             if (/OLDER|OVER|PLUS|\+/.test(s)) return n + 1000;
             return n;
         };
+        // Income brackets read low to high. Parse the bracket's own
+        // numbers so both label styles work ("Under $25K" / "$25-50K" and
+        // "Less than $25,000" / "$25,000 - $49,999").
+        window._piqV4IncomeRank = function(label) {
+            var s = String(label == null ? '' : label).toUpperCase().replace(/,/g, '');
+            var m = s.match(/\d+/);
+            var n = m ? Number(m[0]) : 1e9;
+            if (/UNDER|LESS THAN|BELOW/.test(s)) return n - 1e12;
+            if (/\+|OR MORE|OR ABOVE|AND UP|AND OVER|AND ABOVE|OVER/.test(s)) return n + 1e12;
+            return n;
+        };
         window._piqV4DemoLabel = function(key, raw) {
             var s = String(raw == null ? '' : raw).trim();
             if (key === 'age' && typeof getAgeDisplayLabel === 'function') {
@@ -123794,6 +123805,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 card.classList.remove('piq-no-data');
                 if (key === 'age') keys.sort(function(a, b) { return window._piqV4AgeRank(a) - window._piqV4AgeRank(b); });
+                else if (key === 'income') keys.sort(function(a, b) { return window._piqV4IncomeRank(a) - window._piqV4IncomeRank(b); });
                 else if (!keepOrder[key]) keys.sort(function(a, b) { return Number(vals[b]) - Number(vals[a]); });
                 var idxs = idxMap[key] || {};
                 var gps = gpMap[key] || {};
@@ -135189,6 +135201,9 @@ https://www.instagram.com/p/..."></textarea>
                         if (bi !== -1) return 1;
                         return (Number(buckets[b]) || 0) - (Number(buckets[a]) || 0);
                     });
+                } else if (dataCat === 'income' && typeof window._piqV4IncomeRank === 'function') {
+                    sortedKeys = [...bucketKeys].sort((a, b) =>
+                        window._piqV4IncomeRank(a) - window._piqV4IncomeRank(b));
                 } else {
                     sortedKeys = [...bucketKeys].sort((a, b) => (Number(buckets[b]) || 0) - (Number(buckets[a]) || 0));
                 }
