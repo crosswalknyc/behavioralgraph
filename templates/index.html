@@ -29822,10 +29822,418 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #trendsIQView .tiq-row-why { color: #334155 !important; opacity: 1 !important; }
             body[data-theme="light"] #trendsIQView .tiq-person-context { color: #475569; opacity: 1; }
             body[data-theme="light"] #trendsIQView .tiq-started { color: #475569; opacity: 1; }
+
+            /* ==============================================================
+               RANKERS / TRENDS - EDITORIAL LAYOUT
+               A ranked list is a magazine feature, so it is set like one:
+               a masthead, a section rail you read across, then the list
+               itself with the rank, the art and the number doing the work.
+               Brand system throughout, so the violet chrome is retired.
+               ============================================================== */
+
+            #trendsIQView {
+                font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+                --mag-ink: #E9E8E1;
+                --mag-body: #9AA09B;
+                --mag-mute: #7C878A;
+                --mag-rule: #3B3D38;
+                --mag-panel: #15252A;
+                --mag-ground: #0C1618;
+                --mag-accent: #C7F23E;
+                --mag-second: #E682FF;
+            }
+            body[data-theme="light"] #trendsIQView {
+                --mag-ink: #0C1618;
+                --mag-body: #5C6560;
+                --mag-mute: #888C89;
+                --mag-rule: #C9C6BA;
+                --mag-panel: #FFFFFF;
+                --mag-ground: #F4F3EE;
+                --mag-accent: #5E7E12;
+                --mag-second: #8E3FA8;
+            }
+
+            /* ---- Masthead ------------------------------------------------ */
+            #trendsIQView .tiq-header {
+                gap: 0 !important;
+                padding-bottom: 18px;
+                margin-bottom: 18px !important;
+                border-bottom: 1px solid var(--mag-rule);
+            }
+            #trendsIQView .tiq-title {
+                font-size: 34px !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.03em !important;
+                line-height: 1.05 !important;
+                color: var(--mag-ink) !important;
+                text-transform: none !important;
+                margin: 0 0 8px !important;
+            }
+            #trendsIQView .tiq-title span {
+                display: block;
+                margin: 8px 0 0 !important;
+                font-size: 11px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.16em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-subtitle {
+                font-size: 13.5px !important;
+                line-height: 1.55 !important;
+                color: var(--mag-body) !important;
+                text-transform: none !important;
+                max-width: 62ch;
+                margin: 0 !important;
+            }
+
+            /* ---- Toolbar. Quiet rules, not a filled slab. ---------------- */
+            #trendsIQView .tiq-filter-bar {
+                background: transparent !important;
+                border: 0 !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                border-radius: 0 !important;
+                padding: 0 0 16px !important;
+                margin-bottom: 14px !important;
+                align-items: flex-end !important;
+            }
+            #trendsIQView .tiq-filter-bar label {
+                font-size: 9.5px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.16em !important;
+                color: var(--mag-mute) !important;
+                margin-bottom: 6px !important;
+            }
+            #trendsIQView .tiq-filter-bar select,
+            #trendsIQView .tiq-filter-bar input {
+                background: var(--mag-ground) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 8px !important;
+                color: var(--mag-ink) !important;
+                font-family: inherit !important;
+                font-size: 12.5px !important;
+                padding: 8px 10px !important;
+            }
+            #trendsIQView .tiq-filter-bar select:focus,
+            #trendsIQView .tiq-filter-bar input:focus {
+                outline: none;
+                border-color: var(--mag-accent) !important;
+            }
+            #trendsIQView .tiq-filter-bar button {
+                background: var(--mag-accent) !important;
+                color: #0C1618 !important;
+                border: 0 !important;
+                border-radius: 8px !important;
+                font-family: inherit !important;
+                font-size: 10.5px !important;
+                font-weight: 800 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                padding: 9px 16px !important;
+                cursor: pointer;
+            }
+            body[data-theme="light"] #trendsIQView .tiq-filter-bar button { color: #E9E8E1 !important; }
+            #trendsIQView .tiq-filter-bar button[onclick*="tiqResetAsOf"] {
+                background: transparent !important;
+                color: var(--mag-mute) !important;
+                border: 1px solid var(--mag-rule) !important;
+            }
+
+            /* ---- Dateline ------------------------------------------------ */
+            #trendsIQView .tiq-meta {
+                font-size: 10px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.14em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+                margin-bottom: 16px !important;
+            }
+            #trendsIQView .tiq-refresh-btn {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 7px !important;
+                color: var(--mag-body) !important;
+                font-family: inherit !important;
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                padding: 6px 11px !important;
+            }
+            #trendsIQView .tiq-refresh-btn:hover {
+                background: transparent !important;
+                border-color: var(--mag-accent) !important;
+                color: var(--mag-ink) !important;
+            }
+
+            /* ---- Section rail. Read across the top like a contents page. -- */
+            #trendsIQView .tiq-tabstrip {
+                gap: 26px !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                padding: 0 !important;
+                margin-bottom: 20px !important;
+            }
+            #trendsIQView .tiq-tab {
+                background: transparent !important;
+                border: 0 !important;
+                border-bottom: 2px solid transparent !important;
+                border-radius: 0 !important;
+                padding: 0 0 11px !important;
+                gap: 7px !important;
+                font-size: 12px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+                transition: color 140ms ease, border-color 140ms ease;
+            }
+            #trendsIQView .tiq-tab:hover { color: var(--mag-ink) !important; background: transparent !important; }
+            #trendsIQView .tiq-tab.active {
+                background: transparent !important;
+                color: var(--mag-ink) !important;
+                border-bottom-color: var(--mag-accent) !important;
+            }
+            /* The count rides as a small numeral, not a filled badge. */
+            #trendsIQView .tiq-tab .tiq-tab-count,
+            #trendsIQView .tiq-tab .tiq-count,
+            #trendsIQView .tiq-tab > span:last-child:not(:first-child) {
+                background: transparent !important;
+                border: 0 !important;
+                padding: 0 !important;
+                font-size: 10px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.04em !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-tab.active > span:last-child:not(:first-child) { color: var(--mag-accent) !important; }
+
+            /* ---- Provider pills ------------------------------------------ */
+            #trendsIQView .tiq-social-tabs,
+            #trendsIQView .tiq-retailer-tabs { gap: 7px !important; margin-bottom: 16px !important; }
+            #trendsIQView .tiq-social-tab,
+            #trendsIQView .tiq-retailer-tab {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 999px !important;
+                padding: 7px 14px !important;
+                font-size: 10.5px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-body) !important;
+                transition: border-color 140ms ease, color 140ms ease;
+            }
+            #trendsIQView .tiq-social-tab:hover,
+            #trendsIQView .tiq-retailer-tab:hover { border-color: var(--mag-mute) !important; color: var(--mag-ink) !important; background: transparent !important; }
+            #trendsIQView .tiq-social-tab.active,
+            #trendsIQView .tiq-retailer-tab.active {
+                background: var(--mag-accent) !important;
+                color: #0C1618 !important;
+                border-color: var(--mag-accent) !important;
+            }
+            body[data-theme="light"] #trendsIQView .tiq-social-tab.active,
+            body[data-theme="light"] #trendsIQView .tiq-retailer-tab.active { color: #E9E8E1 !important; }
+
+            /* ---- Search -------------------------------------------------- */
+            #trendsIQView .tiq-card-search {
+                background: var(--mag-ground) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 9px !important;
+                color: var(--mag-ink) !important;
+                font-family: inherit !important;
+                font-size: 13px !important;
+                padding: 10px 13px !important;
+            }
+            #trendsIQView .tiq-card-search:focus { outline: none; border-color: var(--mag-accent) !important; }
+            #trendsIQView .tiq-card-search-count {
+                font-size: 10px !important;
+                letter-spacing: 0.12em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-card-sub {
+                font-size: 11.5px !important;
+                line-height: 1.5 !important;
+                color: var(--mag-mute) !important;
+                text-transform: none !important;
+                margin-bottom: 14px !important;
+            }
+
+            /* ---- The feature card ---------------------------------------- */
+            #trendsIQView .tiq-cards-grid { gap: 18px !important; }
+            #trendsIQView .tiq-card {
+                background: var(--mag-panel) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 14px !important;
+                padding: 18px 20px 8px !important;
+                gap: 0 !important;
+            }
+            #trendsIQView .tiq-sheet-cardhead {
+                align-items: baseline !important;
+                padding-bottom: 12px;
+                margin-bottom: 4px !important;
+                border-bottom: 1px solid var(--mag-rule);
+            }
+            #trendsIQView .tiq-card h4,
+            #trendsIQView .tiq-sheet-cardhead h4 {
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                letter-spacing: 0.16em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-ink) !important;
+                gap: 8px !important;
+            }
+            #trendsIQView .tiq-sheet-cardhead h4::before {
+                content: '';
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--mag-accent);
+                flex: 0 0 auto;
+            }
+            #trendsIQView .tiq-export-btn {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 7px !important;
+                color: var(--mag-mute) !important;
+                font-size: 9.5px !important;
+                letter-spacing: 0.12em !important;
+                padding: 5px 9px !important;
+            }
+            #trendsIQView .tiq-export-btn:hover { border-color: var(--mag-accent) !important; color: var(--mag-ink) !important; }
+            #trendsIQView .tiq-export-menu {
+                background: var(--mag-panel) !important;
+                border-color: var(--mag-rule) !important;
+                border-radius: 10px !important;
+            }
+            #trendsIQView .tiq-export-menu button { font-size: 11.5px !important; color: var(--mag-ink) !important; }
+
+            /* ---- The ranked list ----------------------------------------- */
+            #trendsIQView .tiq-sheet thead th {
+                font-size: 9.5px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.16em !important;
+                color: var(--mag-mute) !important;
+                border-bottom: 0 !important;
+                padding: 10px 6px 12px !important;
+            }
+            #trendsIQView .tiq-sheet th.sort-asc .tiq-sort-ind,
+            #trendsIQView .tiq-sheet th.sort-desc .tiq-sort-ind { color: var(--mag-accent) !important; }
+            #trendsIQView .tiq-sheet tbody td {
+                padding: 11px 6px !important;
+                border-bottom: 1px solid rgba(233, 232, 225, 0.07) !important;
+            }
+            body[data-theme="light"] #trendsIQView .tiq-sheet tbody td { border-bottom-color: rgba(12, 22, 24, 0.07) !important; }
+            #trendsIQView .tiq-sheet tbody tr:hover td { background: rgba(233, 232, 225, 0.035) !important; }
+            body[data-theme="light"] #trendsIQView .tiq-sheet tbody tr:hover td { background: rgba(12, 22, 24, 0.03) !important; }
+            #trendsIQView .tiq-sheet-titlecell { gap: 13px !important; }
+            /* The rank is set large and light, the way a countdown reads. */
+            #trendsIQView .tiq-sheet-rank {
+                min-width: 26px !important;
+                font-size: 19px !important;
+                font-weight: 300 !important;
+                letter-spacing: -0.03em !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-sheet tbody tr:nth-child(-n+3) .tiq-sheet-rank {
+                color: var(--mag-accent) !important;
+                font-weight: 500 !important;
+            }
+            #trendsIQView .tiq-sheet .tiq-poster-image {
+                flex: 0 0 42px !important;
+                width: 42px !important;
+                height: 60px !important;
+                border-radius: 5px;
+                overflow: hidden;
+            }
+            #trendsIQView .tiq-sheet .tiq-poster-image img { border-radius: 5px; }
+            /* Titles read in their own case. Only labels are shouted. */
+            #trendsIQView .tiq-row-title,
+            #trendsIQView .tiq-sheet-titlemain .tiq-row-title {
+                font-size: 13.5px !important;
+                font-weight: 700 !important;
+                letter-spacing: -0.01em !important;
+                line-height: 1.3 !important;
+                color: var(--mag-ink) !important;
+                text-transform: none !important;
+            }
+            #trendsIQView .tiq-row-title a:hover { color: var(--mag-accent) !important; }
+            #trendsIQView .tiq-sheet-subline,
+            #trendsIQView .tiq-row-meta {
+                font-size: 9.5px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+                margin-top: 5px !important;
+            }
+            #trendsIQView .tiq-sheet-dim { color: var(--mag-mute) !important; font-weight: 500 !important; }
+            #trendsIQView .tiq-sheet .tiq-sheet-td-num {
+                font-size: 14px !important;
+                font-weight: 700 !important;
+                letter-spacing: -0.015em !important;
+                color: var(--mag-ink) !important;
+            }
+            /* Direction carries the read, so green rises and orchid falls. */
+            #trendsIQView .tiq-sheet-delta { font-size: 11.5px !important; font-weight: 700 !important; }
+            #trendsIQView .tiq-sheet-delta.up { color: var(--mag-accent) !important; }
+            #trendsIQView .tiq-sheet-delta.down { color: var(--mag-second) !important; }
+            #trendsIQView .tiq-sheet-delta.flat { color: var(--mag-mute) !important; }
+            #trendsIQView .tiq-sheet-delta.new { color: #B7B3D8 !important; letter-spacing: 0.1em !important; }
+            #trendsIQView .tiq-sheet-tag {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                color: var(--mag-mute) !important;
+                font-size: 9px !important;
+                letter-spacing: 0.1em !important;
+                padding: 2px 8px !important;
+            }
+            #trendsIQView .tiq-chip {
+                background: transparent !important;
+                border-color: var(--mag-rule) !important;
+                color: var(--mag-body) !important;
+                font-size: 9.5px !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                padding: 3px 10px !important;
+            }
+            #trendsIQView .tiq-chip:hover { background: transparent !important; border-color: var(--mag-accent) !important; color: var(--mag-ink) !important; }
+
+            /* In-header sort selects sit quietly next to the column label. */
+            #trendsIQView .tiq-sheet-titlesort,
+            #trendsIQView .tiq-sheet-genresort,
+            #trendsIQView .tiq-sheet-yearsort {
+                background: transparent !important;
+                border-color: var(--mag-rule) !important;
+                color: var(--mag-body) !important;
+                border-radius: 5px !important;
+            }
+            #trendsIQView .tiq-sheet-titlesort option,
+            #trendsIQView .tiq-sheet-genresort option,
+            #trendsIQView .tiq-sheet-yearsort option { background: var(--mag-panel) !important; color: var(--mag-ink) !important; }
+
+            /* ---- Row actions --------------------------------------------- */
+            #trendsIQView .tiq-action-btn { border-color: var(--mag-rule) !important; color: var(--mag-mute) !important; }
+            #trendsIQView .tiq-action-btn:hover { border-color: var(--mag-accent) !important; color: var(--mag-accent) !important; }
+            #trendsIQView .tiq-actions { opacity: 0 !important; transition: opacity 140ms ease; }
+            #trendsIQView .tiq-sheet tbody tr:hover .tiq-actions,
+            #trendsIQView .tiq-row:hover .tiq-actions,
+            #trendsIQView .tiq-person-card:hover .tiq-actions { opacity: 1 !important; }
+
+            /* ---- Person / row cards in the other sections ---------------- */
+            #trendsIQView .tiq-row { padding: 11px 0 !important; border-bottom: 1px solid rgba(233, 232, 225, 0.07) !important; gap: 12px !important; }
+            body[data-theme="light"] #trendsIQView .tiq-row { border-bottom-color: rgba(12, 22, 24, 0.07) !important; }
+            #trendsIQView .tiq-empty,
+            #trendsIQView .tiq-placeholder {
+                background: transparent !important;
+                border: 1px dashed var(--mag-rule) !important;
+                border-radius: 12px !important;
+                color: var(--mag-mute) !important;
+            }
         </style>
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
-                <h2 class="tiq-title" id="trendsIQTitle">📈 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span></h2>
+                <h2 class="tiq-title" id="trendsIQTitle">Trends.<span>Culture trends tracker</span></h2>
                 <p class="tiq-subtitle">Who and what are trending across media search, news, and retail right now.</p>
                 <!--
                     Trends IQ ships its own HOVER ON/OFF toggle in the top-
@@ -64945,9 +65353,9 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('trendsIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
             var _rTitle = document.getElementById('trendsIQTitle');
-            if (_rTitle) _rTitle.innerHTML = '\uD83D\uDCCA Rankers';
+            if (_rTitle) _rTitle.innerHTML = 'Rankers.<span>What the panel watched, played and listened to</span>';
             var _rSub = document.querySelector('#trendsIQView .tiq-subtitle');
-            if (_rSub) _rSub.textContent = 'Ranking trending music, podcasts, streaming, FAST, and gaming';
+            if (_rSub) _rSub.textContent = 'Every title ranked by yesterday\u2019s US views across music, podcasts, streaming, FAST and gaming. Pick a section, then a service. Tap any column to re-sort.';
             try {
                 var hoverOn = localStorage.getItem('bg_hover_enabled') !== 'false';
                 var l = document.getElementById('trendsIQHoverToggleLabel');
