@@ -173313,9 +173313,10 @@ https://www.instagram.com/p/..."></textarea>
     /* Export rides on the section rail instead of owning a row. The row
        is full width, so it must not take the pointer or it covers the
        five section tabs underneath it. Only the control is clickable. */
+    #trendsIQPanels { position: relative; }
     #trendsIQView .tiq-panel-actions {
-        margin: -51px 0 0 !important;
-        position: relative; z-index: 2;
+        position: absolute; top: -51px; right: 0;
+        margin: 0 !important; z-index: 2;
         pointer-events: none;
     }
     #trendsIQView .tiq-panel-actions > * { pointer-events: auto; }
