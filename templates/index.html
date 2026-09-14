@@ -172974,8 +172974,57 @@ https://www.instagram.com/p/..."></textarea>
        the brand-system products it matches the view so no navy edge
        shows. Products still on the legacy navy panels keep the navy
        ground so their cards do not sit stranded on Graphite. */
-    body[data-ground="graphite"] { background: #0C1618 !important; }
+    body[data-ground="graphite"] { background: var(--cw-page) !important; }
     body[data-theme="light"][data-ground="graphite"] { background: #E9E8E1 !important; }
+
+    /* ------------------------------------------------------------------
+       Dark surface ramp. The ground used to sit on the darkest value in
+       the system with panels a hair above it, which reads as one flat
+       black sheet rather than depth. Lift the ground a step, open the
+       gap to the raised surface, and put every hairline on the
+       documented dashboard border instead of Pavement, which goes muddy
+       against teal. Type and accent contrast are unchanged.
+       ------------------------------------------------------------------ */
+    :root {
+        --cw-page: #111F22;
+        --cw-raised: #1B2E34;
+        --cw-input: #22383F;
+        --cw-border: #2C4148;
+    }
+    #dashboardView.piq-v4,
+    #trendsIQView,
+    #microdramasIQView {
+        --bg-dark: var(--cw-page);
+        --bg-primary: var(--cw-page);
+        --bg-secondary: var(--cw-raised);
+        --bg-card: var(--cw-raised);
+        --bg-input: var(--cw-input);
+        --border-color: var(--cw-border);
+        background: var(--cw-page) !important;
+    }
+    /* The editorial views drive most of their styling off these. */
+    #trendsIQView,
+    #microdramasIQView {
+        --mag-ground: var(--cw-page);
+        --mag-panel: var(--cw-raised);
+        --mag-rule: var(--cw-border);
+    }
+    /* Row separators inside dense tables track the same lift. */
+    #trendsIQView .tiq-sheet tbody td,
+    #trendsIQView .tiq-row {
+        border-bottom-color: rgba(233, 232, 225, 0.10) !important;
+    }
+    body[data-theme="light"] #dashboardView.piq-v4,
+    body[data-theme="light"] #trendsIQView,
+    body[data-theme="light"] #microdramasIQView {
+        --bg-dark: #E9E8E1;
+        --bg-primary: #E9E8E1;
+        --bg-secondary: #FFFFFF;
+        --bg-card: #FFFFFF;
+        --bg-input: #FFFFFF;
+        --border-color: #C9C6BA;
+        background: #E9E8E1 !important;
+    }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
