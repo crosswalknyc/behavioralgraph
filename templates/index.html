@@ -61670,7 +61670,6 @@ https://www.instagram.com/p/..."></textarea>
                         _tiqActions('headline', 'gdelt', r.title, r.title, r.geo || 'National') + '</div>' +
                         '<div class="tiq-row-meta"><span class="tiq-badge">' + _tiqEsc(r.source || '') + '</span>' +
                         _tiqAudienceChip(r.us_readers) +
-                        (r.seendate ? '<span>' + _tiqEsc(r.seendate) + '</span>' : '') +
                         '</div></div></div>';
             });
             html += '</div></div>';
@@ -61697,7 +61696,6 @@ https://www.instagram.com/p/..."></textarea>
                         var bySrcAudChip = _tiqAudienceChip(a.us_readers);
                         var bySrcMeta = '';
                         if (bySrcAudChip) bySrcMeta += bySrcAudChip;
-                        if (a.seendate) bySrcMeta += '<span>' + _tiqEsc(a.seendate) + '</span>';
                         html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                 '<div class="tiq-row-body">' +
                                 '<div class="tiq-row-title"><a href="' + _tiqEsc(a.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(a.title) + '</a></div>' +
@@ -61735,9 +61733,6 @@ https://www.instagram.com/p/..."></textarea>
                 // _annotate_headlines_with_readers in trends_iq.py.
                 var philReaderChip = _tiqAudienceChip(r.us_readers);
                 if (philReaderChip) meta += philReaderChip;
-                if (r.published) {
-                    meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
-                }
                 html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                         '<div class="tiq-row-body">' +
                         '<div class="tiq-row-title">' +
@@ -61771,9 +61766,6 @@ https://www.instagram.com/p/..."></textarea>
                 // _annotate_headlines_with_readers in trends_iq.py.
                 var bizReaderChip = _tiqAudienceChip(r.us_readers);
                 if (bizReaderChip) meta += bizReaderChip;
-                if (r.published) {
-                    meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
-                }
                 html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                         '<div class="tiq-row-body">' +
                         '<div class="tiq-row-title">' +
@@ -61815,9 +61807,6 @@ https://www.instagram.com/p/..."></textarea>
                     : '';
                 var readerChip = _tiqAudienceChip(r.us_readers);
                 if (readerChip) meta += readerChip;
-                if (r.published) {
-                    meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
-                }
                 html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                         '<div class="tiq-row-body">' +
                         '<div class="tiq-row-title">' +
