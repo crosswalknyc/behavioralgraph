@@ -11430,6 +11430,136 @@
             margin-bottom: 1rem;
         }
 
+
+        /* ---- Compare tab loading -------------------------------------- */
+        /* Same language as the dashboard boot screen: mark, title, one
+           progress track, and a numbered step per profile being read. */
+        .cmp-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 64px 24px 72px;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #E9E8E1;
+        }
+        body[data-theme="light"] .cmp-loading { color: #0C1618; }
+        .cmp-loading-mark {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3358FF, #E682FF);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            box-shadow: 0 16px 40px rgba(51, 88, 255, 0.28);
+        }
+        .cmp-loading-word {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+        .cmp-loading-title {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin: 0 0 10px;
+        }
+        .cmp-loading-sub {
+            font-size: 14px;
+            color: #9AA09B;
+            margin: 0 0 26px;
+            min-height: 1.2em;
+        }
+        body[data-theme="light"] .cmp-loading-sub { color: #5C6560; }
+        .cmp-loading-progress {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            width: min(420px, 100%);
+            margin: 0 auto 32px;
+        }
+        .cmp-loading-track {
+            flex: 1 1 auto;
+            height: 2px;
+            background: #3B3D38;
+            overflow: hidden;
+        }
+        body[data-theme="light"] .cmp-loading-track { background: rgba(12, 22, 24, 0.12); }
+        .cmp-loading-fill {
+            height: 100%;
+            background: #C7F23E;
+            transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        body[data-theme="light"] .cmp-loading-fill { background: #5E7E12; }
+        .cmp-loading-pct {
+            font-size: 13px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: #C7F23E;
+            min-width: 34px;
+            text-align: right;
+            letter-spacing: -0.01em;
+        }
+        body[data-theme="light"] .cmp-loading-pct { color: #5E7E12; }
+        .cmp-loading-steps {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px 26px;
+            max-width: 720px;
+        }
+        .cmp-loading-steps li {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11.5px;
+            font-weight: 500;
+            letter-spacing: -0.005em;
+            color: #7C878A;
+        }
+        .cmp-loading-steps li.step-active { color: #E9E8E1; font-weight: 700; }
+        body[data-theme="light"] .cmp-loading-steps li.step-active { color: #0C1618; }
+        .cmp-loading-steps li.step-done { color: #9AA09B; }
+        body[data-theme="light"] .cmp-loading-steps li.step-done { color: #5C6560; }
+        .cmp-loading-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 1px solid #3B3D38;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0;
+            color: #7C878A;
+            flex: 0 0 20px;
+        }
+        body[data-theme="light"] .cmp-loading-num { border-color: #C9C6BA; }
+        .cmp-loading-steps li.step-active .cmp-loading-num {
+            border-color: #C7F23E;
+            color: #C7F23E;
+        }
+        body[data-theme="light"] .cmp-loading-steps li.step-active .cmp-loading-num {
+            border-color: #5E7E12;
+            color: #5E7E12;
+        }
+        .cmp-loading-steps li.step-done .cmp-loading-num {
+            border-color: rgba(199, 242, 62, 0.45);
+            color: #C7F23E;
+        }
+        body[data-theme="light"] .cmp-loading-steps li.step-done .cmp-loading-num {
+            border-color: rgba(94, 126, 18, 0.45);
+            color: #5E7E12;
+        }
         .comparison-empty {
             display: flex;
             align-items: center;
@@ -154711,6 +154841,48 @@ https://www.instagram.com/p/..."></textarea>
             renderProfileSelectList(profiles);
         }
 
+
+        // Compare loading state. Mirrors the dashboard boot screen so the
+        // wait reads like the rest of the product instead of a bare line of
+        // text with a filename in it.
+        function _cmpLoadingName(id) {
+            let s = String(id == null ? '' : id).replace(/\.csv$/i, '');
+            s = s.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+            s = s.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+            if (typeof window._piqV4PrettyName === 'function') {
+                try { s = window._piqV4PrettyName(s) || s; } catch (_e) {}
+            }
+            return s;
+        }
+        function _cmpRenderLoading(container, ids, idx) {
+            if (!container) return;
+            const total = Math.max(1, ids.length);
+            const pct = Math.round((idx / total) * 100);
+            const current = _cmpLoadingName(ids[idx] || '');
+            const steps = ids.map((id, i) => {
+                const state = i < idx ? 'step-done' : (i === idx ? 'step-active' : '');
+                const num = (i + 1 < 10 ? '0' : '') + (i + 1);
+                const nm = _cmpLoadingName(id).replace(/</g, '&lt;');
+                return '<li class="' + state + '"><span class="cmp-loading-num">' + num + '</span><span>' + nm + '</span></li>';
+            }).join('');
+            container.innerHTML =
+                '<div class="cmp-loading" role="status" aria-live="polite">' +
+                    '<div class="cmp-loading-mark" aria-hidden="true">' +
+                        '<svg width="26" height="26" viewBox="0 0 64 64"><g transform="skewX(-14)" fill="#E9E8E1">' +
+                        '<rect x="24" y="10" width="8.5" height="44" rx="1.75"/>' +
+                        '<rect x="37" y="10" width="8.5" height="44" rx="1.75"/>' +
+                        '<rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>' +
+                    '</div>' +
+                    '<div class="cmp-loading-word">Crosswalk</div>' +
+                    '<div class="cmp-loading-title">Building your comparison.</div>' +
+                    '<div class="cmp-loading-sub">Reading ' + (current || 'the next profile').replace(/</g, '&lt;') + '</div>' +
+                    '<div class="cmp-loading-progress">' +
+                        '<div class="cmp-loading-track"><div class="cmp-loading-fill" style="width:' + pct + '%"></div></div>' +
+                        '<div class="cmp-loading-pct">' + pct + '%</div>' +
+                    '</div>' +
+                    '<ul class="cmp-loading-steps">' + steps + '</ul>' +
+                '</div>';
+        }
         async function selectSingleProfile(id) {
             selectedSingleProfile = id;
             loadProfileSelectList(); // Update selection UI
@@ -155307,7 +155479,7 @@ https://www.instagram.com/p/..."></textarea>
             
             for (let idx = 0; idx < selectedIds.length; idx++) {
                 const id = selectedIds[idx];
-                resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading profile ${idx + 1} of ${selectedIds.length}...</p><p style="font-size: 0.75rem; color: var(--text-secondary);">${id}</p></div>`;
+                _cmpRenderLoading(resultsContainer, selectedIds, idx);
                 
                 // Check if this is a segment profile (virtual profile from segment builder)
                 // First check persistent storage, then comparisonProfiles
