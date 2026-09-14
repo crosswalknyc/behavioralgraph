@@ -55,6 +55,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -144,24 +145,47 @@ def get_token(env=None):
     return j.get("access_token")
 
 
-def api_get(path, token, **params):
+def api_get(path, token, _tries=5, **params):
+    """GET a Spotify API path. Retries transient failures (HTTP 429 rate limit,
+    5xx, and network hiccups) with a short backoff so callers get a clean JSON."""
     q = ("?" + urllib.parse.urlencode(params)) if params else ""
     url = API + path + q
-    _, j = _request(url, headers={"User-Agent": UA,
-                                  "Authorization": "Bearer %s" % token})
+    headers = {"User-Agent": UA, "Authorization": "Bearer %s" % token}
+    j = {}
+    for attempt in range(_tries):
+        code, j = _request(url, headers=headers)
+        if code == 200:
+            return j
+        if code == 429:                       # rate limited — honour a short wait
+            time.sleep(min(2.0 * (attempt + 1), 8.0))
+            continue
+        if code is None or (isinstance(code, int) and code >= 500):
+            time.sleep(1.0 * (attempt + 1))
+            continue
+        return j                              # 4xx (non-429): don't spin
     return j
 
 
 # ── discovery + enumeration ───────────────────────────────────────────────────
-def find_show(name, token):
-    """(show_id, show_name) for the best case-insensitive show match, or (None,None)."""
-    j = api_get("/search", token, q=name, type="show", market=MARKET, limit=20)
-    items = ((j.get("shows") or {}).get("items")) or []
-    items = [it for it in items if it and it.get("id")]
-    if not items:
-        return None, None
-    best = max(items, key=lambda it: similarity(name, it.get("name", "")))
-    return best.get("id"), best.get("name")
+def find_show(name, token, _tries=5):
+    """(show_id, show_name) for the best case-insensitive show match, or (None,None).
+
+    Spotify's Client-Credentials search intermittently returns an empty `items`
+    array (with a non-zero `total`) from some backends, so we retry a few times
+    before concluding a show truly isn't there."""
+    for attempt in range(_tries):
+        # NOTE: Spotify's /search caps `limit` at 10 for this access mode
+        # (limit>=20 -> HTTP 400 "Invalid limit"); episodes paging still uses 50.
+        j = api_get("/search", token, q=name, type="show", market=MARKET, limit=10)
+        shows = j.get("shows") or {}
+        items = [it for it in (shows.get("items") or []) if it and it.get("id")]
+        if items:
+            best = max(items, key=lambda it: similarity(name, it.get("name", "")))
+            return best.get("id"), best.get("name")
+        if not shows.get("total"):            # genuinely no results
+            return None, None
+        time.sleep(1.0 * (attempt + 1))       # total>0 but empty page -> retry
+    return None, None
 
 
 def show_name(show_id, token):
@@ -170,23 +194,38 @@ def show_name(show_id, token):
 
 
 def show_episodes(show_id, token, limit=50):
-    """Every episode of a show as [(episode_id, name)], in Spotify's order."""
-    out, offset = [], 0
+    """Every episode of a show as [(episode_id, name)], in Spotify's order.
+
+    Tolerant of Spotify's Client-Credentials flakiness: a page that comes back
+    empty while more episodes remain (offset < total) is retried before we
+    accept it, so we don't silently truncate a show."""
+    out, offset, total = [], 0, None
     while True:
-        j = api_get("/shows/%s/episodes" % show_id, token,
-                    market=MARKET, limit=limit, offset=offset)
-        items = j.get("items")
-        if items is None:                     # error / bad token
+        items, page_total, has_next = None, None, False
+        for attempt in range(5):              # per-page retry on empty/transient
+            j = api_get("/shows/%s/episodes" % show_id, token,
+                        market=MARKET, limit=limit, offset=offset)
+            items = j.get("items")
+            page_total = j.get("total")
+            has_next = bool(j.get("next"))
+            if items:                         # got a non-empty page
+                break
+            if items is None:                 # hard error / bad token
+                break
+            if not page_total or offset >= page_total:
+                break                         # legitimately no more episodes
+            time.sleep(1.0 * (attempt + 1))   # empty but more remain -> retry
+        if not items:
             break
-        got = 0
+        if page_total is not None:
+            total = page_total
         for it in items:
             if it and it.get("id"):
                 out.append((it["id"], it.get("name", "")))
-                got += 1
         offset += len(items)
-        if not j.get("next") or got == 0 and not items:
+        if not has_next:
             break
-        if offset >= (j.get("total") or offset):
+        if total is not None and offset >= total:
             break
     return out
 
@@ -250,7 +289,7 @@ def resolve(title=None, url=None, kind="series", seasons=None):
     # 2) movie by title -> single best-matching episode
     if kind == "movie" and title:
         j = api_get("/search", token, q=title, type="episode",
-                    market=MARKET, limit=20)
+                    market=MARKET, limit=10)   # /search caps at 10 (see find_show)
         items = ((j.get("episodes") or {}).get("items")) or []
         items = [it for it in items if it and it.get("id")]
         if not items:
