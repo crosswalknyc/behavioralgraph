@@ -130,6 +130,7 @@ RESOLVER_PLATFORMS = {
     "spotify": {"label": "Spotify", "module": "spotify_episode_identifier"},
     "applepodcasts": {"label": "Apple Podcasts",
                       "module": "apple_podcasts_identifier"},
+    "iheart": {"label": "iHeart", "module": "iheart_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -150,15 +151,16 @@ RESOLVER_MODULE = {
     "youtube": "youtube_episode_identifier",
     "spotify": "spotify_episode_identifier",
     "applepodcasts": "apple_podcasts_identifier",
+    "iheart": "iheart_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
-                      "youtube", "spotify", "applepodcasts"}
+                      "youtube", "spotify", "applepodcasts", "iheart"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
-                  "britbox", "youtube", "spotify", "applepodcasts"]
+                  "britbox", "youtube", "spotify", "applepodcasts", "iheart"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -463,6 +465,8 @@ def choose_platform() -> str:
             tag = "direct · API key · every episode URL"
         elif key == "applepodcasts":
             tag = "direct · no login · every episode URL"
+        elif key == "iheart":
+            tag = "direct · no login · every episode URL"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -590,6 +594,9 @@ def main() -> int:
         elif platform == "applepodcasts":
             print(f"Resolving {label} — every episode URL via Apple's public "
                   f"iTunes API (no login) ...")
+        elif platform == "iheart":
+            print(f"Resolving {label} — every episode URL via iHeart's public "
+                  f"API (no login) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
