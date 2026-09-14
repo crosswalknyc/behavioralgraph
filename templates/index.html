@@ -61375,18 +61375,11 @@ https://www.instagram.com/p/..."></textarea>
                     innerCards[ic].setAttribute('data-tiq-search-consolidated', '1');
                 }
                 var splitWrap = _tiqBuildCardSearchWidget(splitPanel);
-                // The controls filter the board, so they sit with it
-                // rather than above the shelf. Anchor on the board's
-                // section head when there is one; panels without a
-                // shelf keep the widget at the top as before.
+                // The controls filter the board, so they sit under its
+                // heading, directly above the table they act on. Panels
+                // with no board keep the widget at the top as before.
                 var splitBoard = splitPanel.querySelector(':scope > .tiq-board');
-                var splitAnchor = null;
-                if (splitBoard) {
-                    var splitPrev = splitBoard.previousElementSibling;
-                    splitAnchor = (splitPrev && splitPrev.classList.contains('tiq-sec-head'))
-                                    ? splitPrev : splitBoard;
-                }
-                if (!splitAnchor) splitAnchor = splitPanel.firstChild;
+                var splitAnchor = splitBoard || splitPanel.firstChild;
                 if (splitAnchor) {
                     splitPanel.insertBefore(splitWrap, splitAnchor);
                 } else {
