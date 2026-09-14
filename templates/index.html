@@ -29698,6 +29698,7 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
             #trendsIQView .tiq-sheet-genresort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-genresort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
+            #trendsIQView .tiq-sheet-genresort.tiq-chan-typesel { width: auto; min-width: 6.4rem; max-width: 11rem; text-align: left; text-align-last: left; padding-right: 6px; }
             #trendsIQView .tiq-sheet-yearsort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-yearsort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
             #trendsIQView .tiq-sheet-row.tiq-genre-hidden { display: none !important; }
@@ -59271,6 +59272,76 @@ https://www.instagram.com/p/..."></textarea>
             }
         };
 
+        // Channel type filter for the Channel Ranker. Hides rows with the
+        // same .tiq-genre-hidden class the title sheets use, which CSV
+        // export already skips, so an export follows the filter without
+        // any extra wiring. The choice applies to every platform at once
+        // so it survives a platform switch.
+        window.tiqFilterFastChannelType = function(sel) {
+            var val = String(sel.value || '');
+            window.__trendsIQ = window.__trendsIQ || {};
+            window.__trendsIQ.activeFastChannelType = val;
+            var root = sel.closest ? sel.closest('[data-tiq-panel="fast"]') : null;
+            var panels = (root || document).querySelectorAll('[data-tiq-fast]');
+            for (var p = 0; p < panels.length; p++) {
+                _tiqApplyChanType(panels[p], val);
+            }
+        };
+
+        // Ranks are left as they are: a rank is a channel's place among
+        // every channel on the platform, so a filtered list reads 3, 17,
+        // 41 rather than renumbering itself from 1. Bar widths are set at
+        // render against the platform leader and are not recomputed, so a
+        // filtered list stays comparable with the full one. A type absent
+        // from a platform shows that platform's full list instead.
+        function _tiqApplyChanType(panel, val) {
+            var table = panel.querySelector('.tiq-sheet-chan');
+            if (!table) return;
+            var rows = table.querySelectorAll('tbody tr.tiq-sheet-row');
+            var i, present = false;
+            if (val && val !== 'all') {
+                for (i = 0; i < rows.length; i++) {
+                    if ((rows[i].getAttribute('data-chantype') || '') === val) {
+                        present = true;
+                        break;
+                    }
+                }
+            }
+            var active = present ? val : '';
+            var shown = 0;
+            for (i = 0; i < rows.length; i++) {
+                var match = !active || (rows[i].getAttribute('data-chantype') || '') === active;
+                rows[i].classList.toggle('tiq-genre-hidden', !match);
+                if (match) shown++;
+            }
+            var own = table.querySelector('.tiq-chan-typesel');
+            if (own) own.value = active;
+            var sub = panel.querySelector('.tiq-chan-sub');
+            if (sub) {
+                sub.innerHTML = _tiqChanSubText(
+                    shown,
+                    parseInt(sub.getAttribute('data-chan-total'), 10) || shown,
+                    sub.getAttribute('data-chan-label') || '',
+                    sub.getAttribute('data-chan-noun') || '',
+                    active);
+            }
+        }
+
+        // The line above the Channel Ranker table. Plain count when no
+        // type is chosen; names the type and explains the rank gaps when
+        // one is.
+        function _tiqChanSubText(shown, total, platform, noun, typeLabel) {
+            var what = typeLabel
+                ? (shown + ' ' + _tiqEsc(typeLabel) + ' channels')
+                : (shown + ' most-watched channels');
+            var tail = typeLabel
+                ? (' Rank numbers hold their place across all ' + total +
+                   ' channels. Tap Views or \u0394% to sort.')
+                : ' Tap Views or \u0394% to sort.';
+            return 'Ranking the ' + what + ' on ' + _tiqEsc(platform) +
+                   ' by ' + _tiqEsc(noun) + ' US viewers.' + tail;
+        }
+
         // Release-year filter options for a title sheet. Fixed decade
         // buckets, newest first; only a bucket that actually has a row
         // is emitted (mirrors _tiqGenreOptions so the pill never lists
@@ -59450,7 +59521,7 @@ https://www.instagram.com/p/..."></textarea>
             var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
             var metricLabel = table.getAttribute('data-metric') || 'Views';
             var header;
-            if (entity === 'Channel')      header = ['Rank', 'Channel', metricLabel, 'Change %'];
+            if (entity === 'Channel')      header = ['Rank', 'Channel', 'Channel Type', metricLabel, 'Change %'];
             else if (entity === 'Music')   header = ['Rank', 'Title', 'Artist', metricLabel, 'Change %'];
             else if (entity === 'Podcast') header = ['Rank', 'Title', 'Publisher', metricLabel, 'Change %'];
             else if (entity === 'Gaming')  header = ['Rank', 'Title', 'Publisher', 'Genre', metricLabel, 'Change %'];
@@ -59470,7 +59541,7 @@ https://www.instagram.com/p/..."></textarea>
                 var delta = r.getAttribute('data-delta');
                 var deltaStr = (delta === null || delta === '') ? '' : ((Number(delta) > 0 ? '+' : '') + delta + '%');
                 var cols;
-                if (entity === 'Channel')      cols = [rank, name, views, deltaStr];
+                if (entity === 'Channel')      cols = [rank, name, r.getAttribute('data-chantype') || '', views, deltaStr];
                 else if (entity === 'Music')   cols = [rank, name, r.getAttribute('data-artist') || '', views, deltaStr];
                 else if (entity === 'Podcast') cols = [rank, name, r.getAttribute('data-artist') || '', views, deltaStr];
                 else if (entity === 'Gaming')  cols = [rank, name, r.getAttribute('data-artist') || '', r.getAttribute('data-genres') || '', views, deltaStr];
@@ -64105,6 +64176,29 @@ https://www.instagram.com/p/..."></textarea>
                             var v = Number((c.us_streams || {}).us_estimate);
                             return (isFinite(v) && v > m) ? v : m;
                         }, 0);
+                        // Only the types carried by THIS platform, so the
+                        // list never offers a choice that returns nothing.
+                        var typeCounts = {};
+                        channels.forEach(function(c) {
+                            var g = String(c.genre || '').trim();
+                            if (g) typeCounts[g] = (typeCounts[g] || 0) + 1;
+                        });
+                        var typeNames = Object.keys(typeCounts).sort(function(a, b) {
+                            return a.localeCompare(b);
+                        });
+                        // One type across a whole platform gives the reader
+                        // nothing to choose between, so no control at all.
+                        var showTypeFilter = typeNames.length > 1;
+                        var wantType = String((window.__trendsIQ || {}).activeFastChannelType || '');
+                        var activeType = (showTypeFilter && typeCounts[wantType]) ? wantType : '';
+                        var typeOpts = '<option value="">Channel type</option>' +
+                            '<option value="all">All types (' + channels.length + ')</option>';
+                        typeNames.forEach(function(g) {
+                            typeOpts += '<option value="' + _tiqEsc(g) + '"' +
+                                        (g === activeType ? ' selected' : '') + '>' +
+                                        _tiqEsc(g) + ' (' + typeCounts[g] + ')</option>';
+                        });
+                        var shownCount = activeType ? typeCounts[activeType] : channels.length;
                         var chRows = channels.map(function(ch, i) {
                             var us = ch.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -64148,7 +64242,10 @@ https://www.instagram.com/p/..."></textarea>
                             var rk = ch.rank || (i + 1);
                             var sortTitle = _tiqEsc(String(ch.name || '').toLowerCase());
                             var dispName = _tiqEsc(String(ch.name || ''));
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="" data-genres="" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            var chType = String(ch.genre || '').trim();
+                            var chTypeAttr = _tiqEsc(chType);
+                            var typeHidden = (activeType && chType !== activeType) ? ' tiq-genre-hidden' : '';
+                            return '<tr class="tiq-sheet-row' + typeHidden + '" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="" data-genres="" data-chantype="' + chTypeAttr + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -64174,16 +64271,20 @@ https://www.instagram.com/p/..."></textarea>
                         // the 30-day view reads consistently with the
                         // chip's "monthly US viewers" tooltip.
                         var _chanNoun = _tiqWindowNoun(_tiqGetLookback());
+                        var _chanLabel = String(s.label || k);
                         channelsHtml =
-                            '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                              'Ranking the ' + channels.length + ' most-watched channels on ' +
-                              _tiqEsc(s.label || k) + ' by ' + _chanNoun +
-                              ' US viewers. Tap Views or \u0394% to sort.' +
+                            '<div class="tiq-card-sub tiq-chan-sub" style="margin-bottom:12px;"' +
+                              ' data-chan-total="' + channels.length + '"' +
+                              ' data-chan-label="' + _tiqEsc(_chanLabel) + '"' +
+                              ' data-chan-noun="' + _tiqEsc(_chanNoun) + '">' +
+                              _tiqChanSubText(shownCount, channels.length, _chanLabel, _chanNoun, activeType) +
                             '</div>' +
                             '<div class="tiq-card">' + _tiqSheetCardHead('Channels') +
                               '<table class="tiq-sheet tiq-sheet-chan" data-entity="Channel" data-export="' + _tiqEsc(String(k) + '-channels') + '">' +
                                 '<thead><tr>' +
-                                  '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
+                                  '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select>' +
+                                  (showTypeFilter ? '<select class="tiq-sheet-genresort tiq-chan-typesel" onchange="tiqFilterFastChannelType(this)">' + typeOpts + '</select>' : '') +
+                                  '</th>' +
                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-views" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-delta has-tooltip" data-tooltip="Change in US views for each channel against the previous read in the same window." onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                   '<th class="tiq-sheet-th-spacer"></th>' +

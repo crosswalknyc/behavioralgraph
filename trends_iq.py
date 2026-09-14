@@ -450,6 +450,7 @@ _SNAPSHOT_DATED_PREFIX = 'trends_iq_snapshots/{date}/'
 # so a scraper that legitimately stops writing still fails loud.
 _AD_HOC_REFRESH_SOURCES = frozenset({
     'fast_channel_lineups',
+    'fast_channel_genres',
 })
 
 
@@ -8266,6 +8267,17 @@ FAST_PLATFORMS = [
     ('amazon',  'Amazon',           False),
 ]
 
+# Defensive ceiling on how many channels one platform contributes to
+# the Channel Ranker. Every channel in the lineup is measured and
+# ranked (2026-09-14); before that the payload carried a flat top-100
+# per platform off a list ordered by weekly airings, which is
+# scheduling volume rather than audience, so a channel below that line
+# could not appear however well it performed. This number exists only
+# so a pathological lineup refresh cannot blow up the payload, and it
+# sits far above the largest real lineup (Amazon ~655). A bind logs at
+# ERROR because it means the ranker stopped showing the full field.
+_FAST_CHANNEL_RENDER_CEILING = 1_500
+
 
 def _fetch_fast_trending(state: Optional[str], lookback_days: int,
                           keywords: Optional[list[str]] = None,
@@ -8293,6 +8305,15 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
         else _read_snapshot('fast_channel_lineups')
     channel_sources = (lineups_snap or {}).get('sources') or {}
 
+    # Channel type per channel, keyed by the same `_cp_normalize` name
+    # the lineup keys use, so one label serves every platform a
+    # channel appears on. A missing artifact leaves every row reading
+    # `Other` and the Channel Ranker renders exactly as it did before
+    # the filter existed.
+    genres_snap = _read_snapshot('fast_channel_genres', asof) if asof \
+        else _read_snapshot('fast_channel_genres')
+    channel_genres = (genres_snap or {}).get('genres') or {}
+
     result: dict[str, dict] = {}
     for slug, label, _default_avail in FAST_PLATFORMS:
         block = sources.get(slug) or {}
@@ -8315,14 +8336,20 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
         for i, r in enumerate(tv, 1):
             r['bucket_rank'] = i
 
-        # Channel lineup for this platform (top-N by weekly airings).
-        # Cap at 100 (Jenna 2026-09-09: every list carries 100+ items
-        # where the source has them; the lineups snapshot carries
-        # hundreds of channels per platform).
+        # Channel lineup for this platform: the WHOLE lineup. The
+        # ranker orders the full field by viewers downstream in
+        # `_annotate_fast_channels_with_views`, so the only slice here
+        # is the defensive ceiling above.
         lineup_block = channel_sources.get(slug) or {}
         raw_channels = lineup_block.get('channels') or []
+        if len(raw_channels) > _FAST_CHANNEL_RENDER_CEILING:
+            logger.error(
+                'fast channel ranker: %s lineup carries %d channels, above '
+                'the %d render ceiling; the tail will not appear in the '
+                'ranker. Raise _FAST_CHANNEL_RENDER_CEILING.',
+                slug, len(raw_channels), _FAST_CHANNEL_RENDER_CEILING)
         channels_out: list[dict] = []
-        for i, ch in enumerate(raw_channels[:100], 1):
+        for i, ch in enumerate(raw_channels[:_FAST_CHANNEL_RENDER_CEILING], 1):
             if not isinstance(ch, dict):
                 continue
             channels_out.append({
@@ -8330,6 +8357,9 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
                 'name':         ch.get('name') or '',
                 'airings':      int(ch.get('airings') or 0),
                 'content_type': ch.get('content_type') or '',
+                'genre':        (channel_genres.get(
+                                    _cp_normalize(ch.get('name') or ''))
+                                 or 'Other'),
             })
 
         result[slug] = {

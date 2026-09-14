@@ -184,6 +184,22 @@ def _upload_to_s3(payload: dict) -> None:
     logger.info("wrote s3://%s/%s (%d bytes)", S3_BUCKET, dated, len(body))
 
 
+def _refresh_channel_genres(payload: dict[str, Any]) -> None:
+    """Bring the channel-type labels up to date against the lineup we
+    just wrote. Only channels with no label yet cost anything, so a
+    refresh that adds twenty channels labels twenty. Never raises: a
+    failure here leaves the lineup published and the Channel Ranker
+    reading the labels it already had."""
+    try:
+        from . import fast_channel_genres
+        names = fast_channel_genres.names_from_lineups(payload)
+        mapping = fast_channel_genres.refresh(names)
+        logger.info("channel types: %d labelled", len(mapping))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("channel types not updated (%s); the lineup is "
+                        "published and existing labels still apply", e)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument('--amazon')
@@ -239,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             logger.exception("S3 upload failed: %s", e)
             return 3
+        _refresh_channel_genres(payload)
     else:
         logger.info("--no-upload set; skipping S3")
 

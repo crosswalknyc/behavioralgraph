@@ -24,6 +24,7 @@
     "disneyplus.py",
     "donate_cookies.py",
     "espnplus.py",
+    "fast_channel_genres.py",
     "fast_channels.py",
     "film_ticketing.py",
     "goodreads_charts.py",
