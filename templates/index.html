@@ -58963,9 +58963,9 @@ https://www.instagram.com/p/..."></textarea>
                 var dayNoun = (wc === 1) ? 'day' : 'days';
                 tipParts.push('Observed on ' + wc + ' of last ' + wt + ' ' + dayNoun + '.');
             }
-            if (us.method)     tipParts.push(String(us.method));
+            tipParts.push('From our first party clickstream data.');
             if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
-            var tip = _tiqEsc(tipParts.join(' \u2014 '));
+            var tip = _tiqEsc(tipParts.join(' \u00b7 '));
             // Stash the minimum blob the applier needs to rewrite this
             // chip when the user toggles the lens dropdown. Keeps the
             // repaint client-side (no server round-trip).
@@ -58978,7 +58978,6 @@ https://www.instagram.com/p/..."></textarea>
                 dc: (typeof us.delta_pct === 'number') ? us.delta_pct : null,
                 dr: us.direction || null,
                 pr: us.prev_rank || null,
-                m:  us.method || null,
                 a:  us.as_of_date || null,
                 // Window accumulator provenance (2026-09-03): let the
                 // lens-rewrite path preserve the "Observed on X of
@@ -59023,7 +59022,6 @@ https://www.instagram.com/p/..."></textarea>
                     delta_pct:            us.dc,
                     direction:            us.dr,
                     prev_rank:            us.pr,
-                    method:               us.m,
                     as_of_date:           us.a,
                     window_days_covered:  us.wc,
                     window_days_total:    us.wt
@@ -62676,10 +62674,10 @@ https://www.instagram.com/p/..."></textarea>
                 var tipParts = [];
                 if (hasVal) {
                     tipParts.push(valNum + ' ' + (us.unit_label || metricLabel.toLowerCase()));
-                    if (us.method) tipParts.push(String(us.method));
+                    tipParts.push('From our first party clickstream data.');
                     if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                 }
-                var valTip = _tiqEsc(tipParts.join(' \u2014 '));
+                var valTip = _tiqEsc(tipParts.join(' \u00b7 '));
                 var img = _tiqPosterCell(it.image);
                 var wkey = keyOf(it);
                 var sub = subOf(it) || '';
@@ -63585,10 +63583,10 @@ https://www.instagram.com/p/..."></textarea>
                             var tipParts = [];
                             if (hasViews) {
                                 tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
-                                if (us.method) tipParts.push(String(us.method));
+                                tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
-                            var viewsTip = _tiqEsc(tipParts.join(' — '));
+                            var viewsTip = _tiqEsc(tipParts.join(' \u00b7 '));
                             var streamKey = it.title;
                             var img = _tiqPosterCell(it.image);
                             var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
@@ -63955,10 +63953,10 @@ https://www.instagram.com/p/..."></textarea>
                             var tipParts = [];
                             if (hasViews) {
                                 tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
-                                if (us.method) tipParts.push(String(us.method));
+                                tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
-                            var viewsTip = _tiqEsc(tipParts.join(' — '));
+                            var viewsTip = _tiqEsc(tipParts.join(' \u00b7 '));
                             var streamKey = it.title;
                             var img = _tiqPosterCell(it.image);
                             var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
@@ -64087,10 +64085,10 @@ https://www.instagram.com/p/..."></textarea>
                             var tipParts = [];
                             if (hasViews) {
                                 tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US viewers'));
-                                if (us.method) tipParts.push(String(us.method));
+                                tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
-                            var viewsTip = _tiqEsc(tipParts.join(' — '));
+                            var viewsTip = _tiqEsc(tipParts.join(' \u00b7 '));
                             var chName = _tiqEsc(ch.name);
                             var rk = ch.rank || (i + 1);
                             var sortTitle = _tiqEsc(String(ch.name || '').toLowerCase());
