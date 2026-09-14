@@ -173299,9 +173299,9 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-title { font-size: 28px !important; margin-bottom: 6px !important; }
     #trendsIQView .tiq-header { padding-bottom: 12px !important; margin-bottom: 12px !important; }
     #trendsIQView .tiq-filter-bar { padding-bottom: 11px !important; margin-bottom: 10px !important; }
-    #trendsIQView .tiq-meta { margin-bottom: 10px !important; }
-    #trendsIQView .tiq-tabstrip { margin-bottom: 13px !important; }
-    #trendsIQView .tiq-social-tabs { margin-bottom: 11px !important; }
+    #trendsIQView .tiq-meta { margin-bottom: 18px !important; }
+    #trendsIQView .tiq-tabstrip { margin-bottom: 20px !important; }
+    #trendsIQView .tiq-social-tabs { margin-bottom: 18px !important; }
     #trendsIQView .tiq-card-sub { margin-bottom: 9px !important; }
     #trendsIQView .tiq-mode-strip { margin-bottom: 11px !important; }
     #trendsIQView .tiq-sec-head {
@@ -173323,7 +173323,7 @@ https://www.instagram.com/p/..."></textarea>
        is full width, so it must not take the pointer or it covers the
        five section tabs underneath it. Only the control is clickable. */
     #trendsIQView .tiq-panel-actions {
-        margin: -44px 0 0 !important;
+        margin: -51px 0 0 !important;
         position: relative; z-index: 2;
         pointer-events: none;
     }
@@ -173348,7 +173348,7 @@ https://www.instagram.com/p/..."></textarea>
 
     #trendsIQView .tiq-title { font-size: 26px !important; margin-bottom: 0 !important; }
     #trendsIQView .tiq-header { padding-bottom: 10px !important; margin-bottom: 10px !important; }
-    #trendsIQView .tiq-sec-head { margin: 12px 0 10px !important; padding-bottom: 8px !important; }
+    #trendsIQView .tiq-sec-head { margin: 22px 0 14px !important; padding-bottom: 10px !important; }
 
     /* ---- The header belongs to the page ----------------------------
        It kept the old darkest value after the ground was lifted, which
@@ -173368,6 +173368,13 @@ https://www.instagram.com/p/..."></textarea>
     body[data-ground="graphite"] #dashboardView .profile-and-toolbar-row {
         border-bottom: 1px solid var(--cw-border);
     }
+
+    /* The search field sits between two rows of controls, so it needs
+       air on both sides rather than butting against the pills. */
+    #trendsIQView .tiq-card-search-wrap { margin: 0 0 16px !important; }
+    #trendsIQView .tiq-card-search { padding: 11px 13px !important; }
+    #trendsIQView .tiq-social-tab,
+    #trendsIQView .tiq-mode-pill { padding: 8px 15px !important; }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
