@@ -58859,6 +58859,14 @@ https://www.instagram.com/p/..."></textarea>
             return label + ' ' + unitShort;
         }
 
+        // Unit labels arrive carrying the service they were scored
+        // against, e.g. "daily US unique searchers (Google Trends query)".
+        // Nothing outward facing names an outside source, so the trailing
+        // parenthetical is dropped wherever a unit label is read.
+        function _tiqCleanUnit(label) {
+            return String(label || '').replace(/\s*\([^()]*\)\s*$/, '').trim();
+        }
+
         function _tiqAudienceChip(us) {
             if (!us || !us.us_estimate || us.us_estimate <= 0) return '';
             // Per-lens rescaling (2026-09-03). When a lens is active AND
@@ -58872,7 +58880,7 @@ https://www.instagram.com/p/..."></textarea>
                           ? Number(byLens[lensId]) : 0;
             var val    = lensV || us.us_estimate;
             var num  = _tiqCompactNum(val);
-            var unit = us.unit_label || 'weekly US views';
+            var unit = _tiqCleanUnit(us.unit_label) || 'weekly US views';
             // The pill shows a concise unit; a long trailing parenthetical
             // (e.g. trending-people "weekly US individuals (searched, read
             // news, watched, ...)") is dropped from the visible chip so it
@@ -60296,7 +60304,7 @@ https://www.instagram.com/p/..."></textarea>
             var e = row.us_streams || row.stream_estimate || row.us_audience || null;
             if (!e) return { value: '', unit: '', change: '' };
             var v = e.us_estimate || e.estimate || e.value || e.count || '';
-            var u = e.unit_label || e.unit || '';
+            var u = _tiqCleanUnit(e.unit_label || e.unit) || '';
             var change = '';
             if (typeof e.delta_pct === 'number' && e.delta_pct !== 0 && e.direction) {
                 var pct = Math.round(Math.abs(e.delta_pct) * 100);
@@ -60322,7 +60330,7 @@ https://www.instagram.com/p/..."></textarea>
                 typeof s.us_estimate === 'number' && s.us_estimate > 0) {
                 return {
                     value: s.us_estimate,
-                    unit:  s.unit_label || 'weekly US views',
+                    unit:  _tiqCleanUnit(s.unit_label) || 'weekly US views',
                     by_lens: s.us_estimate_by_lens || null
                 };
             }
@@ -60331,7 +60339,7 @@ https://www.instagram.com/p/..."></textarea>
                 typeof r.us_estimate === 'number' && r.us_estimate > 0) {
                 return {
                     value: r.us_estimate,
-                    unit:  r.unit_label || 'weekly US readers',
+                    unit:  _tiqCleanUnit(r.unit_label) || 'weekly US readers',
                     by_lens: r.us_estimate_by_lens || null
                 };
             }
@@ -62673,7 +62681,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 var tipParts = [];
                 if (hasVal) {
-                    tipParts.push(valNum + ' ' + (us.unit_label || metricLabel.toLowerCase()));
+                    tipParts.push(valNum + ' ' + (_tiqCleanUnit(us.unit_label) || metricLabel.toLowerCase()));
                     tipParts.push('From our first party clickstream data.');
                     if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                 }
@@ -63582,7 +63590,7 @@ https://www.instagram.com/p/..."></textarea>
                             }
                             var tipParts = [];
                             if (hasViews) {
-                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
+                                tipParts.push(viewsNum + ' ' + (_tiqCleanUnit(us.unit_label) || 'weekly US views'));
                                 tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
@@ -63952,7 +63960,7 @@ https://www.instagram.com/p/..."></textarea>
                             }
                             var tipParts = [];
                             if (hasViews) {
-                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
+                                tipParts.push(viewsNum + ' ' + (_tiqCleanUnit(us.unit_label) || 'weekly US views'));
                                 tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
@@ -64084,7 +64092,7 @@ https://www.instagram.com/p/..."></textarea>
                             }
                             var tipParts = [];
                             if (hasViews) {
-                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US viewers'));
+                                tipParts.push(viewsNum + ' ' + (_tiqCleanUnit(us.unit_label) || 'weekly US viewers'));
                                 tipParts.push('From our first party clickstream data.');
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
