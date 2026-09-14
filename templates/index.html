@@ -60006,6 +60006,10 @@ https://www.instagram.com/p/..."></textarea>
                 // a single date for a 1-day view. End = asof (today on
                 // the live path); start = end - (window - 1) days.
                 var _endISO = filters.asof || _tiqTodayISO();
+                // asof is the day the view was requested. The live read
+                // always covers the last completed day, so the label
+                // reports T-1. A historic view keeps the picked date.
+                if (!filters.historic) _endISO = _tiqShiftISO(_endISO, -1);
                 var _nDays = parseInt(filters.lookback_days, 10);
                 if (!isFinite(_nDays) || _nDays < 1) _nDays = 1;
                 var _startISO = _tiqShiftISO(_endISO, -(_nDays - 1));
