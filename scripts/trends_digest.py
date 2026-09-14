@@ -24,7 +24,7 @@ Manual test (single user, no email send):
     python3 -m scripts.trends_digest --dry-run --user jenna_crosswalknyc_com
 
 Environment:
-    TRENDS_DIGEST_FROM   default 'BehavioralGraph <jenna@crosswalknyc.com>'
+    TRENDS_DIGEST_FROM   default 'Crosswalk <no_reply@crosswalknyc.com>'
     TRENDS_DIGEST_REGION default 'us-east-2'
     TRENDS_DIGEST_BUCKET default 'dashboard-inputs'
 """
@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import sys
+from html import escape as _html_escape
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -50,7 +51,12 @@ logger = logging.getLogger(__name__)
 BUCKET      = os.environ.get('TRENDS_DIGEST_BUCKET') or os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 STATE_PREFIX = 'trends_iq_alerts/'
 SES_REGION  = os.environ.get('TRENDS_DIGEST_REGION', 'us-east-2')
-SES_FROM    = os.environ.get('TRENDS_DIGEST_FROM',   'BehavioralGraph <jenna@crosswalknyc.com>')
+# Send as Crosswalk from the shared no_reply identity (a verified SES sender
+# in us-east-2, same one the newsletter uses). Using jenna@ made Gmail show
+# the personal contact name "Jenna Menking"; a non-personal address lets the
+# "Crosswalk" display name stand. Replies route to the general inbox.
+SES_FROM    = os.environ.get('TRENDS_DIGEST_FROM',   'Crosswalk <no_reply@crosswalknyc.com>')
+SES_REPLY_TO = os.environ.get('TRENDS_DIGEST_REPLY_TO', 'hello@crosswalknyc.com')
 # Public dashboard URL for the "manage your watchlist" link. The old
 # hardcoded www.behavioralgraph.com does not resolve (NXDOMAIN); the live
 # production host is the verified Render custom domain below. Overridable
@@ -163,20 +169,36 @@ def _latest_present_rank(arc: dict):
     return arc.get('current_rank')
 
 
-def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dict]]:
-    """Return (alerts, new_state, watchlist_entries) for this user.
+def _recent_two_present_ranks(arc: dict) -> tuple[Optional[int], Optional[int]]:
+    """(prev_rank, current_rank) from the two most recent days in the arc
+    that actually have a rank. Drives the 'Daily Move' column straight off
+    the item's own history, so it shows a delta even when the state-based
+    alert threshold reports 'no material movement'."""
+    ranks = [d.get('rank') for d in (arc.get('days') or [])
+             if d.get('present') and d.get('rank') is not None]
+    cur = ranks[-1] if ranks else None
+    prev = ranks[-2] if len(ranks) >= 2 else None
+    return prev, cur
+
+
+def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dict], list[dict]]:
+    """Return (alerts, new_state, watchlist_entries, watch_items) for this user.
 
     `alerts` = list of alert dicts fired today (only material movements).
     `new_state` = the arcs to persist as "yesterday" for the next run.
+    `watch_items` = every watched item with its current/best rank and the
+                    day-over-day move, so the digest can always show the full
+                    watchlist table regardless of whether any alert fired.
     """
     entries = trends_watchlist.load_watchlist(user_slug)
     if not entries:
-        return [], {}, []
+        return [], {}, [], []
     prior = _load_prior_state(user_slug)
     prior_arcs = prior.get('arcs', {}) if isinstance(prior, dict) else {}
 
     alerts: list[dict] = []
     new_arcs: dict[str, dict] = {}
+    watch_items: list[dict] = []
     for e in entries:
         kind   = e.get('kind') or ''
         source = e.get('source') or ''
@@ -188,6 +210,7 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
         # so classify_alert_transition compares real snapshots run-over-run
         # (today's calendar day is usually unscraped at digest time).
         curr['current_rank'] = _latest_present_rank(curr)
+        prev_day_rank, cur_day_rank = _recent_two_present_ranks(curr)
         new_arcs[slug] = {
             'current_rank': curr.get('current_rank'),
             'best_rank':    curr.get('best_rank'),
@@ -195,6 +218,15 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
             'present_days': curr.get('present_days'),
             'momentum':     curr.get('momentum'),
         }
+        watch_items.append({
+            'label':        e.get('label') or key,
+            'kind':         kind,
+            'source':       source,
+            'geo':          geo,
+            'current_rank': curr.get('current_rank'),
+            'best_rank':    curr.get('best_rank'),
+            'prev_rank':    prev_day_rank,
+        })
         prev = prior_arcs.get(slug)
         prev_wrapped = {
             'current_rank': (prev or {}).get('current_rank'),
@@ -210,51 +242,59 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'arcs':        new_arcs,
     }
-    return alerts, new_state, entries
+    return alerts, new_state, entries, watch_items
 
 
 def _render_email(user_slug: str, alerts: list[dict],
-                   entries: list[dict]) -> tuple[str, str, str]:
+                   entries: list[dict],
+                   watch_items: Optional[list[dict]] = None) -> tuple[str, str, str]:
     """Return (subject, html, text) for the digest email.
 
     Styled to the Crosswalk brand system (August 2026): Off-White ground,
     Inter 18pt, Signal Olive as the single light-surface accent, one
     bulletproof CTA. Single-column table layout, inline styles only.
+
+    Always renders the full watchlist (item, current rank, best rank, and the
+    day-over-day move) so the digest is useful even when nothing crossed the
+    alert threshold.
     """
+    watch_items = watch_items or []
     today = datetime.now(timezone.utc).strftime('%A, %b %-d')
-    n = len(alerts)
-    if n == 0:
+    B = _BRAND
+
+    watched = len(watch_items)
+    movers = sum(
+        1 for w in watch_items
+        if w.get('prev_rank') is not None and w.get('current_rank') is not None
+        and w.get('prev_rank') != w.get('current_rank')
+    )
+    if movers == 0:
         subject = f"Trends IQ: no watchlist moves, {today}"
-        preheader = "No rank changes on your watched items in the latest snapshot."
+        preheader = (f"Your {watched} watched item{'s' if watched != 1 else ''} held rank. "
+                     "Current and best inside.")
     else:
-        moves = f"{n} watchlist move{'s' if n != 1 else ''}"
-        subject = f"Trends IQ: {moves}, {today}"
-        preheader = f"{moves} in the latest Trends IQ snapshot."
+        subject = f"Trends IQ: {movers} watchlist move{'s' if movers != 1 else ''}, {today}"
+        preheader = (f"{movers} of {watched} watched item{'s' if watched != 1 else ''} "
+                     "moved since yesterday.")
 
-    bucket = {
-        'BREAKOUT':  [], 'RISING':   [], 'FALLING': [],
-        'DROPPED_OFF': [], 'RETURNED': [], 'NEW': [],
-    }
-    for a in alerts:
-        bucket.setdefault(a.get('alert_type', 'NEW'), []).append(a)
+    def _rank(r) -> str:
+        return f"#{r}" if isinstance(r, int) else "-"
 
-    def _row_line(a: dict) -> str:
-        label = a.get('label') or a.get('key') or ''
-        cur = a.get('curr_rank')
-        prev = a.get('prev_rank')
-        if cur is not None and prev is not None:
-            return f"  {label}: was #{prev} -> now #{cur}"
-        if cur is not None:
-            return f"  {label}: now #{cur}"
-        if prev is not None:
-            return f"  {label}: dropped from #{prev}"
-        return f"  {label}"
-
-    order = ['BREAKOUT', 'RISING', 'RETURNED', 'NEW', 'FALLING', 'DROPPED_OFF']
-    # Display labels for the section headers (internal alert-type keys are
-    # kept as-is for the movement logic). 'RETURNED' reads as 'YOUR TRENDS';
-    # 'DROPPED_OFF' loses the code-token underscore.
-    tag_label = {'RETURNED': 'YOUR TRENDS', 'DROPPED_OFF': 'DROPPED OFF'}
+    def _move(prev, cur) -> tuple[str, str]:
+        """(plain, html) for the Daily Move cell. A positive delta means the
+        item moved up the chart (to a smaller rank number)."""
+        if cur is None and prev is None:
+            return "-", f"<span style=\"color:{B['muted']};\">-</span>"
+        if cur is None:
+            return "off", f"<span style=\"color:{B['body']};\">off</span>"
+        if prev is None:
+            return "new", f"<span style=\"color:{B['olive']};font-weight:700;\">new</span>"
+        d = prev - cur
+        if d > 0:
+            return f"+{d}", f"<span style=\"color:{B['olive']};font-weight:700;\">&#9650;{d}</span>"
+        if d < 0:
+            return f"{d}", f"<span style=\"color:{B['body']};font-weight:700;\">&#9660;{abs(d)}</span>"
+        return "0", f"<span style=\"color:{B['muted']};\">0</span>"
 
     # ---- plain-text part -------------------------------------------------
     text_lines = [
@@ -266,59 +306,57 @@ def _render_email(user_slug: str, alerts: list[dict],
         "Monitor and manage your watchlist in Trends IQ:",
         CTA_URL,
         "",
+        "YOUR WATCHLIST  (current / best / daily move)",
     ]
-
-    # ---- HTML body sections ----------------------------------------------
-    B = _BRAND
-    section_html: list[str] = []
-    if not alerts:
-        text_lines.append("No material movement on your watched items in the latest snapshot.")
-        section_html.append(
-            f"<p style=\"margin:0;font-size:14px;line-height:1.5;color:{B['body']};\">"
-            "No material movement on your watched items in the latest snapshot. "
-            "The next rank change will show up here.</p>"
+    for w in watch_items:
+        mv_text, _ = _move(w.get('prev_rank'), w.get('current_rank'))
+        text_lines.append(
+            f"  {w.get('label') or ''}: "
+            f"current {_rank(w.get('current_rank'))}, "
+            f"best {_rank(w.get('best_rank'))}, "
+            f"move {mv_text}"
         )
-    else:
-        for tag in order:
-            items = bucket.get(tag) or []
-            if not items:
-                continue
-            hdr_label = tag_label.get(tag, tag)
-            text_lines.append(f"{hdr_label} ({len(items)}):")
-            rows = []
-            for a in items:
-                text_lines.append(_row_line(a))
-                label = (a.get('label') or a.get('key') or '')
-                cur = a.get('curr_rank'); prev = a.get('prev_rank')
-                if cur is not None and prev is not None:
-                    detail = f"was #{prev} &rarr; now <b style=\"color:{B['ink']};\">#{cur}</b>"
-                elif cur is not None:
-                    detail = f"now <b style=\"color:{B['ink']};\">#{cur}</b>"
-                elif prev is not None:
-                    detail = f"dropped from #{prev}"
-                else:
-                    detail = ''
-                rows.append(
-                    "<tr>"
-                    f"<td style=\"padding:9px 0;border-bottom:1px solid {B['border']};"
-                    f"font-size:14px;line-height:1.3;color:{B['ink']};font-weight:700;\">{label}</td>"
-                    f"<td align=\"right\" style=\"padding:9px 0 9px 12px;"
-                    f"border-bottom:1px solid {B['border']};font-size:13px;line-height:1.3;"
-                    f"color:{B['body']};white-space:nowrap;\">{detail}</td>"
-                    "</tr>"
-                )
-            text_lines.append("")
-            section_html.append(
-                "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
-                "style=\"margin:0 0 22px;border-collapse:collapse;\">"
-                "<tr><td colspan=\"2\" style=\"padding:0 0 6px;font-size:11px;"
-                f"letter-spacing:1px;text-transform:uppercase;font-weight:700;color:{B['ink']};\">"
-                f"{hdr_label} <span style=\"color:{B['muted']};font-weight:500;\">({len(items)})</span>"
-                "</td></tr>" + ''.join(rows) + "</table>"
-            )
+    text_lines += ["", "--", "CROSSWALK / BEHAVIORAL INTELLIGENCE"]
 
-    text_lines.append("--")
-    text_lines.append("CROSSWALK / BEHAVIORAL INTELLIGENCE")
+    # ---- HTML watchlist table (always shown) -----------------------------
+    def _num_cell(content: str) -> str:
+        return (f"<td align=\"right\" style=\"padding:11px 0 11px 10px;"
+                f"border-top:1px solid {B['border']};font-size:14px;font-weight:700;"
+                f"color:{B['ink']};white-space:nowrap;vertical-align:top;\">{content}</td>")
+
+    item_rows = []
+    for w in watch_items:
+        label = _html_escape(w.get('label') or '')
+        sub_bits = [str(x) for x in (w.get('kind'), w.get('source'), w.get('geo')) if x]
+        sub = _html_escape(" \u00b7 ".join(sub_bits)).upper()
+        _, mv_html = _move(w.get('prev_rank'), w.get('current_rank'))
+        item_rows.append(
+            "<tr>"
+            f"<td style=\"padding:11px 0;border-top:1px solid {B['border']};vertical-align:top;\">"
+            f"<div style=\"font-size:14px;line-height:1.3;font-weight:700;color:{B['ink']};\">{label}</div>"
+            f"<div style=\"margin-top:3px;font-size:10px;letter-spacing:0.5px;"
+            f"text-transform:uppercase;color:{B['muted']};\">{sub}</div></td>"
+            + _num_cell(_rank(w.get('current_rank')))
+            + _num_cell(_rank(w.get('best_rank')))
+            + _num_cell(mv_html)
+            + "</tr>"
+        )
+
+    _col = "font-size:9px;letter-spacing:1px;text-transform:uppercase;color:" + B['muted'] + ";"
+    section_html = (
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"border-collapse:collapse;\">"
+        f"<tr><td colspan=\"4\" style=\"padding:0 0 2px;font-size:11px;letter-spacing:1px;"
+        f"text-transform:uppercase;font-weight:700;color:{B['ink']};\">Your watchlist</td></tr>"
+        f"<tr><td colspan=\"4\" style=\"padding:0 0 12px;font-size:12px;line-height:1.4;"
+        f"color:{B['body']};\">Current and best rank, with the move since yesterday.</td></tr>"
+        "<tr><td></td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Current</td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Best</td>"
+        f"<td align=\"right\" style=\"padding:0 0 6px 10px;{_col}\">Daily move</td></tr>"
+        + ''.join(item_rows) +
+        "</table>"
+    )
 
     button = _brand_button(CTA_URL, "Open Trends IQ &rarr;")
 
@@ -360,7 +398,7 @@ def _render_email(user_slug: str, alerts: list[dict],
         f"<tr><td style=\"padding:10px 32px 0;\"><div style=\"border-top:1px solid {B['border']};"
         "font-size:0;line-height:0;\">&nbsp;</div></td></tr>"
         # sections
-        f"<tr><td style=\"padding:22px 32px 4px;font-family:{_FONT};\">{''.join(section_html)}</td></tr>"
+        f"<tr><td style=\"padding:22px 32px 4px;font-family:{_FONT};\">{section_html}</td></tr>"
         # footer
         f"<tr><td style=\"padding:18px 32px 28px;font-family:{_FONT};border-top:1px solid {B['border']};\">"
         f"<div style=\"font-size:9px;letter-spacing:2px;text-transform:uppercase;color:{B['footer']};\">"
@@ -384,6 +422,7 @@ def _send_email(to_addr: str, subject: str, html: str, text: str, *, dry_run: bo
     _ses().send_email(
         Source=SES_FROM,
         Destination={'ToAddresses': [to_addr]},
+        ReplyToAddresses=[SES_REPLY_TO] if SES_REPLY_TO else [],
         Message={
             'Subject': {'Data': subject, 'Charset': 'UTF-8'},
             'Body':    {'Html': {'Data': html, 'Charset': 'UTF-8'},
@@ -398,11 +437,11 @@ def run_for_user(user_slug: str, *, dry_run: bool = False) -> dict:
         logger.info("digest: no email for user_slug=%s (skipping)", user_slug)
         return {'user_slug': user_slug, 'sent': False, 'reason': 'no_email'}
 
-    alerts, new_state, entries = _compute_alerts_for_user(user_slug)
+    alerts, new_state, entries, watch_items = _compute_alerts_for_user(user_slug)
     if not entries:
         return {'user_slug': user_slug, 'sent': False, 'reason': 'empty_watchlist'}
 
-    subject, html, text = _render_email(user_slug, alerts, entries)
+    subject, html, text = _render_email(user_slug, alerts, entries, watch_items)
     try:
         _send_email(email, subject, html, text, dry_run=dry_run)
         sent = True
