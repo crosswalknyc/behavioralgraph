@@ -56094,6 +56094,123 @@ def _spec_from_draft(draft):
     return spec
 
 
+@app.route('/api/brief-chat/rebind-window', methods=['POST'])
+@app.route('/api/synth-chat/rebind-window', methods=['POST'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/rebind-window')
+def api_synth_chat_rebind_window():
+    """Apply an answered time window to drafts the reader already has.
+
+    Week 2026-W37 showed 26% of all chat latency (539s of 2100s) going
+    into re-reading asks that had already been read. Cause: when the
+    reader answers the window question with their own range instead of
+    taking the default, the chat used to fold the answer onto the end
+    of the original ask and start over from scratch. That second pass
+    cost 57s to 147s and produced exactly the same subjects, the same
+    decisions, and the same sizes as the first. The only thing that
+    actually changed was the window.
+
+    So change only the window. The drafts are already in the reader's
+    hands (the approve route has always taken spec_draft straight from
+    the client), so this adds no new trust surface, and it is strictly
+    narrower than approve: it edits one field group and queues nothing.
+    No model call, so the answer comes back in milliseconds.
+
+    This is not a behaviour override per no-external-overrides.mdc. The
+    caller states no decision and passes no flags. It answers a
+    question the product asked, and the window is parsed server side by
+    the same _split_trailing_date_range the interpret step uses, then
+    applied by the same _bind_shared_explicit_window. An answer this
+    cannot parse returns unparsed=True so the caller falls back to a
+    full re-read rather than guessing.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    answer = str(body.get('text') or '').strip()
+    drafts = body.get('spec_drafts')
+    if not isinstance(drafts, list):
+        one = body.get('spec_draft')
+        drafts = [one] if isinstance(one, dict) else []
+    drafts = [d for d in drafts if isinstance(d, dict)]
+    if not answer or not drafts:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    # Parse through the interpret step's own reader so a window that
+    # binds here is exactly the window a full re-read would have bound.
+    #
+    # That reader splits a TRAILING clause off a carrier string and
+    # deliberately declines when the whole string is the clause (it
+    # refuses to leave an empty subject behind). A bare reply is all
+    # clause, so give it an inert carrier. 'Run it' is chosen because
+    # it contains none of the words the reader triggers on (date,
+    # dates, date range, date window, window, time frame, timeframe,
+    # period) - a carrier carrying one of those would match at index 0
+    # and leave nothing in front of the clause again. The carrier is
+    # never shown or stored; only the parsed window survives.
+    bare = re.sub(
+        r'^\s*(?:date\s*range|dates?|date\s*window|window|'
+        r'time\s*frame|timeframe|period)\s*[:\-]?\s*',
+        '', answer, flags=re.IGNORECASE).strip()
+    probe = f'Run it. Date range: {bare or answer}'
+    try:
+        _, rng = _split_trailing_date_range(probe)
+    except Exception:
+        rng = None
+    if not rng or ' TO ' not in rng:
+        # Relative phrasing ("trailing 6 months"), an event window, or
+        # anything else we cannot resolve deterministically. Say so and
+        # let the caller re-read the ask properly.
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    bound = 0
+    for d in drafts:
+        # Clear the flag first: these drafts already carry a window
+        # (the default we proposed), and the binder deliberately yields
+        # to anything already marked explicit.
+        d.pop('date_range_explicit', None)
+        try:
+            if _bind_shared_explicit_window(
+                    d, probe, decision=d.get('decision')):
+                bound += 1
+        except Exception:
+            pass
+    if not bound:
+        return jsonify({'success': False, 'unparsed': True}), 200
+
+    # Same per-line window suffix the interpret step renders, so a
+    # rebound card and a re-read card are indistinguishable.
+    try:
+        _annotate_drafts_date_window(drafts)
+    except Exception:
+        pass
+
+    start, end = [p.strip() for p in rng.split(' TO ', 1)]
+    try:
+        label = _ew_format_label(start, end) or rng
+    except Exception:
+        label = rng
+    try:
+        print(f"[rebind-window] {user}: {bound} draft(s) -> {rng} "
+              f"(no re-read)")
+    except Exception:
+        pass
+    return jsonify({
+        'success': True,
+        'bound': bound,
+        'date_range': {'start': start, 'end': end},
+        'date_window_label': label,
+        'spec_drafts': drafts,
+    })
+
+
 @app.route('/api/brief-chat/approve', methods=['POST'])
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth

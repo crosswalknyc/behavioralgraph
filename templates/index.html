@@ -70874,6 +70874,52 @@ https://www.instagram.com/p/..."></textarea>
             _pmAwaitingCombineName = false;
         }
 
+        // Apply an answered time window to the drafts already stashed,
+        // without reading the whole ask again.
+        //
+        // Week 2026-W37: answering the window question with a custom
+        // range cost a second full read of 57s to 147s that came back
+        // with the same subjects, decisions and sizes as the first.
+        // 26% of the week's chat latency went into those re-reads.
+        //
+        // Returns true when the stash now carries the answered window,
+        // in which case the caller releases it exactly the way a plain
+        // "yes" is released. Returns false for anything we cannot
+        // resolve deterministically (relative phrasing, event windows,
+        // a request that also changes the subject), and the caller
+        // falls back to the full re-read.
+        async function _pmRebindStashedWindow(answer) {
+            try {
+                var _batch = synthChatStashedBatchData;
+                var _one = synthChatStashedDraft;
+                var _drafts = (_batch && _batch.spec_drafts)
+                    ? _batch.spec_drafts
+                    : (_one ? [_one] : []);
+                if (!_drafts.length) { return false; }
+                var _fr = await _synthChatFetchJson(
+                    '/api/brief-chat/rebind-window',
+                    { text: answer, spec_drafts: _drafts });
+                var _d = _fr && _fr.data;
+                if (!_d || !_d.success || !_d.spec_drafts
+                        || !_d.spec_drafts.length) {
+                    return false;
+                }
+                // Land the rebound drafts back on the stash so the
+                // release path below renders the answered window.
+                if (_batch && _batch.spec_drafts) {
+                    _batch.spec_drafts = _d.spec_drafts;
+                } else {
+                    synthChatStashedDraft = _d.spec_drafts[0];
+                }
+                if (_d.date_range) {
+                    synthChatStashedProposedRange = _d.date_range;
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
         // Read a combine-vs-individual reply. true = one combined
         // profile, false = one per subject, null = could not tell, ask
         // again. The chips send unambiguous phrases; this only has to
@@ -73624,7 +73670,18 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             if (synthChatAwaitingDateConfirm && !_pmKpiPivot && !_pmDeckPivot) {
-                if (_synthChatIsDateConfirmation(text)) {
+                // A plain yes releases what we stashed. A custom window
+                // used to throw the stash away and read the whole ask
+                // again, which in week 2026-W37 was 26% of all chat
+                // latency for a result that differed only by the
+                // window. Bind it onto the drafts we already have and
+                // release them the same way. If that cannot be done
+                // cleanly the old re-read still runs below.
+                var _pmDateOk = _synthChatIsDateConfirmation(text);
+                if (!_pmDateOk) {
+                    _pmDateOk = await _pmRebindStashedWindow(text);
+                }
+                if (_pmDateOk) {
                     // Batch release (2026-08-20): the whole batch
                     // was stashed pending the window answer.
                     if (synthChatStashedBatchData) {
