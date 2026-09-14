@@ -64065,6 +64065,13 @@ https://www.instagram.com/p/..."></textarea>
                     if (!channels.length) {
                         channelsHtml = '<div class="tiq-empty">Channel ranker is warming up.</div>';
                     } else {
+                        // Bars read against the top channel, so the
+                        // leader fills the track and everything else is
+                        // measured against it.
+                        var chanPeak = channels.reduce(function (m, c) {
+                            var v = Number((c.us_streams || {}).us_estimate);
+                            return (isFinite(v) && v > m) ? v : m;
+                        }, 0);
                         var chRows = channels.map(function(ch, i) {
                             var us = ch.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -64114,6 +64121,11 @@ https://www.instagram.com/p/..."></textarea>
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
                                        '<div class="tiq-sheet-titlemain">' +
                                          '<div class="tiq-row-title" title="' + chName + '">' + chName + '</div>' +
+                                         (hasViews && chanPeak > 0
+                                           ? '<div class="tiq-chan-bar"><i style="width:' +
+                                             Math.max(1.5, (estimate / chanPeak) * 100).toFixed(1) +
+                                             '%"></i></div>'
+                                           : '') +
                                        '</div>' +
                                      '</div>' +
                                    '</td>' +
@@ -173382,6 +173394,38 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-card-search { padding: 11px 13px !important; }
     #trendsIQView .tiq-social-tab,
     #trendsIQView .tiq-mode-pill { padding: 8px 15px !important; }
+
+    /* ---- Channel Ranker ---------------------------------------------
+       A third of the table was an empty spacer column. The name column
+       takes most of it and carries a share bar, so the distance between
+       first and fifth is visible rather than only readable. */
+    #trendsIQView .tiq-sheet-chan .tiq-sheet-td-title,
+    #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-title { width: 54% !important; }
+    #trendsIQView .tiq-sheet-chan .tiq-chan-views { width: 16% !important; }
+    #trendsIQView .tiq-sheet-chan .tiq-chan-delta { width: 12% !important; }
+    #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-spacer,
+    #trendsIQView .tiq-sheet-chan .tiq-sheet-td-spacer { width: 18% !important; }
+    #trendsIQView .tiq-sheet-chan .tiq-sheet-titlemain { width: 100%; }
+    #trendsIQView .tiq-chan-bar {
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(233, 232, 225, 0.07);
+        margin-top: 8px;
+        overflow: hidden;
+        max-width: 560px;
+    }
+    body[data-theme="light"] #trendsIQView .tiq-chan-bar { background: rgba(12, 22, 24, 0.08); }
+    #trendsIQView .tiq-chan-bar i {
+        display: block;
+        height: 100%;
+        background: var(--mag-second);
+        border-radius: 2px;
+    }
+    /* The top three read in the accent, matching the shelf. */
+    #trendsIQView .tiq-sheet-chan tbody tr:nth-child(-n+3) .tiq-chan-bar i {
+        background: var(--mag-accent);
+    }
+    #trendsIQView .tiq-sheet-chan tbody td { padding-top: 13px !important; padding-bottom: 13px !important; }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
