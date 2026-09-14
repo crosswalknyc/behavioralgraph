@@ -59950,6 +59950,20 @@ https://www.instagram.com/p/..."></textarea>
             }
             return { cls: 'flat', txt: '', mag: 0 };
         }
+        // The change cell carries two different measures: most rows show a
+        // percentage change in views, but a row whose platform ranks rather
+        // than counts shows places moved instead. They look alike at a
+        // glance, so each says which it is on hover.
+        var _TIQ_DELTA_TIPS = {
+            pct:  'Change in US views against the previous read in the same window.',
+            rank: 'Places moved on this chart since the previous read. A change in position, not a percentage.',
+            'new': 'First appearance on this chart in this window, so there is nothing to compare it against yet.',
+            flat: 'No earlier read to compare this against yet.'
+        };
+        function _tiqDeltaTipAttr(kind) {
+            var t = _TIQ_DELTA_TIPS[kind];
+            return t ? ' data-tooltip="' + _tiqEsc(t) + '"' : '';
+        }
         function _tiqRenderNine(tagged) {
             if (!tagged || !tagged.length) return '';
             var tiles = tagged.slice(0, 10).map(function (o, i) {
@@ -59969,7 +59983,9 @@ https://www.instagram.com/p/..."></textarea>
                            '<span class="tiq-nine-ini">' + _tiqEsc(_tiqFastInitials(it.title)) + '</span>' +
                            art +
                            '<span class="tiq-nine-rk">' + (i + 1) + '</span>' +
-                           (d.txt ? '<span class="tiq-nine-dl ' + d.cls + '">' + d.txt + '</span>' : '') +
+                           (d.txt ? '<span class="tiq-nine-dl has-tooltip ' + d.cls + '"' +
+                             _tiqDeltaTipAttr(d.kind === 'rank' ? 'rank' : (d.cls === 'new' ? 'new' : 'pct')) +
+                             '>' + d.txt + '</span>' : '') +
                          '</div>' +
                          '<div class="tiq-nine-nm">' + _tiqEsc(it.title || '') + '</div>' +
                          '<div class="tiq-nine-vv">' + views + '</div>' +
@@ -62682,10 +62698,10 @@ https://www.instagram.com/p/..."></textarea>
                     var pos = Math.abs(us.delta_positions);
                     var glyph = (us.direction === 'up') ? '\u2191' : (us.direction === 'down') ? '\u2193' : '\u00b7';
                     var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                    deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('rank') + '>' + glyph + ' ' + pos + '</span>';
                     deltaSort = String((us.direction === 'up') ? pos : -pos);
                 } else if (us.direction === 'new') {
-                    deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                    deltaHtml = '<span class="tiq-sheet-delta new has-tooltip"' + _tiqDeltaTipAttr('new') + '>NEW</span>';
                     deltaSort = '0';
                 } else if (typeof us.delta_pct === 'number' && us.direction) {
                     var pctRaw2 = Math.abs(us.delta_pct) * 100;
@@ -63578,7 +63594,7 @@ https://www.instagram.com/p/..."></textarea>
                             var estimate = Number(us.us_estimate);
                             var hasViews = isFinite(estimate) && estimate > 0;
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
-                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat has-tooltip"' + _tiqDeltaTipAttr('flat') + '>—</span>';
                             var deltaSort = '';
                             // Rank-position delta first so FAST Film/TV
                             // rows render as `↑ 3` / `↓ 8` off
@@ -63591,10 +63607,10 @@ https://www.instagram.com/p/..."></textarea>
                                 var pos = Math.abs(us.delta_positions);
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('rank') + '>' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
                             } else if (us.direction === 'new') {
-                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta new has-tooltip"' + _tiqDeltaTipAttr('new') + '>NEW</span>';
                                 deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pctRaw = Math.abs(us.delta_pct) * 100;
@@ -63602,7 +63618,7 @@ https://www.instagram.com/p/..."></textarea>
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('pct') + '>' + glyph + ' ' + pct + '%</span>';
                                 deltaSort = String(signed);
                             }
                             var tipParts = [];
@@ -63651,7 +63667,7 @@ https://www.instagram.com/p/..."></textarea>
                                  '<thead><tr>' +
                                    '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select><select class="tiq-sheet-yearsort" onchange="tiqFilterFastYear(this)">' + yearOpts + '</select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
-                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable has-tooltip" data-tooltip="How each title moved against the previous read. Most rows show the change in US views; a row that ranks rather than counts shows places moved instead. Hover any cell to see which." onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                  '</tr></thead>' +
                                  '<tbody>' + (rowsHtml || '<tr><td colspan="3" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
                                '</table></div>';
@@ -63955,7 +63971,7 @@ https://www.instagram.com/p/..."></textarea>
                             var estimate = Number(us.us_estimate);
                             var hasViews = isFinite(estimate) && estimate > 0;
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
-                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat has-tooltip"' + _tiqDeltaTipAttr('flat') + '>—</span>';
                             var deltaSort = '';
                             // Rank-position delta first so FAST Film/TV
                             // rows render as `↑ 3` / `↓ 8` off
@@ -63968,10 +63984,10 @@ https://www.instagram.com/p/..."></textarea>
                                 var pos = Math.abs(us.delta_positions);
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('rank') + '>' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
                             } else if (us.direction === 'new') {
-                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta new has-tooltip"' + _tiqDeltaTipAttr('new') + '>NEW</span>';
                                 deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pctRaw = Math.abs(us.delta_pct) * 100;
@@ -63979,7 +63995,7 @@ https://www.instagram.com/p/..."></textarea>
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('pct') + '>' + glyph + ' ' + pct + '%</span>';
                                 deltaSort = String(signed);
                             }
                             var tipParts = [];
@@ -64028,7 +64044,7 @@ https://www.instagram.com/p/..."></textarea>
                                  '<thead><tr>' +
                                    '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select><select class="tiq-sheet-yearsort" onchange="tiqFilterFastYear(this)">' + yearOpts + '</select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
-                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable has-tooltip" data-tooltip="How each title moved against the previous read. Most rows show the change in US views; a row that ranks rather than counts shows places moved instead. Hover any cell to see which." onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                  '</tr></thead>' +
                                  '<tbody>' + (rowsHtml || '<tr><td colspan="3" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
                                '</table></div>';
@@ -64094,7 +64110,7 @@ https://www.instagram.com/p/..."></textarea>
                             var estimate = Number(us.us_estimate);
                             var hasViews = isFinite(estimate) && estimate > 0;
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
-                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat has-tooltip"' + _tiqDeltaTipAttr('flat') + '>—</span>';
                             var deltaSort = '';
                             // Rank-position delta first so FAST Film/TV
                             // rows render as `↑ 3` / `↓ 8` off
@@ -64107,10 +64123,10 @@ https://www.instagram.com/p/..."></textarea>
                                 var pos = Math.abs(us.delta_positions);
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('rank') + '>' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
                             } else if (us.direction === 'new') {
-                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta new has-tooltip"' + _tiqDeltaTipAttr('new') + '>NEW</span>';
                                 deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pctRaw = Math.abs(us.delta_pct) * 100;
@@ -64118,7 +64134,7 @@ https://www.instagram.com/p/..."></textarea>
                                 var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls + '"' + _tiqDeltaTipAttr('pct') + '>' + glyph + ' ' + pct + '%</span>';
                                 deltaSort = String(signed);
                             }
                             var tipParts = [];
@@ -64169,7 +64185,7 @@ https://www.instagram.com/p/..."></textarea>
                                 '<thead><tr>' +
                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-views" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
-                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-delta" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-delta has-tooltip" data-tooltip="Change in US views for each channel against the previous read in the same window." onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                   '<th class="tiq-sheet-th-spacer"></th>' +
                                 '</tr></thead>' +
                                 '<tbody>' + chRows + '</tbody>' +
