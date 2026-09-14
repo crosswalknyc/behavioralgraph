@@ -24250,7 +24250,7 @@ https://www.instagram.com/p/..."></textarea>
         /* The jump row lives inside the pinned chrome, so every rule here
            has to match there too. Scoped to #dashboardView alone, the menu
            lost its dropdown styling and spilled out as a wall of buttons. */
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-lbl {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-lbl {
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.14em;
@@ -24258,7 +24258,7 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500;
             flex: 0 0 auto;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn {
             display: inline-flex !important;
             align-items: center;
             justify-content: space-between;
@@ -24278,28 +24278,46 @@ https://www.instagram.com/p/..."></textarea>
             cursor: pointer;
             transition: border-color 120ms ease;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn:hover {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn:hover {
             border-color: #7C878A;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn .caret {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn .caret {
             font-size: 8px;
             color: #7C878A;
             transition: transform 120ms ease;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn[aria-expanded="true"] {
             border-color: rgba(199, 242, 62, 0.45);
             color: #C7F23E;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] .caret {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn[aria-expanded="true"] .caret {
             transform: rotate(180deg);
             color: #C7F23E;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-wrap {
+        #dashboardView.piq-v4 #compJumpWrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+        }
+        #dashboardView.piq-v4 #compJumpWrap select { display: none !important; }
+        /* Group headings inside the menu, mirroring the select's optgroups. */
+        #dashboardView.piq-v4 #compJumpWrap .piq-jump-group {
+            display: block;
+            padding: 10px 10px 5px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #7C878A;
+        }
+        #dashboardView.piq-v4 #compJumpWrap .piq-jump-group:first-child { padding-top: 4px; }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-wrap {
             position: relative;
             display: inline-flex;
             flex: 0 0 auto;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-menu {
             position: absolute !important;
             left: 0;
             top: calc(100% + 6px);
@@ -24315,17 +24333,17 @@ https://www.instagram.com/p/..."></textarea>
             z-index: 60;
             box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu[hidden] {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-menu[hidden] {
             display: none !important;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu::-webkit-scrollbar {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-menu::-webkit-scrollbar {
             width: 8px;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu::-webkit-scrollbar-thumb {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-menu::-webkit-scrollbar-thumb {
             background: #3B3D38;
             border-radius: 999px;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt {
             display: flex !important;
             align-items: center;
             gap: 8px;
@@ -24344,7 +24362,7 @@ https://www.instagram.com/p/..."></textarea>
             cursor: pointer;
         }
         /* Leading dot marks the category the list is currently sorted to. */
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt::before {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt::before {
             content: '';
             width: 5px;
             height: 5px;
@@ -24352,40 +24370,40 @@ https://www.instagram.com/p/..."></textarea>
             flex: 0 0 5px;
             background: transparent;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt:hover {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt:hover {
             background: rgba(199, 242, 62, 0.08) !important;
             color: #C7F23E;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt.is-on {
             background: rgba(199, 242, 62, 0.12) !important;
             color: #C7F23E;
         }
-        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on::before {
+        :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt.is-on::before {
             background: #C7F23E;
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn {
             background: #FFFFFF;
             border-color: #C9C6BA;
             color: #0C1618;
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-btn[aria-expanded="true"] {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-btn[aria-expanded="true"] {
             border-color: #5E7E12;
             color: #5E7E12;
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-menu {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-menu {
             background: #FFFFFF;
             border-color: #C9C6BA;
             box-shadow: 0 18px 44px rgba(12, 22, 24, 0.16);
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt {
             color: #0C1618;
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt:hover,
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt:hover,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt.is-on {
             background: rgba(94, 126, 18, 0.10) !important;
             color: #5E7E12;
         }
-        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #piqBehJump .piq-jump-opt.is-on::before {
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 :is(#piqBehJump, #compJumpWrap) .piq-jump-opt.is-on::before {
             background: #5E7E12;
         }
         @media (max-width: 900px) {
@@ -26833,9 +26851,18 @@ https://www.instagram.com/p/..."></textarea>
                 <!-- Comparison Analysis Tabs with Action Buttons -->
                 <div class="comp-analysis-tabs">
                     <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
-                    <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
-                            <option value="">📍 Jump to...</option>
+                    <div id="compJumpWrap">
+                        <span class="piq-jump-lbl">Jump to</span>
+                        <div class="piq-jump-wrap">
+                            <button type="button" class="piq-jump-btn" id="compJumpBtn" aria-expanded="false"><span class="piq-jump-current">Pick a section</span><span class="caret">&#9662;</span></button>
+                            <div class="piq-jump-menu" id="compJumpMenu" hidden></div>
+                        </div>
+                        <!-- Still the source of truth for what is jumpable;
+                             the menu above is built from it. -->
+                        <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section" aria-hidden="true" tabindex="-1">
+                            <option value="">Jump to...</option>
                         </select>
+                    </div>
                 </div>
                 
                 <!-- Comparison Report View -->
@@ -156605,6 +156632,74 @@ https://www.instagram.com/p/..."></textarea>
             occupation: 'Occupation'
         };
         
+
+        // Compare "Jump to" uses the same control as the Behavioral tab.
+        // The native select stays as the source of truth so the existing
+        // rebuild logic is untouched; this mirrors it into the menu.
+        function _compJumpSyncMenu() {
+            const sel = document.getElementById('compJumpToSelect');
+            const menu = document.getElementById('compJumpMenu');
+            const btn = document.getElementById('compJumpBtn');
+            if (!sel || !menu || !btn) return;
+            let html = '';
+            const esc = (s) => String(s == null ? '' : s).replace(/</g, '&lt;');
+            const addOpt = (o) => {
+                if (!o.value) return;
+                const label = String(o.textContent || '').replace(/^[^\w(]+\s*/, '').trim();
+                html += '<button type="button" class="piq-jump-opt" data-sec="' +
+                    esc(o.value).replace(/"/g, '') + '">' + esc(label) + '</button>';
+            };
+            Array.prototype.forEach.call(sel.children, (node) => {
+                if (node.tagName === 'OPTGROUP') {
+                    const kids = Array.prototype.filter.call(node.children, (o) => o.value);
+                    if (!kids.length) return;
+                    html += '<span class="piq-jump-group">' + esc(node.label) + '</span>';
+                    kids.forEach(addOpt);
+                } else if (node.tagName === 'OPTION') {
+                    addOpt(node);
+                }
+            });
+            if (!html) html = '<span class="piq-jump-group">Run a comparison first</span>';
+            if (menu.innerHTML !== html) menu.innerHTML = html;
+        }
+        function _compJumpBind() {
+            const btn = document.getElementById('compJumpBtn');
+            const menu = document.getElementById('compJumpMenu');
+            const sel = document.getElementById('compJumpToSelect');
+            if (!btn || !menu || btn._compBound) return;
+            btn._compBound = true;
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                _compJumpSyncMenu();
+                const open = menu.hasAttribute('hidden');
+                if (open) menu.removeAttribute('hidden');
+                else menu.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open) {
+                    const on = menu.querySelector('.piq-jump-opt.is-on');
+                    menu.scrollTop = on ? Math.max(0, on.offsetTop - 8) : 0;
+                }
+            });
+            menu.addEventListener('click', function(e) {
+                const opt = e.target.closest('[data-sec]');
+                if (!opt) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const sec = opt.getAttribute('data-sec');
+                const cur = btn.querySelector('.piq-jump-current');
+                if (cur) cur.textContent = opt.textContent;
+                menu.querySelectorAll('.piq-jump-opt').forEach(el => el.classList.toggle('is-on', el === opt));
+                menu.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', 'false');
+                if (sel) sel.value = sec;
+                if (typeof jumpToCompSection === 'function') jumpToCompSection(sec);
+            });
+            document.addEventListener('click', function() {
+                menu.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', 'false');
+            });
+        }
         function updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats, selectedCategoriesSet) {
             const dropdown = document.getElementById('compJumpToSelect');
             if (!dropdown) return;
@@ -156638,6 +156733,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             
             dropdown.innerHTML = options;
+            try { _compJumpBind(); _compJumpSyncMenu(); } catch (_e) {}
         }
 
         function getBehavioralCategoryValueCount(profiles, category) {
