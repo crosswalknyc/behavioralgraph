@@ -173325,17 +173325,23 @@ https://www.instagram.com/p/..."></textarea>
     /* The deck repeats what the section labels say. */
     #trendsIQView .tiq-subtitle { display: none; }
 
-    /* Export rides on the section rail instead of owning a row. */
+    /* Export rides on the section rail instead of owning a row. The row
+       is full width, so it must not take the pointer or it covers the
+       five section tabs underneath it. Only the control is clickable. */
     #trendsIQView .tiq-panel-actions {
         margin: -44px 0 0 !important;
         position: relative; z-index: 2;
+        pointer-events: none;
     }
+    #trendsIQView .tiq-panel-actions > * { pointer-events: auto; }
 
     /* The mode toggle rides on the search row. */
     #trendsIQView .tiq-social-panel { position: relative; }
     #trendsIQView .tiq-social-panel > .tiq-mode-strip {
         position: absolute; top: 0; right: 0; margin: 0 !important; z-index: 2;
+        pointer-events: none;
     }
+    #trendsIQView .tiq-social-panel > .tiq-mode-strip > * { pointer-events: auto; }
     #trendsIQView .tiq-card-search-wrap { padding-right: 250px; }
     @media (max-width: 1180px) {
         #trendsIQView .tiq-social-panel > .tiq-mode-strip { position: static; margin: 0 0 10px !important; }
