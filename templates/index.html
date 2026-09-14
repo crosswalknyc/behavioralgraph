@@ -30230,6 +30230,43 @@ https://www.instagram.com/p/..."></textarea>
                 border-radius: 12px !important;
                 color: var(--mag-mute) !important;
             }
+
+            /* Section rail runs on type alone. The icons were decoration. */
+            #trendsIQView .tiq-tab .tiq-tab-ico { display: none !important; }
+            #trendsIQView .tiq-tab-count {
+                background: transparent !important;
+                padding: 0 !important;
+                border-radius: 0 !important;
+                opacity: 1 !important;
+                font-size: 10px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.04em !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-tab.active .tiq-tab-count { color: var(--mag-accent) !important; }
+
+            /* Titles / Channel Ranker toggle */
+            #trendsIQView .tiq-mode-strip { display: flex; gap: 8px; margin-bottom: 16px; }
+            #trendsIQView .tiq-mode-pill {
+                background: transparent;
+                color: var(--mag-body);
+                border: 1px solid var(--mag-rule);
+                border-radius: 999px;
+                padding: 7px 15px;
+                font-family: inherit;
+                font-size: 10.5px;
+                font-weight: 600;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                cursor: pointer;
+                transition: border-color 140ms ease, color 140ms ease;
+            }
+            #trendsIQView .tiq-mode-pill:hover { border-color: var(--mag-mute); color: var(--mag-ink); }
+            #trendsIQView .tiq-mode-pill.active {
+                background: var(--mag-ink);
+                color: var(--mag-ground);
+                border-color: var(--mag-ink);
+            }
         </style>
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
@@ -59456,7 +59493,7 @@ https://www.instagram.com/p/..."></textarea>
                 var badgeId = (t.key === 'watchlist') ? ' id="trendsIQWatchBadge"' : '';
                 var tipAttr = t.tip ? ' data-tooltip="' + _tiqEsc(t.tip) + '"' : '';
                 return '<div class="tiq-tab has-tooltip' + active + '" data-tiq-tab="' + t.key + '"' + tipAttr + ' onclick="setTrendsIQTab(\'' + t.key + '\')">' +
-                       '<span>' + t.icon + '</span><span>' + t.label + '</span>' +
+                       '<span class="tiq-tab-ico">' + t.icon + '</span><span class="tiq-tab-name">' + t.label + '</span>' +
                        (t.count ? '<span class="tiq-tab-count"' + badgeId + '>' + t.count + '</span>' : (t.key === 'watchlist' ? '<span class="tiq-tab-count"' + badgeId + ' style="display:none;"></span>' : '')) +
                        '</div>';
             }).join('');
@@ -63496,19 +63533,13 @@ https://www.instagram.com/p/..."></textarea>
                     // stays subdued.
                     var mkPill = function(m, label) {
                         var isOn = (mode === m);
-                        var bg  = isOn ? '#6366f1' : '#fff';
-                        var col = isOn ? '#fff'    : '#334155';
-                        var bd  = isOn ? '#6366f1' : '#e5e7eb';
-                        return '<button type="button" ' +
-                               'onclick="setTrendsIQFastMode(\'' + m + '\')" ' +
-                               'style="background:' + bg + '; color:' + col + '; ' +
-                               'border:1px solid ' + bd + '; border-radius:9999px; ' +
-                               'padding:6px 14px; font-size:12px; font-weight:600; ' +
-                               'cursor:pointer; letter-spacing:.02em;">' +
+                        return '<button type="button" class="tiq-mode-pill' +
+                               (isOn ? ' active' : '') + '" ' +
+                               'onclick="setTrendsIQFastMode(\'' + m + '\')">' +
                                label + '</button>';
                     };
                     var modeStrip =
-                        '<div style="display:flex; gap:8px; margin-bottom:16px;">' +
+                        '<div class="tiq-mode-strip">' +
                           mkPill('titles',   'Titles') +
                           mkPill('channels', 'Channel Ranker') +
                         '</div>';
