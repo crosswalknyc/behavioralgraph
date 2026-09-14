@@ -173419,6 +173419,31 @@ https://www.instagram.com/p/..."></textarea>
         background: var(--mag-accent);
     }
     #trendsIQView .tiq-sheet-chan tbody td { padding-top: 13px !important; padding-bottom: 13px !important; }
+
+    /* ---- Film and TV rows stay on the same lines --------------------
+       The two columns are separate tables, so one tall row knocks every
+       separator below it out of step with its neighbour. The poster sets
+       the row height, and the text inside is held to that height rather
+       than being allowed to grow the row. */
+    #trendsIQView .tiq-board .tiq-sheet tbody tr { height: 82px; }
+    #trendsIQView .tiq-board .tiq-sheet tbody td { height: 82px; }
+    #trendsIQView .tiq-board .tiq-sheet-titlemain {
+        max-height: 62px;
+        overflow: hidden;
+    }
+    /* A third genre is what usually wraps; it truncates instead. */
+    #trendsIQView .tiq-board .tiq-sheet-subline {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* A very long title takes two lines, never three. */
+    #trendsIQView .tiq-board .tiq-row-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
