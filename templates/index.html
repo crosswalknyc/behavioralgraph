@@ -173355,6 +173355,25 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-title { font-size: 26px !important; margin-bottom: 0 !important; }
     #trendsIQView .tiq-header { padding-bottom: 10px !important; margin-bottom: 10px !important; }
     #trendsIQView .tiq-sec-head { margin: 12px 0 10px !important; padding-bottom: 8px !important; }
+
+    /* ---- The header belongs to the page ----------------------------
+       It kept the old darkest value after the ground was lifted, which
+       left a hard step under it on any view without a dark hero to mask
+       it. Same ground, hairline separator, no step. Scoped so the
+       products still on the legacy navy keep their own header. */
+    body[data-ground="graphite"] header {
+        background: var(--cw-page) !important;
+        border-bottom-color: var(--cw-border) !important;
+    }
+    body[data-theme="light"][data-ground="graphite"] header {
+        background: #E9E8E1 !important;
+        border-bottom-color: #C9C6BA !important;
+    }
+    /* The Profile IQ cover stays darker than the page on purpose: it is
+       a cover, and its lower edge is meant to read as one. */
+    body[data-ground="graphite"] #dashboardView .profile-and-toolbar-row {
+        border-bottom: 1px solid var(--cw-border);
+    }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
