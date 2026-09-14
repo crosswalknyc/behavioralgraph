@@ -61375,11 +61375,27 @@ https://www.instagram.com/p/..."></textarea>
                     innerCards[ic].setAttribute('data-tiq-search-consolidated', '1');
                 }
                 var splitWrap = _tiqBuildCardSearchWidget(splitPanel);
-                if (splitPanel.firstChild) {
-                    splitPanel.insertBefore(splitWrap, splitPanel.firstChild);
+                // The controls filter the board, so they sit with it
+                // rather than above the shelf. Anchor on the board's
+                // section head when there is one; panels without a
+                // shelf keep the widget at the top as before.
+                var splitBoard = splitPanel.querySelector(':scope > .tiq-board');
+                var splitAnchor = null;
+                if (splitBoard) {
+                    var splitPrev = splitBoard.previousElementSibling;
+                    splitAnchor = (splitPrev && splitPrev.classList.contains('tiq-sec-head'))
+                                    ? splitPrev : splitBoard;
+                }
+                if (!splitAnchor) splitAnchor = splitPanel.firstChild;
+                if (splitAnchor) {
+                    splitPanel.insertBefore(splitWrap, splitAnchor);
                 } else {
                     splitPanel.appendChild(splitWrap);
                 }
+                // Toggle rides inside the widget so the two share a row
+                // without being positioned on top of each other.
+                var splitMode = splitPanel.querySelector(':scope > .tiq-mode-strip');
+                if (splitMode) splitWrap.insertBefore(splitMode, splitWrap.firstChild);
             }
 
             // Pass B: per-card search. Every `.tiq-card` that owns
@@ -173323,19 +173339,14 @@ https://www.instagram.com/p/..."></textarea>
 
     /* The mode toggle rides on the search row. */
     #trendsIQView .tiq-social-panel { position: relative; }
-    #trendsIQView .tiq-social-panel > .tiq-mode-strip {
-        position: absolute; top: 0; left: 0; margin: 0 !important; z-index: 2;
-        pointer-events: none;
+    /* The toggle now lives inside the search row, so it needs no
+       positioning of its own. */
+    #trendsIQView .tiq-card-search-wrap > .tiq-mode-strip {
+        margin: 0 !important; flex: 0 0 auto;
     }
-    #trendsIQView .tiq-social-panel > .tiq-mode-strip > * { pointer-events: auto; }
-    /* The toggle is 226px; the search field starts clear of it. */
-    #trendsIQView .tiq-card-search-wrap { padding-left: 246px; }
-    /* Too narrow for one row: the toggle stacks above the search field. */
+    #trendsIQView .tiq-card-search-wrap { gap: 20px !important; }
     @media (max-width: 1180px) {
-        #trendsIQView .tiq-card-search-wrap {
-            padding-left: 0;
-            margin-top: 43px !important;
-        }
+        #trendsIQView .tiq-card-search-wrap { flex-wrap: wrap; gap: 12px !important; }
     }
 
     /* The caption under the toggle repeats the dateline and the section
