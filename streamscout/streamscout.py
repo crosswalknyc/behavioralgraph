@@ -481,7 +481,7 @@ def choose_platform() -> str:
         elif key == "amazonpodcasts":
             tag = "direct · no login · browser · every episode URL"
         elif key == "siriusxm":
-            tag = "direct · no login · browser · every episode URL (paste show link)"
+            tag = "browser · every episode URL · one-time login for title search"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
