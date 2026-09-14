@@ -30666,10 +30666,383 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #microdramasIQView .miq-cross-card { background: #fff; border-color: rgba(0,0,0,0.08); }
             body[data-theme="light"] #microdramasIQView .miq-filter-bar,
             body[data-theme="light"] #microdramasIQView .miq-comp-filter { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+
+            /* ==============================================================
+               MICRO-SERIES - EDITORIAL LAYOUT
+               Same treatment as Rankers: a masthead, a section rail you
+               read across, then the feature well. Brand palette only, so
+               the pink-to-violet chrome and the seven-color platform
+               spectrum are retired.
+               ============================================================== */
+
+            #microdramasIQView {
+                font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+                --mag-ink: #E9E8E1;
+                --mag-body: #9AA09B;
+                --mag-mute: #7C878A;
+                --mag-rule: #3B3D38;
+                --mag-panel: #15252A;
+                --mag-ground: #0C1618;
+                --mag-accent: #C7F23E;
+                --mag-second: #E682FF;
+            }
+            body[data-theme="light"] #microdramasIQView {
+                --mag-ink: #0C1618;
+                --mag-body: #5C6560;
+                --mag-mute: #888C89;
+                --mag-rule: #C9C6BA;
+                --mag-panel: #FFFFFF;
+                --mag-ground: #F4F3EE;
+                --mag-accent: #5E7E12;
+                --mag-second: #8E3FA8;
+            }
+
+            /* ---- Masthead ------------------------------------------------ */
+            #microdramasIQView .miq-header {
+                gap: 0 !important;
+                padding-bottom: 18px;
+                margin-bottom: 18px !important;
+                border-bottom: 1px solid var(--mag-rule);
+            }
+            #microdramasIQView .miq-title {
+                font-size: 34px !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.03em !important;
+                line-height: 1.05 !important;
+                color: var(--mag-ink) !important;
+                text-transform: none !important;
+                margin: 0 0 8px !important;
+            }
+            #microdramasIQView .miq-title span {
+                display: block;
+                margin-top: 8px;
+                font-size: 11px;
+                font-weight: 500;
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+                color: var(--mag-mute);
+            }
+            #microdramasIQView .miq-deck {
+                font-size: 13.5px;
+                line-height: 1.55;
+                color: var(--mag-body);
+                text-transform: none;
+                max-width: 68ch;
+                margin: 0;
+            }
+
+            /* ---- Toolbar ------------------------------------------------- */
+            #microdramasIQView .miq-filter-bar {
+                background: transparent !important;
+                border: 0 !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                border-radius: 0 !important;
+                padding: 0 0 16px !important;
+                margin-bottom: 14px !important;
+            }
+            #microdramasIQView .miq-filter-bar label {
+                font-size: 9.5px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.16em !important;
+                color: var(--mag-mute) !important;
+                margin-bottom: 6px !important;
+            }
+            #microdramasIQView .miq-filter-bar select {
+                background: var(--mag-ground) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 8px !important;
+                color: var(--mag-ink) !important;
+                font-family: inherit !important;
+                font-size: 12.5px !important;
+                padding: 8px 10px !important;
+            }
+            #microdramasIQView .miq-filter-bar select:focus { outline: none; border-color: var(--mag-accent) !important; }
+            /* The action takes ink. Signal Green is reserved for the data. */
+            #microdramasIQView .miq-apply-btn {
+                background: var(--mag-ink) !important;
+                color: var(--mag-ground) !important;
+                border: 0 !important;
+                border-radius: 8px !important;
+                font-family: inherit !important;
+                font-size: 10.5px !important;
+                font-weight: 800 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                padding: 9px 16px !important;
+            }
+            #microdramasIQView .miq-apply-btn:hover { opacity: 1; filter: brightness(0.92); }
+
+            /* ---- Dateline ------------------------------------------------ */
+            #microdramasIQView .miq-datestamp {
+                background: transparent !important;
+                border: 0 !important;
+                border-top: 1px solid var(--mag-rule) !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                border-radius: 0 !important;
+                padding: 11px 0 !important;
+                margin: 0 0 16px !important;
+            }
+            #microdramasIQView .miq-datestamp-label,
+            #microdramasIQView .miq-datestamp-value,
+            #microdramasIQView .miq-datestamp-range {
+                font-size: 10px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.14em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+            }
+            #microdramasIQView .miq-datestamp-value { color: var(--mag-ink) !important; font-weight: 700 !important; }
+            #microdramasIQView .miq-export-btn {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 7px !important;
+                color: var(--mag-body) !important;
+                font-family: inherit !important;
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                padding: 6px 11px !important;
+            }
+            #microdramasIQView .miq-export-btn:hover { border-color: var(--mag-accent) !important; color: var(--mag-ink) !important; }
+            #microdramasIQView .miq-meta {
+                font-size: 10px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.14em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+            }
+
+            /* ---- Section rail -------------------------------------------- */
+            #microdramasIQView .miq-tabstrip {
+                gap: 26px !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                padding: 0 !important;
+                margin-bottom: 20px !important;
+            }
+            #microdramasIQView .miq-tab {
+                background: transparent !important;
+                border: 0 !important;
+                border-bottom: 2px solid transparent !important;
+                border-radius: 0 !important;
+                padding: 0 0 11px !important;
+                font-family: inherit !important;
+                font-size: 12px !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.1em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+                transition: color 140ms ease, border-color 140ms ease;
+            }
+            #microdramasIQView .miq-tab:hover { background: transparent !important; color: var(--mag-ink) !important; }
+            #microdramasIQView .miq-tab.active {
+                background: transparent !important;
+                color: var(--mag-ink) !important;
+                border-bottom-color: var(--mag-accent) !important;
+            }
+
+            /* ---- Platform colors. Brand data series, seven values. -------- */
+            #microdramasIQView .miq-plat-reelshort   { --plat: #C7F23E; }
+            #microdramasIQView .miq-plat-dramabox    { --plat: #E682FF; }
+            #microdramasIQView .miq-plat-goodshort   { --plat: #3358FF; }
+            #microdramasIQView .miq-plat-peacock     { --plat: #B7B3D8; }
+            #microdramasIQView .miq-plat-netshort    { --plat: #8E3FA8; }
+            #microdramasIQView .miq-plat-dramashorts { --plat: #5E7E12; }
+            #microdramasIQView .miq-plat-atwist      { --plat: #7C878A; }
+            #microdramasIQView .miq-rollup-bar-seg[class*="miq-plat-"] { background: var(--plat) !important; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot[class*="miq-plat-"] { background: var(--plat) !important; }
+
+            /* ---- Platform roll-up ---------------------------------------- */
+            #microdramasIQView .miq-platform-rollup {
+                background: transparent !important;
+                border: 0 !important;
+                border-bottom: 1px solid var(--mag-rule) !important;
+                border-radius: 0 !important;
+                padding: 0 0 22px !important;
+                margin-bottom: 22px !important;
+            }
+            #microdramasIQView .miq-rollup-title {
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                letter-spacing: 0.16em !important;
+                color: var(--mag-ink) !important;
+                align-items: center !important;
+                margin-bottom: 12px;
+            }
+            #microdramasIQView .miq-rollup-title::before {
+                content: '';
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--mag-accent);
+                flex: 0 0 auto;
+                margin-right: -2px;
+            }
+            #microdramasIQView .miq-rollup-title > :first-child { margin-right: auto; }
+            #microdramasIQView .miq-rollup-title .miq-rollup-total { font-size: 11px !important; color: var(--mag-ink) !important; }
+            #microdramasIQView .miq-rollup-bar {
+                height: 14px !important;
+                border-radius: 7px !important;
+                background: var(--mag-ground) !important;
+                margin-bottom: 16px;
+            }
+            #microdramasIQView .miq-rollup-cards { gap: 12px !important; }
+            #microdramasIQView .miq-rollup-card {
+                background: var(--mag-panel) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 12px !important;
+                padding: 14px 15px !important;
+                gap: 3px !important;
+            }
+            #microdramasIQView .miq-rollup-card-name {
+                font-size: 10px !important;
+                letter-spacing: 0.14em !important;
+                color: var(--mag-ink) !important;
+            }
+            #microdramasIQView .miq-rollup-card-share,
+            #microdramasIQView .miq-rollup-card-views-label,
+            #microdramasIQView .miq-rollup-card-sub,
+            #microdramasIQView .miq-rollup-conv-label,
+            #microdramasIQView .miq-rollup-flow-label {
+                font-size: 9px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.12em !important;
+                text-transform: uppercase !important;
+                color: var(--mag-mute) !important;
+            }
+            #microdramasIQView .miq-rollup-card-views {
+                font-size: 26px !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.03em !important;
+                color: var(--mag-ink) !important;
+                line-height: 1.1 !important;
+            }
+            #microdramasIQView .miq-rollup-card-conv,
+            #microdramasIQView .miq-rollup-card-flow { border-top: 1px solid var(--mag-rule) !important; padding-top: 10px !important; margin-top: 10px !important; }
+            #microdramasIQView .miq-rollup-conv-value { color: var(--mag-ink) !important; font-size: 12px !important; }
+            #microdramasIQView .miq-rollup-card-conv-raw,
+            #microdramasIQView .miq-rollup-card-top { color: var(--mag-mute) !important; font-size: 9.5px !important; }
+            #microdramasIQView .miq-rollup-card-top { font-style: normal !important; text-transform: none !important; }
+            #microdramasIQView .miq-rollup-flow-value { font-size: 12px !important; color: var(--mag-ink) !important; }
+            /* Growth reads green, loss reads orchid. No red in the palette. */
+            #microdramasIQView .miq-rollup-flow-value.miq-rollup-flow-pos,
+            #microdramasIQView .miq-rollup-flow-net-pos { color: var(--mag-accent) !important; }
+            #microdramasIQView .miq-rollup-flow-value.miq-rollup-flow-neg,
+            #microdramasIQView .miq-rollup-flow-net-neg { color: var(--mag-second) !important; }
+
+            /* ---- The feature well ---------------------------------------- */
+            #microdramasIQView .miq-title-grid {
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
+                gap: 16px !important;
+            }
+            #microdramasIQView .miq-title-card {
+                background: var(--mag-panel) !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 14px !important;
+                padding: 16px 17px !important;
+                gap: 10px !important;
+            }
+            #microdramasIQView .miq-title-card:hover {
+                border-color: var(--mag-mute) !important;
+                transform: none !important;
+            }
+            /* Platform badge: a dot plus a quiet label, not a colored slab. */
+            #microdramasIQView .miq-platform-badge {
+                top: 15px !important;
+                right: 15px !important;
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                color: var(--mag-mute) !important;
+                font-size: 9px !important;
+                letter-spacing: 0.12em !important;
+                padding: 3px 9px 3px 7px !important;
+                border-radius: 999px !important;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+            #microdramasIQView .miq-platform-badge::before {
+                content: '';
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+                background: var(--plat, var(--mag-mute));
+            }
+            /* The rank is set like a countdown numeral, top three in green. */
+            #microdramasIQView .miq-title-row {
+                font-size: 15px !important;
+                font-weight: 700 !important;
+                letter-spacing: -0.015em !important;
+                line-height: 1.25 !important;
+                color: var(--mag-ink) !important;
+                text-transform: none !important;
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+            }
+            #microdramasIQView .miq-agg-rank {
+                background: transparent !important;
+                border: 0 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                font-size: 19px !important;
+                font-weight: 300 !important;
+                letter-spacing: -0.03em !important;
+                color: var(--mag-mute) !important;
+                flex: 0 0 auto;
+            }
+            #microdramasIQView .miq-title-card:nth-child(-n+3) .miq-agg-rank {
+                color: var(--mag-accent) !important;
+                font-weight: 500 !important;
+            }
+            #microdramasIQView .miq-title-series { color: var(--mag-mute) !important; font-size: 9.5px !important; letter-spacing: 0.12em !important; }
+            #microdramasIQView .miq-title-metrics { gap: 10px 14px !important; margin-top: 2px !important; }
+            #microdramasIQView .miq-metric-label {
+                font-size: 9px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.12em !important;
+                color: var(--mag-mute) !important;
+            }
+            #microdramasIQView .miq-metric-value {
+                font-size: 17px !important;
+                font-weight: 700 !important;
+                letter-spacing: -0.02em !important;
+                color: var(--mag-ink) !important;
+            }
+            /* Completion chips run as one quiet family. */
+            #microdramasIQView .miq-comp-chip,
+            #microdramasIQView .miq-comp-chip.miq-chip-completion,
+            #microdramasIQView .miq-comp-chip.miq-chip-payer,
+            #microdramasIQView .miq-comp-chip.miq-chip-series {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                border-radius: 999px !important;
+                padding: 5px 11px !important;
+            }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-label {
+                font-size: 8.5px !important;
+                letter-spacing: 0.12em !important;
+                color: var(--mag-mute) !important;
+            }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-value,
+            #microdramasIQView .miq-comp-chip.miq-chip-completion .miq-comp-chip-value,
+            #microdramasIQView .miq-comp-chip.miq-chip-payer .miq-comp-chip-value,
+            #microdramasIQView .miq-comp-chip.miq-chip-series .miq-comp-chip-value {
+                font-size: 11.5px !important;
+                font-weight: 700 !important;
+                color: var(--mag-ink) !important;
+            }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-raw { font-size: 8.5px !important; color: var(--mag-mute) !important; opacity: 1 !important; }
+            #microdramasIQView .miq-window-cell { background: var(--mag-accent) !important; opacity: 0.55 !important; border-radius: 2px 2px 0 0 !important; }
+            #microdramasIQView .miq-window-cell-empty { background: var(--mag-rule) !important; opacity: 1 !important; }
+            #microdramasIQView .miq-spark-wrap { border-top: 1px solid var(--mag-rule) !important; padding-top: 8px !important; margin-top: 8px !important; }
+            #microdramasIQView .miq-spark-wrap:hover { background: rgba(233, 232, 225, 0.035) !important; }
+
         </style>
         <div id="microdramasIQView">
             <div class="miq-header">
-                <h2 class="miq-title">📱 Micro-Series</h2>
+                <h2 class="miq-title">Micro-Series.<span>Vertical short drama across every platform</span></h2>
+                <p class="miq-deck">Every title ranked by views in the window you pick. Choose a platform, then read down: views, episodes, how many viewers cross the paywall, and how many finish.</p>
             </div>
             <!-- Unified filter bar: applies to whichever tab is active.
                  Peacock uses Look back + Genre; competitor tabs also
