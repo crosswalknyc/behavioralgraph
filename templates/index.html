@@ -29531,6 +29531,10 @@ https://www.instagram.com/p/..."></textarea>
             /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio). Titles iTunes Search has no artwork for show a lime tile with the real CROSSWALK ///-mark (cropped straight from the logo, recolored dark via brightness(0)) centered on top; real posters cover it via .tiq-ph-img. */
             #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; border-radius: 4px; background-color: #c4f542; }
             #trendsIQView .tiq-poster-mark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 58%; height: auto; z-index: 0; filter: brightness(0); pointer-events: none; }
+            /* Titles with no artwork: gradient plus initials, matching the
+               shelf tiles, instead of the lime mark tile. */
+            #trendsIQView .tiq-poster-image.has-ini { background-color: transparent; background-image: linear-gradient(140deg, #24506B, #5B3E86 55%, #3B6B4A); }
+            #trendsIQView .tiq-poster-ini { position: absolute; inset: 0; z-index: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; letter-spacing: -0.03em; color: rgba(233, 232, 225, 0.9); pointer-events: none; }
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
@@ -59885,12 +59889,19 @@ https://www.instagram.com/p/..."></textarea>
         // via .tiq-ph-img; titles with no artwork - or whose poster URL 404s /
         // is paywalled (onerror removes it) - fall through to the lime mark.
         var _TIQ_POSTER_MARK_SRC = "{{ url_for('static', filename='crosswalk-slashes.png') }}";
-        function _tiqPosterCell(url) {
-            var mark = '<img class="tiq-poster-mark" src="' + _TIQ_POSTER_MARK_SRC + '" alt="" aria-hidden="true">';
+        function _tiqPosterCell(url, title) {
+            // With a title we draw the same gradient-and-initials tile the
+            // shelf uses, so a title with no artwork reads as a designed
+            // cell. Without one we keep the mark, which is what every
+            // caller that has no title to give still gets.
+            var ini = title ? _tiqFastInitials(title) : '';
+            var base = ini
+                ? '<span class="tiq-poster-ini">' + _tiqEsc(ini) + '</span>'
+                : '<img class="tiq-poster-mark" src="' + _TIQ_POSTER_MARK_SRC + '" alt="" aria-hidden="true">';
             var img = url
                 ? '<img class="tiq-ph-img" src="' + _tiqEsc(url) + '" loading="lazy" alt="" onerror="this.remove()">'
                 : '';
-            return '<div class="tiq-poster-image tiq-ph">' + mark + img + '</div>';
+            return '<div class="tiq-poster-image tiq-ph' + (ini ? ' has-ini' : '') + '">' + base + img + '</div>';
         }
         function _tiqNum(n) {
             n = Number(n);
@@ -63596,7 +63607,7 @@ https://www.instagram.com/p/..."></textarea>
                             }
                             var viewsTip = _tiqEsc(tipParts.join(' \u00b7 '));
                             var streamKey = it.title;
-                            var img = _tiqPosterCell(it.image);
+                            var img = _tiqPosterCell(it.image, it.title);
                             var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
@@ -63648,19 +63659,26 @@ https://www.instagram.com/p/..."></textarea>
                     var titlesGrid = '';
                     if (hasFilm) titlesGrid += renderCol('Film', filmRows);
                     if (hasTV)   titlesGrid += renderCol('TV',   tvRows);
-                    // Full-width "All" card: Film + TV re-ranked by weekly US views.
-                    var allRows = (filmRows || []).concat(tvRows || []);
-                    allRows.sort(function(a, b) {
-                        var av = Number((a.us_streams || {}).us_estimate); av = isFinite(av) ? av : -1;
-                        var bv = Number((b.us_streams || {}).us_estimate); bv = isFinite(bv) ? bv : -1;
+                    // Top ten shelf: Film + TV re-ranked by US views, the same
+                    // shelf FAST carries. It replaces the old full-width "All"
+                    // card, which re-listed all 200 titles already rendered in
+                    // the two columns below it - the whole panel measured
+                    // 25,536px, two thirds of it that duplicate.
+                    var strmTagged = (filmRows || []).map(function (r) { return { r: r, fmt: 'Film' }; })
+                        .concat((tvRows || []).map(function (r) { return { r: r, fmt: 'TV' }; }));
+                    strmTagged.sort(function (a, b) {
+                        var av = Number(((a.r || {}).us_streams || {}).us_estimate); av = isFinite(av) ? av : -1;
+                        var bv = Number(((b.r || {}).us_streams || {}).us_estimate); bv = isFinite(bv) ? bv : -1;
                         return bv - av;
                     });
-                    var allCard = allRows.length ? renderCol('All', allRows, true) : '';
+                    var strmNine = _tiqRenderNine(strmTagged);
                     body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                           '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                           strmNine +
+                           (strmNine ? '<div class="tiq-sec-head"><h3>The full board</h3>' +
+                                       '<em>Tap any column to re-sort</em></div>' : '') +
+                           '<div class="tiq-cards-grid tiq-board" style="grid-template-columns: ' + cols + ';">' +
                            titlesGrid +
-                           '</div>' +
-                           (allCard ? '<div class="tiq-cards-grid" style="grid-template-columns: 1fr; margin-top: 16px;">' + allCard + '</div>' : '');
+                           '</div>';
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-streaming="' + k + '">' + body + '</div>';
             }).join('');
@@ -63966,7 +63984,7 @@ https://www.instagram.com/p/..."></textarea>
                             }
                             var viewsTip = _tiqEsc(tipParts.join(' \u00b7 '));
                             var streamKey = it.title;
-                            var img = _tiqPosterCell(it.image);
+                            var img = _tiqPosterCell(it.image, it.title);
                             var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
