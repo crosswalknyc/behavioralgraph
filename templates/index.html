@@ -60047,7 +60047,7 @@ https://www.instagram.com/p/..."></textarea>
             // array so it's easy to see and update in one place.
             var tabs = [
                 { key: 'talentranker', label: 'Talent Ranker', count: 0, icon: '⭐',
-                  tip: 'Talent Ranker: Leaderboards for Talent, Brands, and Sport ranked by mentions, engagement, and trend velocity.' },
+                  tip: 'Talent Ranker: Leaderboards for Talent, Brands, and Sport ranked by engagements and trend velocity.' },
                 { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎',
                   tip: 'Trending searches: The top search queries and hashtags in the window, ranked by search volume. What people are actively looking for right now.' },
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀',
@@ -62512,11 +62512,13 @@ https://www.instagram.com/p/..."></textarea>
 
         function renderTIQPeople(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending people surfaced for this filter yet.</div>';
-            var mode = window.__trendsIQ.peopleSort || 'mentions';
+            var mode = window.__trendsIQ.peopleSort || 'pageviews';
+            // A saved Mentions sort has nowhere to land now, so it falls
+            // through to the figure the card actually shows.
+            if (mode === 'mentions') mode = 'pageviews';
             var sorted = _tiqSortPeople(rows, mode);
             var opts = [
-                { v: 'mentions',  label: 'Mentions (high to low)' },
-                { v: 'pageviews', label: 'Pageviews (high to low)' },
+                { v: 'pageviews', label: 'Digital touchpoints (high to low)' },
                 { v: 'name',      label: 'Name (A to Z)' },
             ].map(function(o) {
                 var sel = (o.v === mode) ? ' selected' : '';
@@ -62557,12 +62559,8 @@ https://www.instagram.com/p/..."></textarea>
                     ? ('background-image: url(\'' + String(p.image).replace(/'/g, "%27") + '\')')
                     : '';
                 var metaLine = '';
-                if (mentionsProj > 0 && pageviewsProj > 0) {
-                    metaLine = _tiqNum(mentionsProj) + ' mentions &middot; ' + _tiqNum(pageviewsProj) + ' pageviews';
-                } else if (mentionsProj > 0) {
-                    metaLine = _tiqNum(mentionsProj) + ' mentions';
-                } else if (pageviewsProj > 0) {
-                    metaLine = _tiqNum(pageviewsProj) + ' pageviews';
+                if (pageviewsProj > 0) {
+                    metaLine = _tiqNum(pageviewsProj) + ' digital touchpoints';
                 }
                 // Weekly-US-audience-interest chip. us_streams is stamped
                 // by _annotate_trending_people_with_audience in trends_iq.py
