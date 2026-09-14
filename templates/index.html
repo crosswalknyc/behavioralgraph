@@ -173324,14 +173324,18 @@ https://www.instagram.com/p/..."></textarea>
     /* The mode toggle rides on the search row. */
     #trendsIQView .tiq-social-panel { position: relative; }
     #trendsIQView .tiq-social-panel > .tiq-mode-strip {
-        position: absolute; top: 0; right: 0; margin: 0 !important; z-index: 2;
+        position: absolute; top: 0; left: 0; margin: 0 !important; z-index: 2;
         pointer-events: none;
     }
     #trendsIQView .tiq-social-panel > .tiq-mode-strip > * { pointer-events: auto; }
-    #trendsIQView .tiq-card-search-wrap { padding-right: 250px; }
+    /* The toggle is 226px; the search field starts clear of it. */
+    #trendsIQView .tiq-card-search-wrap { padding-left: 246px; }
+    /* Too narrow for one row: the toggle stacks above the search field. */
     @media (max-width: 1180px) {
-        #trendsIQView .tiq-social-panel > .tiq-mode-strip { position: static; margin: 0 0 10px !important; }
-        #trendsIQView .tiq-card-search-wrap { padding-right: 0; }
+        #trendsIQView .tiq-card-search-wrap {
+            padding-left: 0;
+            margin-top: 43px !important;
+        }
     }
 
     /* The caption under the toggle repeats the dateline and the section
