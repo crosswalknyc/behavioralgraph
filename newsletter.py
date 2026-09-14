@@ -577,6 +577,10 @@ def normalize_state(state):
         if "tags" not in sub:
             sub["tags"] = []
             changed = True
+    merged, n_dupes = dedupe_subscriber_rows(state.get("subscribers") or [])
+    if n_dupes:
+        state["subscribers"] = merged
+        changed = True
     for camp in state["campaigns"]:
         if _legacy_jenna_reply(camp.get("reply_to")) or not camp.get("reply_to"):
             camp["reply_to"] = DEFAULT_REPLY_TO
@@ -1013,6 +1017,65 @@ def subscriber_matches_segment(sub, segment):
     return True
 
 
+def _merge_subscriber_into(keep, extra):
+    lists = list(keep.get("list_ids") or [])
+    for lid in extra.get("list_ids") or []:
+        if lid and lid not in lists:
+            lists.append(lid)
+    keep["list_ids"] = lists
+    tags = _normalize_tags(keep.get("tags") or [])
+    have = {t.lower() for t in tags}
+    for tag in extra.get("tags") or []:
+        if tag and tag.lower() not in have:
+            tags.append(tag)
+            have.add(tag.lower())
+    keep["tags"] = tags
+    if extra.get("name") and not keep.get("name"):
+        keep["name"] = extra.get("name")
+    if extra.get("company") and not keep.get("company"):
+        keep["company"] = extra.get("company")
+    extra_status = extra.get("status") or "subscribed"
+    keep_status = keep.get("status") or "subscribed"
+    if extra_status == "unsubscribed" or keep_status == "unsubscribed":
+        keep["status"] = "unsubscribed"
+        keep["unsubscribed_at"] = keep.get("unsubscribed_at") or extra.get("unsubscribed_at")
+
+
+def dedupe_subscriber_rows(subs):
+    """One row per normalized email. Extra copies fold into the first."""
+    out = []
+    by_email = {}
+    collapsed = 0
+    for sub in subs or []:
+        email = _valid_email(sub.get("email"))
+        if not email:
+            collapsed += 1
+            continue
+        cur = by_email.get(email)
+        if not cur:
+            row = dict(sub)
+            row["email"] = email
+            by_email[email] = row
+            out.append(row)
+            continue
+        collapsed += 1
+        _merge_subscriber_into(cur, sub)
+    return out, collapsed
+
+
+def unique_recipient_map(rows):
+    """Build email -> row with one entry per address."""
+    out = {}
+    for row in rows or []:
+        email = _valid_email((row or {}).get("email"))
+        if not email or email in out:
+            continue
+        nxt = dict(row)
+        nxt["email"] = email
+        out[email] = nxt
+    return out
+
+
 def resolve_recipients(state, list_id=None, emails=None, segment_id=None):
     wanted = None
     if emails:
@@ -1184,10 +1247,17 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
     if camp.get("status") == "sent" and (snap.get("recipients") or {}):
         _put_json(SEND_KEY.format(cid=campaign_id) + ".prior", snap)
     existing = (snap.get("recipients") or {}) if camp.get("status") == "sending" else {}
+    existing_norm = {}
+    for key, val in existing.items():
+        ek = _valid_email(key)
+        if ek and ek not in existing_norm:
+            existing_norm[ek] = val
+        elif ek and val.get("status") == "sent":
+            existing_norm[ek] = val
     recips = {}
-    for row in recipients:
+    for row in unique_recipient_map(recipients).values():
         email = row["email"]
-        prev = existing.get(email) or {}
+        prev = existing_norm.get(email) or {}
         recips[email] = {
             "name": row.get("name") or prev.get("name") or "",
             "status": prev.get("status") if prev.get("status") in ("sent", "failed") else "queued",
@@ -1257,11 +1327,23 @@ def _run_send(campaign_id):
         snap = get_send_snapshot(campaign_id)
         snap["links"] = links
         put_send_snapshot(campaign_id, snap)
-        recips = snap.get("recipients") or {}
+        recips = {}
+        for key, row in (snap.get("recipients") or {}).items():
+            email = _valid_email(key)
+            if not email:
+                continue
+            prev = recips.get(email)
+            if prev and prev.get("status") == "sent":
+                continue
+            recips[email] = row
+        snap["recipients"] = recips
         sent = failed = 0
+        delivered = set()
         for email, row in recips.items():
-            if row.get("status") == "sent":
-                sent += 1
+            if email in delivered or row.get("status") == "sent":
+                if row.get("status") == "sent":
+                    sent += 1
+                    delivered.add(email)
                 continue
             try:
                 personalized, unsub = personalize_html(template, campaign_id, email, links, base)
@@ -1273,6 +1355,7 @@ def _run_send(campaign_id):
                 row["sent_at"] = _utcnow()
                 row["error"] = None
                 sent += 1
+                delivered.add(email)
             except Exception as e:
                 row["status"] = "failed"
                 row["error"] = str(e)[:400]
@@ -2206,7 +2289,7 @@ def api_add_subscribers():
         for row in cleaned:
             cur = existing.get(row["email"])
             if not cur:
-                st.setdefault("subscribers", []).append({
+                nxt = {
                     "email": row["email"],
                     "name": row["name"],
                     "company": row["company"],
@@ -2215,7 +2298,9 @@ def api_add_subscribers():
                     "status": "subscribed",
                     "source": "manual",
                     "added_at": _utcnow(),
-                })
+                }
+                st.setdefault("subscribers", []).append(nxt)
+                existing[row["email"]] = nxt
                 continue
             lists = list(cur.get("list_ids") or [])
             for lid in row["list_ids"]:
