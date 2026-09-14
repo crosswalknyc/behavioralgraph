@@ -134,6 +134,7 @@ RESOLVER_PLATFORMS = {
     "pandora": {"label": "Pandora", "module": "pandora_episode_identifier"},
     "amazonpodcasts": {"label": "Amazon Podcasts",
                        "module": "amazon_podcasts_identifier"},
+    "siriusxm": {"label": "SiriusXM", "module": "siriusxm_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -157,17 +158,18 @@ RESOLVER_MODULE = {
     "iheart": "iheart_episode_identifier",
     "pandora": "pandora_episode_identifier",
     "amazonpodcasts": "amazon_podcasts_identifier",
+    "siriusxm": "siriusxm_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
                       "youtube", "spotify", "applepodcasts", "iheart", "pandora",
-                      "amazonpodcasts"}
+                      "amazonpodcasts", "siriusxm"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
                   "britbox", "youtube", "spotify", "applepodcasts", "iheart",
-                  "pandora", "amazonpodcasts"]
+                  "pandora", "amazonpodcasts", "siriusxm"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -478,6 +480,8 @@ def choose_platform() -> str:
             tag = "direct · no login · every episode URL"
         elif key == "amazonpodcasts":
             tag = "direct · no login · browser · every episode URL"
+        elif key == "siriusxm":
+            tag = "direct · no login · browser · every episode URL (paste show link)"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -614,6 +618,9 @@ def main() -> int:
         elif platform == "amazonpodcasts":
             print(f"Resolving {label} — every episode URL via a headless "
                   f"Amazon Music browse (no login; needs Chromium) ...")
+        elif platform == "siriusxm":
+            print(f"Resolving {label} — every episode URL via SiriusXM's "
+                  f"anonymous player session (no login; needs Chromium) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
