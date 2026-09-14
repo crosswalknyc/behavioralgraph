@@ -25895,6 +25895,9 @@ https://www.instagram.com/p/..."></textarea>
         .credits-modal {
             background: rgba(12, 22, 24, 0.78) !important;
             backdrop-filter: blur(4px);
+            /* Above the pinned Profile IQ chrome, which sits near the top of
+               the stacking range. A modal is always the frontmost surface. */
+            z-index: 2147483000 !important;
         }
         .credits-modal-content {
             background: #15252A !important;
@@ -26013,7 +26016,11 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13px !important;
             font-weight: 700 !important;
             margin: 0 !important;
+            text-transform: none !important;
         }
+        .credits-note,
+        .credits-contact-info,
+        .credits-success-message { text-transform: none !important; }
         body[data-theme="light"] .credits-unlimited { color: #5E7E12 !important; }
         /* Signal Green may fill a control on the dark ground. */
         .request-credits-btn {
