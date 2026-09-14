@@ -173273,15 +173273,29 @@ https://www.instagram.com/p/..."></textarea>
         margin-top: 18px; text-transform: none;
     }
 
-    /* ---- Fit the shelf above the fold -------------------------------
-       The art sizes off viewport height instead of a fixed 2:3 ratio, so
-       the row stays in view on a short screen. Posters crop from the
-       centre rather than the row growing past the fold. */
-    #trendsIQView .tiq-nine-art {
-        aspect-ratio: auto !important;
-        height: clamp(132px, 20vh, 208px);
+    /* ---- Posters keep their shape -----------------------------------
+       Sizing the art off viewport height turned the tiles landscape as
+       soon as the grid wrapped, which crops a portrait poster badly.
+       The ratio is fixed; the row shrinks its columns instead. */
+    #trendsIQView .tiq-nine {
+        grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
     }
-    #trendsIQView .tiq-nine-art img { object-position: center; }
+    #trendsIQView .tiq-nine-art {
+        aspect-ratio: 2 / 3 !important;
+        height: auto !important;
+    }
+    #trendsIQView .tiq-nine-art img { object-position: center top; }
+    /* Below this the tiles would be too small to read, so the shelf
+       scrolls sideways rather than breaking into rows. */
+    @media (max-width: 1180px) {
+        #trendsIQView .tiq-nine {
+            display: flex !important;
+            overflow-x: auto;
+            scroll-snap-type: x proximity;
+            padding-bottom: 6px;
+        }
+        #trendsIQView .tiq-nine-tile { flex: 0 0 122px; scroll-snap-align: start; }
+    }
     #trendsIQView .tiq-nine-nm { margin-top: 7px !important; }
     #trendsIQView .tiq-nine-vv { margin-top: 4px !important; }
     #trendsIQView .tiq-nine-gg { margin-top: 2px !important; }
@@ -173303,6 +173317,38 @@ https://www.instagram.com/p/..."></textarea>
     /* The board keeps its breathing room; only the shelf is squeezed. */
     #trendsIQView .tiq-nine + .tiq-sec-head,
     #trendsIQView .tiq-board ~ .tiq-sec-head { margin-top: 26px !important; }
+
+    /* ---- Fewer rows before the content ------------------------------
+       Nine stacked control rows pushed the shelf most of a screen down.
+       Three of them fold into rows that were already there. */
+
+    /* The deck repeats what the section labels say. */
+    #trendsIQView .tiq-subtitle { display: none; }
+
+    /* Export rides on the section rail instead of owning a row. */
+    #trendsIQView .tiq-panel-actions {
+        margin: -44px 0 0 !important;
+        position: relative; z-index: 2;
+    }
+
+    /* The mode toggle rides on the search row. */
+    #trendsIQView .tiq-social-panel { position: relative; }
+    #trendsIQView .tiq-social-panel > .tiq-mode-strip {
+        position: absolute; top: 0; right: 0; margin: 0 !important; z-index: 2;
+    }
+    #trendsIQView .tiq-card-search-wrap { padding-right: 250px; }
+    @media (max-width: 1180px) {
+        #trendsIQView .tiq-social-panel > .tiq-mode-strip { position: static; margin: 0 0 10px !important; }
+        #trendsIQView .tiq-card-search-wrap { padding-right: 0; }
+    }
+
+    /* The caption under the toggle repeats the dateline and the section
+       head, so it only earns its line on the channel view. */
+    #trendsIQView .tiq-social-panel > .tiq-card-sub { display: none; }
+
+    #trendsIQView .tiq-title { font-size: 26px !important; margin-bottom: 0 !important; }
+    #trendsIQView .tiq-header { padding-bottom: 10px !important; margin-bottom: 10px !important; }
+    #trendsIQView .tiq-sec-head { margin: 12px 0 10px !important; padding-bottom: 8px !important; }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
