@@ -30069,10 +30069,19 @@ https://www.instagram.com/p/..."></textarea>
                 gap: 0 !important;
             }
             #trendsIQView .tiq-sheet-cardhead {
-                align-items: baseline !important;
+                align-items: center !important;
                 padding-bottom: 12px;
                 margin-bottom: 4px !important;
                 border-bottom: 1px solid var(--mag-rule);
+            }
+            #trendsIQView .tiq-sheet-cardhead::before {
+                content: '';
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--mag-accent);
+                flex: 0 0 auto;
+                margin-right: -2px;
             }
             #trendsIQView .tiq-card h4,
             #trendsIQView .tiq-sheet-cardhead h4 {
@@ -30082,14 +30091,6 @@ https://www.instagram.com/p/..."></textarea>
                 text-transform: uppercase !important;
                 color: var(--mag-ink) !important;
                 gap: 8px !important;
-            }
-            #trendsIQView .tiq-sheet-cardhead h4::before {
-                content: '';
-                width: 6px;
-                height: 6px;
-                border-radius: 50%;
-                background: var(--mag-accent);
-                flex: 0 0 auto;
             }
             #trendsIQView .tiq-export-btn {
                 background: transparent !important;
@@ -30266,6 +30267,32 @@ https://www.instagram.com/p/..."></textarea>
                 background: var(--mag-ink);
                 color: var(--mag-ground);
                 border-color: var(--mag-ink);
+            }
+
+            /* Accent discipline. Signal Green marks the ranking signal:
+               where you are in the sections, the top three, and what rose.
+               Actions and utilities take ink, not accent. */
+            #trendsIQView .tiq-filter-bar button {
+                background: var(--mag-ink) !important;
+                color: var(--mag-ground) !important;
+            }
+            #trendsIQView .tiq-filter-bar button[onclick*="tiqResetAsOf"] {
+                background: transparent !important;
+                color: var(--mag-mute) !important;
+            }
+            #trendsIQView .tiq-hide-btn {
+                background: transparent !important;
+                border: 1px solid var(--mag-rule) !important;
+                color: var(--mag-mute) !important;
+                font-size: 9px !important;
+                letter-spacing: 0.14em !important;
+                padding: 3px 9px !important;
+                border-radius: 6px !important;
+            }
+            #trendsIQView .tiq-hide-btn:hover {
+                background: transparent !important;
+                border-color: var(--mag-mute) !important;
+                color: var(--mag-ink) !important;
             }
         </style>
         <div id="trendsIQView">
