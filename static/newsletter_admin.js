@@ -7,6 +7,13 @@
         reportId: null,
         dirty: false,
         sendBusy: false,
+        report: null,
+        reportSort: {
+            recips: { key: '', dir: 'asc' },
+            downloads: { key: '', dir: 'asc' },
+            links: { key: '', dir: 'asc' },
+            outcomes: { key: '', dir: 'asc' },
+        },
     };
 
     function $(id) { return document.getElementById(id); }
@@ -517,10 +524,126 @@
         } catch (e) { toast(e.message, true); }
     };
 
+    function ensureSortStyles() {
+        if (document.getElementById('nl-sort-style')) return;
+        const s = document.createElement('style');
+        s.id = 'nl-sort-style';
+        s.textContent = '.nl-table th.nl-sort{cursor:pointer;user-select:none;white-space:nowrap}.nl-table th.nl-sort:hover{text-decoration:underline}';
+        document.head.appendChild(s);
+    }
+
+    function sortValue(v) {
+        if (v == null || v === '') return { t: 0, n: 0, s: '' };
+        if (typeof v === 'number' && !Number.isNaN(v)) return { t: 1, n: v, s: '' };
+        const raw = String(v);
+        const ts = Date.parse(raw);
+        if (!Number.isNaN(ts) && /^\d{4}-\d{2}-\d{2}/.test(raw)) return { t: 1, n: ts, s: '' };
+        const num = Number(raw);
+        if (raw !== '' && !Number.isNaN(num) && raw.trim() === String(num)) return { t: 1, n: num, s: '' };
+        return { t: 1, n: 0, s: raw.toLowerCase() };
+    }
+
+    function sortRows(rows, spec, getter) {
+        if (!spec || !spec.key) return rows.slice();
+        const mul = spec.dir === 'desc' ? -1 : 1;
+        return rows.slice().sort((a, b) => {
+            const va = sortValue(getter(a, spec.key));
+            const vb = sortValue(getter(b, spec.key));
+            if (va.t !== vb.t) return (va.t - vb.t) * (spec.dir === 'desc' ? 1 : -1);
+            if (va.s && vb.s) return va.s < vb.s ? -mul : va.s > vb.s ? mul : 0;
+            if (va.n !== vb.n) return (va.n - vb.n) * mul;
+            return 0;
+        });
+    }
+
+    function sortTh(table, key, label) {
+        const spec = state.reportSort[table] || {};
+        const on = spec.key === key;
+        const arrow = on ? (spec.dir === 'desc' ? ' \u2193' : ' \u2191') : '';
+        return `<th class="nl-sort" onclick="nlSortReport('${table}','${key}')">${esc(label)}${arrow}</th>`;
+    }
+
+    window.nlSortReport = function (table, key) {
+        const spec = state.reportSort[table] || { key: '', dir: 'asc' };
+        if (spec.key === key) spec.dir = spec.dir === 'asc' ? 'desc' : 'asc';
+        else spec.dir = (key === 'clicks' || key === 'click_count' || key === 'download_count' || key === 'amount_usd' || key === 'sent' || key === 'open_rate' || key === 'click_rate' || key === 'leads' || key === 'unique_downloads' || key === 'paid' || key === 'revenue_usd') ? 'desc' : 'asc';
+        spec.key = key;
+        state.reportSort[table] = spec;
+        if (table === 'outcomes') renderOutcomes();
+        else renderReportTables();
+    };
+
+    function recipField(r, key) {
+        if (key === 'email') return r.email || '';
+        if (key === 'status') return r.status || '';
+        if (key === 'opened_at') return r.opened_at || '';
+        if (key === 'click_count') return Number(r.click_count || 0);
+        if (key === 'error') return r.error || '';
+        return '';
+    }
+
+    function downloadField(r, key) {
+        if (key === 'email') return r.email || '';
+        if (key === 'entered_at') return r.entered_at || '';
+        if (key === 'amount_usd') return r.paid ? Number(r.amount_usd || 0) : -1;
+        if (key === 'download_count') return Number(r.download_count || 0);
+        return '';
+    }
+
+    function linkField(r, key) {
+        if (key === 'url') return r.url || '';
+        if (key === 'clicks') return Number(r.clicks || 0);
+        return '';
+    }
+
+    function renderReportTables() {
+        const data = state.report;
+        if (!data) return;
+        ensureSortStyles();
+        const links = sortRows(data.top_links || [], state.reportSort.links, linkField);
+        $('nl-report-links').innerHTML = links.length
+            ? '<table class="nl-table"><thead><tr>' +
+              sortTh('links', 'url', 'Link') +
+              sortTh('links', 'clicks', 'Clicks') +
+              '</tr></thead><tbody>' +
+              links.map((l) => `<tr><td>${esc(l.url)}</td><td>${fmtNum(l.clicks)}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="nl-empty">No clicks yet.</div>';
+        const dls = sortRows(data.downloads || [], state.reportSort.downloads, downloadField);
+        if ($('nl-report-downloads')) {
+            $('nl-report-downloads').innerHTML = dls.length
+                ? '<table class="nl-table"><thead><tr>' +
+                  sortTh('downloads', 'email', 'Email') +
+                  sortTh('downloads', 'entered_at', 'Entered') +
+                  sortTh('downloads', 'amount_usd', 'Paid') +
+                  sortTh('downloads', 'download_count', 'Downloads') +
+                  '</tr></thead><tbody>' +
+                  dls.map((r) => `<tr><td>${esc(r.email)}</td><td>${r.entered_at ? fmtWhen(r.entered_at) : '-'}</td><td>${r.paid ? fmtMoney(r.amount_usd) : 'Free'}</td><td>${fmtNum(r.download_count)}</td></tr>`).join('') +
+                  '</tbody></table>'
+                : '<div class="nl-empty">No one has entered an email for the file yet.</div>';
+        }
+        const recips = sortRows(data.recipients || [], state.reportSort.recips, recipField);
+        $('nl-report-recips').innerHTML = recips.length
+            ? '<table class="nl-table"><thead><tr>' +
+              sortTh('recips', 'email', 'Email') +
+              sortTh('recips', 'status', 'Status') +
+              sortTh('recips', 'opened_at', 'Opened') +
+              sortTh('recips', 'click_count', 'Clicks') +
+              sortTh('recips', 'error', 'Note') +
+              '</tr></thead><tbody>' +
+              recips.map((r) => `<tr><td>${esc(r.email)}</td><td>${esc(r.status || '')}</td><td>${r.opened_at ? fmtWhen(r.opened_at) : '-'}</td><td>${fmtNum(r.click_count)}</td><td>${esc(r.error || '')}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="nl-empty">No recipients on this send yet.</div>';
+    }
+
     window.nlOpenReport = async function (id) {
         state.reportId = id;
+        state.reportSort.recips = { key: '', dir: 'asc' };
+        state.reportSort.downloads = { key: '', dir: 'asc' };
+        state.reportSort.links = { key: '', dir: 'asc' };
         try {
             const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(id) + '/report');
+            state.report = data;
             const c = data.campaign || {};
             const s = data.stats || {};
             const d = data.download_stats || {};
@@ -539,40 +662,46 @@
                 ['Paid', d.paid],
                 ['Revenue', fmtMoney(d.revenue_usd)],
             ].map(([k, v]) => `<div class="nl-stat"><div class="k">${k}</div><div class="v">${typeof v === 'string' ? esc(v) : fmtNum(v)}</div></div>`).join('');
-            const links = data.top_links || [];
-            $('nl-report-links').innerHTML = links.length
-                ? '<table class="nl-table"><thead><tr><th>Link</th><th>Clicks</th></tr></thead><tbody>' +
-                  links.map((l) => `<tr><td>${esc(l.url)}</td><td>${fmtNum(l.clicks)}</td></tr>`).join('') +
-                  '</tbody></table>'
-                : '<div class="nl-empty">No clicks yet.</div>';
-            const dls = data.downloads || [];
-            if ($('nl-report-downloads')) {
-                $('nl-report-downloads').innerHTML = dls.length
-                    ? '<table class="nl-table"><thead><tr><th>Email</th><th>Entered</th><th>Paid</th><th>Downloads</th></tr></thead><tbody>' +
-                      dls.map((r) => `<tr><td>${esc(r.email)}</td><td>${r.entered_at ? fmtWhen(r.entered_at) : '-'}</td><td>${r.paid ? fmtMoney(r.amount_usd) : 'Free'}</td><td>${fmtNum(r.download_count)}</td></tr>`).join('') +
-                      '</tbody></table>'
-                    : '<div class="nl-empty">No one has entered an email for the file yet.</div>';
-            }
-            const recips = data.recipients || [];
-            $('nl-report-recips').innerHTML = recips.length
-                ? '<table class="nl-table"><thead><tr><th>Email</th><th>Status</th><th>Opened</th><th>Clicks</th><th>Note</th></tr></thead><tbody>' +
-                  recips.map((r) => `<tr><td>${esc(r.email)}</td><td>${esc(r.status || '')}</td><td>${r.opened_at ? fmtWhen(r.opened_at) : '-'}</td><td>${fmtNum(r.click_count)}</td><td>${esc(r.error || '')}</td></tr>`).join('') +
-                  '</tbody></table>'
-                : '<div class="nl-empty">No recipients on this send yet.</div>';
+            renderReportTables();
             showView('report');
         } catch (e) { toast(e.message, true); }
     };
 
+    function outcomeField(c, key) {
+        const s = c.stats || {};
+        const d = c.download_stats || {};
+        if (key === 'name') return c.name || '';
+        if (key === 'status') return c.status || '';
+        if (key === 'sent') return Number(s.sent || 0);
+        if (key === 'open_rate') return Number(c.open_rate || 0);
+        if (key === 'click_rate') return Number(c.click_rate || 0);
+        if (key === 'leads') return Number(d.leads || 0);
+        if (key === 'unique_downloads') return Number(d.unique_downloads || 0);
+        if (key === 'paid') return Number(d.paid || 0);
+        if (key === 'revenue_usd') return Number(d.revenue_usd || 0);
+        return '';
+    }
+
     function renderOutcomes() {
         const host = $('nl-outcomes-table');
         if (!host) return;
-        const camps = (state.data && state.data.campaigns) || [];
+        ensureSortStyles();
+        const camps = sortRows((state.data && state.data.campaigns) || [], state.reportSort.outcomes, outcomeField);
         if (!camps.length) {
             host.innerHTML = '<div class="nl-empty">No campaigns yet.</div>';
             return;
         }
         host.innerHTML = '<table class="nl-table"><thead><tr>' +
-            '<th>Campaign</th><th>Status</th><th>Sent</th><th>Open</th><th>Click</th><th>Leads</th><th>Downloads</th><th>Paid</th><th>Revenue</th><th></th>' +
+            sortTh('outcomes', 'name', 'Campaign') +
+            sortTh('outcomes', 'status', 'Status') +
+            sortTh('outcomes', 'sent', 'Sent') +
+            sortTh('outcomes', 'open_rate', 'Open') +
+            sortTh('outcomes', 'click_rate', 'Click') +
+            sortTh('outcomes', 'leads', 'Leads') +
+            sortTh('outcomes', 'unique_downloads', 'Downloads') +
+            sortTh('outcomes', 'paid', 'Paid') +
+            sortTh('outcomes', 'revenue_usd', 'Revenue') +
+            '<th></th>' +
             '</tr></thead><tbody>' +
             camps.map((c) => {
                 const s = c.stats || {};
