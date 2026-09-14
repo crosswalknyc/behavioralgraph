@@ -127,6 +127,7 @@ RESOLVER_PLATFORMS = {
     "mgmplus": {"label": "MGM Plus", "module": "mgmplus_episode_identifier"},
     "britbox": {"label": "BritBox", "module": "britbox_episode_identifier"},
     "youtube": {"label": "YouTube", "module": "youtube_episode_identifier"},
+    "spotify": {"label": "Spotify", "module": "spotify_episode_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -145,15 +146,16 @@ RESOLVER_MODULE = {
     "mgmplus": "mgmplus_episode_identifier",
     "britbox": "britbox_episode_identifier",
     "youtube": "youtube_episode_identifier",
+    "spotify": "spotify_episode_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
-                      "youtube"}
+                      "youtube", "spotify"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
-                  "britbox", "youtube"]
+                  "britbox", "youtube", "spotify"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -454,6 +456,8 @@ def choose_platform() -> str:
             tag = "direct · no login · series shell"
         elif key == "youtube":
             tag = "direct · no login · every episode URL"
+        elif key == "spotify":
+            tag = "direct · API key · every episode URL"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -575,6 +579,9 @@ def main() -> int:
         elif platform == "youtube":
             print(f"Resolving {label} — every episode's watch URL from the "
                   f"channel's Videos tab (long-form; no login) ...")
+        elif platform == "spotify":
+            print(f"Resolving {label} — every episode URL via the Spotify Web "
+                  f"API (case-insensitive; uses .env.local app key) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
