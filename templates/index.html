@@ -25625,6 +25625,237 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #piqLibraryRail .piq-rail-dot { background: #5E7E12; }
         body[data-theme="light"] #piqLibraryRail .piq-rail-label { color: #0C1618; }
 
+        /* ================================================================
+           Global header + its two dropdowns, on the brand system.
+           Replaces the lime logo pill, the Space Mono credits chip and the
+           indigo product nav with Graphite / Slate / Signal Green, and
+           gives both menus the same panel as the Jump to control.
+           ================================================================ */
+        header {
+            align-items: center;
+            gap: 16px !important;
+            padding: 14px 32px !important;
+            margin-bottom: 0 !important;
+            background: #0C1618;
+            border-bottom: 1px solid #3B3D38 !important;
+        }
+        body[data-theme="light"] header {
+            background: #E9E8E1;
+            border-bottom-color: #C9C6BA !important;
+        }
+        /* The asset is already white, so it only needs inverting on light. */
+        .header-logo-text {
+            background: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+        }
+        .header-logo-text:hover { box-shadow: none !important; }
+        .header-logo-text img {
+            height: 20px !important;
+            filter: none !important;
+            mix-blend-mode: normal !important;
+        }
+        body[data-theme="light"] .header-logo-text img { filter: invert(1) !important; }
+
+        .header-right-section { gap: 10px !important; }
+        .user-info-bar { gap: 10px !important; }
+
+        .credits-display {
+            gap: 7px !important;
+            padding: 6px 11px !important;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 8px !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            transition: border-color 120ms ease;
+        }
+        .credits-display:hover {
+            background: #15252A !important;
+            border-color: #7C878A !important;
+        }
+        body[data-theme="light"] .credits-display {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+        }
+        .credits-icon { display: none !important; }
+        .credits-label {
+            font-size: 9.5px !important;
+            letter-spacing: 0.14em !important;
+            text-transform: uppercase !important;
+            color: #7C878A !important;
+            font-weight: 500 !important;
+        }
+        .credits-value {
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            color: #C7F23E !important;
+            font-weight: 700 !important;
+        }
+        body[data-theme="light"] .credits-value { color: #5E7E12 !important; }
+
+        .user-menu-clickable {
+            gap: 8px !important;
+            padding: 4px 8px 4px 4px !important;
+            border-radius: 999px !important;
+        }
+        .user-menu-clickable:hover { background: rgba(233, 232, 225, 0.06) !important; }
+        body[data-theme="light"] .user-menu-clickable:hover { background: rgba(12, 22, 24, 0.05) !important; }
+        .user-avatar {
+            width: 30px !important;
+            height: 30px !important;
+            border: 0 !important;
+            background: linear-gradient(135deg, #3358FF, #E682FF) !important;
+            color: #E9E8E1 !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0 !important;
+        }
+        .user-name {
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            color: #9AA09B !important;
+        }
+        body[data-theme="light"] .user-name { color: #5C6560 !important; }
+
+        /* ---- Product picker ------------------------------------------- */
+        .view-nav-label {
+            color: #7C878A !important;
+            font-size: 9.5px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.14em !important;
+        }
+        .view-nav-trigger {
+            padding: 8px 30px 8px 12px !important;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #E9E8E1 !important;
+            border-radius: 8px !important;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            font-size: 10.5px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%237C878A' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E") !important;
+            background-repeat: no-repeat !important;
+            background-position: right 10px center !important;
+            transition: border-color 120ms ease;
+        }
+        .view-nav-trigger:hover {
+            background: #15252A !important;
+            border-color: #7C878A !important;
+        }
+        body[data-theme="light"] .view-nav-trigger {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #0C1618 !important;
+        }
+        .view-nav-panel {
+            margin-top: 6px !important;
+            padding: 6px !important;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+            max-height: 420px !important;
+        }
+        body[data-theme="light"] .view-nav-panel {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            box-shadow: 0 18px 44px rgba(12, 22, 24, 0.16) !important;
+        }
+        .view-nav-panel::-webkit-scrollbar { width: 8px; }
+        .view-nav-panel::-webkit-scrollbar-thumb { background: #3B3D38; border-radius: 999px; }
+        .view-nav-option,
+        .view-nav-group-trigger,
+        .view-nav-suboption {
+            padding: 8px 10px !important;
+            border-radius: 6px !important;
+            background: transparent !important;
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.04em !important;
+            text-transform: uppercase !important;
+        }
+        body[data-theme="light"] .view-nav-option,
+        body[data-theme="light"] .view-nav-group-trigger,
+        body[data-theme="light"] .view-nav-suboption { color: #0C1618 !important; }
+        .view-nav-option:hover,
+        .view-nav-group-trigger:hover,
+        .view-nav-suboption:hover {
+            background: rgba(199, 242, 62, 0.08) !important;
+            color: #C7F23E !important;
+        }
+        body[data-theme="light"] .view-nav-option:hover,
+        body[data-theme="light"] .view-nav-group-trigger:hover,
+        body[data-theme="light"] .view-nav-suboption:hover {
+            background: rgba(94, 126, 18, 0.10) !important;
+            color: #5E7E12 !important;
+        }
+        .view-nav-submenu { background: transparent !important; border: 0 !important; }
+
+        /* ---- Account menu --------------------------------------------- */
+        .user-dropdown-inner {
+            padding: 6px !important;
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+        }
+        body[data-theme="light"] .user-dropdown-inner {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            box-shadow: 0 18px 44px rgba(12, 22, 24, 0.16) !important;
+        }
+        .user-dropdown-item,
+        .user-dropdown-subitem,
+        .user-dropdown-subitem2 {
+            padding: 8px 10px !important;
+            border-radius: 6px !important;
+            background: transparent !important;
+            color: #E9E8E1 !important;
+            font-family: inherit !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.04em !important;
+            text-transform: uppercase !important;
+        }
+        body[data-theme="light"] .user-dropdown-item,
+        body[data-theme="light"] .user-dropdown-subitem,
+        body[data-theme="light"] .user-dropdown-subitem2 { color: #0C1618 !important; }
+        .user-dropdown-item:hover,
+        .user-dropdown-subitem:hover,
+        .user-dropdown-subitem2:hover {
+            background: rgba(199, 242, 62, 0.08) !important;
+            color: #C7F23E !important;
+        }
+        body[data-theme="light"] .user-dropdown-item:hover,
+        body[data-theme="light"] .user-dropdown-subitem:hover,
+        body[data-theme="light"] .user-dropdown-subitem2:hover {
+            background: rgba(94, 126, 18, 0.10) !important;
+            color: #5E7E12 !important;
+        }
+        .user-dropdown-divider {
+            background: #3B3D38 !important;
+            margin: 5px 4px !important;
+        }
+        body[data-theme="light"] .user-dropdown-divider { background: #C9C6BA !important; }
+        .user-dropdown-subheader {
+            color: #7C878A !important;
+            font-size: 9px !important;
+            letter-spacing: 0.16em !important;
+            text-transform: uppercase !important;
+            font-weight: 700 !important;
+            padding: 8px 10px 4px !important;
+        }
+        .user-dropdown-caret { color: #7C878A !important; font-size: 9px !important; }
+
+
         /* Momentum rail: fills the column beside Key Differentiators. */
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail {
             grid-template-columns: minmax(0, 1fr) minmax(300px, 400px) !important;
