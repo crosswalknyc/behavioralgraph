@@ -58,6 +58,26 @@ from datetime import datetime
 BASE = "https://www.siriusxm.com"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+# persistent login profile (log in ONCE; future runs reuse the session cookie)
+PROFILE_DIR = os.path.expanduser("~/.siriusxm_scraper_profile")
+
+
+def load_env(path=".env.local"):
+    """Read SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD from a gitignored .env.local,
+    searching cwd, this file's dir, and the repo root (parent of streamscout/)."""
+    env = {}
+    for p in (path, os.path.join(os.path.dirname(__file__), path),
+              os.path.join(os.path.dirname(os.path.dirname(__file__)), path)):
+        try:
+            if os.path.exists(p):
+                for line in open(p):
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        env.setdefault(k.strip(), v.strip())
+        except Exception:  # noqa: BLE001
+            pass
+    return env
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _SHOW_IN_URL = re.compile(r"show-podcast/entity/(" + _UUID + r")")
@@ -92,13 +112,142 @@ def _sync_playwright():
     return sync_playwright
 
 
-def _new_page(pw, headless=True):
-    browser = pw.chromium.launch(headless=headless)
-    ctx = browser.new_context(user_agent=UA,
-                              viewport={"width": 1360, "height": 1000},
-                              locale="en-US")
+def _new_context(pw, headless=True):
+    """A PERSISTENT Chromium profile so the SiriusXM login survives between runs.
+    Enumeration works anonymously; only title-search needs the login, and the
+    profile means we log in at most once."""
+    os.makedirs(PROFILE_DIR, exist_ok=True)
+    ctx = pw.chromium.launch_persistent_context(
+        PROFILE_DIR, headless=headless, user_agent=UA,
+        viewport={"width": 1360, "height": 1000}, locale="en-US")
     ctx.set_default_timeout(45000)
-    return browser, ctx, ctx.new_page()
+    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+    return ctx, page
+
+
+# ── login (only needed for title-search; enumeration is anonymous) ─────────────
+def _set_input(page, selector, value):
+    """Set a React-controlled input via the native value setter + input event."""
+    page.eval_on_selector(
+        selector,
+        """(el, v) => {
+            const set = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value').set;
+            set.call(el, v);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }""",
+        value)
+
+
+def _click_row(page, text):
+    """Click the real clickable ancestor of a label. SiriusXM's option rows put
+    the visible text in a zero-width span, so a text-node click misses — we walk
+    up to the pointer-cursor container and hardware-click its centre."""
+    xy = page.evaluate(
+        """(t) => {
+            const leaf = [...document.querySelectorAll('*')].find(
+                e => e.children.length === 0 &&
+                     (e.textContent || '').trim().toLowerCase() === t.toLowerCase());
+            if (!leaf) return null;
+            let el = leaf;
+            for (let i = 0; i < 6 && el; i++) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 20 && r.height > 10 &&
+                    getComputedStyle(el).cursor === 'pointer')
+                    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+                el = el.parentElement;
+            }
+            const r = leaf.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        }""", text)
+    if not xy:
+        return False
+    page.mouse.click(xy["x"], xy["y"])
+    return True
+
+
+def _click_continue(page):
+    """Click the rightmost visible 'Continue' button. The email step and the
+    sign-in-method modal each render one, so a plain text selector is ambiguous;
+    the modal's button sits furthest right, so we pick max-x."""
+    xy = page.evaluate(
+        """() => {
+            const btns = [...document.querySelectorAll('button')].filter(b => {
+                if (!/^\\s*Continue\\s*$/i.test(b.textContent || '')) return false;
+                if (b.disabled) return false;
+                const r = b.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+            });
+            if (!btns.length) return null;
+            btns.sort((a, b) => b.getBoundingClientRect().x
+                              - a.getBoundingClientRect().x);
+            const r = btns[0].getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        }""")
+    if not xy:
+        return False
+    page.mouse.click(xy["x"], xy["y"])
+    return True
+
+
+def _logged_in(page):
+    """True if the player loads a real (non-/welcome) authenticated view."""
+    try:
+        page.goto(BASE + "/player/search", wait_until="domcontentloaded")
+        page.wait_for_timeout(2500)
+        return "/welcome" not in page.url and "/login" not in page.url
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _login(page, email, password):
+    """Automate SiriusXM's email -> (choose password) -> password sign-in.
+    Returns True on success. Raises with guidance if SiriusXM forces an OTP
+    device check (run once with --headed to clear it into the saved profile)."""
+    page.goto(BASE + "/player/login", wait_until="domcontentloaded")
+    page.wait_for_timeout(1500)
+    # dismiss cookie banner if present
+    for sel in ("button:has-text('Deny Non-Essential')", "button:has-text('Close')"):
+        try:
+            b = page.query_selector(sel)
+            if b and b.is_visible():
+                b.click(timeout=2000)
+                break
+        except Exception:  # noqa: BLE001
+            pass
+    # step 1: email -> Continue
+    page.wait_for_selector("input[name='emailOrUsername'], input[type='text']",
+                           timeout=15000)
+    _set_input(page, "input[name='emailOrUsername'], input[type='text']", email)
+    _click_continue(page)
+    page.wait_for_timeout(2500)
+    # step 2: if a "how would you like to sign in?" chooser shows, pick password.
+    # (choose row -> radios confirm with password preselected -> Continue -> pw)
+    if _click_row(page, "Sign in with my password"):
+        page.wait_for_timeout(1000)
+        for _ in range(3):
+            if page.query_selector("input[type='password']"):
+                break
+            _click_continue(page)
+            page.wait_for_timeout(1500)
+    # step 3: password
+    try:
+        page.wait_for_selector("input[type='password']", timeout=8000)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "SiriusXM asked for a one-time verification code (no password option "
+            "on this device). Run once with --headed to complete the email/text "
+            "code; the saved profile is then trusted for future headless runs."
+        ) from exc
+    _set_input(page, "input[type='password']", password)
+    _click_continue(page)
+    # wait to land in the authenticated player
+    for _ in range(30):
+        page.wait_for_timeout(500)
+        if "/login" not in page.url and "/welcome" not in page.url:
+            return True
+    return "/login" not in page.url
 
 
 # JS run inside the authenticated player context: read the anonymous accessToken
@@ -214,47 +363,39 @@ def _mint_and_enumerate(page, show_id):
 
 
 def _discover_show_id(page, title):
-    """Use the player's own search box to find the best show-podcast id."""
-    page.goto(BASE + "/player/discover", wait_until="domcontentloaded")
+    """Use the LOGGED-IN player search to find the best show-podcast id."""
+    page.goto(BASE + "/player/search", wait_until="domcontentloaded")
     page.wait_for_timeout(1500)
-    # dismiss cookie banner if it's covering the UI
-    for sel in ("button:has-text('Deny Non-Essential')",
-                "button:has-text('Accept')", "button[aria-label='Close']"):
-        try:
-            el = page.query_selector(sel)
-            if el and el.is_visible():
-                el.click(timeout=2000)
-                break
-        except Exception:  # noqa: BLE001
-            pass
-    # open search + type the title
-    for sel in ("a[href*='/search']", "text=Search", "[aria-label='Search']"):
-        try:
-            page.click(sel, timeout=3000)
-            break
-        except Exception:  # noqa: BLE001
-            pass
-    box = None
-    for sel in ("input[placeholder*='Search' i]", "input[type='search']",
-                "input[type='text']"):
-        try:
-            box = page.wait_for_selector(sel, timeout=5000)
-            if box:
-                break
-        except Exception:  # noqa: BLE001
-            pass
+    if "/welcome" in page.url or "/login" in page.url:
+        return None                              # not logged in
+    # the real search box: aria-label 'Search for something' / placeholder
+    # 'Search channels…'. Avoid the hidden cookie-consent 'Search…' input.
+    box_sel = ("input[aria-label='Search for something'], "
+               "input[placeholder*='Search channels' i], input[type='search']")
+    try:
+        box = page.wait_for_selector(box_sel, timeout=8000, state="visible")
+    except Exception:  # noqa: BLE001
+        return None
     if not box:
         return None
     box.click()
-    box.fill(title)
-    # wait for show-podcast result cards to render
+    _set_input(page, box_sel, title)
+    # nudge the debounce listeners the app uses (append+delete a char)
     try:
-        page.wait_for_selector("a[href*='show-podcast/entity/']", timeout=12000)
+        page.keyboard.type(" ")
+        page.keyboard.press("Backspace")
     except Exception:  # noqa: BLE001
-        return None
-    cands = page.eval_on_selector_all(
-        "a[href*='show-podcast/entity/']",
-        "els => els.map(e => [e.getAttribute('href'), (e.textContent||'').trim()])")
+        pass
+    # poll for show-podcast result links (they render a beat after the debounce)
+    cands = []
+    for _ in range(20):
+        cands = page.eval_on_selector_all(
+            "a[href*='show-podcast/entity/']",
+            "els => els.map(e => [e.getAttribute('href'), "
+            "(e.textContent||'').trim()])")
+        if any(_SHOW_IN_URL.search(h or "") for h, _ in cands):
+            break
+        page.wait_for_timeout(1000)
     best, best_score = None, -1.0
     for href, text in cands:
         m = _SHOW_IN_URL.search(href or "")
@@ -299,11 +440,31 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
 
     sp = _sync_playwright()
     with sp() as pw:
-        browser, ctx, page = _new_page(pw, headless=headless)
+        ctx, page = _new_context(pw, headless=headless)
         try:
             show_id = show_id_hint
             if not show_id and title:
+                # try search first (works instantly if the profile is logged in)
                 show_id = _discover_show_id(page, title)
+                if not show_id:
+                    # log in only if we're not already authenticated
+                    if not _logged_in(page):
+                        env = load_env()
+                        email = env.get("SIRIUSXM_EMAIL")
+                        pw_ = env.get("SIRIUSXM_PASSWORD")
+                        if not (email and pw_):
+                            raise RuntimeError(
+                                "SiriusXM title-search needs a login. Add "
+                                "SIRIUSXM_EMAIL / SIRIUSXM_PASSWORD to .env.local, "
+                                "or pass --url with the show link (enumeration is "
+                                "anonymous).")
+                        _login(page, email, pw_)
+                    # retry discovery a few times while the session settles
+                    for _ in range(4):
+                        show_id = _discover_show_id(page, title)
+                        if show_id:
+                            break
+                        page.wait_for_timeout(2000)
             if not show_id:
                 return (title or "", [])
 
@@ -322,7 +483,7 @@ def resolve(title=None, url=None, kind="series", seasons=None, headless=True):
             return (show_name, rows)
         finally:
             try:
-                ctx.close(); browser.close()
+                ctx.close()
             except Exception:  # noqa: BLE001
                 pass
 
