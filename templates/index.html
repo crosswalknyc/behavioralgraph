@@ -59921,6 +59921,12 @@ https://www.instagram.com/p/..."></textarea>
         function _tiqFastInitials(title) {
             var parts = String(title || '').replace(/[^A-Za-z0-9 ]/g, ' ')
                 .split(/\s+/).filter(Boolean);
+            // A leading article carries no identity, and a trailing number
+            // reads as a digit rather than a letter, so 'Turning Point:
+            // Generation 9/11' gives TG instead of T1.
+            if (parts.length > 1 && /^(the|a|an)$/i.test(parts[0])) parts = parts.slice(1);
+            var words = parts.filter(function (p) { return /[A-Za-z]/.test(p); });
+            if (words.length) parts = words;
             if (!parts.length) return '';
             if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
             return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
