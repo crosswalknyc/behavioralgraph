@@ -31038,6 +31038,17 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-spark-wrap { border-top: 1px solid var(--mag-rule) !important; padding-top: 8px !important; margin-top: 8px !important; }
             #microdramasIQView .miq-spark-wrap:hover { background: rgba(233, 232, 225, 0.035) !important; }
 
+            /* Sparkline rides the same accent as the rank: it is the trend. */
+            #microdramasIQView .miq-spark-dot { fill: var(--mag-accent) !important; }
+            #microdramasIQView .miq-spark-dot-last { fill: var(--mag-ink) !important; stroke: var(--mag-accent) !important; }
+            #microdramasIQView .miq-spark-wrap:focus-visible { outline: 2px solid #3358FF !important; }
+            #microdramasIQView .miq-spark-axis > span { color: var(--mag-mute) !important; font-size: 8.5px !important; letter-spacing: 0.08em !important; }
+            /* Seven platforms across one row squeezed every label onto two
+               lines. Let them wrap into rows of four instead. */
+            #microdramasIQView .miq-rollup-cards {
+                grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)) !important;
+            }
+
         </style>
         <div id="microdramasIQView">
             <div class="miq-header">
@@ -56699,12 +56710,12 @@ https://www.instagram.com/p/..."></textarea>
                 '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
                 '<defs>' +
                     '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="0">' +
-                        '<stop offset="0%" stop-color="#ec4899"/>' +
-                        '<stop offset="100%" stop-color="#8b5cf6"/>' +
+                        '<stop offset="0%" stop-color="#C7F23E"/>' +
+                        '<stop offset="100%" stop-color="#C7F23E"/>' +
                     '</linearGradient>' +
                     '<linearGradient id="' + aid + '" x1="0" y1="0" x2="0" y2="1">' +
-                        '<stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28"/>' +
-                        '<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>' +
+                        '<stop offset="0%" stop-color="#C7F23E" stop-opacity="0.20"/>' +
+                        '<stop offset="100%" stop-color="#C7F23E" stop-opacity="0"/>' +
                     '</linearGradient>' +
                 '</defs>' +
                 (areaD ? '<path d="' + areaD + '" fill="url(#' + aid + ')" stroke="none"/>' : '') +
@@ -58077,12 +58088,12 @@ https://www.instagram.com/p/..."></textarea>
             return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="display:block;">' +
                 '<defs>' +
                     '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="0">' +
-                        '<stop offset="0%" stop-color="#ec4899"/>' +
-                        '<stop offset="100%" stop-color="#8b5cf6"/>' +
+                        '<stop offset="0%" stop-color="#C7F23E"/>' +
+                        '<stop offset="100%" stop-color="#C7F23E"/>' +
                     '</linearGradient>' +
                     '<linearGradient id="' + aid + '" x1="0" y1="0" x2="0" y2="1">' +
-                        '<stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28"/>' +
-                        '<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>' +
+                        '<stop offset="0%" stop-color="#C7F23E" stop-opacity="0.20"/>' +
+                        '<stop offset="100%" stop-color="#C7F23E" stop-opacity="0"/>' +
                     '</linearGradient>' +
                 '</defs>' +
                 axis +
