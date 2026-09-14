@@ -61962,29 +61962,17 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _tiqRenderSearchRow(r, rank) {
-            var volLabel  = _tiqFormatVolume(r.volume || r.score || 0);
-            var growth    = Number(r.volume_growth_pct || 0);
-            var started   = _tiqRelativeTime(r.started_ts || 0);
             var hot       = r.days_trending >= 3;
             var breakdown = (r.trend_keywords || []).slice(0, 6);
             var news      = (r.news_articles  || []).slice(0, 2);
             var origin    = r.origin || 'search';
 
             var badges = '';
-            if (volLabel) {
-                badges += '<span class="tiq-badge tiq-vol">' + _tiqEsc(volLabel) + '</span>';
-            }
-            if (growth > 0) {
-                var growthCls = growth >= 500 ? ' tiq-growth-hot' : '';
-                badges += '<span class="tiq-badge tiq-growth' + growthCls + '">+' +
-                          (growth >= 1000 ? '1,000%' : (growth + '%')) + '</span>';
-            }
+            // Volume, growth and relative-time badges retired 2026-09-14.
+            // The days-trending badge and the audience chip carry the row.
             if (r.days_trending) {
                 badges += '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' +
                           r.days_trending + 'd trending</span>';
-            }
-            if (started) {
-                badges += '<span class="tiq-started">' + _tiqEsc(started) + '</span>';
             }
             // Weekly US searchers chip. us_streams is stamped by
             // _annotate_search_terms_with_audience in trends_iq.py
