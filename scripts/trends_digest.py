@@ -218,6 +218,14 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
             'present_days': curr.get('present_days'),
             'momentum':     curr.get('momentum'),
         }
+        prev = prior_arcs.get(slug)
+        # Daily move prior: prefer the item's own arc (its second-most-recent
+        # day with data); fall back to the rank saved on the last digest run.
+        # Sparse arcs (e.g. single-day Google search history) otherwise have no
+        # second day and were wrongly reading as "new" every morning.
+        daily_prev = prev_day_rank
+        if daily_prev is None:
+            daily_prev = (prev or {}).get('current_rank')
         watch_items.append({
             'label':        e.get('label') or key,
             'kind':         kind,
@@ -225,9 +233,8 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
             'geo':          geo,
             'current_rank': curr.get('current_rank'),
             'best_rank':    curr.get('best_rank'),
-            'prev_rank':    prev_day_rank,
+            'prev_rank':    daily_prev,
         })
-        prev = prior_arcs.get(slug)
         prev_wrapped = {
             'current_rank': (prev or {}).get('current_rank'),
             'days':         [{'rank': (prev or {}).get('current_rank'), 'present': (prev or {}).get('current_rank') is not None}] if prev else [],
@@ -282,19 +289,18 @@ def _render_email(user_slug: str, alerts: list[dict],
 
     def _move(prev, cur) -> tuple[str, str]:
         """(plain, html) for the Daily Move cell. A positive delta means the
-        item moved up the chart (to a smaller rank number)."""
-        if cur is None and prev is None:
-            return "-", f"<span style=\"color:{B['muted']};\">-</span>"
-        if cur is None:
-            return "off", f"<span style=\"color:{B['body']};\">off</span>"
-        if prev is None:
-            return "new", f"<span style=\"color:{B['olive']};font-weight:700;\">new</span>"
+        item moved up the chart (to a smaller rank number). When there's no
+        prior rank to compare against, or the rank held steady, show a dash
+        rather than a misleading '0' or 'new'."""
+        dash = ("-", f"<span style=\"color:{B['muted']};\">-</span>")
+        if cur is None or prev is None:
+            return dash
         d = prev - cur
         if d > 0:
             return f"+{d}", f"<span style=\"color:{B['olive']};font-weight:700;\">&#9650;{d}</span>"
         if d < 0:
             return f"{d}", f"<span style=\"color:{B['body']};font-weight:700;\">&#9660;{abs(d)}</span>"
-        return "0", f"<span style=\"color:{B['muted']};\">0</span>"
+        return dash
 
     # ---- plain-text part -------------------------------------------------
     text_lines = [
