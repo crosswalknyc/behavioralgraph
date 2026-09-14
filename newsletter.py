@@ -67,10 +67,13 @@ UNSUB_PLACEHOLDER_RE = re.compile(
 )
 
 _state_lock = threading.Lock()
+_send_thread_lock = threading.Lock()
+_send_threads = {}
 _scheduler_started = False
 _seed_assets_done = False
 _s3 = None
 _ses = None
+SEND_LEASE_TTL = 180
 
 
 def _utcnow():
@@ -373,6 +376,27 @@ def _put_bytes(key: str, body: bytes, content_type: str):
     _s3_client().put_object(
         Bucket=S3_BUCKET, Key=key, Body=body, ContentType=content_type
     )
+
+
+def _presigned_get(key: str, filename: str, expires: int = 180):
+    """Hand the file off S3 so the web process does not hold the bytes."""
+    if _use_local():
+        return None
+    safe = re.sub(r'["\r\n]', "", filename or "download")
+    try:
+        return _s3_client().generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": S3_BUCKET,
+                "Key": key,
+                "ResponseContentDisposition": f'attachment; filename="{safe}"',
+                "ResponseContentType": _content_type_for(safe),
+            },
+            ExpiresIn=expires,
+        )
+    except Exception as e:
+        print(f"[newsletter] presign failed: {e}")
+        return None
 
 
 def _get_text(key: str):
@@ -1223,6 +1247,87 @@ def send_one_email(to_email, subject, html, text, from_header, from_addr,
     )
 
 
+def _lease_live(camp):
+    lease = (camp or {}).get("send_lease") or {}
+    try:
+        until = float(lease.get("until") or 0)
+    except (TypeError, ValueError):
+        until = 0
+    return bool(lease.get("owner") and until > time.time())
+
+
+def _acquire_send_lease(campaign_id):
+    owner = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
+    now = time.time()
+
+    def mutate(st):
+        c = _campaign(st, campaign_id)
+        if not c:
+            return None
+        if _lease_live(c):
+            return None
+        c["send_lease"] = {"owner": owner, "until": now + SEND_LEASE_TTL}
+        if c.get("status") in ("draft", "scheduled", "sent"):
+            c["status"] = "sending"
+        c["updated_at"] = _utcnow()
+        return st
+
+    nxt = _cas_update_state(mutate)
+    claimed = _campaign(nxt, campaign_id)
+    lease = (claimed or {}).get("send_lease") or {}
+    if not claimed or lease.get("owner") != owner:
+        return None
+    return owner
+
+
+def _heartbeat_send_lease(campaign_id, owner):
+    if not owner:
+        return
+
+    def mutate(st):
+        c = _campaign(st, campaign_id)
+        if not c or ((c.get("send_lease") or {}).get("owner") != owner):
+            return None
+        c["send_lease"] = {"owner": owner, "until": time.time() + SEND_LEASE_TTL}
+        return st
+
+    try:
+        _cas_update_state(mutate)
+    except Exception:
+        pass
+
+
+def _release_send_lease(campaign_id, owner):
+    if not owner:
+        return
+
+    def mutate(st):
+        c = _campaign(st, campaign_id)
+        if not c:
+            return None
+        if (c.get("send_lease") or {}).get("owner") == owner:
+            c["send_lease"] = {}
+            c["updated_at"] = _utcnow()
+        return st
+
+    try:
+        _cas_update_state(mutate)
+    except Exception:
+        pass
+
+
+def _snapshot_recipient_map(raw):
+    out = {}
+    for key, val in (raw or {}).items():
+        ek = _valid_email(key)
+        if not ek:
+            continue
+        row = dict(val or {})
+        if ek not in out or row.get("status") == "sent":
+            out[ek] = row
+    return out
+
+
 def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment_id=None):
     """Mark campaign sending and write the recipient snapshot. None if blocked."""
     state = load_state()
@@ -1233,6 +1338,8 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
         return None, f"campaign is {camp.get('status')}"
     if scheduled and camp.get("status") == "sent":
         return None, "campaign already sent"
+    if camp.get("status") == "sending" and _lease_live(camp):
+        return get_send_snapshot(campaign_id).get("recipients") or {}, "already sending"
     segment_id = segment_id or camp.get("segment_id") or None
     recipients = resolve_recipients(
         state,
@@ -1244,25 +1351,17 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
         return None, "no subscribed recipients on that audience"
 
     snap = get_send_snapshot(campaign_id)
-    if camp.get("status") == "sent" and (snap.get("recipients") or {}):
-        _put_json(SEND_KEY.format(cid=campaign_id) + ".prior", snap)
-    existing = (snap.get("recipients") or {}) if camp.get("status") == "sending" else {}
-    existing_norm = {}
-    for key, val in existing.items():
-        ek = _valid_email(key)
-        if ek and ek not in existing_norm:
-            existing_norm[ek] = val
-        elif ek and val.get("status") == "sent":
-            existing_norm[ek] = val
+    existing_norm = _snapshot_recipient_map(snap.get("recipients") or {})
     recips = {}
     for row in unique_recipient_map(recipients).values():
         email = row["email"]
         prev = existing_norm.get(email) or {}
+        already = prev.get("status") == "sent"
         recips[email] = {
             "name": row.get("name") or prev.get("name") or "",
-            "status": prev.get("status") if prev.get("status") in ("sent", "failed") else "queued",
-            "sent_at": prev.get("sent_at"),
-            "error": prev.get("error"),
+            "status": "sent" if already else "queued",
+            "sent_at": prev.get("sent_at") if already else None,
+            "error": None if already else prev.get("error"),
             "opened_at": prev.get("opened_at"),
             "open_count": prev.get("open_count") or 0,
             "clicks": prev.get("clicks") or [],
@@ -1281,6 +1380,8 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
             return None
         if scheduled and c.get("status") in ("sending", "sent"):
             return None
+        if _lease_live(c):
+            return None
         c["status"] = "sending"
         c["list_id"] = list_id or c.get("list_id")
         if segment_id:
@@ -1294,6 +1395,8 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
     claimed = _campaign(nxt, campaign_id)
     if not claimed or claimed.get("status") != "sending":
         return None, "could not claim send"
+    if _lease_live(claimed):
+        return get_send_snapshot(campaign_id).get("recipients") or {}, "already sending"
     put_send_snapshot(campaign_id, {
         "campaign_id": campaign_id,
         "started_at": snap.get("started_at") or _utcnow(),
@@ -1307,6 +1410,11 @@ def _claim_send(campaign_id, list_id=None, emails=None, scheduled=False, segment
 
 def _run_send(campaign_id):
     result = {"sent": 0, "failed": 0, "errors": []}
+    owner = _acquire_send_lease(campaign_id)
+    if not owner:
+        result["errors"].append("send already running")
+        return result
+    sent = failed = 0
     try:
         state = load_state_raw()
         camp = _campaign(state, campaign_id)
@@ -1326,19 +1434,11 @@ def _run_send(campaign_id):
 
         snap = get_send_snapshot(campaign_id)
         snap["links"] = links
-        put_send_snapshot(campaign_id, snap)
-        recips = {}
-        for key, row in (snap.get("recipients") or {}).items():
-            email = _valid_email(key)
-            if not email:
-                continue
-            prev = recips.get(email)
-            if prev and prev.get("status") == "sent":
-                continue
-            recips[email] = row
+        recips = _snapshot_recipient_map(snap.get("recipients") or {})
         snap["recipients"] = recips
-        sent = failed = 0
+        put_send_snapshot(campaign_id, snap)
         delivered = set()
+        n = 0
         for email, row in recips.items():
             if email in delivered or row.get("status") == "sent":
                 if row.get("status") == "sent":
@@ -1364,6 +1464,9 @@ def _run_send(campaign_id):
                 print(f"newsletter send failed {campaign_id} -> {email}: {e}")
             snap["recipients"][email] = row
             put_send_snapshot(campaign_id, snap)
+            n += 1
+            if n % 10 == 0:
+                _heartbeat_send_lease(campaign_id, owner)
             time.sleep(0.08)
 
         snap["finished_at"] = _utcnow()
@@ -1382,6 +1485,7 @@ def _run_send(campaign_id):
                 c["sent_at"] = snap.get("finished_at")
             c["scheduled_at"] = None
             c["stats"] = stats
+            c["send_lease"] = {}
             c["updated_at"] = _utcnow()
             return st
 
@@ -1395,9 +1499,16 @@ def _run_send(campaign_id):
 
         def revert(st):
             c = _campaign(st, campaign_id)
-            if not c or c.get("status") != "sending":
+            if not c:
                 return None
-            c["status"] = "draft"
+            if (c.get("send_lease") or {}).get("owner") == owner:
+                c["send_lease"] = {}
+            # Keep sending so leftover queued addresses can resume.
+            # Never drop back to draft after any copy has gone out.
+            if sent:
+                c["status"] = "sending"
+            elif c.get("status") == "sending":
+                c["status"] = "draft"
             c["updated_at"] = _utcnow()
             return st
 
@@ -1405,13 +1516,25 @@ def _run_send(campaign_id):
             _cas_update_state(revert)
         except Exception:
             pass
+    finally:
+        _release_send_lease(campaign_id, owner)
     return result
 
 
 def start_send_async(campaign_id):
-    t = threading.Thread(target=_run_send, args=(campaign_id,), daemon=True)
-    t.start()
-    return t
+    with _send_thread_lock:
+        live = _send_threads.get(campaign_id)
+        if live and live.is_alive():
+            return live
+        t = threading.Thread(
+            target=_run_send,
+            args=(campaign_id,),
+            name=f"nl-send-{campaign_id}",
+            daemon=False,
+        )
+        _send_threads[campaign_id] = t
+        t.start()
+        return t
 
 
 def send_test(campaign_id, to_email):
@@ -1532,10 +1655,12 @@ def _kick_due_sends():
         cid = camp.get("id")
         status = camp.get("status")
         if status == "sending":
+            if _lease_live(camp):
+                continue
             snap = get_send_snapshot(cid)
             queued = [
                 e for e, r in (snap.get("recipients") or {}).items()
-                if (r.get("status") or "") == "queued"
+                if (r.get("status") or "") != "sent"
             ]
             if queued:
                 start_send_async(cid)
@@ -2119,27 +2244,42 @@ def api_send(cid):
         return jsonify({"success": True, "status": "scheduled", **_overview_payload()})
 
     recips, err = _claim_send(cid, list_id, emails, segment_id=segment_id)
+    if err == "already sending":
+        return jsonify({
+            "success": True,
+            "status": "sending",
+            "recipients": len(recips or {}),
+            **_overview_payload(),
+        })
     if err:
         return jsonify({"success": False, "error": err}), 400
-    result = _run_send(cid)
-    sent = int(result.get("sent") or 0)
-    failed = int(result.get("failed") or 0)
-    errors = result.get("errors") or []
-    if sent == 0 and failed:
+    pending = sum(1 for row in (recips or {}).values() if (row.get("status") or "") != "sent")
+    already = len(recips or {}) - pending
+    if not pending:
+        def finish(st):
+            c = _campaign(st, cid)
+            if not c:
+                return None
+            c["status"] = "sent"
+            c["updated_at"] = _utcnow()
+            return st
+
+        _cas_update_state(finish)
         return jsonify({
-            "success": False,
-            "error": errors[0] if errors else "Send failed.",
-            "sent": sent,
-            "failed": failed,
+            "success": True,
+            "status": "sent",
+            "recipients": len(recips or {}),
+            "sent": already,
+            "failed": 0,
             **_overview_payload(),
-        }), 400
+        })
+    start_send_async(cid)
     return jsonify({
         "success": True,
-        "status": "sent",
-        "recipients": len(recips),
-        "sent": sent,
-        "failed": failed,
-        "errors": errors[:8],
+        "status": "sending",
+        "recipients": len(recips or {}),
+        "queued": pending,
+        "already_sent": already,
         **_overview_payload(),
     })
 
@@ -2679,50 +2819,57 @@ color:#5C6560;">Crosswalk / The Read</div>
 @newsletter_bp.route("/n/d/<cid>", methods=["GET", "POST"])
 def public_download_gate(cid):
     cid = re.sub(r"[^A-Za-z0-9._-]", "", cid or "")
-    state = load_state_raw()
-    camp = _campaign(state, cid)
-    if not camp:
-        return _download_page("This download is not available.", ok=False), 404
-    dl = _campaign_download(camp)
-    if not dl.get("enabled"):
-        return _download_page("This download is not available.", ok=False), 404
-    settings = state.get("settings") or {}
-    title = dl.get("title") or camp.get("name") or "Crosswalk report"
-    paid = bool(dl.get("paid"))
-    price = float(dl.get("price_usd") or 0)
-    if request.method == "GET":
-        return _download_page(
-            f"Enter your email to download {title}." if not paid
-            else f"Enter your email and pay ${price:.2f} to download {title}.",
-            title=title,
-            form=True,
-            cid=cid,
-            paid=paid,
-            price=price,
-        )
-    email = _valid_email(request.form.get("email") or (request.get_json(silent=True) or {}).get("email"))
-    if not email:
-        return _download_page(
-            "That email is not valid. Try again.",
-            title=title, form=True, cid=cid, paid=paid, price=price, ok=False,
-        ), 400
-    name = (request.form.get("name") or "").strip()[:80]
-    record_download_lead(cid, email, name=name)
-    list_id = dl.get("list_id") or camp.get("list_id") or "the-read"
+    try:
+        state = load_state_raw()
+        camp = _campaign(state, cid)
+        if not camp:
+            return _download_page("This download is not available.", ok=False), 404
+        dl = _campaign_download(camp)
+        if not dl.get("enabled"):
+            return _download_page("This download is not available.", ok=False), 404
+        settings = state.get("settings") or {}
+        title = dl.get("title") or camp.get("name") or "Crosswalk report"
+        paid = bool(dl.get("paid"))
+        price = float(dl.get("price_usd") or 0)
+        if request.method == "GET":
+            return _download_page(
+                f"Enter your email to download {title}." if not paid
+                else f"Enter your email and pay ${price:.2f} to download {title}.",
+                title=title,
+                form=True,
+                cid=cid,
+                paid=paid,
+                price=price,
+            )
+        email = _valid_email(request.form.get("email") or (request.get_json(silent=True) or {}).get("email"))
+        if not email:
+            return _download_page(
+                "That email is not valid. Try again.",
+                title=title, form=True, cid=cid, paid=paid, price=price, ok=False,
+            ), 400
+        name = (request.form.get("name") or "").strip()[:80]
+        record_download_lead(cid, email, name=name)
+        list_id = dl.get("list_id") or camp.get("list_id") or "the-read"
 
-    def mutate(st):
-        _upsert_subscriber(
-            st, email, name=name, list_ids=[list_id],
-            tags=["download"],
-            source="download",
-        )
-        return st
+        def mutate(st):
+            _upsert_subscriber(
+                st, email, name=name, list_ids=[list_id],
+                tags=["download"],
+                source="download",
+            )
+            return st
 
-    _cas_update_state(mutate)
-    if paid:
-        return _start_download_checkout(cid, email, title, price, settings)
-    token = sign_token({"c": cid, "e": email, "p": "d"})
-    return redirect(f"/n/d/{cid}/file/{token}", code=302)
+        _cas_update_state(mutate)
+        if paid:
+            return _start_download_checkout(cid, email, title, price, settings)
+        token = sign_token({"c": cid, "e": email, "p": "d"})
+        return redirect(f"/n/d/{cid}/file/{token}", code=302)
+    except Exception:
+        traceback.print_exc()
+        return _download_page(
+            "This page is taking a moment. Refresh and try again, or write hello@crosswalknyc.com.",
+            ok=False,
+        ), 503
 
 
 @newsletter_bp.route("/n/d/<cid>/paid")
@@ -2782,11 +2929,15 @@ def public_download_file(cid, token):
         lead = ((get_download_store(cid).get("leads") or {}).get(email) or {})
         if not lead.get("paid"):
             return _download_page("Payment is still required for this file.", form=True, cid=cid, paid=True, title=dl.get("title") or ""), 402
-    raw = _get_bytes(ATTACH_KEY.format(cid=cid, name=dl["filename"]))
+    filename = dl.get("original_name") or dl.get("filename")
+    key = ATTACH_KEY.format(cid=cid, name=dl["filename"])
+    mark_file_downloaded(cid, email)
+    url = _presigned_get(key, filename)
+    if url:
+        return redirect(url, code=302)
+    raw = _get_bytes(key)
     if raw is None:
         return _download_page("The file is missing. Write hello@crosswalknyc.com.", ok=False), 404
-    mark_file_downloaded(cid, email)
-    filename = dl.get("original_name") or dl.get("filename")
     return Response(
         raw,
         mimetype=_content_type_for(filename),

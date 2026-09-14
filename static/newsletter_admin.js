@@ -6,6 +6,7 @@
         editingId: null,
         reportId: null,
         dirty: false,
+        sendBusy: false,
     };
 
     function $(id) { return document.getElementById(id); }
@@ -125,12 +126,19 @@
             const dl = c.download_stats || {};
             let meta = c.status === 'sent'
                 ? `${fmtNum(stats.sent)} sent · ${c.open_rate}% opened · ${c.click_rate}% clicked`
-                : (c.status === 'scheduled'
-                    ? 'Sends ' + fmtWhen(c.scheduled_at)
-                    : (c.subject || 'Draft · no subject yet'));
+                : (c.status === 'sending'
+                    ? `${fmtNum(stats.sent || 0)} sent so far · still going`
+                    : (c.status === 'scheduled'
+                        ? 'Sends ' + fmtWhen(c.scheduled_at)
+                        : (c.subject || 'Draft · no subject yet')));
             if (dl.unique_downloads) {
                 meta += ` · ${fmtNum(dl.unique_downloads)} downloads`;
             }
+            const sendBtn = c.status === 'sent'
+                ? `<button class="btn btn-small btn-secondary" onclick="nlOpenReport('${esc(c.id)}')">Report</button>`
+                : (c.status === 'sending'
+                    ? `<button class="btn btn-small btn-secondary" disabled>Sending…</button>`
+                    : `<button class="btn btn-small btn-primary" onclick="nlOpenEditor('${esc(c.id)}', true)">Send</button>`);
             return `<article class="nl-card">
                 <div class="nl-card-preview"><iframe src="/n/preview/${encodeURIComponent(c.id)}" loading="lazy"></iframe></div>
                 <div class="nl-card-body">
@@ -139,9 +147,9 @@
                     <div class="meta">${esc(meta)}</div>
                     <div class="nl-card-foot">
                         <button class="btn btn-small btn-secondary" onclick="nlOpenEditor('${esc(c.id)}')">Edit</button>
-                        ${c.status === 'sent' ? `<button class="btn btn-small btn-secondary" onclick="nlOpenReport('${esc(c.id)}')">Report</button>` : `<button class="btn btn-small btn-primary" onclick="nlOpenEditor('${esc(c.id)}', true)">Send</button>`}
+                        ${sendBtn}
                         <button class="btn btn-small btn-secondary" onclick="nlDuplicate('${esc(c.id)}')">Duplicate</button>
-                        ${c.status === 'sent' ? '' : `<button class="btn btn-small btn-secondary" onclick="nlDeleteCampaign('${esc(c.id)}')">Delete</button>`}
+                        ${c.status === 'sent' || c.status === 'sending' ? '' : `<button class="btn btn-small btn-secondary" onclick="nlDeleteCampaign('${esc(c.id)}')">Delete</button>`}
                     </div>
                 </div>
             </article>`;
@@ -283,7 +291,12 @@
         $('nl-preview').src = '/n/preview/' + encodeURIComponent(id) + '?t=' + Date.now();
         $('nl-html-file').value = '';
         if ($('nl-dl-file')) $('nl-dl-file').value = '';
-        if ($('nl-send-now')) $('nl-send-now').textContent = (camp && camp.status === 'sent') ? 'Send again' : 'Send now';
+        if ($('nl-send-now')) {
+            $('nl-send-now').disabled = !!(camp && camp.status === 'sending');
+            $('nl-send-now').textContent = (camp && camp.status === 'sending')
+                ? 'Sending…'
+                : ((camp && camp.status === 'sent') ? 'Send leftovers' : 'Send now');
+        }
         state.dirty = false;
         showView('editor');
         if (focusSend) $('nl-send-now').focus();
@@ -393,8 +406,31 @@
         } catch (e) { toast(e.message, true); }
     };
 
+    function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function pollSend(id) {
+        for (let i = 0; i < 180; i += 1) {
+            await sleep(2000);
+            try {
+                const data = await api('/api/admin/newsletter');
+                state.data = data;
+                renderAll();
+                const camp = ((data && data.campaigns) || []).find((c) => c.id === id);
+                if (!camp || camp.status !== 'sending') {
+                    if (camp && camp.status === 'sent') {
+                        toast('Sent to ' + fmtNum((camp.stats && camp.stats.sent) || 0) + ' people');
+                    }
+                    return;
+                }
+            } catch (e) { /* keep waiting through a deploy blip */ }
+        }
+        toast('Still sending. Refresh in a minute.', true);
+    }
+
     window.nlConfirmSend = async function (schedule) {
-        if (!state.editingId) return;
+        if (!state.editingId || state.sendBusy) return;
         await nlSaveCampaign();
         const value = $('nl-ed-list').value;
         const n = audienceCount(value);
@@ -410,16 +446,27 @@
         const subject = $('nl-ed-subject').value || '(no subject)';
         const label = audienceLabel(value);
         const camp = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
+        if (!schedule && camp && camp.status === 'sending') {
+            toast('This letter is already going out. One copy per address.');
+            await pollSend(state.editingId);
+            return;
+        }
         const liOn = $('nl-li-enabled') && $('nl-li-enabled').checked;
         const liConn = state.data && state.data.settings && state.data.settings.linkedin && state.data.settings.linkedin.connected;
         const liNote = (liOn && liConn) ? ' LinkedIn gets the headline, image, and issue link at the same time.' : '';
-        const already = camp && camp.status === 'sent';
+        const leftovers = camp && camp.status === 'sent';
         const msg = schedule
             ? `Schedule "${subject}" to ${n} people on ${label} at ${fmtWhen(when)}?` + liNote
-            : (already
-                ? `Send "${subject}" again to ${n} people on ${label}? They already got the last send.`
-                : `Send "${subject}" to ${n} people on ${label} now? This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.`) + liNote;
+            : (leftovers
+                ? `Send leftover copies of "${subject}" on ${label}? Anyone who already received it is skipped.`
+                : `Send "${subject}" to ${n} people on ${label} now? Each address gets one copy. This uses no_reply@crosswalknyc.com. Replies go to hello@crosswalknyc.com.`) + liNote;
         openModal(msg, async () => {
+            if (state.sendBusy) return;
+            state.sendBusy = true;
+            if ($('nl-send-now')) {
+                $('nl-send-now').disabled = true;
+                $('nl-send-now').textContent = 'Sending…';
+            }
             try {
                 const aud = parseAudience(value);
                 const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(state.editingId) + '/send', {
@@ -433,10 +480,26 @@
                 state.data = data;
                 renderAll();
                 if (data.status === 'scheduled') toast('Scheduled');
+                else if (data.status === 'sending') {
+                    const extra = data.already_sent ? ` ${data.already_sent} already received it and will be skipped.` : '';
+                    toast('Sending to ' + (data.queued || data.recipients || n) + ' people.' + extra);
+                    showView('campaigns');
+                    await pollSend(state.editingId);
+                }
                 else if (data.failed) toast('Sent to ' + (data.sent || 0) + ', ' + data.failed + ' did not go out', true);
                 else toast('Sent to ' + (data.sent || data.recipients || n) + ' people');
                 showView('campaigns');
             } catch (e) { toast(e.message, true); }
+            finally {
+                state.sendBusy = false;
+                const latest = ((state.data && state.data.campaigns) || []).find((c) => c.id === state.editingId);
+                if ($('nl-send-now')) {
+                    $('nl-send-now').disabled = !!(latest && latest.status === 'sending');
+                    $('nl-send-now').textContent = (latest && latest.status === 'sending')
+                        ? 'Sending…'
+                        : ((latest && latest.status === 'sent') ? 'Send leftovers' : 'Send now');
+                }
+            }
         });
     };
 
