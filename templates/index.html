@@ -26229,7 +26229,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div class="dash-header-row profile-header-row" id="profileHeaderRow">
                     <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
                         <div class="dash-profile-image-wrap">
-                            <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile"></div>
+                            <div class="dash-profile-image" id="dashProfileImage"><img src="" alt=""></div>
                             <div class="piq-portrait-fallback" id="piqPortraitFallback" aria-hidden="true"></div>
                             <div class="dash-imdb-box" id="dashImdbHeader" style="display: none;"></div>
                         </div>
@@ -27674,7 +27674,7 @@ https://www.instagram.com/p/..."></textarea>
                         <!-- Profile Info Header -->
                         <div id="subscriberProfileInfo" class="dash-header-row">
                             <div class="dash-profile-info">
-                                <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show"></div>
+                                <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt=""></div>
                                 <div class="dash-brand-container">
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
@@ -173024,6 +173024,18 @@ https://www.instagram.com/p/..."></textarea>
         --bg-input: #FFFFFF;
         --border-color: #C9C6BA;
         background: #E9E8E1 !important;
+    }
+
+    /* ------------------------------------------------------------------
+       Portrait fallback. With no artwork the wrap already paints the
+       gradient and the initials, so the empty <img> on top only
+       contributes a broken-image mark. Hide it whenever there is nothing
+       to show: no src, an empty src, or the wrap in its fallback state.
+       ------------------------------------------------------------------ */
+    .dash-profile-image img:not([src]),
+    .dash-profile-image img[src=""],
+    .dash-profile-image-wrap.is-fallback .dash-profile-image img {
+        display: none !important;
     }
 </style>
 <script>
