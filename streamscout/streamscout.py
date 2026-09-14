@@ -118,7 +118,7 @@ RESOLVER_PLATFORMS = {
     "hulu": {"label": "Hulu", "module": "hulu_episode_identifier"},
     "netflix": {"label": "Netflix", "module": "netflix_title_identifier"},
     "appletv": {"label": "Apple TV", "module": "apple_tv_identifier"},
-    "paramount": {"label": "Paramount+", "module": "paramount_episode_identifier"},
+    "paramount": {"label": "Paramount Plus", "module": "paramount_episode_identifier"},
     "max": {"label": "HBO MAX", "module": "max_episode_identifier"},
     "disney": {"label": "Disney Plus", "module": "disney_episode_identifier"},
     "starz": {"label": "Starz", "module": "starz_episode_identifier"},
