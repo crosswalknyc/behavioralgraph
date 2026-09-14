@@ -172969,5 +172969,45 @@ https://www.instagram.com/p/..."></textarea>
 </footer>
 
 
+<style>
+    /* Page frame. The rim around the active view is the body ground; on
+       the brand-system products it matches the view so no navy edge
+       shows. Products still on the legacy navy panels keep the navy
+       ground so their cards do not sit stranded on Graphite. */
+    body[data-ground="graphite"] { background: #0C1618 !important; }
+    body[data-theme="light"][data-ground="graphite"] { background: #E9E8E1 !important; }
+</style>
+<script>
+    // Which products run the brand palette. Keep in sync as views migrate.
+    (function () {
+        var GRAPHITE = ['profileIQ', 'cultureRankerIQ', 'trendsIQ', 'microdramasIQ'];
+        function syncGround() {
+            try {
+                var dd = document.getElementById('viewNavDropdown');
+                var v = dd ? dd.value : '';
+                document.body.setAttribute(
+                    'data-ground', GRAPHITE.indexOf(v) >= 0 ? 'graphite' : 'legacy');
+            } catch (e) { /* never block the page over page chrome */ }
+        }
+        function bind() {
+            var dd = document.getElementById('viewNavDropdown');
+            if (dd && !dd._groundBound) {
+                dd._groundBound = true;
+                dd.addEventListener('change', function () { setTimeout(syncGround, 0); });
+            }
+            syncGround();
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bind);
+        } else {
+            bind();
+        }
+        // The product can also change from code paths that set the value
+        // directly, so re-check on a light interval for the first while.
+        var n = 0;
+        var t = setInterval(function () { syncGround(); if (++n > 40) clearInterval(t); }, 500);
+    })();
+</script>
+
 </body>
 </html>
