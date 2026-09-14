@@ -8,11 +8,13 @@
         dirty: false,
         sendBusy: false,
         report: null,
+        reportWho: '',
         reportSort: {
             recips: { key: '', dir: 'asc' },
             downloads: { key: '', dir: 'asc' },
             links: { key: '', dir: 'asc' },
             outcomes: { key: '', dir: 'asc' },
+            who: { key: '', dir: 'asc' },
         },
     };
 
@@ -528,7 +530,13 @@
         if (document.getElementById('nl-sort-style')) return;
         const s = document.createElement('style');
         s.id = 'nl-sort-style';
-        s.textContent = '.nl-table th.nl-sort{cursor:pointer;user-select:none;white-space:nowrap}.nl-table th.nl-sort:hover{text-decoration:underline}';
+        s.textContent = [
+            '.nl-table th.nl-sort{cursor:pointer;user-select:none;white-space:nowrap}',
+            '.nl-table th.nl-sort:hover{text-decoration:underline}',
+            '.nl-stat.nl-stat-hit{cursor:pointer}',
+            '.nl-stat.nl-stat-hit:hover{filter:brightness(1.08)}',
+            '.nl-stat.nl-stat-on{outline:2px solid var(--accent-cyan,#C7F23E);outline-offset:2px}',
+        ].join('');
         document.head.appendChild(s);
     }
 
@@ -570,6 +578,7 @@
         spec.key = key;
         state.reportSort[table] = spec;
         if (table === 'outcomes') renderOutcomes();
+        else if (table === 'who') renderReportWho();
         else renderReportTables();
     };
 
@@ -594,6 +603,248 @@
         if (key === 'url') return r.url || '';
         if (key === 'clicks') return Number(r.clicks || 0);
         return '';
+    }
+
+    function whoField(r, key) {
+        return r[key];
+    }
+
+    function whoClickRows(uniqueOnly) {
+        const out = [];
+        ((state.report && state.report.recipients) || []).forEach((r) => {
+            const clicks = r.clicks || [];
+            const total = Number(r.click_count || 0);
+            if (!total && !clicks.length) return;
+            if (uniqueOnly) {
+                out.push({
+                    email: r.email,
+                    name: r.name || '',
+                    url: clicks.length > 1 ? (clicks.length + ' links') : ((clicks[0] && clicks[0].url) || ''),
+                    count: total || clicks.length,
+                    at: (clicks[0] && (clicks[0].at || clicks[0].last_at)) || '',
+                });
+                return;
+            }
+            if (!clicks.length) {
+                out.push({ email: r.email, name: r.name || '', url: '', count: total, at: '' });
+                return;
+            }
+            clicks.forEach((c) => {
+                out.push({
+                    email: r.email,
+                    name: r.name || '',
+                    url: c.url || '',
+                    count: Number(c.count || 1),
+                    at: c.at || c.last_at || '',
+                });
+            });
+        });
+        return out;
+    }
+
+    function whoPeople() {
+        const recips = (state.report && state.report.recipients) || [];
+        const dls = (state.report && state.report.downloads) || [];
+        const key = state.reportWho;
+        if (key === 'sent') {
+            return {
+                title: 'Sent',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'name', label: 'Name' },
+                    { key: 'sent_at', label: 'Sent', fmt: 'when' },
+                ],
+                rows: recips.filter((r) => r.status === 'sent').map((r) => ({
+                    email: r.email, name: r.name || '', sent_at: r.sent_at || '',
+                })),
+            };
+        }
+        if (key === 'failed') {
+            return {
+                title: 'Failed',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'error', label: 'Note' },
+                ],
+                rows: recips.filter((r) => r.status === 'failed').map((r) => ({
+                    email: r.email, error: r.error || '',
+                })),
+            };
+        }
+        if (key === 'unique_opens' || key === 'opens') {
+            return {
+                title: key === 'opens' ? 'Opens' : 'Unique opens',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'opened_at', label: 'First opened', fmt: 'when' },
+                    { key: 'open_count', label: 'Opens', fmt: 'num' },
+                ],
+                rows: recips.filter((r) => r.opened_at || Number(r.open_count || 0) > 0).map((r) => ({
+                    email: r.email, opened_at: r.opened_at || '', open_count: Number(r.open_count || 0),
+                })),
+            };
+        }
+        if (key === 'unique_clicks' || key === 'clicks') {
+            return {
+                title: key === 'clicks' ? 'Clicks' : 'Unique clicks',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'url', label: 'Link' },
+                    { key: 'count', label: 'Clicks', fmt: 'num' },
+                    { key: 'at', label: 'When', fmt: 'when' },
+                ],
+                rows: whoClickRows(key === 'unique_clicks'),
+            };
+        }
+        if (key === 'unsubs') {
+            return {
+                title: 'Unsubscribes',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'unsubscribed_at', label: 'Unsubscribed', fmt: 'when' },
+                ],
+                rows: recips.filter((r) => r.unsubscribed_at).map((r) => ({
+                    email: r.email, unsubscribed_at: r.unsubscribed_at,
+                })),
+            };
+        }
+        if (key === 'leads') {
+            return {
+                title: 'Download leads',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'name', label: 'Name' },
+                    { key: 'entered_at', label: 'Entered', fmt: 'when' },
+                ],
+                rows: dls.map((r) => ({
+                    email: r.email, name: r.name || '', entered_at: r.entered_at || '',
+                })),
+            };
+        }
+        if (key === 'downloads') {
+            return {
+                title: 'Downloads',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'download_count', label: 'Downloads', fmt: 'num' },
+                    { key: 'last_download_at', label: 'Last download', fmt: 'when' },
+                ],
+                rows: dls.filter((r) => Number(r.download_count || 0) > 0).map((r) => ({
+                    email: r.email,
+                    download_count: Number(r.download_count || 0),
+                    last_download_at: r.last_download_at || '',
+                })),
+            };
+        }
+        if (key === 'paid' || key === 'revenue') {
+            return {
+                title: key === 'revenue' ? 'Revenue' : 'Paid',
+                cols: [
+                    { key: 'email', label: 'Email' },
+                    { key: 'amount_usd', label: 'Paid', fmt: 'money' },
+                    { key: 'paid_at', label: 'When', fmt: 'when' },
+                ],
+                rows: dls.filter((r) => r.paid).map((r) => ({
+                    email: r.email,
+                    amount_usd: Number(r.amount_usd || 0),
+                    paid_at: r.paid_at || '',
+                })),
+            };
+        }
+        return null;
+    }
+
+    function fmtWhoCell(col, row) {
+        const v = row[col.key];
+        if (col.fmt === 'when') return v ? fmtWhen(v) : '-';
+        if (col.fmt === 'num') return fmtNum(v);
+        if (col.fmt === 'money') return fmtMoney(v);
+        return esc(v || '');
+    }
+
+    function ensureWhoHost() {
+        let el = $('nl-report-who');
+        if (el) return el;
+        const stats = $('nl-report-stats');
+        if (!stats) return null;
+        el = document.createElement('div');
+        el.id = 'nl-report-who';
+        el.className = 'card';
+        el.style.margin = '1rem 0';
+        el.style.padding = '1rem';
+        el.style.display = 'none';
+        stats.insertAdjacentElement('afterend', el);
+        return el;
+    }
+
+    function renderReportWho() {
+        const host = ensureWhoHost();
+        if (!host) return;
+        const spec = whoPeople();
+        if (!spec) {
+            host.style.display = 'none';
+            host.innerHTML = '';
+            return;
+        }
+        ensureSortStyles();
+        const rows = sortRows(spec.rows, state.reportSort.who, whoField);
+        host.style.display = '';
+        const empty = rows.length ? '' : '<div class="nl-empty">No one has done this yet.</div>';
+        host.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 0.6rem;">' +
+            `<h3 style="margin:0;">${esc(spec.title)} · ${fmtNum(rows.length)}</h3>` +
+            '<button class="btn btn-small btn-secondary" onclick="nlClearReportWho()">Close</button></div>' +
+            (rows.length
+                ? '<table class="nl-table"><thead><tr>' +
+                  spec.cols.map((c) => sortTh('who', c.key, c.label)).join('') +
+                  '</tr></thead><tbody>' +
+                  rows.map((r) => '<tr>' + spec.cols.map((c) => `<td>${fmtWhoCell(c, r)}</td>`).join('') + '</tr>').join('') +
+                  '</tbody></table>'
+                : empty);
+        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    window.nlShowReportWho = function (key) {
+        if (state.reportWho === key) {
+            state.reportWho = '';
+        } else {
+            state.reportWho = key;
+            state.reportSort.who = { key: '', dir: 'asc' };
+        }
+        renderReportStats();
+        renderReportWho();
+    };
+
+    window.nlClearReportWho = function () {
+        state.reportWho = '';
+        renderReportStats();
+        renderReportWho();
+    };
+
+    function renderReportStats() {
+        const data = state.report;
+        if (!data || !$('nl-report-stats')) return;
+        ensureSortStyles();
+        const s = data.stats || {};
+        const d = data.download_stats || {};
+        const tiles = [
+            ['sent', 'Sent', s.sent],
+            ['failed', 'Failed', s.failed],
+            ['unique_opens', 'Unique opens', s.unique_opens],
+            ['opens', 'Opens', s.opens],
+            ['unique_clicks', 'Unique clicks', s.unique_clicks],
+            ['clicks', 'Clicks', s.clicks],
+            ['unsubs', 'Unsubscribes', s.unsubs],
+            ['leads', 'Download leads', d.leads],
+            ['downloads', 'Downloads', d.unique_downloads],
+            ['paid', 'Paid', d.paid],
+            ['revenue', 'Revenue', fmtMoney(d.revenue_usd)],
+        ];
+        $('nl-report-stats').innerHTML = tiles.map(([key, label, v]) => {
+            const on = state.reportWho === key ? ' nl-stat-on' : '';
+            return `<div class="nl-stat nl-stat-hit${on}" onclick="nlShowReportWho('${key}')" title="Show who">` +
+                `<div class="k">${esc(label)}</div>` +
+                `<div class="v">${typeof v === 'string' ? esc(v) : fmtNum(v)}</div></div>`;
+        }).join('');
     }
 
     function renderReportTables() {
@@ -638,30 +889,19 @@
 
     window.nlOpenReport = async function (id) {
         state.reportId = id;
+        state.reportWho = '';
         state.reportSort.recips = { key: '', dir: 'asc' };
         state.reportSort.downloads = { key: '', dir: 'asc' };
         state.reportSort.links = { key: '', dir: 'asc' };
+        state.reportSort.who = { key: '', dir: 'asc' };
         try {
             const data = await api('/api/admin/newsletter/campaigns/' + encodeURIComponent(id) + '/report');
             state.report = data;
             const c = data.campaign || {};
-            const s = data.stats || {};
-            const d = data.download_stats || {};
             $('nl-report-title').textContent = c.name || 'Report';
             $('nl-report-sub').textContent = (c.subject || '') + (c.sent_at ? ' · sent ' + fmtWhen(c.sent_at) : '');
-            $('nl-report-stats').innerHTML = [
-                ['Sent', s.sent],
-                ['Failed', s.failed],
-                ['Unique opens', s.unique_opens],
-                ['Opens', s.opens],
-                ['Unique clicks', s.unique_clicks],
-                ['Clicks', s.clicks],
-                ['Unsubscribes', s.unsubs],
-                ['Download leads', d.leads],
-                ['Downloads', d.unique_downloads],
-                ['Paid', d.paid],
-                ['Revenue', fmtMoney(d.revenue_usd)],
-            ].map(([k, v]) => `<div class="nl-stat"><div class="k">${k}</div><div class="v">${typeof v === 'string' ? esc(v) : fmtNum(v)}</div></div>`).join('');
+            renderReportStats();
+            renderReportWho();
             renderReportTables();
             showView('report');
         } catch (e) { toast(e.message, true); }
