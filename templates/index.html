@@ -59929,7 +59929,7 @@ https://www.instagram.com/p/..."></textarea>
         }
         function _tiqRenderNine(tagged) {
             if (!tagged || !tagged.length) return '';
-            var tiles = tagged.slice(0, 9).map(function (o, i) {
+            var tiles = tagged.slice(0, 10).map(function (o, i) {
                 var it = o.r || {};
                 var us = it.us_streams || {};
                 var est = Number(us.us_estimate);
@@ -59940,8 +59940,7 @@ https://www.instagram.com/p/..."></textarea>
                 var art = it.image
                     ? '<img src="' + _tiqEsc(it.image) + '" loading="lazy" alt="" onerror="this.remove()">'
                     : '';
-                var meta = [o.fmt, it.year ? String(it.year) : '',
-                            (it.genres || []).slice(0, 2).join(' · ')].filter(Boolean).join(' · ');
+                var meta = [o.fmt, it.year ? String(it.year) : ''].filter(Boolean).join(' · ');
                 return '<div class="tiq-nine-tile' + (i === 0 ? ' is-lead' : '') + '">' +
                          '<div class="tiq-nine-art">' +
                            '<span class="tiq-nine-ini">' + _tiqEsc(_tiqFastInitials(it.title)) + '</span>' +
@@ -59954,7 +59953,7 @@ https://www.instagram.com/p/..."></textarea>
                          '<div class="tiq-nine-gg">' + _tiqEsc(meta) + '</div>' +
                        '</div>';
             }).join('');
-            return '<div class="tiq-sec-head"><h3>The nine</h3>' +
+            return '<div class="tiq-sec-head"><h3>The ten</h3>' +
                    '<em>Film and TV combined, by views</em></div>' +
                    '<div class="tiq-nine">' + tiles + '</div>';
         }
@@ -173172,10 +173171,10 @@ https://www.instagram.com/p/..."></textarea>
     }
 
     /* ---- the nine ---- */
-    #trendsIQView .tiq-nine { display: grid; grid-template-columns: repeat(6, 1fr); gap: 22px; }
-    @media (max-width: 1500px) { #trendsIQView .tiq-nine { grid-template-columns: repeat(4, 1fr); } }
-    @media (max-width: 1000px) { #trendsIQView .tiq-nine { grid-template-columns: repeat(2, 1fr); } }
-    #trendsIQView .tiq-nine-tile.is-lead { grid-column: span 2; grid-row: span 2; }
+    /* Ten across, one row, so the whole shelf is in view above the board. */
+    #trendsIQView .tiq-nine { display: grid; grid-template-columns: repeat(10, 1fr); gap: 14px; }
+    @media (max-width: 1400px) { #trendsIQView .tiq-nine { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 860px)  { #trendsIQView .tiq-nine { grid-template-columns: repeat(3, 1fr); } }
     #trendsIQView .tiq-nine-art {
         position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 2 / 3;
         background: linear-gradient(140deg, #3358FF, #E682FF 60%, #C7F23E);
@@ -173189,44 +173188,46 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-nine-ini {
         position: absolute; inset: 0; display: flex;
         align-items: center; justify-content: center;
-        font-size: 56px; font-weight: 900; letter-spacing: -.05em;
+        font-size: 34px; font-weight: 900; letter-spacing: -.05em;
         color: #0C1618; opacity: .34;
     }
-    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-ini { font-size: 104px; }
     #trendsIQView .tiq-nine-art::after {
         content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; z-index: 2;
         background: linear-gradient(180deg, rgba(12,22,24,0), rgba(12,22,24,.78) 70%, rgba(12,22,24,.92));
         pointer-events: none;
     }
     #trendsIQView .tiq-nine-rk {
-        position: absolute; left: 0; bottom: 0; z-index: 3; padding: 10px 14px 8px;
-        font-size: 40px; font-weight: 800; letter-spacing: -.05em; line-height: 1;
+        position: absolute; left: 0; bottom: 0; z-index: 3; padding: 7px 10px 6px;
+        font-size: 28px; font-weight: 800; letter-spacing: -.05em; line-height: 1;
         color: var(--mag-ink);
     }
-    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-rk { font-size: 76px; padding: 16px 22px 14px; }
     #trendsIQView .tiq-nine-dl {
-        position: absolute; right: 10px; top: 10px; z-index: 3;
-        font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
-        background: rgba(12, 22, 24, .72); font-variant-numeric: tabular-nums;
+        position: absolute; right: 6px; top: 6px; z-index: 3;
+        font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 999px;
+        background: rgba(12, 22, 24, .78); font-variant-numeric: tabular-nums;
     }
     #trendsIQView .tiq-nine-dl.up { color: var(--mag-accent); }
     #trendsIQView .tiq-nine-dl.down { color: var(--mag-second); }
     #trendsIQView .tiq-nine-dl.flat, #trendsIQView .tiq-nine-dl.new { color: #B7B3D8; }
+    /* Two lines, then clip. A long title must not push the row taller. */
     #trendsIQView .tiq-nine-nm {
-        font-size: 13.5px; font-weight: 700; letter-spacing: -.01em;
-        margin-top: 11px; line-height: 1.3; color: var(--mag-ink);
+        font-size: 12px; font-weight: 700; letter-spacing: -.01em;
+        margin-top: 9px; line-height: 1.3; color: var(--mag-ink);
         text-transform: none;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; min-height: 2.6em;
     }
     #trendsIQView .tiq-nine-vv {
-        font-size: 15px; font-weight: 700; letter-spacing: -.02em;
-        margin-top: 6px; color: var(--mag-ink); font-variant-numeric: tabular-nums;
+        font-size: 13px; font-weight: 700; letter-spacing: -.02em;
+        margin-top: 5px; color: var(--mag-ink); font-variant-numeric: tabular-nums;
     }
     #trendsIQView .tiq-nine-gg {
-        font-size: 9px; font-weight: 500; letter-spacing: .11em;
-        text-transform: uppercase; color: var(--mag-mute); margin-top: 4px;
+        font-size: 8.5px; font-weight: 500; letter-spacing: .1em;
+        text-transform: uppercase; color: var(--mag-mute); margin-top: 3px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-nm { font-size: 22px; margin-top: 16px; }
-    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-vv { font-size: 26px; }
+    /* The lead keeps the accent so the row still has a focal point. */
+    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-rk { color: var(--mag-accent); }
 
     /* ---- the board: columns lose their card chrome ---- */
     #trendsIQView .tiq-board .tiq-card {
