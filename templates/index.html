@@ -59897,6 +59897,98 @@ https://www.instagram.com/p/..."></textarea>
             return String(Math.round(n));
         }
 
+
+        // ---- Rankers: the nine + the movers rail -----------------------
+        // Both read the same row shape the board tables read, so sorting,
+        // search, export and the watchlist keep working untouched.
+        function _tiqFastInitials(title) {
+            var parts = String(title || '').replace(/[^A-Za-z0-9 ]/g, ' ')
+                .split(/\s+/).filter(Boolean);
+            if (!parts.length) return '';
+            if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        }
+        // Mirrors the delta branches the board rows use, returning the
+        // pieces rather than markup so the shelf and the rail can format
+        // them their own way.
+        function _tiqFastDeltaBits(us) {
+            us = us || {};
+            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number'
+                && us.delta_positions !== 0 && us.direction) {
+                var pos = Math.abs(us.delta_positions);
+                if (us.direction !== 'up' && us.direction !== 'down') return { cls: 'flat', txt: '', mag: 0 };
+                return { cls: us.direction, txt: (us.direction === 'up' ? '↑ ' : '↓ ') + pos, mag: pos, kind: 'rank' };
+            }
+            if (us.direction === 'new') return { cls: 'new', txt: 'NEW', mag: 0 };
+            if (typeof us.delta_pct === 'number' && (us.direction === 'up' || us.direction === 'down')) {
+                var raw = Math.abs(us.delta_pct) * 100;
+                var pct = raw >= 1 ? Math.round(raw) : Math.round(raw * 10) / 10;
+                return { cls: us.direction, txt: (us.direction === 'up' ? '↑ ' : '↓ ') + pct + '%', mag: pct, kind: 'pct' };
+            }
+            return { cls: 'flat', txt: '', mag: 0 };
+        }
+        function _tiqRenderNine(tagged) {
+            if (!tagged || !tagged.length) return '';
+            var tiles = tagged.slice(0, 9).map(function (o, i) {
+                var it = o.r || {};
+                var us = it.us_streams || {};
+                var est = Number(us.us_estimate);
+                var views = (isFinite(est) && est > 0) ? _tiqFullNum(est) : '—';
+                var d = _tiqFastDeltaBits(us);
+                // The initials sit under the artwork, so a poster that
+                // fails to load reveals a designed tile, not an empty one.
+                var art = it.image
+                    ? '<img src="' + _tiqEsc(it.image) + '" loading="lazy" alt="" onerror="this.remove()">'
+                    : '';
+                var meta = [o.fmt, it.year ? String(it.year) : '',
+                            (it.genres || []).slice(0, 2).join(' · ')].filter(Boolean).join(' · ');
+                return '<div class="tiq-nine-tile' + (i === 0 ? ' is-lead' : '') + '">' +
+                         '<div class="tiq-nine-art">' +
+                           '<span class="tiq-nine-ini">' + _tiqEsc(_tiqFastInitials(it.title)) + '</span>' +
+                           art +
+                           '<span class="tiq-nine-rk">' + (i + 1) + '</span>' +
+                           (d.txt ? '<span class="tiq-nine-dl ' + d.cls + '">' + d.txt + '</span>' : '') +
+                         '</div>' +
+                         '<div class="tiq-nine-nm">' + _tiqEsc(it.title || '') + '</div>' +
+                         '<div class="tiq-nine-vv">' + views + '</div>' +
+                         '<div class="tiq-nine-gg">' + _tiqEsc(meta) + '</div>' +
+                       '</div>';
+            }).join('');
+            return '<div class="tiq-sec-head"><h3>The nine</h3>' +
+                   '<em>Film and TV combined, by views</em></div>' +
+                   '<div class="tiq-nine">' + tiles + '</div>';
+        }
+        function _tiqRenderMovers(tagged) {
+            var pool = (tagged || []).map(function (o) {
+                return { it: o.r || {}, d: _tiqFastDeltaBits((o.r || {}).us_streams) };
+            }).filter(function (x) {
+                return (x.d.cls === 'up' || x.d.cls === 'down') && x.d.mag > 0;
+            });
+            if (!pool.length) return '';
+            pool.sort(function (a, b) { return b.d.mag - a.d.mag; });
+            var top = pool.slice(0, 5);
+            var max = top[0].d.mag || 1;
+            var rows = top.map(function (x) {
+                var est = Number((x.it.us_streams || {}).us_estimate);
+                var views = (isFinite(est) && est > 0) ? _tiqFullNum(est) : '';
+                var w = Math.max(6, Math.round((x.d.mag / max) * 100));
+                return '<div class="tiq-mover">' +
+                         '<div class="tiq-mover-t">' + _tiqEsc(x.it.title || '') + '</div>' +
+                         '<div class="tiq-mover-b">' +
+                           '<span class="tiq-mover-p ' + x.d.cls + '">' + x.d.txt + '</span>' +
+                           '<span class="tiq-mover-s">' + views + '</span>' +
+                         '</div>' +
+                         '<div class="tiq-mover-track"><i class="' + x.d.cls +
+                           '" style="width:' + w + '%"></i></div>' +
+                       '</div>';
+            }).join('');
+            return '<div class="tiq-movers">' +
+                     '<h4>Biggest movers</h4>' + rows +
+                     '<p class="tiq-movers-note">Movers rank by change over the window, ' +
+                     'not by views, so a small title breaking out is not buried under the leaders.</p>' +
+                   '</div>';
+        }
+
         function renderTrendsIQ(data) {
             window.__trendsIQ.lastData = data;
             var cards = data.cards || {};
@@ -63937,10 +64029,26 @@ https://www.instagram.com/p/..."></textarea>
                         return bv - av;
                     });
                     var allCard = allRows.length ? renderCol('All', allRows, true) : '';
+                    // Tag each row with its format so the merged shelf can
+                    // say whether a title is Film or TV, then sort on the
+                    // same key the board sorts on.
+                    var taggedRows = (filmRows || []).map(function (r) { return { r: r, fmt: 'Film' }; })
+                        .concat((tvRows || []).map(function (r) { return { r: r, fmt: 'TV' }; }));
+                    taggedRows.sort(function (a, b) {
+                        var av = Number(((a.r || {}).us_streams || {}).us_estimate); av = isFinite(av) ? av : -1;
+                        var bv = Number(((b.r || {}).us_streams || {}).us_estimate); bv = isFinite(bv) ? bv : -1;
+                        return bv - av;
+                    });
+                    var nineHtml   = _tiqRenderNine(taggedRows);
+                    var moversHtml = _tiqRenderMovers(taggedRows);
+                    var boardCols  = cols + (moversHtml ? ' 290px' : '');
                     var titlesHtml =
                         '<div class="tiq-card-sub" style="margin-bottom:12px;">' + titlesSubtitle + '</div>' +
-                        '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
-                        titlesGrid +
+                        nineHtml +
+                        '<div class="tiq-sec-head"><h3>The full board</h3>' +
+                          '<em>Tap any column to re-sort</em></div>' +
+                        '<div class="tiq-cards-grid tiq-board" style="grid-template-columns: ' + boardCols + ';">' +
+                        titlesGrid + moversHtml +
                         '</div>' +
                         (allCard ? '<div class="tiq-cards-grid" style="grid-template-columns: 1fr; margin-top: 16px;">' + allCard + '</div>' : '');
 
@@ -173036,6 +173144,127 @@ https://www.instagram.com/p/..."></textarea>
     .dash-profile-image img[src=""],
     .dash-profile-image-wrap.is-fallback .dash-profile-image img {
         display: none !important;
+    }
+
+    /* ==================================================================
+       RANKERS - THE NINE + THE FULL BOARD
+       A poster shelf of the day's top titles, then the ranked board with
+       a movers rail. Same rows underneath, so sort, search and export are
+       unaffected.
+       ================================================================== */
+    #trendsIQView .tiq-sec-head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        margin: 26px 0 16px; padding-bottom: 12px;
+        border-bottom: 1px solid var(--mag-rule);
+    }
+    #trendsIQView .tiq-sec-head h3 {
+        margin: 0; display: flex; align-items: center; gap: 8px;
+        font-size: 11px; font-weight: 700; letter-spacing: .18em;
+        text-transform: uppercase; color: var(--mag-ink);
+    }
+    #trendsIQView .tiq-sec-head h3::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: var(--mag-accent);
+    }
+    #trendsIQView .tiq-sec-head em {
+        font-style: normal; font-size: 10px; font-weight: 500;
+        letter-spacing: .12em; text-transform: uppercase; color: var(--mag-mute);
+    }
+
+    /* ---- the nine ---- */
+    #trendsIQView .tiq-nine { display: grid; grid-template-columns: repeat(6, 1fr); gap: 22px; }
+    @media (max-width: 1500px) { #trendsIQView .tiq-nine { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 1000px) { #trendsIQView .tiq-nine { grid-template-columns: repeat(2, 1fr); } }
+    #trendsIQView .tiq-nine-tile.is-lead { grid-column: span 2; grid-row: span 2; }
+    #trendsIQView .tiq-nine-art {
+        position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 2 / 3;
+        background: linear-gradient(140deg, #3358FF, #E682FF 60%, #C7F23E);
+    }
+    #trendsIQView .tiq-nine-art img {
+        position: absolute; inset: 0; z-index: 1;
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    /* Sits under the artwork, so a poster that fails to load reveals a
+       designed tile instead of an empty gradient. */
+    #trendsIQView .tiq-nine-ini {
+        position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        font-size: 56px; font-weight: 900; letter-spacing: -.05em;
+        color: #0C1618; opacity: .34;
+    }
+    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-ini { font-size: 104px; }
+    #trendsIQView .tiq-nine-art::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; z-index: 2;
+        background: linear-gradient(180deg, rgba(12,22,24,0), rgba(12,22,24,.78) 70%, rgba(12,22,24,.92));
+        pointer-events: none;
+    }
+    #trendsIQView .tiq-nine-rk {
+        position: absolute; left: 0; bottom: 0; z-index: 3; padding: 10px 14px 8px;
+        font-size: 40px; font-weight: 800; letter-spacing: -.05em; line-height: 1;
+        color: var(--mag-ink);
+    }
+    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-rk { font-size: 76px; padding: 16px 22px 14px; }
+    #trendsIQView .tiq-nine-dl {
+        position: absolute; right: 10px; top: 10px; z-index: 3;
+        font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+        background: rgba(12, 22, 24, .72); font-variant-numeric: tabular-nums;
+    }
+    #trendsIQView .tiq-nine-dl.up { color: var(--mag-accent); }
+    #trendsIQView .tiq-nine-dl.down { color: var(--mag-second); }
+    #trendsIQView .tiq-nine-dl.flat, #trendsIQView .tiq-nine-dl.new { color: #B7B3D8; }
+    #trendsIQView .tiq-nine-nm {
+        font-size: 13.5px; font-weight: 700; letter-spacing: -.01em;
+        margin-top: 11px; line-height: 1.3; color: var(--mag-ink);
+    }
+    #trendsIQView .tiq-nine-vv {
+        font-size: 15px; font-weight: 700; letter-spacing: -.02em;
+        margin-top: 6px; color: var(--mag-ink); font-variant-numeric: tabular-nums;
+    }
+    #trendsIQView .tiq-nine-gg {
+        font-size: 9px; font-weight: 500; letter-spacing: .11em;
+        text-transform: uppercase; color: var(--mag-mute); margin-top: 4px;
+    }
+    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-nm { font-size: 22px; margin-top: 16px; }
+    #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-vv { font-size: 26px; }
+
+    /* ---- the board: columns lose their card chrome ---- */
+    #trendsIQView .tiq-board .tiq-card {
+        background: transparent !important; border: 0 !important;
+        border-radius: 0 !important; padding: 0 !important;
+    }
+    #trendsIQView .tiq-board .tiq-sheet-cardhead {
+        border-bottom: 2px solid var(--mag-ink) !important;
+    }
+    #trendsIQView .tiq-board .tiq-sheet-cardhead::before { display: none !important; }
+
+    /* ---- movers rail ---- */
+    #trendsIQView .tiq-movers { border-left: 1px solid var(--mag-rule); padding-left: 28px; }
+    #trendsIQView .tiq-movers h4 {
+        margin: 0 0 14px; font-size: 10px; font-weight: 700;
+        letter-spacing: .18em; text-transform: uppercase; color: var(--mag-mute);
+    }
+    #trendsIQView .tiq-mover { padding: 12px 0; border-bottom: 1px solid rgba(233,232,225,.10); }
+    #trendsIQView .tiq-mover-t { font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--mag-ink); }
+    #trendsIQView .tiq-mover-b {
+        display: flex; justify-content: space-between; align-items: baseline; margin-top: 7px;
+    }
+    #trendsIQView .tiq-mover-p {
+        font-size: 16px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+    }
+    #trendsIQView .tiq-mover-p.up { color: var(--mag-accent); }
+    #trendsIQView .tiq-mover-p.down { color: var(--mag-second); }
+    #trendsIQView .tiq-mover-s {
+        font-size: 9px; font-weight: 500; letter-spacing: .12em;
+        color: var(--mag-mute); font-variant-numeric: tabular-nums;
+    }
+    #trendsIQView .tiq-mover-track {
+        height: 4px; border-radius: 2px; background: var(--mag-rule);
+        margin-top: 9px; overflow: hidden;
+    }
+    #trendsIQView .tiq-mover-track i { display: block; height: 100%; background: var(--mag-accent); }
+    #trendsIQView .tiq-mover-track i.down { background: var(--mag-second); }
+    #trendsIQView .tiq-movers-note {
+        font-size: 11.5px; color: var(--mag-mute); line-height: 1.6; margin-top: 18px;
     }
 </style>
 <script>
