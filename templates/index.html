@@ -24294,6 +24294,12 @@ https://www.instagram.com/p/..."></textarea>
             transform: rotate(180deg);
             color: #C7F23E;
         }
+        /* The strip is a 45px scroll box, which cropped the menu to a
+           sliver. It only holds a tab and this control, so it has no
+           reason to clip. */
+        #dashboardView.piq-v4 .comp-analysis-tabs {
+            overflow: visible !important;
+        }
         #dashboardView.piq-v4 #compJumpWrap {
             display: inline-flex;
             align-items: center;
