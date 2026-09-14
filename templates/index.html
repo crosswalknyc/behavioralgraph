@@ -26203,28 +26203,6 @@ https://www.instagram.com/p/..."></textarea>
                     </select>
                     <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
 
-                    <!-- Eliminate Items Indexed: global numeric filter that
-                         hides items in every behavioral card based on the
-                         row's index column. "Under N" hides index < N,
-                         "Over N" hides index > N, and "Both" keeps only
-                         items inside an [N1, N2] range (hides outside).
-                         Items with no index (N/A) are never hidden. -->
-                    <div class="behavioral-index-filter has-tooltip" data-tooltip="Eliminate items by index value across every behavioral card. Reminder: 100 = parity with Gen Pop, 150 = 1.5x, etc.">
-                        <span class="bif-label">Eliminate Items Indexed</span>
-                        <select id="behIndexFilterMode" onchange="onBehIndexFilterChange()">
-                            <option value="off">Off</option>
-                            <option value="under">Under</option>
-                            <option value="over">Over</option>
-                            <option value="both">Both (outside range)</option>
-                        </select>
-                        <input type="number" id="behIndexFilterValue" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
-                        <span id="behIndexFilterValue2Wrap" style="display:none; align-items:center; gap:0.25rem;">
-                            <span style="color: var(--text-secondary); font-size: 0.7rem;">to</span>
-                            <input type="number" id="behIndexFilterValue2" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
-                        </span>
-                        <button id="behIndexFilterClearBtn" class="btn btn-small btn-secondary" onclick="clearBehIndexFilter()" style="padding: 0.25rem 0.45rem; font-size: 0.65rem; display:none;" title="Clear index filter">✕</button>
-                        <span id="behIndexFilterStatus" style="color: var(--accent-cyan); font-size: 0.65rem; margin-left: 0.25rem;"></span>
-                    </div>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -139374,18 +139352,11 @@ https://www.instagram.com/p/..."></textarea>
         let _behIndexFilter = { mode: 'off', lo: null, hi: null };
 
         function _loadBehIndexFilter() {
-            try {
-                const raw = localStorage.getItem(BEH_INDEX_FILTER_LS_KEY);
-                if (!raw) return;
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === 'object') {
-                    _behIndexFilter = {
-                        mode: ['off','under','over','both'].includes(parsed.mode) ? parsed.mode : 'off',
-                        lo: (parsed.lo == null || parsed.lo === '') ? null : Number(parsed.lo),
-                        hi: (parsed.hi == null || parsed.hi === '') ? null : Number(parsed.hi)
-                    };
-                }
-            } catch (_) {}
+            // The control was removed from the Behavioral bar, so nothing can
+            // clear a filter a previous session left behind. Always start off
+            // and drop the stored value.
+            _behIndexFilter = { mode: 'off', lo: null, hi: null };
+            try { localStorage.removeItem(BEH_INDEX_FILTER_LS_KEY); } catch (_) {}
         }
 
         function _saveBehIndexFilter() {
