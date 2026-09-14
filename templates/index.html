@@ -25855,6 +25855,42 @@ https://www.instagram.com/p/..."></textarea>
         }
         .user-dropdown-caret { color: #7C878A !important; font-size: 9px !important; }
 
+        /* Product rows read like the library folders: a brand dot, the
+           name, and a quiet fill on hover. */
+        .view-nav-option,
+        .view-nav-suboption {
+            display: flex !important;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            text-align: left;
+        }
+        .view-nav-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex: 0 0 6px;
+            background: #7C878A;
+        }
+        .view-nav-dot.signal { background: #C7F23E; }
+        .view-nav-dot.orchid { background: #E682FF; }
+        .view-nav-dot.cobalt { background: #3358FF; }
+        .view-nav-dot.dusk { background: #B7B3D8; }
+        .view-nav-dot.muted { background: #7C878A; }
+        body[data-theme="light"] .view-nav-dot.signal { background: #5E7E12; }
+        body[data-theme="light"] .view-nav-dot.orchid { background: #8E3FA8; }
+        .view-nav-name { flex: 1 1 auto; min-width: 0; }
+        .view-nav-option:hover,
+        .view-nav-suboption:hover { background: #1B2F35 !important; color: #E9E8E1 !important; }
+        body[data-theme="light"] .view-nav-option:hover,
+        body[data-theme="light"] .view-nav-suboption:hover { background: #F4F3EE !important; color: #0C1618 !important; }
+        /* The group row keeps its count badge, so it stays a plain row. */
+        .view-nav-group-trigger { gap: 10px; }
+        .view-nav-group-trigger:hover { background: #1B2F35 !important; color: #E9E8E1 !important; }
+        body[data-theme="light"] .view-nav-group-trigger:hover { background: #F4F3EE !important; color: #0C1618 !important; }
+        .view-nav-trigger { text-transform: uppercase !important; }
+
+
 
         /* Momentum rail: fills the column beside Key Differentiators. */
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail {
@@ -49339,9 +49375,30 @@ https://www.instagram.com/p/..."></textarea>
                     return null;
                 }
 
+                function _navCleanLabel(raw) {
+                    // Options ship with a leading emoji. Strip any leading
+                    // non-letter run so only the product name survives.
+                    return String(raw == null ? '' : raw)
+                        .replace(/^[^\p{L}\p{N}]+/u, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                }
+                function _navDotTone(val, label) {
+                    var k = String(label || val || '').toUpperCase();
+                    if (k.indexOf('PROFILE') === 0) return 'signal';
+                    if (k.indexOf('SUBSCRIBER') === 0) return 'cobalt';
+                    if (k.indexOf('DIGITAL JOURNEY') === 0) return 'orchid';
+                    if (k.indexOf('TREND') === 0) return 'dusk';
+                    if (k.indexOf('RANKER') === 0) return 'signal';
+                    if (k.indexOf('ADMIN') === 0) return 'muted';
+                    if (k.indexOf('BRAND') === 0) return 'dusk';
+                    if (k.indexOf('FIN') === 0 || k.indexOf('BLUE') === 0) return 'cobalt';
+                    if (k.indexOf('ATTRIBUTION') === 0 || k.indexOf('SF ') === 0) return 'orchid';
+                    return 'muted';
+                }
                 function _buildLeafOption(opt) {
                     var val = opt.value;
-                    var label = opt.textContent;
+                    var label = _navCleanLabel(opt.textContent);
                     var disabled = opt.disabled;
                     var item = document.createElement('button');
                     item.type = 'button';
@@ -49349,7 +49406,14 @@ https://www.instagram.com/p/..."></textarea>
                     item.setAttribute('role', 'option');
                     item.setAttribute('data-value', val);
                     if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
-                    item.textContent = label;
+                    var _dot = document.createElement('span');
+                    _dot.className = 'view-nav-dot ' + _navDotTone(val, label);
+                    _dot.setAttribute('aria-hidden', 'true');
+                    var _txt = document.createElement('span');
+                    _txt.className = 'view-nav-name';
+                    _txt.textContent = label;
+                    item.appendChild(_dot);
+                    item.appendChild(_txt);
                     if (disabled) {
                         item.disabled = true;
                     } else {
@@ -49357,7 +49421,7 @@ https://www.instagram.com/p/..."></textarea>
                             var v = this.getAttribute('data-value');
                             viewDropdown.value = v;
                             viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
-                            triggerEl.textContent = this.textContent;
+                            triggerEl.textContent = _navCleanLabel(this.textContent);
                             panelEl.classList.remove('open');
                             triggerEl.setAttribute('aria-expanded', 'false');
                         });
@@ -49449,6 +49513,13 @@ https://www.instagram.com/p/..."></textarea>
                     updateTriggerText();
                 }
                 rebuildViewNavCustomPanel();
+                (function _stripTriggerEmoji() {
+                    try {
+                        var t = triggerEl.textContent;
+                        var c = _navCleanLabel(t);
+                        if (c && c !== t) triggerEl.textContent = c;
+                    } catch (_e) {}
+                })();
                 // 2026-06-23: expose for global-hide enforcer so it can
                 // re-render the custom flyout after removing options.
                 window.rebuildViewNavCustomPanel = rebuildViewNavCustomPanel;
