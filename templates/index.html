@@ -31043,11 +31043,24 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-spark-dot-last { fill: var(--mag-ink) !important; stroke: var(--mag-accent) !important; }
             #microdramasIQView .miq-spark-wrap:focus-visible { outline: 2px solid #3358FF !important; }
             #microdramasIQView .miq-spark-axis > span { color: var(--mag-mute) !important; font-size: 8.5px !important; letter-spacing: 0.08em !important; }
-            /* Seven platforms across one row squeezed every label onto two
-               lines. Let them wrap into rows of four instead. */
             #microdramasIQView .miq-rollup-cards {
                 grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)) !important;
             }
+            /* Seven platforms sit side by side so they compare at a glance,
+               which leaves each card narrow. A two-up grid broke every
+               label onto two lines, so the stats read as rows instead. */
+            #microdramasIQView .miq-rollup-card-flow {
+                grid-template-columns: 1fr !important;
+                gap: 7px !important;
+            }
+            #microdramasIQView .miq-rollup-flow-cell {
+                flex-direction: row !important;
+                align-items: baseline !important;
+                justify-content: space-between !important;
+                gap: 10px !important;
+            }
+            #microdramasIQView .miq-rollup-flow-label { white-space: nowrap; }
+            #microdramasIQView .miq-rollup-flow-value { text-align: right; }
 
         </style>
         <div id="microdramasIQView">
