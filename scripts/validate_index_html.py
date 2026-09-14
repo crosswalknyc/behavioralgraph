@@ -503,3 +503,4 @@ if __name__ == "__main__":
 # (see fix/profile-image-hyphen-space - profile image hyphen/space lookup)
 # (feat/profile-family-grouping 2026-09-08 - data-cut family sync + audit)
 # (fix/bpiq-superadmin-journeys 2026-09-08 - super_admin resolves to '*')
+# (title-lookup-tool 2026-09-14 - StreamScout 19-platform identifier tool, PR #75)
