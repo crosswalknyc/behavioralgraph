@@ -49287,7 +49287,10 @@ https://www.instagram.com/p/..."></textarea>
             var panelEl = document.getElementById('viewNavPanel');
             if (triggerEl && panelEl && viewDropdown) {
                 function updateTriggerText() {
-                    if (viewDropdown.selectedIndex >= 0) triggerEl.textContent = viewDropdown.options[viewDropdown.selectedIndex].textContent;
+                    if (viewDropdown.selectedIndex < 0) return;
+                    var _raw = viewDropdown.options[viewDropdown.selectedIndex].textContent;
+                    triggerEl.textContent = (typeof _navCleanLabel === 'function')
+                        ? _navCleanLabel(_raw) : _raw;
                 }
                 function applyProductAccessPayload(d) {
                     if (!d || !d.success) return;
@@ -49513,13 +49516,6 @@ https://www.instagram.com/p/..."></textarea>
                     updateTriggerText();
                 }
                 rebuildViewNavCustomPanel();
-                (function _stripTriggerEmoji() {
-                    try {
-                        var t = triggerEl.textContent;
-                        var c = _navCleanLabel(t);
-                        if (c && c !== t) triggerEl.textContent = c;
-                    } catch (_e) {}
-                })();
                 // 2026-06-23: expose for global-hide enforcer so it can
                 // re-render the custom flyout after removing options.
                 window.rebuildViewNavCustomPanel = rebuildViewNavCustomPanel;
