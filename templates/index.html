@@ -11439,9 +11439,17 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
+            width: 100%;
             padding: 64px 24px 72px;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             color: #E9E8E1;
+        }
+        /* The dashboard uppercases its chrome from the top, so sentences
+           inside the panel have to opt back out. */
+        .cmp-loading .cmp-loading-title,
+        .cmp-loading .cmp-loading-sub,
+        .cmp-loading .cmp-loading-steps li {
+            text-transform: none !important;
         }
         body[data-theme="light"] .cmp-loading { color: #0C1618; }
         .cmp-loading-mark {
@@ -22876,6 +22884,9 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 .dashboard-tab-content {
             padding: 24px 32px 64px;
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
         }
         #dashboardView.piq-v4 .tab-content.active {
             padding: 8px 4px 40px;
