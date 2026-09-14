@@ -30,6 +30,11 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 The tool lives in **Pull Request #75**. Until it's merged, the `streamscout/`
 folder isn't on `main` yet — so do this first:
 
+> ✅ **Everything's already saved.** All **13 platforms** and every fix live
+> safely on GitHub inside this PR — nothing exists only on one person's laptop.
+> Merging doesn't *save* the work (it's already backed up); it just **publishes**
+> it to `main` so anyone can `git pull` it.
+
 1. Open **https://github.com/crosswalknyc/behavioralgraph/pull/75**
 2. Click **Merge pull request** → **Confirm merge**.
    - If you see "the check **`validate`** didn't run" — that check only applies
