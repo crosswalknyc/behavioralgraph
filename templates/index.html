@@ -21627,8 +21627,13 @@ https://www.instagram.com/p/..."></textarea>
         }
         #prometheusWidget {
             position: fixed; right: 22px; bottom: 22px; width: 480px;
-            height: min(680px, calc(100vh - 420px));
-            min-width: 360px; min-height: 360px; max-width: 94vw; max-height: calc(100vh - 420px);
+            height: min(680px, calc(100vh - 120px));
+            /* The drag-resize handles cap at 94% of the viewport in either
+               direction, so the ceiling here has to match. It used to
+               reserve 420px of height, which on a normal screen left the
+               window already sitting at its maximum: dragging the bottom
+               edge did nothing while the sides still moved. */
+            min-width: 360px; min-height: 360px; max-width: 94vw; max-height: 94vh;
             background: #15252A; border: 1px solid #3B3D38; border-radius: 20px;
             box-shadow: 0 30px 60px rgba(0, 0, 0, 0.36);
             display: none; flex-direction: column; overflow: hidden;
