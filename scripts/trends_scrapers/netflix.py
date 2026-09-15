@@ -33,6 +33,7 @@ Standalone:
 from __future__ import annotations
 
 import io
+import json
 import logging
 import re
 import sys
@@ -302,6 +303,27 @@ def _run_netflix_playwright() -> Optional[str]:
     return html
 
 
+def _load_previous_daily() -> dict:
+    """Read the current latest/netflix.json from S3. Empty dict on any
+    failure, and on anything that did not come through the authenticated
+    daily path, so a carried-forward rail can never mix row shapes with
+    the weekly fallback. Used to keep a previously-good films or TV rail
+    when today's render only produced one of the two."""
+    try:
+        import boto3
+        s3 = boto3.client('s3', region_name='us-east-2')
+        o = s3.get_object(
+            Bucket='dashboard-inputs',
+            Key='trends_iq_snapshots/latest/netflix.json')
+        d = json.loads(o['Body'].read().decode('utf-8'))
+        if not isinstance(d, dict):
+            return {}
+        return d if d.get('source_path') == 'authenticated_daily' else {}
+    except Exception as e:
+        logger.info("netflix: could not read previous snapshot: %s", e)
+        return {}
+
+
 def _fetch_authenticated_daily() -> Optional[dict]:
     """Try the authenticated Playwright path. Returns a payload dict on
     success, None on failure (caller falls back to weekly TSV)."""
@@ -351,6 +373,30 @@ def _fetch_authenticated_daily() -> Optional[dict]:
 
     logger.info("netflix: authenticated daily parsed %d TV + %d Films",
                  len(tv_items), len(film_items))
+
+    # Never ship an empty rail over a previously-good one. Both rails
+    # render off the same page, so one of them coming back empty is a
+    # transient render or parse miss rather than Netflix publishing an
+    # empty chart. Keep yesterday's rows for that rail, marked stale, so
+    # the archive never lands a half-width day. Two days were lost this
+    # way before the guard existed.
+    if bool(film_items) != bool(tv_items):
+        prev = _load_previous_daily()
+        for label, key, items in (('films', 'us_films', film_items),
+                                   ('TV', 'us_tv', tv_items)):
+            if items:
+                continue
+            carried = [dict(r, stale_from_previous=True)
+                        for r in (prev.get(key) or []) if isinstance(r, dict)]
+            if not carried:
+                logger.warning(
+                    "netflix: %s rail empty and no previous rail to carry "
+                    "forward; shipping without it", label)
+                continue
+            items.extend(carried)
+            logger.warning(
+                "netflix: %s rail parsed 0 rows; carrying %d rows forward "
+                "from the previous capture", label, len(carried))
 
     # Interleave films + TV for the `national` display list (rank 1 film,
     # rank 1 tv, rank 2 film, rank 2 tv, ...) - same shape as the weekly
