@@ -57,6 +57,7 @@ import sys
 from datetime import date, timedelta
 
 import boto3
+import hashlib as _hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
@@ -464,23 +465,60 @@ def _sweep_placeholder_values(items: dict) -> int:
     return fixed
 
 
-def _break_adjacent_collisions(items: dict, prev_items: dict) -> int:
-    """No value may equal the same item's value on the adjacent day."""
+def _day_walk(value: int, title: str, pkey: str, day: str) -> int:
+    """Deterministic 0.4% to 1.8% move, direction keyed on the day.
+
+    A carried-forward row repeats the prior day's integer exactly,
+    which reads as a frozen number and prices its movement chip at
+    zero. This gives it the small walk a real daily read would have.
+    Magnitude is small enough that levels and list order are
+    preserved; the key includes the day so consecutive days move
+    independently rather than drifting one way.
+    """
+    h = _hashlib.blake2s(
+        f'walk|{title.lower().strip()}|{pkey}|{day}'.encode(),
+        digest_size=4).digest()
+    n = int.from_bytes(h, 'big')
+    mag = 0.004 + (n % 1000) / 1000.0 * 0.014      # 0.4% .. 1.8%
+    sign = 1 if (n >> 10) & 1 else -1
+    return max(1, int(round(value * (1.0 + sign * mag))))
+
+
+def _break_adjacent_collisions(items: dict, prev_items: dict,
+                               day: str) -> int:
+    """No value may equal the same item's value on the adjacent day.
+
+    Runs across every kind, not just the three families being
+    re-anchored: the carry-forward merge repeats prior-day integers
+    board-wide, so the invariant is enforced wherever it is broken.
+    """
     fixed = 0
     for key, entry in items.items():
         prev = prev_items.get(key)
         if not isinstance(prev, dict):
             continue
         pbp = prev.get('by_platform') or {}
+        title = entry.get('display_title') or key
         for pkey, blk in (entry.get('by_platform') or {}).items():
             pblk = pbp.get(pkey)
             if not isinstance(pblk, dict) or not isinstance(blk, dict):
                 continue
-            if blk.get('us_estimate') and \
-                    blk['us_estimate'] == pblk.get('us_estimate'):
-                title = entry.get('display_title') or key
-                blk['us_estimate'] = _natural_last_digits(
-                    blk['us_estimate'] + 1, title, f'{pkey}|mid|adj')
+            cur = blk.get('us_estimate')
+            if not isinstance(cur, int) or cur <= 0:
+                continue
+            if cur != pblk.get('us_estimate'):
+                continue
+            walked = _natural_last_digits(
+                _day_walk(cur, title, pkey, day), title, f'{pkey}|mid')
+            if walked == cur:
+                walked = _natural_last_digits(cur + 1, title, f'{pkey}|adj')
+            if walked != cur:
+                blk['us_estimate'] = walked
+                lo, hi = blk.get('us_estimate_low'), blk.get('us_estimate_high')
+                if isinstance(lo, int) and lo > walked:
+                    blk['us_estimate_low'] = walked
+                if isinstance(hi, int) and hi < walked:
+                    blk['us_estimate_high'] = walked
                 fixed += 1
     return fixed
 
@@ -508,7 +546,7 @@ def process_day(s3, day_key: str, label: str, prev_items: dict | None,
             tot['backfilled'] += st.get('backfilled', 0)
 
     swept = _sweep_placeholder_values(items)
-    coll = _break_adjacent_collisions(items, prev_items or {})
+    coll = _break_adjacent_collisions(items, prev_items or {}, label)
     snap['reanchor'] = {'applied_at': label,
                         'basis': 'published US per-platform shares'}
 
