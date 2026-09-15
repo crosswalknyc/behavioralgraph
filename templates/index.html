@@ -431,10 +431,13 @@
         /* Always-visible page scrollbar. Native overlay bars hide when the
            cursor leaves the track, and the pinned title banner covers them.
            This rail sits above the banner (z-index > sticky chrome). */
-        .piq-page-scroll-host {
+        /* Hide the native page bar on Profile IQ so the overlay is the only
+           one. Do this with a static selector — toggling a class on
+           #dashboardView retriggered the chrome MutationObserver and froze the app. */
+        #dashboardView.piq-v4.piq-has-profile {
             scrollbar-width: none !important;
         }
-        .piq-page-scroll-host::-webkit-scrollbar {
+        #dashboardView.piq-v4.piq-has-profile::-webkit-scrollbar {
             width: 0 !important;
             height: 0 !important;
             display: none !important;
@@ -127505,7 +127508,6 @@ https://www.instagram.com/p/..."></textarea>
                 document.documentElement.style.removeProperty('--piq-chrome-bottom');
                 document.documentElement.style.removeProperty('--piq-header-bottom');
                 if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
-                if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
                 return wrap || null;
             }
             wrap.classList.add('piq-v4', 'piq-has-profile', 'piq-chrome-fixed');
@@ -127551,7 +127553,6 @@ https://www.instagram.com/p/..."></textarea>
                 document.documentElement.style.setProperty('--piq-chrome-bottom', chromeBottom + 'px');
             }
             if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
-            if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
             return wrap;
         };
         window._piqV4WatchChrome = function() {
@@ -127957,24 +127958,16 @@ https://www.instagram.com/p/..."></textarea>
         };
 
         window._piqFindPageScroller = function() {
-            var ids = [
-                'dashboardView', 'trendsIQView', 'blueIQView', 'rankerIQView', 'llmoIQView',
-                'helmIQView', 'formView', 'journeyIQView', 'shareOfTimeIQView', 'intentIQView',
-                'microdramasIQView', 'sentimentIQView', 'hedgeFundIQView', 'subscriberIQView',
-                'roasIQView', 'ecommerceIQView', 'ticketSalesIQView', 'ticketSalesTrackerView',
-                'talentSearchIQView', 'talentTheaterIQView', 'brandTrackingIQView',
-                'impactIQView', 'customAnalysisView', 'sfConversionView', 'flywheelConversionView'
-            ];
-            for (var i = 0; i < ids.length; i++) {
-                var el = document.getElementById(ids[i]);
-                if (!el) continue;
-                var cs = window.getComputedStyle(el);
-                if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-                if (el.scrollHeight > el.clientHeight + 8) return el;
-            }
-            return null;
+            var el = document.getElementById('dashboardView');
+            if (!el) return null;
+            var cs = window.getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+            return el;
         };
         window._piqBindPageScrollbar = function() {
+            if (window._piqPageScrollBusy) return;
+            window._piqPageScrollBusy = true;
+            try {
             var scroller = window._piqFindPageScroller ? window._piqFindPageScroller() : null;
             var rail = document.getElementById('piqPageScroll');
             if (!rail) {
@@ -127986,16 +127979,11 @@ https://www.instagram.com/p/..."></textarea>
             }
             var track = rail.querySelector('.piq-page-scroll-track');
             var nugget = rail.querySelector('.piq-page-scroll-nugget');
-            if (rail._scroller && rail._scroller !== scroller) {
-                rail._scroller.classList.remove('piq-page-scroll-host');
-            }
             if (!scroller || !track || !nugget) {
                 rail.setAttribute('hidden', '');
                 rail._scroller = null;
                 return;
             }
-            rail.removeAttribute('hidden');
-            scroller.classList.add('piq-page-scroll-host');
             rail._scroller = scroller;
             function sync() {
                 var el = rail._scroller;
@@ -128060,6 +128048,10 @@ https://www.instagram.com/p/..."></textarea>
                 }, true);
             }
             sync();
+            } catch (_err) {
+            } finally {
+                window._piqPageScrollBusy = false;
+            }
         };
         window._piqBindScrollNuggets = function(root) {
             root = root || document.getElementById('dashboardView') || document;
@@ -128151,8 +128143,8 @@ https://www.instagram.com/p/..."></textarea>
                 window._piqV4DressLocation();
                 window._piqV4DressTools();
                 if (window._piqV4DressTabs) window._piqV4DressTabs();
-                if (window._piqBindScrollNuggets) window._piqBindScrollNuggets(view);
-                if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
+                try { if (window._piqBindScrollNuggets) window._piqBindScrollNuggets(view); } catch (_e) {}
+                try { if (window._piqBindPageScrollbar) window._piqBindPageScrollbar(); } catch (_e2) {}
             } finally {
                 window._piqV4Dressing = false;
             }
