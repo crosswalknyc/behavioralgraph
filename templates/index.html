@@ -174054,11 +174054,33 @@ https://www.instagram.com/p/..."></textarea>
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
-    /* The meta line is a wrapping row of chips, and the wrap is what
-       adds the height. Hold it to one line. */
+    /* The meta line is a row of chips that wrapped, and the wrap is what
+       made one row twice the height of its neighbour. Hold it to a
+       single line: each chip keeps its own width instead of being
+       squeezed until its text wraps, and anything past the edge of the
+       column is clipped rather than pushed onto a second line. */
     #trendsIQView[data-tiq-product="trends"] .tiq-row-meta {
         flex-wrap: nowrap !important;
+        align-items: center;
         overflow: hidden;
+    }
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-meta > * {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+    /* The reading count is the point of the row, so it leads and is
+       never the thing that gets clipped. Price, holds and genre are
+       secondary and give way first. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-meta .tiq-audience-chip { order: -1; }
+    /* The watchlist and trend controls sat inline after the title and
+       took a line of their own when the title ran long. Park them in
+       the corner of the row instead. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-row { position: relative; }
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-title { padding-right: 52px; }
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-title .tiq-actions {
+        position: absolute;
+        top: 10px;
+        right: 0;
     }
     /* These sheets scroll, so the column header has to stay opaque to
        cover the rows passing under it. On the page rather than on the
