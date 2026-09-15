@@ -4319,6 +4319,7 @@ def _accumulate_headline_estimates_over_window(
         return None
 
     prev_days_fetched = len(prev_fetched)
+    noun = _window_noun_for_days(n)
     stamped = 0
     level_fallback = 0
     for key, entry in merged['items'].items():
@@ -4358,6 +4359,24 @@ def _accumulate_headline_estimates_over_window(
                 if not prev_baseline_day:
                     prev_baseline_day = d
 
+        # A one day window keeps the daily reading and its daily
+        # label. A longer one shows what the window actually held,
+        # the same swap the stream rail makes, so the audience on the
+        # row and the baseline beside it are the same kind of number
+        # and the chip between them can be checked by hand:
+        # cur_sum / window_days_covered against prev_estimate /
+        # prev_days_covered is exactly the percentage rendered.
+        if n > 1:
+            entry['us_estimate'] = int(cur_sum)
+            entry['unit_label'] = _rewrite_unit_label(
+                entry.get('unit_label'), noun)
+            for bound in ('us_estimate_low', 'us_estimate_high'):
+                b = entry.get(bound)
+                if isinstance(b, (int, float)) and b > 0 and level > 0:
+                    entry[bound] = int(round(b * cur_sum / float(level)))
+        entry['window_days_covered'] = cur_days
+        entry['window_days_total'] = n
+
         d = _window_delta_fields(
             cur_sum, prev_sum, prev_days_fetched,
             cur_days_covered=cur_days, prev_days_covered=prev_days,
@@ -4368,8 +4387,6 @@ def _accumulate_headline_estimates_over_window(
         entry['delta_pct'], entry['direction'] = d
         entry['prev_estimate'] = int(prev_sum)
         entry['prev_days_covered'] = prev_days
-        entry['window_days_covered'] = cur_days
-        entry['window_days_total'] = n
         if prev_baseline_day:
             entry['prev_date'] = prev_baseline_day
         else:
