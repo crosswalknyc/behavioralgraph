@@ -23217,12 +23217,60 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 .insight-card-v2,
         body[data-theme="light"] #dashboardView.piq-v4 .demo-insight-card,
         body[data-theme="light"] #dashboardView.piq-v4 .stat-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .activation-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .chart-card,
         body[data-theme="light"] #dashboardView.piq-v4 .behavioral-card,
-        body[data-theme="light"] #dashboardView.piq-v4 .location-section {
+        body[data-theme="light"] #dashboardView.piq-v4 .location-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .location-section,
+        body[data-theme="light"] #dashboardView.piq-v4 .interest-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .interests-insights-row,
+        body[data-theme="light"] #dashboardView.piq-v4 .interests-heatmap-section,
+        body[data-theme="light"] #dashboardView.piq-v4 .interests-categories-section,
+        body[data-theme="light"] #dashboardView.piq-v4 .interests-list-section,
+        body[data-theme="light"] #dashboardView.piq-v4 .affinity-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .marketing-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .comp-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .media-reach-chart-card,
+        body[data-theme="light"] #dashboardView.piq-v4 .regional-breakdown {
             background: #FFFFFF !important;
             border-color: #C9C6BA !important;
             color: #0C1618 !important;
         }
+        /* Darken table row/cell text to a dark grey; column-header labels to a
+           softer grey. Over/under index accents keep their olive / orchid hue
+           (their own .idx.over/.under and .index-over/.index-under rules win on
+           the accent cells). */
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .name,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .pct,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .gp,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .idx,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .key,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .name,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .pct,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .gp,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .idx.par,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-card-title-row,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-table,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-item,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-item {
+            color: #2E322C !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 th,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-header-row,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-header-row,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head .name,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head .pct,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head .gp,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head .idx,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row.head {
+            color: #5C6560 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .idx.over,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .idx.over,
+        body[data-theme="light"] #dashboardView.piq-v4 .index-over { color: #5E7E12 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row .idx.under,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-data-row .idx.under,
+        body[data-theme="light"] #dashboardView.piq-v4 .index-under { color: #8E3FA8 !important; }
         #dashboardView.piq-v4 .insight-card-v2 h3,
         #dashboardView.piq-v4 .insight-card-header h3,
         #dashboardView.piq-v4 .demo-insight-card h4,
