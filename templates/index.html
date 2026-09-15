@@ -22877,14 +22877,54 @@ https://www.instagram.com/p/..."></textarea>
             color: #E9E8E1;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
         }
+        body[data-theme="light"] #dashboardView.piq-v4,
         body[data-theme="light"] #dashboardView.piq-v4 .dashboard-tab-content,
         body[data-theme="light"] #dashboardView.piq-v4 .tab-content,
         body[data-theme="light"] #dashboardView.piq-v4 .insights-container,
+        body[data-theme="light"] #dashboardView.piq-v4 .insights-grid-v2,
+        body[data-theme="light"] #dashboardView.piq-v4 .insights-summary-grid,
         body[data-theme="light"] #dashboardView.piq-v4 .demo-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .behavioral-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .interests-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .location-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .comparison-main,
+        body[data-theme="light"] #dashboardView.piq-v4 .comparison-container,
+        body[data-theme="light"] #dashboardView.piq-v4 .marketing-main,
         body[data-theme="light"] #dashboardView.piq-v4 .dashboard-empty-state {
-            background: #E9E8E1 !important;
-            color: #0C1618;
+            background: #E7EBD2 !important;   /* light olive green ground (light mode) */
+            color: #2E322C;                     /* dark grey text */
         }
+        /* Light mode: the revamp hardcoded off-white / light-grey text (built
+           for the dark ground). Darken it to a dark grey so it reads on the
+           olive. Over/under index numbers keep their olive / orchid accent. */
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights h2,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights h3,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-section-head h2,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-label,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-pct,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-desc,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .key,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .name,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .pct,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .gp,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .idx.par,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .snapshot-label,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .snapshot-value,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .snapshot-subtext,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-callout,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights li,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights p {
+            color: #2E322C !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-eyebrow,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-eyebrow .num,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row.head {
+            color: #5C6560 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .idx.over { color: #5E7E12 !important; }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .idx.under { color: #8E3FA8 !important; }
         #dashboardView.piq-v4 .dashboard-tab-content {
             padding: 24px 32px 64px;
             flex: 1 1 auto;
