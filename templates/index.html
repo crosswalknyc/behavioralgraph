@@ -51185,6 +51185,10 @@ https://www.instagram.com/p/..."></textarea>
             }
             
             function showTooltip(el, e) {
+                // EXPORT's hover explainer sits below the cursor. While the
+                // menu is open that puts it on top of the dropdown, so skip.
+                var exportMenu = document.getElementById('tabExportDropdown');
+                if (exportMenu && exportMenu.style.display === 'block' && el.closest && el.closest('.dash-dropdown')) return;
                 const html = (el.getAttribute('data-tooltip-html') || '').trim();
                 const text = (el.getAttribute('data-tooltip') || el.getAttribute('title') || '').trim();
                 if (!text && !html) return;
@@ -51215,6 +51219,7 @@ https://www.instagram.com/p/..."></textarea>
                 tooltip.classList.remove('tooltip-rich');
                 tooltip.textContent = '';
             }
+            window.hideGlobalTooltip = hideTooltip;
             
             // Use mouseover so tooltips show when cursor is already over element (e.g. after TST panel opens)
             document.body.addEventListener('mouseover', function(e) {
@@ -155815,6 +155820,7 @@ https://www.instagram.com/p/..."></textarea>
                 window.removeEventListener('scroll', _positionTabExportDropdown, true);
                 window.removeEventListener('resize', _positionTabExportDropdown);
             } else {
+                if (typeof window.hideGlobalTooltip === 'function') window.hideGlobalTooltip();
                 dropdown.style.display = 'block';
                 _positionTabExportDropdown();
                 // Reposition on scroll (capture so we catch scrolls inside
