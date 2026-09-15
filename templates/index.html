@@ -29473,13 +29473,13 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-row-title a { color: inherit; text-decoration: none; }
             #trendsIQView .tiq-row-title a:hover { color: #a78bfa; text-decoration: underline; }
             #trendsIQView .tiq-row-meta { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
-            #trendsIQView .tiq-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.45rem; background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-radius: 10px; font-size: 0.7rem; font-weight: 500; }
+            #trendsIQView .tiq-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.45rem; background: rgba(183, 179, 216, 0.12); color: #B7B3D8; border-radius: 10px; font-size: 0.7rem; font-weight: 500; }
             #trendsIQView .tiq-badge.hot { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
             #trendsIQView .tiq-badge.rising { background: rgba(34, 197, 94, 0.18); color: #86efac; }
             /* Rich Google Trends fields: volume / growth / started time /
                "Trend breakdown" query chips / per-trend news thumbnails.
                These match the layout of trends.google.com/trending. */
-            #trendsIQView .tiq-badge.tiq-vol { background: rgba(59, 130, 246, 0.22); color: #93c5fd; }
+            #trendsIQView .tiq-badge.tiq-vol { background: rgba(183, 179, 216, 0.16); color: #B7B3D8; }
             #trendsIQView .tiq-badge.tiq-growth { background: rgba(34, 197, 94, 0.18); color: #86efac; }
             #trendsIQView .tiq-badge.tiq-growth.tiq-growth-hot { background: rgba(34, 197, 94, 0.28); color: #4ade80; font-weight: 600; }
             #trendsIQView .tiq-started { font-size: 0.7rem; color: var(--text-secondary); opacity: 0.85; }
@@ -29632,8 +29632,8 @@ https://www.instagram.com/p/..."></textarea>
                were drawn from a non-search trending pool (news /
                wikipedia / people / movers). Kept subtle so real Google
                Trends searches still visually dominate the card. */
-            #trendsIQView .tiq-badge.tiq-origin-news   { background: rgba(59,130,246,0.15);  color: #93c5fd; }
-            #trendsIQView .tiq-badge.tiq-origin-person { background: rgba(168,85,247,0.15);  color: #d8b4fe; }
+            #trendsIQView .tiq-badge.tiq-origin-news   { background: rgba(183, 179, 216, 0.12); color: #B7B3D8; }
+            #trendsIQView .tiq-badge.tiq-origin-person { background: rgba(230, 130, 255, 0.14); color: #E682FF; }
             #trendsIQView .tiq-badge.tiq-origin-wiki   { background: rgba(148,163,184,0.18); color: #cbd5e1; }
             #trendsIQView .tiq-badge.tiq-origin-mover  { background: rgba(34,197,94,0.15);   color: #86efac; }
             #trendsIQView .tiq-social-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
@@ -56152,8 +56152,10 @@ https://www.instagram.com/p/..."></textarea>
             // Trends product owns the search/news/retail tab set. Reset the
             // shared header (the Rankers product reuses this same view).
             window.__trendsIQ.product = 'trends';
+            var _tView = document.getElementById('trendsIQView');
+            if (_tView) _tView.setAttribute('data-tiq-product', 'trends');
             var _tTitle = document.getElementById('trendsIQTitle');
-            if (_tTitle) _tTitle.innerHTML = '\uD83D\uDCC8 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span>';
+            if (_tTitle) _tTitle.innerHTML = 'Trends.<span>Culture trends tracker</span>';
             var _tSub = document.querySelector('#trendsIQView .tiq-subtitle');
             if (_tSub) _tSub.textContent = 'Who and what are trending across media search, news, and retail right now.';
             // Sync the in-header HOVER toggle to the persisted state so
@@ -66181,6 +66183,7 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof _trendsIQHideAllOtherViews === 'function') _trendsIQHideAllOtherViews();
             var view = document.getElementById('trendsIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+            if (view) view.setAttribute('data-tiq-product', 'rankers');
             var _rTitle = document.getElementById('trendsIQTitle');
             if (_rTitle) _rTitle.innerHTML = 'Rankers.<span>What the panel watched, played and listened to</span>';
             var _rSub = document.querySelector('#trendsIQView .tiq-subtitle');
@@ -174015,6 +174018,48 @@ https://www.instagram.com/p/..."></textarea>
     /* Without the card box the columns need real air between them, and
        each chart needs room below it before the next row starts. */
     #trendsIQView .tiq-cards-grid.tiq-flat { gap: 34px 40px !important; }
+
+    /* ---- Trends: same treatment as the Rankers boards ---------------
+       The audience chip and the trend badges shipped in violet and
+       indigo, neither of which is in the palette. Dusk on a hairline
+       keeps them readable without competing with the accent. */
+    #trendsIQView .tiq-audience-chip {
+        background: rgba(183, 179, 216, 0.10) !important;
+        color: #B7B3D8 !important;
+        border: 1px solid rgba(183, 179, 216, 0.22) !important;
+    }
+    /* Trends cards lose the box, the way the boards did. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-card {
+        background: transparent !important; border: 0 !important;
+        border-radius: 0 !important; padding: 0 !important;
+    }
+    #trendsIQView[data-tiq-product="trends"] .tiq-sheet-cardhead {
+        border-bottom: 2px solid var(--mag-ink) !important;
+    }
+    #trendsIQView[data-tiq-product="trends"] .tiq-sheet-cardhead::before { display: none !important; }
+    #trendsIQView[data-tiq-product="trends"] .tiq-cards-grid { gap: 34px 40px !important; }
+    #trendsIQView[data-tiq-product="trends"] .tiq-sheet-scroll thead th {
+        background: var(--cw-page) !important;
+        box-shadow: inset 0 -1px 0 var(--mag-rule);
+    }
+    /* ---- Trends rows hold one height per column ---------------------
+       Books ran from 116px to 256px because a product title can be a
+       paragraph, which walked each column out of step with the one
+       beside it. Clamp what varies. The clamp goes on the link rather
+       than the title block, so the watchlist and trend controls that
+       sit inline after it are never the thing that gets cut. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-title > a {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    /* The meta line is a wrapping row of chips, and the wrap is what
+       adds the height. Hold it to one line. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-meta {
+        flex-wrap: nowrap !important;
+        overflow: hidden;
+    }
     /* These sheets scroll, so the column header has to stay opaque to
        cover the rows passing under it. On the page rather than on the
        panel colour it reads as a rule, not a grey box. */
