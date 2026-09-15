@@ -174203,9 +174203,16 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-flat .tiq-sheet tbody tr { height: 82px; }
     #trendsIQView .tiq-board .tiq-sheet tbody td,
     #trendsIQView .tiq-flat .tiq-sheet tbody td { height: 82px; }
-    #trendsIQView .tiq-board .tiq-sheet-titlemain,
-    #trendsIQView .tiq-flat .tiq-sheet-titlemain {
+    #trendsIQView .tiq-board .tiq-sheet-titlemain {
         max-height: 62px;
+        overflow: hidden;
+    }
+    /* These sheets carry 60px artwork, and the cell adds 11px of padding
+       top and bottom. A cap above 60px lets a two-line title outgrow the
+       artwork and add 2px to the row, which is enough to walk a column
+       out of step over a long list. */
+    #trendsIQView .tiq-flat .tiq-sheet-titlemain {
+        max-height: 60px;
         overflow: hidden;
     }
     /* A third genre, or a long "with <host>" credit, is what usually
