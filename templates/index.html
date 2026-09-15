@@ -23913,6 +23913,52 @@ https://www.instagram.com/p/..."></textarea>
             border-color: #5E7E12;
             color: #5E7E12;
         }
+        #piqCsvMenu.piq-csv-menu {
+            position: fixed;
+            min-width: 200px;
+            max-width: min(280px, calc(100vw - 24px));
+            max-height: 320px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            background: #15252A;
+            border: 1px solid #3B3D38;
+            border-radius: 10px;
+            padding: 6px;
+            z-index: 100090;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+        }
+        #piqCsvMenu.piq-csv-menu[hidden] { display: none !important; }
+        #piqCsvMenu.piq-csv-menu .piq-csv-opt {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-radius: 7px;
+            color: #E9E8E1;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 10px;
+            cursor: pointer;
+            line-height: 1.3;
+        }
+        #piqCsvMenu.piq-csv-menu .piq-csv-opt:hover,
+        #piqCsvMenu.piq-csv-menu .piq-csv-opt.is-on {
+            background: #1B2F35;
+            color: #C7F23E;
+        }
+        body[data-theme="light"] #piqCsvMenu.piq-csv-menu {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            box-shadow: 0 18px 44px rgba(12, 22, 24, 0.18);
+        }
+        body[data-theme="light"] #piqCsvMenu.piq-csv-menu .piq-csv-opt { color: #0C1618; }
+        body[data-theme="light"] #piqCsvMenu.piq-csv-menu .piq-csv-opt:hover,
+        body[data-theme="light"] #piqCsvMenu.piq-csv-menu .piq-csv-opt.is-on {
+            background: #F3F1E8;
+            color: #5E7E12;
+        }
         #dashboardView.piq-v4 .piq-head-actions {
             display: flex;
             align-items: center;
@@ -51189,6 +51235,8 @@ https://www.instagram.com/p/..."></textarea>
                 // menu is open that puts it on top of the dropdown, so skip.
                 var exportMenu = document.getElementById('tabExportDropdown');
                 if (exportMenu && exportMenu.style.display === 'block' && el.closest && el.closest('.dash-dropdown')) return;
+                var csvMenu = document.getElementById('piqCsvMenu');
+                if (csvMenu && !csvMenu.hasAttribute('hidden') && el.closest && el.closest('.piq-csv-btn')) return;
                 const html = (el.getAttribute('data-tooltip-html') || '').trim();
                 const text = (el.getAttribute('data-tooltip') || el.getAttribute('title') || '').trim();
                 if (!text && !html) return;
@@ -126493,22 +126541,97 @@ https://www.instagram.com/p/..."></textarea>
         };
         window._piqV4CsvBtn = function(type, category, opts) {
             opts = opts || {};
-            var attrs = 'type="button" class="piq-csv-btn has-tooltip" data-tooltip="Export CSV"';
+            var tip = opts.menu ? 'Export CSV: choose All or a subset' : 'Export CSV';
+            var attrs = 'type="button" class="piq-csv-btn has-tooltip" data-tooltip="' + tip + '"';
+            if (opts.menu) attrs += ' data-piq-csv-menu="1"';
             if (opts.fn) {
                 attrs += ' data-piq-csv-fn="' + window._piqV4Attr(opts.fn) + '"';
                 if (opts.arg != null) attrs += ' data-piq-csv-arg="' + window._piqV4Attr(opts.arg) + '"';
             } else {
                 attrs += ' data-piq-csv-type="' + window._piqV4Attr(type) + '" data-piq-csv-cat="' + window._piqV4Attr(category) + '"';
             }
-            return '<button ' + attrs + '>CSV</button>';
+            return '<button ' + attrs + '>' + (opts.menu ? 'CSV \u25BE' : 'CSV') + '</button>';
+        };
+        window._piqV4CsvMenuEl = function() {
+            var menu = document.getElementById('piqCsvMenu');
+            if (menu) return menu;
+            menu = document.createElement('div');
+            menu.id = 'piqCsvMenu';
+            menu.className = 'piq-csv-menu';
+            menu.setAttribute('hidden', '');
+            document.body.appendChild(menu);
+            return menu;
+        };
+        window._piqV4CloseCsvMenu = function() {
+            var menu = document.getElementById('piqCsvMenu');
+            if (menu) {
+                menu.setAttribute('hidden', '');
+                menu.innerHTML = '';
+            }
+            window._piqV4CsvMenuBtn = null;
+        };
+        window._piqV4ToggleCsvMenu = function(btn) {
+            var menu = window._piqV4CsvMenuEl();
+            var wasThis = window._piqV4CsvMenuBtn === btn && !menu.hasAttribute('hidden');
+            window._piqV4CloseCsvMenu();
+            if (wasThis) return;
+            var card = btn.closest ? btn.closest('.behavioral-card') : null;
+            var sel = card ? card.querySelector('.behavioral-slice-select') : null;
+            var type = btn.getAttribute('data-piq-csv-type') || 'behavioral';
+            var cat = btn.getAttribute('data-piq-csv-cat') || (card ? card.getAttribute('data-category') : '') || '';
+            var current = sel ? String(sel.value || 'all') : 'all';
+            var html = '';
+            function addOpt(value, label, on) {
+                html += '<button type="button" class="piq-csv-opt' + (on ? ' is-on' : '') + '" data-piq-csv-type="' +
+                    window._piqV4Attr(type) + '" data-piq-csv-cat="' + window._piqV4Attr(cat) +
+                    '" data-piq-csv-slice="' + window._piqV4Attr(value) + '">' + window._piqV4Esc(label) + '</button>';
+            }
+            if (sel && sel.options && sel.options.length) {
+                Array.prototype.forEach.call(sel.options, function(o) {
+                    addOpt(o.value, (o.textContent || o.value || '').trim() || o.value, o.value === current);
+                });
+            } else {
+                addOpt('all', 'Show All', true);
+            }
+            menu.innerHTML = html;
+            menu.removeAttribute('hidden');
+            window._piqV4CsvMenuBtn = btn;
+            if (typeof window.hideGlobalTooltip === 'function') window.hideGlobalTooltip();
+            var r = btn.getBoundingClientRect();
+            var mw = Math.max(200, menu.offsetWidth || 200);
+            var left = Math.min(window.innerWidth - mw - 8, Math.max(8, r.right - mw));
+            var top = r.bottom + 6;
+            if (top + 280 > window.innerHeight) top = Math.max(8, r.top - 6 - Math.min(280, menu.offsetHeight || 280));
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
         };
         if (!window._piqV4CsvBound) {
             window._piqV4CsvBound = true;
             document.addEventListener('click', function(e) {
-                var btn = e.target && e.target.closest ? e.target.closest('.piq-csv-btn') : null;
-                if (!btn) return;
+                var t = e.target;
+                var opt = t && t.closest ? t.closest('.piq-csv-opt') : null;
+                if (opt) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var slice = opt.getAttribute('data-piq-csv-slice');
+                    window._piqV4CloseCsvMenu();
+                    if (typeof exportModuleCSV === 'function') {
+                        exportModuleCSV(opt.getAttribute('data-piq-csv-type') || '', opt.getAttribute('data-piq-csv-cat') || '', slice);
+                    }
+                    return;
+                }
+                var btn = t && t.closest ? t.closest('.piq-csv-btn') : null;
+                if (!btn) {
+                    window._piqV4CloseCsvMenu();
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
+                if (btn.getAttribute('data-piq-csv-menu')) {
+                    window._piqV4ToggleCsvMenu(btn);
+                    return;
+                }
+                window._piqV4CloseCsvMenu();
                 var fn = btn.getAttribute('data-piq-csv-fn');
                 if (fn && typeof window[fn] === 'function') {
                     window[fn](btn.getAttribute('data-piq-csv-arg'));
@@ -126518,6 +126641,17 @@ https://www.instagram.com/p/..."></textarea>
                     exportModuleCSV(btn.getAttribute('data-piq-csv-type') || '', btn.getAttribute('data-piq-csv-cat') || '');
                 }
             }, true);
+            window.addEventListener('scroll', function(e) {
+                var menu = document.getElementById('piqCsvMenu');
+                if (menu && e.target && (e.target === menu || (menu.contains && menu.contains(e.target)))) return;
+                if (window._piqV4CloseCsvMenu) window._piqV4CloseCsvMenu();
+            }, true);
+            window.addEventListener('resize', function() {
+                if (window._piqV4CloseCsvMenu) window._piqV4CloseCsvMenu();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && window._piqV4CloseCsvMenu) window._piqV4CloseCsvMenu();
+            });
         }
         window._piqV4CutsOn = function() {
             try {
@@ -126913,8 +127047,17 @@ https://www.instagram.com/p/..."></textarea>
                     if (title) title.parentNode.insertBefore(eye, title);
                     else card.insertBefore(eye, card.firstChild);
                 }
+                var wantMenu = !!card.querySelector('.behavioral-slice-select');
+                var existing = eye.querySelector('.piq-csv-btn');
+                var same = existing && existing.getAttribute('data-piq-csv-cat') === cat &&
+                    !!existing.getAttribute('data-piq-csv-menu') === wantMenu;
+                if (same) {
+                    var numEl = eye.querySelector('.piq-eyebrow .num');
+                    if (numEl) numEl.textContent = num;
+                    return;
+                }
                 eye.innerHTML = '<div class="piq-eyebrow"><span class="num">' + num + '</span>' + window._piqV4Esc(cat) + '</div>' +
-                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat) : '');
+                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : '');
             });
             var sel = document.getElementById('categoryReorderSelect');
             var jump = document.getElementById('piqBehJump');
@@ -146449,14 +146592,109 @@ https://www.instagram.com/p/..."></textarea>
             link.click();
         }
         
+        function getBehavioralCsvItems(cat, sliceValue) {
+            var source = (typeof allBehavioralData !== 'undefined' && allBehavioralData && allBehavioralData[cat])
+                ? allBehavioralData[cat]
+                : ((currentDashboardData && currentDashboardData.behavioral && currentDashboardData.behavioral[cat]) || []);
+            var items = Array.isArray(source) ? source.slice() : [];
+            if (!sliceValue || sliceValue === 'all') return items;
+            var catUpper = String(cat || '').toUpperCase();
+            var sliceLower = String(sliceValue).toLowerCase();
+            if (catUpper === 'TALENT') {
+                var talentMap = {
+                    'actor': ['ACTOR'],
+                    'athlete': ['ATHLETE'],
+                    'host/personality': ['HOST/PERSONALITY'],
+                    'influencer/creator': ['INFLUENCER/CREATOR'],
+                    'creator/influencer': ['CREATOR/INFLUENCER'],
+                    'mlb athlete': ['MLB ATHLETE'],
+                    'musician/band': ['MUSICIAN/BAND'],
+                    'nba athlete': ['NBA ATHLETE'],
+                    'nfl athlete': ['NFL ATHLETE'],
+                    'nhl athlete': ['NHL ATHLETE'],
+                    'politics/activist': ['POLITICS/ACTIVIST'],
+                    'soccer athlete': ['SOCCER ATHLETE'],
+                    'wnba athlete': ['WNBA ATHLETE'],
+                    'writer/director/author/artist': ['WRITER/DIRECTOR/AUTHOR/ARTIST'],
+                    'emerging talent': ['EMERGING TALENT']
+                };
+                var talentKeys = talentMap[sliceLower] || [String(sliceValue).toUpperCase()];
+                return items.filter(function(item) {
+                    var originalCat = item.originalCategory || '';
+                    return talentKeys.some(function(keyword) {
+                        return originalCat.toUpperCase() === String(keyword).toUpperCase();
+                    });
+                });
+            }
+            if (catUpper === 'SPORTS' && typeof filterSportsBySlice === 'function') {
+                return filterSportsBySlice(items, sliceValue);
+            }
+            if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED' || catUpper === 'WHERE THEY SHOP') {
+                var sliceToCategoryMap = {
+                    'apparel/footwear': 'APPAREL/FOOTWEAR',
+                    'accessories': 'ACCESSORIES',
+                    'beauty/wellness': 'BEAUTY/WELLNESS',
+                    'cpg': 'CPG',
+                    'health & wellness': 'HEALTH & WELLNESS',
+                    'home/outdoor': 'HOME/OUTDOOR',
+                    'toys': 'TOYS',
+                    'pets': 'PETS',
+                    'technology brand': 'TECHNOLOGY/DEVICE'
+                };
+                var mappedCategory = sliceToCategoryMap[sliceLower];
+                if (mappedCategory && typeof allBehavioralData !== 'undefined' && allBehavioralData) {
+                    var categoryVariants = [
+                        mappedCategory,
+                        mappedCategory.replace('/', ' '),
+                        mappedCategory.replace('/', '_'),
+                        mappedCategory.replace(/\s+/g, '_')
+                    ];
+                    for (var vi = 0; vi < categoryVariants.length; vi++) {
+                        var found = allBehavioralData[categoryVariants[vi]];
+                        if (found && found.length) return found.slice();
+                    }
+                    var sliceKeywords = [mappedCategory].concat(mappedCategory.split('/')).filter(Boolean);
+                    return items.filter(function(item) {
+                        var hay = ((item.subcategory || '') + ' ' + (item.originalColumn || '')).toUpperCase();
+                        return sliceKeywords.some(function(keyword) {
+                            return hay.indexOf(String(keyword).toUpperCase()) !== -1;
+                        });
+                    });
+                }
+                return items;
+            }
+            var sliceUpper = String(sliceValue).toUpperCase();
+            return items.filter(function(item) {
+                var nameUpper = String(item.name || '').toUpperCase();
+                var subcatUpper = String(item.subcategory || '').toUpperCase();
+                var tagsUpper = (item.tags || []).map(function(t) { return String(t).toUpperCase(); }).join(' ');
+                return nameUpper.indexOf(sliceUpper) !== -1 || subcatUpper.indexOf(sliceUpper) !== -1 || tagsUpper.indexOf(sliceUpper) !== -1;
+            });
+        }
+
+        function _behavioralCsvSliceLabel(sliceValue) {
+            if (!sliceValue || sliceValue === 'all') return '';
+            if (typeof capitalizeWords === 'function') return capitalizeWords(sliceValue);
+            return String(sliceValue);
+        }
+
         // Export module as CSV
-        function exportModuleCSV(type, category) {
+        function exportModuleCSV(type, category, sliceValue) {
             if (!currentDashboardData || !currentProfileData) {
                 alert('Please select a profile first');
                 return;
             }
+            var csvFileSuffix = '';
+            var csvSliceLabel = '';
+            if (type === 'behavioral') {
+                if (arguments.length < 3) {
+                    sliceValue = (typeof currentSlices !== 'undefined' && currentSlices[category]) ? currentSlices[category] : 'all';
+                }
+                csvSliceLabel = _behavioralCsvSliceLabel(sliceValue);
+                if (csvSliceLabel) csvFileSuffix = '_' + csvSliceLabel.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+            }
             
-            trackActivity('export_module_csv', `${type}:${category}`);
+            trackActivity('export_module_csv', type + ':' + category + (csvSliceLabel ? ':' + csvSliceLabel : ''));
             
             let csvContent = '';
             const profileName = currentProfileData.name || 'Profile';
@@ -146508,7 +146746,7 @@ https://www.instagram.com/p/..."></textarea>
                     csvContent += `"${csvLabel}",${val}%,${gp}%,${idx}${_demoCohortCells}\n`;
                 });
             } else if (type === 'behavioral') {
-                const items = currentDashboardData.behavioral[category] || [];
+                const items = getBehavioralCsvItems(category, sliceValue);
                 const US_POP = 329900000;
                 const _behExtraCohorts = _extraCohortsForCsv();
                 let _behCohortHead = '';
@@ -146518,7 +146756,7 @@ https://www.instagram.com/p/..."></textarea>
                     _behCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
                 });
                 // Use same values as dashboard: projection and genPopProjection (not recalculated from %)
-                csvContent = `${profileName} - ${category}\n`;
+                csvContent = `${profileName} - ${category}${csvSliceLabel ? ' - ' + csvSliceLabel : ''}\n`;
                 csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index${_behCohortHead}\n`;
                 items.forEach(item => {
                     const audiencePct = (item.pct || 0).toFixed(2);
@@ -146661,7 +146899,7 @@ https://www.instagram.com/p/..."></textarea>
             // Download
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            const filename = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}_${category.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+            const filename = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}_${category.replace(/[^a-zA-Z0-9]/g, '_')}${csvFileSuffix}.csv`;
             link.href = URL.createObjectURL(blob);
             link.download = filename;
             link.click();
