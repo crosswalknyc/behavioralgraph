@@ -359,12 +359,12 @@ _SOURCE_SNAPSHOT_ALIAS = {
 _MUSIC_SUB_SOURCES = {'spotify', 'shazam', 'apple', 'tiktok'}
 
 
-# FAST-channel sub-source ids. All four sit inside the single daily
+# FAST-channel sub-source ids. All of them sit inside the single daily
 # `fast_channels` snapshot under `sources[sub].items` (same pattern as
 # music). `amazon` here collides with the retailer scraper of the same
 # name, so the dispatcher MUST gate on `kind=='fast'` before it looks
-# at the source id.
-_FAST_SUB_SOURCES = {'roku', 'tubi', 'pluto', 'amazon'}
+# at the source id. `xumo` added 2026-09-14 alongside the platform.
+_FAST_SUB_SOURCES = {'roku', 'tubi', 'pluto', 'amazon', 'xumo'}
 
 
 # Books-tab sub-sources. Every row on the Books tab is tagged
@@ -570,7 +570,7 @@ def history_for_fast(sub: str, key: str, *,
                       days: int = DEFAULT_DAYS,
                       geo: str = 'National') -> dict:
     """Reconstruct the arc for a FAST-channel item. `sub` is one of
-    `roku` / `tubi` / `pluto` / `amazon` and identifies which
+    `roku` / `tubi` / `pluto` / `amazon` / `xumo` and identifies which
     per-platform block inside `fast_channels.json` to read.
 
     FAST rows are keyed by `title` (no `artist`), and the scraper

@@ -147,14 +147,14 @@ _MAX_PODCAST_ITEMS   = 520   # 2026-09-09: was 300. 6 panels x full 100
 _MAX_SONG_ITEMS      = 480   # 2026-09-09: was 250. 6 music panels x
                              # full 100 rendered rows; same rank-81-100
                              # gap as podcasts before the bump.
-_MAX_STREAMING_ITEMS = 480   # 2026-09-09: was 380. 11 platforms
+_MAX_STREAMING_ITEMS = 520   # 2026-09-14: was 480. 12 platforms
                              # (netflix, disneyplus, hulu, max,
                              # primevideo, paramountplus, peacock,
-                             # espnplus, britbox, mgmplus, starz) x
-                             # top ~30-40 unique, PLUS the 4 Netflix
-                             # global lists (global_films_en/nonen,
-                             # global_tv_en/nonen) that were never
-                             # collected before 2026-09-09.
+                             # amcplus, espnplus, britbox, mgmplus,
+                             # starz) x top ~30-40 unique, PLUS the 4
+                             # Netflix global lists (global_films_en/
+                             # nonen, global_tv_en/nonen) that were
+                             # never collected before 2026-09-09.
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
 # Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
@@ -169,12 +169,13 @@ _MAX_WATTPAD_ITEMS   = 200
 # ('goodreads_book') so anchor tiers don't cross-contaminate the
 # Amazon / Apple / Audible / Libby platform ceilings.
 _MAX_GOODREADS_ITEMS = 60
-# FAST-channels: 4 platforms x top 100 = 400 gross, ~250-300 after
+# FAST-channels: 5 platforms x top 100 = 500 gross, ~320-400 after
 # cross-platform dedup (Alone / Everybody Loves Raymond / etc. appear
-# on 2-3 platforms). Cap at 350 for safety headroom on days there is
-# little cross-platform overlap. ~$6-7/day added to the daily Claude
-# spend at full 100-row coverage.
-_MAX_FAST_ITEMS      = 350
+# on 2-3 platforms). Cap at 450 for safety headroom on days there is
+# little cross-platform overlap. 2026-09-14: was 350 for 4 platforms;
+# Xumo's catalog overlaps the others only partially, so the old cap
+# would have started truncating the tail of the union.
+_MAX_FAST_ITEMS      = 450
 # Gaming: 3 panels today - Xbox Game Pass Ultimate (25) + Meta Quest
 # Top Free (~20) + Meta Quest Top Paid (~10). Cross-panel dedup
 # collapses any title that charts on multiple providers (e.g. Beat
@@ -476,6 +477,10 @@ _STREAMING_SLUGS = (
     # Anchors + per-platform ceilings live in _STREAMING_PLATFORMS_META.
     ('paramountplus', 'Paramount+'),
     ('peacock',       'Peacock'),
+    # 2026-09-14: AMC+ (AMC Networks premium, JustWatch package acp).
+    # Same JustWatch-fed path as Paramount+ / Peacock. Anchors +
+    # ceiling live in _STREAMING_PLATFORMS_META below.
+    ('amcplus',       'AMC+'),
 )
 
 
@@ -489,6 +494,9 @@ _FAST_SLUGS = (
     ('tubi',   'Tubi'),
     ('pluto',  'Pluto TV'),
     ('amazon', 'Amazon Live TV'),
+    # 2026-09-14: Xumo (Comcast/Charter's free service). JustWatch
+    # packages xum + xpl unioned in fast_channels.FAST_PLATFORMS.
+    ('xumo',   'Xumo'),
 )
 
 
@@ -2303,6 +2311,33 @@ _STREAMING_PLATFORMS_META = [
          '2.5M. Anchor: Comcast Q2 2026 earnings + Nielsen Streaming '
          'Content Ratings + Antenna monthly SVOD engagement reports.'
      )},
+    {'key': 'amcplus',
+     'label': 'AMC+',
+     'ceiling': 4_000_000,
+     'anchors': (
+         "AMC+ (AMC Networks' premium streaming bundle: AMC+, "
+         'Shudder, Sundance Now, IFC Films Unlimited, ~10-12M US '
+         'subscribers as of 2026 per AMC Networks earnings, and a '
+         'near-entirely-US footprint). Much smaller than Paramount+ '
+         'or Peacock, so the ceiling sits with the premium tier '
+         '(Starz / MGM+) rather than with the broad streamers. '
+         'Nielsen does not break AMC+ out of The Gauge as its own '
+         'line, which itself bounds the platform below ~1% of total '
+         'US TV usage. Flagship franchise windows (The Walking Dead: '
+         "Dead City, Daryl Dixon, Anne Rice's Interview with the "
+         'Vampire and Mayfair Witches, Dark Winds) reach 900K-2.2M '
+         'US viewers/week while a season is airing. Library anchors '
+         '(Mad Men, Fear the Walking Dead, the original Walking Dead '
+         'run) sustain 400K-1.1M/week. Shudder horror originals and '
+         'the IFC indie catalog run 80-400K/week; deep catalog and '
+         'acquired arthouse titles 20-120K. Steady-state top-10 '
+         'without a flagship air window 250K-900K. Anchor: AMC '
+         'Networks Q2 2026 earnings + Nielsen Streaming Content '
+         'Ratings + Antenna monthly SVOD engagement reports. '
+         'IMPORTANT: AMC+ the streamer, NOT the AMC cable network '
+         'and NOT AMC Theatres - do not reason from linear AMC '
+         'ratings or from box office.'
+     )},
 ]
 
 
@@ -2364,6 +2399,27 @@ _FAST_PLATFORMS_META = [
          'channels ONLY - do NOT reason from Prime Video paid catalog '
          'numbers (Ted Lasso, Reacher) even if the title has a free '
          'pilot on Prime.'
+     )},
+    {'key': 'xumo',
+     'label': 'Xumo',
+     'ceiling': 3_000_000,
+     'anchors': (
+         'Xumo (the Comcast + Charter joint venture behind Xumo Play '
+         'free streaming, distributed through the Xumo Stream Box, '
+         'Xfinity Flex, Spectrum boxes, and the Xumo app on smart '
+         'TVs). Roughly 25-30M US monthly actives, materially '
+         'smaller than Tubi (~97M MAU) or Pluto (~50M US) and a step '
+         'below Roku Channel. Nielsen does not break Xumo out as its '
+         'own line in the FAST Gauge, which bounds it below ~0.5% of '
+         'total US TV usage. Distribution is set-top-led rather than '
+         'app-led, so reach concentrates among households that '
+         'already have the box. Top titles reach 700K-1.6M US weekly '
+         'viewers. Middle of the top-100 typically 70-300K. '
+         'Long-tail catalog 15-80K. Anchor: Comcast Q2 2026 earnings '
+         '+ Charter investor materials + TVREV monthly FAST '
+         'rankings. IMPORTANT: this is the free Xumo Play service, '
+         'NOT a paid Comcast or Spectrum cable subscription - do not '
+         'reason from pay-TV subscriber counts.'
      )},
 ]
 
@@ -2810,7 +2866,16 @@ _CHART_LABEL_TO_PLATFORM = (
     ('paramountplus',    'paramountplus'),
     ('paramount',        'paramountplus'),
     ('peacock',          'peacock'),
+    # 2026-09-14: AMC+ streaming platform. 'amc+' and 'amc plus' must
+    # win before any bare 'amc' would, and there is no bare 'amc' key
+    # on purpose: the AMC cable network is not on the Streaming tab.
+    ('amc+',             'amcplus'),
+    ('amc plus',         'amcplus'),
+    ('amcplus',          'amcplus'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
+    # 'xumo' must sit with the FAST group; the Streaming tab has no
+    # Xumo panel.
+    ('xumo',             'xumo'),
     # `amazon live tv` is handled up above alongside `amazon music` to
     # win the match before the bare `amazon` catch-all.
     ('roku channel',     'roku'),
@@ -4248,7 +4313,27 @@ def _research_all(items: list[dict],
 # -------------------------------------------------------------------------
 _BATCH_MAX_REQUESTS = 100_000   # Anthropic hard limit per batch (v2026-08)
 _BATCH_POLL_SECONDS = 30
-_BATCH_MAX_MINUTES  = 60        # safety timeout; batch expiry is 24h
+# Safety timeout on the poll loop. Anthropic's own batch expiry is 24h
+# and its published guidance is that most batches finish within an
+# hour, so this cap is about protecting the nightly run's wall clock,
+# not about the API.
+#
+# 2026-09-14: was 60. The nightly run now takes this lane (it costs
+# half of the serial lane), and the nightly item count is ~3,700, so a
+# 60-minute cap could cancel a healthy-but-slow batch and throw away
+# the whole day's research. 180 minutes is the serial lane's own
+# measured wall time for the same work (13:47 to 16:50 UTC on
+# 2026-09-14), so the worst case here is no later than the behaviour
+# it replaced, and the expected case is much earlier. A run that does
+# hit the cap now salvages whatever finished instead of discarding it
+# (see the cancel path below), and the coverage gate prices whatever
+# is still missing afterwards.
+_BATCH_MAX_MINUTES  = 180
+# How many poll intervals to wait for a cancelled batch to reach a
+# terminal state before reading its partial results. 4 x 30s = 2
+# minutes, which is ample: cancellation is near-immediate and the
+# loop exits as soon as the status settles.
+_BATCH_CANCEL_SETTLE_POLLS = 4
 
 
 def _custom_id_for(key: str) -> str:
@@ -4421,13 +4506,30 @@ def _research_all_batch(items: list[dict],
         elapsed_min = (time.time() - t0) / 60.0
         if elapsed_min > _BATCH_MAX_MINUTES:
             logger.error("stream_estimates BATCH: batch %s exceeded "
-                          "%d min wait cap; cancelling.",
+                          "%d min wait cap; cancelling and salvaging "
+                          "whatever already finished.",
                           batch_id, _BATCH_MAX_MINUTES)
             try:
                 client.messages.batches.cancel(batch_id)
-            except Exception:
-                pass
-            return out
+            except Exception as e:
+                logger.warning("stream_estimates BATCH: cancel failed: "
+                                "%s", e)
+            # A cancelled batch still exposes results for every
+            # request that completed before the cancel landed. Wait
+            # briefly for the terminal state, then fall through to the
+            # results read rather than discarding a few thousand
+            # finished items. Anything genuinely missing is picked up
+            # by the coverage gate later in the same run.
+            for _ in range(_BATCH_CANCEL_SETTLE_POLLS):
+                time.sleep(_BATCH_POLL_SECONDS)
+                try:
+                    batch = client.messages.batches.retrieve(batch_id)
+                except Exception:
+                    continue
+                if getattr(batch, 'processing_status', '') in (
+                        'ended', 'canceled', 'expired', 'failed'):
+                    break
+            break
         try:
             batch = client.messages.batches.retrieve(batch_id)
         except Exception as e:
@@ -4449,11 +4551,17 @@ def _research_all_batch(items: list[dict],
             break
         time.sleep(_BATCH_POLL_SECONDS)
 
-    if getattr(batch, 'processing_status', '') != 'ended':
+    final_status = getattr(batch, 'processing_status', '') or '?'
+    if final_status not in ('ended', 'canceled', 'expired'):
         logger.error("stream_estimates BATCH: batch %s finished with "
-                      "status=%s; no results",
-                      batch_id, getattr(batch, 'processing_status', '?'))
+                      "status=%s; no results", batch_id, final_status)
         return out
+    if final_status != 'ended':
+        # Salvage path: a cancelled or expired batch still serves
+        # results for the requests that completed. Read them; the
+        # coverage gate covers the remainder.
+        logger.warning("stream_estimates BATCH: batch %s status=%s; "
+                        "reading partial results", batch_id, final_status)
 
     # ------------------------------------------------------------------
     # Stream results back by custom_id.

@@ -336,6 +336,13 @@ STREAMING_PLATFORMS = [
     # donated session. Slugs follow the disneyplus/espnplus convention.
     ('paramountplus', 'Paramount+', False),
     ('peacock',       'Peacock',    False),
+    # 2026-09-14: AMC+ (AMC Networks premium: The Walking Dead
+    # universe, Interview with the Vampire, Mad Men, plus the Shudder
+    # and IFC Films catalogs). Same JustWatch path as Paramount+ and
+    # Peacock, single package `acp` - the Apple TV channel package is
+    # the same catalog resold, so it stays out. Runs from Hetzner in
+    # the daily batch.
+    ('amcplus',       'AMC+',       False),
     ('espnplus',   'ESPN+',        False),
     # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
     # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
@@ -3936,17 +3943,19 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'starz':      'starz',
     'paramountplus': 'paramountplus',
     'peacock':       'peacock',
+    'amcplus':       'amcplus',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
 # `stream_estimates._FAST_PLATFORMS_META` - the `key` value there must
-# match. All 4 FAST panels have per-platform anchors so every FAST
-# row surfaces a platform-specific weekly-views number.
+# match. Every FAST panel has per-platform anchors so every FAST row
+# surfaces a platform-specific weekly-views number.
 _FAST_PANEL_TO_PLATFORM = {
     'roku':   'roku',
     'tubi':   'tubi',
     'pluto':  'pluto',
     'amazon': 'amazon',
+    'xumo':   'xumo',
 }
 # Gaming: two pills today (Xbox Game Pass Ultimate; Meta Quest -
 # whose panel splits into Free / Paid columns). Adding PS Plus /
@@ -8460,7 +8469,7 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
 
 # ============================================================================
-# Card 5b: FAST channels (Roku, Tubi, Pluto, Amazon)
+# Card 5b: FAST channels (Roku, Tubi, Pluto, Amazon, Xumo)
 # ============================================================================
 # The four platforms in dashboard sub-tab order. Slug matches
 # `fast_channels.FAST_PLATFORMS`; `available_default` is what the panel
@@ -8470,6 +8479,19 @@ FAST_PLATFORMS = [
     ('tubi',    'Tubi',             False),
     ('pluto',   'Pluto TV',         False),
     ('amazon',  'Amazon',           False),
+    # 2026-09-14: Xumo (Comcast + Charter's free service). Titles
+    # only. The Channel Ranker strip needs a per-channel lineup with
+    # a weekly programming-activity count, and the other four get
+    # theirs from the weekly Stream Metric Schedules workbooks. There
+    # is no Xumo workbook, and Xumo's public guide does not carry a
+    # substitute: its channel list is complete (446 channels) but
+    # only the ~18% of channels that run a programmed loop expose a
+    # schedule at all, with the rest being passthrough live feeds
+    # that report a single open-ended block. Ranking a field where
+    # four in five entries have no activity signal would read as a
+    # lineup while measuring almost nothing, so the strip stays off
+    # for Xumo until a workbook lands.
+    ('xumo',    'Xumo',             False),
 ]
 
 # Defensive ceiling on how many channels one platform contributes to
@@ -8492,9 +8514,9 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
 
     The scraper writes a single S3 object
     `trends_iq_snapshots/latest/fast_channels.json` whose `sources`
-    key contains one entry per platform (roku / tubi / pluto / amazon),
-    each with an `items` list of up to 100 titles (mixed Film + TV) in
-    JustWatch popularity order.
+    key contains one entry per platform (roku / tubi / pluto / amazon
+    / xumo), each with an `items` list of up to 100 titles (mixed
+    Film + TV) in JustWatch popularity order.
     """
     snap = _read_snapshot('fast_channels', asof) if asof else _read_snapshot('fast_channels')
     sources = (snap or {}).get('sources') or {}
@@ -9835,7 +9857,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'streaming':     sum(1 for p in streaming_trending.values()
                                     if (p or {}).get('available')),
             'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
-                                  for k in ('roku', 'tubi', 'pluto', 'amazon')),
+                                  for k, *_r in FAST_PLATFORMS),
             'gaming':        sum(_gaming_panel_count(gaming_trending.get(k) or {})
                                   for k, *_rest in GAMING_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))

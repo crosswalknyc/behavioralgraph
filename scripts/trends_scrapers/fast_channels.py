@@ -83,18 +83,40 @@ _JW_TITLE_HOST  = 'https://www.justwatch.com'
 _POSTER_PROFILE = 's276'
 _POSTER_FORMAT  = 'jpg'
 
-# Per-platform: (sub-source slug, dashboard label, JustWatch package code,
+# Per-platform: (sub-source slug, dashboard label, JustWatch package codes,
 #                fast_only mode). fast_only=True means the whole catalog on
 # that provider is FAST content, so no monetization filter is needed. For
 # Amazon we set fast_only=False so the fetcher applies FREE-only +
 # FLATRATE-exclusion logic to isolate Amazon Live TV / ex-Freevee content.
-FAST_PLATFORMS: list[tuple[str, str, str, bool]] = [
-    ('roku',    'The Roku Channel', 'rkc', True),
-    ('tubi',    'Tubi',             'tbv', True),
-    ('pluto',   'Pluto TV',         'ptv', True),
+#
+# The package field is a tuple so a platform that ships its catalog
+# across more than one JustWatch package can union them in one
+# popularity query, the way the Streaming tab already does for
+# Paramount+ (ppp + ppe) and Peacock (pct + pcp).
+FAST_PLATFORMS: list[tuple[str, str, tuple[str, ...], bool]] = [
+    ('roku',    'The Roku Channel', ('rkc',), True),
+    ('tubi',    'Tubi',             ('tbv',), True),
+    ('pluto',   'Pluto TV',         ('ptv',), True),
     # 'amp' = Prime Video. Filter down to Amazon's FAST content via
     # monetizationTypes + FLATRATE exclusion. See _fetch_amazon_fast.
-    ('amazon',  'Amazon',           'amp', False),
+    ('amazon',  'Amazon',           ('amp',), False),
+    # Xumo (2026-09-14, Jenna: "we need to add xumo tv to fast").
+    # Comcast/Charter's free service ships as two JustWatch US
+    # packages and we union both:
+    #   xum (id 1963, Xumo Play, monetization ADS)  - the on-demand
+    #       catalog, the direct analogue of rkc / tbv / ptv. 4,438
+    #       films + 525 shows in the US popularity pool, so it
+    #       carries the same 100 + 100 depth the others do.
+    #   xpl (id 2743, Xumo Play Live, monetization FAST) - the live
+    #       linear side of the same consumer-facing service. Verified
+    #       2026-09-14: 16 films + 4 shows, and ZERO objectId overlap
+    #       with xum, so the union cannot double-count. A viewer does
+    #       not experience these as two services, and the live grid is
+    #       the part of Xumo the request is really about, so leaving
+    #       xpl out would drop real rows for no gain.
+    # Whole catalog is free on both packages, so fast_only=True: no
+    # monetization filter, same path Roku / Tubi / Pluto take.
+    ('xumo',    'Xumo',             ('xum', 'xpl'), True),
 ]
 
 # Total items per platform, split evenly across Film + TV. Two
@@ -374,7 +396,17 @@ def _normalize_node(node: dict) -> Optional[dict]:
     }
 
 
-def _fetch_platform_whole_catalog(pkg: str, label: str,
+def _as_packages(pkg: Any) -> list[str]:
+    """Accept either a single JustWatch package code or a sequence of
+    them and always return a list. Keeps every call site below able to
+    take a plain string (the shape the first four platforms shipped
+    with) or a tuple (Xumo's xum + xpl union)."""
+    if isinstance(pkg, str):
+        return [pkg]
+    return [p for p in pkg if p]
+
+
+def _fetch_platform_whole_catalog(pkg: Any, label: str,
                                     limit: int) -> list[dict]:
     """Roku Channel / Tubi / Pluto TV: whole catalog is FAST by
     definition. We issue TWO separate popularity queries (MOVIE-only
@@ -415,20 +447,22 @@ def _fetch_platform_whole_catalog(pkg: str, label: str,
     for i, r in enumerate(out, 1):
         r['rank'] = i
     logger.info("fast_channels %s (%s): kept %d films + %d tv (interleaved %d)",
-                 label, pkg, len(films), len(tv), len(out))
+                 label, ','.join(_as_packages(pkg)), len(films), len(tv),
+                 len(out))
     return out
 
 
-def _fetch_one_kind_whole_catalog(pkg: str, label: str, object_type: str,
+def _fetch_one_kind_whole_catalog(pkg: Any, label: str, object_type: str,
                                     limit: int) -> list[dict]:
     """Single-kind popularity query for the whole-catalog platforms.
     Called twice per platform (MOVIE + SHOW). Dedup is title-only
     within this kind - two shows with the same title (rare) collapse
     to the first-seen, but a movie and a show with the same title
     can no longer collide because they live in separate calls."""
+    packages = _as_packages(pkg)
     data = _post_graphql(
         _JW_QUERY,
-        {'country': 'US', 'providers': [pkg],
+        {'country': 'US', 'providers': packages,
          'first': limit, 'ot': [object_type]},
         'FASTPopular',
     )
@@ -436,7 +470,7 @@ def _fetch_one_kind_whole_catalog(pkg: str, label: str, object_type: str,
         return []
     if data.get('errors'):
         logger.warning("fast_channels %s (%s) %s: GraphQL errors: %s",
-                        label, pkg, object_type,
+                        label, ','.join(packages), object_type,
                         json.dumps(data['errors'])[:200])
         return []
     pop   = ((data.get('data') or {}).get('popularTitles') or {})
@@ -457,7 +491,7 @@ def _fetch_one_kind_whole_catalog(pkg: str, label: str, object_type: str,
     return out
 
 
-def _fetch_platform_amazon_fast(pkg: str, label: str,
+def _fetch_platform_amazon_fast(pkg: Any, label: str,
                                   limit: int) -> list[dict]:
     """Amazon: filter `amp` popularity to FREE monetization AND drop
     any title whose Amazon offers still include FLATRATE (those are
@@ -488,16 +522,18 @@ def _fetch_platform_amazon_fast(pkg: str, label: str,
         r['rank'] = i
     logger.info("fast_channels %s (%s): amazon kept %d films + %d tv "
                  "(interleaved %d)",
-                 label, pkg, len(films), len(tv), len(out))
+                 label, ','.join(_as_packages(pkg)), len(films), len(tv),
+                 len(out))
     return out
 
 
-def _fetch_one_kind_amazon_fast(pkg: str, label: str, object_type: str,
+def _fetch_one_kind_amazon_fast(pkg: Any, label: str, object_type: str,
                                   limit: int) -> list[dict]:
     """Single-kind Amazon FAST fetch. Paginates FREE-tier candidates
     and post-filters out any that still carry FLATRATE on Amazon,
     same as the pre-split behavior but restricted to one objectType
     per call so film + tv can't shadow each other."""
+    packages = _as_packages(pkg)
     out: list[dict] = []
     seen: set[str] = set()
     offset = 0
@@ -506,7 +542,7 @@ def _fetch_one_kind_amazon_fast(pkg: str, label: str, object_type: str,
     while len(out) < limit and pages < _AMAZON_MAX_PAGES:
         data = _post_graphql(
             _JW_QUERY_AMAZON_FAST,
-            {'country': 'US', 'providers': [pkg], 'first': 100,
+            {'country': 'US', 'providers': packages, 'first': 100,
              'offset': offset, 'ot': [object_type]},
             'FASTAmazonFree',
         )
@@ -515,7 +551,7 @@ def _fetch_one_kind_amazon_fast(pkg: str, label: str, object_type: str,
             break
         if data.get('errors'):
             logger.warning("fast_channels %s (%s) %s: GraphQL errors: %s",
-                            label, pkg, object_type,
+                            label, ','.join(packages), object_type,
                             json.dumps(data['errors'])[:200])
             break
         pop   = ((data.get('data') or {}).get('popularTitles') or {})
@@ -552,17 +588,18 @@ def _fetch_one_kind_amazon_fast(pkg: str, label: str, object_type: str,
     return out
 
 
-def _fetch_platform(pkg: str, label: str, limit: int,
+def _fetch_platform(pkg: Any, label: str, limit: int,
                       fast_only: bool = True) -> list[dict]:
-    """Dispatcher. Roku / Tubi / Pluto use the whole-catalog path;
-    Amazon uses the FREE-monetization + FLATRATE-exclusion path."""
+    """Dispatcher. Roku / Tubi / Pluto / Xumo use the whole-catalog
+    path; Amazon uses the FREE-monetization + FLATRATE-exclusion
+    path."""
     if fast_only:
         return _fetch_platform_whole_catalog(pkg, label, limit)
     return _fetch_platform_amazon_fast(pkg, label, limit)
 
 
 def fetch() -> dict[str, Any]:
-    """Pull all four FAST platforms sequentially. Each is best-effort;
+    """Pull every FAST platform sequentially. Each is best-effort;
     a single platform failure doesn't kill the others - that platform
     just ships `available: false` in its sources entry, and the
     frontend renders a neutral "Loading" placeholder for it (same
@@ -604,13 +641,14 @@ def main() -> int:
     )
     result = run_scraper('fast_channels', 'FAST channels', 'fast', fetch)
     srcs = (result.get('sources') or {})
-    for slug in ('roku', 'tubi', 'pluto', 'amazon'):
+    slugs = [s for s, _l, _p, _f in FAST_PLATFORMS]
+    for slug in slugs:
         block = srcs.get(slug) or {}
         cnt = len(block.get('items') or [])
         print(f"fast_{slug:8s}  items={cnt:3d}  avail={block.get('available')}",
                file=sys.stderr)
     total = sum(len(((srcs.get(k) or {}).get('items') or []))
-                 for k in ('roku', 'tubi', 'pluto', 'amazon'))
+                 for k in slugs)
     err = result.get('error')
     print(f"TOTAL items across all platforms: {total}  err={err}",
            file=sys.stderr)

@@ -866,6 +866,7 @@ def _collect_all_items() -> list[dict]:
                          ('primevideo',    'Prime Video'),
                          ('paramountplus', 'Paramount+'),
                          ('peacock',       'Peacock'),
+                         ('amcplus',       'AMC+'),
                          ('britbox',       'BritBox'),
                          ('mgmplus',       'MGM+'),
                          ('starz',         'Starz'),

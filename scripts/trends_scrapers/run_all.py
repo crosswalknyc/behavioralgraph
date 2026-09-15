@@ -128,6 +128,10 @@ SCRAPERS = [
     # hop, no donated session, no cookie-donation domain.
     ('paramountplus', 'scripts.trends_scrapers.paramountplus', 'Paramount+', 'streaming'),
     ('peacock',       'scripts.trends_scrapers.peacock',       'Peacock',    'streaming'),
+    # AMC+ (2026-09-14). Same JustWatch path as Paramount+ / Peacock,
+    # single package `acp`. The Apple TV channel package `aat` is a
+    # storefront for the same catalog, not a tier, so it stays out.
+    ('amcplus',       'scripts.trends_scrapers.amcplus',       'AMC+',       'streaming'),
     # Streaming depth extender (2026-09-09, Jenna: every list carries
     # 100+ items where the source has them). JustWatch top-100 films +
     # top-100 shows per platform for the residential-scraped streamers
@@ -239,12 +243,48 @@ def _fire_manifest_drift_notice(missing: list[str], scrapers_dir: str) -> None:
         logging.warning("run_all: manifest drift notify failed: %s", e)
 
 
-def _run_one(source: str, module_path: str, label: str, kind: str) -> dict:
+# ---------------------------------------------------------------------------
+# Which lane the nightly estimator uses.
+#
+# 2026-09-14 (Jenna approved): the nightly pass now goes through the
+# discounted asynchronous lane instead of issuing one request per item.
+# Same prompts, same tiering, same web_search behaviour - the only
+# differences are the price (half) and that the work is handed over as
+# one job and polled to completion.
+#
+# Ordering is unchanged. The estimator call below still blocks until
+# every result is back and written, so the coverage gate, the dated
+# snapshot write, the index write, and the cache warm all still run
+# strictly after the values land. Nothing downstream can race ahead.
+#
+# Set TRENDS_ESTIMATOR_SERIAL=1 in the environment to fall back to the
+# per-item lane for one run (ops escape hatch on the box only; this is
+# never a request field on any dashboard or partner surface).
+_ESTIMATOR_BATCH_MODE = (
+    os.environ.get('TRENDS_ESTIMATOR_SERIAL', '').strip().lower()
+    not in ('1', 'true', 'yes')
+)
+
+
+def _run_one(source: str, module_path: str, label: str, kind: str,
+              fetch_kwargs: dict | None = None) -> dict:
+    """Import `module_path`, run its `fetch` through `run_scraper`, and
+    return the payload with an elapsed stamp.
+
+    `fetch_kwargs` lets a caller pass options into a scraper's `fetch`
+    without changing that scraper's default behaviour for anyone else
+    (used by the nightly estimator to take the discounted lane while
+    the CLI and the backfill tool keep their own defaults)."""
     started = time.time()
     try:
         module = __import__(module_path, fromlist=['fetch'])
         from scripts.trends_scrapers._base import run_scraper  # local import
-        payload = run_scraper(source, label, kind, module.fetch)
+        if fetch_kwargs:
+            def _fetch(_f=module.fetch, _kw=dict(fetch_kwargs)):
+                return _f(**_kw)
+        else:
+            _fetch = module.fetch
+        payload = run_scraper(source, label, kind, _fetch)
     except Exception as e:
         logging.exception("run_all: scraper %s failed to import/run", source)
         payload = {
@@ -464,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
                 'scripts.trends_scrapers.stream_estimates',
                 'US Streams',
                 'meta',
+                fetch_kwargs={'batch_mode': _ESTIMATOR_BATCH_MODE},
             ))
         except Exception as e:
             logging.exception("run_all: stream_estimates post-step crashed")

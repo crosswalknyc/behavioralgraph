@@ -11,6 +11,7 @@
     "_proxy.py",
     "_streaming_common.py",
     "_usage_tap.py",
+    "amcplus.py",
     "backfill_daily_estimates.py",
     "backfill_history.py",
     "book_charts.py",
