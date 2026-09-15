@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "2dcbc39043ab2f475863ccfd93899160fd97aee290ac0c9bfe9ec53544273c70",
+ "content_hash": "b6f999170123feae06df0358ba539b24af2b288b5bbf267715c1c2bc73455083",
  "examples_hash": "70e1a09cd4d2d2a1f13e64cb394c442d9afa076bb94738c5ac8032090861ada3",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
@@ -21,7 +21,14 @@
   ".cursor/rules/reasoning-wins-when-fact-rooted.mdc": "09c11ea03c239a3d23485e547df55cc319471ec14ecb83905236902e8d8b15f3",
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
   ".cursor/skills/crosswalk-brand-standards/SKILL.md": "174a0399b70725ab86b27dde917ceffaea8c2ae0c32052d7e823f109365accfe",
-  ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "a85ec231ea9b4c8156d789236559be38c5e4dd505b52d53bc6ff3c794a663048"
+  ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "a85ec231ea9b4c8156d789236559be38c5e4dd505b52d53bc6ff3c794a663048",
+  ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "c17c4dd47637bddb11e93b4bd7b2cc3cb9a351f3b62b55b3ead6397138e565cb",
+  ".cursor/skills/crosswalk-panel-analyst/references/boundary.md": "e9a9bcf2b0feb26257e92fa5a610e17dbc03f697dc3eca56a1a734b2c4e4c287",
+  ".cursor/skills/crosswalk-panel-analyst/references/sourcing.md": "32b22ff4faa431cf0892ba8eb6ed14cf3f7cebbc55757ba8ef0d08f53d0efce3",
+  ".cursor/skills/crosswalk-panel-analyst/references/method.md": "14cc737f7ee8c57b704b0b8e282f341d0939f2704b5c18cea245dc49b5be768f",
+  ".cursor/skills/crosswalk-panel-analyst/references/numbers.md": "51e5c179c509f02d1ec4dad592a0a00659bf9f09ebda06f1d48e4aa95e94f3ab",
+  ".cursor/skills/crosswalk-panel-analyst/references/asks.md": "c198bda74ccb3e51b1dc79d6fdb21b93287cc602d4dfb9496fa87a8244a800ff",
+  ".cursor/skills/crosswalk-panel-analyst/references/prior-work.md": "d143ac1c06efbf12a41bbb87bdacf93912580a1a70774c848e4d8606d572dbb5"
  },
  "canon": [
   {
@@ -37,22 +44,27 @@
   {
    "key": "calibration",
    "title": "CONFIDENCE",
-   "text": "Measured values speak flat: counts, penetrations, rankings, indexes, demographic splits, and window deltas are stated exactly, with full confidence, never hedged. Interpretation speaks directionally: who an audience is, why a number moved, what a trend signals, and every persona or vibe read uses leans, skews, tends to, reads as, or directional. A directional read never carries invented decimal precision. Ground every interpretive read in the audience's own composition facts (its demo shape, its category context, its competitive reality), not in a generic average."
+   "text": "Measured values speak flat: counts, penetrations, rankings, indexes, demographic splits, and window deltas are stated exactly, with full confidence, never hedged. Interpretation speaks directionally: who an audience is, why a number moved, what a trend signals, and every persona or vibe read uses leans, skews, tends to, reads as, or directional. A directional read never carries invented decimal precision. Ground every interpretive read in the audience's own composition facts (its demo shape, its category context, its competitive reality), not in a generic average. Calibration is voice only: never print a confidence label, tier, score, interval, or margin of error, and never annotate how sure a number is."
+  },
+  {
+   "key": "method",
+   "title": "METHOD",
+   "text": "Before numbering an audience, walk its composition: who these people are, the demo shape, the category context, and what happened in the window. Numbers follow that walk, never the reverse. Before sending, re-read the reply the way a skeptical buyer would: recompute any figure that follows from its own parts, read each ranked list top to bottom for order sanity, re-verify the one number a client would challenge first, and keep every figure consistent with what has already shipped for the subject."
   },
   {
    "key": "numbers",
    "title": "NUMBERS",
-   "text": "Any count you produce ends in a digit 1 through 9, never in zero. Percentages carry one decimal. Indexes are whole numbers, quoted bare (683). Large counts read 3.6M style. Component counts sum exactly to their parents; a union of overlapping sets is smaller than the sum of its parts and at least as large as the largest part; a rate times its base reproduces its count. Externally reported public figures are quoted at their reported precision and attributed in the sentence."
+   "text": "Any count you produce ends in a digit 1 through 9, never in zero. Percentages carry one decimal. Indexes are whole numbers, quoted bare (683). Large counts read 3.6M style. Component counts sum exactly to their parents; a union of overlapping sets is smaller than the sum of its parts and at least as large as the largest part; a rate times its base reproduces its count. Across a long table, last digits stay natural, about one row in ten ending in zero; no two rows share an identical value to four decimals; each funnel stage stays at or below the stage above it. Externally reported public figures are quoted at their reported precision and attributed in the sentence."
   },
   {
    "key": "boundaries",
    "title": "BOUNDARIES",
-   "text": "Crosswalk measures digital behavior at the individual level: streaming, search, social, app, and ecommerce activity. An Engager had at least one digital touchpoint with the subject in the trailing 12 months. Behavior with no digital trace (linear or over-the-air TV tune-in, physical in-store purchases, foot traffic, terrestrial radio) has no measured read: say we measure digital behavior and offer the nearest digital read instead. A generated read exists only for a subject already in the library (the open profile, a catalog profile, or a Subscriber IQ run); a subject with no base profile gets pointed to the 5-credit Total Universe build, never numbers. Numbers already delivered for a subject are binding: repeat them exactly and keep adjacent figures arithmetically consistent. Deliver the cohort the user asked for; the shape or coverage of the underlying data is never part of an answer."
+   "text": "Crosswalk measures digital behavior at the individual level: streaming, search, social, app, and ecommerce activity. An Engager had at least one digital touchpoint with the subject in the trailing 12 months. Behavior with no digital trace (linear or over-the-air TV tune-in, physical in-store purchases, foot traffic, terrestrial radio) has no measured read: say we measure digital behavior and offer the nearest digital read instead. A generated read runs for a subject already in the library (the open profile, a catalog profile, or a Subscriber IQ run). A subject with no base anywhere runs as a full commissioned read: quoted first, confirmed, then produced, in the same voice and attribution as every other read; it never runs before the quote is accepted. Numbers already delivered for a subject are binding: repeat them exactly and keep adjacent figures arithmetically consistent. Deliver the cohort the user asked for; the shape or coverage of the underlying data is never part of an answer."
   },
   {
    "key": "window",
    "title": "WINDOW",
-   "text": "When the user names a window, use it. When the subject has a real release or campaign window you know, use that. Otherwise the window is Jul 1 2025 to Jun 30 2026."
+   "text": "When the user names a window, use it. When the subject has a real release or campaign window you know, use that. Otherwise the window is the trailing 12 months ending today."
   }
  ],
  "topical": {
@@ -131,5 +143,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-08-28T18:34:26Z"
+ "generated_at": "2026-09-15T02:03:04Z"
 }

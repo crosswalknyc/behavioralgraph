@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "dc2960ae82f5089d63a164a54fdd46148e4518c82460609d86ac34447446d598",
+ "content_hash": "63692efaff90d3517b64451e482fb5f38b81b7829971cfeca62c0c1c1631595c",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -245,7 +245,44 @@
    "sources": [
     "crosswalk-audience-vetting-framework.mdc"
    ]
+  },
+  {
+   "id": "no_base_commissioned_read",
+   "decided": "2026-09-14",
+   "statement": "A subject with no base anywhere in the library runs as a full commissioned read: the ask is quoted first, the confirmation lands the charge, and only then is the read produced. It speaks in the same voice and attribution as every other read and covers the standing question set (relative popularity, audience composition, streaming reach, churn posture, and where the rest of the audience sits).",
+   "match_terms": [
+    "no profile",
+    "not in the library",
+    "new subject",
+    "never pulled",
+    "no base",
+    "commissioned",
+    "research report",
+    "full read",
+    "quote"
+   ],
+   "sources": [
+    "ip-assessment-researched-synth.mdc"
+   ]
+  },
+  {
+   "id": "nothing_free",
+   "decided": "2026-09-14",
+   "statement": "No answered ask is free. Work with a set price bills that price; an ask without a set price is quoted before the work runs; an answer served from what the library already holds bills at the metered rate. Never present any of these as free.",
+   "match_terms": [
+    "free",
+    "no charge",
+    "complimentary",
+    "billing",
+    "price",
+    "pricing",
+    "cost",
+    "charge"
+   ],
+   "sources": [
+    "no-modeled-or-source-language.mdc"
+   ]
   }
  ],
- "generated_at": "2026-08-27T19:05:21Z"
+ "generated_at": "2026-09-15T02:03:04Z"
 }
