@@ -74,6 +74,10 @@ DEFAULT_PRICING = {
         "profile_iq_build": 500.0,
         "profile_iq_derived_cut": 100.0,
         "subscriber_iq_build": 1000.0,
+        # Prometheus research report (2026-09-14 Jenna): the put-
+        # together read on a subject with no base anywhere, and the
+        # catch-all price for report asks with no other set price.
+        "panel_report": 550.0,
         # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
         # from modules. those are just access monthly not any per pull
         # things'). The dashboard-side Chatbot Profile IQ pull_type
@@ -363,6 +367,17 @@ MODULE_CATALOG = [
      "pulls", 3, 100.0, "has_profile_iq_access"),
     ("subscriber_iq_build",        "Subscriber IQ - Pull",
      "pulls", 10, 1000.0, "has_subscriber_iq_access"),
+    # 2026-09-14 (Jenna, verbatim: "before it puts together any report
+    # outside of a simple analysis of what already exists it should
+    # charge them. if they request something that doesnt have a set
+    # price it should charge $550."). A Prometheus research report -
+    # the full put-together read on a subject with no base profile
+    # anywhere - is a priced pull, not a metered question. This is
+    # ALSO the catch-all price for report requests that map to no
+    # other set-price product. Credits column = 6 (nearest whole
+    # credit above $550 at the $100/credit build rate).
+    ("panel_report",               "Prometheus - Research Report",
+     "pulls", 6, 550.0, "has_prometheus_access"),
     # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
     # from modules. those are just access monthly not any per pull
     # things'). Three rows retired here:
@@ -1242,6 +1257,10 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "subscriber iq":                 "subscriber_iq_build",
     "subscriber iq build":           "subscriber_iq_build",
     "svod":                          "subscriber_iq_build",
+    # ---- Prometheus research report (2026-09-14) ----
+    "panel report":                  "panel_report",
+    "research report":               "panel_report",
+    "prometheus report":             "panel_report",
     # ---- Attribution / marketing modules ----
     # Each has its OWN MODULE_CATALOG row so the admin billing panel
     # can price them independently. NEVER collapse to a shared bucket.

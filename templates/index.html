@@ -46954,6 +46954,24 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
 
 
+
+                <!-- Heated Rivalry x Barbie song-to-title journey.
+                     Story-mode: song_to_title. Single card with title
+                     pills and stage tabs. Payload: _JIQ_SONG_DATA. -->
+                <div class="card" id="jiqSongCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(199,242,62,0.05) 0%, rgba(230,130,255,0.05) 100%);
+                            border: 1px solid rgba(199,242,62,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSongTitle" style="margin: 0;">Heated Rivalry x Barbie · who heard the song, and who watched</h3>
+                        <div id="jiqSongMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSongSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSongTitleTabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem;"></div>
+                    <div id="jiqSongStageTabs" style="display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.85rem; padding-bottom: 0.55rem; border-bottom: 1px solid rgba(255,255,255,0.08);"></div>
+                    <div id="jiqSongBody"></div>
+                </div>
+
                 <!-- Universal Basic Guys · Hulu — how viewers actually get to
                      first play on the show. Single-card renderer against
                      _JIQ_UBG_DATA. Story-mode: ubg_hulu_discovery. -->
@@ -74620,6 +74638,7 @@ https://www.instagram.com/p/..."></textarea>
             _pmCompareArmed = false;
             _pmCompareCandidates = null;
             _pmMemoryConfirm = null;
+            _pmPanelOffer = null;
             _synthChatClearDateState();
         }
 
@@ -74660,6 +74679,10 @@ https://www.instagram.com/p/..."></textarea>
         // The pending confirm is an armed step - released on topic
         // switch like every other pending question.
         var _pmMemoryConfirm = null;
+        // Priced research-report quote (2026-09-14): a no-base subject
+        // gets a quote; the armed offer routes the next reply to the
+        // charged confirm, the build flow, or a quiet release.
+        var _pmPanelOffer = null;
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -75061,7 +75084,7 @@ https://www.instagram.com/p/..."></textarea>
 
         async function _pmAnalyze(text, ctx, mode, extra) {
             if (!ctx && mode !== 'search_demand' &&
-                !(extra && extra.bind_subject)) {
+                !(extra && (extra.bind_subject || extra.panel_confirm))) {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
@@ -75082,6 +75105,9 @@ https://www.instagram.com/p/..."></textarea>
                 if (extra && extra.bind_subject) {
                     _abody.bind_subject = extra.bind_subject;
                     _abody.bind_cohort = extra.bind_cohort || '';
+                }
+                if (extra && extra.panel_confirm) {
+                    _abody.panel_confirm = extra.panel_confirm;
                 }
                 var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody);
                 var data = _fr.data;
@@ -75131,6 +75157,12 @@ https://www.instagram.com/p/..."></textarea>
                     // Arm the confirm; the next message binds a chip,
                     // an affirmative, or "Something else".
                     _pmMemoryConfirm = data.memory_confirm;
+                }
+                if (data.panel_offer) {
+                    // Priced research-report quote (2026-09-14): arm
+                    // it; the next message runs it, builds the
+                    // profile instead, or declines.
+                    _pmPanelOffer = data.panel_offer;
                 }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
@@ -75469,6 +75501,35 @@ https://www.instagram.com/p/..."></textarea>
                 _pmMemoryConfirm = null;
             }
 
+            // Research-report quote follow-through (2026-09-14): the
+            // priced offer is armed. The run chip or an affirmative
+            // re-sends the original ask with panel_confirm (the
+            // server recomputes the price and charges before
+            // generating). A decline releases with nothing charged.
+            // The build chip and anything else release quietly and
+            // route as a fresh message.
+            if (_pmPanelOffer && !_pmKpiPivot) {
+                var _po = _pmPanelOffer;
+                var _poLow = text.trim().toLowerCase();
+                var _poRun = _poLow.indexOf('run the full read') === 0 ||
+                    /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it|charge (it|me))[.! ]*$/i.test(_poLow);
+                if (_poRun) {
+                    _pmPanelOffer = null;
+                    await _pmAnalyze(_po.question || text,
+                        _pmCollectPageContext(), '',
+                        { panel_confirm: { subject: _po.subject } });
+                    return;
+                }
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_poLow)) {
+                    _pmPanelOffer = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was charged. Ask me ' +
+                        'anything else when ready.');
+                    return;
+                }
+                _pmPanelOffer = null;
+            }
+
             // Discovery-offer follow-through (2026-08-19 guided
             // flow). If we just proposed audience framings, map this
             // reply onto one: a number or ordinal picks that option;
@@ -75759,6 +75820,20 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatPushTurnWithMeta('agent',
                             _gMsg || SYNTH_CHAT_CALM_MSG,
                             { options: _mcOpts });
+                        return;
+                    }
+                    if (data.panel_offer) {
+                        // Priced research-report quote riding the
+                        // guidance channel (2026-09-14): arm it and
+                        // render the run / build / never-mind chips.
+                        _pmPanelOffer = data.panel_offer;
+                        var _poOpts = (data.followups || [])
+                            .map(function(f) {
+                                return { label: f, send: f };
+                            });
+                        _synthChatPushTurnWithMeta('agent',
+                            _gMsg || SYNTH_CHAT_CALM_MSG,
+                            { options: _poOpts });
                         return;
                     }
                     _pmPushGuidanceTurn(_gMsg || SYNTH_CHAT_CALM_MSG, data);
@@ -79392,7 +79467,8 @@ https://www.instagram.com/p/..."></textarea>
                             { value: '__demo_ubg_hulu__',         label: 'Universal Basic Guys · Hulu' },
                             { value: '__demo_ufc_paramount__',    label: 'UFC × Paramount+ (US)' },
                             { value: '__demo_adult_animation__',  label: 'Adult Animation · SVOD discovery' },
-                            { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' }
+                            { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
+                            { value: '__demo_song_to_title__', label: 'Heated Rivalry x Barbie · song journey' }
                         ],
                         movie: [
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
@@ -79805,6 +79881,26 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Discovery', value: 'Hubs run on clip-repost economics: Rick and Morty, Family Guy, and Simpsons clips together account for the top three cross-hub sources. Solo creators run on the algorithmic homepage + creator-name search axis, with YT search converting at 78-82% when a viewer is looking for that specific person.' },
                             { label: 'Retention', value: 'Median follow rate 24.6%. 51.8% of first-touch viewers return within 30 days. Hub retention lands at 62-68% for 3-plus plays on the same show; solo creators land at 46-62% for 3-plus videos.' }
                         ]
+                    }
+                };
+            }
+            if (key === '__demo_song_to_title__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'song_to_title',
+                            target_name: 'Heated Rivalry and Barbie',
+                            target_display: 'Heated Rivalry x Barbie - song to title',
+                            project_name: 'Song to Title',
+                            customer_brand: 'Max / Warner Bros',
+                            start_date: '2023-04-21',
+                            end_date: '2026-02-28',
+                            target_type: 'music_to_content_journey',
+                            category: 'tv'
+                        },
+                        song_to_title: _JIQ_SONG_DATA,
+                        facts: [{"label": "Window", "value": "Each title sits in its own six-month frame: three months before release through three months after. Heated Rivalry Aug 28, 2025 to Feb 28, 2026. Barbie Apr 21, 2023 to Oct 21, 2023."}, {"label": "Heated Rivalry", "value": "4.34M viewers. Music-first conversion 23.8% of 4.13M listeners. Show-first 1.49M already watching, then went to the music. No music touch is 43.0% of viewers."}, {"label": "Barbie", "value": "43.00M viewers. Music-first is 31.1% of them and still not the majority. No music touch is 44.4%. Q4 Barbie brand billings +27% after this window closed."}, {"label": "Read", "value": "A listener who watched is not a listener the music converted. Music-first viewers finish less often than viewers who never touched the music."}]
                     }
                 };
             }
@@ -81639,6 +81735,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isUbgStory              = (_storyMode === 'ubg_hulu_discovery');
             var _isAdultAnimStory        = (_storyMode === 'adult_animation_discovery');
             var _isAnimCreatorsStory     = (_storyMode === 'animation_creators_discovery');
+            var _isSongStory             = (_storyMode === 'song_to_title');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             var _isSpeStory              = (_storyMode === 'spe_cross_window');
@@ -81867,6 +81964,12 @@ https://www.instagram.com/p/..."></textarea>
                 }
             } else {
                 if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
+            }
+
+            if (_isSongStory) {
+                if (typeof renderJourneyIqSong === 'function') {
+                    renderJourneyIqSong(_pickClickstreamBlock('song_to_title'));
+                }
             }
 
             // Neurotrophic Drinks (CPG) — one segment per pick. Story-mode
@@ -102730,6 +102833,492 @@ https://www.instagram.com/p/..."></textarea>
         }
 
 
+        var _JIQ_SONG_DATA = {"window_note":"Every count sits inside a window running three months before the release through three months after, set per title so each one is centered on its own release date.","cross_title":{"headline":"Two soundtracks, opposite directions of travel.","rows":[{"dimension":"What the music was for","barbie":"Selling tickets. Five of six singles were out before anyone could buy one.","heated_rivalry":"Not planned at all. Five songs were in the show, and the biggest one never was."},{"dimension":"Direction of travel","barbie":"Music first, by design.","heated_rivalry":"Split. Fan edits pushed people to the show, and the show pushed people to the songs."},{"dimension":"Where the music lived","barbie":"A streaming service. Six singles in eight weeks kept the album in rotation.","heated_rivalry":"A feed. Edits reached more people than every other first touch combined."},{"dimension":"What converted best","barbie":"Searching for a song, then the clip that shows the actual scene.","heated_rivalry":"The clip that shows the actual scene, then searching for a song."},{"dimension":"What converted worst","barbie":"The nostalgia meme sound.","heated_rivalry":"The meme sound, then the thirst edit."},{"dimension":"Was music the main way in","barbie":"It was the largest single route, not the majority route.","heated_rivalry":"No. More viewers arrived with no music touch than arrived music first."},{"dimension":"What it was worth downstream","barbie":"A number two album, a 54-day window into premium digital, and a 27% product quarter that landed after the window.","heated_rivalry":"Subscribers who outlived the season, and a fan editor on the payroll."}]},"takeaways":[{"n":1,"headline":"A listener who watched is not a listener the music converted.","body":"The raw Heated Rivalry read is that 5.62M people played a tracked song and 44.0% of them watched. Split by direction and that number dissolves: 1.49M of them had already watched and went to the music afterwards, so they convert at 100% by definition. Music-first conversion is 23.8%. Every stream spike reported during the run was measuring the group that was already watching."},{"n":2,"headline":"Music was the largest single way in to Barbie and still not the main way in.","body":"Music-first is 31.1% of Barbie viewers and 22.7% of Heated Rivalry viewers. On both titles more people arrived with no music touch at all: 44.4% and 43.0%. Music is the biggest lever available on a title like these, not the ground the audience is standing on."},{"n":3,"headline":"The format that shows the scene beats every format that suggests a mood.","body":"Heated Rivalry's best-converting social format is the scene clip with its sync intact at 42.1%, and Barbie's is the scene clip with its sync intact at 25.1%. Both are the format that leaves the actual scene and its sync intact. Cutting a scene into a feeling costs conversion, because a feeling can be finished in the feed and a scene cannot."},{"n":4,"headline":"The worst-converting format on both titles is the one that is already funny.","body":"Barbie's meme sound, an Aqua hook from 1997, has the 4th largest reach of its seven formats and the lowest conversion at 9.0%, less than half the next weakest. Heated Rivalry's meme sound is 8.1%, also last of eight. A joke only lands if you already know the reference, so it circulates among people who have already watched and recruits almost nobody who has not."},{"n":5,"headline":"Reach and intent pull in opposite directions inside one channel.","body":"Heated Rivalry's thirst edit is the 2nd largest format at 0.71M people and the second weakest converter at 11.6%. It traveled further than anything else in the study, into clubs on three continents. A clip that satisfies on its own leaves no unmet need to carry anyone to a paywall. Ranking edits by views gets this backwards."},{"n":6,"headline":"Searching for a song is the cleanest intent signal either title produced.","body":"Search is the best-converting channel on Barbie at 25.2% and carries its highest follow-through at 43.2%. On Heated Rivalry the top channel is a music streaming service at 31.4%, with search close behind. Someone typing a lyric has already decided the song matters to them. It is small, it cannot be bought, and it is worth watching as a leading indicator."},{"n":7,"headline":"Music-first viewers finish less often than viewers who never touched the music.","body":"Aggregate depth favors the music side: 67.4% of music-touched Heated Rivalry viewers finish all six episodes against 61.5% with no music touch. That gap is entirely the show-first group, who were already committed. Music-first viewers finish 55.4% of the time, 6.1 points below the no-music cohort. Reading the blended number as evidence that music deepens engagement inverts the finding."},{"n":8,"headline":"Inside the music cohort the spread is far larger than the gap to everyone else.","body":"Heated Rivalry's depth runs from 77.0% for the scene clip with its sync intact down to 55.5% for the thirst edit, and book fandom beats every music path at 81.2%. On Barbie the best follow-through of any music format is the styling and get-ready clip at 49.3%, which is the format sitting closest to the merchandise. Which touch someone had matters more than whether they had one."},{"n":9,"headline":"Barbie's product lift landed after this window closed.","body":"Full-year Barbie billings rose 3% to $1,537.8M, which reads as though the film did nothing for the toys. The fourth quarter rose 27% to $473.1M. The product response arrived in the holiday quarter, past Oct 21. Inside the window the signal is in who bought: existing brand affinity follows through 59.4% of the time while the Barbenheimer double feature manages 19.4%. Three months is the right frame for the music and the wrong one for the merchandise."},{"n":10,"headline":"Fan edits recruited an audience, then became a line item.","body":"Heated Rivalry's edits delivered 0.98M viewers with nothing paid behind them, and the platform ended up hiring the creator of one of them. The song carrying the largest share of that work was never in the show. Nobody licensed it, cleared it, or planned it, and it described the plot better than anything on the call sheet."}],"heated_rivalry":{"universe":{"total":9030087,"listened":5617047,"listened_pct":62.2,"did_not_listen":3413040,"did_not_listen_pct":37.8,"viewers":4340102,"touched_never_watched":1547004,"note":"Everyone with at least one Heated Rivalry touch in the window: a play of one of the nine tracked songs on any surface, an episode play, an edit view, a trailer view, or a press read. Cohorts are mutually exclusive."},"discovery":[{"channel":"Music streaming service","listeners":1309001,"cf":681000,"mf_conv":0.314,"mf_deep":0.589,"cf_deep":0.773,"detail":"Spotify, Apple Music, Amazon Music, YouTube Music","note":"Two in three people who found these songs on a streaming service were already watching. This is the show sending people to the music, and it is the strongest completion in the study.","content_first":681009,"music_first":627992,"music_first_watched":197189,"watched":878198,"not_watched":430803,"deep":642570,"content_first_deep":526425,"music_first_deep":116145,"conversion_pct":67.1,"music_first_conversion_pct":31.4,"depth_pct":73.2,"music_first_depth_pct":58.9,"content_first_depth_pct":77.3,"is_social":false,"share_of_listeners_pct":23.3},{"channel":"Social media","listeners":2938035,"cf":null,"mf_conv":null,"mf_deep":null,"cf_deep":null,"detail":"TikTok, Instagram Reels, X, YouTube Shorts, Reddit","note":"The largest first touch by a wide margin and the weakest average intent. Format decides everything inside it.","content_first":460030,"music_first":2478005,"music_first_watched":545389,"watched":1005419,"not_watched":1932616,"deep":635304,"content_first_deep":337919,"music_first_deep":297385,"conversion_pct":34.2,"music_first_conversion_pct":22.0,"depth_pct":63.2,"music_first_depth_pct":54.5,"content_first_depth_pct":73.5,"is_social":true,"share_of_listeners_pct":52.3},{"channel":"Search","listeners":612002,"cf":214000,"mf_conv":0.281,"mf_deep":0.574,"cf_deep":0.758,"detail":"Song, lyric and artist queries","note":"Somebody typing a lyric into a search box has already decided the song matters to them.","content_first":214005,"music_first":397997,"music_first_watched":111830,"watched":325835,"not_watched":286167,"deep":226402,"content_first_deep":162210,"music_first_deep":64192,"conversion_pct":53.2,"music_first_conversion_pct":28.1,"depth_pct":69.5,"music_first_depth_pct":57.4,"content_first_depth_pct":75.8,"is_social":false,"share_of_listeners_pct":10.9},{"channel":"Editorial and press","listeners":477001,"cf":92000,"mf_conv":0.226,"mf_deep":0.551,"cf_deep":0.724,"detail":"Billboard, Pitchfork, Vulture, Them, The Globe and Mail","note":"Coverage of the sync placements themselves. Reaches people who read about music before they hear it.","content_first":92005,"music_first":384996,"music_first_watched":87006,"watched":179011,"not_watched":297990,"deep":114560,"content_first_deep":66611,"music_first_deep":47949,"conversion_pct":37.5,"music_first_conversion_pct":22.6,"depth_pct":64.0,"music_first_depth_pct":55.1,"content_first_depth_pct":72.4,"is_social":false,"share_of_listeners_pct":8.5},{"channel":"Direct navigation","listeners":281008,"cf":43000,"mf_conv":0.179,"mf_deep":0.468,"cf_deep":0.692,"detail":"Typed or bookmarked artist and soundtrack pages","note":"Existing fans of Feist, Wet Leg and Wolf Parade arriving for the artist, not the show.","content_first":43002,"music_first":238006,"music_first_watched":42601,"watched":85603,"not_watched":195405,"deep":49683,"content_first_deep":29753,"music_first_deep":19930,"conversion_pct":30.5,"music_first_conversion_pct":17.9,"depth_pct":58.0,"music_first_depth_pct":46.8,"content_first_depth_pct":69.2,"is_social":false,"share_of_listeners_pct":5.0}],"social_formats":[{"fmt":"Mood and angst edit","song":"Secret Love Song, Pt. II","artist":"Little Mix","listeners":941003,"cf":104000,"mf_conv":0.248,"mf_deep":0.532,"cf_deep":0.716,"theme":"Forbidden love, longing","note":"Never appeared in the series. It became the anthem of the edit community anyway, and it is the single largest first touch in this study.","content_first":104001,"music_first":837002,"music_first_watched":207576,"watched":311577,"not_watched":629426,"deep":184900,"content_first_deep":74469,"music_first_deep":110431,"conversion_pct":33.1,"music_first_conversion_pct":24.8,"depth_pct":59.3,"music_first_depth_pct":53.2,"content_first_depth_pct":71.6,"share_of_social_pct":32.0,"theme_group":"Longing and secrecy"},{"fmt":"Thirst and NSFW edit","song":"Big Ole Freak","artist":"Megan Thee Stallion","listeners":712005,"cf":61000,"mf_conv":0.116,"mf_deep":0.443,"cf_deep":0.694,"theme":"Heat, spectacle","note":"Traveled further than any other edit and converted worse than any other edit. The clip is the product, not the trailer.","content_first":61001,"music_first":651004,"music_first_watched":75512,"watched":136513,"not_watched":575492,"deep":75790,"content_first_deep":42336,"music_first_deep":33454,"conversion_pct":19.2,"music_first_conversion_pct":11.6,"depth_pct":55.5,"music_first_depth_pct":44.3,"content_first_depth_pct":69.4,"share_of_social_pct":24.2,"theme_group":"Heat and spectacle"},{"fmt":"Hypnotic remix edit","song":"Sweet Dreams (Are Made of This)","artist":"Eurythmics","listeners":418007,"cf":57000,"mf_conv":0.312,"mf_deep":0.561,"cf_deep":0.723,"theme":"Obsession, inevitability","note":"The one edit format the platform itself commissioned after the fact, and the best-converting edit in the set.","content_first":57001,"music_first":361006,"music_first_watched":112630,"watched":169631,"not_watched":248376,"deep":104401,"content_first_deep":41217,"music_first_deep":63184,"conversion_pct":40.6,"music_first_conversion_pct":31.2,"depth_pct":61.5,"music_first_depth_pct":56.1,"content_first_depth_pct":72.3,"share_of_social_pct":14.2,"theme_group":"Obsession and atmosphere"},{"fmt":"Lyric-overlay edit","song":"Lips","artist":"Baxter Dury","listeners":309003,"cf":71000,"mf_conv":0.286,"mf_deep":0.598,"cf_deep":0.751,"theme":"Intimacy, confession","note":"Lyrics on screen carry story rather than mood, which is why this format completes 6.6 points above the mood edit.","content_first":71009,"music_first":237994,"music_first_watched":68064,"watched":139073,"not_watched":169930,"deep":94031,"content_first_deep":53328,"music_first_deep":40703,"conversion_pct":45.0,"music_first_conversion_pct":28.6,"depth_pct":67.6,"music_first_depth_pct":59.8,"content_first_depth_pct":75.1,"share_of_social_pct":10.5,"theme_group":"Longing and secrecy"},{"fmt":"Scene clip, sync intact","song":"Sealion / All the Things She Said","artist":"Feist / t.A.T.u.","listeners":191004,"cf":88000,"mf_conv":0.421,"mf_deep":0.702,"cf_deep":0.804,"theme":"In-world moment","note":"The only social format that shows the actual scene. Best conversion and best completion of any social entry.","content_first":88002,"music_first":103002,"music_first_watched":43360,"watched":131362,"not_watched":59642,"deep":101183,"content_first_deep":70753,"music_first_deep":30430,"conversion_pct":68.8,"music_first_conversion_pct":42.1,"depth_pct":77.0,"music_first_depth_pct":70.2,"content_first_depth_pct":80.4,"share_of_social_pct":6.5,"theme_group":"In-world moment"},{"fmt":"Meme audio remix","song":"Frottage Core","artist":"Elyse","listeners":221001,"cf":34000,"mf_conv":0.081,"mf_deep":0.384,"cf_deep":0.662,"theme":"Joke, in-group signal","note":"An in-joke for people already watching. As a first touch it is the weakest entry anywhere in either title.","content_first":34004,"music_first":186997,"music_first_watched":15144,"watched":49148,"not_watched":171853,"deep":28327,"content_first_deep":22511,"music_first_deep":5816,"conversion_pct":22.2,"music_first_conversion_pct":8.1,"depth_pct":57.6,"music_first_depth_pct":38.4,"content_first_depth_pct":66.2,"share_of_social_pct":7.5,"theme_group":"Joke and in-group signal"},{"fmt":"Sport-crossover fancam","song":"Mangetout","artist":"Wet Leg","listeners":89003,"cf":19000,"mf_conv":0.174,"mf_deep":0.516,"cf_deep":0.688,"theme":"Rivalry, adrenaline","note":"Reads as hockey content first. It reaches sports fans and loses most of them at the paywall.","content_first":19004,"music_first":69999,"music_first_watched":12186,"watched":31190,"not_watched":57813,"deep":19353,"content_first_deep":13071,"music_first_deep":6282,"conversion_pct":35.0,"music_first_conversion_pct":17.4,"depth_pct":62.0,"music_first_depth_pct":51.6,"content_first_depth_pct":68.8,"share_of_social_pct":3.0,"theme_group":"Rivalry"},{"fmt":"Creator commentary and reaction","song":"Mixed","artist":"Various","listeners":57009,"cf":26000,"mf_conv":0.352,"mf_deep":0.649,"cf_deep":0.778,"theme":"Endorsement","note":"Small but high intent. A trusted voice explaining why the show is worth the subscription.","content_first":26008,"music_first":31001,"music_first_watched":10917,"watched":36925,"not_watched":20084,"deep":27319,"content_first_deep":20234,"music_first_deep":7085,"conversion_pct":64.8,"music_first_conversion_pct":35.2,"depth_pct":74.0,"music_first_depth_pct":64.9,"content_first_depth_pct":77.8,"share_of_social_pct":1.9,"theme_group":"Endorsement"}],"directions":[{"direction":"Music first","label":"Played a song before any contact with the title","reached":4126996,"viewers":984015,"conversion_pct":23.8,"deep":545601,"depth_pct":55.4,"share_of_viewers_pct":22.7,"note":"The honest acquisition number. Fan edits reached more people than every other first touch combined and converted a quarter of them."},{"direction":"Show first","label":"Watched an episode, then went to the music","reached":1490051,"viewers":1490051,"conversion_pct":100.0,"deep":1122918,"depth_pct":75.4,"share_of_viewers_pct":34.3,"note":"The amplification number. These viewers were already watching and the show pushed them to a streaming service, which is what the reported stream spikes were measuring."},{"direction":"No music touch","label":"Never played a tracked song in the window","reached":3413040,"viewers":1866036,"conversion_pct":54.7,"deep":1146992,"depth_pct":61.5,"share_of_viewers_pct":43.0,"note":"Larger than music-first acquisition and slightly better at finishing the season."}],"no_music_entries":[{"path":"On-platform discovery","viewers":712004,"deep":370956,"detail":"Home row, autoplay, because-you-watched","note":"The largest single way in, and the least deliberate. Half of these viewers do not reach the finale.","depth_pct":52.1,"share_of_no_music_viewers_pct":38.2},{"path":"Word of mouth","viewers":381008,"deep":264410,"detail":"Group chats, direct shares, in-person recommendation","note":"A person vouching for the show outperforms every algorithmic surface by 17.3 points on completion.","depth_pct":69.4,"share_of_no_music_viewers_pct":20.4},{"path":"Press and reviews","viewers":243003,"deep":162329,"detail":"Reviews, recaps and features","note":"Readers arrive knowing what the show is trying to do.","depth_pct":66.8,"share_of_no_music_viewers_pct":13.0},{"path":"Book fandom","viewers":208005,"deep":168897,"detail":"Rachel Reid's Game Changers readers, BookTok, Goodreads","note":"The highest completion of any entry point in either title. They already know how it ends and they came to see it.","depth_pct":81.2,"share_of_no_music_viewers_pct":11.1},{"path":"Creator crossover","viewers":141009,"deep":86430,"detail":"Jacob Tierney's Letterkenny and Shoresy audience","note":"Comes for the creator, stays for the show more often than the algorithm's viewers do.","depth_pct":61.3,"share_of_no_music_viewers_pct":7.6},{"path":"Sports adjacency","viewers":113004,"deep":50515,"detail":"Hockey and league content","note":"Weakest completion outside the meme edit. The hockey is the setting, not the subject, and this cohort finds that out.","depth_pct":44.7,"share_of_no_music_viewers_pct":6.1},{"path":"Search","viewers":68003,"deep":43455,"detail":"Title and cast queries with no song touch","note":"Looked up the show directly, never touched the music.","depth_pct":63.9,"share_of_no_music_viewers_pct":3.6}],"no_music_total":{"viewers":1866036,"deep":1146992,"depth_pct":61.5},"music_total":{"listeners":5617047,"viewers":2474066,"deep":1668519,"conversion_pct":44.0,"depth_pct":67.4},"themes":[{"theme":"Longing and secrecy","formats":["Mood and angst edit","Lyric-overlay edit"],"listeners":1250006,"music_first":1074996,"music_first_watched":275640,"watched":450650,"deep":278931,"share_of_social_pct":42.5,"music_first_conversion_pct":25.6,"depth_pct":61.9},{"theme":"Heat and spectacle","formats":["Thirst and NSFW edit"],"listeners":712005,"music_first":651004,"music_first_watched":75512,"watched":136513,"deep":75790,"share_of_social_pct":24.2,"music_first_conversion_pct":11.6,"depth_pct":55.5},{"theme":"Obsession and atmosphere","formats":["Hypnotic remix edit"],"listeners":418007,"music_first":361006,"music_first_watched":112630,"watched":169631,"deep":104401,"share_of_social_pct":14.2,"music_first_conversion_pct":31.2,"depth_pct":61.5},{"theme":"Joke and in-group signal","formats":["Meme audio remix"],"listeners":221001,"music_first":186997,"music_first_watched":15144,"watched":49148,"deep":28327,"share_of_social_pct":7.5,"music_first_conversion_pct":8.1,"depth_pct":57.6},{"theme":"In-world moment","formats":["Scene clip, sync intact"],"listeners":191004,"music_first":103002,"music_first_watched":43360,"watched":131362,"deep":101183,"share_of_social_pct":6.5,"music_first_conversion_pct":42.1,"depth_pct":77.0},{"theme":"Rivalry","formats":["Sport-crossover fancam"],"listeners":89003,"music_first":69999,"music_first_watched":12186,"watched":31190,"deep":19353,"share_of_social_pct":3.0,"music_first_conversion_pct":17.4,"depth_pct":62.0},{"theme":"Endorsement","formats":["Creator commentary and reaction"],"listeners":57009,"music_first":31001,"music_first_watched":10917,"watched":36925,"deep":27319,"share_of_social_pct":1.9,"music_first_conversion_pct":35.2,"depth_pct":74.0}],"meta":{"title":"Heated Rivalry","kind":"Series","platform":"HBO Max","release_label":"Premiered Nov 28, 2025","release_date":"2025-11-28","finale_date":"2025-12-26","window_start":"2025-08-28","window_end":"2026-02-28","window_label":"Aug 28, 2025 to Feb 28, 2026","window_note":"Three months before the premiere through three months after. The premiere sits at the centre, so the whole run-up and the whole tail are inside one frame.","depth_label":"Finished all six episodes","depth_definition":"Watched every one of the six episodes at least once by the end of the window. The finale landed Dec 26, 2025, so every viewer in the window had the chance.","watch_label":"Watched Heated Rivalry","watch_definition":"At least one episode played on HBO Max.","listen_definition":"At least one play of one of the nine tracked songs on any surface: a music streaming service, a social clip using it as the sound, or a video platform.","release_shape":"Weekly. Two episodes at launch, then one a week for four weeks.","songs_note":"Five songs are in the show. Four are not. The biggest one is not."},"songs":[{"song":"Secret Love Song, Pt. II","artist":"Little Mix","role":"Fan-edit anthem","placement":"Never appeared in the series","in_show":false,"theme":"Longing and secrecy","format":"Mood edit","evidence":"Around 30,000 US on-demand streams over Nov 28 to Dec 1, rising close to 40% to about 42,500 over Dec 5 to 8.","read":"The largest single first touch in this study, and the show never used it. The edit community picked the song that described the plot better than the soundtrack did."},{"song":"Mangetout","artist":"Wet Leg","role":"Sync","placement":"Opens episode 2, Olympians","in_show":true,"theme":"Rivalry","format":"Fancam","evidence":"Up 61% to more than 226,000 US on-demand streams over Dec 5 to 8.","read":"The highest-volume sync in the set. Placement at the top of an episode gets a song heard by everyone who presses play."},{"song":"Sweet Dreams (Are Made of This)","artist":"Eurythmics","role":"Fan edit, later commissioned","placement":"Not in the series. A fan edit of episodes 1 and 2.","in_show":false,"theme":"Nostalgia","format":"Hypnotic remix","evidence":"HBO hired the creator of this edit to make official social material.","read":"The only case where the platform bought the fan's work. It is also the best-converting edit format we observe, which suggests the buy was correct."},{"song":"Big Ole Freak","artist":"Megan Thee Stallion","role":"Fan edit","placement":"Not in the series. The most-traveled edit of the run.","in_show":false,"theme":"Heat and spectacle","format":"Thirst edit","evidence":"Millions of views across platforms, played in clubs from Istanbul to Vietnam to Australia. The artist confirmed she had seen it.","read":"Reach and conversion pull in opposite directions here. This edit is a finished piece of entertainment on its own, so there is no unmet need for it to send anyone to a paywall."},{"song":"All the Things She Said","artist":"t.A.T.u., Harrison remix","role":"Sync","placement":"Closes episode 4, Rose","in_show":true,"theme":"Nostalgia","format":"Scene clip","evidence":"A 2002 single reintroduced through a wordless club scene, in a remix with masculine vocals.","read":"A song already coded as a queer anthem, placed so the coding does the work. Nostalgia and theme arriving together."},{"song":"Sealion","artist":"Feist","role":"Sync","placement":"Closes episode 1, the locker room scene","in_show":true,"theme":"In-world moment","format":"Scene clip","evidence":"About 6,600 US on-demand streams over Nov 28 to Dec 1, then up 155% to roughly 17,000 over Dec 5 to 8.","read":"The scene people talked about, so the song traveled with the talking. Small numbers, steep slope."},{"song":"Lips","artist":"Baxter Dury","role":"Sync","placement":"Closes episode 3, Hunter","in_show":true,"theme":"Longing and secrecy","format":"Lyric overlay","evidence":"137 US on-demand streams over Nov 28 to Dec 1, then more than 19,000 over Dec 5 to 8.","read":"The steepest lift of any song in either title. A song nobody was playing became a song people sought out, and the only thing that changed was where it sat in an episode."},{"song":"I'll Believe In Anything","artist":"Wolf Parade","role":"Sync","placement":"Opens episode 3, and titles episode 5","in_show":true,"theme":"Longing and secrecy","format":"Lyric overlay","evidence":"Up sharply to more than 23,000 US on-demand streams over Dec 5 to 8.","read":"Naming an episode after a lyric ties the song to the story twice. It is the clearest deliberate music decision in the run."},{"song":"Frottage Core","artist":"Elyse","role":"Meme remix","placement":"Not in the series","in_show":false,"theme":"Joke and in-group signal","format":"Meme audio","evidence":"Circulated as a joke sound among people already watching.","read":"The weakest first touch anywhere in this study. A joke only lands if you already know the reference, so it recruits almost nobody."}],"timeline":[{"day":-92,"date":"Aug 28, 2025","kind":"window","event":"Window opens","detail":"Three months before the premiere."},{"day":-50,"date":"Oct 9, 2025","kind":"marketing","event":"Trailer and premiere date announced","detail":"Six-episode season confirmed, two episodes at launch."},{"day":-38,"date":"Oct 21, 2025","kind":"context","event":"HBO Max US pricing changes","detail":"Basic with Ads $10.99, Standard $18.49, Premium $22.99. This is the paywall every music-first viewer met."},{"day":-9,"date":"Nov 19, 2025","kind":"marketing","event":"Press cycle opens","detail":"Preview coverage begins."},{"day":0,"date":"Nov 28, 2025","kind":"release","event":"Episodes 1 and 2 premiere","detail":"Feist's Sealion closes episode 1. Wet Leg's Mangetout opens episode 2. Baxter Dury's Lips is at 137 US streams."},{"day":7,"date":"Dec 5, 2025","kind":"release","event":"Episode 3, and the music inflects","detail":"Lips goes from 137 to more than 19,000 US streams. Sealion up 155%. Mangetout up 61% past 226,000. Wolf Parade past 23,000."},{"day":14,"date":"Dec 12, 2025","kind":"release","event":"Episode 4, Rose","detail":"A wordless club scene closes on a remix of t.A.T.u.'s All the Things She Said, sending a 2002 single back into search."},{"day":21,"date":"Dec 19, 2025","kind":"release","event":"Episode 5, I'll Believe in Anything","detail":"The episode is named after the Wolf Parade song that opened episode 3."},{"day":28,"date":"Dec 26, 2025","kind":"release","event":"Finale, The Cottage","detail":"Every viewer from here on can finish the season in one sitting, which is what most of them do."},{"day":45,"date":"Mid Jan 2026","kind":"commercial","event":"HBO hires a fan editor","detail":"The creator of the Sweet Dreams edit is commissioned to make official social material. The edit economy becomes a marketing line item."},{"day":92,"date":"Feb 28, 2026","kind":"window","event":"Window closes","detail":"Three months after the premiere."}],"individual_journey":{"label":"One viewer, Heated Rivalry","demographics":{"age":27,"gender":"Female","location":"Chicago, IL","income":"$70K to $85K","household":"Single, no children","subscriber_at_window_open":"No","subscriber_at_window_close":"Yes, Basic with Ads"},"outcome":"Converted from a fan edit. Finished the season. Still subscribed at the end of the window.","spend_usd":43.94,"spend_note":"Two months of Basic with Ads at $10.99 plus a $21.96 book purchase.","steps":[{"n":1,"date":"Dec 3, 2025","surface":"TikTok","action":"Watched a Secret Love Song, Pt. II mood edit","detail":"41 seconds, watched three times through. No prior Heated Rivalry touch of any kind."},{"n":2,"date":"Dec 3, 2025","surface":"TikTok","action":"Opened the sound page","detail":"Watched six more edits set to the same song. This is the step that separates a scroll from an interest."},{"n":3,"date":"Dec 4, 2025","surface":"Spotify","action":"Searched the song and played it four times","detail":"Saved it to a private playlist. First music streaming touch, one day after the first social touch."},{"n":4,"date":"Dec 5, 2025","surface":"Google","action":"Searched heated rivalry where to watch","detail":"Intent becomes explicit seven days after the premiere and the same day episode 3 dropped."},{"n":5,"date":"Dec 5, 2025","surface":"HBO Max","action":"Reached the signup page and left","detail":"Bounced at the paywall. Most of this cohort stops here and never comes back."},{"n":6,"date":"Dec 6, 2025","surface":"Reddit","action":"Read the episode 3 discussion thread","detail":"Spoiler-tolerant. Reading about it made the case the paywall had not."},{"n":7,"date":"Dec 7, 2025","surface":"HBO Max","action":"Subscribed to Basic with Ads at $10.99","detail":"Watched episodes 1 and 2 back to back the same night. Four days from first edit to paying customer."},{"n":8,"date":"Dec 8, 2025","surface":"Spotify","action":"Played Sealion and Mangetout","detail":"Now going to the music because of the show. The direction of travel reverses inside a single journey."},{"n":9,"date":"Dec 12, 2025","surface":"HBO Max then Spotify","action":"Watched episode 4, then searched All the Things She Said","detail":"Watched the club scene and looked up a 2002 single within the hour."},{"n":10,"date":"Dec 26, 2025","surface":"HBO Max","action":"Watched the finale on release night","detail":"Season complete. Six episodes, 19 days."},{"n":11,"date":"Dec 27, 2025","surface":"Amazon","action":"Bought the Game Changers paperback for $21.96","detail":"Went to the source. The book cohort is the highest completing group in this study and she has just joined it."},{"n":12,"date":"Jan 9, 2026","surface":"Instagram","action":"Shared a Sweet Dreams edit to Stories","detail":"Became a distribution point for the same mechanism that recruited her."},{"n":13,"date":"Feb 2026","surface":"HBO Max","action":"Still subscribed, watched two unrelated titles","detail":"The retention question: a fan edit bought a subscriber who outlived the show that sold it."}]},"pathways":{"base":984015,"base_label":"Music-first viewers","covered":981000,"covered_pct":99.7,"other":3015,"other_pct":0.3,"sequences":[{"rank":1,"viewers":418000,"depth_pct":57.2,"steps":["Mood edit on a feed","Sound page, more edits","Music streaming service, saved the song","Searched where to watch","Hit the paywall","Subscribed","Watched episodes 1 and 2 back to back"],"note":"The main music-first route. Note the paywall step: it appears in every converting social pathway and it is where most of the cohort stops.","share_of_base_pct":42.5},{"rank":2,"viewers":213000,"depth_pct":71.8,"steps":["Scene clip with the sync intact","Searched the song","Searched the series","Subscribed","Watched from episode 1"],"note":"Shorter, and it completes 14.6 points better. Seeing the scene sets an expectation the show then meets.","share_of_base_pct":21.6},{"rank":3,"viewers":167000,"depth_pct":48.4,"steps":["Thirst edit","More edits from the same account","Searched the cast","Subscribed","Watched the two episodes the edit came from"],"note":"Converts rarely, and when it does the viewer often wants the scenes rather than the season.","share_of_base_pct":17.0},{"rank":4,"viewers":104000,"depth_pct":64.1,"steps":["Press piece about the sync placements","Music streaming service, played the soundtrack","Subscribed","Watched weekly as episodes dropped"],"note":"The patient route. Weekly rather than binge, and it holds.","share_of_base_pct":10.6},{"rank":5,"viewers":79000,"depth_pct":61.3,"steps":["Artist page for Feist or Wet Leg","Found the sync credit","Searched the series","Subscribed","Watched"],"note":"Existing fans of the artists arriving through the credit.","share_of_base_pct":8.0}],"note":"Priority-resolved: each viewer is assigned to the single sequence that matches their observed order of touches. The remainder are sequences with too few viewers to name."}},"barbie":{"universe":{"total":121032055,"listened":78501024,"listened_pct":64.9,"did_not_listen":42531031,"did_not_listen_pct":35.1,"viewers":43004387,"touched_never_watched":23418000,"note":"Everyone with at least one Barbie touch in the window: a play of one of the six tracked singles or the album on any surface, a ticket purchase, a premium digital purchase or rental, a licensed product purchase, or a press read. Cohorts are mutually exclusive."},"discovery":[{"channel":"Music streaming service","listeners":31204004,"cf":4618000,"mf_conv":0.208,"mf_deep":0.368,"cf_deep":0.446,"detail":"Spotify, Apple Music, Amazon Music, YouTube Music","note":"Six singles across eight weeks kept the album in rotation before there was a film to see. This is the channel the release plan was actually built for.","content_first":4618008,"music_first":26585996,"music_first_watched":5529885,"watched":10147893,"not_watched":21056111,"deep":4094623,"content_first_deep":2059630,"music_first_deep":2034993,"conversion_pct":32.5,"music_first_conversion_pct":20.8,"depth_pct":40.3,"music_first_depth_pct":36.8,"content_first_depth_pct":44.6,"is_social":false,"share_of_listeners_pct":39.7},{"channel":"Social media","listeners":27471019,"cf":null,"mf_conv":null,"mf_deep":null,"cf_deep":null,"detail":"TikTok, Instagram Reels, YouTube Shorts, X","note":"Slightly smaller than streaming and far more variable. The spread between its best and worst format is 26.4 points of conversion.","content_first":3654031,"music_first":23816988,"music_first_watched":4224234,"watched":7878265,"not_watched":19592754,"deep":3210470,"content_first_deep":1627266,"music_first_deep":1583204,"conversion_pct":28.7,"music_first_conversion_pct":17.7,"depth_pct":40.8,"music_first_depth_pct":37.5,"content_first_depth_pct":44.5,"is_social":true,"share_of_listeners_pct":35.0},{"channel":"Search","listeners":8916000,"cf":1106000,"mf_conv":0.252,"mf_deep":0.406,"cf_deep":0.478,"detail":"Song, lyric, artist and soundtrack queries","note":"Highest-converting channel in either title. Searching for a song is the clearest statement of intent we can observe.","content_first":1106001,"music_first":7809999,"music_first_watched":1968126,"watched":3074127,"not_watched":5841873,"deep":1327712,"content_first_deep":528662,"music_first_deep":799050,"conversion_pct":34.5,"music_first_conversion_pct":25.2,"depth_pct":43.2,"music_first_depth_pct":40.6,"content_first_depth_pct":47.8,"is_social":false,"share_of_listeners_pct":11.4},{"channel":"Editorial and press","listeners":6398001,"cf":642000,"mf_conv":0.192,"mf_deep":0.281,"cf_deep":0.352,"detail":"Chart coverage, reviews, artist features","note":"Six Top 40 singles in one soundtrack generated its own news cycle, which then sold the film.","content_first":642004,"music_first":5755997,"music_first_watched":1105155,"watched":1747159,"not_watched":4650842,"deep":536532,"content_first_deep":225988,"music_first_deep":310544,"conversion_pct":27.3,"music_first_conversion_pct":19.2,"depth_pct":30.7,"music_first_depth_pct":28.1,"content_first_depth_pct":35.2,"is_social":false,"share_of_listeners_pct":8.2},{"channel":"Direct navigation","listeners":4512000,"cf":498000,"mf_conv":0.136,"mf_deep":0.247,"cf_deep":0.318,"detail":"Typed artist, label and soundtrack pages","note":"Dua Lipa, Billie Eilish and Charli XCX fans arriving for the artist. The film is a by-product for this group.","content_first":498006,"music_first":4013994,"music_first_watched":545906,"watched":1043912,"not_watched":3468088,"deep":293200,"content_first_deep":158368,"music_first_deep":134832,"conversion_pct":23.1,"music_first_conversion_pct":13.6,"depth_pct":28.1,"music_first_depth_pct":24.7,"content_first_depth_pct":31.8,"is_social":false,"share_of_listeners_pct":5.7}],"social_formats":[{"fmt":"Dance trend and choreography","song":"Dance the Night / Barbie World","artist":"Dua Lipa / Nicki Minaj and Ice Spice","listeners":8712008,"cf":706000,"mf_conv":0.178,"mf_deep":0.352,"cf_deep":0.428,"theme":"Euphoria, participation","note":"A dance trend asks the viewer to do something. It is the largest music first touch of the Barbie window and it landed eight weeks before opening night.","content_first":706007,"music_first":8006001,"music_first_watched":1425068,"watched":2131075,"not_watched":6580933,"deep":803798,"content_first_deep":302176,"music_first_deep":501622,"conversion_pct":24.5,"music_first_conversion_pct":17.8,"depth_pct":37.7,"music_first_depth_pct":35.2,"content_first_depth_pct":42.8,"share_of_social_pct":31.7,"theme_group":"Euphoria and participation"},{"fmt":"Mood and emotional edit","song":"What Was I Made For?","artist":"Billie Eilish","listeners":6104005,"cf":1218000,"mf_conv":0.205,"mf_deep":0.398,"cf_deep":0.474,"theme":"Melancholy, self-recognition","note":"Released eight days before opening. It converted better than any other Barbie social format and it is the reason the film read as more than a toy comedy.","content_first":1218003,"music_first":4886002,"music_first_watched":1001635,"watched":2219638,"not_watched":3884367,"deep":975994,"content_first_deep":577336,"music_first_deep":398658,"conversion_pct":36.4,"music_first_conversion_pct":20.5,"depth_pct":44.0,"music_first_depth_pct":39.8,"content_first_depth_pct":47.4,"share_of_social_pct":22.2,"theme_group":"Longing and self-recognition"},{"fmt":"Fashion, styling and get-ready","song":"Speed Drive","artist":"Charli XCX","listeners":4631000,"cf":512000,"mf_conv":0.161,"mf_deep":0.463,"cf_deep":0.531,"theme":"Identity, aesthetic","note":"The pink-outfit economy. This format is where the film's merchandise and its music share the same viewer.","content_first":512001,"music_first":4118999,"music_first_watched":663152,"watched":1175153,"not_watched":3455847,"deep":578901,"content_first_deep":271870,"music_first_deep":307031,"conversion_pct":25.4,"music_first_conversion_pct":16.1,"depth_pct":49.3,"music_first_depth_pct":46.3,"content_first_depth_pct":53.1,"share_of_social_pct":16.9,"theme_group":"Identity and aesthetic"},{"fmt":"Meme audio remix","song":"Barbie Girl (sampled)","artist":"Aqua","listeners":3408002,"cf":402000,"mf_conv":0.09,"mf_deep":0.216,"cf_deep":0.302,"theme":"Nostalgia, joke","note":"A 1997 hook doing 2023 work. Enormous reach, thin intent, and the same shape as Heated Rivalry's meme edit.","content_first":402003,"music_first":3005999,"music_first_watched":270546,"watched":672549,"not_watched":2735453,"deep":179848,"content_first_deep":121409,"music_first_deep":58439,"conversion_pct":19.7,"music_first_conversion_pct":9.0,"depth_pct":26.7,"music_first_depth_pct":21.6,"content_first_depth_pct":30.2,"share_of_social_pct":12.4,"theme_group":"Nostalgia"},{"fmt":"Trailer and scene clip, sync intact","song":"Dance the Night","artist":"Dua Lipa","listeners":2297003,"cf":338000,"mf_conv":0.251,"mf_deep":0.381,"cf_deep":0.452,"theme":"In-world moment","note":"As with Heated Rivalry, the format that shows the actual scene converts best. The pattern holds across both titles.","content_first":338007,"music_first":1958996,"music_first_watched":491706,"watched":829713,"not_watched":1467290,"deep":340112,"content_first_deep":152771,"music_first_deep":187341,"conversion_pct":36.1,"music_first_conversion_pct":25.1,"depth_pct":41.0,"music_first_depth_pct":38.1,"content_first_depth_pct":45.2,"share_of_social_pct":8.4,"theme_group":"In-world moment"},{"fmt":"Creator commentary and reaction","song":"Mixed","artist":"Various","listeners":1412000,"cf":284000,"mf_conv":0.194,"mf_deep":0.334,"cf_deep":0.409,"theme":"Endorsement","note":"Reaction and explainer content, including the Barbenheimer framing that ran alongside it.","content_first":284005,"music_first":1127995,"music_first_watched":218833,"watched":502838,"not_watched":909162,"deep":189244,"content_first_deep":116154,"music_first_deep":73090,"conversion_pct":35.6,"music_first_conversion_pct":19.4,"depth_pct":37.6,"music_first_depth_pct":33.4,"content_first_depth_pct":40.9,"share_of_social_pct":5.1,"theme_group":"Endorsement"},{"fmt":"Lyric-overlay edit","song":"What Was I Made For?","artist":"Billie Eilish","listeners":907001,"cf":194000,"mf_conv":0.215,"mf_deep":0.372,"cf_deep":0.441,"theme":"Longing, doubt","note":"The film's thesis, quoted verbatim, before anyone had seen it.","content_first":194005,"music_first":712996,"music_first_watched":153294,"watched":347299,"not_watched":559702,"deep":142573,"content_first_deep":85550,"music_first_deep":57023,"conversion_pct":38.3,"music_first_conversion_pct":21.5,"depth_pct":41.1,"music_first_depth_pct":37.2,"content_first_depth_pct":44.1,"share_of_social_pct":3.3,"theme_group":"Longing and self-recognition"}],"directions":[{"direction":"Music first","label":"Played a song before any contact with the title","reached":67982974,"viewers":13373306,"conversion_pct":19.7,"deep":4862623,"depth_pct":36.4,"share_of_viewers_pct":31.1,"note":"Barbie was built for this direction and it worked. Music-first is the largest single route to a ticket in the window."},{"direction":"Film first","label":"Saw the film, then went to the music","reached":10518050,"viewers":10518050,"conversion_pct":100.0,"deep":4599914,"depth_pct":43.7,"share_of_viewers_pct":24.5,"note":"Much smaller than Heated Rivalry's equivalent, because the album arrived on release day rather than being discovered later."},{"direction":"No music touch","label":"Never played a tracked song in the window","reached":42531031,"viewers":19113031,"conversion_pct":44.9,"deep":6884548,"depth_pct":36.0,"share_of_viewers_pct":44.4,"note":"Still the majority of the audience. Music was the biggest single route in, not most of the way in."}],"no_music_entries":[{"path":"Word of mouth and group outing","viewers":5464007,"deep":2251160,"detail":"Group bookings, matching outfits, family and friend groups","note":"Barbie was a group event. This is the largest way in overall and it beats every music path on completion.","depth_pct":41.2,"share_of_no_music_viewers_pct":28.6},{"path":"Trailer and theatrical marketing","viewers":4425005,"deep":1265550,"detail":"Broadcast, out-of-home, in-cinema, brand partnerships","note":"Conventional marketing at unusual scale. It reached people the music never touched.","depth_pct":28.6,"share_of_no_music_viewers_pct":23.2},{"path":"Barbenheimer double feature","viewers":2640003,"deep":512160,"detail":"Same-day pairing with Oppenheimer","note":"A scheduling joke that became a reason to buy two tickets. No music touch at all in this cohort.","depth_pct":19.4,"share_of_no_music_viewers_pct":13.8},{"path":"Brand and retail activation","viewers":2214003,"deep":1146853,"detail":"Retail tie-ins, apparel, home, gaming and travel partners","note":"Met the audience in aisles rather than feeds.","depth_pct":51.8,"share_of_no_music_viewers_pct":11.6},{"path":"Press and reviews","viewers":1903002,"deep":462424,"detail":"Reviews, features and awards coverage","note":"Readers who came for Gerwig rather than for a single.","depth_pct":24.3,"share_of_no_music_viewers_pct":10.0},{"path":"Existing brand affinity","viewers":1789009,"deep":1062668,"detail":"Barbie product households, parents and collectors","note":"Already bought the doll. The film was an extension of a relationship that predated the soundtrack.","depth_pct":59.4,"share_of_no_music_viewers_pct":9.4},{"path":"Search","viewers":678002,"deep":183733,"detail":"Title, cast and showtime queries with no song touch","note":"Straight to showtimes.","depth_pct":27.1,"share_of_no_music_viewers_pct":3.5}],"no_music_total":{"viewers":19113031,"deep":6884548,"depth_pct":36.0},"music_total":{"listeners":78501024,"viewers":23891356,"deep":9462537,"conversion_pct":30.4,"depth_pct":39.6},"themes":[{"theme":"Euphoria and participation","formats":["Dance trend and choreography"],"listeners":8712008,"music_first":8006001,"music_first_watched":1425068,"watched":2131075,"deep":803798,"share_of_social_pct":31.7,"music_first_conversion_pct":17.8,"depth_pct":37.7},{"theme":"Longing and self-recognition","formats":["Mood and emotional edit","Lyric-overlay edit"],"listeners":7011006,"music_first":5598998,"music_first_watched":1154929,"watched":2566937,"deep":1118567,"share_of_social_pct":25.5,"music_first_conversion_pct":20.6,"depth_pct":43.6},{"theme":"Identity and aesthetic","formats":["Fashion, styling and get-ready"],"listeners":4631000,"music_first":4118999,"music_first_watched":663152,"watched":1175153,"deep":578901,"share_of_social_pct":16.9,"music_first_conversion_pct":16.1,"depth_pct":49.3},{"theme":"Nostalgia","formats":["Meme audio remix"],"listeners":3408002,"music_first":3005999,"music_first_watched":270546,"watched":672549,"deep":179848,"share_of_social_pct":12.4,"music_first_conversion_pct":9.0,"depth_pct":26.7},{"theme":"In-world moment","formats":["Trailer and scene clip, sync intact"],"listeners":2297003,"music_first":1958996,"music_first_watched":491706,"watched":829713,"deep":340112,"share_of_social_pct":8.4,"music_first_conversion_pct":25.1,"depth_pct":41.0},{"theme":"Endorsement","formats":["Creator commentary and reaction"],"listeners":1412000,"music_first":1127995,"music_first_watched":218833,"watched":502838,"deep":189244,"share_of_social_pct":5.1,"music_first_conversion_pct":19.4,"depth_pct":37.6}],"meta":{"title":"Barbie","kind":"Film","platform":"Theatrical, then premium digital","release_label":"Wide release Jul 21, 2023","release_date":"2023-07-21","finale_date":"2023-09-12","window_start":"2023-04-21","window_end":"2023-10-21","window_label":"Apr 21, 2023 to Oct 21, 2023","window_note":"Three months before the wide release through three months after, which puts every single, the album, the Sept 12 premium digital date and the Sept 22 large-format re-release inside one frame.","depth_label":"Took a further paid Barbie action","depth_definition":"After seeing the film, bought a repeat ticket, a premium digital copy or rental, or a licensed product, inside the window. Theatrical attendance cannot be measured for completion the way an episode play can, so paid follow-through is the depth metric on this title.","watch_label":"Saw Barbie","watch_definition":"Bought a theatrical ticket or a premium digital purchase or rental inside the window.","listen_definition":"At least one play of one of the six tracked singles or the album on any surface: a music streaming service, a social clip using it as the sound, or a video platform.","release_shape":"Single wide release, then a 54-day theatrical window before premium digital.","songs_note":"Six singles across eight weeks, five of them out before anyone could buy a ticket."},"songs":[{"song":"Dance the Night","artist":"Dua Lipa","role":"Lead single","placement":"Released May 25, 2023, 57 days before the film","in_show":true,"theme":"Euphoria and participation","format":"Dance trend","evidence":"Number one in 10 countries, number 6 on the Hot 100, top ten in 25 countries. Included in an official trailer.","read":"The opening move, and it was a dance record on purpose. A song you can copy asks for participation eight weeks before there is a ticket to buy."},{"song":"What Was I Made For?","artist":"Billie Eilish","role":"Fifth single","placement":"Released Jul 13, 2023, 8 days before the film","in_show":true,"theme":"Longing and self-recognition","format":"Mood edit","evidence":"Number one in the UK, Ireland, Switzerland and Australia, number 14 on the Hot 100, 20 weeks on the UK chart and number one there on Aug 24.","read":"The best-converting song in the Barbie window and the one that changed what people thought the film was. It arrived late on purpose, once curiosity was already there."},{"song":"Barbie World","artist":"Nicki Minaj and Ice Spice with Aqua","role":"Third single","placement":"Released Jun 23, 2023, 28 days before the film","in_show":true,"theme":"Nostalgia","format":"Meme and dance","evidence":"Debuted at number 7 on the Hot 100, number 4 in the UK, top ten in 15 territories. Built on Aqua's 1997 Barbie Girl.","read":"Borrowed a hook the audience already had in their heads. Enormous reach, and the thinnest intent of any Barbie single."},{"song":"Speed Drive","artist":"Charli XCX","role":"Fourth single","placement":"Released Jun 29, 2023, 22 days before the film","in_show":true,"theme":"Identity and aesthetic","format":"Fashion and styling","evidence":"Top ten in the UK and Ireland.","read":"The styling record. It sits underneath the pink-outfit economy, and its listeners are the most likely of any music cohort to buy something."},{"song":"Angel","artist":"PinkPantheress","role":"Second single","placement":"Released Jun 9, 2023, 42 days before the film","in_show":true,"theme":"Longing and self-recognition","format":"Mood","evidence":"Second single from the soundtrack.","read":"Held the middle of the run-up between the lead single and the louder June releases."},{"song":"Choose Your Fighter","artist":"Ava Max","role":"Sixth single","placement":"Serviced to radio Jul 28, 2023, 7 days after the film","in_show":true,"theme":"Identity and aesthetic","format":"Fashion and styling","evidence":"Serviced to airplay radio as the sixth single.","read":"The only Barbie single released after opening weekend. Its job was to hold the record on radio once the film was already out."}],"timeline":[{"day":-91,"date":"Apr 21, 2023","kind":"window","event":"Window opens","detail":"Three months before wide release."},{"day":-60,"date":"May 22, 2023","kind":"marketing","event":"Lead single announced","detail":"Dua Lipa recreates a shot from the second trailer."},{"day":-57,"date":"May 25, 2023","kind":"music","event":"Dance the Night","detail":"Lead single. Contemporary hit radio in the US five days later. The first thing most people experienced of this film was a song."},{"day":-42,"date":"Jun 9, 2023","kind":"music","event":"Angel","detail":"Second single, PinkPantheress."},{"day":-28,"date":"Jun 23, 2023","kind":"music","event":"Barbie World and its video","detail":"Third single. Samples Aqua's 1997 Barbie Girl and debuts at number 7 on the Hot 100."},{"day":-22,"date":"Jun 29, 2023","kind":"music","event":"Speed Drive","detail":"Fourth single, Charli XCX."},{"day":-8,"date":"Jul 13, 2023","kind":"music","event":"What Was I Made For?","detail":"Fifth single. The tone shifts from party to melancholy eight days before opening, and so does what people expect."},{"day":0,"date":"Jul 21, 2023","kind":"release","event":"Wide release and the album","detail":"Film and soundtrack land the same day, after five singles have already run."},{"day":7,"date":"Jul 28, 2023","kind":"music","event":"Choose Your Fighter to radio","detail":"Sixth single. The only one released after opening weekend."},{"day":15,"date":"Aug 5, 2023","kind":"commercial","event":"Album debuts and peaks at number 2","detail":"126,000 units in week one: 70,000 streaming equivalent, 53,000 pure sales, 3,000 track equivalent. 93.81M streams, the biggest soundtrack opening in five years. 33,000 on vinyl, a record for a theatrical soundtrack since 1991."},{"day":34,"date":"Aug 24, 2023","kind":"music","event":"What Was I Made For? hits number one in the UK","detail":"Five weeks after the film opened, the music is still recruiting."},{"day":45,"date":"Sep 4, 2023","kind":"commercial","event":"$612.2M domestic through day 46","detail":"Seventh weekend still adding $13.2M over the Labor Day holiday."},{"day":53,"date":"Sep 12, 2023","kind":"release","event":"Premium digital","detail":"Premium digital ownership at $29.99 and a 48-hour rental at $24.99, after a 54-day theatrical window."},{"day":63,"date":"Sep 22, 2023","kind":"release","event":"Large-format re-release","detail":"A one-week run with a new post-credits sequence, ten days after the film was already buyable at home."},{"day":92,"date":"Oct 21, 2023","kind":"window","event":"Window closes","detail":"Three months after wide release."}],"individual_journey":{"label":"One viewer, Barbie","demographics":{"age":31,"gender":"Female","location":"Dallas, TX","income":"$85K to $105K","household":"Married, one child","prior_barbie_product_purchase":"None in the prior year"},"outcome":"Entered on a song 57 days before release. Saw the film twice, bought it again on digital, and spent on licensed product three separate times.","spend_usd":189.06,"spend_note":"Tickets $56.16, premium digital rental $24.99, licensed product $107.91.","steps":[{"n":1,"date":"May 26, 2023","surface":"TikTok","action":"Watched a Dance the Night dance trend","detail":"One day after the single. Fifty-six days before there was a ticket to buy."},{"n":2,"date":"May 27, 2023","surface":"Spotify","action":"Played Dance the Night and saved it","detail":"Song enters personal rotation. No film intent yet."},{"n":3,"date":"Jun 23, 2023","surface":"Instagram","action":"Watched the Barbie World video","detail":"Recognized the 1997 hook. Nostalgia does the introducing, four weeks out."},{"n":4,"date":"Jul 13, 2023","surface":"Spotify","action":"Played What Was I Made For? seven times on release day","detail":"The tone shift lands. This is the step where a pink comedy becomes something she wants to see."},{"n":5,"date":"Jul 14, 2023","surface":"Google","action":"Searched barbie showtimes","detail":"First film intent, 49 days after the first song."},{"n":6,"date":"Jul 15, 2023","surface":"Fandango","action":"Bought three opening-weekend tickets for $42.87","detail":"A group purchase. The occasion is social from the start."},{"n":7,"date":"Jul 21, 2023","surface":"Theatrical","action":"Saw the film on opening night","detail":"Day zero."},{"n":8,"date":"Jul 22, 2023","surface":"Spotify","action":"Played the album end to end and shared it to a group chat","detail":"Turns from consumer into channel. Three of the six recipients had no prior Barbie music touch."},{"n":9,"date":"Jul 29, 2023","surface":"Target","action":"Bought two dolls for $44.98","detail":"First licensed product purchase, eight days after seeing the film and nine weeks after the first song."},{"n":10,"date":"Aug 5, 2023","surface":"Amazon","action":"Bought a costume for $34.99","detail":"Second product purchase, a different retailer and a different need."},{"n":11,"date":"Aug 12, 2023","surface":"Theatrical","action":"Saw the film again for $13.29","detail":"Repeat attendance. This is why unique viewers sit well below admissions."},{"n":12,"date":"Sep 12, 2023","surface":"Apple TV","action":"Rented the 48-hour premium digital release for $24.99","detail":"Day one of the digital window. She has now paid to see the same film three times."},{"n":13,"date":"Oct 14, 2023","surface":"Party City","action":"Bought licensed costume accessories for $27.94","detail":"Third product purchase, a week before the window closes and a full 141 days after the song that started it."}]},"pathways":{"base":13373306,"base_label":"Music-first viewers","covered":9324000,"covered_pct":69.7,"other":4049306,"other_pct":30.3,"sequences":[{"rank":1,"viewers":3284000,"depth_pct":44.8,"steps":["Dance trend on a feed","Saved the song on a streaming service","Searched showtimes","Bought a ticket online","Saw the film opening weekend","Played the full album","Bought a licensed product"],"note":"The route the release plan was designed to produce, and the largest one. Music, ticket, then merchandise, in that order.","share_of_base_pct":24.6},{"rank":2,"viewers":2106000,"depth_pct":51.2,"steps":["Billie Eilish single on release day","Mood edit on a feed","Searched the film","Bought a ticket","Saw the film","Bought a premium digital copy on Sep 12"],"note":"The highest follow-through of any Barbie pathway. This cohort buys the film twice.","share_of_base_pct":15.7},{"rank":3,"viewers":1612000,"depth_pct":48.6,"steps":["Styling or get-ready clip","Saved the song","Bought an outfit or accessory","Saw the film in a group","Bought more licensed product"],"note":"Spending starts before the ticket here. The outfit is part of the occasion, not a souvenir of it.","share_of_base_pct":12.1},{"rank":4,"viewers":1418000,"depth_pct":22.4,"steps":["Nostalgia meme sound","Played the song","Saw the film weeks later"],"note":"Big, slow and shallow. The Aqua hook reaches everyone and commits nobody.","share_of_base_pct":10.6},{"rank":5,"viewers":904000,"depth_pct":39.1,"steps":["Searched a lyric","Played the song","Searched the film","Bought a ticket","Saw the film"],"note":"Short and deliberate. Search is the clearest intent signal in either title.","share_of_base_pct":6.8}],"note":"Priority-resolved: each viewer is assigned to the single sequence that matches their observed order of touches. The remainder are sequences with too few viewers to name."},"commercial":{"theatrical":{"domestic_usd":636785476,"worldwide_usd":1447685476,"theatrical_window_days":54,"note":"Highest grossing release of 2023 worldwide, and the highest grossing film in Warner Bros' first hundred years before inflation adjustment."},"soundtrack":{"peak_billboard_200":2,"week_one_units":126000,"week_one_streaming_equivalent":70000,"week_one_pure_sales":53000,"week_one_track_equivalent":3000,"week_one_streams_m":93.81,"week_one_vinyl":33000,"weeks_on_chart":59,"us_units_lifetime":"More than 1 million","note":"The biggest opening week by units for a theatrical film soundtrack in more than four years, the biggest soundtrack streaming week in five years, and the largest vinyl week for a theatrical soundtrack since electronic tracking began in 1991. It outlasted the theatrical window by more than a year."},"premium_digital":{"date":"Sep 12, 2023","ownership_usd":29.99,"rental_48h_usd":24.99,"note":"Arrived 54 days after opening, inside this window. The music cohort was still active when it did, which is the whole reason the digital window performed."},"licensed_product":{"barbie_fy2023_gross_billings_usd_m":1537.8,"barbie_fy2022_gross_billings_usd_m":1490.6,"fy_change_pct":3,"fy_change_cc_pct":2,"q4_2023_usd_m":473.1,"q4_2022_usd_m":372.2,"q4_change_pct":27,"q4_change_cc_pct":24,"dolls_fy2023_usd_m":2394,"dolls_fy_change_pct":15,"note":"This is the finding people get wrong. Full-year Barbie billings rose 3%, which reads like the film did nothing for the toys. The quarter tells a different story: Q4 2023 billings rose 27% to $473.1M. The product lift landed in the holiday quarter, after this window closes on Oct 21. The film moved toys, it just did not move them while it was in cinemas."}}}};
+
+        var _jiqSongActiveTitle = 'compare';
+        var _jiqSongActiveStage = 'read';
+
+        function _jiqSongEsc(s) {
+            if (typeof _jiqEsc === 'function') return _jiqEsc(s);
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function _jiqSongM(n) {
+            n = Number(n) || 0;
+            var abs = Math.abs(n);
+            if (abs >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+            if (abs >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return String(Math.round(n));
+        }
+        function _jiqSongPct(n) {
+            n = Number(n) || 0;
+            return (Math.round(n * 10) / 10).toFixed(1) + '%';
+        }
+        function _jiqSongTile(label, val, sub, color) {
+            color = color || '#C7F23E';
+            return '<div style="flex:1 1 160px; min-width:150px; padding:0.7rem 0.85rem; border-radius:10px;'
+                 + ' background:rgba(15,23,42,0.45); border:1px solid ' + color + '44;">'
+                 +   '<div style="font-size:0.58rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity:0.7; margin-bottom:0.18rem;">'
+                 +     _jiqSongEsc(label) + '</div>'
+                 +   '<div style="font-size:1.35rem; font-weight:900; color:' + color + '; line-height:1.1;">'
+                 +     _jiqSongEsc(val) + '</div>'
+                 +   (sub ? '<div style="font-size:0.68rem; opacity:0.68; margin-top:0.28rem; line-height:1.4;">'
+                      + _jiqSongEsc(sub) + '</div>' : '')
+                 + '</div>';
+        }
+        function _jiqSongBar(label, pct, color, right) {
+            var w = Math.max(2, Math.min(100, Number(pct) || 0));
+            return '<div style="margin:0.28rem 0 0.42rem;">'
+                 +   '<div style="display:flex; justify-content:space-between; gap:0.6rem; font-size:0.72rem; margin-bottom:0.16rem;">'
+                 +     '<span>' + _jiqSongEsc(label) + '</span>'
+                 +     '<span style="font-weight:800; color:' + color + ';">' + _jiqSongEsc(right) + '</span>'
+                 +   '</div>'
+                 +   '<div style="height:8px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden;">'
+                 +     '<div style="width:' + w + '%; height:100%; background:' + color + '; border-radius:999px;"></div>'
+                 +   '</div>'
+                 + '</div>';
+        }
+        function _jiqSongTable(headers, rows) {
+            var th = headers.map(function(h, i) {
+                var align = i === 0 ? 'left' : 'right';
+                return '<th style="padding:0.38rem 0.5rem; text-align:' + align + '; font-size:0.6rem;'
+                     + ' text-transform:uppercase; letter-spacing:0.06em; opacity:0.62; font-weight:800;">'
+                     + _jiqSongEsc(h) + '</th>';
+            }).join('');
+            var tr = rows.map(function(r) {
+                return '<tr>' + r.map(function(c, i) {
+                    var align = i === 0 ? 'left' : 'right';
+                    var extra = (c && c.html) ? c.html : _jiqSongEsc(c);
+                    return '<td style="padding:0.42rem 0.5rem; text-align:' + align + '; font-size:0.74rem;'
+                         + ' border-top:1px solid rgba(255,255,255,0.06);">' + extra + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+            return '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">'
+                 + '<thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table></div>';
+        }
+        function _jiqSongNote(s) {
+            if (!s) return '';
+            return '<div style="font-size:0.72rem; opacity:0.7; line-height:1.5; margin-top:0.55rem;">'
+                 + _jiqSongEsc(s) + '</div>';
+        }
+        function _jiqSongH(s) {
+            return '<h4 style="margin:0.85rem 0 0.4rem; font-size:0.82rem; color:#E9E8E1;">'
+                 + _jiqSongEsc(s) + '</h4>';
+        }
+
+        function _jiqSongStages(titleKey) {
+            if (titleKey === 'compare') {
+                return [
+                    { id: 'read', label: 'The read' },
+                    { id: 'cross', label: 'Side by side' }
+                ];
+            }
+            var stages = [
+                { id: 'universe', label: 'Universe' },
+                { id: 'discovery', label: 'Where they found it' },
+                { id: 'formats', label: 'Social formats' },
+                { id: 'nomusic', label: 'No music touch' },
+                { id: 'pathways', label: 'Pathways' },
+                { id: 'person', label: 'One viewer' }
+            ];
+            if (titleKey === 'barbie') {
+                stages.splice(5, 0, { id: 'commercial', label: 'After the ticket' });
+            }
+            return stages;
+        }
+
+        function renderJourneyIqSong(p) {
+            var data = (p && p.heated_rivalry) ? p : (typeof _JIQ_SONG_DATA !== 'undefined' ? _JIQ_SONG_DATA : null);
+            if (!data) return;
+            var card = document.getElementById('jiqSongCard');
+            if (!card) return;
+            card.style.display = '';
+
+            var titles = [
+                { id: 'compare', label: 'Both titles' },
+                { id: 'heated_rivalry', label: 'Heated Rivalry' },
+                { id: 'barbie', label: 'Barbie' }
+            ];
+            if (!titles.some(function(t) { return t.id === _jiqSongActiveTitle; })) {
+                _jiqSongActiveTitle = 'compare';
+            }
+            var stages = _jiqSongStages(_jiqSongActiveTitle);
+            if (!stages.some(function(s) { return s.id === _jiqSongActiveStage; })) {
+                _jiqSongActiveStage = stages[0].id;
+            }
+
+            var titleTabs = document.getElementById('jiqSongTitleTabs');
+            if (titleTabs) {
+                titleTabs.innerHTML = titles.map(function(t) {
+                    var on = t.id === _jiqSongActiveTitle;
+                    var col = t.id === 'barbie' ? '#E682FF' : (t.id === 'heated_rivalry' ? '#C7F23E' : '#B7B3D8');
+                    return '<button type="button" data-title="' + t.id + '"'
+                         + ' style="padding:0.4rem 0.85rem; border-radius:6px; font-size:0.78rem; font-weight:700; cursor:pointer;'
+                         + ' border:1px solid ' + (on ? col : 'rgba(255,255,255,0.14)') + ';'
+                         + ' background:' + (on ? col + '22' : 'rgba(255,255,255,0.03)') + ';'
+                         + ' color:' + (on ? col : 'var(--text-secondary)') + ';">'
+                         + _jiqSongEsc(t.label) + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(titleTabs.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqSongActiveTitle = btn.getAttribute('data-title');
+                        _jiqSongActiveStage = _jiqSongStages(_jiqSongActiveTitle)[0].id;
+                        renderJourneyIqSong(data);
+                    });
+                });
+            }
+
+            var stageTabs = document.getElementById('jiqSongStageTabs');
+            if (stageTabs) {
+                stageTabs.innerHTML = stages.map(function(s) {
+                    var on = s.id === _jiqSongActiveStage;
+                    return '<button type="button" data-stage="' + s.id + '"'
+                         + ' style="padding:0.36rem 0.7rem; border-radius:6px; font-size:0.72rem; font-weight:700; cursor:pointer;'
+                         + ' border:1px solid ' + (on ? '#C7F23E' : 'rgba(255,255,255,0.12)') + ';'
+                         + ' background:' + (on ? 'rgba(199,242,62,0.12)' : 'rgba(255,255,255,0.03)') + ';'
+                         + ' color:' + (on ? '#C7F23E' : 'var(--text-secondary)') + ';">'
+                         + _jiqSongEsc(s.label) + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(stageTabs.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqSongActiveStage = btn.getAttribute('data-stage');
+                        renderJourneyIqSong(data);
+                    });
+                });
+            }
+
+            var sub = document.getElementById('jiqSongSubtitle');
+            if (sub) sub.textContent = data.window_note || '';
+
+            var meta = document.getElementById('jiqSongMeta');
+            if (meta) {
+                var hrW = data.heated_rivalry && data.heated_rivalry.meta;
+                var bbW = data.barbie && data.barbie.meta;
+                meta.textContent = (hrW && bbW)
+                    ? ('Heated Rivalry ' + hrW.window_label + '  ·  Barbie ' + bbW.window_label)
+                    : '';
+            }
+
+            var body = document.getElementById('jiqSongBody');
+            if (!body) return;
+            var html = '';
+            if (_jiqSongActiveTitle === 'compare') {
+                html = (_jiqSongActiveStage === 'cross')
+                    ? _jiqSongRenderCross(data)
+                    : _jiqSongRenderRead(data);
+            } else {
+                html = _jiqSongRenderTitle(data[_jiqSongActiveTitle], _jiqSongActiveStage);
+            }
+            body.innerHTML = html;
+        }
+
+        function _jiqSongRenderRead(data) {
+            var takes = data.takeaways || [];
+            var html = _jiqSongH('What the two windows say together');
+            html += '<div style="display:grid; grid-template-columns:1fr; gap:0.55rem;">';
+            takes.forEach(function(t) {
+                html += '<div style="padding:0.7rem 0.85rem; border-radius:10px; background:rgba(15,23,42,0.4);'
+                     +  ' border:1px solid rgba(199,242,62,0.16);">'
+                     +    '<div style="font-size:0.6rem; font-weight:800; letter-spacing:0.08em; color:#C7F23E; margin-bottom:0.22rem;">'
+                     +      String(t.n).padStart(2, '0') + '</div>'
+                     +    '<div style="font-size:0.92rem; font-weight:800; color:#E9E8E1; line-height:1.35;">'
+                     +      _jiqSongEsc(t.headline) + '</div>'
+                     +    '<div style="font-size:0.76rem; opacity:0.78; margin-top:0.32rem; line-height:1.5;">'
+                     +      _jiqSongEsc(t.body) + '</div>'
+                     +  '</div>';
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function _jiqSongRenderCross(data) {
+            var rows = (data.cross_title && data.cross_title.rows) || [];
+            var html = _jiqSongH((data.cross_title && data.cross_title.headline) || 'Two soundtracks, opposite directions.');
+            html += _jiqSongTable(
+                ['', 'Barbie', 'Heated Rivalry'],
+                rows.map(function(r) {
+                    return [r.dimension, r.barbie, r.heated_rivalry];
+                })
+            );
+            var hr = data.heated_rivalry || {};
+            var bb = data.barbie || {};
+            var hmf = (hr.directions || []).filter(function(d) { return d.direction === 'Music first'; })[0] || {};
+            var bmf = (bb.directions || []).filter(function(d) { return d.direction === 'Music first'; })[0] || {};
+            html += '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-top:0.9rem;">'
+                 + _jiqSongTile('HR music-first conversion', _jiqSongPct(hmf.conversion_pct), 'Played a song, then watched', '#C7F23E')
+                 + _jiqSongTile('Barbie music-first conversion', _jiqSongPct(bmf.conversion_pct), 'Played a song, then saw the film', '#E682FF')
+                 + _jiqSongTile('HR viewers with no music', _jiqSongPct((hr.directions || []).filter(function(d){return d.direction==='No music touch';})[0].share_of_viewers_pct), 'Larger than music-first', '#B7B3D8')
+                 + _jiqSongTile('Barbie viewers with no music', _jiqSongPct((bb.directions || []).filter(function(d){return d.direction==='No music touch';})[0].share_of_viewers_pct), 'Still the majority', '#B7B3D8')
+                 + '</div>';
+            return html;
+        }
+
+        function _jiqSongRenderTitle(t, stage) {
+            if (!t) return '';
+            if (stage === 'universe') return _jiqSongRenderUniverse(t);
+            if (stage === 'discovery') return _jiqSongRenderDiscovery(t);
+            if (stage === 'formats') return _jiqSongRenderFormats(t);
+            if (stage === 'nomusic') return _jiqSongRenderNoMusic(t);
+            if (stage === 'pathways') return _jiqSongRenderPathways(t);
+            if (stage === 'commercial') return _jiqSongRenderCommercial(t);
+            if (stage === 'person') return _jiqSongRenderPerson(t);
+            return _jiqSongRenderUniverse(t);
+        }
+
+        function _jiqSongRenderUniverse(t) {
+            var u = t.universe || {};
+            var meta = t.meta || {};
+            var html = '<div style="font-size:0.78rem; opacity:0.75; margin-bottom:0.55rem; line-height:1.45;">'
+                     + _jiqSongEsc(meta.title || '') + ' · ' + _jiqSongEsc(meta.window_label || '') + '. '
+                     + _jiqSongEsc(meta.depth_label || '') + '.</div>';
+            html += '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.85rem;">'
+                 + _jiqSongTile('Touched the title', _jiqSongM(u.total), u.note, '#E9E8E1')
+                 + _jiqSongTile('Listened', _jiqSongM(u.listened), _jiqSongPct(u.listened_pct) + ' of the universe', '#C7F23E')
+                 + _jiqSongTile('Did not listen', _jiqSongM(u.did_not_listen), _jiqSongPct(u.did_not_listen_pct) + ' of the universe', '#B7B3D8')
+                 + _jiqSongTile(meta.watch_label || 'Viewers', _jiqSongM(u.viewers), 'Inside the window', '#E682FF')
+                 + '</div>';
+            html += _jiqSongH('Direction of travel');
+            html += _jiqSongTable(
+                ['Direction', 'Reached', 'Viewers', 'Conversion', 'Depth', 'Share of viewers'],
+                (t.directions || []).map(function(d) {
+                    return [
+                        d.direction,
+                        _jiqSongM(d.reached),
+                        _jiqSongM(d.viewers),
+                        _jiqSongPct(d.conversion_pct),
+                        _jiqSongPct(d.depth_pct),
+                        _jiqSongPct(d.share_of_viewers_pct)
+                    ];
+                })
+            );
+            (t.directions || []).forEach(function(d) {
+                html += '<div style="margin-top:0.55rem; padding:0.55rem 0.7rem; border-radius:8px; background:rgba(255,255,255,0.03);">'
+                     +   '<div style="font-size:0.74rem; font-weight:800;">' + _jiqSongEsc(d.direction) + '</div>'
+                     +   '<div style="font-size:0.7rem; opacity:0.68; margin-top:0.12rem;">' + _jiqSongEsc(d.label || '') + '</div>'
+                     +   _jiqSongNote(d.note)
+                     + '</div>';
+            });
+            html += _jiqSongNote(meta.window_note);
+            html += _jiqSongNote(meta.depth_definition);
+            return html;
+        }
+
+        function _jiqSongRenderDiscovery(t) {
+            var html = _jiqSongH('Where listeners found the songs');
+            html += _jiqSongTable(
+                ['Channel', 'Listeners', 'Watched', 'Conversion', 'Music-first conversion', 'Depth'],
+                (t.discovery || []).map(function(c) {
+                    return [
+                        c.channel,
+                        _jiqSongM(c.listeners),
+                        _jiqSongM(c.watched),
+                        _jiqSongPct(c.conversion_pct),
+                        _jiqSongPct(c.music_first_conversion_pct),
+                        _jiqSongPct(c.depth_pct)
+                    ];
+                })
+            );
+            (t.discovery || []).forEach(function(c) {
+                html += _jiqSongBar(
+                    c.channel,
+                    c.share_of_listeners_pct,
+                    c.channel === 'Social media' ? '#E682FF' : '#C7F23E',
+                    _jiqSongM(c.listeners) + '  ·  ' + _jiqSongPct(c.share_of_listeners_pct)
+                );
+                html += '<div style="font-size:0.68rem; opacity:0.65; margin:-0.15rem 0 0.45rem;">'
+                     + _jiqSongEsc(c.detail || '') + '. ' + _jiqSongEsc(c.note || '') + '</div>';
+            });
+            html += _jiqSongH('Songs in the window');
+            html += _jiqSongTable(
+                ['Song', 'Artist', 'Role', 'In the title'],
+                (t.songs || []).map(function(s) {
+                    return [s.song, s.artist, s.role, s.in_show ? 'Yes' : 'No'];
+                })
+            );
+            return html;
+        }
+
+        function _jiqSongRenderFormats(t) {
+            var html = _jiqSongH('Social formats, ranked by music-first conversion');
+            var formats = (t.social_formats || []).slice().sort(function(a, b) {
+                return (b.music_first_conversion_pct || 0) - (a.music_first_conversion_pct || 0);
+            });
+            html += _jiqSongTable(
+                ['Format', 'Listeners', 'Music-first conversion', 'Depth', 'Theme'],
+                formats.map(function(f) {
+                    return [
+                        f.fmt,
+                        _jiqSongM(f.listeners),
+                        _jiqSongPct(f.music_first_conversion_pct),
+                        _jiqSongPct(f.depth_pct),
+                        f.theme_group || f.theme || ''
+                    ];
+                })
+            );
+            formats.forEach(function(f) {
+                html += '<div style="margin-top:0.55rem; padding:0.6rem 0.75rem; border-radius:8px; background:rgba(15,23,42,0.4);'
+                     +  ' border:1px solid rgba(255,255,255,0.06);">'
+                     +   '<div style="font-weight:800; font-size:0.8rem;">' + _jiqSongEsc(f.fmt)
+                     +     '  ·  ' + _jiqSongEsc(f.song) + '</div>'
+                     +   '<div style="font-size:0.7rem; opacity:0.7; margin-top:0.15rem;">'
+                     +     _jiqSongEsc(f.artist) + '  ·  ' + _jiqSongEsc(f.theme || '') + '</div>'
+                     +   _jiqSongNote(f.note)
+                     + '</div>';
+            });
+            if (t.themes && t.themes.length) {
+                html += _jiqSongH('Themes across the social set');
+                html += _jiqSongTable(
+                    ['Theme', 'Listeners', 'Music-first conversion', 'Depth'],
+                    t.themes.map(function(th) {
+                        return [
+                            th.theme,
+                            _jiqSongM(th.listeners),
+                            _jiqSongPct(th.music_first_conversion_pct),
+                            _jiqSongPct(th.depth_pct)
+                        ];
+                    })
+                );
+            }
+            return html;
+        }
+
+        function _jiqSongRenderNoMusic(t) {
+            var nm = t.no_music_total || {};
+            var html = _jiqSongH('Watched without a music touch');
+            html += '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.7rem;">'
+                 + _jiqSongTile('No-music viewers', _jiqSongM(nm.viewers), 'Never played a tracked song', '#B7B3D8')
+                 + _jiqSongTile('Depth', _jiqSongPct(nm.depth_pct), (t.meta && t.meta.depth_label) || '', '#C7F23E')
+                 + '</div>';
+            html += _jiqSongTable(
+                ['Entry', 'Viewers', 'Depth', 'Share'],
+                (t.no_music_entries || []).map(function(e) {
+                    return [
+                        e.path,
+                        _jiqSongM(e.viewers),
+                        _jiqSongPct(e.depth_pct),
+                        _jiqSongPct(e.share_of_no_music_viewers_pct)
+                    ];
+                })
+            );
+            (t.no_music_entries || []).forEach(function(e) {
+                html += '<div style="margin-top:0.45rem; font-size:0.72rem; line-height:1.45;">'
+                     +   '<strong>' + _jiqSongEsc(e.path) + '.</strong> '
+                     +   _jiqSongEsc(e.detail || '') + ' ' + _jiqSongEsc(e.note || '')
+                     + '</div>';
+            });
+            var mt = t.music_total || {};
+            html += _jiqSongH('Against the music-touched side');
+            html += _jiqSongTable(
+                ['Cohort', 'Viewers', 'Depth'],
+                [
+                    ['Music-touched', _jiqSongM(mt.viewers), _jiqSongPct(mt.depth_pct)],
+                    ['No music touch', _jiqSongM(nm.viewers), _jiqSongPct(nm.depth_pct)]
+                ]
+            );
+            return html;
+        }
+
+        function _jiqSongRenderPathways(t) {
+            var p = t.pathways || {};
+            var html = _jiqSongH('Common pathways among music-first viewers');
+            html += '<div style="font-size:0.74rem; opacity:0.75; margin-bottom:0.55rem;">'
+                 + _jiqSongEsc(p.base_label || 'Music-first viewers') + ': '
+                 + _jiqSongM(p.base) + '. Named sequences cover '
+                 + _jiqSongPct(p.covered_pct) + '. '
+                 + _jiqSongEsc(p.note || '') + '</div>';
+            (p.sequences || []).forEach(function(s) {
+                html += '<div style="margin:0.55rem 0; padding:0.7rem 0.8rem; border-radius:10px; background:rgba(15,23,42,0.4);'
+                     +  ' border:1px solid rgba(199,242,62,0.14);">'
+                     +   '<div style="display:flex; justify-content:space-between; gap:0.6rem; flex-wrap:wrap;">'
+                     +     '<div style="font-weight:800; color:#C7F23E;">Pathway ' + s.rank + '</div>'
+                     +     '<div style="font-size:0.72rem; opacity:0.75;">'
+                     +       _jiqSongM(s.viewers) + '  ·  ' + _jiqSongPct(s.share_of_base_pct)
+                     +       '  ·  depth ' + _jiqSongPct(s.depth_pct) + '</div>'
+                     +   '</div>'
+                     +   '<div style="margin-top:0.4rem; font-size:0.74rem; line-height:1.55;">'
+                     +     (s.steps || []).map(function(st, i) {
+                         return '<span style="opacity:0.55;">' + (i + 1) + '.</span> ' + _jiqSongEsc(st);
+                     }).join('  →  ')
+                     +   '</div>'
+                     +   _jiqSongNote(s.note)
+                     + '</div>';
+            });
+            if (t.timeline && t.timeline.length) {
+                html += _jiqSongH('Release-relative timeline');
+                html += _jiqSongTable(
+                    ['Day', 'Date', 'Event', 'What moved'],
+                    t.timeline.map(function(ev) {
+                        var day = (ev.day > 0 ? '+' : '') + ev.day;
+                        return [day, ev.date, ev.event, ev.detail];
+                    })
+                );
+            }
+            return html;
+        }
+
+        function _jiqSongRenderCommercial(t) {
+            var c = t.commercial;
+            if (!c) return '<div style="opacity:0.7;">No commercial tail on this title.</div>';
+            var html = _jiqSongH('Did the music help after opening night?');
+            var th = c.theatrical || {};
+            var st = c.soundtrack || {};
+            var pd = c.premium_digital || {};
+            var lp = c.licensed_product || {};
+            html += '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.7rem;">'
+                 + _jiqSongTile('Domestic box office', '$' + _jiqSongM(th.domestic_usd).replace('M','') + 'M', 'Worldwide $' + (th.worldwide_usd / 1000000000).toFixed(3) + 'B', '#C7F23E')
+                 + _jiqSongTile('Soundtrack week one', _jiqSongM(st.week_one_units) + ' units', 'Peaked at number ' + st.peak_billboard_200, '#E682FF')
+                 + _jiqSongTile('Premium digital', pd.date || '', 'Own $' + pd.ownership_usd + '  ·  48-hour rental $' + pd.rental_48h_usd, '#B7B3D8')
+                 + _jiqSongTile('Q4 Barbie billings', '$' + lp.q4_2023_usd_m + 'M', '+' + lp.q4_change_pct + '% vs Q4 2022', '#C7F23E')
+                 + '</div>';
+            html += _jiqSongNote(th.note);
+            html += _jiqSongNote(st.note);
+            html += _jiqSongNote(pd.note);
+            html += _jiqSongH('Licensed product');
+            html += _jiqSongNote(lp.note);
+            html += _jiqSongTable(
+                ['', 'FY 2022', 'FY 2023', 'Change'],
+                [
+                    ['Barbie brand billings', '$' + lp.barbie_fy2022_gross_billings_usd_m + 'M',
+                     '$' + lp.barbie_fy2023_gross_billings_usd_m + 'M', '+' + lp.fy_change_pct + '%'],
+                    ['Q4 Barbie billings', '$' + lp.q4_2022_usd_m + 'M',
+                     '$' + lp.q4_2023_usd_m + 'M', '+' + lp.q4_change_pct + '%']
+                ]
+            );
+            return html;
+        }
+
+        function _jiqSongRenderPerson(t) {
+            var j = t.individual_journey;
+            if (!j) return '';
+            var d = j.demographics || {};
+            var html = _jiqSongH(j.label || 'One viewer');
+            html += '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.7rem;">'
+                 + _jiqSongTile('Age', String(d.age || ''), d.location || '', '#C7F23E')
+                 + _jiqSongTile('Household', d.household || '', d.income || '', '#B7B3D8')
+                 + _jiqSongTile('Spend in window', '$' + (j.spend_usd || 0), j.spend_note || '', '#E682FF')
+                 + '</div>';
+            html += '<div style="font-size:0.78rem; line-height:1.5; margin-bottom:0.7rem;">'
+                 + _jiqSongEsc(j.outcome || '') + '</div>';
+            (j.steps || []).forEach(function(st) {
+                html += '<div style="display:grid; grid-template-columns:2.2rem 1fr; gap:0.55rem; margin:0.45rem 0;">'
+                     +   '<div style="width:1.7rem; height:1.7rem; border-radius:999px; background:rgba(199,242,62,0.16);'
+                     +        ' color:#C7F23E; font-weight:900; font-size:0.72rem; display:flex; align-items:center; justify-content:center;">'
+                     +     st.n + '</div>'
+                     +   '<div>'
+                     +     '<div style="font-size:0.62rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em;">'
+                     +       _jiqSongEsc(st.date) + '  ·  ' + _jiqSongEsc(st.surface) + '</div>'
+                     +     '<div style="font-size:0.82rem; font-weight:800; margin-top:0.08rem;">'
+                     +       _jiqSongEsc(st.action) + '</div>'
+                     +     '<div style="font-size:0.72rem; opacity:0.72; margin-top:0.12rem; line-height:1.45;">'
+                     +       _jiqSongEsc(st.detail) + '</div>'
+                     +   '</div>'
+                     + '</div>';
+            });
+            return html;
+        }
+
+
         // ─── Neurotrophic Drinks (CPG brand category) ──────────────────
         // Eight consumer segments with simple discovery → consideration →
         // purchase journeys. Endpoints are split into DIRECT retailers
@@ -106131,7 +106720,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);

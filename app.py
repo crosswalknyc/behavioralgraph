@@ -1832,6 +1832,22 @@ CREDITS_JOURNEY_IQ = 10
 CREDITS_CHATBOT_ANALYZE = 0   # metered, not per-pull
 CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 
+# Prometheus research report (2026-09-14, Jenna, verbatim: "before it
+# puts together any report outside of a simple analysis of what
+# already exists it should charge them. if they request something
+# that doesnt have a set price it should charge $550."). Reading data
+# that already exists (an open profile, a banked read, a shipped
+# deliverable) stays metered per the 2026-09-09 ruling above. A full
+# put-together read on a subject with NO base anywhere is a priced
+# deliverable, quoted before generation and charged on confirm. The
+# wallet-side dollar price is $550 (wallet.py DEFAULT_PRICING
+# 'panel_report'); this credit count covers internal-allowance users
+# at 6 credits, the nearest whole credit above $550 at the
+# $100/credit build rate. Admin-tunable via pricing settings
+# ('panel_report') and the billing panel's per-tool USD row.
+CREDITS_PANEL_REPORT = 6
+PANEL_REPORT_USD = 550.0
+
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
 
@@ -1867,6 +1883,8 @@ DEFAULT_PRICING = {
     'journey_iq': 30,            # Digital Journey - 2026-08-14 Jenna: 10 -> 30
     'cross_show': 5,             # 2026-08-14 new tile
     'intent_ingest': 10,         # 2026-08-14 new tile (module added 2026-08-12)
+    'panel_report': 6,           # 2026-09-14 Prometheus research report
+                                 # (credits twin of the $550 wallet price)
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}
@@ -54243,6 +54261,13 @@ def api_synth_chat_interpret():
                     _deflect_payload['memory_confirm']
                 _guid['followups'] = list(
                     _deflect_payload.get('followups') or [])
+            # Research-report quote (2026-09-14): the widget arms the
+            # priced confirm and renders the run / build / never-mind
+            # chips.
+            if _deflect_payload.get('panel_offer'):
+                _guid['panel_offer'] = _deflect_payload['panel_offer']
+                _guid['followups'] = list(
+                    _deflect_payload.get('followups') or [])
             return jsonify(_guid)
     except Exception:
         traceback.print_exc()
@@ -57974,11 +57999,65 @@ def _pm_history_bind_text(history):
     return '\n'.join(parts)
 
 
+def _pm_panel_price_label(username):
+    """User-facing price for the Prometheus research report, plus the
+    credit count the charge will consume. Internal-credit holders see
+    the credit count; a paying customer whose credits will not cover
+    it sees the dollar price the wallet will absorb ($550 default,
+    admin-tunable in the billing panel). Never raises."""
+    credits_price = CREDITS_PANEL_REPORT
+    try:
+        credits_price = int(get_credit_cost('panel_report')
+                            or CREDITS_PANEL_REPORT)
+    except Exception:
+        pass
+    try:
+        data = load_users() or {}
+        u = (data.get('users') or {}).get(str(username or '')) or {}
+        bal = _numeric_credits_balance(u)
+        if bal == -1 or bal >= credits_price:
+            return f"{credits_price} credits", credits_price
+        company = (u.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        if pool is not None and u.get('credit_source') != 'personal':
+            return f"{credits_price} credits", credits_price
+        import wallet as _w
+        if _w.is_paying_customer(u):
+            usd = float(_w.tool_price_usd('panel_report')
+                        or PANEL_REPORT_USD)
+            label = (f"${usd:,.0f}" if usd == int(usd)
+                     else f"${usd:,.2f}")
+            return label, credits_price
+    except Exception:
+        traceback.print_exc()
+    return f"{credits_price} credits", credits_price
+
+
+def _pm_panel_refund(panel_charge):
+    """Reverse a research-report charge when the read never delivered
+    (job error or held-for-review). Mirrors the build flow's
+    charge-then-refund posture. Never raises."""
+    if not isinstance(panel_charge, dict):
+        return
+    try:
+        u = str(panel_charge.get('user') or '').strip()
+        n = int(panel_charge.get('credits') or 0)
+        if u and n > 0:
+            refund_credit(
+                u, credits=n,
+                reason=('Research report did not deliver - '
+                        f"{panel_charge.get('subject') or 'read'}"))
+            print(f"[pm-panel] refunded {n} credits to {u}")
+    except Exception:
+        traceback.print_exc()
+
+
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   anchors_block='', charge_done=False,
                                   ctx=None, digest_block='',
                                   prefer_catalog=False, async_fresh=None,
-                                  bind_subject=None, bind_cohort=None):
+                                  bind_subject=None, bind_cohort=None,
+                                  panel_confirm=None):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -58091,6 +58170,87 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                            'options': _opts}})
         except Exception:
             traceback.print_exc()
+    panel_charge = None
+    if not base:
+        # PANEL RESEARCH REPORT (2026-09-14, Jenna, verbatim: "before
+        # it puts together any report outside of a simple analysis of
+        # what already exists it should charge them. if they request
+        # something that doesnt have a set price it should charge
+        # $550."). A question about a subject with no base anywhere is
+        # a full put-together read, not a lookup: quote the price
+        # first, charge on confirm, THEN generate. Reading back a
+        # report that already delivered stays free - the identical-ask
+        # replay below fires before any quote.
+        subj_name = (subj_hint or pma.guess_subject_from_text(text)
+                     or '').strip()
+        if isinstance(panel_confirm, dict) and not subj_name:
+            subj_name = str(panel_confirm.get('subject') or '').strip()
+        if subj_name:
+            try:
+                _led_nb = il.consult(subject=subj_name, question=text)
+                _exact_nb = (_led_nb or {}).get('exact')
+                if _exact_nb and _exact_nb.get('reply'):
+                    _pm_ask_hint(outcome='answered', subject=subj_name)
+                    _pm_remember_ask(_pm_user, text, subject=subj_name,
+                                     cohort=_exact_nb.get('cohort'),
+                                     ledger_key=_exact_nb.get('k'),
+                                     route='replay')
+                    _nb_chips = list(_exact_nb.get('followups')
+                                     or [])[:3]
+                    if pma.CSV_OFFER_CHIP not in _nb_chips:
+                        _nb_chips.append(pma.CSV_OFFER_CHIP)
+                    _pm_csv_point(subj_name, text,
+                                  _exact_nb.get('family'))
+                    return jsonify({
+                        'success': True, 'action': 'answer',
+                        'reply': _exact_nb['reply'],
+                        'followups': _nb_chips,
+                        'offer_deck': False, 'deck_angle': None,
+                        'profile': subj_name})
+            except Exception:
+                traceback.print_exc()
+        if subj_name and pma.panel_report_eligible(text, subj_name):
+            _pr_label, _pr_credits = _pm_panel_price_label(_pm_user)
+            if isinstance(panel_confirm, dict):
+                # Confirmed: the charge lands NOW, before anything is
+                # generated. Price is always the server's, never the
+                # client's. Internal credits drain first; a paying
+                # customer's wallet absorbs the pull at the dollar
+                # price when credits are out (consume_credit handles
+                # both, plus unlimited users, in one call).
+                if not _pm_user or not consume_credit(
+                        _pm_user,
+                        description=('Prometheus Research Report - '
+                                     f'{subj_name}'),
+                        pull_type='Panel Report',
+                        credits_used=_pr_credits):
+                    _pm_ask_hint(outcome='panel_out_of_credits',
+                                 subject=subj_name)
+                    return jsonify({
+                        'success': False, 'guidance': True,
+                        'analysis_read': True,
+                        'error': (f"You're out of credits for this "
+                                  f"one - the {subj_name} read runs "
+                                  f"{_pr_label}. Top up or ask your "
+                                  f"admin, and I'll pick it right "
+                                  f"back up."),
+                        'followups': []})
+                base = {'subject': subj_name, 's3_key': '',
+                        'source': 'panel'}
+                panel_charge = {'user': _pm_user,
+                                'credits': _pr_credits,
+                                'subject': subj_name}
+                print(f"[pm-panel] charged {_pr_credits} credits to "
+                      f"{_pm_user} for {subj_name}")
+            else:
+                reply, followups, offer = pma.build_panel_report_offer(
+                    subj_name, _pr_label, question=text)
+                _pm_ask_hint(outcome='panel_offer', subject=subj_name)
+                return jsonify({
+                    'success': True, 'action': 'answer',
+                    'reply': reply, 'followups': followups,
+                    'offer_deck': False, 'deck_angle': None,
+                    'panel_offer': offer})
     if not base:
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or 'that subject')
@@ -58137,6 +58297,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         traceback.print_exc()
     _pm_ask_stage('ledger', t0=_t_ledger)
     exact = led.get('exact')
+    # A charged research report never takes the replay shortcut (the
+    # pre-charge replay check already ran; a race landing here would
+    # hand back a stored reply against a fresh charge). Entries still
+    # ride the prompt as binding constraints.
+    if panel_charge is not None:
+        exact = None
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
                      subject=led.get('subject') or subj_hint)
@@ -58190,6 +58356,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             args=(job_id, _pm_user, _pm_read_extras, text,
                   list(history or [])[-10:], mr, base, digest_block,
                   anchors_block, led),
+            kwargs={'panel_charge': panel_charge},
             daemon=True).start()
         _pm_ask_hint(outcome='answered', subject=base.get('subject'))
         return jsonify({
@@ -58203,6 +58370,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         text=text, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
         led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras)
+    _sync_held = bool(payload.get('_held'))
+    if panel_charge and (_sync_held or not payload.get('success')):
+        # The paid report never delivered: reverse the charge.
+        _pm_panel_refund(panel_charge)
     try:
         if not payload.pop('_held', False):
             _pm_csv_point(payload.get('profile'), text,
@@ -58369,6 +58540,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     extra_blocks = [b for b in (subiq_block, neighbor_block,
                                 examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
+    # Paid research report on a no-base subject (2026-09-14): the
+    # subject has no profile rows anywhere, so the read is researched
+    # end to end instead of derived from a base file. The guidance
+    # block swaps the grounding order accordingly.
+    _is_panel = str(base.get('source') or '') == 'panel'
+    if _is_panel:
+        extra_blocks.append(pma.PANEL_REPORT_GUIDANCE)
     is_strategy = False
     try:
         is_strategy = pma.detect_strategy_intent(text)
@@ -58642,7 +58820,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             f"examples={'yes' if examples_block else 'no'}; "
             f"subiq={subiq_show or 'no'}; "
             f"research=web_search; "
-            f"playbook={'strategy' if is_strategy else 'standard'}"
+            f"playbook="
+            f"{'panel_report' if _is_panel else ('strategy' if is_strategy else 'standard')}"
             + _verify_note)
         il.persist(
             subject=res.get('subject'),
@@ -58909,7 +59088,8 @@ def _pm_append_deck_to_history(username, job_id, status):
 
 
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
-                     digest_block, anchors_block, led):
+                     digest_block, anchors_block, led,
+                     panel_charge=None):
     """Background body of one generated read. Writes the finished
     payload to the S3-backed job status the widget polls; a locked
     phone or reloaded tab picks the read up when it returns. As the
@@ -58962,9 +59142,16 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                 _pm_flush_notify(job_id, 'read', payload)
             else:
                 _pm_notify_delete(job_id)
+                # A held research report never delivered: the charge
+                # reverses (the read itself stays held per house
+                # practice; the user was told it needs another pass).
+                if panel_charge:
+                    _pm_panel_refund(panel_charge)
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
             _pm_notify_delete(job_id)
+            if panel_charge:
+                _pm_panel_refund(panel_charge)
         print(f"[pm-loop] read {job_id} "
               f"{'held' if held else 'done' if payload.get('success') else 'failed'} "
               f"for {pm_user}")
@@ -58979,6 +59166,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         except Exception:
             pass
         _pm_notify_delete(job_id)
+        if panel_charge:
+            _pm_panel_refund(panel_charge)
 
 
 @app.route('/api/brief-chat/read-status/<job_id>', methods=['GET'])
@@ -59145,6 +59334,17 @@ def api_synth_chat_analyze():
             user, text, history, ctx=ctx, prefer_catalog=True,
             bind_subject=_bind_subject,
             bind_cohort=str(body.get('bind_cohort') or '').strip())
+    # Research-report confirm (2026-09-14): the widget's priced chip
+    # re-sends the original ask with panel_confirm. The price is
+    # recomputed and charged server-side; the client payload only
+    # names the subject the quote was for.
+    _panel_confirm = body.get('panel_confirm')
+    if isinstance(_panel_confirm, dict) and _panel_confirm:
+        if ctx_err:
+            return ctx_err
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx, prefer_catalog=True,
+            panel_confirm=_panel_confirm)
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _nc_refs = []
 

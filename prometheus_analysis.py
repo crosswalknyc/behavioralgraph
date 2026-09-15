@@ -3081,6 +3081,109 @@ def build_profile_required_reply(subject):
     return scrub_user_text(reply), followups
 
 
+# ---------------------------------------------------------------------------
+# Panel research report (2026-09-14, Jenna: "before it puts together
+# any report outside of a simple analysis of what already exists it
+# should charge them. if they request something that doesnt have a set
+# price it should charge $550."). A question about a subject with no
+# base anywhere no longer dead-ends at the steer-to-build reply: the
+# chat offers the full put-together read as a priced deliverable. The
+# price is quoted BEFORE anything is generated; the charge lands on
+# confirm, before generation starts.
+# ---------------------------------------------------------------------------
+
+PANEL_RUN_CHIP_PREFIX = 'Run the full read'
+
+
+def panel_report_eligible(text, subject):
+    """Whether an ask about a no-base subject qualifies for the priced
+    research-report offer: a named subject plus a question-shaped or
+    behavior-shaped ask that is not an explicit build, cut, deck, or
+    export request. Anything that fails this keeps the steer-to-build
+    reply."""
+    subj = str(subject or '').strip()
+    t = str(text or '').strip()
+    if not subj or len(subj) < 2:
+        return False
+    if not t or len(t) > 600:
+        return False
+    if _is_build_request(t) or _CUT_REQUEST_RX.search(t):
+        return False
+    if detect_deck_intent(t) or detect_csv_download_intent(t):
+        return False
+    return bool(_ANALYSIS_QUESTION_RX.search(t)
+                or _ANALYSIS_BEHAVIOR_RX.search(t)
+                or _STRATEGY_RX.search(t)
+                or re.match(r'\s*(?:do|does|are|is|top|how|what|which|'
+                            r'who|where|when|why|compare)\b', t,
+                            re.IGNORECASE)
+                or t.rstrip().endswith('?'))
+
+
+def build_panel_report_offer(subject, price_label, question=''):
+    """The priced offer for a full read on a no-base subject. Returns
+    (reply, followups, offer) where `offer` is the payload the widget
+    arms so the confirm chip re-sends the ask with panel_confirm.
+    Price is stated up front (2026-08-18 house rule: what you see is
+    what you pay); the charge itself only lands on confirm, server
+    side, at the server's price."""
+    subj = str(subject or '').strip() or 'that subject'
+    price = str(price_label or '').strip()
+    run_chip = (f"{PANEL_RUN_CHIP_PREFIX} - {price}"
+                if price else PANEL_RUN_CHIP_PREFIX)[:160]
+    reply = (
+        f"{subj} is not in your library yet, so this one is a full "
+        f"put-together read, not a lookup. I research the {subj} "
+        f"audience end to end and deliver the numbers right here in "
+        f"the chat. It runs {price}." if price else
+        f"{subj} is not in your library yet, so this one is a full "
+        f"put-together read, not a lookup. I research the {subj} "
+        f"audience end to end and deliver the numbers right here in "
+        f"the chat."
+    )
+    reply += (
+        f"\n\nIf you want the complete {subj} profile in your Select "
+        f"Profile dropdown instead (every category, every cut on "
+        f"tap), the 5-credit build is the better buy."
+    )
+    followups = [run_chip,
+                 f"Build the {subj} profile instead"[:160],
+                 'Never mind']
+    offer = {'question': str(question or '')[:600],
+             'subject': subj[:120]}
+    return scrub_user_text(reply), followups, offer
+
+
+PANEL_REPORT_GUIDANCE = (
+    'FULL RESEARCH REPORT (no first-party rows exist for this subject '
+    'yet - this read is the deliverable the user just paid for):\n'
+    '1. This subject has no profile rows on file. Do NOT invent a '
+    'profile row block or cite one. The grounding is: published '
+    'measurements for this subject (binding), neighbor evidence from '
+    'comparable audiences (calibration), and gap research.\n'
+    '2. Research the subject thoroughly with the web_search tool '
+    'before any number: real-world scale (subscriber base, box '
+    'office, chart position, follower counts, store footprint, app '
+    'rank), audience composition (age, gender, geography, intensity), '
+    'and what happened in the window (release, tour, season, viral '
+    'moment). Approved ground only: SEC filings and earnings, Pew, '
+    'Statista, eMarketer, YouGov, app analytics. The reply NEVER '
+    'names a source or a research step.\n'
+    '3. A title or IP with a parent (a creator, an author, a '
+    'franchise) has two universes: the title audience and the parent '
+    'halo. Size them separately; never hand the whole halo to the '
+    'title.\n'
+    '4. Every number must sit at a realistic magnitude for the '
+    'subject and stay inside its real-world ceiling: a projection '
+    'can never exceed the researched US footprint of the thing '
+    'counted. Digital behavior only - streaming, search, social, '
+    'app, and ecommerce activity. No linear TV, no in-store, no '
+    'foot traffic.\n'
+    '5. Hard counts speak flat with messy last digits (never a round '
+    'number); blended or inferred reads use directional language '
+    '(leans, skews, reads as). State the window in the reply.\n')
+
+
 REASONED_METRICS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user asked for a concrete measured number that the data open on screen does not carry. You produce the read from Crosswalk's first-party US measurement of digital behavior: streaming, search, social, app, and ecommerce activity at the individual level.
 
 WHAT TO PRODUCE
