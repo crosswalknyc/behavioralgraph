@@ -51210,6 +51210,36 @@ def _normalize_cut_items(raw_items, dma_list=None):
                          'kind': 'dma', 'pin_category': 'LOCATION',
                          'pin_buckets': [dma],
                          'credits': ADDON_CUT_CREDITS, **extra})
+        elif ctype == 'income_band':
+            # {'type': 'income_band', 'floor': 75000} or explicit
+            # canonical buckets. Floor pins every bucket at or above it
+            # (2026-09-15, partner '$75K+ HHI' asks).
+            buckets = [b for b in (c.get('buckets') or [])
+                       if any(b == lbl for lbl, _lo, _hi
+                              in _V1_INCOME_BUCKETS)]
+            if not buckets:
+                try:
+                    floor = int(c.get('floor'))
+                except (TypeError, ValueError):
+                    continue
+                if floor < 1000:
+                    floor *= 1000
+                buckets = [lbl for lbl, _lo, b_hi in _V1_INCOME_BUCKETS
+                           if b_hi >= floor]
+                if not buckets or len(buckets) == len(_V1_INCOME_BUCKETS):
+                    continue
+                short = f'${floor // 1000}K+'
+            else:
+                short = str(c.get('label') or buckets[0]).strip()
+            cid = 'income_' + _re.sub(r'[^a-z0-9]+', '_', short.lower())
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, 'label': f'{short} Income',
+                         'name_label': f'{short} Income',
+                         'kind': 'income_band', 'pin_category': 'INCOME',
+                         'pin_buckets': buckets,
+                         'credits': ADDON_CUT_CREDITS, **extra})
     return cuts
 
 
@@ -63789,6 +63819,13 @@ def _v1_subject_verified(draft, decision, ex_key, candidates=None):
     subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
     if ex_key or decision == 'existing_match':
         return True, subj, None
+    # Persona-class universes pass by construction (2026-09-15): a
+    # cohort described by interests and demographics is not an entity
+    # claim, so there is no spelling to protect. The deterministic
+    # grammar test in _v1_persona_universe_normalize set this flag;
+    # verification exists for misspelled brand names, not personas.
+    if draft.get('_persona_universe'):
+        return True, subj, None
     # Catalog collapse-match beats everything else - never refuse a
     # subject we already carry (typos of real profiles resolve here).
     try:
@@ -64243,6 +64280,358 @@ _V1_QUEUE_AVID_FLOOR = 500
 _V1_QUEUE_AVID_CEILING = 8_000_000
 
 
+# ---------------------------------------------------------------------------
+# Persona-universe recognition + normalization for the one-shot v1
+# surface (2026-09-15, partner finding: three audience-description
+# prompts - '55+, $75K+ HHI, interested in health and wellness' and two
+# variants - were refused six times in ten minutes as unverifiable
+# subjects, and the interpreted labels dropped qualifiers or ran the
+# whole prompt into the name). A demographic + interest description is
+# a PERSONA universe, an established product class (the Protein
+# Enthusiasts pattern): the subject is the interest cohort, and every
+# demographic qualifier rides as a derived add-on cut off the full
+# universe. Subject verification exists to catch misspelled entity
+# names; a persona label is not an entity claim and never needed it
+# (the verifier's own docstring says personas 'pass by design' - this
+# makes that deterministic instead of trusting a model classification).
+# ---------------------------------------------------------------------------
+
+_V1_INCOME_BUCKETS = [
+    ('Less than $25,000', 0, 24_999),
+    ('$25,000 - $49,999', 25_000, 49_999),
+    ('$50,000 - $74,999', 50_000, 74_999),
+    ('$75,000 - $99,999', 75_000, 99_999),
+    ('$100,000 - $149,999', 100_000, 149_999),
+    ('$150,000 - $249,999', 150_000, 249_999),
+    ('$250,000 or More', 250_000, 10**9),
+]
+
+# Capitalized tokens that carry no entity signal in an audience ask.
+_V1_PERSONA_CAP_WHITELIST = {
+    'group', 'age', 'ages', 'aged', 'hhi', 'income', 'household',
+    'adults', 'adult', 'people', 'us', 'usa', 'avid', 'interested',
+    'interest', 'visitors', 'users', 'shoppers', 'consumers', 'buyers',
+    'enthusiasts', 'i', 'a', 'the', 'and', 'or', 'who', 'with', 'in',
+    'of', 'to', 'they', 'have', 'has', 'k',
+}
+
+
+def _v1_strip_exemplar_clauses(text):
+    """Drop 'such as A, B and C' / 'like X' / 'including Y' exemplar
+    lists so brand names given as EXAMPLES of an interest never read as
+    the subject entity ('visitors to health sites such as WebMD and
+    Healthline' is a persona ask, not a WebMD ask)."""
+    import re as _re
+    # A period followed by non-space is a domain dot ('Coupons.com'),
+    # not a sentence boundary - keep consuming the exemplar list.
+    return _re.sub(
+        r'\b(?:such as|including|e\.g\.?,?)\s+(?:[^.;]|\.(?=\S))*',
+        ' ', str(text or ''), flags=_re.IGNORECASE)
+
+
+def _v1_text_names_entity(text):
+    """True when the exemplar-stripped ask carries a proper-noun entity
+    signal: a capitalized token outside sentence starts and the
+    audience-vocabulary whitelist. Persona asks describe cohorts in
+    common nouns; entity asks anchor on a name. When most tokens are
+    capitalized (ALL CAPS / Title Case typing) casing carries no signal
+    and this returns False - the persona grammar gates still apply."""
+    import re as _re
+    t = _v1_strip_exemplar_clauses(text)
+    tokens = _re.findall(r"[A-Za-z][\w'&.-]*", t)
+    if not tokens:
+        return False
+    capped = [w for w in tokens if w[0].isupper()]
+    if len(capped) > 0.6 * len(tokens):
+        return False
+    starts = set()
+    for m in _re.finditer(r"(?:^|[.!?;\n]\s*)([A-Za-z][\w'&.-]*)", t):
+        starts.add(m.start(1))
+    pos = 0
+    for w in tokens:
+        idx = t.find(w, pos)
+        pos = idx + len(w)
+        if not w[0].isupper():
+            continue
+        if idx in starts:
+            continue
+        if w.lower() in _V1_PERSONA_CAP_WHITELIST:
+            continue
+        if len(w) <= 2 and w.isupper():
+            continue
+        return True
+    return False
+
+
+def _v1_persona_class_ask(text):
+    """Deterministic persona-class test for a one-shot prompt: cohort
+    grammar (an interest/behavior description) plus either a
+    demographic qualifier or explicit cohort-membership phrasing, and
+    no proper-noun entity outside exemplar clauses."""
+    import re as _re
+    t = str(text or '')
+    tl = t.lower()
+    interest = bool(_re.search(
+        r'interest(?:ed)?\s+in|visitors?\s+to\s|users?\s+of\s|'
+        r'\bshoppers?\b|\benthusiasts?\b|(?:have\s+)?downloaded\s|'
+        r'showed\s+behavior|who\s+(?:are|have|buy|use|shop|watch)',
+        tl))
+    demo = bool(_re.search(
+        r'aged?\s+\d{2}|\b\d{2}\s*\+|\$\s*\d{2,3}[,\d]*\s*k?\b|'
+        r'household\s+income|\bhhi\b|income\s+of', tl))
+    behavior = bool(_re.search(
+        r'visitors?\s+to\s+[a-z][^.;]{2,60}?\bsites?\b|'
+        r'users?\s+of\s+[a-z][^.;]{2,60}?\b(?:apps?|sites?|services?)\b',
+        tl))
+    if not interest:
+        return False
+    if not (demo or behavior):
+        return False
+    return not _v1_text_names_entity(t)
+
+
+def _v1_persona_age_cut_from_text(text):
+    """Resolved age add-on cut extracted from prompt wording ('aged 55
+    and older', '55+', 'ages 25 to 44'), or None."""
+    import re as _re
+    tl = str(text or '').lower()
+    lo = hi = None
+    m = _re.search(r'ages?\s+(\d{2})\s*(?:-|to|through)\s*(\d{2})', tl)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+    else:
+        m = _re.search(
+            r'aged?\s+(\d{2})\s+(?:and|or)\s+(?:older|over|above|up)|'
+            r'\b(\d{2})\s*\+', tl)
+        if m:
+            lo = int(m.group(1) or m.group(2))
+            hi = 120
+    if lo is None or hi is None or not (18 <= lo < hi <= 120):
+        return None
+    buckets = [lbl for lbl, b_lo, b_hi in _ADDON_AGE_BUCKET_SPANS
+               if not (hi < b_lo or lo > b_hi)]
+    if not buckets:
+        return None
+    label = f'{lo}+' if hi >= 120 else f'{lo}-{hi}'
+    cid = 'age_' + _re.sub(r'[^a-z0-9]+', '_', label.lower())
+    cut = {'cut_id': cid, 'label': f'Ages {label}', 'name_label': label,
+           'kind': 'age_band', 'pin_category': 'AGE',
+           'pin_buckets': buckets, 'credits': ADDON_CUT_CREDITS}
+    if hi < 120 or lo not in (b_lo for _, b_lo, _h in
+                              _ADDON_AGE_BUCKET_SPANS):
+        cut['age_range'] = [lo, min(hi, 120)]
+    return cut
+
+
+def _v1_persona_income_cut_from_text(text):
+    """Resolved income add-on cut from prompt wording ('$75k+ HHI',
+    'household income of $75,000 or more'), or None. Floor-style asks
+    pin every income bucket at or above the floor."""
+    import re as _re
+    tl = str(text or '').lower()
+    if not _re.search(r'\$|income|hhi', tl):
+        return None
+    # Dollar- or k-anchored only, so an age token ('55+') can never
+    # read as an income floor.
+    _tail = (r'\s*(?:\+|plus|or\s+more|and\s+(?:up|above|over)|'
+             r'or\s+(?:higher|above|greater))')
+    m = _re.search(r'\$\s*(\d{1,3})(?:,(\d{3}))?\s*(k)?' + _tail, tl)
+    if not m:
+        m = _re.search(r'\b(\d{2,3})()\s*(k)' + _tail, tl)
+    if not m:
+        return None
+    val = int(m.group(1))
+    if m.group(2):
+        val = val * 1000 + int(m.group(2))
+    elif m.group(3) or val < 1000:
+        val *= 1000
+    if not (10_000 <= val <= 500_000):
+        return None
+    buckets = [lbl for lbl, b_lo, b_hi in _V1_INCOME_BUCKETS
+               if b_hi >= val]
+    if not buckets or len(buckets) == len(_V1_INCOME_BUCKETS):
+        return None
+    short = f'${val // 1000}K+'
+    cid = 'income_' + _re.sub(r'[^a-z0-9]+', '_', short.lower())
+    return {'cut_id': cid, 'label': f'{short} Income',
+            'name_label': f'{short} Income', 'kind': 'income_band',
+            'pin_category': 'INCOME', 'pin_buckets': buckets,
+            'credits': ADDON_CUT_CREDITS}
+
+
+def _v1_persona_label_from_text(text):
+    """Clean persona-universe display name rebuilt from the ask's own
+    interest phrases: 'Health & Wellness Enthusiasts', 'Health &
+    Wellness Couponing Shoppers'. Returns '' when no interest phrase
+    is recoverable."""
+    import re as _re
+    t = _v1_strip_exemplar_clauses(str(text or '').lower())
+    interests = []
+    _stop = {'who', 'are', 'is', 'was', 'were', 'more', 'less', 'or',
+             'with', 'of', 'to', 'from', 'they', 'them', 'their',
+             'have', 'has', 'had', 'that', 'which', 'when', 'then',
+             'than', 'also', 'a', 'an', 'in', 'into', 'about'}
+    # Intensity adjectives name a tier, never the universe ('avid
+    # shoppers' is the Avid cut of the Shoppers universe).
+    _modifier = {'avid', 'frequent', 'heavy', 'active', 'regular',
+                 'loyal', 'casual', 'devoted', 'occasional'}
+
+    def _add(phrase):
+        p = _re.sub(r'\s+', ' ', str(phrase or '').strip(' ,.;-'))
+        p = _re.sub(r'^(?:the|a|an)\s+', '', p)
+        # Keep only the trailing run of non-stopword tokens ('r more
+        # who are health and wellness' -> 'health and wellness').
+        toks = p.split()
+        kept = []
+        for w in reversed(toks):
+            if w in _stop:
+                break
+            kept.append(w)
+        kept.reverse()
+        while kept and (len(kept[0]) < 2 or kept[0] in ('and', '&')
+                        or kept[0] in _modifier):
+            kept.pop(0)
+        p = ' '.join(kept)
+        if not p or len(p) < 3:
+            return
+        tokset = set(p.split())
+        for prev in interests:
+            if tokset <= set(prev.split()) or set(prev.split()) <= tokset:
+                return
+        interests.append(p)
+
+    m = _re.search(r'visitors?\s+to\s+([a-z][a-z &\-]{2,40}?)\s+'
+                   r'(?:web)?sites?', t)
+    if m:
+        _add(m.group(1))
+    m = _re.search(r'users?\s+of\s+([a-z][a-z &\-]{2,40}?)\s+'
+                   r'(?:apps?|sites?|services?)', t)
+    if m:
+        _add(m.group(1))
+    m = _re.search(r'([a-z][a-z &\-]{2,40}?)\s+shoppers?\b', t)
+    if m:
+        _add(m.group(1))
+    for m in _re.finditer(
+            r'interest(?:ed)?\s+in\s+([a-z][a-z &\-]{2,40}?)'
+            r'(?=,|\.|;|\s+they\s|\s+then\s|\s+and\s+(?:are|have|who)'
+            r'|\s+who\s|\s+with\s|\s+have\s|$)',
+            t):
+        _add(m.group(1))
+    if not interests:
+        return ''
+    noun = 'Enthusiasts'
+    if _re.search(r'\bshoppers?\b', t):
+        noun = 'Shoppers'
+    elif _re.search(r'visitors?\s+to', t):
+        noun = 'Visitors'
+    elif _re.search(r'users?\s+of', t):
+        noun = 'Users'
+
+    def _tc(p):
+        p = p.replace(' and ', ' & ')
+        return ' '.join(w.capitalize() if w != '&' else '&'
+                        for w in p.split())
+
+    core = ' '.join(_tc(p) for p in interests[:2])
+    return f'{core} {noun}'
+
+
+def _v1_persona_clean_label(subject):
+    """Strip demographic qualifier words out of a model-produced
+    persona label ('Adults High Income Health & Wellness Enthusiasts'
+    -> 'Health & Wellness Enthusiasts'). Returns the cleaned label, or
+    '' when nothing usable remains."""
+    import re as _re
+    s = str(subject or '')
+    s = _re.sub(
+        r'\b(?:adults?|aged?|ages?|premium|affluent|high[- ]income|'
+        r'high[- ]earning|upscale|older|seniors?|household|income|hhi|'
+        r'or\s+more|\d{2,3}[,\d]*k?\+?|and\s+(?:older|over|up))\b',
+        ' ', s, flags=_re.IGNORECASE)
+    s = _re.sub(r'\$\s*[\d,]+\s*k?\+?', ' ', s, flags=_re.IGNORECASE)
+    s = _re.sub(r'\bhigh\b', ' ', s, flags=_re.IGNORECASE)
+    s = _re.sub(r'\s{2,}', ' ', s).strip(' ,-&')
+    if len(s.split()) < 2:
+        return ''
+    return s
+
+
+def _v1_persona_universe_normalize(draft, user_text):
+    """One-shot persona normalizer for the v1 surface. When the ask is
+    persona-class: mark the draft so subject verification passes by
+    construction, replace a qualifier-polluted or run-on subject label
+    with a clean cohort name, and ride every age / income qualifier
+    found in the ASK as a derived add-on cut (Jenna 2026-08-20:
+    embedded demographic qualifiers never narrow the TU). Mutates the
+    draft in place; never raises."""
+    try:
+        decision = str(draft.get('decision') or 'new_build'
+                       ).strip().lower()
+        if decision not in ('new_build', 'time_shifted_refresh', ''):
+            return
+        text = str(user_text or '')
+        if not _v1_persona_class_ask(text):
+            return
+        draft['_persona_universe'] = True
+        draft['subject_verified'] = True
+
+        subject = str(draft.get('subject') or '').strip()
+        label = subject
+        if len(subject.split()) > 6 or not subject:
+            label = ''
+        else:
+            label = _v1_persona_clean_label(subject)
+        if not label:
+            label = _v1_persona_label_from_text(text) \
+                or _v1_persona_clean_label(subject) or subject
+        if label and label != subject:
+            import re as _re
+            draft['subject'] = label
+            draft['name'] = label
+            stem = _re.sub(r'\s+', '_', label)
+            stem = ''.join(ch for ch in stem if ch.isalnum() or ch in '_-')
+            if stem:
+                draft['file_stem'] = stem
+
+        cuts = [c for c in (draft.get('addon_cuts') or [])
+                if isinstance(c, dict)]
+        pinned_cats = {str(c.get('pin_category') or '').upper()
+                       for c in cuts}
+        added = []
+        if 'AGE' not in pinned_cats:
+            age_cut = _v1_persona_age_cut_from_text(text)
+            if age_cut:
+                added.append(age_cut)
+        if 'INCOME' not in pinned_cats:
+            inc_cut = _v1_persona_income_cut_from_text(text)
+            if inc_cut:
+                added.append(inc_cut)
+        if added:
+            merged = _merge_cuts(cuts, added)
+            draft['addon_cuts'] = merged
+            try:
+                base_credits = int(draft.get('base_credits')
+                                   or draft.get('estimated_credits') or 5)
+            except (TypeError, ValueError):
+                base_credits = 5
+            draft['base_credits'] = base_credits
+            draft['estimated_credits'] = (
+                base_credits + ADDON_CUT_CREDITS * len(merged))
+            names = ', '.join(c.get('name_label') or c.get('label')
+                              or c['cut_id'] for c in added)
+            note = (f"Audience described by qualifiers: the build "
+                    f"covers the full {draft.get('subject')} universe; "
+                    f"{names} ride as derived cut(s) named "
+                    f"'{draft.get('subject')} - <cut>'.")
+            assumptions = draft.get('assumptions')
+            if isinstance(assumptions, list):
+                assumptions.append(note)
+            else:
+                draft['assumptions'] = [note]
+    except Exception as _e:
+        print(f"[v1-persona-normalize] non-fatal: {_e}")
+
+
 def _v1_queue_spec_refusal(spec, decision='new_build', body=None):
     """Faithful mirror of the enqueue-time spec validation that runs on
     the engine host (migration/synth_queue_listener.py::_validate_spec).
@@ -64511,6 +64900,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
     except Exception:
         pass
     _decompose_embedded_subject_cuts(draft, prompt)
+    _v1_persona_universe_normalize(draft, prompt)
     _augment_multi_cohort_cuts(draft, prompt)
     _drop_degenerate_addon_cuts(draft)
     _maybe_promote_embedded_cuts_to_parent(draft,
@@ -64668,9 +65058,13 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
                   f"suggest={_sv_suggest!r} prompt={prompt[:120]!r}")
         except Exception:
             pass
-        _sv_msg = ('subject could not be verified as a known brand, '
-                   'person, or title: '
-                   + _scrub_identity_dashes(_sv_subj or prompt[:120]))
+        # Copy is a details-prompt, never a capability statement
+        # (2026-09-15 partner finding: the old 'could not be verified
+        # as a known brand, person, or title' read back to the client
+        # as a description of what the engine accepts).
+        _sv_msg = ("we couldn't confidently identify '"
+                   + _scrub_identity_dashes(_sv_subj or prompt[:120])
+                   + "'")
         _sv_suggest = _scrub_identity_dashes(_sv_suggest or '') or None
         if _sv_suggest:
             _sv_msg += (f". Did you mean '{_sv_suggest}'? If so, ask "
@@ -64678,6 +65072,13 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
                         f"include the subject's website (e.g. "
                         f"`www.example.com`) so we can confirm the "
                         f"spelling.")
+        else:
+            _sv_msg += (". Double-check the spelling and include the "
+                        "subject's website (e.g. `www.example.com`), "
+                        "or describe the audience itself - who they "
+                        "are, what they're into, and any age or "
+                        "income qualifiers - and the build will run "
+                        "from that description.")
         return {
             'draft': draft,
             'candidates': candidates,
