@@ -24338,6 +24338,37 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-header-row {
             background: #FFFFFF !important;
         }
+        /* Pin the header while rows scroll INSIDE each fixed-size card (card
+           dimensions unchanged): the row table fills the card and owns the
+           scroll, and the sticky header stays above the scrolling rows. */
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-card {
+            overflow: hidden !important;
+        }
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-table {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow-y: auto !important;
+        }
+        #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-header-row {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 6 !important;
+        }
+        #dashboardView.piq-v4 #tab-interests .interests-list-section {
+            overflow: hidden !important;
+        }
+        #dashboardView.piq-v4 #tab-interests #interestsGrid,
+        #dashboardView.piq-v4 #tab-interests .interests-grid {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+        }
+        #dashboardView.piq-v4 #tab-interests .interest-header-row {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 6 !important;
+        }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="behavioral"]) #piqBehJump {
             display: none !important;
         }
