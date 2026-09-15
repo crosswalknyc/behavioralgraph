@@ -1577,9 +1577,32 @@ def _daily_prompt_preface(target_date_iso: str) -> str:
         "the freshest daily citation for this specific day before "
         "falling back to weekly anchors.\n"
         "\n"
+        "ONE PLATFORM PER ROW (HARD RULE):\n"
+        "Every number you return inside `by_platform` is that ONE "
+        "platform's US audience, never the item's total across all "
+        "platforms. Published rankers almost always measure the "
+        "TOTAL: Edison Podcast Metrics ranks by reach across every "
+        "app, Podtrac by unique US monthly audience across every app, "
+        "Circana BookScan by units across every retailer, Comichron "
+        "by units across every channel. A published total must be "
+        "APPORTIONED before it lands on a platform row:\n"
+        "  platform_weekly = cross_platform_weekly * platform_share\n"
+        "where `platform_share` is that platform's published share of "
+        "US listening / buying / borrowing for the category, stated "
+        "in its TARGET_PLATFORMS entry below. Tilt the share for the "
+        "specific item when there is a reason to (a Spotify-exclusive "
+        "show earns more than Spotify's average share, a YouTube-"
+        "native show earns more than YouTube's), but never hand the "
+        "whole total to one platform. Joe Rogan's total US weekly "
+        "audience is not Apple Podcasts' Joe Rogan audience.\n"
+        "The aggregate `us_estimate` IS the cross-platform total, so "
+        "the per-platform blocks sum to less than it by design: the "
+        "remainder sits on apps and retailers with no panel.\n"
+        "\n"
         "WHEN ONLY WEEKLY ANCHORS ARE AVAILABLE: the per-platform "
-        "tiers in TARGET_PLATFORMS below are written in weekly units. "
-        "Convert to a DAILY number for the target day via:\n"
+        "tiers in TARGET_PLATFORMS below are written in weekly units "
+        "and are ALREADY apportioned to that one platform. Convert to "
+        "a DAILY number for the target day via:\n"
         "  daily_baseline = weekly_anchor / 7\n"
         "  daily_adjusted = daily_baseline * day_of_week_factor\n"
         "Day-of-week factors (typical, adjust with real evidence):\n"
@@ -1862,104 +1885,144 @@ _SONG_PLATFORMS = [
 _PODCAST_PLATFORMS = [
     {'key': 'apple',
      'label': 'Apple Podcasts',
-     'ceiling': 8_000_000,
+     'ceiling': 1_400_000,
      'anchors': (
-         'Podtrac Ranker US weekly downloads (Apple + web): #1 '
-         'typically 5-8M weekly US listeners (Rogan / Daily / Crime '
-         'Junkie tier); top-10 2-4M; top-50 0.5-1.5M. Apple Podcasts '
-         'itself is ~45-55% of total US podcast listenership.'
+         'APPLE ONLY - do not put a cross-platform total on this row. '
+         'The US base is 130M weekly podcast consumers 12+ (Edison '
+         'Research, Infinite Dial 2026). Apple Podcasts is the service '
+         '12% of US weekly podcast consumers use most (Edison Podcast '
+         'Metrics Q1 2026), down from 14% in 2024, so Apple is roughly '
+         'one eighth of US podcast listening and NOT the ~50% the '
+         'retired guidance claimed. Cross-platform weekly US reach by '
+         'Edison Top 50 rank: #1 6-9M (Rogan, who runs >2.5x #2 Crime '
+         'Junkie), #2-3 2.6-3.8M, #4-10 1.5-2.7M, #11-25 0.85-1.6M, '
+         '#26-50 0.42-0.9M, off-ranker long tail 0.12-0.42M. Take the '
+         "show's cross-platform weekly figure, multiply by Apple's 12% "
+         '(more when the show is Apple-native, for example NPR and '
+         'legacy public-radio shows; less for a YouTube-first or '
+         'Spotify-exclusive show), THEN divide by 7 for the daily '
+         'figure. Apple-only #1 therefore lands near 0.7-1.1M weekly, '
+         'about 100-155K a day.'
      )},
     {'key': 'spotify',
      'label': 'Spotify Podcasts',
-     'ceiling': 8_000_000,
+     'ceiling': 2_400_000,
      'anchors': (
-         'Spotify Podcasts US ~25-35% share. Rogan alone (Spotify-'
-         'exclusive era) was 5-8M weekly US on Spotify. Non-exclusive '
-         '#1: 2-5M weekly US on Spotify; top-10 1-2.5M; top-50 <1M.'
+         'SPOTIFY ONLY - do not put a cross-platform total on this '
+         'row. Spotify is the service 21% of US weekly podcast '
+         'consumers use most (Edison Podcast Metrics Q1 2026), down '
+         'from 28% in 2024 as YouTube took share. Apply 21% to the '
+         "show's cross-platform weekly US reach (see the Apple row for "
+         'the rank ladder), then divide by 7. Skew well above 21% for '
+         'a Spotify-first or Spotify-exclusive show (Rogan lives here) '
+         'and below it for a YouTube-native video podcast. Spotify-'
+         'only #1 lands near 1.3-1.9M weekly, about 180-270K a day.'
      )},
     {'key': 'youtube_podcasts',
      'label': 'YouTube Podcasts',
-     'ceiling': 7_000_000,
+     'ceiling': 4_000_000,
      'anchors': (
-         'YouTube is now the #1 US podcast platform by weekly reach '
-         "per Edison Research's Infinite Dial 2025 - ~31% of US "
-         'monthly podcast listeners use YouTube as their primary '
-         'listening surface, ~50-80M individuals reached weekly with '
-         'video-podcast content on the platform. Top video-podcast '
-         'shows on YouTube (Joe Rogan Experience YouTube channel, '
-         'Kill Tony, This Past Weekend w/ Theo Von, Shawn Ryan Show, '
-         'Rotten Mango, MeidasTouch) reach 4-7M weekly US individuals '
-         'each; tier-two shows (Diary of a CEO, Financial Audit, '
-         'Good Mythical Morning) 500K-2M; long-tail YouTube podcast '
-         'shows 10K-100K. Anchor per-show numbers off the channel '
-         'subscriber base and reported weekly video views on the '
-         'canonical show channel; a channel with N subscribers and M '
-         'weekly video views on new podcast uploads sees roughly '
-         '~0.15-0.30 x M unique US viewers per week. Bias to the '
-         'middle of these tiers unless a specific press cite or '
-         'Podnews / Podtrac YouTube-inclusive ranker exists for the '
-         'exact show.'
+         'YOUTUBE ONLY - do not put a cross-platform total on this '
+         'row. YouTube is the largest US podcast surface: 37% of US '
+         'weekly podcast consumers use it most (Edison Podcast '
+         'Metrics Q1 2026, up from 31% in 2024), and video podcast '
+         'consumption passed audio-only for the first time in Q3 '
+         '2025. Apply 37% to the cross-platform weekly US reach (see '
+         'the Apple row for the rank ladder), then divide by 7. Skew '
+         'well above 37% for a YouTube-native show whose home is the '
+         'channel itself (Kill Tony, Rotten Mango, MeidasTouch, '
+         'Dr. Insanity, Good Mythical Morning) and below it for an '
+         'audio-first news show. YouTube-only #1 lands near 2.2-3.3M '
+         'weekly, about 320-480K a day. A channel with M weekly views '
+         'on new podcast uploads sees roughly 0.15-0.30 x M unique US '
+         'viewers per week; use that when the show has no ranker '
+         'position.'
      )},
     {'key': 'netflix',
      'label': 'Netflix Video Podcasts',
-     'ceiling': 3_000_000,
+     'ceiling': 120_000,
      'anchors': (
-         'Netflix video podcasts are a new format (2026). Netflix does '
-         'not publish per-podcast reach. Estimate from Nielsen Tudum '
-         'video views (video podcast episodes are counted as short-'
-         'form watches): #1 ~ 1-3M weekly US views; long tail <0.5M. '
-         'Prefer 0 unless a specific press release exists.'
+         'NETFLIX ONLY - do not put a cross-platform total on this '
+         'row. Netflix video podcasts launched in 2026 and Netflix '
+         'publishes no per-podcast reach. Edison does not break the '
+         'service out, so it sits inside the 30% "other services" '
+         'bucket alongside iHeart, Pandora and Pocket Casts; the '
+         'working share is well under 1% of US podcast listening and '
+         'is the least evidenced number in this table. A show that '
+         'also runs on Apple, Spotify and YouTube earns only its '
+         'Netflix slice here, not its total. Netflix-only #1 lands '
+         'near 60-120K weekly, roughly 9-17K a day. Bias LOW.'
      )},
     {'key': 'amazon',
      'label': 'Amazon Music Podcasts',
-     'ceiling': 2_000_000,
+     'ceiling': 340_000,
      'anchors': (
-         'Amazon Music US podcast share <10%. #1 podcast on Amazon '
-         'Music: 0.3-1M weekly US; top-10 <0.5M. Amazon does not '
-         'publish per-podcast numbers; bias LOW.'
+         'AMAZON MUSIC ONLY - do not put a cross-platform total on '
+         'this row. Amazon Music sits inside Edison\'s 30% "other '
+         'services" bucket and is not broken out; the working share '
+         'is about 3% of US podcast listening. Apply that to the '
+         "show's cross-platform weekly US reach, then divide by 7. "
+         'Amazon-only #1 lands near 180-270K weekly, about 26-39K a '
+         'day. Amazon publishes no per-podcast numbers; bias LOW.'
      )},
     {'key': 'audible',
      'label': 'Audible Podcasts',
-     'ceiling': 1_500_000,
+     'ceiling': 170_000,
      'anchors': (
-         'Audible podcast tier is small (Audible is primarily audio-'
-         'book). Audible Originals top podcasts: 0.1-0.5M weekly US '
-         'downloads. Bias LOW - if no press release exists, return '
-         '0 or minimal.'
+         'AUDIBLE ONLY - do not put a cross-platform total on this '
+         'row. Audible is primarily an audiobook service and its '
+         'podcast slice sits inside Edison\'s 30% "other services" '
+         'bucket; the working share is about 1.5% of US podcast '
+         'listening. A wide show that happens to appear on the '
+         'Audible chart still earns only its Audible slice. '
+         'Audible-only #1 lands near 90-135K weekly, about 13-19K a '
+         'day. Bias LOW.'
      )},
 ]
 
 _BOOK_PLATFORMS = [
     {'key': 'amazon',
      'label': 'Amazon Best-Sellers (Kindle + Print)',
-     'ceiling': 500_000,
+     'ceiling': 30_000,
      'anchors': (
-         "NPD BookScan / Circana US weekly print+ebook units. Top-10 "
-         "trade book typically 15-50K weekly US buyers; #1 in a "
-         "release week 100-300K (rare political memoir / celebrity "
-         "release). Amazon is ~55-65% of US ebook sales and ~40-50% "
-         "of print. Bias LOW: prefer the tier's low anchor unless a "
-         "publisher/Circana press cite backs a higher number for the "
-         "specific week. Steady-state top-10 = 8-25K weekly US buyers."
+         "AMAZON ONLY - the Circana ladder below is CROSS-RETAILER "
+         "and must be apportioned before it lands on this row. "
+         "Observed Circana BookScan US weekly print units, Aug-Sep "
+         "2026 weeks (via Publishers Weekly): #1 41-55K (The Women "
+         "54,997; Great Big Beautiful Life 41,332 on debut), #3 "
+         "37,246, #4 25,776, #8 17,883, #10 16,456. So the ladder is "
+         "#1 40-56K, #2-5 24-42K, #6-10 15-26K, #11-25 7.5-16K, "
+         "#26-50 3.5-9K, #51-100 1.4-4K. The earlier '#1 in a release "
+         "week 100-300K' band was several times the observed weekly "
+         "reality and is retired. Amazon is ~40-50% of US print and "
+         "~55-65% of US ebook, so a blended ~50% applies to its own "
+         "print+Kindle list. Multiply the cross-retailer tier by that "
+         "share, THEN divide by 7. Amazon-only #1 therefore lands "
+         "near 20-28K weekly, about 2.9-4.0K a day. Bias LOW."
      )},
     {'key': 'apple',
      'label': 'Apple Books Top 100 (Paid US)',
-     'ceiling': 60_000,
+     'ceiling': 2_000,
      'anchors': (
-         "Apple Books is ~8-12% of US ebook market. Top-10 Apple Books "
-         "US typically 1-4K weekly US buyers; #1 3-10K. Rarely exceeds "
-         "10K weekly except for a mega-launch week. If no press data "
-         "exists, use chart-position * Apple's share of US ebook (~10%) "
-         "of the Amazon anchor - and bias LOW."
+         "APPLE BOOKS ONLY. Apple Books is ~8-12% of the US ebook "
+         "market and ebooks are ~20-25% of US trade units, so Apple "
+         "carries roughly 2.5% of a title's cross-retailer weekly "
+         "units. Apply that to the Circana ladder in the Amazon row, "
+         "then divide by 7. Apple-only #1 lands near 1.0-1.4K weekly, "
+         "roughly 150-200 a day; top-10 a few hundred weekly. This is "
+         "a genuinely small list and must not be inflated to look "
+         "comparable to the Amazon panel. Bias LOW."
      )},
     {'key': 'audible',
      'label': 'Audible Best-Sellers (Audiobook)',
-     'ceiling': 80_000,
+     'ceiling': 4_800,
      'anchors': (
-         "Audible has ~10M US members. Top audiobook titles do 5-15K "
-         "weekly US listens/purchases; #1 20-50K in a big release week. "
-         "Audible dominates US audiobook (~55-65% share). Steady-state "
-         "top-10 = 3-10K weekly US listeners. Bias LOW."
+         "AUDIBLE ONLY. Audible has ~10M US members and holds "
+         "~55-65% of US audiobook, but audiobooks are only ~10% of US "
+         "trade units, so Audible carries roughly 6% of a title's "
+         "cross-retailer weekly units. Apply that to the Circana "
+         "ladder in the Amazon row, then divide by 7. Audible-only #1 "
+         "lands near 2.4-3.4K weekly, roughly 340-480 a day. Bias LOW."
      )},
     {'key': 'libby_ebook',
      'label': 'Libby Popular eBooks (US public-library projection)',
@@ -3845,12 +3908,21 @@ def _sanitize_platform_block(kind: str, key: str, raw: Any,
     if conf not in ('high', 'medium', 'low'):
         conf = 'medium'
     clamped = False
-    if mid > ceiling:
+    # The ceilings are US-WEEKLY caps for the platform's #1 slot, and
+    # they are handed to the model in weekly units (see the prompt's
+    # "ceiling N US weekly" line). The value being checked here is the
+    # DAILY figure the model returns after the weekly-to-daily
+    # conversion, so the cap has to be converted the same way. Testing
+    # a daily number against a weekly cap let every platform run to
+    # seven times its own documented limit, which is what put a
+    # 1.8M-a-day reading on a service with under 3M US subscribers.
+    daily_ceiling = max(1, int(ceiling / 7))
+    if mid > daily_ceiling:
         # Bias down aggressively - hallucinations at this level
         # discredit the whole panel.
-        mid  = int(ceiling * _CLAMP_TO_FRACTION)
+        mid  = int(daily_ceiling * _CLAMP_TO_FRACTION)
         low  = min(low,  mid)
-        high = min(high, ceiling)
+        high = min(high, daily_ceiling)
         conf = 'low'
         clamped = True
 
@@ -3955,10 +4027,14 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     if conf not in ('high', 'medium', 'low'):
         conf = 'medium'
     clamped = False
-    if agg_mid > ceiling:
-        agg_mid  = int(ceiling * _CLAMP_TO_FRACTION)
+    # Same weekly-cap / daily-value mismatch as the per-platform clamp
+    # above: `_MAX_ESTIMATE_BY_KIND` is the all-platforms US WEEKLY
+    # total, `agg_mid` is the daily figure.
+    daily_ceiling = max(1, int(ceiling / 7))
+    if agg_mid > daily_ceiling:
+        agg_mid  = int(daily_ceiling * _CLAMP_TO_FRACTION)
         agg_low  = min(agg_low,  agg_mid)
-        agg_high = min(agg_high, ceiling)
+        agg_high = min(agg_high, daily_ceiling)
         conf = 'low'
         clamped = True
 
