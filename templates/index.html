@@ -60031,8 +60031,12 @@ https://www.instagram.com/p/..."></textarea>
             'new': 'First appearance on this chart in this window, so there is nothing to compare it against yet.',
             flat: 'No earlier read to compare this against yet.'
         };
-        function _tiqDeltaTipAttr(kind) {
+        function _tiqDeltaTipAttr(kind, noun) {
             var t = _TIQ_DELTA_TIPS[kind];
+            if (kind === 'pct') {
+                t = 'Change in US ' + (noun || 'views') +
+                    ' against the previous read in the same window.';
+            }
             return t ? ' data-tooltip="' + _tiqEsc(t) + '"' : '';
         }
         function _tiqRenderNine(tagged) {
@@ -62739,6 +62743,9 @@ https://www.instagram.com/p/..."></textarea>
         //          subOf(it), badgeOf(it), keyOf(it) }
         // ------------------------------------------------------------------
         function _tiqSourceSheet(opts) {
+            // Streams, Listeners, Plays: the change tooltip should name
+            // whatever this sheet counts rather than defaulting to views.
+            var _metricNoun = String((opts && opts.metricLabel) || 'views').toLowerCase();
             opts = opts || {};
             var kind = opts.kind || 'music';
             var source = opts.source || '';
@@ -62780,7 +62787,7 @@ https://www.instagram.com/p/..."></textarea>
                     var glyph2 = (us.direction === 'up') ? '\u2191' : (us.direction === 'down') ? '\u2193' : '\u00b7';
                     var dcls2  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                     var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls2 + '">' + glyph2 + ' ' + pct + '%</span>';
+                    deltaHtml = '<span class="tiq-sheet-delta has-tooltip ' + dcls2 + '"' + _tiqDeltaTipAttr('pct', _metricNoun) + '>' + glyph2 + ' ' + pct + '%</span>';
                     deltaSort = String(signed);
                 }
                 var tipParts = [];
@@ -62823,7 +62830,7 @@ https://www.instagram.com/p/..."></textarea>
                      '<thead><tr>' +
                        '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High \u2192 Low</option><option value="lo">Low \u2192 High</option><option value="az">A\u2013Z</option></select></th>' +
                        '<th class="tiq-sheet-th-num tiq-sheet-sortable' + (wide ? ' tiq-chan-views' : '') + '" onclick="tiqSortFastSheet(this,\'views\')">' + _tiqEsc(metricLabel) + '<span class="tiq-sort-ind">\u21c5</span></th>' +
-                       '<th class="tiq-sheet-th-num tiq-sheet-sortable' + (wide ? ' tiq-chan-delta' : '') + '" onclick="tiqSortFastSheet(this,\'delta\')">\u0394%<span class="tiq-sort-ind">\u21c5</span></th>' +
+                       '<th class="tiq-sheet-th-num tiq-sheet-sortable has-tooltip' + (wide ? ' tiq-chan-delta' : '') + '" data-tooltip="' + _tiqEsc('How each row moved against the previous read. Most rows show the change in US ' + _metricNoun + '; a row that ranks rather than counts shows places moved instead. Hover any cell to see which.') + '" onclick="tiqSortFastSheet(this,\'delta\')">\u0394%<span class="tiq-sort-ind">\u21c5</span></th>' +
                        (wide ? '<th class="tiq-sheet-th-spacer"></th>' : '') +
                      '</tr></thead>' +
                      '<tbody>' + (rowsHtml || '<tr><td colspan="' + (wide ? '4' : '3') + '" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
@@ -62869,7 +62876,7 @@ https://www.instagram.com/p/..."></textarea>
                     badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
                 });
             }).join('');
-            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up tiq-flat">' + cards + '</div>';
         }
         window.setTrendsIQMusic = function(key) {
             window.__trendsIQ.activeMusic = key;
@@ -62937,7 +62944,7 @@ https://www.instagram.com/p/..."></textarea>
                     badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
                 });
             }).join('');
-            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up tiq-flat">' + cards + '</div>';
         }
         window.setTrendsIQPodcasts = function(key) {
             window.__trendsIQ.activePodcasts = key;
@@ -64434,7 +64441,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
             });
 
-            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards.join('') + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up tiq-flat">' + cards.join('') + '</div>';
         }
         window.setTrendsIQGaming = function(key) {
             window.__trendsIQ.activeGaming = key;
@@ -173399,14 +173406,20 @@ https://www.instagram.com/p/..."></textarea>
     #trendsIQView .tiq-nine-tile.is-lead .tiq-nine-rk { color: var(--mag-accent); }
 
     /* ---- the board: columns lose their card chrome ---- */
-    #trendsIQView .tiq-board .tiq-card {
+    #trendsIQView .tiq-board .tiq-card,
+    #trendsIQView .tiq-flat .tiq-card {
         background: transparent !important; border: 0 !important;
         border-radius: 0 !important; padding: 0 !important;
     }
-    #trendsIQView .tiq-board .tiq-sheet-cardhead {
+    #trendsIQView .tiq-board .tiq-sheet-cardhead,
+    #trendsIQView .tiq-flat .tiq-sheet-cardhead {
         border-bottom: 2px solid var(--mag-ink) !important;
     }
-    #trendsIQView .tiq-board .tiq-sheet-cardhead::before { display: none !important; }
+    #trendsIQView .tiq-board .tiq-sheet-cardhead::before,
+    #trendsIQView .tiq-flat .tiq-sheet-cardhead::before { display: none !important; }
+    /* Without the card box the columns need real air between them, and
+       each chart needs room below it before the next row starts. */
+    #trendsIQView .tiq-cards-grid.tiq-flat { gap: 34px 40px !important; }
 
     /* ---- movers rail ---- */
     #trendsIQView .tiq-movers { border-left: 1px solid var(--mag-rule); padding-left: 28px; }
