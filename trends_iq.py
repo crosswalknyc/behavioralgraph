@@ -6514,6 +6514,49 @@ def _coverage_kind_for_path(path: str, it: dict) -> str:
     return 'search_term'
 
 
+# Payload path prefix -> {panel slug: estimator platform key}, for the
+# chart panels. Streaming and FAST already resolve through
+# `_carry_platform_for_path`, whose slug IS the estimator key.
+#
+# Used to scale a last-resort baseline to the rail it lands on, and to
+# find the cap a row has to sit under. Both read the same tables the
+# annotators stamp from, so a rail that gains a panel gains both
+# behaviours with it.
+def _coverage_panel_platform_maps() -> tuple:
+    return (
+        ('music_trending.',    _MUSIC_PANEL_TO_PLATFORM),
+        ('podcasts_trending.', _PODCAST_PANEL_TO_PLATFORM),
+        ('books_trending.',    {**_BOOK_PANEL_TO_PLATFORM,
+                                 **_WATTPAD_PANEL_TO_PLATFORM,
+                                 **_GOODREADS_PANEL_TO_PLATFORM}),
+        ('libby_trending.',    _LIBBY_PANEL_TO_PLATFORM),
+        ('comics_trending.',   _COMIC_PANEL_TO_PLATFORM),
+        ('gaming_trending.',   _GAMING_PANEL_TO_PLATFORM),
+    )
+
+
+def _coverage_platform_for_path(path: str) -> str:
+    """Estimator platform key for the rail at `path`, or '' when the
+    rail is cross-platform (Broadway, Search, Trending People)."""
+    slug = _carry_platform_for_path(path)
+    if slug:
+        return slug
+    for pfx, table in _coverage_panel_platform_maps():
+        if not path.startswith(pfx):
+            continue
+        parts = path[len(pfx):].split('.')
+        panel = parts[0] if parts else ''
+        bucket = parts[1] if len(parts) > 1 else ''
+        # Gaming splits one panel into two priced rails (Meta Quest
+        # Free / Paid, Steam Most Played / Top Sellers), so the list
+        # key decides which one a row belongs to.
+        for name, pkey in (_GAMING_PANEL_BUCKETS.get(panel) or ()):
+            if name == bucket:
+                return pkey
+        return table.get(panel, '')
+    return ''
+
+
 def _coverage_jitter(title: str, kind: str, base: float) -> int:
     """Deterministic per-title jitter: +-12% of base, salted by
     (title|kind), last digit forced to 1-9 so no value reads as a
@@ -6531,31 +6574,73 @@ def _coverage_jitter(title: str, kind: str, base: float) -> int:
 
 
 def _coverage_baselines_from_estimates(stream_snap: dict) -> dict:
-    """Per-kind sorted us_estimate distributions from the researched
-    snapshot. {kind: [ascending values]}"""
-    dist: dict[str, list] = {}
+    """Researched us_estimate distributions from the snapshot, keyed
+    both by kind and by the rail the number belongs to.
+
+    `{'by_kind': {kind: [ascending]},
+      'by_platform': {(kind, platform): [ascending]}}`
+
+    The per-kind pool used to be the only one, and a kind pools every
+    service that sells that kind of thing. A comic on Apple Comics was
+    priced off a pool that includes library borrowing; a podcast on
+    Amazon off a pool led by Apple and Spotify. The pool is dominated
+    by the big rails, so the number a thin panel got was the big
+    panel's number and it landed at the top of the small list. The
+    per-rail pool comes from the same snapshot's own per-platform
+    blocks, so a fallback is scaled to the panel it lands in."""
+    by_kind: dict[str, list] = {}
+    by_platform: dict[tuple, list] = {}
     for key, entry in ((stream_snap or {}).get('items') or {}).items():
+        kind = key.split(':', 1)[0]
         try:
             v = float(entry.get('us_estimate') or 0)
         except (TypeError, ValueError):
-            continue
-        if v <= 0:
-            continue
-        kind = key.split(':', 1)[0]
-        dist.setdefault(kind, []).append(v)
-    for kind in dist:
-        dist[kind].sort()
-    return dist
+            v = 0.0
+        if v > 0:
+            by_kind.setdefault(kind, []).append(v)
+        for slug, blk in (entry.get('by_platform') or {}).items():
+            if not isinstance(blk, dict):
+                continue
+            try:
+                pv = float(blk.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                continue
+            if pv > 0:
+                by_platform.setdefault((kind, slug), []).append(pv)
+    for vals in by_kind.values():
+        vals.sort()
+    for vals in by_platform.values():
+        vals.sort()
+    return {'by_kind': by_kind, 'by_platform': by_platform}
+
+
+# A rail needs this many priced rows of its own before its pool is
+# worth sampling. Under it the shape is one or two titles rather than
+# a distribution, and the kind pool is the better read.
+_COVERAGE_MIN_PLATFORM_ROWS = 6
 
 
 def _coverage_pick_from_dist(dist: dict, kind: str,
-                              rank_pos: int, list_len: int) -> float:
-    """Sample the same-kind researched distribution at the item's rank
-    percentile (top of the rendered list -> upper end of the priced
-    distribution) so baselines ladder sensibly within a chart. Falls
-    back to the all-kind median when the kind has no priced rows yet
-    (e.g. a brand-new tab)."""
-    values = dist.get(kind) or []
+                              rank_pos: int, list_len: int,
+                              platform: str = '') -> float:
+    """Sample a researched distribution at the item's rank percentile
+    (top of the rendered list -> upper end of the priced distribution)
+    so baselines ladder sensibly within a chart.
+
+    The rail's own priced rows are preferred, so a fallback on a small
+    panel is scaled to that panel. Rails too thin to have a shape of
+    their own fall back to the kind pool, and a kind with nothing
+    priced yet (a brand-new tab) falls back to the all-kind median."""
+    by_kind = dist.get('by_kind') or {}
+    by_platform = dist.get('by_platform') or {}
+
+    values = []
+    if platform:
+        own = by_platform.get((kind, platform)) or []
+        if len(own) >= _COVERAGE_MIN_PLATFORM_ROWS:
+            values = own
+    if not values:
+        values = by_kind.get(kind) or []
     # kind aliases that share an audience scale
     if not values:
         for alias in ({'film': 'tv', 'tv': 'film', 'title': 'tv',
@@ -6564,11 +6649,11 @@ def _coverage_pick_from_dist(dist: dict, kind: str,
                        'wiki_topic': 'trending_person',
                        'trending_person': 'search_term'}.get(kind) or ''
                       ,):
-            if alias and dist.get(alias):
-                values = dist[alias]
+            if alias and by_kind.get(alias):
+                values = by_kind[alias]
                 break
     if not values:
-        pooled = sorted(v for vs in dist.values() for v in vs)
+        pooled = sorted(v for vs in by_kind.values() for v in vs)
         if not pooled:
             return 0.0
         return pooled[len(pooled) // 2]
@@ -6953,7 +7038,10 @@ def _ensure_full_audience_coverage(cards: dict,
         # No reading for this title on any day in the record: a
         # genuinely new chart entry. The rank tier is the only thing
         # left, and it is marked so it can be counted and re-priced.
-        base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len)
+        # Scaled to the rail it lands on, so a thin panel is not given
+        # the leading panel's number.
+        base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len,
+                                         _coverage_platform_for_path(path))
         val = _coverage_jitter(title, kind, base)
         it['us_streams'] = {
             'us_estimate':      val,
@@ -7016,6 +7104,251 @@ def _ensure_full_audience_coverage(cards: dict,
 
 
 # ============================================================================
+# A row sits under its own service's published cap
+# ============================================================================
+# Every service carries a documented cap for its own number one slot,
+# written weekly (`stream_estimates._STREAMING_PLATFORMS_META` and its
+# siblings, "ceiling N US weekly"). The stored figures are daily per
+# item, so the cap a daily row has to clear is that number over seven.
+#
+# The estimator applies it on the way in and, since the 2026-09-15
+# ceiling fix, converts it correctly. That covers a value it researched
+# FOR that service. It does not cover the two other ways a number
+# reaches a service's rail:
+#
+#  * the cross-platform total. When a title charts on a service the
+#    research came back with no block for, the rail falls back to the
+#    total across every service. The total is checked against the
+#    kind's aggregate cap, which is the sum of every service's, so a
+#    small service can render a number many times its own.
+#  * a carried or first-appearance value, which is scaled to a
+#    distribution rather than checked against a cap.
+#
+# On 2026-09-15 that put Shameless on BritBox at 1,822,805 a day
+# against a service documented at 1.5M a WEEK for its top slot, and
+# Apollo 13 on MGM+ at 1,907,148 against 2M a week. Both are the
+# cross-platform total: the research found each title on Netflix and
+# returned nothing for the small service, and the total itself had
+# jumped roughly twentyfold overnight off a slip in its own working
+# (the reasoning derives 186-314K a day and then states 1.847M).
+# Neither the per-service cap nor the aggregate cap could catch it,
+# and re-running the research does not change that, so the cap is
+# enforced here against the number the reader is actually shown.
+#
+# Only a genuine breach is touched. A row inside its cap is left
+# exactly as it is; this pass moves no levels on its own. On a window
+# wider than a day the number is the sum of the days the item
+# appeared, so the cap is multiplied by those same days before the
+# comparison.
+#
+# What a corrected row becomes, in order of preference:
+#   1. what this rail showed for this title on its previous day,
+#      walked to today through the shared per-item rhythm, when that
+#      reading is itself inside the cap. This is the same walk the
+#      carry-forward path uses, so the row reads as its own number for
+#      today and its movement chip is a real day-over-day move rather
+#      than the size of the correction.
+#   2. the same, taken from the dated record when the row carries no
+#      previous reading of its own.
+#   3. a seat a little under the cap, salted per title so several
+#      corrected rows on one rail do not share a number. Reached only
+#      when nothing inside the cap has ever been read for this title
+#      on this rail, which is also the case where yesterday's reading
+#      was over the cap too, so the correction is a small step rather
+#      than a fall.
+
+# Where the cap is enforced today: the streaming and FAST rails.
+#
+# The chart families (music, podcasts, books, comics, library) are
+# deliberately held. A recalibration pass owns their levels and its
+# corrections land on tonight's run; 207 of their rows currently
+# render above their own service's documented cap, so enforcing here
+# would mass-move levels that pass is already moving and the two would
+# fight. `audit_panel_ordering.py` sweeps every family read-only, so
+# the size of that population stays visible. Widen this tuple once the
+# levels pass has settled.
+_CAP_PASS_ROOTS = ('streaming_trending', 'fast_trending')
+
+
+def _platform_daily_cap(kind: str, platform: str) -> Optional[int]:
+    """The published cap for one service's top slot, as a daily
+    number. None when the service publishes none."""
+    if not kind or not platform:
+        return None
+    try:
+        from scripts.trends_scrapers.stream_estimates import \
+            _platforms_for_kind
+    except Exception:
+        return None
+    try:
+        for p in _platforms_for_kind(kind) or []:
+            if p.get('key') == platform:
+                weekly = int(p.get('ceiling') or 0)
+                return max(1, weekly // 7) if weekly > 0 else None
+    except Exception:
+        return None
+    return None
+
+
+def _cap_days_covered(blk: dict) -> int:
+    """How many days of audience the number in `blk` adds up.
+
+    One on the daily view. On a wider window the accumulator sums only
+    the days the item actually appeared, and says so on the row."""
+    for f in ('window_days_covered', 'window_days_total'):
+        try:
+            n = int(blk.get(f) or 0)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            return n
+    return 1
+
+
+def _cap_corrected_value(blk: dict, kind: str, title: str,
+                          platform: str, cap: int) -> tuple:
+    """`(value, prev_value, prev_day_iso, source)` for a row that
+    breached its cap."""
+    today = date.today()
+
+    def _walk(prev_val: int, prev_day: str, key: str) -> int:
+        return _carry_walk_to_today(prev_val, kind, title, key, prev_day)
+
+    try:
+        own_prev = int(blk.get('prev_estimate') or 0)
+    except (TypeError, ValueError):
+        own_prev = 0
+    own_day = blk.get('prev_date') or ''
+    if 0 < own_prev <= cap:
+        key = f'{kind}:{_cp_normalize(title)}'
+        return (_walk(own_prev, own_day, key), own_prev,
+                own_day or (today - timedelta(days=1)).isoformat(),
+                'own_previous')
+
+    prior = _carry_find_prior(kind, title, platform)
+    if prior:
+        prev_val, prev_day, resolved_key = prior
+        if 0 < prev_val <= cap:
+            return (_walk(prev_val, prev_day, resolved_key), prev_val,
+                    prev_day, 'record')
+
+    # Nothing inside the cap has ever been read for this title on this
+    # rail, so the only defensible place for it is the top of what the
+    # service reaches, a little under the cap rather than on it. The
+    # exact seat is salted per title so several corrected rows on one
+    # rail do not land on the same number, and it carries natural last
+    # digits like every other count.
+    try:
+        from scripts.trends_scrapers.stream_estimates import (
+            _h01, _natural_last_digits)
+        frac = 0.82 + _h01(f'{platform}|{title}|capseat') * 0.14
+        val = _natural_last_digits(max(1, int(cap * frac)),
+                                    title, f'{platform}|cap')
+    except Exception:
+        val = max(1, int(cap * 0.88))
+    val = min(val, cap - 1) if cap > 1 else val
+    return val, own_prev, own_day, 'cap_seat'
+
+
+def _enforce_platform_caps(cards: dict) -> dict:
+    """Bring any row rendering above its own service's published cap
+    back inside it. Best-effort: never raises into compute_view."""
+    stats = {'checked': 0, 'corrected': 0, 'by_source': {}, 'rows': []}
+    today_iso = _today_iso()
+
+    def _fix(it: dict, path: str) -> None:
+        blk = it.get('us_streams')
+        if not isinstance(blk, dict):
+            return
+        try:
+            cur = int(float(blk.get('us_estimate') or 0))
+        except (TypeError, ValueError):
+            return
+        if cur <= 0:
+            return
+        kind = _coverage_kind_for_path(path, it)
+        platform = _coverage_platform_for_path(path)
+        cap = _platform_daily_cap(kind, platform)
+        if cap is None:
+            return
+        # On a window wider than a day the number is the sum of the
+        # days the item appeared, so the cap it has to clear is the
+        # daily one over the same days. Comparing a seven-day sum
+        # against a one-day cap would clamp rows that are perfectly
+        # in band.
+        cap = cap * _cap_days_covered(blk)
+        stats['checked'] += 1
+        if cur <= cap:
+            return
+        title = _coverage_item_title(it)
+        if not title:
+            return
+        val, prev_val, prev_day, source = _cap_corrected_value(
+            blk, kind, title, platform, cap)
+        if val <= 0 or val > cap:
+            val = max(1, int(cap * 0.4))
+        direction, delta = ('new', 0.0)
+        if prev_val > 0:
+            direction, delta = _direction_from_prev(val, prev_val)
+        blk['us_estimate'] = val
+        blk['us_estimate_low'] = int(val * 0.78)
+        blk['us_estimate_high'] = int(val * 1.32)
+        blk['delta_pct'] = delta
+        blk['direction'] = direction
+        blk['as_of_date'] = today_iso
+        if prev_val > 0:
+            blk['prev_estimate'] = prev_val
+            if prev_day:
+                blk['prev_date'] = prev_day
+        else:
+            blk.pop('prev_estimate', None)
+            blk.pop('prev_date', None)
+        # The reasoning that travelled with the old number described
+        # the old number, so it does not survive the correction.
+        blk['method'] = ('the top of what this service reaches in a day'
+                         if source == 'cap_seat' else
+                         "this title's own most recent reading on this "
+                         'service, moved to today')
+        blk.pop('sources', None)
+        blk['confidence'] = 'directional'
+        blk['est_basis'] = 'platform_cap'
+        stats['corrected'] += 1
+        stats['by_source'][source] = stats['by_source'].get(source, 0) + 1
+        stats['rows'].append((path, title, cur, val, cap))
+
+    def _walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, (dict, list)):
+                    _walk(v, f'{path}.{k}' if path else k)
+            return
+        if isinstance(node, list):
+            for x in node:
+                if isinstance(x, dict):
+                    _fix(x, path)
+                    _walk(x, path)
+
+    try:
+        for root in _CAP_PASS_ROOTS:
+            node = (cards or {}).get(root)
+            if isinstance(node, (dict, list)):
+                _walk(node, root)
+    except Exception:
+        logger.exception("platform cap pass failed (non-fatal)")
+    if stats['corrected']:
+        for path, title, was, now, cap in stats['rows'][:20]:
+            logger.info("platform cap: %s '%s' %s -> %s (cap %s)",
+                        path, title, f'{was:,}', f'{now:,}', f'{cap:,}')
+        logger.info("platform cap: %d row(s) of %d checked were above "
+                    "their own service's published daily cap and were "
+                    "brought inside it (%s)",
+                    stats['corrected'], stats['checked'],
+                    ', '.join(f'{k}={v}'
+                              for k, v in sorted(stats['by_source'].items())))
+    return stats
+
+
+# ============================================================================
 # Rank follows the number on the page
 # ============================================================================
 # A streaming or FAST rail states that its rank is the title's position
@@ -7052,6 +7385,43 @@ _RANK_VIEW_KEYS = ('tv', 'films')
 # number.
 _RANK_INDEPENDENT_KEYS = ('channels',)
 _RANK_INDEPENDENT_PREFIXES = ('global_',)
+
+# The chart panels. Every one of these puts an audience figure in
+# front of the reader, so every one has to read descending by it.
+#
+# They were ordered that way on 2026-09-10, but that ordering was
+# applied once against the values of that day. A recalibration on
+# 2026-09-15 moved the values without re-ordering and the boards went
+# out of order again: 267 pairs out of order across Books, 224 across
+# Podcasts, 173 across Music, 152 across Libby, 130 across Gaming and
+# 126 across Comics on the one-day National view. Ordering that is
+# applied once to a stored list drifts the moment any later pass
+# touches a level, and several passes do.
+#
+# So they join the streaming and FAST rails on the same render-time
+# pass instead: the order comes from the value the row is rendering,
+# every time the view is built, after every annotator and after the
+# coverage pass. A later change to a level re-orders the list for
+# free and there is no second implementation to keep in step.
+#
+# Shape is simpler here than on a service block. There is no filtered
+# view over a full list, so every list of rows under a panel source is
+# its own ranking: `items` on most, `free` / `paid` on Meta Quest,
+# `most_played` / `top_sellers` on Steam. Naming no list key keeps a
+# new rail correct the day it ships.
+#
+# Film ticketing is deliberately absent. Those rows carry no audience
+# figure (the coverage guarantee is explicitly non-Film), so their
+# order is the chart's and stays the chart's.
+_RANK_PANEL_KEYS = (
+    'music_trending',
+    'podcasts_trending',
+    'books_trending',
+    'comics_trending',
+    'libby_trending',
+    'gaming_trending',
+    'broadway_trending',
+)
 
 
 def _rank_row_value(row: dict) -> Optional[int]:
@@ -7148,11 +7518,13 @@ def _apply_plausibility_clamp(rows: list, slug: str) -> bool:
 
 
 def _realign_ranks_to_rendered_values(cards: dict) -> dict:
-    """Re-derive every streaming and FAST rank from the value on the
-    page. Best-effort: never raises into compute_view."""
+    """Re-derive every rank on a list that shows an audience figure
+    from the value on the page: the streaming and FAST rails, and the
+    music, podcast, book, comic, library, gaming and Broadway panels.
+    Best-effort: never raises into compute_view."""
     stats = {'lists': 0, 'rows_moved': 0, 'views_synced': 0,
              'views_shared': 0, 'views_reseated': 0, 'clamped': 0,
-             'orphan_view_rows': 0}
+             'orphan_view_rows': 0, 'panel_lists': 0}
     try:
         for prefix in _RANK_PASS_PREFIXES:
             tab = (cards or {}).get(prefix)
@@ -7256,14 +7628,40 @@ def _realign_ranks_to_rendered_values(cards: dict) -> dict:
                         # ranker, a Netflix global rail).
                         stats['rows_moved'] += _reseat_ranks_by_value(value)
                         stats['lists'] += 1
+
+        for panel in _RANK_PANEL_KEYS:
+            tab = (cards or {}).get(panel)
+            if not isinstance(tab, dict):
+                continue
+            for _src, block in tab.items():
+                if not isinstance(block, dict):
+                    continue
+                for _key, value in block.items():
+                    if not isinstance(value, list) or len(value) < 2:
+                        continue
+                    rows = [r for r in value if isinstance(r, dict)]
+                    if len(rows) != len(value):
+                        continue
+                    # A list where nothing carries a figure is not an
+                    # audience ranking and keeps the order it arrived
+                    # in. Film ticketing is the whole of that case
+                    # today.
+                    if not any(_rank_row_value(r) is not None
+                               for r in rows):
+                        continue
+                    stats['rows_moved'] += _reseat_ranks_by_value(value)
+                    stats['lists'] += 1
+                    stats['panel_lists'] += 1
     except Exception:
         logger.exception("rank alignment pass failed (non-fatal)")
     if stats['lists']:
-        logger.info("rank alignment: %d list(s) ordered by rendered value, "
-                    "%d row(s) moved, %d view(s) already on the full "
-                    "list's rows, %d view(s) synced (%d re-seated "
-                    "against their own numbers), %d orphan view row(s)",
-                    stats['lists'], stats['rows_moved'],
+        logger.info("rank alignment: %d list(s) ordered by rendered value "
+                    "(%d chart panel list(s)), %d row(s) moved, %d view(s) "
+                    "already on the full list's rows, %d view(s) synced "
+                    "(%d re-seated against their own numbers), %d orphan "
+                    "view row(s)",
+                    stats['lists'], stats['panel_lists'],
+                    stats['rows_moved'],
                     stats['views_shared'], stats['views_synced'],
                     stats['views_reseated'], stats['orphan_view_rows'])
     return stats
@@ -11125,9 +11523,18 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     except Exception as e:
         logger.warning("audience coverage pass failed: %s", e)
 
-    # Rank last, so every streaming and FAST rail is ordered by the
-    # number the reader is looking at rather than by an ordering
-    # computed before the values settled.
+    # No row may render above its own service's published cap. After
+    # the coverage pass, so a carried or first-appearance value is
+    # checked too, and before the rank pass, so a corrected row is
+    # ordered on the number it ends up showing.
+    try:
+        _enforce_platform_caps(payload['cards'])
+    except Exception as e:
+        logger.warning("platform cap pass failed: %s", e)
+
+    # Rank last, so every list that shows an audience figure is
+    # ordered by the number the reader is looking at rather than by an
+    # ordering computed before the values settled.
     try:
         _realign_ranks_to_rendered_values(payload['cards'])
     except Exception as e:

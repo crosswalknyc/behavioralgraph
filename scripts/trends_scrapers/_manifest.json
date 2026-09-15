@@ -14,6 +14,7 @@
     "_usage_tap.py",
     "amcplus.py",
     "audit_board_state.py",
+    "audit_panel_ordering.py",
     "backfill_daily_estimates.py",
     "backfill_history.py",
     "book_charts.py",
