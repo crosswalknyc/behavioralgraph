@@ -376,7 +376,13 @@ MODULE_CATALOG = [
     # ALSO the catch-all price for report requests that map to no
     # other set-price product. Credits column = 6 (nearest whole
     # credit above $550 at the $100/credit build rate).
-    ("panel_report",               "Prometheus - Research Report",
+    # 2026-09-14 (Jenna, same day, verbatim: 'add something to the
+    # billing tab that says "un-priced ask" and set that to the $550
+    # and then the super admins can change it if needed'). The billing
+    # panel row is labeled "Un-priced Ask"; the USD field is editable
+    # like every other row and the edited value flows through
+    # tool_price_usd() into both the Prometheus quote and the charge.
+    ("panel_report",               "Un-priced Ask",
      "pulls", 6, 550.0, "has_prometheus_access"),
     # 2026-09-09 (Jenna, verbatim: 'please remove chatbot things
     # from modules. those are just access monthly not any per pull
@@ -1257,10 +1263,12 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "subscriber iq":                 "subscriber_iq_build",
     "subscriber iq build":           "subscriber_iq_build",
     "svod":                          "subscriber_iq_build",
-    # ---- Prometheus research report (2026-09-14) ----
+    # ---- Prometheus research report / un-priced ask (2026-09-14) ----
     "panel report":                  "panel_report",
     "research report":               "panel_report",
     "prometheus report":             "panel_report",
+    "un-priced ask":                 "panel_report",
+    "unpriced ask":                  "panel_report",
     # ---- Attribution / marketing modules ----
     # Each has its OWN MODULE_CATALOG row so the admin billing panel
     # can price them independently. NEVER collapse to a shared bucket.
