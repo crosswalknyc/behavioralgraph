@@ -25079,6 +25079,7 @@ https://www.instagram.com/p/..."></textarea>
             display: inline-flex !important;
             align-items: center;
             gap: 8px;
+            cursor: pointer !important;
             color: #9AA09B !important;
             font-size: 10.5px !important;
             font-weight: 500 !important;
@@ -25256,6 +25257,15 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 13.5px !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .comp-table td.primary-col { color: #5E7E12 !important; }
+        #dashboardView.piq-v4 .comp-table th.primary-col,
+        #dashboardView.piq-v4 .comp-table td.primary-col {
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+        #dashboardView.piq-v4 .comp-table th.sortable::after,
+        #dashboardView.piq-v4 .comp-table th.sortable.sorted::after {
+            content: none !important;
+        }
         #dashboardView.piq-v4 .comp-table td.genpop-column {
             color: #9AA09B !important;
             font-weight: 500 !important;
@@ -127907,11 +127917,15 @@ https://www.instagram.com/p/..."></textarea>
                     if (!name) return;
                     var sub = cleaned.note || reach[i - 1] || '';
                     var isGp = /gen\s*pop/i.test(name);
-                    var sig = name + '|' + sub;
+                    var primaryIdx = (typeof window.primaryProfileIndex === 'number') ? window.primaryProfileIndex : 0;
+                    var isPrimaryCol = (i - 1) === primaryIdx && !isGp;
+                    var sig = name + '|' + sub + '|' + (isPrimaryCol ? 'p' : '');
+                    th.style.cursor = 'pointer';
+                    th.setAttribute('onclick', 'setPrimaryProfile(' + (i - 1) + ')');
                     if (th.getAttribute('data-piq-cmp') === sig) return;
                     th.setAttribute('data-piq-cmp', sig);
                     th.setAttribute('data-piq-name', raw.replace(/\s+/g, ' ').trim());
-                    th.classList.toggle('piq-cmp-primary', i === 1 && !isGp);
+                    th.classList.toggle('piq-cmp-primary', isPrimaryCol);
                     var av = '<span class="piq-cmp-av' + (isGp ? ' gp' : '') + '"' +
                         (isGp ? '' : ' style="background: ' + grads[(i - 1) % grads.length] + '"') + '>' +
                         window._piqV4Esc(window._piqV4CmpInitials(name)) + '</span>';
@@ -158032,6 +158046,7 @@ https://www.instagram.com/p/..."></textarea>
             // Adjust primary profile index if needed
             if (removedIdx >= 0 && removedIdx <= primaryProfileIndex) {
                 primaryProfileIndex = Math.max(0, primaryProfileIndex - 1);
+                window.primaryProfileIndex = primaryProfileIndex;
             }
             
             // Re-render sidebar
@@ -158044,6 +158059,7 @@ https://www.instagram.com/p/..."></textarea>
             } else {
                 // Clear the comparison results and reset primary
                 primaryProfileIndex = 0;
+                window.primaryProfileIndex = 0;
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
                         <p>Open profiles to compare</p>
@@ -158241,6 +158257,7 @@ https://www.instagram.com/p/..."></textarea>
             loadedComparisonData = {};
             window.comparisonProfilesData = null;
             primaryProfileIndex = 0;
+            window.primaryProfileIndex = 0;
             availableCategories.behavioral = [];
             availableCategories.location = false;
             selectedCategories.clear();
@@ -159253,13 +159270,51 @@ https://www.instagram.com/p/..."></textarea>
         
         // Primary profile state (index of the primary profile in comparison)
         let primaryProfileIndex = 0;
-        
-        function setPrimaryProfile(idx) {
-            if (!window.comparisonProfilesData || idx >= window.comparisonProfilesData.length) return;
-            primaryProfileIndex = idx;
-            // Re-render comparison to update primary indicator
-            renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+        window.primaryProfileIndex = 0;
+
+        function applyComparePrimaryUI(idx) {
+            var tabs = document.querySelectorAll('#comparisonResults .comp-profile-tab');
+            Array.prototype.forEach.call(tabs, function(tab, i) {
+                var on = i === idx;
+                tab.classList.toggle('is-primary', on);
+                tab.title = on ? 'Primary Profile' : 'Click to set as primary';
+                var star = tab.querySelector('.comp-profile-tab-primary');
+                if (on && !star) {
+                    star = document.createElement('span');
+                    star.className = 'comp-profile-tab-primary';
+                    star.title = 'Primary Profile';
+                    star.textContent = '\u2605';
+                    tab.insertBefore(star, tab.firstChild);
+                } else if (!on && star) {
+                    star.remove();
+                }
+            });
+            document.querySelectorAll('#comparisonResults .comp-table').forEach(function(table) {
+                Array.prototype.forEach.call(table.rows, function(tr) {
+                    Array.prototype.forEach.call(tr.cells, function(cell, ci) {
+                        if (ci === 0) return;
+                        var on = (ci - 1) === idx;
+                        cell.classList.toggle('primary-col', on);
+                        if (cell.tagName === 'TH') {
+                            var nm = cell.querySelector('.piq-cmp-nm');
+                            var name = ((nm && nm.textContent) || cell.getAttribute('data-piq-name') || cell.textContent || '');
+                            var isGp = /gen\s*pop/i.test(name);
+                            cell.classList.toggle('piq-cmp-primary', on && !isGp);
+                        }
+                    });
+                });
+            });
         }
+
+        function setPrimaryProfile(idx) {
+            idx = Number(idx);
+            if (!window.comparisonProfilesData || !isFinite(idx) || idx < 0 || idx >= window.comparisonProfilesData.length) return;
+            if (idx === primaryProfileIndex) return;
+            primaryProfileIndex = idx;
+            window.primaryProfileIndex = idx;
+            applyComparePrimaryUI(idx);
+        }
+        window.setPrimaryProfile = setPrimaryProfile;
 
         // Category filter state
         let availableCategories = {
@@ -159602,7 +159657,7 @@ https://www.instagram.com/p/..."></textarea>
                 const primaryClass = isPrimary ? 'primary-col' : '';
                 const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; min-width: 0;">${name}${sortIndicator} ${ageDisplay}</span></th>`;
+                return `<th class="${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="setPrimaryProfile(${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; min-width: 0;">${name} ${ageDisplay}</span></th>`;
             };
             // Label column: sort by label (e.g. Age, Gender) ascending/descending; profileIndex -1
             const sortableLabelHeader = (section, labelText) => {
@@ -159686,7 +159741,7 @@ https://www.instagram.com/p/..."></textarea>
                         <thead>
                             <tr>
                                 <th></th>
-                                ${profiles.map((p, idx) => `<th class="${idx === primaryProfileIndex ? 'primary-col' : ''}" style="border-bottom: 3px solid ${p.color}">
+                                ${profiles.map((p, idx) => `<th class="${idx === primaryProfileIndex ? 'primary-col' : ''}" style="border-bottom: 3px solid ${p.color}; cursor: pointer;" onclick="setPrimaryProfile(${idx})">
                                     <span>${p.name}</span>
                                 </th>`).join('')}
                             </tr>
