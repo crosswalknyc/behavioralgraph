@@ -51754,6 +51754,15 @@ def _drop_degenerate_addon_cuts(draft):
         for c in cuts:
             if not isinstance(c, dict):
                 continue
+            # A qualifier extracted from the ask itself is never
+            # degenerate (2026-09-15): on a persona draft the model
+            # shapes demos to the ask, so a '55+' cut covers every
+            # populated AGE bucket AT INTERPRET TIME - but the engine
+            # rebuilds pinned categories to the full-universe baseline
+            # because the cut rides. Dropping here loses the qualifier.
+            if c.get('from_prompt_qualifier'):
+                kept.append(c)
+                continue
             pin_cat = str(c.get('pin_category') or '').upper()
             cid = str(c.get('cut_id') or '').lower()
             cbuckets = {str(b).upper() for b in (c.get('pin_buckets') or [])}
@@ -64619,6 +64628,15 @@ def _v1_persona_universe_normalize(draft, user_text):
             inc_cut = _v1_persona_income_cut_from_text(text)
             if inc_cut:
                 added.append(inc_cut)
+        # Qualifier cuts extracted from the ask survive the degenerate
+        # filter: the interpret model often shapes the draft demos to
+        # the ask (AGE already 55+ on a '55+' persona), which makes the
+        # cut LOOK like the whole universe at interpret time. The
+        # engine rebuilds pinned categories to the full-universe
+        # baseline precisely because the cut rides, so dropping it
+        # here would lose the qualifier end to end.
+        for c in added:
+            c['from_prompt_qualifier'] = True
         if added:
             merged = _merge_cuts(cuts, added)
             draft['addon_cuts'] = merged
