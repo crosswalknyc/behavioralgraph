@@ -4334,6 +4334,12 @@ _BATCH_MAX_MINUTES  = 180
 # minutes, which is ample: cancellation is near-immediate and the
 # loop exits as soon as the status settles.
 _BATCH_CANCEL_SETTLE_POLLS = 4
+# Below this share of requested items coming back, treat the batch
+# lane as having failed rather than as having run badly, and redo
+# the remainder per item. Set low so a batch that merely lost a
+# few stragglers is left for the coverage gate instead of being
+# re-run and paid for twice.
+_BATCH_FALLBACK_MIN_SHARE = 0.25
 
 
 def _custom_id_for(key: str) -> str:
@@ -5607,6 +5613,39 @@ def fetch(only: Optional[set[str]] = None,
             spend_monitor=spend_monitor,
             checkpoint_state=checkpoint_state,
         )
+        # Fall back to the per-item lane if the job never really ran.
+        # The batch lane returns nothing at all when submission is
+        # refused or the SDK is too old, and in the nightly run that
+        # would leave several thousand items unpriced and hand the
+        # whole load to the coverage gate, which has no budget cap.
+        # A deliberate spend trip is NOT a failure, so that case is
+        # left alone. The threshold is generous on purpose: a batch
+        # that mostly worked is left to the coverage gate rather than
+        # paying twice for the same items.
+        tripped = bool(spend_monitor is not None
+                       and spend_monitor.tripped())
+        if (items_to_research and not tripped
+                and len(researched_new) < _BATCH_FALLBACK_MIN_SHARE
+                * len(items_to_research)):
+            logger.error("stream_estimates: batch lane returned %d/%d "
+                          "results; falling back to the per-item lane "
+                          "for this run.",
+                          len(researched_new), len(items_to_research))
+            already = set(researched_new)
+            remaining = [it for it in items_to_research
+                          if _lookup_key(it['kind'], it['display_title'],
+                                          it.get('artist') or '')
+                          not in already]
+            checkpoint_state['in_progress'] = dict(
+                checkpoint_state.get('in_progress') or {})
+            checkpoint_state['in_progress'].update(researched_new)
+            serial_new = _research_all(
+                remaining,
+                target_date_iso=target_date_iso,
+                spend_monitor=spend_monitor,
+                checkpoint_state=checkpoint_state,
+            )
+            researched_new = {**researched_new, **serial_new}
     else:
         researched_new = _research_all(
             items_to_research,
