@@ -23884,6 +23884,52 @@ https://www.instagram.com/p/..."></textarea>
             flex-direction: column;
             gap: 3px;
         }
+        #dashboardView.piq-v4 .piq-csv-btn {
+            flex: 0 0 auto;
+            margin-left: auto;
+            padding: 3px 9px;
+            border-radius: 6px;
+            background: #1B2F35;
+            border: 1px solid #3B3D38;
+            color: #9AA09B;
+            font-family: inherit;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            line-height: 1.4;
+        }
+        #dashboardView.piq-v4 .piq-csv-btn:hover {
+            border-color: #C7F23E;
+            color: #C7F23E;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-csv-btn {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+            color: #5C6560;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-csv-btn:hover {
+            border-color: #5E7E12;
+            color: #5E7E12;
+        }
+        #dashboardView.piq-v4 .piq-head-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 0 0 auto;
+            margin-left: auto;
+        }
+        #dashboardView.piq-v4 .piq-beh-eye {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 6px;
+        }
+        #dashboardView.piq-v4 .comp-section-title .piq-csv-btn {
+            margin: 0 8px 0 0;
+        }
         #dashboardView.piq-v4 .piq-panel-head h3 {
             font-size: 16px !important;
             font-weight: 700 !important;
@@ -24149,9 +24195,20 @@ https://www.instagram.com/p/..."></textarea>
             width: 100% !important;
             padding: 20px 22px !important;
         }
+        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Key Differentiators"] > .piq-head-actions {
+            width: 100%;
+            justify-content: flex-end;
+            margin: 0 0 8px;
+        }
         #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead h3,
-        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead .piq-chip {
+        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead .piq-chip,
+        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead .stack {
             display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead {
+            justify-content: flex-end;
+            align-items: center;
+            margin: 0 0 8px;
         }
         #dashboardView.piq-v4 #tab-demographics #demoDifferentiators {
             display: block !important;
@@ -24188,7 +24245,7 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics .piq-chart-head {
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
+            align-items: center;
             margin-bottom: 8px;
         }
         #dashboardView.piq-v4 #tab-demographics .piq-chart-head .title {
@@ -126423,6 +126480,40 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4Esc = function(s) {
             return String(s == null ? '' : s).replace(/</g, '');
         };
+        window._piqV4Attr = function(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
+        };
+        window._piqV4CsvBtn = function(type, category, opts) {
+            opts = opts || {};
+            var attrs = 'type="button" class="piq-csv-btn has-tooltip" data-tooltip="Export CSV"';
+            if (opts.fn) {
+                attrs += ' data-piq-csv-fn="' + window._piqV4Attr(opts.fn) + '"';
+                if (opts.arg != null) attrs += ' data-piq-csv-arg="' + window._piqV4Attr(opts.arg) + '"';
+            } else {
+                attrs += ' data-piq-csv-type="' + window._piqV4Attr(type) + '" data-piq-csv-cat="' + window._piqV4Attr(category) + '"';
+            }
+            return '<button ' + attrs + '>CSV</button>';
+        };
+        if (!window._piqV4CsvBound) {
+            window._piqV4CsvBound = true;
+            document.addEventListener('click', function(e) {
+                var btn = e.target && e.target.closest ? e.target.closest('.piq-csv-btn') : null;
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                var fn = btn.getAttribute('data-piq-csv-fn');
+                if (fn && typeof window[fn] === 'function') {
+                    window[fn](btn.getAttribute('data-piq-csv-arg'));
+                    return;
+                }
+                if (typeof exportModuleCSV === 'function') {
+                    exportModuleCSV(btn.getAttribute('data-piq-csv-type') || '', btn.getAttribute('data-piq-csv-cat') || '');
+                }
+            }, true);
+        }
         window._piqV4CutsOn = function() {
             try {
                 var st = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
@@ -126675,8 +126766,11 @@ https://www.instagram.com/p/..."></textarea>
                 var head = document.createElement('div');
                 head.id = 'piqDemoDiffHead';
                 head.className = 'piq-panel-head';
-                head.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">01</span>Key differentiators</div><h3>Where the audience differentiates vs Gen Pop</h3></div><span class="piq-chip">index > 110 or < 90</span>';
                 insights.insertBefore(head, insights.firstChild);
+            }
+            var diffHead = document.getElementById('piqDemoDiffHead');
+            if (diffHead) {
+                diffHead.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">01</span>Key differentiators</div><h3>Where the audience differentiates vs Gen Pop</h3></div><span class="piq-chip">index > 110 or < 90</span>';
             }
             var chartsHead = document.getElementById('piqDemoChartsHead');
             if (chartsHead) chartsHead.style.display = 'none';
@@ -126709,6 +126803,12 @@ https://www.instagram.com/p/..."></textarea>
                 rows.sort(function(a, b) { return Math.abs(b.idx - 100) - Math.abs(a.idx - 100); });
                 rows = rows.slice(0, 10);
                 var diffCard = tab.querySelector('.demo-insight-card[data-module="Key Differentiators"]');
+                if (diffCard && window._piqV4CsvBtn && !diffCard.querySelector('.piq-csv-btn')) {
+                    var csvWrap = document.createElement('div');
+                    csvWrap.className = 'piq-head-actions';
+                    csvWrap.innerHTML = window._piqV4CsvBtn('demographic', 'Key Differentiators');
+                    diffCard.insertBefore(csvWrap, diffCard.firstChild);
+                }
                 if (rows.length) {
                     var html = '<div class="piq-data-row head"><span>Category</span><span>Segment</span><span>Profile</span><span>Gen Pop</span><span>Index</span></div>';
                     rows.forEach(function(r) {
@@ -126789,7 +126889,8 @@ https://www.instagram.com/p/..."></textarea>
                     chead.className = 'piq-chart-head';
                     card.insertBefore(chead, card.firstChild);
                 }
-                chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span>';
+                chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span>' +
+                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : '');
             });
         };
         window._piqV4DressBehavioral = function() {
@@ -126797,14 +126898,18 @@ https://www.instagram.com/p/..."></textarea>
             if (!tab) return;
             var cards = tab.querySelectorAll('.behavioral-card[data-category]');
             cards.forEach(function(card, i) {
-                if (card.querySelector('.piq-beh-eye')) return;
                 var cat = card.getAttribute('data-category') || '';
                 var title = card.querySelector('.behavioral-card-title-row');
                 var num = (i + 1 < 10 ? '0' : '') + (i + 1);
-                var eye = document.createElement('div');
-                eye.className = 'piq-beh-eye';
-                eye.innerHTML = '<div class="piq-eyebrow"><span class="num">' + num + '</span>' + window._piqV4Esc(cat) + '</div>';
-                if (title) title.parentNode.insertBefore(eye, title);
+                var eye = card.querySelector('.piq-beh-eye');
+                if (!eye) {
+                    eye = document.createElement('div');
+                    eye.className = 'piq-beh-eye';
+                    if (title) title.parentNode.insertBefore(eye, title);
+                    else card.insertBefore(eye, card.firstChild);
+                }
+                eye.innerHTML = '<div class="piq-eyebrow"><span class="num">' + num + '</span>' + window._piqV4Esc(cat) + '</div>' +
+                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat) : '');
             });
             var sel = document.getElementById('categoryReorderSelect');
             var jump = document.getElementById('piqBehJump');
@@ -126907,7 +127012,8 @@ https://www.instagram.com/p/..."></textarea>
             }
             var head = document.getElementById('piqIntHead');
             if (head) {
-                head.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">01</span>All Interests</div><h3>Ranked by index vs Gen Pop</h3></div><span class="piq-chip">' + window._piqV4Esc(count || 'tracked') + '</span>';
+                head.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">01</span>All Interests</div><h3>Ranked by index vs Gen Pop</h3></div><div class="piq-head-actions"><span class="piq-chip">' + window._piqV4Esc(count || 'tracked') + '</span>' +
+                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('interests', 'All Interests') : '') + '</div>';
             }
             var rail = document.getElementById('piqInterestsRail');
             if (!rail) {
@@ -126973,34 +127079,23 @@ https://www.instagram.com/p/..."></textarea>
             var tab = document.getElementById('tab-location');
             if (!tab) return;
             try { window._piqV4LocationColumns(tab); } catch (_e) {}
-            function labelSection(sel, id, num, eyebrow, title) {
-                var el = tab.querySelector(sel);
-                if (!el || el.querySelector('#' + id)) return;
-                var h = document.createElement('div');
-                h.id = id;
-                h.className = 'piq-panel-head';
-                h.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>';
-                el.insertBefore(h, el.firstChild);
+            function fillLocHead(el, id, num, eyebrow, title, csvType, csvCat) {
+                if (!el) return;
+                var h = el.querySelector('#' + id);
+                if (!h) {
+                    h = document.createElement('div');
+                    h.id = id;
+                    h.className = 'piq-panel-head';
+                    el.insertBefore(h, el.firstChild);
+                }
+                var csv = (csvType && window._piqV4CsvBtn) ? window._piqV4CsvBtn(csvType, csvCat) : '';
+                h.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>' + csv;
             }
-            labelSection('#allLocationsContainer', 'piqLocAllHead', '01', 'All Locations by penetration', 'Top DMAs');
-            labelSection('.heatmap-container', 'piqLocMapHead', '02', 'DMA Concentration Map', 'US bubble map');
-            labelSection('.regional-breakdown', 'piqLocRegHead', '03', 'Regional split', 'Aligned to Nielsen regions');
-            var over = tab.querySelector('[data-module="Over-Indexing DMAs"]');
-            if (over && !over.querySelector('#piqLocOverHead')) {
-                var oh = document.createElement('div');
-                oh.id = 'piqLocOverHead';
-                oh.className = 'piq-panel-head';
-                oh.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">04</span>Over-indexing DMAs</div><h3>Above Gen Pop</h3></div>';
-                over.insertBefore(oh, over.firstChild);
-            }
-            var under = tab.querySelector('[data-module="Under-Indexing DMAs"]');
-            if (under && !under.querySelector('#piqLocUnderHead')) {
-                var uh = document.createElement('div');
-                uh.id = 'piqLocUnderHead';
-                uh.className = 'piq-panel-head';
-                uh.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">05</span>Under-indexing DMAs</div><h3>Below Gen Pop</h3></div>';
-                under.insertBefore(uh, under.firstChild);
-            }
+            fillLocHead(tab.querySelector('#allLocationsContainer'), 'piqLocAllHead', '01', 'All Locations by penetration', 'Top DMAs', 'location', 'All Locations');
+            fillLocHead(tab.querySelector('.heatmap-container'), 'piqLocMapHead', '02', 'DMA Concentration Map', 'US bubble map');
+            fillLocHead(tab.querySelector('.regional-breakdown'), 'piqLocRegHead', '03', 'Regional split', 'Aligned to Nielsen regions', 'location', 'Regional Breakdown');
+            fillLocHead(tab.querySelector('[data-module="Over-Indexing DMAs"]'), 'piqLocOverHead', '04', 'Over-indexing DMAs', 'Above Gen Pop', 'location', 'Over-Indexing DMAs');
+            fillLocHead(tab.querySelector('[data-module="Under-Indexing DMAs"]'), 'piqLocUnderHead', '05', 'Under-indexing DMAs', 'Below Gen Pop', 'location', 'Under-Indexing DMAs');
             var parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || {};
             var locs = Array.isArray(parsed.locations) ? parsed.locations.slice() : [];
             locs.sort(function(a, b) { return (Number(b.index) || 0) - (Number(a.index) || 0); });
@@ -127452,6 +127547,19 @@ https://www.instagram.com/p/..."></textarea>
                         (sub ? '<span class="piq-cmp-sub">' + window._piqV4Esc(sub) + '</span>' : '') +
                         '</span></span>';
                 });
+            });
+            tab.querySelectorAll('.comp-section-title').forEach(function(titleEl) {
+                if (titleEl.querySelector('.piq-csv-btn')) return;
+                var src = titleEl.querySelector('[onclick*="exportComparisonSectionCSV"]');
+                var m = src && String(src.getAttribute('onclick') || '').match(/exportComparisonSectionCSV\('([^']*)'\)/);
+                if (!m || !window._piqV4CsvBtn) return;
+                var wrap = document.createElement('span');
+                wrap.innerHTML = window._piqV4CsvBtn('', '', { fn: 'exportComparisonSectionCSV', arg: m[1] });
+                var btn = wrap.firstChild;
+                if (!btn) return;
+                var menu = titleEl.querySelector('.comp-export-dropdown');
+                if (menu) titleEl.insertBefore(btn, menu);
+                else titleEl.appendChild(btn);
             });
         };
         (function() {
@@ -146348,7 +146456,21 @@ https://www.instagram.com/p/..."></textarea>
             let csvContent = '';
             const profileName = currentProfileData.name || 'Profile';
             
-            if (type === 'demographic') {
+            if (type === 'demographic' && /key\s*differentiators/i.test(category || '')) {
+                csvContent = `${profileName} - Key Differentiators\n`;
+                csvContent += `Category,Segment,Profile %,Gen Pop %,Index\n`;
+                const _diffHost = document.getElementById('demoDifferentiators');
+                if (_diffHost) {
+                    _diffHost.querySelectorAll('.piq-data-row:not(.head)').forEach(row => {
+                        const cells = row.querySelectorAll('span');
+                        if (cells.length >= 5) {
+                            const cat = (cells[0].textContent || '').replace(/"/g, '""');
+                            const seg = (cells[1].textContent || '').replace(/"/g, '""');
+                            csvContent += `"${cat}","${seg}",${cells[2].textContent || ''},${cells[3].textContent || ''},${cells[4].textContent || ''}\n`;
+                        }
+                    });
+                }
+            } else if (type === 'demographic') {
                 // Map display category name to internal key (e.g. Sexual Orientation -> sexual_orientation)
                 const demoKeyByCategory = { 'age': 'age', 'gender': 'gender', 'ethnicity': 'ethnicity', 'income': 'income', 'education': 'education', 'relationship status': 'relationship', 'sexual orientation': 'sexual_orientation', 'parental status': 'parental_status', 'occupation': 'occupation' };
                 const catKey = demoKeyByCategory[category.toLowerCase()] || category.toLowerCase().replace(/\s+/g, '_');
