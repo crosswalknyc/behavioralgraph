@@ -24319,7 +24319,11 @@ https://www.instagram.com/p/..."></textarea>
             gap: 0 !important;
             padding: 9px 0 !important;
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
-            background: transparent !important;
+            background: #15252A !important;   /* opaque so scrolled rows don't bleed through the pinned header */
+            z-index: 3 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-table .behavioral-header-row {
+            background: #FFFFFF !important;
         }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="behavioral"]) #piqBehJump {
             display: none !important;
@@ -24578,7 +24582,11 @@ https://www.instagram.com/p/..."></textarea>
             gap: 12px !important;
             padding: 9px 0 !important;
             border-bottom: 1px solid rgba(233,232,225,0.06) !important;
-            background: transparent !important;
+            background: #15252A !important;   /* opaque so scrolled rows don't bleed through the pinned header */
+            z-index: 3 !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-header-row {
+            background: #FFFFFF !important;
         }
         #dashboardView.piq-v4 #tab-interests .interest-header-row {
             color: #7C878A !important;
