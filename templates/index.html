@@ -174192,25 +174192,33 @@ https://www.instagram.com/p/..."></textarea>
     }
     #trendsIQView .tiq-sheet-chan tbody td { padding-top: 13px !important; padding-bottom: 13px !important; }
 
-    /* ---- Film and TV rows stay on the same lines --------------------
-       The two columns are separate tables, so one tall row knocks every
-       separator below it out of step with its neighbour. The poster sets
-       the row height, and the text inside is held to that height rather
-       than being allowed to grow the row. */
-    #trendsIQView .tiq-board .tiq-sheet tbody tr { height: 82px; }
-    #trendsIQView .tiq-board .tiq-sheet tbody td { height: 82px; }
-    #trendsIQView .tiq-board .tiq-sheet-titlemain {
+    /* ---- Rows stay on the same lines across every column ------------
+       Each column is its own table, so one tall row knocks every
+       separator below it out of step with its neighbour. The artwork
+       sets the row height, and the text inside is held to that height
+       rather than being allowed to grow the row. Applies to the title
+       boards and to the Music, Podcasts and Gaming sheets alike: a
+       podcast with a long presenter credit was the worst offender. */
+    #trendsIQView .tiq-board .tiq-sheet tbody tr,
+    #trendsIQView .tiq-flat .tiq-sheet tbody tr { height: 82px; }
+    #trendsIQView .tiq-board .tiq-sheet tbody td,
+    #trendsIQView .tiq-flat .tiq-sheet tbody td { height: 82px; }
+    #trendsIQView .tiq-board .tiq-sheet-titlemain,
+    #trendsIQView .tiq-flat .tiq-sheet-titlemain {
         max-height: 62px;
         overflow: hidden;
     }
-    /* A third genre is what usually wraps; it truncates instead. */
-    #trendsIQView .tiq-board .tiq-sheet-subline {
+    /* A third genre, or a long "with <host>" credit, is what usually
+       wraps; it truncates instead. */
+    #trendsIQView .tiq-board .tiq-sheet-subline,
+    #trendsIQView .tiq-flat .tiq-sheet-subline {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
     /* A very long title takes two lines, never three. */
-    #trendsIQView .tiq-board .tiq-row-title {
+    #trendsIQView .tiq-board .tiq-row-title,
+    #trendsIQView .tiq-flat .tiq-row-title {
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
