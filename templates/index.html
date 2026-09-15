@@ -173420,6 +173420,13 @@ https://www.instagram.com/p/..."></textarea>
     /* Without the card box the columns need real air between them, and
        each chart needs room below it before the next row starts. */
     #trendsIQView .tiq-cards-grid.tiq-flat { gap: 34px 40px !important; }
+    /* These sheets scroll, so the column header has to stay opaque to
+       cover the rows passing under it. On the page rather than on the
+       panel colour it reads as a rule, not a grey box. */
+    #trendsIQView .tiq-flat .tiq-sheet-scroll thead th {
+        background: var(--cw-page) !important;
+        box-shadow: inset 0 -1px 0 var(--mag-rule);
+    }
 
     /* ---- movers rail ---- */
     #trendsIQView .tiq-movers { border-left: 1px solid var(--mag-rule); padding-left: 28px; }
