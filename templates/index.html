@@ -130083,6 +130083,22 @@ https://www.instagram.com/p/..."></textarea>
             // dimmed rows made a restricted user look like they had the
             // full catalog.
             profiles = profiles.filter(p => p.accessible !== false);
+
+            // Avid Fan runs never render in the selector (Jenna
+            // 2026-09-15: only the main profile shows). They stay in
+            // dashboardProfiles (assigned above, pre-filter) so the
+            // Data Cuts popover on the parent still reaches them.
+            // Uses the house suffix parser so a subject legitimately
+            // NAMED "Avid" (suffixType none) is never dropped, while
+            // "X - Avid Fan", "X 2023 - Avid Fan" and punctuation-
+            // variant strays that used to leak as their own rows all
+            // disappear.
+            profiles = profiles.filter(p => {
+                try {
+                    const info = getProfileSuffixInfo(p);
+                    return !/(^|\s)avid(\s+fans?)?$/i.test(info.suffixLabel || '');
+                } catch (_e) { return true; }
+            });
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase().trim();
 
