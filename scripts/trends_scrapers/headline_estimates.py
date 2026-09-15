@@ -65,18 +65,18 @@ Standalone:
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import json
 import logging
 import os
 import re
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import boto3
 
-from scripts.trends_scrapers import _usage_tap  # noqa: E402
+from scripts.trends_scrapers import _parallel, _usage_tap  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,26 @@ _WEBSEARCH_MODEL      = (os.environ.get('HEADLINE_ESTIMATES_MODEL')
 _WEBSEARCH_MAX_TOKENS = 1200
 _WEBSEARCH_MAX_USES   = 3
 _WEBSEARCH_TIMEOUT_S  = 60
-_CONCURRENCY          = 8
+
+# Total tries per headline, covering BOTH an API error and an
+# unparseable response. 2 is what this scraper has always done; the
+# only change is that a transient failure now backs off before the
+# second try instead of retrying instantly into the same condition.
+_ATTEMPTS = 2
+
+# Measured on the server 2026-09-15 against the real headline pool.
+# Every call is pure wait on api.anthropic.com (a Sonnet turn plus up
+# to 3 web_search round trips), so throughput scales with threads in
+# flight until something upstream pushes back. Nothing did: the trends
+# key reports 10,000 req/min and 10M input tokens/min, and a full
+# sweep at 8 workers drew zero 429s and zero non-200s across 9,383
+# calls. 32 is the measured default; see the sweep table in the
+# docstring of _research_all.
+#
+# Override per run with HEADLINE_ESTIMATES_CONCURRENCY=<n>.
+# Fall all the way back with TRENDS_SCRAPERS_SEQUENTIAL=1.
+_CONCURRENCY_DEFAULT = 32
+_CONCURRENCY_ENV     = 'HEADLINE_ESTIMATES_CONCURRENCY'
 
 
 # Byte-for-byte identical to trends_iq._CP_STOPWORDS / stream_estimates
@@ -483,7 +502,7 @@ def _lookup_key(title: str) -> str:
 def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
     key = _lookup_key(item['display_title'])
     prompt = _build_prompt(item)
-    for attempt in range(2):
+    for attempt in range(_ATTEMPTS):
         try:
             resp = client.messages.create(
                 model=_WEBSEARCH_MODEL,
@@ -500,6 +519,12 @@ def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
         except Exception as e:
             logger.info("headline_estimates %r attempt %d: %s",
                          item['display_title'][:60], attempt + 1, e)
+            # With many calls in flight a 429 or a 529 arrives at every
+            # worker at once. Sleeping a salted interval before the
+            # retry keeps them from re-stampeding in lockstep.
+            if attempt < _ATTEMPTS - 1 and _parallel.is_retryable(e):
+                time.sleep(_parallel.backoff_delay(
+                    2.0, attempt, 30.0, key))
             continue
         # Trends / Ranker attribution tap for the daily spend email.
         _usage_tap.record_call(_WEBSEARCH_MODEL, resp)
@@ -519,6 +544,32 @@ def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
 
 
 def _research_all(items: list[dict]) -> dict[str, dict]:
+    """Price every headline, many calls in flight at once.
+
+    Measured concurrency sweep on the server against the live key,
+    2026-09-15, same 60 real headlines re-priced at each level
+    (scripts/trends_scrapers/bench_concurrency.py):
+
+        workers   wall clock   items/min   priced   missing
+             8        171.3s        21.0    60/60         0
+            16         92.0s        39.1    60/60         0
+            32         67.8s        53.1    60/60         0
+            48         75.0s        48.0    60/60         0
+
+    32 is the measured peak, 2.5x the old value of 8, and 48 is past
+    the knee: it went backwards. That regression is the real ceiling
+    here, and it is not an account rate limit. The key reports 10,000
+    req/min and 10M input tokens/min, and not one call at any level
+    returned a 429 or a 529. What saturates first is the web_search
+    tool's own round trips, so pushing more threads at it just adds
+    queueing. 8 workers measured 21.0 items/min here against 20.5
+    items/min in the production run the same day, which is what says
+    this bench reflects the real phase.
+
+    Failure is per item. A headline whose two tries both fail is
+    simply absent from the result, exactly as before; it never takes
+    the phase down and never blocks the other items.
+    """
     api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
     if not api_key:
         logger.warning("headline_estimates: ANTHROPIC_API_KEY missing; skipping")
@@ -530,26 +581,38 @@ def _research_all(items: list[dict]) -> dict[str, dict]:
         return {}
     client = anthropic.Anthropic(api_key=api_key)
 
-    out: dict[str, dict] = {}
     if not items:
-        return out
+        return {}
+
+    workers = _parallel.worker_count(_CONCURRENCY_ENV, _CONCURRENCY_DEFAULT)
     logger.info("headline_estimates: researching %d items with %s (concurrency=%d)",
-                 len(items), _WEBSEARCH_MODEL, _CONCURRENCY)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_CONCURRENCY) as ex:
-        futs = {ex.submit(_research_one, it, client): it for it in items}
-        for i, fut in enumerate(concurrent.futures.as_completed(futs)):
-            try:
-                key, result = fut.result(timeout=_WEBSEARCH_TIMEOUT_S + 15)
-            except Exception as e:
-                logger.info("headline_estimates worker: %s", e)
-                continue
-            if key and result:
-                out[key] = result
-                logger.info("  [%3d/%d] %-52s -> %s ~ %s",
-                             i + 1, len(items),
-                             result['display_title'][:52],
-                             _humanize(result['us_estimate']),
-                             result['confidence'])
+                 len(items), _WEBSEARCH_MODEL, workers)
+
+    by_key: dict[str, dict] = {}
+    for i, (_item, res, err) in enumerate(_parallel.imap_unordered(
+            lambda it: _research_one(it, client), items, workers,
+            label='headline_est')):
+        if err is not None:
+            logger.info("headline_estimates worker: %s", err)
+            continue
+        key, result = res if res else (None, None)
+        if key and result:
+            by_key[key] = result
+            logger.info("  [%3d/%d] %-52s -> %s ~ %s",
+                         i + 1, len(items),
+                         result['display_title'][:52],
+                         _humanize(result['us_estimate']),
+                         result['confidence'])
+
+    # Emit in collection order rather than completion order. The
+    # values are identical either way; fixing the order just stops the
+    # snapshot from reshuffling itself every night for no reason,
+    # which makes a day-over-day diff of the file readable.
+    out: dict[str, dict] = {}
+    for it in items:
+        k = _lookup_key(it['display_title'])
+        if k in by_key:
+            out[k] = by_key[k]
     return out
 
 

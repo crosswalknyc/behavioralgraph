@@ -70,7 +70,6 @@ Standalone:
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import json
 import logging
 import os
@@ -81,7 +80,7 @@ from typing import Any, Optional
 
 import boto3
 
-from scripts.trends_scrapers import _usage_tap  # noqa: E402
+from scripts.trends_scrapers import _parallel, _usage_tap  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +92,60 @@ _S3_LATEST = 'trends_iq_snapshots/latest/'
 _CLAUDE_MODEL = (os.environ.get('LENS_RELEVANCE_MODEL')
                   or os.environ.get('WEBSEARCH_MODEL')
                   or 'claude-sonnet-4-5')
-_CONCURRENCY  = int(os.environ.get('LENS_RELEVANCE_CONCURRENCY') or '4')
 _BATCH_SIZE   = int(os.environ.get('LENS_RELEVANCE_BATCH_SIZE')  or '25')
 _TIMEOUT_S    = int(os.environ.get('LENS_RELEVANCE_TIMEOUT_S')   or '120')
+
+# Total tries per batch. A batch that fails outright loses the scores
+# for its 25 items for the day, so one retry on a transient error is
+# worth it; a non-transient error still fails on the first try.
+_ATTEMPTS = 2
+
+# Measured on the server 2026-09-15. Batches are a single Sonnet turn
+# with no tool use, ~25s each, so this is pure IO wait and scales with
+# threads in flight. The old value of 4 was doing the work of one
+# lens at a time; see _score_all_lenses for why the lens loop itself
+# was the larger problem.
+#
+# Override per run with LENS_RELEVANCE_CONCURRENCY=<n>.
+# Fall all the way back with TRENDS_SCRAPERS_SEQUENTIAL=1.
+_CONCURRENCY_DEFAULT = 24
+_CONCURRENCY_ENV     = 'LENS_RELEVANCE_CONCURRENCY'
+
+# ---------------------------------------------------------------------------
+# Score reuse
+# ---------------------------------------------------------------------------
+# A lens score is a deterministic question: "how does THIS persona feel
+# about THIS item?" Neither side of that changes overnight for most of
+# the board. Measured 2026-09-15 against the four prior daily
+# snapshots, 72-76% of the item set carries over unchanged day to day
+# (3,453 of 4,553 on the most recent pair), and yet every one of them
+# was being re-asked from scratch every night.
+#
+# Worse, re-asking produced a DIFFERENT answer most of the time: only
+# 13.9% of carried-over (item, lens) score pairs came back identical
+# to the day before. That drift is noise, not signal. An unchanged
+# podcast does not become 20 points less interesting to Gen X
+# overnight; the model simply sampled differently. Reusing the prior
+# answer is both far cheaper and more stable for the reader.
+#
+# The reuse key is a content hash over everything that actually feeds
+# the prompt for that pair:
+#   item side   - kind, title, artist, context
+#   persona side- the composed persona brief and its calibration anchors
+#   prompt side - _PROMPT_VERSION, bumped by hand whenever the batch
+#                 prompt template changes in a way that should
+#                 invalidate every stored score
+# Change any of those and the pair is re-scored. Change none of them
+# and yesterday's answer stands.
+#
+# `seen_on` is deliberately NOT in the key. It is a provenance label
+# (which platforms carried the title), not a property of the item, and
+# a show landing on one more service does not change how a persona
+# feels about it. Including it would churn the cache for no gain.
+#
+# Disable entirely with LENS_RELEVANCE_CACHE=0 to force a full rescore.
+_PROMPT_VERSION = 'lr-2026-09-15'
+_CACHE_ENV      = 'LENS_RELEVANCE_CACHE'
 
 
 # ---------------------------------------------------------------------------
@@ -1239,6 +1289,97 @@ def _parse_batch(text: str, batch_len: int) -> list[Optional[dict]]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Content fingerprints for score reuse
+# ---------------------------------------------------------------------------
+def _item_fingerprint(it: dict) -> str:
+    """Hash of everything about the item that reaches the prompt.
+
+    Note the deliberate omission of `seen_on` (see the _PROMPT_VERSION
+    block above). Everything else that `_batch_prompt` renders for a
+    row is in here, so a changed fingerprint always means a changed
+    question.
+    """
+    return _parallel.content_key(
+        it.get('kind'), it.get('title'), it.get('artist'), it.get('context'))
+
+
+def _persona_fingerprint(lens: dict) -> str:
+    """Hash of the persona brief plus its calibration anchors.
+
+    Edit a persona JSON or retune an anchor and every score for that
+    lens is invalidated, which is what we want: the question changed.
+    Other lenses keep their cached scores.
+    """
+    anchors = _ANCHORS.get(lens['id']) or []
+    anchor_blob = '|'.join(
+        f'{a.get("kind")}:{a.get("title")}:{a.get("score")}' for a in anchors)
+    return _parallel.content_key(
+        _PROMPT_VERSION, lens['id'], lens.get('persona'), anchor_blob)
+
+
+def _cache_enabled() -> bool:
+    return (os.environ.get(_CACHE_ENV) or '1').strip().lower() not in (
+        '0', 'false', 'no', 'off')
+
+
+def _load_prior_scores(current_fps: dict[str, str]) -> dict[tuple[str, str], dict]:
+    """Build `{(lens_id, item_fingerprint): {score, tilt, why}}` from the
+    last published snapshot.
+
+    A lens only contributes if the snapshot was produced under the same
+    persona fingerprint AND the same prompt version. Anything else is
+    ignored outright rather than partially trusted, so a persona edit
+    can never leave half the board scored against the old brief.
+
+    Entirely best effort: no snapshot, an old snapshot with no
+    fingerprints, or unreadable JSON all degrade to an empty cache,
+    which means a full rescore. That is also exactly what the first
+    run after this change does, which is how the cache seeds itself.
+    """
+    if not _cache_enabled():
+        logger.info("lens_relevance: score reuse disabled via %s", _CACHE_ENV)
+        return {}
+    prior = _read('lens_scores') or {}
+    if not prior:
+        logger.info("lens_relevance: no prior snapshot; scoring everything")
+        return {}
+    if prior.get('prompt_version') != _PROMPT_VERSION:
+        logger.info("lens_relevance: prior snapshot prompt_version=%r != %r; "
+                     "scoring everything",
+                     prior.get('prompt_version'), _PROMPT_VERSION)
+        return {}
+    prior_fps = prior.get('persona_fingerprints') or {}
+    usable = {lid for lid, fp in current_fps.items()
+              if prior_fps.get(lid) == fp}
+    stale = sorted(set(current_fps) - usable)
+    if stale:
+        logger.info("lens_relevance: persona changed for %s; those lenses "
+                     "rescore in full", ', '.join(stale))
+    if not usable:
+        return {}
+
+    cache: dict[tuple[str, str], dict] = {}
+    for entry in (prior.get('items') or {}).values():
+        fp = entry.get('ck')
+        if not fp:
+            continue
+        scores = entry.get('scores') or {}
+        tilts  = entry.get('tilts')  or {}
+        whys   = entry.get('why')    or {}
+        for lens_id, score in scores.items():
+            if lens_id not in usable:
+                continue
+            cache[(lens_id, fp)] = {
+                'score': int(score),
+                'tilt':  tilts.get(lens_id),
+                'why':   whys.get(lens_id) or '',
+            }
+    logger.info("lens_relevance: reuse cache holds %d (lens, item) pairs "
+                 "from %s", len(cache), prior.get('generated_at') or 'prior run')
+    return cache
+
+
 def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
     prompt = _batch_prompt(lens, batch)
     try:
@@ -1250,12 +1391,17 @@ def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
         # accepts and ignores the metadata kwarg (AWS bills the
         # invocation, not Anthropic), and its response has no `usage`
         # attribute so the tap becomes a no-op there.
-        resp = client.messages.create(
-            model=_CLAUDE_MODEL,
-            max_tokens=4096,
-            messages=[{'role': 'user', 'content': prompt}],
-            metadata=_usage_tap.metadata_dict(),
-            timeout=_TIMEOUT_S,
+        resp = _parallel.call_with_backoff(
+            lambda: client.messages.create(
+                model=_CLAUDE_MODEL,
+                max_tokens=4096,
+                messages=[{'role': 'user', 'content': prompt}],
+                metadata=_usage_tap.metadata_dict(),
+                timeout=_TIMEOUT_S,
+            ),
+            attempts=_ATTEMPTS,
+            salt=f'{lens["id"]}|{len(batch)}|{batch[0]["key"] if batch else ""}',
+            label=f'lens_relevance {lens["id"]}',
         )
     except Exception as e:
         logger.info("lens_relevance %s batch (n=%d): %s",
@@ -1266,38 +1412,78 @@ def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
     return _parse_batch(text, len(batch))
 
 
+def _score_all_lenses(client,
+                       work_by_lens: list[tuple[dict, list[dict]]],
+                       workers: Optional[int] = None
+                       ) -> dict[str, dict[str, dict]]:
+    """Score many lenses at once, one flat queue of batches.
+
+    This is the change that mattered most for this phase. The old code
+    looped the lenses one at a time and only parallelised the batches
+    inside a single lens, so with five lenses at four workers the
+    phase ran five sequential 19-minute blocks: 93 minutes, with the
+    pool sitting at four in flight the whole time even though nothing
+    upstream was pushing back.
+
+    There is no ordering dependency between lenses, or between batches
+    within a lens, so every (lens, batch) pair goes into one queue and
+    the pool drains it. Batch numbering stays per lens in the log so
+    the existing `[batch 12/44] -> 25/25 scored` lines still read and
+    grep the same way.
+
+    Returns `{lens_id: {item_key: {score, tilt, why}}}`. A batch that
+    fails both tries contributes nothing and is logged; it never takes
+    down the other batches or the other lenses.
+    """
+    if workers is None:
+        workers = _parallel.worker_count(_CONCURRENCY_ENV, _CONCURRENCY_DEFAULT)
+
+    units: list[dict[str, Any]] = []
+    for lens, items in work_by_lens:
+        batches = [items[i:i + _BATCH_SIZE]
+                   for i in range(0, len(items), _BATCH_SIZE)]
+        for bi, batch in enumerate(batches, start=1):
+            units.append({'lens': lens, 'batch': batch,
+                           'bi': bi, 'total': len(batches)})
+        logger.info("lens_relevance %s: %d items -> %d batches (%s, concurrency=%d)",
+                     lens['id'], len(items), len(batches),
+                     _CLAUDE_MODEL, workers)
+
+    out: dict[str, dict[str, dict]] = {
+        lens['id']: {} for lens, _ in work_by_lens}
+    if not units:
+        return out
+
+    for unit, results, err in _parallel.imap_unordered(
+            lambda u: _score_batch(client, u['lens'], u['batch']),
+            units, workers, label='lens_rel'):
+        lens_id = unit['lens']['id']
+        if err is not None:
+            logger.info("lens_relevance %s batch %d failed: %s",
+                         lens_id, unit['bi'], err)
+            continue
+        covered = 0
+        for it, res in zip(unit['batch'], results or []):
+            if res:
+                out[lens_id][it['key']] = res
+                covered += 1
+        logger.info("  %s [batch %2d/%d] -> %d/%d scored",
+                     lens_id, unit['bi'], unit['total'],
+                     covered, len(unit['batch']))
+    return out
+
+
 def _score_lens(client, lens: dict, items: list[dict]) -> dict[str, dict]:
-    """Score every item for a single lens.  Batches of `_BATCH_SIZE`
-    items per Claude call.  Returns {key: {'score': int, 'why': str}}."""
+    """Score every item for a single lens.
+
+    Kept as-is for external callers (`score_new_items_only.py` drives
+    its gap fill through this). Now a thin wrapper over the shared
+    pool runner so both paths get the same concurrency and the same
+    retry behaviour.
+    """
     if not items:
         return {}
-    out: dict[str, dict] = {}
-    batches: list[list[dict]] = [
-        items[i:i + _BATCH_SIZE]
-        for i in range(0, len(items), _BATCH_SIZE)
-    ]
-    logger.info("lens_relevance %s: %d items -> %d batches (%s, concurrency=%d)",
-                 lens['id'], len(items), len(batches),
-                 _CLAUDE_MODEL, _CONCURRENCY)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_CONCURRENCY) as ex:
-        futs = {ex.submit(_score_batch, client, lens, b): b for b in batches}
-        for bi, fut in enumerate(concurrent.futures.as_completed(futs), start=1):
-            batch = futs[fut]
-            try:
-                results = fut.result(timeout=_TIMEOUT_S + 30)
-            except Exception as e:
-                logger.info("lens_relevance %s batch %d failed: %s",
-                             lens['id'], bi, e)
-                continue
-            covered = 0
-            for it, res in zip(batch, results):
-                if res:
-                    out[it['key']] = res
-                    covered += 1
-            logger.info("  %s [batch %2d/%d] -> %d/%d scored",
-                         lens['id'], bi, len(batches),
-                         covered, len(batch))
-    return out
+    return _score_all_lenses(client, [(lens, items)]).get(lens['id'], {})
 
 
 # ---------------------------------------------------------------------------
@@ -1331,19 +1517,52 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
                  'error': f'anthropic SDK missing: {e}'}
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Combine per-lens results into a single item-keyed dict:
-    #   items[key] = {kind, title, scores: {lens_id: {score, why}}}
+    active = [l for l in _LENSES if not only_lens or l['id'] == only_lens]
+
+    # Fingerprint every item and every persona, then reuse yesterday's
+    # answer for any pair where neither side moved. Only the genuine
+    # deltas reach the model.
+    for it in items:
+        it['ck'] = _item_fingerprint(it)
+    persona_fps = {l['id']: _persona_fingerprint(l) for l in active}
+    cache = _load_prior_scores(persona_fps)
+
     per_lens: dict[str, dict[str, dict]] = {}
-    for lens in _LENSES:
-        if only_lens and lens['id'] != only_lens:
-            continue
-        per_lens[lens['id']] = _score_lens(client, lens, items)
+    work_by_lens: list[tuple[dict, list[dict]]] = []
+    reused_total = 0
+    for lens in active:
+        reused: dict[str, dict] = {}
+        todo: list[dict] = []
+        for it in items:
+            hit = cache.get((lens['id'], it['ck']))
+            if hit is not None:
+                reused[it['key']] = hit
+            else:
+                todo.append(it)
+        per_lens[lens['id']] = reused
+        reused_total += len(reused)
+        if todo:
+            work_by_lens.append((lens, todo))
+        logger.info("lens_relevance %s: %d reused, %d to score",
+                     lens['id'], len(reused), len(todo))
+
+    pairs = len(items) * max(1, len(active))
+    logger.info("lens_relevance: %d/%d (lens, item) pairs reused (%.1f%%); "
+                 "%d pairs to score",
+                 reused_total, pairs, 100.0 * reused_total / max(1, pairs),
+                 pairs - reused_total)
+
+    for lens_id, scored in _score_all_lenses(client, work_by_lens).items():
+        per_lens.setdefault(lens_id, {}).update(scored)
 
     combined: dict[str, dict] = {}
     for it in items:
         row: dict[str, Any] = {
             'kind':   it['kind'],
             'title':  it['title'],
+            # Content fingerprint. Tomorrow's run matches on this to
+            # decide whether this item's scores can stand.
+            'ck':     it.get('ck') or _item_fingerprint(it),
             'scores': {},
             'tilts':  {},   # {lens_id: 0.10-4.0}, tilt vs baseline pop share
             'shares': {},   # {lens_id: 0.001-0.90}, share-of-item audience
@@ -1381,6 +1600,13 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
         'lenses':       lens_meta,
         'cutoffs':      cutoffs,
         'count':        len(combined),
+        # Score-reuse bookkeeping. Tomorrow's run reads these back to
+        # decide what it is allowed to carry over; they are internal
+        # and nothing renders them.
+        'prompt_version':      _PROMPT_VERSION,
+        'persona_fingerprints': persona_fps,
+        'reused_pairs':        reused_total,
+        'scored_pairs':        pairs - reused_total,
         'generated_at': datetime.now(timezone.utc).isoformat(),
     }
 
