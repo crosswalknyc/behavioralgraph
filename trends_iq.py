@@ -1020,7 +1020,9 @@ def _window_delta_fields(cur_sum: float, prev_sum: float,
                           prev_days_fetched: int,
                           cur_days_covered: int = 0,
                           prev_days_covered: int = 0,
-                          label: str = '') -> Optional[tuple]:
+                          label: str = '',
+                          min_rate: float = 0.0,
+                          clamp_to: Optional[float] = None) -> Optional[tuple]:
     """(delta_pct, direction) comparing this window against the
     immediately preceding equal-length window.
 
@@ -1043,6 +1045,19 @@ def _window_delta_fields(cur_sum: float, prev_sum: float,
                                               fields untouched.
     move beyond the plausible ceiling     -> (0.0, 'flat'): the chip
                                               renders no movement.
+                                              Callers that pass
+                                              `clamp_to` get the bound
+                                              itself instead, so a real
+                                              surge still reads as up.
+
+    `min_rate` (2026-09-15) is the smallest per-day audience that can
+    carry a ratio, tested against the LARGER of the two sides. An item
+    under it on both sides never reached an audience worth pricing a
+    move on, so the percentage would describe the bottom of the
+    measurement scale rather than the item; the movement is withheld
+    and the row renders its audience with no arrow. An item that
+    cleared it on either side keeps its percentage, bounded by the
+    ceiling below. Default 0 leaves every existing caller unchanged.
     """
     if prev_days_fetched <= 0:
         return None
@@ -1053,13 +1068,18 @@ def _window_delta_fields(cur_sum: float, prev_sum: float,
         prev_rate = prev_sum / float(prev_days)
         if prev_rate <= 0:
             return None
+        if min_rate > 0 and max(cur_rate, prev_rate) < min_rate:
+            return (0.0, 'flat')
         pct = (cur_rate - prev_rate) / prev_rate
         if pct > _WINDOW_DELTA_MAX_RATIO:
             logger.info(
-                'trends_iq window delta: withholding implausible +%.0f%% '
+                'trends_iq window delta: %s implausible +%.0f%% '
                 'on %s (%d over %d day(s) against %d over %d day(s))',
+                'bounding' if clamp_to is not None else 'withholding',
                 pct * 100.0, label or 'item', int(cur_sum), cur_days,
                 int(prev_sum), prev_days)
+            if clamp_to is not None:
+                return (round(float(clamp_to), 4), _direction_for(clamp_to))
             return (0.0, 'flat')
         return (round(pct, 4), _direction_for(pct))
     if cur_sum > 0:
@@ -4047,7 +4067,49 @@ _READER_FIELDS = (
     'unit_label', 'confidence', 'method', 'sources',
     'delta_pct', 'direction', 'prev_estimate',
     'prev_date', 'as_of_date',
+    # Window provenance (2026-09-15), stamped by
+    # `_accumulate_headline_estimates_over_window`. `window_days_
+    # covered` / `window_days_total` say how many of the last N days
+    # actually carried the story; `prev_days_covered` says the same
+    # for the baseline window, alongside `prev_date` (the most recent
+    # prior day that carried it). Together they make the comparison
+    # behind the movement chip checkable rather than implicit.
+    'window_days_covered', 'window_days_total',
+    'prev_days_covered',
 )
+
+# Smallest audience a news percentage may be computed from, in US
+# readers per day (2026-09-15), tested against the LARGER of the two
+# sides being compared.
+#
+# Two bounds do two different jobs here. This one answers whether
+# there is an audience worth pricing a move on at all: the 5th
+# percentile of priced headlines sits at 150 readers a day, and down
+# in that band a reader count is a placeholder rather than a
+# readership (2, 15, 16, 40). A story under 500 a day in BOTH windows
+# never had an audience to move, so its ratio is arithmetic on the
+# bottom of the scale; it keeps its audience number and renders no
+# movement. A story that cleared 500 on either side did reach an
+# audience, so its direction holds and the ceiling below decides how
+# large a claim we will make about it. Sector lists carry genuinely
+# small readerships, so testing the larger side is what keeps a real
+# philanthropy story from being silenced by yesterday's low base.
+_NEWS_MIN_AUDIENCE_READERS = 500.0
+
+# Where a news move lands when it clears the six-fold per-day ceiling
+# every Trends list observes. News genuinely breaks faster than a
+# streaming title does, so withholding the movement outright would
+# read as "held flat" on a story that really did surge. The chip is
+# bounded instead: 4.99 renders as 499%, one point under the bar every
+# other Trends chip sits below.
+_NEWS_DELTA_CLAMP_RATIO = 4.99
+
+# How far past the two windows the day scan reaches, so a missing or
+# repeated day still leaves enough measured days to fill both halves,
+# and the hard read ceiling that keeps a 30 day window from fanning
+# out into an unbounded number of object reads.
+_NEWS_WINDOW_DAY_BUFFER = 4
+_NEWS_WINDOW_MAX_READS = 70
 
 
 def _headline_lookup_key(title: str) -> str:
@@ -4069,7 +4131,262 @@ def _stamp_reader_estimate(row: dict, entry: Optional[dict]) -> None:
     us_readers = {k: entry[k] for k in _READER_FIELDS if k in entry}
     if not us_readers.get('unit_label'):
         us_readers['unit_label'] = 'daily US readers'
+    _bound_reader_movement(us_readers)
     row['us_readers'] = us_readers
+
+
+def _bound_reader_movement(block: dict) -> None:
+    """Hold a reader block to the two bounds every news percentage
+    observes, whichever pass produced it.
+
+    The window accumulator applies both itself. This is the net for
+    the day the accumulator cannot reach a prior archive at all and
+    the block still carries the single-day comparison the daily
+    reader pass stamped on it, which is unbounded.
+    """
+    pct = block.get('delta_pct')
+    if not isinstance(pct, (int, float)) or pct == 0:
+        return
+
+    def _rate(value_key: str, days_key: str) -> float:
+        v = block.get(value_key)
+        if not isinstance(v, (int, float)) or v <= 0:
+            return 0.0
+        d = block.get(days_key)
+        return v / float(d if isinstance(d, int) and d > 0 else 1)
+
+    cur_rate  = _rate('us_estimate',   'window_days_covered')
+    prev_rate = _rate('prev_estimate', 'prev_days_covered')
+    if prev_rate > 0 and max(cur_rate, prev_rate) < _NEWS_MIN_AUDIENCE_READERS:
+        block['delta_pct'] = 0.0
+        block['direction'] = 'flat'
+        return
+    if pct > _WINDOW_DELTA_MAX_RATIO:
+        block['delta_pct'] = _NEWS_DELTA_CLAMP_RATIO
+        block['direction'] = 'up'
+
+
+def _headline_day_coverage(snap: dict) -> set:
+    """Story keys the headline pool actually carried on the day this
+    snapshot describes.
+
+    A dated `headline_estimates` snapshot's `items` dict is
+    cumulative: a story priced last week is still in today's copy,
+    carried forward unchanged and re-stamped with today's date. So
+    `items` on its own cannot say which days a story was live, and
+    summing it across a window would count carried-forward levels as
+    if each had been measured. `inputs` is the pool the day actually
+    collected and priced, and is the honest per-day coverage signal.
+    """
+    out: set = set()
+    for inp in ((snap or {}).get('inputs') or []):
+        k = (inp or {}).get('key')
+        if k:
+            out.add(k)
+    return out
+
+
+def _accumulate_headline_estimates_over_window(
+        lookback_days: int,
+        asof: Optional[str] = None,
+        today_snap: Optional[dict] = None) -> Optional[dict]:
+    """Window-scoped movement for every story in the reader archive,
+    on the same dated-archive comparison the Titles and FAST rails
+    use (`_accumulate_stream_estimates_over_window`).
+
+    Before this, a news chip came from the daily reader pass, which
+    compares one day against the day before and stamps the result
+    into the snapshot. Every window read the same stored number, so
+    1, 7 and 30 day produced identical movement, and a niche story
+    going from 400 readers to 9,000 rendered +2,150%.
+
+    Here each story's reader count is summed across the days of the
+    chosen window that actually carried it, the same sum is taken
+    over the immediately preceding equal-length window, and the two
+    are compared PER COVERED DAY through the shared
+    `_window_delta_fields`. Comparing per day is what stops a story
+    measured on 6 of the last 7 days from reading as a fall against a
+    7-day baseline. Coverage comes from each day's `inputs` pool, not
+    from the cumulative `items` dict.
+
+    Stamped on every entry that gets a verdict: `prev_estimate`,
+    `prev_days_covered`, `prev_date`, `window_days_covered`,
+    `window_days_total`.
+
+    Two bounds apply, both through the shared path: an audience under
+    `_NEWS_MIN_AUDIENCE_READERS` per day on both sides renders no
+    movement, and a move past the six-fold per-day ceiling renders at
+    the bound so a real surge still reads as up.
+
+    A day is counted once. The daily run sometimes files a fresh
+    dated copy of a pool it already collected, which puts the same
+    measured day on both sides of a short window and reads as a dead
+    0% on every story. A dated file whose collected pool repeats its
+    newer neighbour describes the same measured day and is skipped,
+    so the window always spans distinct days of measurement.
+
+    Returns the merged snapshot, or None when no dated archive was
+    reachable at all (the caller then keeps the plain latest read).
+    Never raises.
+    """
+    try:
+        n = int(lookback_days or 1)
+    except Exception:
+        n = 1
+    n = max(1, min(n, 62))
+
+    ref_iso = asof or _today_iso()
+    try:
+        ref_date = date.fromisoformat(ref_iso)
+    except Exception:
+        return None
+
+    # Read back far enough to fill both halves even when some days
+    # are missing or repeat an earlier pool, then let the distinct
+    # days that came back define the two windows. Reading by date
+    # rather than reaching for the live `latest/` copy is deliberate:
+    # `latest` is written by the same daily run that writes that
+    # day's archive, so filing it under today's date would put
+    # identical numbers on both sides and every chip would read a
+    # dead 0%.
+    span = min(2 * n + _NEWS_WINDOW_DAY_BUFFER, _NEWS_WINDOW_MAX_READS)
+    scan_isos = [(ref_date - timedelta(days=i)).isoformat()
+                 for i in range(span)]
+
+    def _fetch_one(d_iso: str) -> tuple:
+        return d_iso, _read_snapshot('headline_estimates', asof=d_iso)
+
+    by_date: dict = {}
+    ex = ThreadPoolExecutor(
+        max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
+        thread_name_prefix='tiq-news')
+    try:
+        futures = [ex.submit(_fetch_one, d) for d in scan_isos]
+        done, not_done = futures_wait(
+            futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
+        for fut in done:
+            try:
+                d_iso, snap = fut.result()
+            except Exception:
+                continue
+            if snap and isinstance(snap, dict):
+                by_date[d_iso] = snap
+        if not_done:
+            logger.warning(
+                'trends_iq news accumulator: %d of %d dated reads missed '
+                'the %ss budget; comparing the days that landed',
+                len(not_done), len(futures), _WINDOW_ACCUMULATOR_TIMEOUT_S)
+    except Exception as e:
+        logger.debug('trends_iq news accumulator fetch failed: %s', e)
+        return None
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    if not by_date:
+        return None
+
+    # One entry per measured day, newest first. A dated file whose
+    # collected pool repeats its newer neighbour is the same day
+    # written twice, and counting it would put that day on both
+    # sides of a short window.
+    distinct: list = []
+    repeats = 0
+    for d_iso in sorted(by_date, reverse=True):
+        covered = _headline_day_coverage(by_date[d_iso])
+        if distinct and covered and covered == distinct[-1][2]:
+            repeats += 1
+            continue
+        distinct.append(
+            (d_iso, by_date[d_iso].get('items') or {}, covered))
+
+    fetched = distinct[:n]
+    prev_fetched = distinct[n:2 * n]
+    if not fetched:
+        return None
+
+    # Shape template: the live copy the caller already read, which is
+    # the freshest set of stories and the one the lists render off.
+    # Only its movement fields change below.
+    template = (today_snap
+                if isinstance((today_snap or {}).get('items'), dict)
+                else _read_snapshot('headline_estimates',
+                                    asof=fetched[0][0]))
+    try:
+        merged = json.loads(json.dumps(template)) if template else None
+    except Exception:
+        merged = None
+    if not merged or not isinstance(merged.get('items'), dict):
+        return None
+
+    prev_days_fetched = len(prev_fetched)
+    stamped = 0
+    level_fallback = 0
+    for key, entry in merged['items'].items():
+        if not isinstance(entry, dict):
+            continue
+        level = entry.get('us_estimate')
+        if not isinstance(level, (int, float)) or level <= 0:
+            continue
+
+        cur_sum = 0
+        cur_days = 0
+        for _d, items, covered in fetched:
+            if key not in covered:
+                continue
+            v = (items.get(key) or {}).get('us_estimate')
+            if isinstance(v, (int, float)) and v > 0:
+                cur_sum += int(v)
+                cur_days += 1
+        if cur_days == 0:
+            # The story is in the store but was not in any of this
+            # window's collected pools. The level we are about to
+            # render is still one measured reading, so compare on
+            # that rather than dropping the row's movement.
+            cur_sum, cur_days = int(level), 1
+            level_fallback += 1
+
+        prev_sum = 0
+        prev_days = 0
+        prev_baseline_day = ''
+        for d, items, covered in prev_fetched:
+            if key not in covered:
+                continue
+            v = (items.get(key) or {}).get('us_estimate')
+            if isinstance(v, (int, float)) and v > 0:
+                prev_sum += int(v)
+                prev_days += 1
+                if not prev_baseline_day:
+                    prev_baseline_day = d
+
+        d = _window_delta_fields(
+            cur_sum, prev_sum, prev_days_fetched,
+            cur_days_covered=cur_days, prev_days_covered=prev_days,
+            label=key, min_rate=_NEWS_MIN_AUDIENCE_READERS,
+            clamp_to=_NEWS_DELTA_CLAMP_RATIO)
+        if d is None:
+            continue
+        entry['delta_pct'], entry['direction'] = d
+        entry['prev_estimate'] = int(prev_sum)
+        entry['prev_days_covered'] = prev_days
+        entry['window_days_covered'] = cur_days
+        entry['window_days_total'] = n
+        if prev_baseline_day:
+            entry['prev_date'] = prev_baseline_day
+        else:
+            entry.pop('prev_date', None)
+        stamped += 1
+
+    merged['window_lookback_days'] = n
+    merged['window_days_fetched'] = len(fetched)
+    merged['window_prev_days_fetched'] = prev_days_fetched
+    logger.info(
+        'trends_iq headline_estimates accumulator: window=%dd, %d/%d '
+        'current + %d/%d prior measured days (%d repeated days skipped), '
+        'window movement on %d stories (%d compared on their stored '
+        'level)',
+        n, len(fetched), n, prev_days_fetched, n, repeats, stamped,
+        level_fallback)
+    return merged
 
 
 def _annotate_headlines_with_readers(trending_headlines: list,
@@ -4098,20 +4415,21 @@ def _annotate_headlines_with_readers(trending_headlines: list,
     All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
     -> silent no-op (rows just render without the reader chip)."""
-    if not estimates:
-        return
-    items = estimates.get('items') or {}
-    if not items:
-        return
+    items = (estimates or {}).get('items') or {}
 
     def _stamp(row: dict) -> None:
         title = (row.get('title') or '').strip()
-        if not title:
-            return
-        key = _headline_lookup_key(title)
-        entry = items.get(key)
+        entry = items.get(_headline_lookup_key(title)) if title else None
         if entry:
             _stamp_reader_estimate(row, entry)
+            return
+        # No window verdict for this row (its title reads differently
+        # in the news feed than in the reader archive), so it still
+        # carries the single-day comparison the daily reader pass
+        # stamped. Hold it to the same two bounds.
+        existing = row.get('us_readers')
+        if isinstance(existing, dict):
+            _bound_reader_movement(existing)
 
     for row in (trending_headlines or []):
         _stamp(row)
@@ -4805,6 +5123,25 @@ def _yesterday_iso(today_iso: Optional[str] = None) -> str:
     return (today - timedelta(days=1)).isoformat()
 
 
+def _window_baseline_iso(today_iso: Optional[str] = None,
+                          lookback_days: int = 1) -> str:
+    """YYYY-MM-DD for the day the chosen window starts from: the
+    reference day less `lookback_days`. lookback_days=1 is exactly
+    `_yesterday_iso`."""
+    try:
+        n = max(1, int(lookback_days or 1))
+    except Exception:
+        n = 1
+    if today_iso:
+        try:
+            today = datetime.fromisoformat(today_iso).date()
+        except Exception:
+            today = datetime.now(timezone.utc).date()
+    else:
+        today = datetime.now(timezone.utc).date()
+    return (today - timedelta(days=n)).isoformat()
+
+
 def _rank_delta_pct(prev_rank: Optional[int],
                      today_rank: Optional[int]) -> Optional[float]:
     """Rank climb / fall as a fraction.  Positive = climbed toward #1.
@@ -5320,24 +5657,57 @@ def _annotate_headlines_with_rank_change(headline_lists: list,
                                            snapshot_source: str,
                                            by_source_dict: Optional[dict] = None,
                                            asof: Optional[str] = None,
-                                           label: str = '') -> None:
+                                           label: str = '',
+                                           lookback_days: int = 1) -> None:
     """headline_lists: the flat ranked list rendered as the primary
     tab body.  by_source_dict: optional {source: {'items': [...]}} for
-    the per-publisher grouped view."""
-    prev_iso = _yesterday_iso(asof)
+    the per-publisher grouped view.
+
+    The rank baseline is the start of the window the reader picked
+    (2026-09-15), so a spot move on the 7-day view is a move across
+    the week rather than across last night. Falls back to yesterday
+    when that day was never archived, so the column never empties.
+
+    Rank fills the gaps rather than leading. A row the window
+    comparison already settled keeps that verdict, because a reader
+    count measured across the whole window is a better account of
+    the window than one list position is. Rows the reader archive
+    never carried, which would otherwise show nothing at all, take
+    the rank move."""
+    prev_iso = _window_baseline_iso(asof, lookback_days)
     prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
+    if not prev_snap and prev_iso != _yesterday_iso(asof):
+        prev_iso = _yesterday_iso(asof)
+        prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
     if not prev_snap:
         logger.info('%s rank delta: no prior snapshot for %s',
                      label or snapshot_source, prev_iso)
         return
     prev_flat = (prev_snap.get('national')
                  or prev_snap.get('items') or [])
+
+    def _unsettled(rows: list) -> list:
+        """Rows with no window verdict on them yet. `window_days_
+        covered` is stamped only by the window comparison, so its
+        absence is the signal that this row has nothing better."""
+        out = []
+        for r in (rows or []):
+            blk = r.get('us_readers')
+            if isinstance(blk, dict) and blk.get('window_days_covered') \
+                    is not None:
+                continue
+            out.append(r)
+        return out
+
+    held = 0
     # Rank field on the FLAT list is `rank` (assigned by
     # _sort_wall_street_by_readership and the business-news
     # aggregator at compute_view time).  URL is the stable key on
     # every headline.
+    _flat_open = _unsettled(headline_lists)
+    held += len(headline_lists or []) - len(_flat_open)
     m1, n1 = _apply_rank_deltas(
-        headline_lists or [], prev_flat,
+        _flat_open, prev_flat,
         rank_field='rank', target_field='us_readers',
         prev_date=prev_iso)
     m2 = n2 = 0
@@ -5354,15 +5724,18 @@ def _annotate_headlines_with_rank_change(headline_lists: list,
             prev_block_raw = prev_by_source.get(src)
             prev_rows = prev_block_raw if isinstance(prev_block_raw, list) \
                 else ((prev_block_raw or {}).get('items') or [])
+            _open = _unsettled(cur_rows)
+            held += len(cur_rows or []) - len(_open)
             m, n = _apply_rank_deltas(
-                cur_rows, prev_rows,
+                _open, prev_rows,
                 rank_field='rank', target_field='us_readers',
                 prev_date=prev_iso)
             m2 += m
             n2 += n
     logger.info('%s rank delta: %d / %d flat rows + %d / %d by-source '
-                 'rows vs %s', label or snapshot_source,
-                 m1, n1, m2, n2, prev_iso)
+                 'rows vs %s (%d rows kept their window verdict)',
+                 label or snapshot_source,
+                 m1, n1, m2, n2, prev_iso, held)
 
 
 def _annotate_fast_with_rank_change(fast_trending: dict,
@@ -9662,6 +10035,19 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # -> rows just don't carry `us_readers` and the frontend renders
     # without the extra chip.
     headline_estimates_snap = results.get('headline_estimates') or {}
+    # WINDOW accumulator (2026-09-15). The daily reader pass stamps a
+    # single-day comparison into the snapshot, so every window used to
+    # render the same movement and a tiny baseline could produce a
+    # four-figure percentage. Recompute the movement against the dated
+    # archive for the window the reader actually picked, on the shared
+    # path the Titles and FAST rails use. Falls back to the stored
+    # single-day comparison only when no dated archive was reachable.
+    if not historic and headline_estimates_snap:
+        _news_acc = _accumulate_headline_estimates_over_window(
+            int(lookback_days or 1), asof=asof,
+            today_snap=headline_estimates_snap)
+        if _news_acc:
+            headline_estimates_snap = _news_acc
     _annotate_headlines_with_readers(
         headlines, articles_by_source, philanthropy_news,
         headline_estimates_snap,
@@ -9681,17 +10067,17 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_headlines_with_rank_change(
         business_news, snapshot_source='business_news',
         by_source_dict=business_by_source,
-        label='headlines.business')
+        label='headlines.business', lookback_days=lookback_days)
     _annotate_headlines_with_rank_change(
         wall_street_news, snapshot_source='wall_street_news',
         by_source_dict=wall_street_by_source,
-        label='headlines.wall_street')
+        label='headlines.wall_street', lookback_days=lookback_days)
     # Philanthropy rides the same shape and was the one news sub-tab
     # never wired in, which left its rows with no movement chip.
     _annotate_headlines_with_rank_change(
         philanthropy_news, snapshot_source='philanthropy_news',
         by_source_dict=philanthropy_by_source,
-        label='headlines.philanthropy')
+        label='headlines.philanthropy', lookback_days=lookback_days)
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
