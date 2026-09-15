@@ -184,14 +184,26 @@ _MAX_GAMING_ITEMS    = 140
 # FAST-CHANNEL RANKER: micro-channels inside each FAST platform
 # (LaurenZSide, Mythical 24/7, Nick Jr. Pluto TV, Forensic Files
 # 24/7, ...). Roku ships ~619, Amazon ~655, Pluto ~410, Tubi ~169
-# = ~1,850 total, so we cap at top-100 by airings/wk per platform
-# and DO NOT cross-platform dedup: the same channel name on Pluto
-# vs Roku vs Amazon represents entirely different audiences on
-# different distribution rails, so each platform's copy gets its
-# own Claude call. Added 2026-08-21 (Jenna: "channel ranker" sub-
-# tab, "ranks based on views and give an estimate of how many
-# views each channel had"). ~$8/day added spend at 400 items.
-_MAX_FAST_CHANNEL_ITEMS = 400
+# = ~1,850 total, and EVERY one of them is measured. We DO NOT
+# cross-platform dedup: the same channel name on Pluto vs Roku vs
+# Amazon represents entirely different audiences on different
+# distribution rails, so each platform's copy gets its own Claude
+# call. Added 2026-08-21 (Jenna: "channel ranker" sub-tab, "ranks
+# based on views and give an estimate of how many views each
+# channel had").
+#
+# 2026-09-14: was 400, which resolved to a flat top-100-per-platform
+# slice of a list ordered by weekly airings. Airings is scheduling
+# volume, not audience - measured against our own priced field the
+# airings-to-viewers Spearman ran 0.64 Roku / 0.74 Amazon / 0.79
+# Pluto / 0.83 Tubi, and on Roku a channel at airings-rank 59 placed
+# inside the top 20 by viewers. So the slice was choosing the
+# ranker's field on the wrong signal and leaving ~1,450 channels
+# unable to place no matter how they performed. The number below is
+# a defensive ceiling ONLY: it sits well above the whole corpus so
+# it does not bind today, and `_collect_fast_channels` logs an error
+# the moment it does.
+_MAX_FAST_CHANNEL_ITEMS = 2_600
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -714,9 +726,47 @@ def _top_fast_titles_per_platform(top_n: int = 5) -> dict[str, list[str]]:
     return out
 
 
+def _allocate_platform_caps(counts: dict[str, int],
+                             max_items: int) -> dict[str, int]:
+    """Return {platform_slug: how many channels to price}.
+
+    When the whole corpus fits under `max_items` - the normal case -
+    every platform is uncapped and every channel gets measured. When
+    it does not, the ceiling is split in PROPORTION to each platform's
+    real channel count (largest-remainder rounding) so a big lineup
+    (Amazon ~655) can't starve a small one (Tubi ~169), which a flat
+    `max_items // 4` did. A bind is logged at ERROR: it means the
+    ranker has stopped measuring the full field, which is the exact
+    defect this allocation replaced.
+    """
+    total = sum(counts.values())
+    if total <= max_items:
+        return dict(counts)
+    logger.error(
+        "stream_estimates: FAST channel ceiling IS BINDING - %d channels "
+        "across %d platforms exceeds max_items=%d. Channels past each "
+        "platform's proportional share will ship with no audience value "
+        "and cannot rank. Raise _MAX_FAST_CHANNEL_ITEMS.",
+        total, len(counts), max_items)
+    exact = {s: (max_items * n / total) for s, n in counts.items()}
+    caps = {s: min(counts[s], int(v)) for s, v in exact.items()}
+    # Hand the rounding slack to the biggest fractional parts first.
+    order = sorted(counts, key=lambda s: exact[s] - int(exact[s]),
+                    reverse=True)
+    leftover = max_items - sum(caps.values())
+    i = 0
+    while leftover > 0 and any(caps[s] < counts[s] for s in counts):
+        s = order[i % len(order)]
+        if caps[s] < counts[s]:
+            caps[s] += 1
+            leftover -= 1
+        i += 1
+    return caps
+
+
 def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dict]:
-    """Collect the top-N-by-airings micro-channels on each FAST
-    platform. Keyed by `fast_channel:<platform_slug>:<norm_name>`
+    """Collect EVERY micro-channel on each FAST platform. Keyed by
+    `fast_channel:<platform_slug>:<norm_name>`
     with NO cross-platform dedup: the same channel name on Pluto vs.
     Roku vs. Amazon represents distinct audiences on distinct
     distribution rails, so each copy earns its own Claude call.
@@ -749,22 +799,28 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
     # amazon_livetv.json and returns the top 5 titles per platform.
     top_titles_by_platform = _top_fast_titles_per_platform()
 
-    # Per-platform cap: divide the budget across platforms so no
-    # single platform (Amazon at 655 channels) starves the others.
-    # Roku ~619 / Amazon ~655 / Pluto ~410 / Tubi ~169. Cap at
-    # top-100 per platform so the ranker still surfaces the whole
-    # top page of each platform.
-    per_platform_cap = max(50, max_items // 4)
+    # Eligibility: every channel on every platform is measured. The
+    # only slice is the defensive `max_items` ceiling, which sits
+    # above the whole corpus and so does not bind; if it ever does,
+    # `_allocate_platform_caps` splits it proportionally to each
+    # platform's real channel count and logs the bind loudly.
+    counts = {slug: len((sources.get(slug) or {}).get('channels') or [])
+               for slug, _label in _FAST_SLUGS}
+    caps = _allocate_platform_caps(counts, max_items)
 
     out: list[dict] = []
     for slug, label in _FAST_SLUGS:
         block = sources.get(slug) or {}
         channels = (block.get('channels') or [])
         top_titles_platform = top_titles_by_platform.get(slug) or []
-        # Assume the scraper already emits channels sorted by
-        # airings desc (build_fast_channel_lineups does this
-        # explicitly). Cap defensively.
-        for i, ch in enumerate(channels[:per_platform_cap]):
+        # The scraper already emits channels sorted by airings desc
+        # (build_fast_channel_lineups does this explicitly), so
+        # `best_rank` below is an airings position. That position
+        # drives the COST tier (Sonnet for the top of a platform,
+        # Haiku for the tail) and rides along as one research hint
+        # among several; it decides nothing about the final ranking,
+        # which is views desc over the whole field.
+        for i, ch in enumerate(channels[:caps.get(slug, len(channels))]):
             name = (ch.get('name') or '').strip()
             if not _cp_normalize(name):
                 continue
@@ -805,12 +861,17 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
                 # floor, not a target.
                 'top_titles_on_channel': top_titles_platform,
             })
-    # Sort by airings desc across all platforms so the highest-
-    # signal channels get researched first (parallelism doesn't
-    # care about order, but the caller's log is more informative
-    # this way).
+    # Research order only (the caller's progress log reads better
+    # with the busiest channels first). It has no bearing on the
+    # ranker's order, which is views desc across the full field.
     out.sort(key=lambda e: e.get('airings') or 0, reverse=True)
-    return out[:max_items]
+    logger.info("stream_estimates: collected %d FAST channels to price "
+                 "(%s) out of %d in the lineup",
+                 len(out),
+                 ', '.join(f'{s}={caps.get(s, 0)}/{counts.get(s, 0)}'
+                            for s, _l in _FAST_SLUGS),
+                 sum(counts.values()))
+    return out
 
 
 def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
@@ -4204,9 +4265,16 @@ def _custom_id_for(key: str) -> str:
 def _research_all_batch(items: list[dict],
                           target_date_iso: Optional[str] = None,
                           spend_monitor: Optional[Any] = None,
+                          checkpoint_state: Optional[dict] = None,
                           ) -> dict[str, dict]:
     """Submit `items` as a single Message Batch, poll until ended,
     fetch results, parse per-item. Returns {key: sanitized_result}.
+
+    `checkpoint_state` has the same shape the serial path uses (see
+    `_research_all`). Results are flushed to the WIP S3 key every
+    _CHECKPOINT_INTERVAL items AS THEY STREAM BACK, so a crash or a
+    kill during the results read resumes from the last flush instead
+    of re-paying for the whole batch.
 
     Preflight: estimates the batch's cost against the SpendMonitor's
     remaining budget. If the estimate exceeds the remaining cap, does
@@ -4432,6 +4500,23 @@ def _research_all_batch(items: list[dict],
                 continue
             out[key] = sanitized
             n_ok += 1
+            if checkpoint_state is not None:
+                checkpoint_state.setdefault('in_progress', {})[key] = sanitized
+                total_done = len(checkpoint_state['in_progress'])
+                last = int(checkpoint_state.get('flushed_at') or 0)
+                if total_done - last >= _CHECKPOINT_INTERVAL:
+                    try:
+                        _write_wip_checkpoint(
+                            target_date_iso=checkpoint_state['target_date_iso'],
+                            kept_prior=checkpoint_state.get('kept_prior') or {},
+                            researched=checkpoint_state['in_progress'],
+                        )
+                        checkpoint_state['flushed_at'] = total_done
+                        logger.info("  [checkpoint] flushed %d batch "
+                                     "result(s)", total_done)
+                    except Exception as e:
+                        logger.warning("stream_estimates BATCH: WIP flush "
+                                        "failed (non-fatal): %s", e)
         elif rtype == 'errored':
             err = getattr(result, 'error', None)
             logger.info("stream_estimates BATCH result errored: cid=%s "
@@ -5300,11 +5385,12 @@ def fetch(only: Optional[set[str]] = None,
     }
     # -----------------------------------------------------------------
     # WIP checkpoint resume (Lever 4). On restart, skip items already
-    # researched in the WIP snapshot for the target day. Serial path
-    # only - batch runs are atomic.
+    # researched in the WIP snapshot for the target day. Both paths:
+    # the batch path flushes results as they stream back (2026-09-14),
+    # so a kill part-way through a large batch read resumes too.
     # -----------------------------------------------------------------
     wip_researched: dict[str, dict] = {}
-    if resume_from_wip and not batch_mode:
+    if resume_from_wip:
         wip = _read_wip_checkpoint(target_date_iso)
         if wip:
             wip_researched = wip.get('researched') or {}
@@ -5399,30 +5485,31 @@ def fetch(only: Optional[set[str]] = None,
                      "a numeric anchor but still receive the day-specific "
                      "differentiation directive.", target_date_iso)
 
+    # Both paths flush per-item WIP checkpoints every 25 results.
+    checkpoint_state = {
+        'target_date_iso': target_date_iso,
+        'kept_prior':      dict(prior_items),
+        'in_progress':     dict(wip_researched),
+        'flushed_at':      len(wip_researched),
+    }
     if batch_mode:
         researched_new = _research_all_batch(
             items_to_research,
             target_date_iso=target_date_iso,
             spend_monitor=spend_monitor,
+            checkpoint_state=checkpoint_state,
         )
     else:
-        # Serial path with per-25-item WIP flushes.
-        checkpoint_state = {
-            'target_date_iso': target_date_iso,
-            'kept_prior':      dict(prior_items),
-            'in_progress':     dict(wip_researched),
-            'flushed_at':      len(wip_researched),
-        }
         researched_new = _research_all(
             items_to_research,
             target_date_iso=target_date_iso,
             spend_monitor=spend_monitor,
             checkpoint_state=checkpoint_state,
         )
-        # Union WIP resume + new research so downstream sees everything.
-        merged = dict(wip_researched)
-        merged.update(researched_new)
-        researched_new = merged
+    # Union WIP resume + new research so downstream sees everything.
+    merged = dict(wip_researched)
+    merged.update(researched_new)
+    researched_new = merged
 
     # Forward continuity guard: bound unjustified day-over-day jumps on
     # freshly-researched items against their previous-day reference.
