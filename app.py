@@ -50002,6 +50002,11 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # AFTER the caller-subject override above so the forced batch
         # slice name is what gets decomposed. Reprices the draft.
         _decompose_embedded_subject_cuts(spec_draft, per_prompt)
+        # Persona-universe normalization (2026-09-15): an audience
+        # described by demographics + interests gets a clean cohort
+        # label with age / income qualifiers riding as cuts. Same
+        # treatment on every interpret surface.
+        _v1_persona_universe_normalize(spec_draft, per_prompt)
         # Multi-cohort recovery: age cohorts named in the raw ask that
         # the interpreter dropped ride as additional cuts.
         _augment_multi_cohort_cuts(spec_draft, per_prompt)
@@ -50157,6 +50162,9 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             if _lbl:
                 spec_draft['cut_label'] = _lbl[:160]
         _decompose_embedded_subject_cuts(spec_draft, prompt_text)
+        # Persona-universe normalization (2026-09-15): same treatment
+        # on every interpret surface.
+        _v1_persona_universe_normalize(spec_draft, prompt_text)
         if prompt_text:
             _augment_multi_cohort_cuts(spec_draft, prompt_text)
         _drop_degenerate_addon_cuts(spec_draft)
@@ -54844,6 +54852,11 @@ def api_synth_chat_interpret():
         # ('Go-GURT - 18-24'). Runs after base_credits is anchored so
         # the repricing (base + 3 x cuts) sticks.
         _decompose_embedded_subject_cuts(spec_draft, text)
+        # Persona-universe normalization (2026-09-15): an audience
+        # described by demographics + interests gets a clean cohort
+        # label with age / income qualifiers riding as cuts. Same
+        # treatment on every interpret surface (Prometheus included).
+        _v1_persona_universe_normalize(spec_draft, text)
         # Multi-cohort recovery (2026-08-20 Jenna, Protein
         # Enthusiasts): a request naming SEVERAL age cohorts of the
         # same base audience is ONE TU + one cut per cohort. The
