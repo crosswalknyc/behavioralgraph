@@ -29,6 +29,12 @@ except Exception as _intent_iq_err:
     print(f"⚠️ Attribution IQ module unavailable at import time: {_intent_iq_err}")
 
 try:
+    import mta_iq as _mta_iq  # type: ignore
+except Exception as _mta_iq_err:
+    _mta_iq = None
+    print(f"⚠️ Multi-Touch Attribution module unavailable at import time: {_mta_iq_err}")
+
+try:
     import trends_iq as _trends_iq  # type: ignore
 except Exception as _trends_iq_err:
     _trends_iq = None
@@ -17929,6 +17935,41 @@ def api_intent_in_flight(title_slug):
         return jsonify(_intent_iq.get_in_flight(title_slug,
                                                   as_of=request.args.get('as_of'),
                                                   window=request.args.get('window')))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/mta', methods=['GET'])
+@requires_auth
+def api_intent_mta(title_slug):
+    """Per-touchpoint conversion coefficients for a campaign.
+
+    Gated by ``enabled_tabs.mta``: campaigns without that flag set
+    return 404 so the frontend's tab-visibility observer keeps the
+    button hidden even if a curious operator hand-hits the URL.
+    """
+    ok, err = _require_intent_iq(title_slug)
+    if not ok:
+        return err
+    if _mta_iq is None:
+        return jsonify({'success': False,
+                        'error': 'Multi-Touch Attribution module not loaded'}), 500
+    # Verify the per-campaign flag before doing any work.
+    try:
+        ov = _intent_iq.get_overview(title_slug)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'campaign lookup failed'}), 500
+    if not ov or not ov.get('success'):
+        return jsonify({'success': False, 'error': 'campaign not found'}), 404
+    tabs = ov.get('enabled_tabs') or {}
+    if tabs.get('mta') is False or ('mta' not in tabs):
+        return jsonify({'success': False,
+                        'error': 'Multi-Touch Attribution not enabled for this campaign'}), 404
+    try:
+        return jsonify(_mta_iq.compute_mta_coefficients(
+            title_slug, as_of=request.args.get('as_of')))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

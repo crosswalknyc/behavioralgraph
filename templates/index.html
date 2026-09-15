@@ -31701,13 +31701,14 @@ https://www.instagram.com/p/..."></textarea>
                     <span class="iiq-explore-eyebrow">Explore the full breakdown</span>
                     <span class="iiq-explore-chevron" id="iiqExploreChevron" aria-hidden="true">&#9662;</span>
                 </div>
-                <div class="iiq-explore-hint" id="iiqExploreHint">Timeline, Assets, Performance, Intent to Conversion, ROI.</div>
+                <div class="iiq-explore-hint" id="iiqExploreHint">Timeline, Assets, Performance, Intent to Conversion, Multi-Touch, ROI.</div>
                 <div class="iiq-explore-body" id="iiqExploreBody">
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="conversion" onclick="showIntentIQSubtab('conversion')">💰 INTENT TO CONVERSION</button>
+                <button class="iiq-subtab" data-iiq-subtab="mta" onclick="showIntentIQSubtab('mta')">🎯 MULTI-TOUCH</button>
                 <button class="iiq-subtab" data-iiq-subtab="roi" onclick="showIntentIQSubtab('roi')">💵 ROI</button>
             </div>
 
@@ -31858,6 +31859,10 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
 
                 <div id="iiqConvOutput"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-mta">
+                <div id="iiqMTAContent"><div class="iiq-empty" style="padding:1.5rem;">Loading touchpoint contribution model...</div></div>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-roi">
@@ -32464,6 +32469,7 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 if (tab === 'inflight') reloadIntentIQInFlight();
                 if (tab === 'conversion') iiqRenderConversionMetrics();
+                if (tab === 'mta') iiqRenderMTA();
                 if (tab === 'roi') iiqRenderROI();
             };
 
@@ -33281,6 +33287,239 @@ https://www.instagram.com/p/..."></textarea>
             // ============================================================
             // // end __IIQ_ROI_MODULE_v1__
             // ============================================================
+
+            // ============================================================
+            // // __IIQ_MTA_MODULE_v1__
+            // ============================================================
+            // Multi-Touch Attribution sub-tab. Renders per-touchpoint
+            // conversion coefficients (log-odds) as a horizontal bar
+            // chart plus a "Show details" table. Backend is `mta_iq.py`,
+            // gated per-campaign by `enabled_tabs.mta` on the registry.
+            //
+            // Visible copy avoids the internal MTA vocabulary. What the
+            // reader sees is "touchpoint lift", "band", "significance",
+            // never "coefficient" in a headline (kept in the details
+            // table only where a statistical audience expects the term).
+            // ------------------------------------------------------------
+            window.__iiqMTACache = window.__iiqMTACache || { slug: null, data: null, ts: 0 };
+
+            function _iiqMTAFmtPct(x, digits) {
+                if (x === null || x === undefined || isNaN(x)) return '-';
+                return (Number(x) * 100).toFixed(digits === undefined ? 2 : digits) + '%';
+            }
+            function _iiqMTAFmtSigned(x) {
+                if (x === null || x === undefined || isNaN(x)) return '-';
+                var n = Number(x);
+                return (n >= 0 ? '+' : '') + n.toFixed(4);
+            }
+            function _iiqMTABarColor(sig, coef) {
+                // Signal Green for strong-positive lift on this dark canvas,
+                // Orchid for strong-negative (cannibalizing) lift, muted
+                // Dusk for weak / non-significant rows.
+                if (sig === 'strong'   && coef >= 0) return '#C7F23E';
+                if (sig === 'moderate' && coef >= 0) return '#9FD628';
+                if (sig === 'strong'   && coef <  0) return '#E682FF';
+                if (sig === 'moderate' && coef <  0) return '#B554D6';
+                return '#94a3b8';   // Dusk-adjacent for weak
+            }
+            function _iiqMTASigChip(sig) {
+                var label = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' }[sig] || 'Weak';
+                var bg    = { strong: 'rgba(199,242,62,0.14)', moderate: 'rgba(159,214,40,0.14)', weak: 'rgba(148,163,184,0.14)' }[sig] || 'rgba(148,163,184,0.14)';
+                var color = { strong: '#C7F23E', moderate: '#9FD628', weak: '#94a3b8' }[sig] || '#94a3b8';
+                return '<span style="display:inline-block; padding:0.1rem 0.5rem; font-size:0.66rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + bg + '; color:' + color + ';">' + label + '</span>';
+            }
+            function _iiqMTAQualityChip(quality) {
+                var q = String(quality || 'weak').toLowerCase();
+                var label = { strong: 'Strong fit', moderate: 'Moderate fit', weak: 'Weak fit' }[q] || 'Weak fit';
+                return _iiqMTASigChip(q).replace('>Strong<', '>' + label + '<').replace('>Moderate<', '>' + label + '<').replace('>Weak<', '>' + label + '<');
+            }
+
+            window.iiqRenderMTA = function() {
+                var slug = window.__intentIQ && window.__intentIQ.currentSlug;
+                var host = document.getElementById('iiqMTAContent');
+                if (!host) { console.warn('[MTA] host div #iiqMTAContent missing'); return; }
+                if (!slug) { host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Load a campaign first.</div>'; return; }
+                // Serve from cache if same slug fetched within 5 min.
+                if (window.__iiqMTACache.slug === slug && window.__iiqMTACache.data && (Date.now() - window.__iiqMTACache.ts) < 300000) {
+                    _iiqMTARender(window.__iiqMTACache.data);
+                    return;
+                }
+                host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Loading touchpoint contribution model...</div>';
+                fetch('/api/intent/' + slug + '/mta', { credentials: 'same-origin' })
+                    .then(function(r) {
+                        if (r.status === 401 || r.status === 403) throw new Error('Not authorized (HTTP ' + r.status + '). Refresh and sign in again.');
+                        if (r.status === 404) throw new Error('Multi-Touch Attribution is not enabled for this campaign.');
+                        if (!r.ok) throw new Error('Server returned HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(d) {
+                        if (!d || !d.success) {
+                            host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">Load failed: ' + escapeHtml((d && d.error) || 'no error message') + '</div>';
+                            return;
+                        }
+                        window.__iiqMTACache = { slug: slug, data: d, ts: Date.now() };
+                        _iiqMTARender(d);
+                    })
+                    .catch(function(e) {
+                        console.error('[MTA] fetch chain failed:', e);
+                        host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">' + escapeHtml(e.message || String(e)) + '</div>';
+                    });
+            };
+
+            function _iiqMTARender(d) {
+                var host = document.getElementById('iiqMTAContent');
+                if (!host) return;
+                var tps = (d.touchpoints || []).slice();
+                var bfl = d.bottom_funnel_label || 'Ticketing';
+                var convNoun = d.conversion_noun || 'conversion';
+
+                if (!tps.length) {
+                    host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">No touchpoints available for this campaign yet.</div>';
+                    return;
+                }
+
+                // === Header + How-to-read (collapsible) ===
+                var howToRead =
+                    '<details style="margin: 0 0 0.85rem 0; padding: 0.6rem 0.9rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">'
+                  + '  <summary style="cursor: pointer; user-select: none; font-weight: 600; font-size: 0.82rem; color: var(--text-primary); list-style: none;">'
+                  + '    <span class="iiq-disclosure-arrow" style="display:inline-block; transition: transform 0.15s; margin-right:0.35rem;">&#9654;</span>'
+                  + '    How to read this.'
+                  + '  </summary>'
+                  + '  <div style="margin-top: 0.55rem; font-size: 0.76rem; line-height: 1.55; color: var(--text-secondary);">'
+                  + '    <p style="margin: 0 0 0.4rem 0;"><strong style="color: #cbd5e1;">The lift</strong> next to each bar is the marginal contribution of that touchpoint to a viewer becoming a ' + escapeHtml(convNoun) + ', holding every other touchpoint in the campaign constant. Bars far from zero moved the needle; bars sitting near zero rode along without changing outcomes.</p>'
+                  + '    <p style="margin: 0 0 0.4rem 0;"><strong style="color: #cbd5e1;">The odds ratio</strong> is the same number in an easier form: an odds ratio of 1.26 means viewers exposed to this touchpoint were <strong>1.26x more likely</strong> to visit the ' + escapeHtml(bfl.toLowerCase()) + ' page, all else equal.</p>'
+                  + '    <p style="margin: 0 0 0.4rem 0;"><strong style="color: #cbd5e1;">The band</strong> after the number is the plausible range for that lift. A tight band means the read is precise; a wide band means the touchpoint had lighter exposure and the read is directional.</p>'
+                  + '    <p style="margin: 0 0 0.4rem 0;"><strong style="color: #cbd5e1;">The Strong / Moderate / Weak chip</strong> is a shortcut for how much the data supports the lift being different from zero. Strong = high statistical support, Weak = the exposure ran but the bottom-funnel read is inconclusive.</p>'
+                  + '    <p style="margin: 0.55rem 0 0 0; padding: 0.4rem 0.55rem; background: rgba(234,179,8,0.10); border-left: 2px solid rgba(234,179,8,0.5); border-radius: 4px; color:#fde68a;"><strong>One caveat.</strong> Lifts read at the campaign level. Adding or removing a touchpoint will move every other lift a little, so treat the ranking as a spend prompt, not a fixed rate card.</p>'
+                  + '  </div>'
+                  + '</details>';
+
+                // === Title + subhead ===
+                var header =
+                    '<div style="margin-bottom: 0.6rem;">'
+                  + '  <h4 style="margin: 0;">Touchpoint contribution to ' + escapeHtml(bfl.toLowerCase()) + '.</h4>'
+                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">Per-touchpoint lift on ' + escapeHtml(convNoun) + ' conversion, holding every other touchpoint in the campaign constant. Ranked by absolute lift.</div>'
+                  + '</div>';
+
+                // === Top strip: 3 summary tiles ===
+                var fit = d.model_fit || {};
+                var quality = String(fit.quality || 'weak');
+                var qLabel = { strong: 'Strong fit', moderate: 'Moderate fit', weak: 'Weak fit' }[quality] || 'Weak fit';
+                var qColor = { strong: '#C7F23E', moderate: '#9FD628', weak: '#94a3b8' }[quality] || '#94a3b8';
+                var qBg    = { strong: 'rgba(199,242,62,0.14)', moderate: 'rgba(159,214,40,0.14)', weak: 'rgba(148,163,184,0.14)' }[quality] || 'rgba(148,163,184,0.14)';
+                var qChip  = '<span style="display:inline-block; padding:0.1rem 0.55rem; font-size:0.68rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + qBg + '; color:' + qColor + ';">' + qLabel + '</span>';
+                var tiles = [
+                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(d.conversion_rate, 2), 'share of exposed viewers who visited the ' + bfl.toLowerCase() + ' page in the attribution window'),
+                    iiqSummaryTile('Exposed viewers', fmtCompact(d.sample_size), 'individual viewers used in the fit'),
+                    '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
+                      + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">Read strength</div>'
+                      + '<div style="margin-top:0.35rem;">' + qChip + '</div>'
+                      + '<div class="iiq-card-meta" style="margin-top:0.4rem; font-size:0.7rem; opacity:0.7;">pseudo R\u00b2 ' + (fit.pseudo_r_squared != null ? Number(fit.pseudo_r_squared).toFixed(3) : '\u2014') + ' \u00b7 ' + (fit.convergence ? 'converged' : 'no convergence') + '</div>'
+                    + '</div>'
+                ].join('');
+                var topStrip = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">' + tiles + '</div>';
+
+                // === Horizontal bar chart ===
+                var visLimit = 20;
+                var visible = tps.slice(0, visLimit);
+                var extra = tps.length - visible.length;
+                var maxAbs = 0;
+                for (var i = 0; i < tps.length; i++) { var v = Math.abs(Number(tps[i].coefficient) || 0); if (v > maxAbs) maxAbs = v; }
+                if (maxAbs < 1e-6) maxAbs = 1;
+                var barRows = visible.map(function(r) {
+                    var c = Number(r.coefficient) || 0;
+                    var w = (Math.abs(c) / maxAbs) * 100.0;
+                    var color = _iiqMTABarColor(r.significance, c);
+                    var track = '#3B3D38';   // Pavement
+                    // Two half-tracks meet at center; the bar extends left (negative) or right (positive)
+                    var leftHalf  = (c < 0)
+                        ? '<div style="flex:1; display:flex; justify-content:flex-end;"><div style="width:' + w.toFixed(2) + '%; height:14px; background:' + color + '; border-radius:9999px;"></div></div>'
+                        : '<div style="flex:1; display:flex; justify-content:flex-end;"><div style="width:0; height:14px;"></div></div>';
+                    var rightHalf = (c >= 0)
+                        ? '<div style="flex:1;"><div style="width:' + w.toFixed(2) + '%; height:14px; background:' + color + '; border-radius:9999px;"></div></div>'
+                        : '<div style="flex:1;"><div style="width:0; height:14px;"></div></div>';
+                    var centerRule = '<div style="width:1px; align-self:stretch; background:rgba(255,255,255,0.10); margin:0 2px;"></div>';
+                    var band = r.confidence_interval || [];
+                    var bandText = (band.length === 2) ? '[' + Number(band[0]).toFixed(3) + ', ' + Number(band[1]).toFixed(3) + ']' : '';
+                    return (
+                        '<div style="display:grid; grid-template-columns: 240px 1fr 140px 90px; gap:0.6rem; align-items:center; padding:0.35rem 0;">'
+                      + '  <div style="min-width:0;">'
+                      + '    <div style="font-size:0.78rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.asset_title) + '">' + escapeHtml(r.asset_title) + '</div>'
+                      + '    <div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.1rem;">' + escapeHtml(r.channel) + ' \u00b7 ' + escapeHtml(r.phase || '') + '</div>'
+                      + '  </div>'
+                      + '  <div style="display:flex; align-items:center; background: rgba(255,255,255,0.02); border-radius:9999px; padding:2px 6px;">' + leftHalf + centerRule + rightHalf + '</div>'
+                      + '  <div style="font-size:0.75rem; color: var(--text-primary); text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap;">' + _iiqMTAFmtSigned(c) + ' <span style="color: var(--text-secondary);">(' + Number(r.odds_ratio).toFixed(2) + 'x)</span></div>'
+                      + '  <div style="text-align:right;">' + _iiqMTASigChip(r.significance) + '</div>'
+                      + '</div>'
+                    );
+                }).join('');
+
+                var chartHead =
+                    '<div style="display:grid; grid-template-columns: 240px 1fr 140px 90px; gap:0.6rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
+                  + '  <div>Touchpoint</div>'
+                  + '  <div style="text-align:center;">Lift (log-odds)</div>'
+                  + '  <div style="text-align:right;">Lift value</div>'
+                  + '  <div style="text-align:right;">Read strength</div>'
+                  + '</div>';
+
+                var chart =
+                    '<div style="padding: 0.75rem 0.9rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">'
+                  + chartHead
+                  + '<div style="margin-top: 0.15rem;">' + barRows + '</div>'
+                  + (extra > 0 ? '<div style="margin-top:0.5rem; font-size:0.7rem; color: var(--text-secondary); text-align:center;">' + extra + ' more touchpoints below the top ' + visLimit + ' \u2014 open the details table for the full list.</div>' : '')
+                  + '</div>';
+
+                // === Details table (default hidden) ===
+                var tableHeadRow =
+                    '<tr>'
+                  + '<th style="text-align:left;  padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Individual touchpoint (creative + channel)">Touchpoint</th>'
+                  + '<th style="text-align:left;  padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Content platform / distribution surface">Channel</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Marginal contribution to conversion (log-odds), holding all other touchpoints constant">Lift</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Multiplicative form of lift: exp(lift). 1.20 means 1.20x more likely to convert.">Odds ratio</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Plausible band around the lift. Tighter = higher precision.">Band</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Wald p-value: lower = stronger evidence the lift is not zero.">p-value</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Number of exposed viewers included in this touchpoint\u2019s fit">Exposed</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Of the exposed, how many took the bottom-funnel action">Converted</th>'
+                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Categorical read strength: Strong / Moderate / Weak">Read</th>'
+                  + '</tr>';
+                var tableRows = tps.map(function(r) {
+                    var c = Number(r.coefficient) || 0;
+                    var band = r.confidence_interval || [];
+                    var bandText = (band.length === 2) ? '[' + Number(band[0]).toFixed(3) + ', ' + Number(band[1]).toFixed(3) + ']' : '\u2014';
+                    return (
+                        '<tr>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(r.asset_title) + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(r.channel) + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: ' + (c >= 0 ? '#e2e8f0' : '#fda4af') + ';">' + _iiqMTAFmtSigned(c) + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-primary);">' + Number(r.odds_ratio).toFixed(3) + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + bandText + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + Number(r.p_value).toFixed(4) + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + (r.exposed_n || 0).toLocaleString() + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + (r.converted_n || 0).toLocaleString() + '</td>'
+                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; border-bottom: 1px solid rgba(255,255,255,0.05);">' + _iiqMTASigChip(r.significance) + '</td>'
+                      + '</tr>'
+                    );
+                }).join('');
+                var detailsTable =
+                    '<details style="margin-top: 0.85rem; padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">'
+                  + '  <summary style="cursor: pointer; user-select: none; font-weight: 600; font-size: 0.82rem; color: var(--text-primary); list-style: none;">'
+                  + '    <span class="iiq-disclosure-arrow" style="display:inline-block; transition: transform 0.15s; margin-right:0.35rem;">&#9654;</span>'
+                  + '    Show details (all ' + tps.length + ' touchpoints).'
+                  + '  </summary>'
+                  + '  <div style="margin-top: 0.45rem; overflow-x: auto;">'
+                  + '    <table style="width:100%; border-collapse: collapse; font-family: inherit;">'
+                  + '      <thead>' + tableHeadRow + '</thead>'
+                  + '      <tbody>' + tableRows + '</tbody>'
+                  + '    </table>'
+                  + '  </div>'
+                  + '</details>';
+
+                host.innerHTML = header + howToRead + topStrip + chart + detailsTable;
+            }
+            // ============================================================
+            // // end __IIQ_MTA_MODULE_v1__
+            // ============================================================
+
 
             function fmtUSD(n) { if (!n) return ''; n = Number(n); if (!isFinite(n)) return ''; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + n; }
             function fmtInt(n) { return (n || 0).toLocaleString(); }

@@ -100,6 +100,7 @@ TITLE_TYPE_DEFAULTS = {
             "journey":             True,
             "inflight":            True,
             "conversion":          True,
+            "mta":                 False,   # opt-in per-campaign (registry override)
         },
     },
     "brand": {
@@ -137,6 +138,7 @@ TITLE_TYPE_DEFAULTS = {
             "journey":             True,
             "inflight":            True,
             "conversion":          False,   # Intent-to-Conversion (BO projector) is film-only
+            "mta":                 False,   # opt-in per-campaign (registry override)
         },
     },
 }
@@ -579,9 +581,23 @@ def get_overview(title_slug: str) -> dict:
     snap = _load_normalized_snapshot(title_slug)
     if snap:
         t = snap.get("title", {})
+        # Registry entry -- authoritative for per-campaign enabled_tabs
+        # (matches the CH-first path). If the snapshot carries its own
+        # enabled_tabs, the registry value takes precedence key-by-key
+        # so an admin flipping `mta: true` in the registry beats a stale
+        # snapshot that never carried the key.
+        registry = _load_registry()
+        reg_meta = next((x for x in registry.get("titles", [])
+                         if x.get("title_slug") == title_slug), {})
         phases = []
         for p in snap.get("phases", []):
             phases.append({**p, "color_hex": p.get("color_hex") or _phase_color(p.get("phase_name", ""))})
+        # Merge enabled_tabs: snapshot first, then registry overrides.
+        merged_enabled = {}
+        if t.get("enabled_tabs"):
+            merged_enabled.update(t.get("enabled_tabs"))
+        if reg_meta.get("enabled_tabs"):
+            merged_enabled.update(reg_meta.get("enabled_tabs"))
         out = {
             "success": True,
             "title_slug": title_slug,
@@ -607,11 +623,18 @@ def get_overview(title_slug: str) -> dict:
             # `_iiqHasNewFilmLanding(ov)` can see it on
             # `window.__intentIQ.overview` (introduced 2026-09-02 for
             # Dhar Mann x Minions & Monsters).
+            # Registry-level overrides win over snapshot for any of these
+            # keys so an admin can flip a per-campaign flag (e.g.
+            # `enabled_tabs.mta`) without touching the snapshot itself.
             **{k: t.get(k) for k in ("title_type", "terminology",
-                                       "enabled_tabs", "brand_config",
-                                       "legacy_landing")
+                                       "brand_config", "legacy_landing")
                if t.get(k) is not None},
+            **{k: reg_meta[k] for k in ("title_type", "terminology",
+                                          "brand_config", "legacy_landing")
+               if k in reg_meta},
         }
+        if merged_enabled:
+            out["enabled_tabs"] = merged_enabled
         return _apply_title_type_defaults(out)
     return {"success": False, "error": f"Title not found: {title_slug}"}
 
