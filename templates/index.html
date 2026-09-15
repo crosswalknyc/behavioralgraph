@@ -174076,7 +174076,18 @@ https://www.instagram.com/p/..."></textarea>
        took a line of their own when the title ran long. Park them in
        the corner of the row instead. */
     #trendsIQView[data-tiq-product="trends"] .tiq-row { position: relative; }
-    #trendsIQView[data-tiq-product="trends"] .tiq-row-title { padding-right: 52px; }
+    /* Reserve two lines for the title and one for the meta whether or
+       not a given row fills them. A row that needs the second line no
+       longer sits 7px taller than the one beside it, which is what was
+       still walking the columns apart over a long list. */
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-title {
+        padding-right: 52px;
+        height: 35px;
+        overflow: hidden;
+    }
+    #trendsIQView[data-tiq-product="trends"] .tiq-row-meta {
+        height: 23px;
+    }
     #trendsIQView[data-tiq-product="trends"] .tiq-row-title .tiq-actions {
         position: absolute;
         top: 10px;
