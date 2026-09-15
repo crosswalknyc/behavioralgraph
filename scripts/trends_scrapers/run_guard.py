@@ -48,10 +48,12 @@ _STAMP_PREFIX = "trends_iq_run_guard/"
 LOCK_PATH = os.environ.get("TRENDS_RUN_LOCK",
                            "/var/lock/trends_scrapers_run_all.lock")
 
-# A healthy run has been finishing in about five hours. Alert at two
-# hours past six, which clears normal variance and still leaves most of
-# a working day to react before the next cron.
-EXPECTED_RUNTIME_MIN = int(os.environ.get("TRENDS_RUN_EXPECTED_MIN", "360"))
+# A healthy run finishes in about five hours, so the alert lands at
+# seven and a half. Picked against the incident: the 2026-09-15 run
+# took 9h05m, so this would have said so around 19:30 local, roughly an
+# hour before a colleague noticed the board was wrong, and with enough
+# of the evening left to act on it.
+EXPECTED_RUNTIME_MIN = int(os.environ.get("TRENDS_RUN_EXPECTED_MIN", "300"))
 WATCHDOG_MULTIPLE = float(os.environ.get("TRENDS_RUN_WATCHDOG_MULT", "1.5"))
 
 # A run still holding the lock past this is not slow, it is stuck.
