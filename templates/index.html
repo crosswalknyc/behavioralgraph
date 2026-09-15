@@ -428,6 +428,65 @@
             cursor: grabbing;
         }
 
+        /* Always-visible page scrollbar. Native overlay bars hide when the
+           cursor leaves the track, and the pinned title banner covers them.
+           This rail sits above the banner (z-index > sticky chrome). */
+        .piq-page-scroll-host {
+            scrollbar-width: none !important;
+        }
+        .piq-page-scroll-host::-webkit-scrollbar {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+        #piqPageScroll {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 18px;
+            z-index: 2147481800;
+            pointer-events: none;
+        }
+        #piqPageScroll[hidden] { display: none !important; }
+        #piqPageScroll .piq-page-scroll-track {
+            position: absolute;
+            top: 8px;
+            right: 4px;
+            bottom: 8px;
+            width: 10px;
+            border-radius: 999px;
+            background: #1B2F35;
+            box-shadow: inset 0 0 0 1px #3B3D38;
+            pointer-events: auto;
+        }
+        #piqPageScroll .piq-page-scroll-nugget {
+            position: absolute;
+            left: 1px;
+            right: 1px;
+            min-height: 64px;
+            border-radius: 999px;
+            background: #C5CDC8;
+            cursor: grab;
+            pointer-events: auto;
+        }
+        #piqPageScroll .piq-page-scroll-nugget:hover,
+        #piqPageScroll .piq-page-scroll-nugget:active {
+            background: #E9E8E1;
+            cursor: grabbing;
+        }
+        body[data-theme="light"] #piqPageScroll .piq-page-scroll-track {
+            background: #FFFFFF;
+            box-shadow: inset 0 0 0 1px #C9C6BA;
+        }
+        body[data-theme="light"] #piqPageScroll .piq-page-scroll-nugget {
+            background: #5C6560;
+        }
+        body[data-theme="light"] #piqPageScroll .piq-page-scroll-nugget:hover,
+        body[data-theme="light"] #piqPageScroll .piq-page-scroll-nugget:active {
+            background: #0C1618;
+        }
+
         /* Global Select/Dropdown Styling - Sleek Dark Theme */
         select {
             background: linear-gradient(135deg, #0f1f2f 0%, #1a2a3a 100%);
@@ -127446,6 +127505,7 @@ https://www.instagram.com/p/..."></textarea>
                 document.documentElement.style.removeProperty('--piq-chrome-bottom');
                 document.documentElement.style.removeProperty('--piq-header-bottom');
                 if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
+                if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
                 return wrap || null;
             }
             wrap.classList.add('piq-v4', 'piq-has-profile', 'piq-chrome-fixed');
@@ -127491,6 +127551,7 @@ https://www.instagram.com/p/..."></textarea>
                 document.documentElement.style.setProperty('--piq-chrome-bottom', chromeBottom + 'px');
             }
             if (window._piqV4SyncLibraryRail) window._piqV4SyncLibraryRail();
+            if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
             return wrap;
         };
         window._piqV4WatchChrome = function() {
@@ -127894,6 +127955,112 @@ https://www.instagram.com/p/..."></textarea>
             var ct = document.querySelector('#tab-comparison .comp-tab');
             if (ct) ct.textContent = ct.textContent.replace(/^[^\w]+/, '').trim() || 'Side-by-Side';
         };
+
+        window._piqFindPageScroller = function() {
+            var ids = [
+                'dashboardView', 'trendsIQView', 'blueIQView', 'rankerIQView', 'llmoIQView',
+                'helmIQView', 'formView', 'journeyIQView', 'shareOfTimeIQView', 'intentIQView',
+                'microdramasIQView', 'sentimentIQView', 'hedgeFundIQView', 'subscriberIQView',
+                'roasIQView', 'ecommerceIQView', 'ticketSalesIQView', 'ticketSalesTrackerView',
+                'talentSearchIQView', 'talentTheaterIQView', 'brandTrackingIQView',
+                'impactIQView', 'customAnalysisView', 'sfConversionView', 'flywheelConversionView'
+            ];
+            for (var i = 0; i < ids.length; i++) {
+                var el = document.getElementById(ids[i]);
+                if (!el) continue;
+                var cs = window.getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+                if (el.scrollHeight > el.clientHeight + 8) return el;
+            }
+            return null;
+        };
+        window._piqBindPageScrollbar = function() {
+            var scroller = window._piqFindPageScroller ? window._piqFindPageScroller() : null;
+            var rail = document.getElementById('piqPageScroll');
+            if (!rail) {
+                rail = document.createElement('div');
+                rail.id = 'piqPageScroll';
+                rail.setAttribute('hidden', '');
+                rail.innerHTML = '<div class="piq-page-scroll-track"><div class="piq-page-scroll-nugget"></div></div>';
+                document.body.appendChild(rail);
+            }
+            var track = rail.querySelector('.piq-page-scroll-track');
+            var nugget = rail.querySelector('.piq-page-scroll-nugget');
+            if (rail._scroller && rail._scroller !== scroller) {
+                rail._scroller.classList.remove('piq-page-scroll-host');
+            }
+            if (!scroller || !track || !nugget) {
+                rail.setAttribute('hidden', '');
+                rail._scroller = null;
+                return;
+            }
+            rail.removeAttribute('hidden');
+            scroller.classList.add('piq-page-scroll-host');
+            rail._scroller = scroller;
+            function sync() {
+                var el = rail._scroller;
+                if (!el) return;
+                var sh = el.scrollHeight;
+                var ch = el.clientHeight;
+                if (sh <= ch + 8) {
+                    rail.setAttribute('hidden', '');
+                    return;
+                }
+                rail.removeAttribute('hidden');
+                var tr = track.getBoundingClientRect();
+                var nugH = Math.max(64, Math.round((ch / sh) * tr.height));
+                if (nugH > tr.height) nugH = tr.height;
+                var max = sh - ch;
+                var y = max <= 0 ? 0 : (el.scrollTop / max) * (tr.height - nugH);
+                nugget.style.height = nugH + 'px';
+                nugget.style.top = y + 'px';
+            }
+            rail._sync = sync;
+            if (!rail._piqBound) {
+                rail._piqBound = true;
+                track.addEventListener('pointerdown', function(e) {
+                    if (e.target === nugget) return;
+                    var el = rail._scroller;
+                    if (!el) return;
+                    var tr = track.getBoundingClientRect();
+                    var nugH = nugget.offsetHeight || 64;
+                    var y = e.clientY - tr.top - nugH / 2;
+                    var max = el.scrollHeight - el.clientHeight;
+                    var span = Math.max(8, tr.height - nugH);
+                    el.scrollTop = (y / span) * max;
+                });
+                nugget.addEventListener('pointerdown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var el = rail._scroller;
+                    if (!el) return;
+                    try { nugget.setPointerCapture(e.pointerId); } catch (_e) {}
+                    var startY = e.clientY;
+                    var startScroll = el.scrollTop;
+                    var tr = track.getBoundingClientRect();
+                    var nugH = nugget.offsetHeight || 64;
+                    var max = el.scrollHeight - el.clientHeight;
+                    var span = Math.max(8, tr.height - nugH);
+                    function move(ev) {
+                        el.scrollTop = startScroll + (ev.clientY - startY) * (max / span);
+                    }
+                    function up(ev) {
+                        try { nugget.releasePointerCapture(ev.pointerId); } catch (_e2) {}
+                        nugget.removeEventListener('pointermove', move);
+                        nugget.removeEventListener('pointerup', up);
+                    }
+                    nugget.addEventListener('pointermove', move);
+                    nugget.addEventListener('pointerup', up);
+                });
+                window.addEventListener('resize', function() {
+                    if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
+                });
+                document.addEventListener('scroll', function(e) {
+                    if (e.target === rail._scroller && rail._sync) rail._sync();
+                }, true);
+            }
+            sync();
+        };
         window._piqBindScrollNuggets = function(root) {
             root = root || document.getElementById('dashboardView') || document;
             var nodes = root.querySelectorAll(
@@ -127985,6 +128152,7 @@ https://www.instagram.com/p/..."></textarea>
                 window._piqV4DressTools();
                 if (window._piqV4DressTabs) window._piqV4DressTabs();
                 if (window._piqBindScrollNuggets) window._piqBindScrollNuggets(view);
+                if (window._piqBindPageScrollbar) window._piqBindPageScrollbar();
             } finally {
                 window._piqV4Dressing = false;
             }
