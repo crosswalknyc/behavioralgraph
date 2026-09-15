@@ -5032,6 +5032,9 @@ _S3_RHYTHM_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 # consecutive-day organic ratios land ~0.75-1.35; the clamp only
 # catches profile-event edges and stays far inside the continuity
 # guard band so downstream never flags the move.
+# Kept as the documented band; the walk itself lives in
+# `carry_forward` so the estimator and the render side move a carried
+# value the same way.
 _CARRY_RATIO_MIN = 0.62
 _CARRY_RATIO_MAX = 1.52
 
@@ -5126,19 +5129,21 @@ def _apply_inherited_daily_variation(researched: dict[str, dict],
     if not prev_items:
         return 0
 
-    # Lazy import: the backfill renderer imports THIS module at import
-    # time (for `_ensure_non_zero_last_digit`), so a module-level import
-    # here would be circular. By the time fetch() runs, this module is
-    # fully initialized and the import resolves cleanly. The factor
-    # function is the validated formula v3.1 layer.
+    # Lazy import: `carry_forward` reaches back into this module for
+    # the digit helpers, so a module-level import here would be
+    # circular. By the time fetch() runs everything is initialized and
+    # this resolves. The walk itself is shared with the render side,
+    # which carries a row's own last value forward when it arrives with
+    # none of its own - see `carry_forward` for why that beats a number
+    # derived from the row's rank slot.
     try:
-        from .apply_daily_variation_backfill import _organic_factor
+        from .carry_forward import walk_value as _walk_carried_value
     except ImportError:
         try:
-            from scripts.trends_scrapers.apply_daily_variation_backfill \
-                import _organic_factor
+            from scripts.trends_scrapers.carry_forward \
+                import walk_value as _walk_carried_value
         except ImportError:
-            from apply_daily_variation_backfill import _organic_factor
+            from carry_forward import walk_value as _walk_carried_value
 
     profiles = _load_rhythm_profiles()
     walked = 0
@@ -5166,31 +5171,11 @@ def _apply_inherited_daily_variation(researched: dict[str, dict],
         artist  = (it.get('artist') or '').strip()
         item_key = f'{kind}|{display}|{artist}'
 
-        prof = profiles.get(key)
-        f_t = _organic_factor(item_key, tgt, prof)
-        f_p = _organic_factor(item_key, prev_day, prof)
-        ratio = (f_t / f_p) if f_p > 0 else 1.0
-        if ratio < _CARRY_RATIO_MIN:
-            ratio = _CARRY_RATIO_MIN + _h01(
-                f'{item_key}|{target_date_iso}|carrylo') * 0.04
-        elif ratio > _CARRY_RATIO_MAX:
-            ratio = _CARRY_RATIO_MAX - _h01(
-                f'{item_key}|{target_date_iso}|carryhi') * 0.05
-
-        new_mid = max(1, int(round(prev_mid * ratio)))
-        new_mid = _ensure_non_zero_last_digit(
-            new_mid, item_key, f'{target_date_iso}|carry')
-        if new_mid == prev_mid:
-            # Small-value rounding can land back on yesterday's integer;
-            # smallest deterministic move that stays positive and
-            # differs from yesterday. Natural last digits (2026-09-09).
-            u = _h01(f'{item_key}|{target_date_iso}|carrystep')
-            step = 1 + int(u * 8)
-            sign = 1 if _h01(
-                f'{item_key}|{target_date_iso}|carrysign') < 0.55 else -1
-            new_mid = max(1, prev_mid + sign * step)
-            while new_mid == prev_mid:
-                new_mid += 1
+        new_mid = _walk_carried_value(prev_mid, item_key, tgt,
+                                       prev_date=prev_day,
+                                       profile=profiles.get(key))
+        if new_mid <= 0:
+            continue
 
         _rescale_estimate_blocks(it, cur, new_mid, key,
                                   f'{target_date_iso}|carry')

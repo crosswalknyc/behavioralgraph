@@ -13,8 +13,10 @@ stream_estimates + headline_estimates have landed:
   2. Walk every rendered section generically (payload-derived universe -
      a tab added next month is covered by construction, no hand-
      maintained kind list).
-  3. Any non-Film item whose audience value is missing OR carries the
-     render-time `est_basis='chart_baseline'` marker gets priced through
+  3. Any non-Film item whose audience value is missing, or which is
+     showing its own earlier reading carried forward
+     (`est_basis='carried_forward'`), or which had no reading anywhere
+     and took a rank-tier value (`est_basis='rank_tier'`), is priced through
      the SAME research machinery as the nightly pass (tiering intact:
      Sonnet for top-ranked, Haiku for long-tail). There is NO budget cap
      on this pass (Jenna 2026-09-09: "im okay with it exceeding a price
@@ -72,18 +74,32 @@ def _item_title(it: dict) -> str:
     return ''
 
 
+# How a rendered row came by its number, worst first. `carried` is a
+# real reading of that title from an earlier day walked to today;
+# `rank_tier` is the last resort for a title with no reading anywhere
+# and is the one that should stay rare. `chart_baseline` is the
+# retired name for the rank tier and is still read so a payload cached
+# from before the change is counted correctly.
+_CARRIED_BASES = ('carried_forward',)
+_RANK_TIER_BASES = ('rank_tier', 'chart_baseline')
+
+
 def _audience_state(it: dict) -> str:
-    """'researched' | 'baseline' | 'missing' for a rendered row.
-    Sub-100 estimates count as missing (credibility floor, 2026-09-09)
-    so a degenerate research value gets re-priced instead of passing."""
+    """'researched' | 'carried' | 'rank_tier' | 'missing' for a
+    rendered row. Sub-100 estimates count as missing (credibility
+    floor, 2026-09-09) so a degenerate research value gets re-priced
+    instead of passing."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
             try:
                 if float(blk.get('us_estimate') or 0) >= 100:
-                    return ('baseline'
-                            if blk.get('est_basis') == 'chart_baseline'
-                            else 'researched')
+                    basis = blk.get('est_basis')
+                    if basis in _RANK_TIER_BASES:
+                        return 'rank_tier'
+                    if basis in _CARRIED_BASES:
+                        return 'carried'
+                    return 'researched'
             except (TypeError, ValueError):
                 pass
     try:
@@ -200,7 +216,10 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
         if state == 'researched':
             researched += 1
             continue
-        if state == 'baseline':
+        # A carried reading and a rank-tier one both still want
+        # pricing today; both are counted here so the gate's before
+        # figure stays comparable to its after figure.
+        if state in ('carried', 'rank_tier'):
             baseline += 1
         title = _item_title(it)
         kind = _estimator_kind_for(path, it)
@@ -463,11 +482,13 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
                                        force_refresh=True)
     cards2 = (payload2 or {}).get('cards') or {}
-    total2 = researched2 = rendered2 = baseline2 = 0
+    total2 = researched2 = rendered2 = carried2 = rank_tier2 = 0
     still_missing: list[tuple[str, str]] = []
-    # Per-list baseline tally. A board-wide percentage says something
-    # is wrong; the per-list split says where, which is what makes the
-    # alert actionable.
+    # Per-list tally. A board-wide percentage says something is wrong;
+    # the per-list split says where, which is what makes the alert
+    # actionable. Carried and rank-tier are counted apart: a carried
+    # row is a real reading of that title going slightly stale, a
+    # rank-tier row is a number that says nothing about the title.
     per_list: dict[str, dict[str, int]] = {}
     for path, _rank, it in _walk_rendered(cards2):
         if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
@@ -475,16 +496,21 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         if path.startswith('fused_trending') and _fused_row_is_film_only(it):
             continue
         total2 += 1
-        bucket = per_list.setdefault(path, {'total': 0, 'baseline': 0})
+        bucket = per_list.setdefault(path, {'total': 0, 'carried': 0,
+                                             'rank_tier': 0})
         bucket['total'] += 1
         state = _audience_state(it)
         if state == 'researched':
             researched2 += 1
             rendered2 += 1
-        elif state == 'baseline':
+        elif state == 'carried':
             rendered2 += 1
-            baseline2 += 1
-            bucket['baseline'] += 1
+            carried2 += 1
+            bucket['carried'] += 1
+        elif state == 'rank_tier':
+            rendered2 += 1
+            rank_tier2 += 1
+            bucket['rank_tier'] += 1
         else:
             still_missing.append((path, _item_title(it)))
 
@@ -494,30 +520,39 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         (100.0 * rendered2 / total2) if total2 else 100.0, 2)
     summary['still_missing'] = len(still_missing)
     summary['total'] = total2
-    summary['baseline_after'] = baseline2
-    summary['baseline_after_pct'] = round(
-        (100.0 * baseline2 / total2) if total2 else 0.0, 2)
-    summary['baseline_by_list'] = {
+    summary['carried_after'] = carried2
+    summary['carried_after_pct'] = round(
+        (100.0 * carried2 / total2) if total2 else 0.0, 2)
+    summary['rank_tier_after'] = rank_tier2
+    summary['rank_tier_after_pct'] = round(
+        (100.0 * rank_tier2 / total2) if total2 else 0.0, 2)
+    summary['by_list'] = {
         name: {
             'total': v['total'],
-            'baseline': v['baseline'],
-            'pct': round(100.0 * v['baseline'] / v['total'], 2),
+            'carried': v['carried'],
+            'rank_tier': v['rank_tier'],
+            'carried_pct': round(100.0 * v['carried'] / v['total'], 2),
+            'rank_tier_pct': round(100.0 * v['rank_tier'] / v['total'], 2),
         }
         for name, v in sorted(per_list.items())
-        if v['baseline']
+        if v['carried'] or v['rank_tier']
     }
 
     logger.info("coverage_gate: FINAL coverage researched=%.2f%% "
-                "rendered=%.2f%% baseline=%.2f%% (total=%d, "
-                "still_missing=%d, spend=$%.2f)",
+                "rendered=%.2f%% carried=%.2f%% rank_tier=%.2f%% "
+                "(total=%d, still_missing=%d, spend=$%.2f)",
                 summary['researched_after_pct'],
                 summary['rendered_after_pct'],
-                summary['baseline_after_pct'],
+                summary['carried_after_pct'],
+                summary['rank_tier_after_pct'],
                 total2, len(still_missing), summary['spend_usd'])
-    for name, v in sorted(summary['baseline_by_list'].items(),
-                          key=lambda kv: kv[1]['pct'], reverse=True)[:20]:
-        logger.info("coverage_gate:   baseline %5.1f%% (%d/%d) %s",
-                    v['pct'], v['baseline'], v['total'], name)
+    for name, v in sorted(summary['by_list'].items(),
+                          key=lambda kv: (kv[1]['rank_tier_pct'],
+                                          kv[1]['carried_pct']),
+                          reverse=True)[:20]:
+        logger.info("coverage_gate:   carried %5.1f%% rank-tier %5.1f%% "
+                    "(%d/%d) %s", v['carried_pct'], v['rank_tier_pct'],
+                    v['carried'] + v['rank_tier'], v['total'], name)
 
     if still_missing:
         _send_still_missing_alert(still_missing)

@@ -3757,90 +3757,167 @@ _STREAM_FIELDS = (
 )
 
 
-# Default unit label per kind - used as fallback when the per-platform
-# block doesn't carry its own unit (which it doesn't - we derive from
-# kind). Matches `stream_estimates._default_unit_for_kind`.
-_DEFAULT_UNIT_BY_KIND = {
-    'song':    'weekly US streams',
-    'podcast': 'weekly US listeners',
-    'film':    'weekly US views',
-    'tv':      'weekly US views',
-    'title':   'weekly US views',
-    # For books the noun depends on the platform (readers vs listeners
-    # vs library borrows). The aggregate fallback below is generic; the
-    # per-platform stamp prefers `_PLATFORM_UNIT_LABEL` when set.
-    'book':    'weekly US audience',
-    # Comics: same pattern as books - the per-platform stamp prefers
-    # a comics-specific unit label from `_PLATFORM_UNIT_LABEL`
-    # (readers on Amazon/Apple, library borrows on Libby). The
-    # aggregate fallback stays 'weekly US readers' since a comic is
-    # almost always read (never listened to like an audiobook).
-    'comic':   'weekly US readers',
-    # FAST channels: ad-supported free viewers. Same "views" noun as
-    # paid streaming (Nielsen's household definition), but the daily
-    # Claude research is calibrated separately against FAST Gauge /
-    # TVREV data - see stream_estimates._FAST_PLATFORMS_META.
-    'fast_film': 'weekly US views',
-    'fast_tv':   'weekly US views',
-    # Gaming: Xbox Game Pass Ultimate "plays" = unique US subscribers
-    # who launched the title on console / PC / cloud in the past
-    # 7 days. See stream_estimates._GAMING_PLATFORMS_META for anchor
-    # language + ceiling.
-    'game':      'weekly US plays',
-    # FAST channels (Channel Ranker sub-tab, 2026-08-21): unique US
-    # households tuning to a 24/7 linear channel on Roku Channel /
-    # Tubi / Pluto TV / Amazon Live TV for >=1 minute in the past
-    # 7 days. Not to be confused with `fast_film` / `fast_tv` which
-    # are per-title reach on the same platforms.
-    'fast_channel': 'weekly US viewers',
-    # Search / trending person / trending wiki topic. Weekly-US
-    # audience interest counts, not measured behavior on a specific
-    # platform - see `stream_estimates._SEARCH_TERM_PLATFORMS` /
-    # `_TRENDING_PERSON_PLATFORMS` / `_WIKI_TOPIC_PLATFORMS`.
-    'search_term':     'weekly US searchers',
-    'trending_person': 'weekly US audience',
-    'wiki_topic':      'weekly US audience',
-    # Wattpad serialized fiction: unique US readers who opened this
-    # story on Wattpad in the past 7 days. See
-    # `stream_estimates._WATTPAD_PLATFORMS` for anchor language +
-    # per-story ceiling.
-    'wattpad_story':   'weekly US readers',
-    # Goodreads community weekly-read: unique US readers who read this
-    # book in the past 7 days across ALL surfaces (Kindle, print,
-    # audio, library, Goodreads-native), projected from the Goodreads
-    # community weekly-read signal. See
-    # `stream_estimates._GOODREADS_PLATFORMS` for anchor + ceiling.
-    'goodreads_book':  'weekly US readers',
+# ---------------------------------------------------------------------------
+# Scope labels: one window per list, the right window, the row's own
+# service, and never a household
+# ---------------------------------------------------------------------------
+# The scope text under a number used to come from free text written per
+# row, which left one list carrying several different windows at once
+# (a Roku list held 619 rows reading weekly, 226 weekly views and 70
+# daily), named services the row had nothing to do with (Netflix rows
+# labelled Peacock, Roku rows labelled Pluto TV), and let household
+# language reach the page. The page only ever stripped a trailing
+# bracket, so a wrong service was hidden while its number stayed.
+#
+# Every label is now derived, never quoted: the cadence comes from the
+# window the number actually covers, and the noun from the kind and
+# the platform. Three consequences worth keeping in mind when editing:
+#
+#  * The estimator has produced a DAILY count per item since
+#    2026-09-03 (`stream_estimates._daily_prompt_preface`: "Every
+#    number you return is a DAILY unique-audience count for the target
+#    day. NOT weekly"). The tables here still said weekly, so on the
+#    one-day window the page stated a week and showed a day. Cadence
+#    now follows the window: daily at N=1, the window noun above it.
+#  * No label carries a bracket, so nothing is hidden by the trailing
+#    bracket strip on the page.
+#  * Counts are individuals, never households. Viewers, listeners,
+#    readers, players, searchers, accounts.
+#
+# A number that is inherently one service's - Game Pass launches,
+# Steam sessions, Wattpad reads, library borrowing - names that scope
+# inline, so it cannot be read as a national figure. A title row on a
+# service's own rail says nothing extra: the rail already names the
+# service, and adding it again crowds the chip.
+
+# Noun per kind. No cadence word, no service, no brackets.
+_AUDIENCE_NOUN_BY_KIND = {
+    'song':            'US streams',
+    'podcast':         'US listeners',
+    'film':            'US views',
+    'tv':              'US views',
+    'title':           'US views',
+    'fast_film':       'US views',
+    'fast_tv':         'US views',
+    'fast_channel':    'US viewers',
+    'game':            'US plays',
+    'book':            'US audience',
+    'comic':           'US readers',
+    'goodreads_book':  'US readers',
+    'wattpad_story':   'US reads on Wattpad',
+    'search_term':     'US searchers',
+    'trending_person': 'US audience',
+    'wiki_topic':      'US audience',
 }
 
-# Per (kind, platform) unit label. Wins over Claude's aggregate
-# `unit_label` when the stamp resolves to a specific platform. Keeps
-# the dashboard chip short + the tooltip noun ("readers" / "listeners"
-# / "borrows") crisp. Falls back to `_DEFAULT_UNIT_BY_KIND[kind]` when
-# no override exists for the (kind, platform) pair. `amazon` /
-# `apple` show different labels depending on whether the row is a
-# song / podcast / book, which is why we key by (kind, platform)
-# instead of just platform.
+# Noun per (kind, platform). Wins over the kind default. Entries that
+# name a service are the ones whose number is that service's alone and
+# would otherwise read as a national count.
+_AUDIENCE_NOUN_BY_KIND_PLATFORM = {
+    ('book', 'amazon'):        'US readers',
+    ('book', 'apple'):         'US readers',
+    ('book', 'audible'):       'US listeners',
+    ('book', 'libby_ebook'):   'US library borrows',
+    ('book', 'libby_audio'):   'US library audiobook borrows',
+    ('book', 'libby_magazine'): 'US library magazine reads',
+    ('comic', 'amazon_kindle'): 'US readers',
+    ('comic', 'apple_comics'):  'US readers',
+    ('comic', 'libby_comics'):  'US library comic borrows',
+    ('wattpad_story', 'wattpad'): 'US reads on Wattpad',
+    ('goodreads_book', 'goodreads_most_read'): 'US readers',
+    ('game', 'xbox_gamepass'):     'US plays on Game Pass',
+    ('game', 'steam_most_played'): 'US plays on Steam',
+    ('game', 'steam_top_sellers'): 'US plays on Steam',
+    ('game', 'meta_quest_free'):   'US plays on Meta Quest',
+    ('game', 'meta_quest_paid'):   'US plays on Meta Quest',
+}
+
+
+# Counts are individuals here, never households, and the reasoning
+# text under a number reaches the reader through the tooltip just as
+# the scope label does. Phrases go first so a swap never lands on
+# "viewing viewers". HHI is an income bucket and is left alone.
+_HOUSEHOLD_REWRITES = (
+    (re.compile(r'\bviewing households\b', re.I),        'viewers'),
+    (re.compile(r'\bviewer households\b', re.I),         'viewers'),
+    (re.compile(r'\bwatching households\b', re.I),       'viewers'),
+    (re.compile(r'\bhouseholds watching\b', re.I),       'viewers watching'),
+    (re.compile(r'\bstreaming households\b', re.I),      'streaming viewers'),
+    (re.compile(r'\bsubscriber households\b', re.I),     'subscriber accounts'),
+    (re.compile(r'\bhousehold views\b', re.I),           'views'),
+    (re.compile(r'\bhousehold view\b', re.I),            'view'),
+    (re.compile(r'\bhousehold streams\b', re.I),         'streams'),
+    (re.compile(r'\bhousehold[- ]level\b', re.I),        'viewer-level'),
+    (re.compile(r'\bhousehold[- ]proxy\b', re.I),        'viewer-level'),
+    (re.compile(r'\bper household\b', re.I),             'per viewer'),
+    (re.compile(r'\bper[- ]HH\b'),                       'per viewer'),
+    (re.compile(r'\bhouseholds\b', re.I),                'viewers'),
+    (re.compile(r'\bhousehold\b', re.I),                 'viewer'),
+    (re.compile(r'\bHHs\b'),                             'Accounts'),
+    (re.compile(r'\bHH\b'),                              'Account'),
+)
+
+
+def _scrub_household_language(text: Optional[str]) -> Optional[str]:
+    """Rewrite household counting language into individual-level
+    language. Only touches measurement wording; a headline or a plot
+    synopsis that happens to use the word is not measurement text and
+    never passes through here."""
+    if not text or not isinstance(text, str):
+        return text
+    out = text
+    for pat, repl in _HOUSEHOLD_REWRITES:
+        out = pat.sub(repl, out)
+    return out
+
+
+def _canonical_unit_label(kind: str, platform_key: str = '',
+                           window_days: int = 1) -> str:
+    """The scope line for a row: '<cadence> <noun>'.
+
+    Derived from what the number covers and what it counts, so every
+    row on a list states the same window and no row names a service it
+    did not come from."""
+    n = 1
+    try:
+        n = max(1, int(window_days or 1))
+    except (TypeError, ValueError):
+        n = 1
+    cadence = 'daily' if n <= 1 else _window_noun_for_days(n)
+    noun = (_AUDIENCE_NOUN_BY_KIND_PLATFORM.get((kind, platform_key))
+            or _AUDIENCE_NOUN_BY_KIND.get(kind)
+            or 'US audience')
+    return f'{cadence} {noun}'
+
+
+def _direction_from_prev(cur: int, prev: int) -> tuple:
+    """(direction, fractional delta) for a row measured against its own
+    previous reading."""
+    try:
+        cur_v, prev_v = float(cur), float(prev)
+    except (TypeError, ValueError):
+        return 'flat', 0.0
+    if prev_v <= 0:
+        return 'new', 0.0
+    delta = (cur_v - prev_v) / prev_v
+    if abs(delta) > _WINDOW_DELTA_MAX_RATIO:
+        return 'flat', 0.0
+    return _direction_for(delta), round(delta, 6)
+
+
+# Both tables below are now derived from `_canonical_unit_label` so
+# there is exactly one place a scope label is decided. They stay as
+# dicts because existing call sites read them directly; the values are
+# the one-day-window form, which is what every caller of these two
+# wanted in the first place.
+_DEFAULT_UNIT_BY_KIND = {
+    kind: _canonical_unit_label(kind)
+    for kind in _AUDIENCE_NOUN_BY_KIND
+}
+
 _PLATFORM_UNIT_LABEL = {
-    # Books
-    ('book', 'amazon'):       'weekly US readers',
-    ('book', 'apple'):        'weekly US readers',
-    ('book', 'audible'):      'weekly US listeners',
-    ('book', 'libby_ebook'):  'weekly US library borrows',
-    ('book', 'libby_audio'):  'weekly US library borrows',
-    # Comics
-    ('comic', 'amazon_kindle'): 'weekly US readers',
-    ('comic', 'apple_comics'):  'weekly US readers',
-    ('comic', 'libby_comics'):  'weekly US library comic borrows',
-    # Wattpad serialized fiction: every rail rolls up to the single
-    # `wattpad` platform anchor tier (see
-    # `stream_estimates._WATTPAD_PLATFORMS`). Same "readers" noun as
-    # a Kindle / Apple Books row so the Books tab reads consistently.
-    ('wattpad_story', 'wattpad'): 'weekly US readers',
-    # Goodreads community weekly-read rail: one platform key today
-    # (`goodreads_most_read`). Reader-count unit matches the rest of
-    # the Books tab so cross-panel comparisons read consistently.
-    ('goodreads_book', 'goodreads_most_read'): 'weekly US readers',
+    (kind, plat): _canonical_unit_label(kind, plat)
+    for (kind, plat) in _AUDIENCE_NOUN_BY_KIND_PLATFORM
 }
 
 
@@ -3865,30 +3942,19 @@ def _stamp_stream_estimate(row: dict, entry: dict,
     by_platform = entry.get('by_platform') or {}
     per = by_platform.get(platform_key) if platform_key else None
 
+    # Scope label is derived, never quoted from the row. See
+    # `_canonical_unit_label`: the cadence follows the window this
+    # number covers and the noun follows the kind and the platform, so
+    # one list states one window, no row names a service it did not
+    # come from, and nothing is a household.
+    window_days = (per or {}).get('window_days_total') \
+        if isinstance(per, dict) else None
+    window_days = window_days or entry.get('window_days_total') or 1
+
     if per and (per.get('us_estimate') or 0) > 0:
         # Per-platform source of truth.
-        # When the window accumulator has run, `entry.unit_label`
-        # already carries the window-cadence noun ("monthly US views")
-        # AND the per-platform block has been summed. Prefer the
-        # accumulator-rewritten label over the (weekly-default)
-        # per-platform-vocab table, so a Netflix row on a 30-day
-        # window reads "monthly US views" instead of the default
-        # weekly noun. Rows without the accumulator (lookback_days=1)
-        # fall back to the vocab table as before.
-        if entry.get('window_days_total'):
-            unit_label = (
-                entry.get('unit_label')
-                or _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
-                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
-                or 'weekly US audience'
-            )
-        else:
-            unit_label = (
-                _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
-                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
-                or entry.get('unit_label')
-                or 'weekly US audience'
-            )
+        unit_label = _canonical_unit_label(kind_hint, platform_key,
+                                            window_days)
         out = {
             'us_estimate':      per.get('us_estimate'),
             'us_estimate_low':  per.get('us_estimate_low'),
@@ -3920,12 +3986,19 @@ def _stamp_stream_estimate(row: dict, entry: dict,
         }
     else:
         # Fallback to aggregate. This still preserves old-snapshot
-        # rendering while the daily cron picks up the new schema.
+        # rendering while the daily cron picks up the new schema. The
+        # aggregate is the cross-platform total, so it names no
+        # service.
         out = {k: entry.get(k) for k in _STREAM_FIELDS
                 if entry.get(k) is not None}
-        if kind_hint and not out.get('unit_label'):
-            out['unit_label'] = _DEFAULT_UNIT_BY_KIND.get(kind_hint,
-                                                            'weekly US audience')
+        out['unit_label'] = _canonical_unit_label(kind_hint, '',
+                                                   window_days)
+
+    # The reasoning text lands in the tooltip, so it is read as
+    # closely as the number and is held to the same individual-level
+    # language as the scope label.
+    if out.get('method'):
+        out['method'] = _scrub_household_language(out['method'])
 
     row['us_streams'] = {k: v for k, v in out.items() if v is not None}
 
@@ -4131,6 +4204,9 @@ def _stamp_reader_estimate(row: dict, entry: Optional[dict]) -> None:
     us_readers = {k: entry[k] for k in _READER_FIELDS if k in entry}
     if not us_readers.get('unit_label'):
         us_readers['unit_label'] = 'daily US readers'
+    if us_readers.get('method'):
+        us_readers['method'] = _scrub_household_language(
+            us_readers['method'])
     _bound_reader_movement(us_readers)
     row['us_readers'] = us_readers
 
@@ -4888,6 +4964,13 @@ def _libby_fallback_us_estimate(holds: int, platform_key: str) -> dict:
         'method':           (f'Projected from {holds:,} LA County holds via '
                               f'25x scale-up / 7 = weekly US borrows '
                               f'(conservative low-end).'),
+        # This one is genuinely a week of library borrowing, not a
+        # day, so it keeps the weekly cadence while the rest of the
+        # board reads daily. Marked so the difference is visible in
+        # the payload rather than being a silent second window on a
+        # list. The value itself is a hold-count projection and is
+        # left exactly as it is.
+        'est_basis':        'library_holds_projection',
     }
 
 
@@ -6394,6 +6477,243 @@ def _coverage_pick_from_dist(dist: dict, kind: str,
     return values[idx]
 
 
+# ============================================================================
+# Carry-forward: a row with no value of its own keeps its own last one
+# ============================================================================
+# A row that reaches the page without an audience value used to be given
+# a number sampled from its rank slot in the same-kind distribution.
+# That number looks exactly like a measured one and says nothing about
+# the title, so two different titles at the same rank read almost the
+# same. On 2026-09-15 the estimator lost its store, most of the board
+# fell through to that path, and the whole board read low and uniform.
+#
+# The row's own last measured value is a far better answer: it is about
+# THIS title, and being a few days old is a much smaller error than
+# being about nothing. So the order is now:
+#
+#   1. the item's own most recent measured value, walked to today
+#      through the same per-item rhythm the estimator uses for a
+#      carried-forward night (`scripts.trends_scrapers.carry_forward`),
+#      so it is a real number for today rather than a repeat of an
+#      older one, and the movement chip against it is real.
+#   2. only for an item with no history anywhere - a genuinely new
+#      chart entry - the rank-tier value, marked in the payload as
+#      such so it is identifiable and countable.
+#
+# Both are marked so the nightly gate re-prices them and the quality
+# alarm can report the two populations separately.
+
+_CARRY_HISTORY_DAYS = 14
+_CARRY_HISTORY_TTL_S = 900
+_carry_history_cache: dict = {'ts': 0.0, 'days': []}
+
+# Payload path -> the platform whose number that rail renders. A rail
+# shows one service's audience, so a carried value has to come from
+# that service's block, never the cross-platform total.
+_CARRY_PATH_PLATFORM_PREFIXES = ('streaming_trending.', 'fast_trending.')
+
+
+def _carry_history_days(max_days: int = _CARRY_HISTORY_DAYS) -> list:
+    """Recent dated `stream_estimates` snapshots, newest first, as
+    `[(day_iso, items, fold_index)]`.
+
+    Read once per process per TTL and shared by every row in the
+    coverage pass. Best-effort throughout: an unreachable day is
+    skipped, and a total failure just means no row can carry forward
+    (they fall to the rank tier exactly as before)."""
+    now_ts = time.time()
+    cached = _carry_history_cache.get('days') or []
+    if cached and now_ts - _carry_history_cache['ts'] < _CARRY_HISTORY_TTL_S:
+        return cached
+
+    today = date.today()
+    wanted = [(today - timedelta(days=i)).isoformat()
+              for i in range(1, max_days + 1)]
+    loaded: dict[str, dict] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futs = {pool.submit(_read_snapshot, 'stream_estimates', d): d
+                    for d in wanted}
+            for fut in as_completed(futs, timeout=60):
+                d = futs[fut]
+                try:
+                    snap = fut.result()
+                except Exception:
+                    continue
+                items = (snap or {}).get('items')
+                if isinstance(items, dict) and items:
+                    loaded[d] = items
+    except Exception as e:
+        logger.info("trends_iq carry-forward history read failed: %s", e)
+
+    out = []
+    for d in wanted:                      # already newest-first
+        items = loaded.get(d)
+        if items:
+            out.append((d, items, _build_day_fold_index(items)))
+    _carry_history_cache['days'] = out
+    _carry_history_cache['ts'] = now_ts
+    if out:
+        logger.info("trends_iq carry-forward history: %d day(s) loaded "
+                    "(%s .. %s)", len(out), out[0][0], out[-1][0])
+    return out
+
+
+def _carry_platform_for_path(path: str) -> str:
+    """Platform slug a rail renders, or '' for a cross-platform rail."""
+    for pfx in _CARRY_PATH_PLATFORM_PREFIXES:
+        if path.startswith(pfx):
+            rest = path[len(pfx):]
+            return rest.split('.', 1)[0]
+    return ''
+
+
+def _carry_entry_value(entry: dict, slug: str) -> Optional[int]:
+    """The number this rail would render from a stored entry: the
+    platform's own block when the rail is a platform rail, otherwise
+    the cross-platform total."""
+    if not isinstance(entry, dict):
+        return None
+    if slug:
+        blk = (entry.get('by_platform') or {}).get(slug)
+        if isinstance(blk, dict):
+            try:
+                v = int(blk.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                v = 0
+            return v if v >= 100 else None
+        # The rail names a service the stored entry has no block for.
+        # Handing over the cross-platform total here is exactly the
+        # defect the per-platform pass fixed, so decline instead.
+        return None
+    try:
+        v = int(entry.get('us_estimate') or 0)
+    except (TypeError, ValueError):
+        return None
+    return v if v >= 100 else None
+
+
+def _carry_find_prior(kind: str, title: str, slug: str) -> Optional[tuple]:
+    """Most recent stored value for this item on this rail.
+
+    Returns `(value, day_iso, resolved_key)` or None. Resolution
+    mirrors the annotators: exact key first, then the
+    season-qualifier-folded identity across the kind family, then a
+    title-prefix scan for the kinds whose keys carry an artist or
+    author."""
+    norm = _cp_normalize(title or '')
+    if not norm:
+        return None
+    key = f'{kind}:{norm}'
+    prefix_kinds = ('song', 'book', 'comic', 'goodreads_book',
+                    'wattpad_story') if kind in (
+        'song', 'book', 'comic', 'goodreads_book', 'wattpad_story') else ()
+
+    for day_iso, items, fold in _carry_history_days():
+        entry = _resolve_day_entry(items, fold, key)
+        if entry is not None:
+            v = _carry_entry_value(entry, slug)
+            if v:
+                return v, day_iso, key
+        for pk in prefix_kinds:
+            pfx_space = f'{pk}:{norm} '
+            pfx_only = f'{pk}:{norm}'
+            for k, e in items.items():
+                if k == pfx_only or k.startswith(pfx_space):
+                    v = _carry_entry_value(e, slug)
+                    if v:
+                        return v, day_iso, k
+                    break
+    return None
+
+
+_carry_reader_history_cache: dict = {'ts': 0.0, 'days': []}
+
+
+def _carry_reader_history_days(max_days: int = _CARRY_HISTORY_DAYS) -> list:
+    """Recent dated `headline_estimates` snapshots, newest first, as
+    `[(day_iso, items)]`. A story that also ran yesterday has its own
+    reading; a story published this morning does not, and correctly
+    falls through."""
+    now_ts = time.time()
+    cached = _carry_reader_history_cache.get('days') or []
+    if cached and now_ts - _carry_reader_history_cache['ts'] < _CARRY_HISTORY_TTL_S:
+        return cached
+
+    today = date.today()
+    wanted = [(today - timedelta(days=i)).isoformat()
+              for i in range(1, max_days + 1)]
+    loaded: dict[str, dict] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futs = {pool.submit(_read_snapshot, 'headline_estimates', d): d
+                    for d in wanted}
+            for fut in as_completed(futs, timeout=60):
+                d = futs[fut]
+                try:
+                    snap = fut.result()
+                except Exception:
+                    continue
+                items = (snap or {}).get('items')
+                if isinstance(items, dict) and items:
+                    loaded[d] = items
+    except Exception as e:
+        logger.info("trends_iq reader carry-forward history read failed: %s", e)
+
+    out = [(d, loaded[d]) for d in wanted if loaded.get(d)]
+    _carry_reader_history_cache['days'] = out
+    _carry_reader_history_cache['ts'] = now_ts
+    if out:
+        logger.info("trends_iq reader carry-forward history: %d day(s) "
+                    "loaded (%s .. %s)", len(out), out[0][0], out[-1][0])
+    return out
+
+
+def _carry_find_prior_reader(title: str) -> Optional[tuple]:
+    """Most recent stored readership for this story, as
+    `(value, day_iso)`."""
+    key = _headline_lookup_key(title)
+    if not key:
+        return None
+    for day_iso, items in _carry_reader_history_days():
+        entry = items.get(key)
+        if not isinstance(entry, dict):
+            continue
+        try:
+            v = int(entry.get('us_estimate') or 0)
+        except (TypeError, ValueError):
+            continue
+        if v >= 100:
+            return v, day_iso
+    return None
+
+
+def _carry_walk_to_today(prev_value: int, kind: str, title: str,
+                          resolved_key: str, prev_day_iso: str) -> int:
+    """Walk a carried value to today through the shared per-item
+    rhythm, so the row reads as its own number for today rather than a
+    repeat of an older one. Falls back to the carried value untouched
+    if the walk is unavailable."""
+    try:
+        from scripts.trends_scrapers.carry_forward import (
+            walk_value, load_rhythm_profiles)
+    except Exception:
+        return int(prev_value)
+    try:
+        prev_day = date.fromisoformat(prev_day_iso)
+    except (TypeError, ValueError):
+        prev_day = date.today() - timedelta(days=1)
+    try:
+        profile = (load_rhythm_profiles() or {}).get(resolved_key)
+        walked = walk_value(int(prev_value), f'{kind}|{title}|',
+                             date.today(), prev_date=prev_day,
+                             profile=profile)
+        return walked if walked > 0 else int(prev_value)
+    except Exception:
+        logger.debug("trends_iq carry-forward walk failed for %s", title)
+        return int(prev_value)
+
+
 def _coverage_reader_baselines(headline_snap: dict) -> tuple[dict, float]:
     """Per-outlet median daily-reader values from the researched
     headline snapshot + the global median. ({outlet_norm: median},
@@ -6428,27 +6748,56 @@ def _fused_row_is_film_only(row: dict) -> bool:
 
 
 def _ensure_full_audience_coverage(cards: dict,
-                                     stream_snap: dict,
-                                     headline_snap: dict) -> int:
-    """Stamp a chart-tier baseline audience on every rendered non-Film
-    item still missing one after all annotators ran. Returns the number
-    of rows stamped. Best-effort: never raises into compute_view."""
+                                    stream_snap: dict,
+                                    headline_snap: dict) -> dict:
+    """Give every rendered non-Film row an audience value.
+
+    A row still missing one after all annotators ran takes its OWN most
+    recent measured value, walked to today. Only a row with no history
+    anywhere falls through to the rank tier, and that case is marked in
+    the payload. Returns per-basis counts. Best-effort: never raises
+    into compute_view."""
     dist = _coverage_baselines_from_estimates(stream_snap)
     outlet_med, reader_global_med = _coverage_reader_baselines(headline_snap)
     today_iso = _today_iso()
-    stamped = 0
+    counts = {'carried_forward': 0, 'rank_tier': 0}
 
     def _stamp_baseline(it: dict, path: str, rank_pos: int,
                          list_len: int) -> None:
-        nonlocal stamped
         title = _coverage_item_title(it)
         if not title:
             return
         is_reader = any(path.startswith(p)
                         for p in _COVERAGE_READER_PREFIXES)
         if is_reader:
+            prior = _carry_find_prior_reader(title)
+            if prior:
+                prev_val, prev_day = prior
+                val = _carry_walk_to_today(prev_val, 'headline', title,
+                                            _headline_lookup_key(title),
+                                            prev_day)
+                direction, delta = _direction_from_prev(val, prev_val)
+                it['us_readers'] = {
+                    'us_estimate':      val,
+                    'us_estimate_low':  int(val * 0.72),
+                    'us_estimate_high': int(val * 1.38),
+                    'unit_label':       'daily US readers',
+                    'confidence':       'directional',
+                    'method':           'this story\'s own most recent '
+                                        'reading, moved to today',
+                    'delta_pct':        delta,
+                    'direction':        direction,
+                    'prev_estimate':    prev_val,
+                    'prev_date':        prev_day,
+                    'as_of_date':       today_iso,
+                    'est_basis':        'carried_forward',
+                }
+                counts['carried_forward'] += 1
+                return
+            # A story published today has no reading of its own
+            # anywhere, which is the honest case for the outlet tier.
             outlet = _cp_normalize(it.get('source')
-                                    or it.get('source_label') or '')
+                                   or it.get('source_label') or '')
             base = outlet_med.get(outlet) or reader_global_med
             val = _coverage_jitter(title, 'headline', base)
             it['us_readers'] = {
@@ -6457,36 +6806,64 @@ def _ensure_full_audience_coverage(cards: dict,
                 'us_estimate_high': int(val * 1.7),
                 'unit_label':       'daily US readers',
                 'confidence':       'directional',
-                'method':           'outlet-tier daily readership for '
-                                    'this chart position',
-                'delta_pct':        0.0,
-                'direction':        'stable',
-                'as_of_date':       today_iso,
-                'est_basis':        'chart_baseline',
-            }
-        else:
-            kind = _coverage_kind_for_path(path, it)
-            base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len)
-            val = _coverage_jitter(title, kind, base)
-            it['us_streams'] = {
-                'us_estimate':      val,
-                'us_estimate_low':  int(val * 0.55),
-                'us_estimate_high': int(val * 1.7),
-                'unit_label':       _DEFAULT_UNIT_BY_KIND.get(kind)
-                                     or 'weekly US audience',
-                'confidence':       'directional',
-                'method':           'chart-tier audience for this rank '
-                                    'position',
-                # A baseline stamp means this item carries no measured
-                # audience history anywhere in the record, so the only
-                # honest movement chip is the NEW treatment (first
-                # measured appearance), never a fabricated flat 0%.
+                'method':           'first appearance of this story',
                 'delta_pct':        0.0,
                 'direction':        'new',
                 'as_of_date':       today_iso,
-                'est_basis':        'chart_baseline',
+                'est_basis':        'rank_tier',
+                'no_prior_reading': True,
             }
-        stamped += 1
+            counts['rank_tier'] += 1
+            return
+
+        kind = _coverage_kind_for_path(path, it)
+        slug = _carry_platform_for_path(path)
+
+        prior = _carry_find_prior(kind, title, slug)
+        if prior:
+            prev_val, prev_day, resolved_key = prior
+            val = _carry_walk_to_today(prev_val, kind, title,
+                                        resolved_key, prev_day)
+            direction, delta = _direction_from_prev(val, prev_val)
+            it['us_streams'] = {
+                'us_estimate':      val,
+                'us_estimate_low':  int(val * 0.72),
+                'us_estimate_high': int(val * 1.38),
+                'unit_label':       _canonical_unit_label(kind, slug),
+                'confidence':       'directional',
+                'method':           'this title\'s own most recent '
+                                    'reading, moved to today',
+                'delta_pct':        delta,
+                'direction':        direction,
+                'prev_estimate':    prev_val,
+                'prev_date':        prev_day,
+                'as_of_date':       today_iso,
+                'est_basis':        'carried_forward',
+            }
+            counts['carried_forward'] += 1
+            return
+
+        # No reading for this title on any day in the record: a
+        # genuinely new chart entry. The rank tier is the only thing
+        # left, and it is marked so it can be counted and re-priced.
+        base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len)
+        val = _coverage_jitter(title, kind, base)
+        it['us_streams'] = {
+            'us_estimate':      val,
+            'us_estimate_low':  int(val * 0.55),
+            'us_estimate_high': int(val * 1.7),
+            'unit_label':       _canonical_unit_label(kind, slug),
+            'confidence':       'directional',
+            'method':           'first appearance on this chart',
+            # Nothing to compare against, so the only honest chip is
+            # the NEW treatment, never a fabricated flat 0%.
+            'delta_pct':        0.0,
+            'direction':        'new',
+            'as_of_date':       today_iso,
+            'est_basis':        'rank_tier',
+            'no_prior_reading': True,
+        }
+        counts['rank_tier'] += 1
 
     def _walk(node, path: str) -> None:
         if isinstance(node, dict):
@@ -6523,11 +6900,266 @@ def _ensure_full_audience_coverage(cards: dict,
         _walk(cards or {}, '')
     except Exception:
         logger.exception("audience coverage pass failed (non-fatal)")
-    if stamped:
-        logger.info("audience coverage pass: stamped %d baseline "
-                    "value(s) on rendered rows missing an estimate",
-                    stamped)
-    return stamped
+    if counts['carried_forward'] or counts['rank_tier']:
+        logger.info("audience coverage pass: %d row(s) carried their own "
+                    "previous reading forward, %d had no prior reading "
+                    "anywhere and took a rank-tier value",
+                    counts['carried_forward'], counts['rank_tier'])
+    return counts
+
+
+# ============================================================================
+# Rank follows the number on the page
+# ============================================================================
+# A streaming or FAST rail states that its rank is the title's position
+# by audience on that service that day. Two passes used to write it:
+# the nightly alignment ordered the stored snapshots by the estimator's
+# values, and then the coverage gate re-priced whatever was still
+# missing, which left the ordering describing values that were no
+# longer the ones being shown. On 2026-09-15 Wednesday sat at #198 with
+# 885,913 while Stranger Things sat at #88 with 225,041.
+#
+# This pass runs last, after every annotator, after the coverage pass,
+# and orders each rail by the value that row is actually rendering.
+# Single provenance: nothing here reads a chart position, so rank
+# cannot be a blend of chart order and audience.
+#
+# Conventions preserved. The full list for a service is the authority
+# and stays dense from 1 with no gaps and no rows dropped. The TV and
+# film views are filters over that list and keep the rank their row
+# holds in it, which is why their ranks run 2, 4, 6 rather than 1, 2,
+# 3. The plausibility clamp still runs afterwards, so a library
+# evergreen that tops a shallow list still settles in its band.
+
+_RANK_PASS_PREFIXES = ('streaming_trending', 'fast_trending')
+
+# Within a service block: the full list, then the filtered views over
+# it. Any other list of rows in the block (channel rankers, the
+# Netflix global rails) is its own list and is ranked on its own.
+_RANK_AUTHORITY_KEY = 'items'
+_RANK_VIEW_KEYS = ('tv', 'films')
+
+# Lists in a service block that are their own ranking of their own
+# rows. Everything else in the block is left alone: `week_us` and
+# `week_global` are weekly lists and must not be re-ordered by a daily
+# number.
+_RANK_INDEPENDENT_KEYS = ('channels',)
+_RANK_INDEPENDENT_PREFIXES = ('global_',)
+
+
+def _rank_row_value(row: dict) -> Optional[int]:
+    for f in ('us_streams', 'us_readers'):
+        blk = row.get(f)
+        if isinstance(blk, dict):
+            try:
+                v = int(float(blk.get('us_estimate') or 0))
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                return v
+    return None
+
+
+def _rank_identity(row: dict) -> tuple:
+    """Identity for matching a row between a full list and its filtered
+    views. Category is part of it because a film and a series can share
+    a title on the same service."""
+    return (_cp_normalize(str(row.get('title') or '')),
+            str(row.get('category_display') or '').strip().lower())
+
+
+def _reseat_ranks_by_value(rows: list) -> int:
+    """Order `rows` by rendered value descending and give them dense
+    ranks from 1. Rows with no value hold their relative position at
+    the end rather than being dropped. Returns rows moved."""
+    if not isinstance(rows, list) or len(rows) < 2:
+        return 0
+    decorated = []
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            return 0
+        v = _rank_row_value(row)
+        # Valued rows first, by value descending; current position
+        # breaks ties so a rail with tied values stays stable between
+        # renders. Unvalued rows keep their order at the end.
+        decorated.append(((0 if v is not None else 1),
+                          -(v or 0), i, row))
+    decorated.sort(key=lambda t: (t[0], t[1], t[2]))
+    moved = 0
+    for new_rank, (_, _, _, row) in enumerate(decorated, start=1):
+        if row.get('rank') != new_rank:
+            moved += 1
+        row['rank'] = new_rank
+    rows[:] = [t[3] for t in decorated]
+    return moved
+
+
+def _rank_sort_key(row) -> int:
+    r = row.get('rank') if isinstance(row, dict) else None
+    return r if isinstance(r, int) else 10 ** 9
+
+
+def _reseat_within_slots(rows: list) -> bool:
+    """Put `rows` in descending order of their own rendered value
+    while keeping the exact set of rank slots they already hold.
+
+    Used on a filtered view after it inherits the full list's ranks:
+    the slots stay the parent's, so the two lists still agree about
+    which positions exist, and the view reads in order against the
+    numbers it is showing. Returns True when anything moved."""
+    if not isinstance(rows, list) or len(rows) < 2:
+        return False
+    valued = [(r, _rank_row_value(r)) for r in rows if isinstance(r, dict)]
+    valued = [(r, v) for r, v in valued if v is not None]
+    if len(valued) < 2:
+        return False
+    slots = sorted(r.get('rank') for r, _ in valued
+                   if isinstance(r.get('rank'), int))
+    if len(slots) != len(valued):
+        return False
+    order = sorted(valued, key=lambda t: (-t[1], t[0].get('rank') or 0))
+    changed = False
+    for slot, (row, _) in zip(slots, order):
+        if row.get('rank') != slot:
+            row['rank'] = slot
+            changed = True
+    return changed
+
+
+def _apply_plausibility_clamp(rows: list, slug: str) -> bool:
+    """Reuse the stored per-title rank bands so the clamp keeps working
+    after the re-seat. Absent or unimportable, the rail just ships its
+    value ordering."""
+    try:
+        from scripts.trends_scrapers.stream_estimates import _clamp_rank_to_band
+    except Exception:
+        return False
+    try:
+        return bool(_clamp_rank_to_band(rows, slug))
+    except Exception:
+        return False
+
+
+def _realign_ranks_to_rendered_values(cards: dict) -> dict:
+    """Re-derive every streaming and FAST rank from the value on the
+    page. Best-effort: never raises into compute_view."""
+    stats = {'lists': 0, 'rows_moved': 0, 'views_synced': 0,
+             'views_shared': 0, 'views_reseated': 0, 'clamped': 0,
+             'orphan_view_rows': 0}
+    try:
+        for prefix in _RANK_PASS_PREFIXES:
+            tab = (cards or {}).get(prefix)
+            if not isinstance(tab, dict):
+                continue
+            for slug, block in tab.items():
+                if not isinstance(block, dict):
+                    continue
+
+                authority = block.get(_RANK_AUTHORITY_KEY)
+                rank_by_identity: dict = {}
+                rank_by_title: dict = {}
+                value_by_identity: dict = {}
+                authority_ids: set = set()
+                dup_titles: set = set()
+                if isinstance(authority, list) and len(authority) > 1:
+                    stats['rows_moved'] += _reseat_ranks_by_value(authority)
+                    if _apply_plausibility_clamp(authority, slug):
+                        stats['clamped'] += 1
+                    stats['lists'] += 1
+                    for row in authority:
+                        if not isinstance(row, dict):
+                            continue
+                        authority_ids.add(id(row))
+                        ident = _rank_identity(row)
+                        rank_by_identity.setdefault(ident, row.get('rank'))
+                        value_by_identity.setdefault(ident,
+                                                      _rank_row_value(row))
+                        # Some services leave the category blank on
+                        # the full list and set it only on the
+                        # filtered views, so title alone has to be
+                        # able to match. Kept only where the title is
+                        # unique, so a film and a series sharing a
+                        # name still resolve on category.
+                        t = _cp_normalize(str(row.get('title') or ''))
+                        if t in rank_by_title:
+                            dup_titles.add(t)
+                        else:
+                            rank_by_title[t] = row.get('rank')
+                    for t in dup_titles:
+                        rank_by_title.pop(t, None)
+
+                for key, value in block.items():
+                    if key == _RANK_AUTHORITY_KEY or not isinstance(value, list):
+                        continue
+                    rows = [r for r in value if isinstance(r, dict)]
+                    if len(rows) < 2:
+                        continue
+
+                    if key in _RANK_VIEW_KEYS and rank_by_identity:
+                        # Most services build the TV and film views out
+                        # of the very same row objects as the full
+                        # list, so those rows already carry the rank
+                        # the full list just gave them and there is
+                        # nothing to inherit. Touching them again would
+                        # write back into the full list, which is how
+                        # an earlier version of this pass put holes in
+                        # it. Sort and leave them alone.
+                        if all(id(r) in authority_ids for r in rows):
+                            value.sort(key=_rank_sort_key)
+                            stats['views_shared'] += 1
+                            continue
+
+                        # A view built from copies: inherit the rank the
+                        # row holds in the full list so the two never
+                        # disagree. A row the full list does not carry
+                        # keeps a rank of its own after the rest.
+                        tail = len(rank_by_identity) + 1
+                        disagrees = False
+                        for row in rows:
+                            ident = _rank_identity(row)
+                            inherited = rank_by_identity.get(ident)
+                            if inherited is None:
+                                inherited = rank_by_title.get(
+                                    _cp_normalize(str(row.get('title') or '')))
+                            if inherited is None:
+                                stats['orphan_view_rows'] += 1
+                                row['rank'] = tail
+                                tail += 1
+                                continue
+                            row['rank'] = inherited
+                            if value_by_identity.get(ident) != \
+                                    _rank_row_value(row):
+                                disagrees = True
+                        value.sort(key=_rank_sort_key)
+                        # A couple of rails price the same title twice
+                        # under two kinds, so the view can render a
+                        # different number from its twin on the full
+                        # list. Only there does inheriting leave the
+                        # view out of order against what it is
+                        # showing, and only there is it re-seated.
+                        if disagrees and _reseat_within_slots(rows):
+                            stats['views_reseated'] += 1
+                            _apply_plausibility_clamp(rows, slug)
+                            value.sort(key=_rank_sort_key)
+                        stats['views_synced'] += 1
+
+                    elif (key in _RANK_INDEPENDENT_KEYS
+                            or key.startswith(_RANK_INDEPENDENT_PREFIXES)):
+                        # Its own list of its own rows (a channel
+                        # ranker, a Netflix global rail).
+                        stats['rows_moved'] += _reseat_ranks_by_value(value)
+                        stats['lists'] += 1
+    except Exception:
+        logger.exception("rank alignment pass failed (non-fatal)")
+    if stats['lists']:
+        logger.info("rank alignment: %d list(s) ordered by rendered value, "
+                    "%d row(s) moved, %d view(s) already on the full "
+                    "list's rows, %d view(s) synced (%d re-seated "
+                    "against their own numbers), %d orphan view row(s)",
+                    stats['lists'], stats['rows_moved'],
+                    stats['views_shared'], stats['views_synced'],
+                    stats['views_reseated'], stats['orphan_view_rows'])
+    return stats
 
 
 def _annotate_cross_platform_moments(
@@ -10374,6 +11006,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                         headline_estimates_snap)
     except Exception as e:
         logger.warning("audience coverage pass failed: %s", e)
+
+    # Rank last, so every streaming and FAST rail is ordered by the
+    # number the reader is looking at rather than by an ordering
+    # computed before the values settled.
+    try:
+        _realign_ranks_to_rendered_values(payload['cards'])
+    except Exception as e:
+        logger.warning("rank alignment pass failed: %s", e)
 
     # Per-lens audience rescaling (2026-09-03). Fold `shares` per
     # (item, lens) from `lens_scores.json` into every row's

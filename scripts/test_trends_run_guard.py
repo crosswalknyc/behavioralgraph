@@ -11,7 +11,8 @@ added so the same shape of failure reports itself next time:
   2. `stream_estimates._iter_batch_results` must survive an
      undecodable line instead of taking the whole estimator with it.
   3. `run_guard.RunLock` must refuse a second concurrent run.
-  4. `run_guard.check_baseline_share` must alert past its threshold
+  4. `run_guard.check_baseline_share` must alert past its thresholds,
+     counting carried-forward and rank-derived rows separately
      and stay quiet at or near zero.
 
 Run: python3 scripts/test_trends_run_guard.py
@@ -182,33 +183,66 @@ def test_run_lock_blocks_second_run() -> None:
         run_guard.send_alert = orig_send
 
 
-def test_baseline_share_alarm() -> None:
-    print("\n[7] the quality alarm fires on a rank-derived board")
+def test_provenance_share_alarm() -> None:
+    print("\n[7] the quality alarm separates carried from rank-derived")
     sent: list[tuple[str, str]] = []
     orig_send = run_guard.send_alert
     run_guard.send_alert = lambda tag, subject, body, **kw: (  # type: ignore[assignment]
         sent.append((tag, subject)) or True)
     try:
-        clean = {'total': 12285, 'baseline_after': 3, 'baseline_by_list': {}}
-        share = run_guard.check_baseline_share(clean)
-        check(share is not None and share < 0.1, "a clean board measures ~0%")
+        clean = {'total': 12285, 'carried_after': 41,
+                 'rank_tier_after': 3, 'by_list': {}}
+        got = run_guard.check_baseline_share(clean)
+        check(got is not None and got['rank_tier_pct'] < 0.1,
+              "a clean board measures ~0% on the rank tier")
+        check(got is not None and got['carried_pct'] < 1.0,
+              "a clean board carries a handful of rows")
         check(not sent, "a clean board sends nothing")
 
+        # The 2026-09-15 shape: the store was lost, so nearly every row
+        # had no reading anywhere and fell to the rank tier.
         broken = {
             'total': 12285,
-            'baseline_after': 9520,
-            'baseline_by_list': {
-                'fast.roku':  {'total': 619, 'baseline': 619, 'pct': 100.0},
-                'gaming.xbox_gamepass': {'total': 94, 'baseline': 94,
-                                          'pct': 100.0},
+            'carried_after': 0,
+            'rank_tier_after': 9520,
+            'by_list': {
+                'fast.roku': {'total': 619, 'carried': 0, 'rank_tier': 619,
+                               'carried_pct': 0.0, 'rank_tier_pct': 100.0},
+                'gaming.xbox_gamepass': {'total': 94, 'carried': 0,
+                                          'rank_tier': 94,
+                                          'carried_pct': 0.0,
+                                          'rank_tier_pct': 100.0},
             },
         }
-        share2 = run_guard.check_baseline_share(broken)
-        check(share2 is not None and 77.0 < share2 < 78.0,
-              f"a broken board measures ~77.5% (got {share2})")
+        got2 = run_guard.check_baseline_share(broken)
+        check(got2 is not None and 77.0 < got2['rank_tier_pct'] < 78.0,
+              f"a lost store measures ~77.5% rank tier (got {got2})")
         check(len(sent) == 1, "exactly one alert fires")
+        check(sent[0][0] == 'rank_tier_share', "it is the rank-tier alert")
         check('placeholder' in sent[0][1].lower(),
               "the subject says what is wrong in plain words")
+
+        # A pricing pass that ran out of time: every row keeps its own
+        # last reading. Alertable, but a different and milder thing.
+        sent.clear()
+        stale = {
+            'total': 12285,
+            'carried_after': 6140,
+            'rank_tier_after': 4,
+            'by_list': {
+                'streaming.netflix': {'total': 200, 'carried': 190,
+                                       'rank_tier': 0,
+                                       'carried_pct': 95.0,
+                                       'rank_tier_pct': 0.0},
+            },
+        }
+        got3 = run_guard.check_baseline_share(stale)
+        check(got3 is not None and 49.0 < got3['carried_pct'] < 51.0,
+              f"a stale board measures ~50% carried (got {got3})")
+        check(len(sent) == 1 and sent[0][0] == 'carried_share',
+              "the carried alert fires and the rank-tier one does not")
+        check('older reading' in sent[0][1].lower(),
+              "the subject says the board is old, not wrong")
     finally:
         run_guard.send_alert = orig_send
 
@@ -225,7 +259,7 @@ if __name__ == '__main__':
     test_batch_iter_survives_bad_line()
     test_batch_iter_gives_up_on_garbage()
     test_run_lock_blocks_second_run()
-    test_baseline_share_alarm()
+    test_provenance_share_alarm()
     print(f"\n{'ALL PASS' if not _failures else str(len(_failures)) + ' FAILED'}")
     for f in _failures:
         print(f"  - {f}")

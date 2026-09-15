@@ -531,21 +531,6 @@ def _run_main(argv: list[str] | None = None) -> int:
         except Exception as e:
             logging.exception("run_all: stream_estimates post-step crashed")
             results.append({'source': 'stream_estimates', 'error': str(e), 'national': []})
-        # Single-provenance rank (2026-09-09): once the estimator has
-        # landed, every platform tile's rank must equal the title's
-        # position ordered by that day's audience estimate. Re-seats
-        # view-carrying rows in each platform snapshot (latest + today's
-        # dated copy) and keeps items' chart labels in step. Non-fatal.
-        try:
-            from scripts.trends_scrapers.stream_estimates import (
-                align_snapshot_ranks)
-            today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            for folder in ('latest', today_iso):
-                align_snapshot_ranks(folder)
-        except Exception:
-            logging.exception("run_all: platform rank alignment crashed "
-                               "(non-fatal)")
-
     # headline_estimates: US daily-readership estimates (Claude Sonnet +
     # web_search per article) for every headline on the Trends IQ
     # Headlines tab. Runs AFTER philanthropy_news lands + inline
@@ -594,18 +579,57 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: coverage gate crashed")
             results.append({'source': 'coverage_gate', 'error': str(e),
                             'national': []})
-        # Quality alarm on what actually got published. A row with no
-        # researched value of its own falls back to a number derived
+
+        # Single-provenance rank: a platform tile's rank is the
+        # title's position ordered by that day's audience. This runs
+        # AFTER the gate, not before it (where it sat until
+        # 2026-09-15), because the gate re-prices whatever the
+        # estimator missed. Ordering the stored snapshots first meant
+        # any sizeable gate pass left the ranking describing values
+        # that were no longer the ones on the page: Wednesday at #198
+        # with 885,913 against Stranger Things at #88 with 225,041.
+        # Re-seats view-carrying rows in each platform snapshot
+        # (latest + today's dated copy) and keeps items' chart labels
+        # in step. The render side derives rank from the values it is
+        # actually showing, so this keeps the stored copy in agreement
+        # with the page rather than being the page's only defence.
+        # Non-fatal.
+        try:
+            from scripts.trends_scrapers.stream_estimates import (
+                align_snapshot_ranks)
+            today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            for folder in ('latest', today_iso):
+                align_snapshot_ranks(folder)
+        except Exception:
+            logging.exception("run_all: platform rank alignment crashed "
+                               "(non-fatal)")
+
+        # The re-seated ranks are in the snapshots but the payload the
+        # gate warmed was built before them, so drop it and let the
+        # warm step below rebuild.
+        try:
+            import trends_iq
+            n = trends_iq.invalidate_live_compute_view_caches()
+            logging.info("run_all: purged %d cached payload(s) after rank "
+                          "alignment", n)
+        except Exception:
+            logging.exception("run_all: post-rank cache purge crashed "
+                               "(non-fatal)")
+
+        # Quality alarm on what actually got published, measured in
+        # two parts. A row with no reading of its own now carries its
+        # own most recent one forward, which is honest but stale; only
+        # a row with no reading anywhere falls to a number derived
         # from its rank slot, which reads on the page exactly like a
-        # real one. A clean run leaves that at or near zero; on
-        # 2026-09-15 it was most of the board for most of the day and
-        # nothing noticed until a colleague did.
+        # real one. Both are alertable and the second should be rare.
+        # On 2026-09-15 it was most of the board for most of the day
+        # and nothing noticed until a colleague did.
         try:
             from scripts.trends_scrapers.run_guard import check_baseline_share
             if coverage_summary:
                 check_baseline_share(coverage_summary)
         except Exception:
-            logging.exception("run_all: baseline share check crashed "
+            logging.exception("run_all: provenance share check crashed "
                                "(non-fatal)")
 
     _write_index(results)

@@ -15,8 +15,9 @@ looked too low and too similar to be real:
 
 This module supplies the missing guard for each: `RunLock` (one run at
 a time), `start_watchdog` (alert on an overrun), and
-`check_baseline_share` (alert when too many rendered rows fall back to
-the rank-tier baseline).
+`check_baseline_share` (alert on how the board came by its numbers,
+counting rows carrying their own earlier reading separately from rows
+that had no reading anywhere and fell to the rank tier).
 
 Everything here is best-effort. A guard never raises into a run and
 never blocks one; the worst case is a missing alert, never a lost
@@ -59,11 +60,23 @@ WATCHDOG_MULTIPLE = float(os.environ.get("TRENDS_RUN_WATCHDOG_MULT", "1.5"))
 # A run still holding the lock past this is not slow, it is stuck.
 STALE_RUN_HOURS = float(os.environ.get("TRENDS_RUN_STALE_HOURS", "20"))
 
-# Share of rendered rows allowed to sit on the rank-tier baseline
-# before the board is considered wrong. A clean run lands at or near
-# zero; 2026-09-15 was most of the board.
-BASELINE_SHARE_ALERT_PCT = float(
-    os.environ.get("TRENDS_BASELINE_ALERT_PCT", "5.0"))
+# Two separate bars, because there are now two ways a row can reach
+# the page without a reading of its own and they are not equally bad.
+#
+# Carried forward: the row is showing its own most recent reading,
+# moved to today. It is about the right title and is only stale, so a
+# few percent is unremarkable and a fifth of the board means the
+# pricing pass is not keeping up.
+#
+# Rank tier: the row had no reading anywhere in the record, so its
+# number comes from its position in the list and says nothing about
+# the title. That is the one that made 2026-09-15 read low and
+# uniform. It should be a handful of genuinely new chart entries, so
+# the bar sits low.
+CARRIED_SHARE_ALERT_PCT = float(
+    os.environ.get("TRENDS_CARRIED_ALERT_PCT", "20.0"))
+RANK_TIER_SHARE_ALERT_PCT = float(
+    os.environ.get("TRENDS_RANK_TIER_ALERT_PCT", "2.0"))
 
 
 def _now_iso() -> str:
@@ -283,9 +296,9 @@ def start_watchdog(expected_minutes: int = EXPECTED_RUNTIME_MIN,
                 f"  normal      : about {expected_minutes / 60.0:.1f} hours\n"
                 f"  pid         : {os.getpid()}\n\n"
                 "While a run is unfinished, rows it has not priced yet "
-                "show a value derived from their rank position rather "
-                "than their own. Worth checking whether it is working "
-                "or stuck.\n\n"
+                "show their own most recent reading rather than one "
+                "taken today. Worth checking whether it is working or "
+                "stuck.\n\n"
                 "  tail -50 /var/log/trends_scrapers.log\n",
             )
             return
@@ -300,62 +313,105 @@ def start_watchdog(expected_minutes: int = EXPECTED_RUNTIME_MIN,
 # ---------------------------------------------------------------------------
 # Guard 3: quality alarm on the published board
 # ---------------------------------------------------------------------------
+def _worst_lists(by_list: dict, field: str, limit: int = 15) -> str:
+    worst = sorted(by_list.items(),
+                   key=lambda kv: kv[1].get(f'{field}_pct', 0.0),
+                   reverse=True)[:limit]
+    return "\n".join(
+        f"  {name:<44} {v.get(f'{field}_pct', 0.0):5.1f}%  "
+        f"({v.get(field, 0)}/{v.get('total', 0)})"
+        for name, v in worst if v.get(field)
+    ) or "  (per-list detail unavailable)"
+
+
 def check_baseline_share(summary: dict[str, Any],
-                         *, threshold_pct: float = BASELINE_SHARE_ALERT_PCT,
-                         ) -> Optional[float]:
-    """Alert when too much of the board is on the rank-tier baseline.
+                         *,
+                         carried_pct: float = CARRIED_SHARE_ALERT_PCT,
+                         rank_tier_pct: float = RANK_TIER_SHARE_ALERT_PCT,
+                         ) -> Optional[dict]:
+    """Alert on how the board came by its numbers.
 
-    A rank-derived value carries no signal about the item it is
-    attached to: two different titles at the same rank on the same list
-    get near enough the same number. That is what made the 2026-09-15
-    board look both too low and too uniform. A clean run leaves this at
-    or near zero.
+    Two populations, measured and alerted separately.
 
-    `summary` is the coverage gate's return dict. Returns the measured
-    share, or None when it could not be read.
+    Carried forward: the row is showing its own most recent reading
+    moved to today. Honest and about the right title, just older than
+    today. A large share means the pricing pass is falling behind.
+
+    Rank tier: the row had no reading anywhere, so its number comes
+    from its slot in the list. It looks like a real audience figure
+    and carries nothing about the title, which is why two titles at
+    the same rank read almost the same on 2026-09-15. This should be
+    a handful of genuinely new chart entries and nothing more.
+
+    `summary` is the coverage gate's return dict. Returns
+    `{'carried_pct', 'rank_tier_pct'}`, or None when it could not be
+    read.
     """
     try:
         total = int(summary.get('total') or 0)
-        baseline = summary.get('baseline_after')
-        if not total or baseline is None:
-            logger.info("run_guard: no baseline share to check")
+        carried = summary.get('carried_after')
+        rank_tier = summary.get('rank_tier_after')
+        if not total or (carried is None and rank_tier is None):
+            logger.info("run_guard: no provenance shares to check")
             return None
-        share = 100.0 * int(baseline) / total
-        by_list = summary.get('baseline_by_list') or {}
-        logger.info("run_guard: %.2f%% of rendered rows on the rank-tier "
-                     "baseline (%d/%d)", share, int(baseline), total)
-        if share <= threshold_pct:
-            return share
+        carried = int(carried or 0)
+        rank_tier = int(rank_tier or 0)
+        c_share = 100.0 * carried / total
+        r_share = 100.0 * rank_tier / total
+        by_list = summary.get('by_list') or {}
+        logger.info("run_guard: %.2f%% of rendered rows carried forward "
+                     "(%d/%d), %.2f%% on the rank tier (%d/%d)",
+                     c_share, carried, total, r_share, rank_tier, total)
 
-        worst = sorted(by_list.items(),
-                       key=lambda kv: kv[1].get('pct', 0.0),
-                       reverse=True)[:15]
-        lines = "\n".join(
-            f"  {name:<44} {v.get('pct', 0.0):5.1f}%  "
-            f"({v.get('baseline', 0)}/{v.get('total', 0)})"
-            for name, v in worst
-        ) or "  (per-list detail unavailable)"
-        send_alert(
-            "baseline_share",
-            f"Trends IQ: {share:.0f}% of rows are showing a "
-            f"placeholder audience number",
-            "After tonight's run, a large share of rows on the Trends "
-            "IQ board are showing an audience number derived from the "
-            "row's rank position rather than from the row itself.\n\n"
-            f"  rows on the placeholder : {int(baseline)} of {total} "
-            f"({share:.1f}%)\n"
-            f"  alerts above            : {threshold_pct:.1f}%\n"
-            f"  normal                  : at or near 0%\n\n"
-            "These read like real audience numbers on the page but "
-            "carry no information about the individual title, so items "
-            "at the same rank look near identical.\n\n"
-            "Worst lists:\n" + lines + "\n\n"
-            "Usually this means the pricing pass did not finish or its "
-            "stored values were lost.\n\n"
-            "  grep -E 'coverage_gate|stream_estimates' "
-            "/var/log/trends_scrapers.log | tail -40\n",
-        )
-        return share
+        if r_share > rank_tier_pct:
+            send_alert(
+                "rank_tier_share",
+                f"Trends IQ: {r_share:.0f}% of rows are showing a "
+                f"placeholder audience number",
+                "After tonight's run, rows on the Trends IQ board are "
+                "showing an audience number derived from the row's "
+                "position in its list rather than from the row "
+                "itself.\n\n"
+                f"  rows on the placeholder : {rank_tier} of {total} "
+                f"({r_share:.1f}%)\n"
+                f"  alerts above            : {rank_tier_pct:.1f}%\n"
+                f"  normal                  : a handful of new chart "
+                f"entries\n\n"
+                "These read like real audience numbers on the page but "
+                "carry nothing about the individual title, so items at "
+                "the same rank look near identical. A row only lands "
+                "here when it has no reading anywhere in the record, "
+                "so a large share means either a flood of new titles "
+                "or a lost store.\n\n"
+                "Worst lists:\n"
+                + _worst_lists(by_list, 'rank_tier') + "\n\n"
+                "  grep -E 'coverage_gate|stream_estimates' "
+                "/var/log/trends_scrapers.log | tail -40\n",
+            )
+
+        if c_share > carried_pct:
+            send_alert(
+                "carried_share",
+                f"Trends IQ: {c_share:.0f}% of rows are showing an "
+                f"older reading",
+                "After tonight's run, a large share of rows on the "
+                "Trends IQ board are showing their own most recent "
+                "reading rather than one taken today.\n\n"
+                f"  rows carried forward : {carried} of {total} "
+                f"({c_share:.1f}%)\n"
+                f"  alerts above         : {carried_pct:.1f}%\n\n"
+                "Each number is about the right title, so the board is "
+                "not wrong, but it is older than it should be. This "
+                "usually means the pricing pass did not get through "
+                "its list.\n\n"
+                "Worst lists:\n"
+                + _worst_lists(by_list, 'carried') + "\n\n"
+                "  grep -E 'coverage_gate|stream_estimates' "
+                "/var/log/trends_scrapers.log | tail -40\n",
+            )
+
+        return {'carried_pct': round(c_share, 2),
+                'rank_tier_pct': round(r_share, 2)}
     except Exception as e:
-        logger.warning("run_guard: baseline share check failed: %s", e)
+        logger.warning("run_guard: provenance share check failed: %s", e)
         return None
