@@ -24223,6 +24223,19 @@ https://www.instagram.com/p/..."></textarea>
             padding-bottom: 7px;
             border-bottom-color: #3B3D38;
         }
+        /* Pin the demographics column-header rows while scrolling, with an
+           opaque background so data rows don't bleed through them. */
+        #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head,
+        #dashboardView.piq-v4 #tab-demographics .piq-data-row.head {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 3 !important;
+            background: #15252A !important;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-demo-row.head,
+        body[data-theme="light"] #dashboardView.piq-v4 #tab-demographics .piq-data-row.head {
+            background: #FFFFFF !important;
+        }
         #dashboardView.piq-v4 #tab-demographics .piq-demo-row .name {
             color: #E9E8E1;
             font-size: 12.5px;
