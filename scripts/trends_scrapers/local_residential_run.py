@@ -76,6 +76,12 @@ RESIDENTIAL_SCRAPERS = [
     # /us/en/movies + /us/en/series. Runs residentially because
     # starz.com's Akamai config fingerprints Hetzner's datacenter IP.
     ('starz',         'Starz'),
+    # Starz on Amazon (2026-09-15): the Prime Video Channels panel
+    # carries the same catalog, so it mirrors the snapshot the line
+    # above just wrote. Only reads S3 and needs no residential IP; it
+    # runs here so the mirror refreshes in the same pass rather than
+    # waiting for the next Hetzner batch.
+    ('starz_amazon',  'Starz on Amazon'),
     # Xbox Game Pass Ultimate (2026-08-20): Gaming tab. Parses
     # window.__PRELOADED_STATE__ on /en-US/play for the "Most popular
     # on cloud" SIGL rail, then hydrates the top 25 product IDs via

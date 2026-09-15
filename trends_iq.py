@@ -360,6 +360,17 @@ STREAMING_PLATFORMS = [
     # Blocks[N].data.slides[M]. Runs residentially because Starz's
     # Akamai config fingerprints Hetzner's datacenter IP.
     ('starz',      'Starz',        False),
+    # 2026-09-15 (Jenna): Starz as it is carried on Amazon Prime Video
+    # Channels. Same catalog as the Starz panel above, because it is
+    # the same entitlement - Starz management: "The Starz product, our
+    # D2C product, our Amazon product, is exactly the same product."
+    # `starz_amazon.py` mirrors the Starz catalog rather than scraping
+    # a second one, and the audience is the Prime-Video-carried share
+    # of the Starz audience, researched in that module's docstring.
+    # The Starz panel remains the whole service; this one is the slice
+    # of it that watches inside Prime Video, so the two are never
+    # added together.
+    ('starz_amazon', 'Starz on Amazon', False),
 ]
 
 # 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
@@ -3830,6 +3841,17 @@ _AUDIENCE_NOUN_BY_KIND_PLATFORM = {
     ('game', 'steam_top_sellers'): 'US plays on Steam',
     ('game', 'meta_quest_free'):   'US plays on Meta Quest',
     ('game', 'meta_quest_paid'):   'US plays on Meta Quest',
+    # The two Starz panels overlap by construction: one is the whole
+    # service, the other the part of it carried through Prime Video
+    # Channels. Neither number means anything without saying which,
+    # and nobody should read the Amazon panel as all Starz viewing or
+    # add the two together, so both say it inline.
+    ('film', 'starz'):             'US views on Starz, every distribution path',
+    ('tv', 'starz'):               'US views on Starz, every distribution path',
+    ('title', 'starz'):            'US views on Starz, every distribution path',
+    ('film', 'starz_amazon'):      'US views on Starz through Prime Video Channels',
+    ('tv', 'starz_amazon'):        'US views on Starz through Prime Video Channels',
+    ('title', 'starz_amazon'):     'US views on Starz through Prime Video Channels',
 }
 
 
@@ -4034,6 +4056,10 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'britbox':    'britbox',
     'mgmplus':    'mgmplus',
     'starz':      'starz',
+    # The Amazon-carried panel resolves through the Starz key and is
+    # then apportioned to the Prime-Video-carried share of it. See
+    # `_apportion_to_amazon_carried`.
+    'starz_amazon': 'starz',
     'paramountplus': 'paramountplus',
     'peacock':       'peacock',
     'amcplus':       'amcplus',
@@ -4675,6 +4701,85 @@ def _annotate_podcasts_with_streams(podcast_charts: dict, estimates: dict) -> No
                                      kind_hint='podcast')
 
 
+# Panels whose number is one distribution path through another
+# panel's service. The row resolves against the parent service's
+# estimate and is then multiplied by that path's researched share of
+# the service, because a row is one path and never the service total.
+# Writing the service total into a distribution-path row is the
+# apportionment defect that put values up to 219x over on the podcast
+# rails in September 2026.
+_APPORTIONED_STREAMING_PANELS = {'starz_amazon'}
+
+
+def _amazon_carried_share(title: str, category_display: str) -> float:
+    """Prime-Video-carried share of a Starz title's audience. The
+    research behind it lives in
+    `scripts/trends_scrapers/starz_amazon.py`. Falls back to the
+    service-level read if that module cannot be imported, which keeps
+    the panel priced rather than dark."""
+    try:
+        from scripts.trends_scrapers.starz_amazon import (
+            amazon_share_for_title)
+        return amazon_share_for_title(title, category_display)
+    except Exception:
+        return 0.44
+
+
+def _apportion_to_amazon_carried(row: dict) -> None:
+    """Scale a stamped row from the whole Starz service down to the
+    part of it carried through Prime Video Channels.
+
+    Multiplying a share through leaves the movement chip alone on
+    purpose: a constant share means the day-over-day percentage is
+    identical to the parent's, and it means the same scaling holds
+    over any window the accumulator sums, because a share and a sum
+    commute. The previous reading is scaled with the current one so
+    the chip keeps describing the same quantity on both sides."""
+    blk = row.get('us_streams')
+    if not isinstance(blk, dict):
+        return
+    try:
+        cur = float(blk.get('us_estimate') or 0)
+    except (TypeError, ValueError):
+        return
+    if cur <= 0:
+        return
+    title = (row.get('title') or '').strip()
+    share = _amazon_carried_share(title, row.get('category_display') or '')
+    try:
+        from scripts.trends_scrapers.stream_estimates import (
+            _natural_last_digits)
+    except Exception:
+        def _natural_last_digits(v, _t, _s):  # type: ignore
+            return v
+
+    def _scaled(key: str) -> None:
+        try:
+            v = float(blk.get(key) or 0)
+        except (TypeError, ValueError):
+            return
+        if v <= 0:
+            return
+        blk[key] = _natural_last_digits(max(1, int(round(v * share))),
+                                        title, f'starz_amazon|{key}')
+
+    for field in ('us_estimate', 'us_estimate_low', 'us_estimate_high',
+                  'prev_estimate'):
+        _scaled(field)
+    blk['platform'] = 'starz_amazon'
+    blk['unit_label'] = _canonical_unit_label(
+        _AMAZON_CARRIED_KIND_HINT.get(
+            (row.get('category_display') or '').strip().lower(), 'title'),
+        'starz_amazon',
+        blk.get('window_days_total') or 1)
+    blk['method'] = ('the part of this title\'s Starz audience that '
+                     'watches inside Prime Video')
+    blk.pop('sources', None)
+
+
+_AMAZON_CARRIED_KIND_HINT = {'film': 'film', 'tv': 'tv', '': 'title'}
+
+
 def _annotate_streaming_with_streams(streaming_trending: dict,
                                        estimates: dict) -> None:
     """Attach per-platform `us_streams` to every Film/TV row: Netflix
@@ -4725,6 +4830,8 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
+                if panel_slug in _APPORTIONED_STREAMING_PANELS:
+                    _apportion_to_amazon_carried(row)
 
 
 def _annotate_fast_with_streams(fast_trending: dict,
@@ -9281,6 +9388,15 @@ def _norm_stream_title(title: str) -> str:
     return t
 
 
+# A panel that carries another panel's catalog reads that panel's
+# depth block too. Starz sold through Prime Video Channels is the same
+# entitlement and the same title list as Starz, so the JustWatch depth
+# pulled once for `starz` extends both without a second query.
+_STREAM_DEPTH_ALIAS = {
+    'starz_amazon': 'starz',
+}
+
+
 def _merge_streaming_depth(primary: list[dict], extension: list[dict],
                             limit: int = 100) -> list[dict]:
     """Extend a platform's own ranked list with depth-extension rows.
@@ -9359,7 +9475,9 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             snap, snap_day = _read_snapshot_nearest(slug, asof)
         else:
             snap = _read_snapshot(slug)
-        depth_block = depth_sources.get(slug) or {}
+        depth_block = (depth_sources.get(slug)
+                       or depth_sources.get(_STREAM_DEPTH_ALIAS.get(slug, ''))
+                       or {})
         if not snap:
             # Platform's own snapshot missing entirely - ship the
             # depth extension alone rather than an empty panel.

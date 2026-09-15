@@ -57,6 +57,7 @@
     "run_guard.py",
     "score_new_items_only.py",
     "starz.py",
+    "starz_amazon.py",
     "steam_charts.py",
     "stream_estimates.py",
     "streaming_depth.py",

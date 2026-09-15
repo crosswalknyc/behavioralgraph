@@ -2401,6 +2401,27 @@ _STREAMING_PLATFORMS_META = [
          'and NOT AMC Theatres - do not reason from linear AMC '
          'ratings or from box office.'
      )},
+    # 2026-09-15: Starz as carried on Amazon Prime Video Channels.
+    # `derived_from` marks it as a DISTRIBUTION PATH of another entry
+    # rather than a service of its own: it is never put in front of
+    # the research model (see `_format_target_platforms`), because
+    # its number is the Starz number apportioned to the Prime-Video-
+    # carried share in `trends_iq._apportion_to_amazon_carried`. The
+    # ceiling is registered so the rail is bounded by the same cap
+    # machinery as every other rail: Starz's own 5.0M weekly top slot
+    # times the top of the researched per-title share band. Research
+    # and sources live in `scripts/trends_scrapers/starz_amazon.py`.
+    {'key': 'starz_amazon',
+     'label': 'Starz on Amazon',
+     'ceiling': 2_480_000,
+     'derived_from': 'starz',
+     'anchors': (
+         'Starz sold through Amazon Prime Video Channels. Same '
+         'catalog and same entitlement as Starz; what differs is the '
+         'audience, which is the share of Starz US streaming that '
+         'watches inside Prime Video rather than in the Starz app or '
+         'another storefront.'
+     )},
 ]
 
 
@@ -2837,6 +2858,13 @@ def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str
     returns 0 for them if it can't defend a number."""
     lines = []
     for p in platforms:
+        # A derived rail is one distribution path of another rail on
+        # this same list. Its number is that rail's number apportioned
+        # to the path's researched share, so asking the model for it
+        # separately would price the same audience twice and invite
+        # the two to disagree.
+        if p.get('derived_from'):
+            continue
         marker = ' *[on chart]*' if p['key'] in focus_keys else ''
         lines.append(
             f'  - "{p["key"]}"{marker}: {p["label"]} - '

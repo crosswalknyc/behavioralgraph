@@ -45,6 +45,15 @@ _SERVICE_BY_PATH_HINT = {
     'britbox': 'britbox', 'amcplus': 'amc',
 }
 
+# A rail that is one service carried on another names both, and both
+# are its own. Starz on Amazon is the case: the label has to say the
+# service whose catalog it is and the path it is carried through, or
+# the number reads as all Starz viewing. Longest path hint wins, so
+# `starz_amazon` resolves here rather than falling to `starz`.
+_EXTRA_OWN_SERVICES = {
+    'starz_amazon': {'starz', 'prime'},
+}
+
 
 def _item_title(it: dict) -> str:
     for k in _TITLE_KEYS:
@@ -149,12 +158,19 @@ def audit(filters: dict, force_refresh: bool = False) -> dict[str, Any]:
 
         if '(' in lab or 'streaming on' in low or ' on ' in low:
             own = None
+            owned: set = set()
+            plow = path.lower()
+            for hint, extra in _EXTRA_OWN_SERVICES.items():
+                if hint in plow:
+                    owned |= extra
             for hint, svc in _SERVICE_BY_PATH_HINT.items():
-                if hint in path.lower():
+                if hint in plow:
                     own = svc
                     break
+            if own:
+                owned.add(own)
             for hint, svc in _SERVICE_BY_PATH_HINT.items():
-                if svc in low and (own is None or svc != own):
+                if svc in low and (not owned or svc not in owned):
                     wrong_service.append({'path': path,
                                            'title': _item_title(it),
                                            'label': lab,
