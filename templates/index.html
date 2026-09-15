@@ -128093,7 +128093,7 @@ https://www.instagram.com/p/..."></textarea>
                     var y = (sr.top - hr.top) + (max <= 0 ? 0 : (el.scrollTop / max) * track);
                     nugget.style.height = NUG_H + 'px';
                     nugget.style.top = y + 'px';
-                    nugget.style.right = Math.max(3, (hr.right - sr.right) + 2) + 'px';
+                    nugget.style.right = '4px';
                 }
                 el._piqNuggetSync = sync;
                 el.addEventListener('scroll', sync, { passive: true });
@@ -141539,7 +141539,7 @@ https://www.instagram.com/p/..."></textarea>
                 
                 // Check if this is TALENT for slice dropdown
                 const isTalent = cat.toUpperCase() === 'TALENT';
-                const talentOptions = ['all', 'actor', 'athlete', 'creator/influencer', 'emerging talent', 'host/personality', 'influencer/creator', 'mlb athlete', 'musician/band', 'nba athlete', 'nfl athlete', 'nhl athlete', 'politics/activist', 'soccer athlete', 'wnba athlete', 'writer/director/author/artist'];
+                const talentOptions = ['all', 'actor', 'athlete', 'creator/influencer', 'emerging talent', 'host/personality', 'mlb athlete', 'musician/band', 'nba athlete', 'nfl athlete', 'nhl athlete', 'politics/activist', 'soccer athlete', 'wnba athlete', 'writer/director/author/artist'];
                 const talentSliceOptions = talentOptions.sort((a, b) => {
                     if (a === 'all') return -1;
                     if (b === 'all') return 1;
@@ -141723,7 +141723,7 @@ https://www.instagram.com/p/..."></textarea>
                     });
                 });
                 if (isTalent) {
-                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'comedian':['COMEDIAN'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
+                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'comedian':['COMEDIAN'],'creator/influencer':['CREATOR/INFLUENCER','INFLUENCER/CREATOR'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
                     const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
                 }
@@ -142622,7 +142622,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else if (catUpper === 'TALENT') {
                     const sliceMap = {
                         'actor': ['ACTOR'], 'athlete': ['ATHLETE'], 'host/personality': ['HOST/PERSONALITY'],
-                        'influencer/creator': ['INFLUENCER/CREATOR'], 'creator/influencer': ['CREATOR/INFLUENCER'],
+                        'influencer/creator': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'], 'creator/influencer': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
                         'mlb athlete': ['MLB ATHLETE'], 'musician/band': ['MUSICIAN/BAND'], 'nba athlete': ['NBA ATHLETE'],
                         'nfl athlete': ['NFL ATHLETE'], 'nhl athlete': ['NHL ATHLETE'], 'politics/activist': ['POLITICS/ACTIVIST'],
                         'soccer athlete': ['SOCCER ATHLETE'], 'wnba athlete': ['WNBA ATHLETE'],
@@ -142857,7 +142857,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else if (catUpper === 'TALENT') {
                     const sliceMap = {
                         'actor': ['ACTOR'], 'athlete': ['ATHLETE'], 'host/personality': ['HOST/PERSONALITY'],
-                        'influencer/creator': ['INFLUENCER/CREATOR'], 'creator/influencer': ['CREATOR/INFLUENCER'],
+                        'influencer/creator': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'], 'creator/influencer': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
                         'mlb athlete': ['MLB ATHLETE'], 'musician/band': ['MUSICIAN/BAND'], 'nba athlete': ['NBA ATHLETE'],
                         'nfl athlete': ['NFL ATHLETE'], 'nhl athlete': ['NHL ATHLETE'], 'politics/activist': ['POLITICS/ACTIVIST'],
                         'soccer athlete': ['SOCCER ATHLETE'], 'wnba athlete': ['WNBA ATHLETE'],
@@ -143151,8 +143151,8 @@ https://www.instagram.com/p/..."></textarea>
                     'actor': ['ACTOR'],
                     'athlete': ['ATHLETE'],
                     'host/personality': ['HOST/PERSONALITY'],
-                    'influencer/creator': ['INFLUENCER/CREATOR'],
-                    'creator/influencer': ['CREATOR/INFLUENCER'],
+                    'influencer/creator': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
+                    'creator/influencer': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
                     'mlb athlete': ['MLB ATHLETE'],
                     'musician/band': ['MUSICIAN/BAND'],
                     'nba athlete': ['NBA ATHLETE'],
@@ -147004,8 +147004,8 @@ https://www.instagram.com/p/..."></textarea>
                     'actor': ['ACTOR'],
                     'athlete': ['ATHLETE'],
                     'host/personality': ['HOST/PERSONALITY'],
-                    'influencer/creator': ['INFLUENCER/CREATOR'],
-                    'creator/influencer': ['CREATOR/INFLUENCER'],
+                    'influencer/creator': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
+                    'creator/influencer': ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
                     'mlb athlete': ['MLB ATHLETE'],
                     'musician/band': ['MUSICIAN/BAND'],
                     'nba athlete': ['NBA ATHLETE'],
