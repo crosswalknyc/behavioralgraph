@@ -55834,6 +55834,7 @@ def _spec_from_draft(draft):
             anchor_source=draft.get('anchor_source'),
             prose=_anchor_prose,
             s3_client=_guard_s3,
+            persona_signature=draft.get('_persona_signature'),
         )
     except Exception as _sg_err:
         try:
@@ -55977,6 +55978,9 @@ def _spec_from_draft(draft):
         'persona_notes': _scrub(draft.get('persona_notes') or '',
                                 field='persona_notes', subject=subject,
                                 max_len=4000),
+        # Constraint signature (2026-09-15): rides to the engine so its
+        # sizing-guard mirror enforces refinement containment too.
+        '_persona_signature': draft.get('_persona_signature'),
         'category_lifts': {},
         'brand_overrides': {},
         # 2026-08-19 (Jenna): public-metric ceiling metadata. Captures
@@ -64492,11 +64496,11 @@ def _v1_persona_income_cut_from_text(text):
             'credits': ADDON_CUT_CREDITS}
 
 
-def _v1_persona_label_from_text(text):
-    """Clean persona-universe display name rebuilt from the ask's own
-    interest phrases: 'Health & Wellness Enthusiasts', 'Health &
-    Wellness Couponing Shoppers'. Returns '' when no interest phrase
-    is recoverable."""
+def _v1_persona_interest_phrases(text):
+    """Interest phrases named by a persona ask, in discovery order
+    ('health and wellness', 'couponing'). Shared by the display-name
+    builder and the constraint signature so the two can never
+    disagree."""
     import re as _re
     t = _v1_strip_exemplar_clauses(str(text or '').lower())
     interests = []
@@ -64550,6 +64554,47 @@ def _v1_persona_label_from_text(text):
             r'|\s+who\s|\s+with\s|\s+have\s|$)',
             t):
         _add(m.group(1))
+    return interests
+
+
+def _v1_persona_signature_from_ask(text, cuts=None):
+    """Constraint signature for the refinement-containment sizing
+    guard: demographic cut ids + interest tokens + intensity
+    modifiers. Two asks with the same demographic frame compare by
+    constraint-set containment (a strict superset must size strictly
+    below). Returns None when the ask carries no persona constraints."""
+    import re as _re
+    interests = _v1_persona_interest_phrases(text)
+    tokens = set()
+    for p in interests:
+        for w in str(p).split():
+            w = w.strip('&-')
+            if w and w not in ('and', 'the'):
+                tokens.add(w)
+    modifiers = set()
+    for m in _re.finditer(
+            r'\b(avid|frequent|heavy|devoted|loyal)\s+'
+            r'\w*(?:shopper|buyer|user|fan|viewer|watcher|listener|'
+            r'customer)', str(text or '').lower()):
+        modifiers.add(m.group(1))
+    demo = sorted(str(c.get('cut_id') or '') for c in (cuts or [])
+                  if isinstance(c, dict)
+                  and str(c.get('pin_category') or '').upper()
+                  in ('AGE', 'INCOME', 'GENDER'))
+    if not tokens:
+        return None
+    return {'demo': demo, 'interests': sorted(tokens),
+            'modifiers': sorted(modifiers)}
+
+
+def _v1_persona_label_from_text(text):
+    """Clean persona-universe display name rebuilt from the ask's own
+    interest phrases: 'Health & Wellness Enthusiasts', 'Health &
+    Wellness Couponing Shoppers'. Returns '' when no interest phrase
+    is recoverable."""
+    import re as _re
+    t = _v1_strip_exemplar_clauses(str(text or '').lower())
+    interests = _v1_persona_interest_phrases(text)
     if not interests:
         return ''
     noun = 'Enthusiasts'
@@ -64648,6 +64693,16 @@ def _v1_persona_universe_normalize(draft, user_text):
         # here would lose the qualifier end to end.
         for c in added:
             c['from_prompt_qualifier'] = True
+        # Constraint signature for the refinement-containment sizing
+        # guard (2026-09-15: related asks must quote mutually possible
+        # sizes; adding a constraint can never grow the audience).
+        try:
+            sig = _v1_persona_signature_from_ask(
+                text, cuts=(cuts + added))
+            if sig:
+                draft['_persona_signature'] = sig
+        except Exception:
+            pass
         if added:
             merged = _merge_cuts(cuts, added)
             draft['addon_cuts'] = merged
