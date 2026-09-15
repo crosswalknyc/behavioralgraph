@@ -1000,10 +1000,32 @@ def _resolve_day_entry(day_items: dict, day_fold: dict,
     return None
 
 
+# Movement ceiling (2026-09-15). Anything above this reads as a
+# measurement artifact - a baseline built from one thin day, or two
+# windows that never covered comparable ground - rather than as real
+# audience movement. A wrong chip is worse than no chip, so the
+# movement is withheld and the row renders its audience with no arrow.
+# 5.0 == a six-fold move in the per-day rate.
+_WINDOW_DELTA_MAX_RATIO = 5.0
+
+
 def _window_delta_fields(cur_sum: float, prev_sum: float,
-                          prev_days_fetched: int) -> Optional[tuple]:
-    """(delta_pct, direction) comparing this window's sum against the
-    immediately preceding equal-length window's sum.
+                          prev_days_fetched: int,
+                          cur_days_covered: int = 0,
+                          prev_days_covered: int = 0,
+                          label: str = '') -> Optional[tuple]:
+    """(delta_pct, direction) comparing this window against the
+    immediately preceding equal-length window.
+
+    Compared PER COVERED DAY, not on raw sums (2026-09-15). The two
+    windows rarely cover the same number of days: an item measured on
+    29 of the last 30 days against 30 of the 30 before it would read
+    as a fall purely because one window holds a day less data, and an
+    item measured on 2 days last window against 29 this window would
+    read as a multi-thousand-percent climb for the same reason. Where
+    both sides cover the same number of days the per-day ratio is
+    arithmetically identical to the sum ratio, so this only moves the
+    rows whose sums were never comparable in the first place.
 
     prev window carried data for this item -> real ratio.
     prev window fetched but item absent   -> ('new'): first time this
@@ -1012,11 +1034,26 @@ def _window_delta_fields(cur_sum: float, prev_sum: float,
     prev window entirely unreachable      -> None: caller leaves the
                                               stored day-over-day
                                               fields untouched.
+    move beyond the plausible ceiling     -> (0.0, 'flat'): the chip
+                                              renders no movement.
     """
     if prev_days_fetched <= 0:
         return None
     if prev_sum > 0:
-        pct = (cur_sum - prev_sum) / prev_sum
+        cur_days  = cur_days_covered  if cur_days_covered  > 0 else 1
+        prev_days = prev_days_covered if prev_days_covered > 0 else 1
+        cur_rate  = cur_sum  / float(cur_days)
+        prev_rate = prev_sum / float(prev_days)
+        if prev_rate <= 0:
+            return None
+        pct = (cur_rate - prev_rate) / prev_rate
+        if pct > _WINDOW_DELTA_MAX_RATIO:
+            logger.info(
+                'trends_iq window delta: withholding implausible +%.0f%% '
+                'on %s (%d over %d day(s) against %d over %d day(s))',
+                pct * 100.0, label or 'item', int(cur_sum), cur_days,
+                int(prev_sum), prev_days)
+            return (0.0, 'flat')
         return (round(pct, 4), _direction_for(pct))
     if cur_sum > 0:
         return (0.0, 'new')
@@ -1077,7 +1114,8 @@ def _rewrite_unit_label(label: Optional[str], noun: str) -> str:
 def _accumulate_stream_estimates_over_window(
         lookback_days: int,
         asof: Optional[str] = None,
-        today_snap: Optional[dict] = None
+        today_snap: Optional[dict] = None,
+        _anchor_retry: bool = False
         ) -> Optional[dict]:
     """Sum per-item `us_estimate` across the last N daily
     `stream_estimates` snapshots and stamp a window-over-window delta
@@ -1232,11 +1270,30 @@ def _accumulate_stream_estimates_over_window(
         ex.shutdown(wait=False, cancel_futures=True)
 
     if not fetched:
+        # Nothing landed in the current window. Overnight this is the
+        # normal state of a 1-day live read: the daily archive is
+        # written the morning AFTER the day it measures, so between
+        # UTC midnight and the morning write there is no dated file
+        # for today and the freshest archived day is yesterday's.
+        # Anchor one day earlier and take the comparison from the two
+        # newest days that exist, rather than handing the caller a
+        # None that drops every row back to a single-day read.
+        if not _anchor_retry and not asof:
+            prior = (ref_date - timedelta(days=1)).isoformat()
+            logger.info(
+                'trends_iq accumulator: no dated snapshot inside the %dd '
+                'window ending %s; anchoring on %s instead', n, ref_iso,
+                prior)
+            return _accumulate_stream_estimates_over_window(
+                n, asof=prior, today_snap=today_snap, _anchor_retry=True)
         return None
 
     # Sort newest first so the "base" snapshot (whose non-us_estimate
     # fields survive into the merged output) is the freshest day.
     fetched.sort(key=lambda t: t[0], reverse=True)
+    # Prior window newest-first too, so the baseline day reported on
+    # each item is the most recent prior day that actually carried it.
+    prev_fetched.sort(key=lambda t: t[0], reverse=True)
 
     # Deep-copy the latest snapshot as the shape template. Method /
     # sources / unit vocab survive verbatim; us_estimate becomes the
@@ -1254,9 +1311,21 @@ def _accumulate_stream_estimates_over_window(
     # target key per day is exact-first, folded fallback (see
     # `_resolve_day_entry`), so a title keeps its history across key-
     # spelling drift without ever double-counting a day.
-    cur_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+    # Each tuple is (archive day, measured day, items, folded index).
+    # The archive day is the S3 prefix; the measured day is the
+    # calendar day the numbers describe, which runs one day earlier
+    # because the daily write happens the morning after. Reporting
+    # the measured day keeps a `prev_date` in the payload that a
+    # reader can line up against the row's own `as_of_date`.
+    def _measured_day(day_iso: str, snap: dict) -> str:
+        td = str((snap or {}).get('target_date') or '')[:10]
+        return td or day_iso
+
+    cur_days = [(d, _measured_day(d, snap), snap.get('items') or {},
+                 _build_day_fold_index(snap.get('items') or {}))
                 for d, snap in fetched]
-    prev_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+    prev_days = [(d, _measured_day(d, snap), snap.get('items') or {},
+                  _build_day_fold_index(snap.get('items') or {}))
                  for d, snap in prev_fetched]
     prev_days_fetched = len(prev_days)
 
@@ -1272,7 +1341,8 @@ def _accumulate_stream_estimates_over_window(
         cur_sum = 0
         days_covered = 0
         slug_cur: dict[str, int] = {}
-        for _d, day_items, day_fold in cur_days:
+        slug_cur_days: dict[str, int] = {}
+        for _d, _md, day_items, day_fold in cur_days:
             e = _resolve_day_entry(day_items, day_fold, key)
             if e is None:
                 continue
@@ -1289,12 +1359,16 @@ def _accumulate_stream_estimates_over_window(
                     pv = per.get('us_estimate')
                     if isinstance(pv, (int, float)) and pv > 0:
                         slug_cur[slug] = slug_cur.get(slug, 0) + int(pv)
+                        slug_cur_days[slug] = slug_cur_days.get(slug, 0) + 1
         if cur_sum <= 0:
             continue
 
         prev_sum = 0
+        prev_covered = 0
+        prev_baseline_day = ''
         slug_prev: dict[str, int] = {}
-        for _d, day_items, day_fold in prev_days:
+        slug_prev_days: dict[str, int] = {}
+        for _d, _md, day_items, day_fold in prev_days:
             e = _resolve_day_entry(day_items, day_fold, key)
             if e is None:
                 continue
@@ -1302,6 +1376,11 @@ def _accumulate_stream_estimates_over_window(
             if not isinstance(v, (int, float)) or v <= 0:
                 continue
             prev_sum += int(v)
+            prev_covered += 1
+            # prev_days is newest-first, so the first day that carries
+            # this item IS the most recent prior day with data for it.
+            if not prev_baseline_day:
+                prev_baseline_day = _md
             bp = e.get('by_platform') or {}
             if isinstance(bp, dict):
                 for slug, per in bp.items():
@@ -1310,6 +1389,7 @@ def _accumulate_stream_estimates_over_window(
                     pv = per.get('us_estimate')
                     if isinstance(pv, (int, float)) and pv > 0:
                         slug_prev[slug] = slug_prev.get(slug, 0) + int(pv)
+                        slug_prev_days[slug] = slug_prev_days.get(slug, 0) + 1
 
         # N=1 keeps the single-day value and daily label untouched;
         # N>1 swaps in the window sum + coverage + cadence noun.
@@ -1320,11 +1400,22 @@ def _accumulate_stream_estimates_over_window(
             entry['unit_label'] = _rewrite_unit_label(
                 entry.get('unit_label'), noun)
 
-        d = _window_delta_fields(cur_sum, prev_sum, prev_days_fetched)
+        d = _window_delta_fields(cur_sum, prev_sum, prev_days_fetched,
+                                  cur_days_covered=days_covered,
+                                  prev_days_covered=prev_covered,
+                                  label=key)
         if d is not None:
             entry['delta_pct'], entry['direction'] = d
             entry['prev_estimate'] = int(prev_sum)
-            entry['prev_date'] = prev_isos[0]
+            entry['prev_days_covered'] = prev_covered
+            # Only name a baseline day when a baseline exists. A row
+            # reading NEW has nothing behind it, and stamping the
+            # window edge there would read as a comparison that was
+            # never made.
+            if prev_baseline_day:
+                entry['prev_date'] = prev_baseline_day
+            else:
+                entry.pop('prev_date', None)
             stamped += 1
 
         by_plat = entry.get('by_platform') or {}
@@ -1335,14 +1426,22 @@ def _accumulate_stream_estimates_over_window(
                 s_cur = slug_cur.get(slug, 0)
                 if n > 1 and s_cur > 0:
                     per['us_estimate']         = s_cur
-                    per['window_days_covered'] = days_covered
+                    per['window_days_covered'] = slug_cur_days.get(
+                        slug, days_covered)
                     per['window_days_total']   = n
                 pd = _window_delta_fields(
-                    s_cur, slug_prev.get(slug, 0), prev_days_fetched)
+                    s_cur, slug_prev.get(slug, 0), prev_days_fetched,
+                    cur_days_covered=slug_cur_days.get(slug, days_covered),
+                    prev_days_covered=slug_prev_days.get(slug, prev_covered),
+                    label=f'{key}@{slug}')
                 if pd is not None:
                     per['delta_pct'], per['direction'] = pd
                     per['prev_estimate'] = int(slug_prev.get(slug, 0))
-                    per['prev_date'] = prev_isos[0]
+                    per['prev_days_covered'] = slug_prev_days.get(slug, 0)
+                    if slug_prev_days.get(slug) and prev_baseline_day:
+                        per['prev_date'] = prev_baseline_day
+                    else:
+                        per.pop('prev_date', None)
 
     # Stamp the whole snapshot so log messages and cache lookups can
     # tell an accumulated read apart from a single-day read.
@@ -3621,6 +3720,13 @@ _STREAM_FIELDS = (
     # honestly ("Observed on 3 of last 30 days.") without hedging the
     # number itself. Rows with lookback_days=1 leave both unset.
     'window_days_covered', 'window_days_total',
+    # Baseline coverage (2026-09-15). Days the PRIOR window actually
+    # carried this item, alongside `prev_date` (the measured day the
+    # baseline came from). Together they make the comparison behind
+    # the movement chip checkable instead of implicit: a baseline
+    # thinner than the current window is visible in the payload
+    # rather than silently inflating the percentage.
+    'prev_days_covered',
 )
 
 
@@ -3780,6 +3886,10 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             'window_days_covered': per.get('window_days_covered'),
             'window_days_total':   per.get('window_days_total')
                                      or entry.get('window_days_total'),
+            # Days the prior window carried this item (see
+            # `_STREAM_FIELDS`). Travels with `prev_date` so the
+            # baseline behind the chip is inspectable.
+            'prev_days_covered':   per.get('prev_days_covered'),
         }
     else:
         # Fallback to aggregate. This still preserves old-snapshot
@@ -5327,33 +5437,96 @@ def _annotate_fast_with_rank_change(fast_trending: dict,
                  matched, total, prev_iso)
 
 
+# How far back the channel fallback will look for a baseline when a
+# channel is missing from the immediately prior archived day. Reads
+# are lazy: day 1 always, each further day only if some channel is
+# still unmatched, so the normal run costs one read.
+_FAST_CHANNEL_BASELINE_MAX_BACK = 4
+
+
 def _annotate_fast_channels_with_view_change(fast_trending: dict,
-                                                asof: Optional[str] = None) -> None:
-    """Fold day-over-day VIEW-count change into `us_streams.delta_pct`
-    + `.direction` on every FAST-channel row (Channel Ranker sub-view).
+                                                asof: Optional[str] = None,
+                                                lookback_days: int = 1,
+                                                estimates: Optional[dict] = None
+                                                ) -> None:
+    """Make sure every FAST-channel row (Channel Ranker sub-view)
+    carries movement that belongs to the WINDOW the reader selected.
 
-    Reads yesterday's dated `stream_estimates.json` (which carries a
-    per-channel `by_platform.<slug>.us_estimate` under the key
-    `fast_channel:<slug>:<norm_name>`) and compares against today's
-    stamped `us_streams.us_estimate` on the channel row.  Channels
-    without a prior view estimate keep the stream_estimates annotator's
-    default (usually 0.0/'stable' -> chip hidden).
+    The window-scoped comparison is not computed here. Every other
+    Trends list gets its movement from
+    `_accumulate_stream_estimates_over_window`, which reads the dated
+    archive and compares this window against the equal-length window
+    before it; `_annotate_fast_channels_with_views` then stamps that
+    onto each channel row. Channels ride the same path, so when the
+    accumulator has run this function stands aside.
 
-    Runs AFTER `_annotate_fast_channels_with_views` so the folded
-    delta overwrites the shared stamper's empty 0.0/'stable'.
+    It used to overwrite that unconditionally with a single
+    day-over-day comparison (2026-09-15 defect). On the 1 day view
+    that merely duplicated work; on 7 and 30 day views it divided a
+    window SUM by a SINGLE DAY, which is a units mismatch, so a
+    channel whose audience had barely moved rendered as +483% on the
+    7 day chip and +2326% on the 30 day chip, and all three windows
+    were driven by the same one-day comparison.
+
+    What remains here is the fallback for when the dated archive
+    could not be reached at all and the rows carry a plain single-day
+    read. It compares day against day (never a window against a day),
+    picks the most recent prior archived day that actually carries
+    each channel, and records the day it used.
     """
     if not fast_trending:
         return
-    prev_iso = _yesterday_iso(asof)
-    prev_snap = _read_snapshot('stream_estimates', asof=prev_iso)
-    if not prev_snap:
-        logger.info('fast channel view delta: no prior stream_estimates '
-                     'for %s; chips will populate once yesterdays snapshot '
-                     'is on S3', prev_iso)
+    try:
+        n = max(1, int(lookback_days or 1))
+    except Exception:
+        n = 1
+
+    # The shared window path already ran: rows carry a comparison
+    # against the equal-length window before this one. Leave it be.
+    if (estimates or {}).get('window_lookback_days'):
+        logger.info('fast channel movement: window=%dd comparison already '
+                     'on the rows from the dated archive; no day-over-day '
+                     'overwrite', int(estimates.get('window_lookback_days')))
         return
-    prev_items = (prev_snap.get('items') or {})
+
+    if n > 1:
+        # No window-scoped baseline is available, and a window total
+        # measured against one day is not a comparison. Rows keep
+        # whatever the estimate stamper gave them.
+        logger.info('fast channel movement: window=%dd but the dated '
+                     'archive was unreachable; leaving movement off these '
+                     'rows rather than comparing a window against a day', n)
+        return
+
+    ref_iso = asof or _today_iso()
+    try:
+        ref_date = date.fromisoformat(ref_iso)
+    except Exception:
+        ref_date = date.fromisoformat(_today_iso())
+
+    # Lazily-loaded prior archived days, newest first.
+    loaded: list[tuple[str, str, dict]] = []
+
+    def _prior_day(idx: int) -> Optional[tuple[str, str, dict]]:
+        """(archive day, measured day, items) for the idx-th prior
+        archived day, or None once we run past the lookback."""
+        while len(loaded) <= idx:
+            back = len(loaded) + 1
+            if back > _FAST_CHANNEL_BASELINE_MAX_BACK:
+                return None
+            d_iso = (ref_date - timedelta(days=back)).isoformat()
+            snap = _read_snapshot('stream_estimates', asof=d_iso)
+            if snap:
+                measured = str(snap.get('target_date') or '')[:10] or d_iso
+                loaded.append((d_iso, measured, snap.get('items') or {}))
+            else:
+                loaded.append((d_iso, d_iso, {}))
+        return loaded[idx]
+
     matched = 0
-    total   = 0
+    fell_back = 0
+    withheld = 0
+    total = 0
     for panel_slug, panel in (fast_trending or {}).items():
         if not panel:
             continue
@@ -5368,24 +5541,56 @@ def _annotate_fast_channels_with_view_change(fast_trending: dict,
             if not norm:
                 continue
             key = f'fast_channel:{panel_slug}:{norm}'
-            entry = prev_items.get(key)
-            if not entry:
+
+            prev_est = None
+            prev_measured = ''
+            steps_back = 0
+            for idx in range(_FAST_CHANNEL_BASELINE_MAX_BACK):
+                day = _prior_day(idx)
+                if day is None:
+                    break
+                _d_iso, measured, prev_items = day
+                entry = prev_items.get(key)
+                if not entry:
+                    continue
+                by_plat = (entry.get('by_platform') or {}).get(panel_slug) or {}
+                cand = by_plat.get('us_estimate') or entry.get('us_estimate')
+                if isinstance(cand, (int, float)) and cand > 0:
+                    prev_est = cand
+                    prev_measured = measured
+                    steps_back = idx + 1
+                    break
+            if prev_est is None:
                 continue
-            by_plat = (entry.get('by_platform') or {}).get(panel_slug) or {}
-            prev_est = by_plat.get('us_estimate') or entry.get('us_estimate')
-            if not isinstance(prev_est, (int, float)) or prev_est <= 0:
-                continue
+
             delta = (today_est - prev_est) / prev_est
-            # Metric (view-count % change), not rank.  Chip stays as
-            # `↑ N%` / `↓ N%` (existing behavior).
-            _fold_ranked_delta(row, delta,
+            if delta > _WINDOW_DELTA_MAX_RATIO:
+                # A move this large off a single-day baseline is a
+                # measurement artifact, not audience movement.
+                logger.info(
+                    'fast channel movement: withholding implausible +%.0f%% '
+                    'on %s (%d against %d on %s)', delta * 100.0, key,
+                    int(today_est), int(prev_est), prev_measured)
+                delta = 0.0
+                withheld += 1
+            if steps_back > 1:
+                fell_back += 1
+            dest = dict(row.get('us_streams') or {})
+            dest['prev_days_covered'] = 1
+            dest['baseline_days_back'] = steps_back
+            row['us_streams'] = dest
+            # Metric (view-count % change), not rank. Chip stays as
+            # `up N%` / `down N%` (existing behavior).
+            _fold_ranked_delta(row, round(delta, 4),
                                  prev_estimate=int(prev_est),
-                                 prev_date=(entry.get('as_of_date') or prev_iso),
+                                 prev_date=prev_measured,
                                  delta_kind='metric')
             matched += 1
 
-    logger.info('fast channel view delta: annotated %d / %d channel rows '
-                 'vs %s', matched, total, prev_iso)
+    logger.info('fast channel movement: day-over-day fallback on %d / %d '
+                 'channel rows (%d used an earlier day than the immediately '
+                 'prior one, %d withheld as implausible)',
+                 matched, total, fell_back, withheld)
 
 
 def _annotate_comics_with_streams(comics_charts: dict,
@@ -9331,7 +9536,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Anti-clobber in `_fold_ranked_delta` preserves any pre-existing
     # non-zero delta the estimator wrote.
     _annotate_fast_with_rank_change(fast_trending)
-    _annotate_fast_channels_with_view_change(fast_trending)
+    # Channel Ranker movement rides the same dated-archive window
+    # comparison as every other list (2026-09-15). Passing the
+    # estimates snapshot lets the annotator see that the window
+    # comparison is already on the rows and stand aside instead of
+    # overwriting it with a single day-over-day number.
+    _annotate_fast_channels_with_view_change(
+        fast_trending,
+        asof=asof if historic else None,
+        lookback_days=int(lookback_days or 1),
+        estimates=stream_estimates_snap)
     _annotate_streaming_with_rank_change(streaming_trending,
                                           asof=asof if historic else None)
     _annotate_sources_snapshot_rank_change(
