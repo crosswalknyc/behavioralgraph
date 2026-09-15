@@ -51725,6 +51725,17 @@ def _drop_degenerate_addon_cuts(draft):
         cuts = draft.get('addon_cuts')
         if not isinstance(cuts, list) or not cuts:
             return
+        # Persona-universe drafts skip the degeneracy test entirely
+        # (2026-09-15): the interpret model shapes the draft demos to
+        # the ask itself (AGE reads 55+ on a '55+ health and wellness'
+        # persona), so EVERY qualifier cut looks whole-universe at
+        # interpret time - including cuts the model emitted on its
+        # own, which carry no from_prompt_qualifier marker. The engine
+        # rebuilds pinned categories to the full-universe baseline
+        # because the cut rides, so the cut is a strict subset of what
+        # actually builds.
+        if draft.get('_persona_universe'):
+            return
 
         def _f(v):
             try:
