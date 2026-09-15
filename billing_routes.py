@@ -672,6 +672,10 @@ def admin_pricing_get():
     resp["hidden_tools"] = list(p.get("hidden_tools") or [])
     resp["prometheus_markup"] = float(
         p.get("prometheus_markup_multiplier", 2.10))
+    # 2026-09-14 (Jenna): billed USD per answer served from the library
+    # with no fresh model call (ledger replays). Nothing is ever free.
+    resp["metered_answer_usd"] = float(
+        p.get("metered_answer_usd", 2.10))
     return jsonify(resp)
 
 

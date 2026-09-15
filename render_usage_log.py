@@ -267,6 +267,70 @@ def _put_record_safe(record: dict, ppu: bool = False) -> None:
                 pass
 
 
+def record_metered_answer(surface: str, extras: Optional[dict] = None,
+                          billed_usd: Optional[float] = None) -> None:
+    """Metered-usage record for an answer served WITHOUT a fresh model
+    call (insights-ledger replay, cache-served read).
+
+    2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
+    doesnt have a set price it but is answerable from what's already
+    there that should all be the metered usage."). A replayed answer
+    delivers the same read a fresh generation would, but records no
+    token usage, so under pure consumption metering it billed $0.
+    This closes that gap: one record per served answer.
+
+    The record carries cost_usd = 0.0 (honest: no model spend
+    occurred, so internal spend reports stay true) and billed_usd =
+    the admin-tunable pricing.json:metered_answer_usd (default 2.10,
+    editable in /admin/billing next to the markup). The pay-per-use
+    session sweep sums billed_usd, so the answer bills exactly like
+    a model call would. Mirrors to the PPU prefix when the extras
+    carry pay_per_use, same as record_call; for subscribed full-tier
+    users the record is attribution-only (covered by their tier).
+
+    Never raises; never blocks the caller."""
+    try:
+        rate = billed_usd
+        if rate is None:
+            try:
+                import wallet as _wallet  # type: ignore
+                rate = float(_wallet.metered_answer_usd())
+            except Exception:
+                rate = None
+        if rate is None or rate <= 0:
+            rate = 2.10
+        record = {
+            'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'surface': str(surface or 'replay')[:32],
+            'origin': 'chatbot',
+            'model': 'served_answer',
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'cache_read_input_tokens': 0,
+            'cache_creation_input_tokens': 0,
+            'cost_usd': 0.0,
+            'billed_usd': round(float(rate), 6),
+            'metered_answer': True,
+        }
+        ppu = False
+        if isinstance(extras, dict) and extras:
+            for f in _EXTRA_FIELDS:
+                v = extras.get(f)
+                if v:
+                    record[f] = str(v)[:120]
+            ppu = bool(extras.get('pay_per_use'))
+            if ppu:
+                record['pay_per_use'] = True
+        if _SYNC_FOR_TESTS:
+            _put_record_safe(record, ppu)
+            return
+        t = threading.Thread(target=_put_record_safe, args=(record, ppu),
+                             daemon=True)
+        t.start()
+    except Exception:
+        pass
+
+
 def record_ppu_marker(user: str, user_email: str, session_id: str) -> None:
     """Zero-cost logout marker on the pay-per-use prefix only. The
     session sweep treats it as an immediate session end for the user

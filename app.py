@@ -57304,20 +57304,31 @@ def _pm_validate_page_context(page_context):
             'view_context': view_ctx}, None
 
 
-def _pm_charge_async(username, description):
-    """No-op stub retained for callsite compatibility.
+def _pm_meter_answer(surface, ppu_extras=None):
+    """Metered-usage record for an answer served from what's already
+    there (insights-ledger replay, cache-served read) with no fresh
+    model call.
 
-    2026-09-09 (Jenna): chatbot asks and analyze / deck actions are
-    session-metered, not per-pull charged. This function used to
-    async-record a `Chatbot Analysis` credit debit; that behaviour is
-    retired because CREDITS_CHATBOT_ANALYZE is now 0. Kept as a
-    no-op so existing callers don't need to change shape - the
-    metered usage rolls up through pay_per_use.py at session close,
-    or is included in the subscribed tier for full-tier users."""
-    # Deliberately does nothing. Do not restore the credit debit here
-    # without a fresh explicit directive: it violates the metered-only
-    # pricing policy documented above CREDITS_CHATBOT_ANALYZE.
-    return
+    2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
+    doesnt have a set price it but is answerable from what's already
+    there that should all be the metered usage."). Replaces the retired
+    _pm_charge_async no-op (2026-09-09, which retired the per-ask
+    credit debit in favor of session metering - do NOT restore a
+    credit debit here). The taxonomy: set-price products charge their
+    set price; every other answered ask is metered. Model-backed asks
+    meter naturally through record_call; replayed answers record no
+    tokens, so without this call they billed nothing. Rate:
+    pricing.json:metered_answer_usd (super-admin editable in
+    /admin/billing next to the markup), billed through the same
+    pay-per-use session sweep as model calls. Subscribed full-tier
+    users: the record carries attribution only (no pay_per_use flag),
+    covered by their tier like their other asks. Never raises."""
+    try:
+        import render_usage_log as _rul
+        extras = _pm_merge_extras(_pm_attrib_extras(), ppu_extras)
+        _rul.record_metered_answer(surface, extras=extras)
+    except Exception:
+        traceback.print_exc()
 
 
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
@@ -57823,11 +57834,8 @@ def _pm_search_demand_response(user, text, history):
     if exact and exact.get('route') == 'search_demand' \
             and exact.get('reply'):
         _pm_ask_hint(outcome='answered', subject=led.get('subject'))
-        if _pm_user and _pm_ppu is None:
-            _pm_charge_async(
-                _pm_user,
-                f"Chatbot Analysis [search demand] - "
-                f"{led.get('subject') or 'search demand'}")
+        # Served from the library: metered, never free (2026-09-14).
+        _pm_meter_answer('replay_search', _pm_ppu)
         _replay_chips = list(exact.get('followups') or [])[:3]
         if pma.CSV_OFFER_CHIP not in _replay_chips:
             _replay_chips.append(pma.CSV_OFFER_CHIP)
@@ -57932,11 +57940,6 @@ def _pm_search_demand_response(user, text, history):
         traceback.print_exc()
     _pm_csv_point(study.get('subject'), text, 'search')
     _pm_ask_hint(outcome='answered', subject=study.get('subject'))
-    if _pm_user and _pm_ppu is None:
-        _pm_charge_async(
-            _pm_user,
-            f"Chatbot Analysis [search demand] - "
-            f"{study.get('subject') or 'search demand'}")
     return jsonify({
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
@@ -58179,8 +58182,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # $550."). A question about a subject with no base anywhere is
         # a full put-together read, not a lookup: quote the price
         # first, charge on confirm, THEN generate. Reading back a
-        # report that already delivered stays free - the identical-ask
-        # replay below fires before any quote.
+        # report that already delivered does not re-quote the $550 -
+        # the identical-ask replay below fires before any quote and
+        # bills as metered usage (2026-09-14: nothing is ever free).
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or '').strip()
         if isinstance(panel_confirm, dict) and not subj_name:
@@ -58191,6 +58195,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _exact_nb = (_led_nb or {}).get('exact')
                 if _exact_nb and _exact_nb.get('reply'):
                     _pm_ask_hint(outcome='answered', subject=subj_name)
+                    # Served from the library: metered, never free
+                    # (2026-09-14).
+                    _pm_meter_answer('replay_read', _pm_ppu)
                     _pm_remember_ask(_pm_user, text, subject=subj_name,
                                      cohort=_exact_nb.get('cohort'),
                                      ledger_key=_exact_nb.get('k'),
@@ -58310,11 +58317,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                          subject=led.get('subject') or subj_hint,
                          cohort=exact.get('cohort'),
                          ledger_key=exact.get('k'), route='replay')
-        if _pm_user:
-            _pm_charge_async(
-                _pm_user,
-                f"Chatbot Analysis [measured read] - "
-                f"{led.get('subject') or subj_hint or 'measured read'}")
+        # Served from the library: metered, never free (2026-09-14).
+        _pm_meter_answer('replay_read', _pm_ppu)
         _replay_chips = list(exact.get('followups') or [])[:3]
         if pma.CSV_OFFER_CHIP not in _replay_chips:
             _replay_chips.append(pma.CSV_OFFER_CHIP)
@@ -58846,11 +58850,6 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _pm_ask_hint(
         outcome=('corrected' if _pm_auto_corrected else 'answered'),
         subject=res.get('subject'))
-    if pm_user and pm_ppu is None:
-        _pm_charge_async(
-            pm_user,
-            f"Chatbot Analysis [measured read] - "
-            f"{res.get('subject') or 'measured read'}")
     return {
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
@@ -59540,9 +59539,8 @@ def api_synth_chat_analyze():
         _pm_remember_ask(_pm_user, text, subject=_replay_subj,
                          cohort=_led_exact.get('cohort'),
                          ledger_key=_led_exact.get('k'), route='replay')
-        if _pm_user and _pm_ppu is None:
-            _pm_charge_async(_pm_user,
-                             f"Chatbot Analysis - {_replay_subj}")
+        # Served from the library: metered, never free (2026-09-14).
+        _pm_meter_answer('replay_analysis', _pm_ppu)
         _replay_chips = list(_led_exact.get('followups') or [])[:3]
         if pma.CSV_OFFER_CHIP not in _replay_chips:
             _replay_chips.append(pma.CSV_OFFER_CHIP)
@@ -59705,17 +59703,8 @@ def api_synth_chat_analyze():
                         else 'page_analysis'),
                  outcome='answered', subject=_pm_subject,
                  mode=mode or None)
-    # Record the successful analysis as tracked usage (unlimited users
-    # included - their history + credits_used counters still move).
-    # Deferred to a daemon thread so the S3 write is off the reply path.
-    # Pay-as-you-go users are billed per session from the usage rows
-    # instead; no credit debit.
-    if _pm_user and _pm_ppu is None:
-        _pm_charge_async(
-            _pm_user,
-            f"Chatbot Analysis"
-            f"{' [' + mode + ']' if mode else ''} - "
-            f"{_pm_subject}")
+    # Fresh generations meter through their own model-call usage rows
+    # (usage_extras on _pm_claude_json); no separate debit here.
     return jsonify({
         'success': True, 'action': action, 'reply': reply,
         'followups': followups,

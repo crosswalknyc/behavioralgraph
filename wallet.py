@@ -11,6 +11,12 @@ prices, Prometheus deducts metered Anthropic x 2.10 in real time.
 Internal Crosswalk allowances (`credits` field) drain first, then the
 wallet.
 
+2026-09-14 (Jenna): nothing is ever free. Set-price products charge
+their set price (un-priced report asks charge the Un-priced Ask rate);
+every other answered ask is metered - including answers served from
+the library with no fresh model call, which bill the flat
+metered_answer_usd rate through the same session sweep.
+
 This module is PURE math + state. It does not touch Stripe. It does
 not send emails. Callers (app.py routes, pay_per_use.py session close)
 wire it into their own flows.
@@ -21,6 +27,7 @@ Public surface:
     save_pricing(pricing) -> dict
     tool_price_usd(tool_key) -> float
     prometheus_markup() -> float          # 2.10 currently
+    metered_answer_usd() -> float         # billed per served answer
 
     wallet_balance(user) -> float
     is_paying_customer(user) -> bool
@@ -139,6 +146,16 @@ DEFAULT_PRICING = {
     "top_up_packs_usd": [250, 500, 1000, 2500],
     "top_up_min_custom_usd": 100.0,
     "prometheus_markup_multiplier": 2.10,
+    # 2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
+    # doesnt have a set price it but is answerable from what's already
+    # there that should all be the metered usage."). Billed USD per
+    # answer served from the library with no fresh model call (insights
+    # ledger replays, cache-served reads). Those answers record zero
+    # token usage, so under pure consumption metering they billed $0;
+    # this rate is what the session sweep bills instead. Default 2.10
+    # (a $1.00 generation at the default markup). Editable by super
+    # admins in /admin/billing next to the markup.
+    "metered_answer_usd": 2.10,
     "auto_reload_defaults": {
         "threshold_usd": 500.0,
         "amount_usd": 1000.0,
@@ -826,7 +843,8 @@ def save_pricing(new_pricing: dict) -> dict:
                     float(x) for x in v
                     if isinstance(x, (int, float)) and float(x) > 0]
             elif k in ("top_up_min_custom_usd",
-                       "prometheus_markup_multiplier") \
+                       "prometheus_markup_multiplier",
+                       "metered_answer_usd") \
                     and isinstance(v, (int, float)):
                 merged[k] = float(v)
             elif k == "prometheus_markup" \
@@ -1375,6 +1393,21 @@ def prometheus_markup() -> float:
     billing. Default 2.10 per Jenna's 110%-markup mandate."""
     p = load_pricing()
     return float(p.get("prometheus_markup_multiplier", 2.10))
+
+
+def metered_answer_usd() -> float:
+    """Billed USD per answer served from the library with no fresh
+    model call (ledger replays, cache-served reads). 2026-09-14
+    (Jenna): nothing is ever free; un-set-priced asks answerable from
+    what's already there bill as metered usage. Admin-tunable in
+    /admin/billing; a zero/negative admin entry falls back to the
+    default so a served answer can never bill nothing."""
+    p = load_pricing()
+    try:
+        val = float(p.get("metered_answer_usd", 2.10))
+    except (TypeError, ValueError):
+        return 2.10
+    return val if val > 0 else 2.10
 
 
 def top_up_pack_sizes() -> list:
@@ -2424,6 +2457,7 @@ __all__ = [
     "RETIRED_TOOL_KEYS",
     "load_pricing", "save_pricing",
     "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
+    "metered_answer_usd",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",
     "wallet_balance", "wallet_stats",

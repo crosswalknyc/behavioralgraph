@@ -440,12 +440,24 @@
         <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
           Prometheus sessions are billed by Anthropic-cost markup
           (session close reads billed_usd from the render usage log).
+          Answers served from the library without a fresh model call
+          bill the flat metered-answer rate below, so no answered ask
+          is ever free.
         </p>
         <div class="kv-row">
           <label style="margin: 0;">Markup multiplier:</label>
           <div>
             <input id="markup" type="number" step="0.01" min="1">
             <button id="save-markup">Save</button>
+          </div>
+        </div>
+        <div class="kv-row" style="margin-top: 8px;">
+          <label style="margin: 0;">Metered answer ($ per served
+            answer):</label>
+          <div>
+            <input id="metered-answer" type="number" step="0.01"
+                   min="0.01">
+            <button id="save-metered-answer">Save</button>
           </div>
         </div>
       </div>
@@ -1643,6 +1655,7 @@
       $('pricing-body').innerHTML = html;
       $('markup').value = (p.prometheus_markup ||
         p.prometheus_markup_multiplier || 2.10);
+      $('metered-answer').value = (p.metered_answer_usd || 2.10);
       renderPacks(p.top_up_packs_usd || []);
       $('min-custom').value = p.top_up_min_custom_usd || 100;
       $('save-tools').addEventListener('click', saveTools);
@@ -1965,6 +1978,23 @@
       });
       if (r.ok) $('banner').innerHTML =
         '<div class="banner success">Markup saved.</div>';
+    });
+    $('save-metered-answer').addEventListener('click', async () => {
+      const v = Number($('metered-answer').value || 0);
+      if (!(v > 0)) {
+        $('banner').innerHTML = '<div class="banner error">' +
+          'Metered answer rate must be above zero - ' +
+          'no answered ask is ever free.</div>';
+        return;
+      }
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metered_answer_usd: v }),
+      });
+      if (r.ok) $('banner').innerHTML =
+        '<div class="banner success">Metered answer rate saved.</div>';
     });
     $('save-packs').addEventListener('click', async () => {
       const inputs = document.querySelectorAll('.pack-input');
