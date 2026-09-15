@@ -58838,6 +58838,12 @@ https://www.instagram.com/p/..."></textarea>
             return isFinite(n) && n > 0 ? n : 1;
         }
 
+        function _tiqWindowCompare(days) {
+            var n = parseInt(days, 10);
+            if (!isFinite(n) || n <= 1) return 'the day before';
+            return 'the previous ' + n + ' days';
+        }
+
         // Render the projected-views chip for a row. Reads
         // `row.us_streams` populated by the backend annotator (see
         // trends_iq._annotate_fast_with_streams). Returns '' when the
@@ -58963,17 +58969,17 @@ https://www.instagram.com/p/..."></textarea>
                     arrow = ' <span class="tiq-audience-delta ' + cls + '">' +
                             glyph + ' ' + pct + '%</span>';
                     var verb = (us.direction === 'up') ? 'up' : 'down';
-                    deltaTip = 'Audience ' + verb + ' ' + pct + '% vs the day before.';
+                    deltaTip = 'Audience ' + verb + ' ' + pct + '% vs ' + _tiqWindowCompare(_tiqGetLookback()) + '.';
                 } else {
                     // Moved, but rounds to under a percent. Show the flat
                     // glyph rather than nothing so the column never reads
                     // as a gap.
                     arrow = ' <span class="tiq-audience-delta flat">\u00B7 0%</span>';
-                    deltaTip = 'Held flat vs the day before.';
+                    deltaTip = 'Held flat vs ' + _tiqWindowCompare(_tiqGetLookback()) + '.';
                 }
             } else if (us.direction) {
                 arrow = ' <span class="tiq-audience-delta flat">\u00B7 0%</span>';
-                deltaTip = 'Held flat vs the day before.';
+                deltaTip = 'Held flat vs ' + _tiqWindowCompare(_tiqGetLookback()) + '.';
             }
             // When lensed, prefer the lens-scoped count in the tooltip's
             // primary line so hovering reads "1.8M weekly Gen Z readers"
