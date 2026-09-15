@@ -79,6 +79,49 @@
         body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
         body[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         body[data-theme="light"] * { scrollbar-color: #cbd5e1 #e5e9f0; }
+        body[data-theme="light"] :is(
+            html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content
+        ) { scrollbar-color: #5C6560 #E7EBD2; }
+        body[data-theme="light"] :is(
+            html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content
+        )::-webkit-scrollbar-track { background: #E7EBD2; }
+        body[data-theme="light"] :is(
+            html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content
+        )::-webkit-scrollbar-thumb { background-color: #5C6560; border-color: #E7EBD2; }
+        body[data-theme="light"] :is(
+            html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content
+        )::-webkit-scrollbar-thumb:hover { background-color: #0C1618; }
+        body[data-theme="light"] .piq-scroll-nugget { background: #8A8F88; }
+        body[data-theme="light"] .piq-scroll-nugget:hover,
+        body[data-theme="light"] .piq-scroll-nugget:active { background: #5C6560; }
 
         /* Components with hardcoded dark colors that don't use CSS variables -
            force them to readable values in light mode. Uses !important only
@@ -263,6 +306,126 @@
 
         *::-webkit-scrollbar-thumb:hover {
             background: #2a4a6f;
+        }
+
+        /* Page-edge scroller: wider, brighter, easier to grab. */
+        :is(html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content) {
+            scrollbar-width: auto;
+            scrollbar-color: #C5CDC8 #15252A;
+        }
+        :is(html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content)::-webkit-scrollbar {
+            width: 16px;
+            height: 16px;
+        }
+        :is(html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content)::-webkit-scrollbar-track {
+            background: #15252A;
+        }
+        :is(html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content)::-webkit-scrollbar-thumb {
+            background-color: #C5CDC8;
+            border-radius: 999px;
+            border: 3px solid #0C1618;
+            background-clip: padding-box;
+            min-height: 64px;
+        }
+        :is(html, body, #dashboardView, #formView, #customAnalysisView,
+            #journeyIQView, #impactIQView, #helmIQView, #subscriberIQView,
+            #rankerIQView, #ticketSalesIQView, #ticketSalesTrackerView,
+            #talentSearchIQView, #talentTheaterIQView, #hedgeFundIQView,
+            #brandTrackingIQView, #roasIQView, #ecommerceIQView,
+            #shareOfTimeIQView, #llmoIQView, #trendsIQView, #blueIQView,
+            #microdramasIQView, #intentIQView, #sentimentIQView,
+            #sfConversionView, #flywheelConversionView, .dashboard-tab-content)::-webkit-scrollbar-thumb:hover {
+            background-color: #E9E8E1;
+        }
+
+        /* Card lists keep a thin track; native thumb is hidden in favor of
+           a fixed-size overlay nugget so long and short lists match. */
+        .behavioral-card .behavioral-table,
+        .behavioral-card .behavioral-list,
+        .interests-list-section .interests-grid,
+        #interestsGrid,
+        .location-table [id^="locationList"],
+        .location-section [id^="locationList"],
+        .chart-card .behavioral-table,
+        .insight-list-v2 {
+            scrollbar-width: thin;
+            scrollbar-color: #8A938F transparent;
+        }
+        .behavioral-card .behavioral-table::-webkit-scrollbar,
+        .behavioral-card .behavioral-list::-webkit-scrollbar,
+        .interests-list-section .interests-grid::-webkit-scrollbar,
+        #interestsGrid::-webkit-scrollbar,
+        .location-table [id^="locationList"]::-webkit-scrollbar,
+        .location-section [id^="locationList"]::-webkit-scrollbar,
+        .chart-card .behavioral-table::-webkit-scrollbar,
+        .insight-list-v2::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .behavioral-card .behavioral-table::-webkit-scrollbar-thumb,
+        .behavioral-card .behavioral-list::-webkit-scrollbar-thumb,
+        .interests-list-section .interests-grid::-webkit-scrollbar-thumb,
+        #interestsGrid::-webkit-scrollbar-thumb,
+        .location-table [id^="locationList"]::-webkit-scrollbar-thumb,
+        .location-section [id^="locationList"]::-webkit-scrollbar-thumb,
+        .chart-card .behavioral-table::-webkit-scrollbar-thumb,
+        .insight-list-v2::-webkit-scrollbar-thumb {
+            background: #8A938F;
+            border-radius: 999px;
+            min-height: 48px;
+            max-height: 48px;
+        }
+        .piq-nugget-scroller {
+            scrollbar-width: none !important;
+        }
+        .piq-nugget-scroller::-webkit-scrollbar {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+        .piq-scroll-nugget {
+            position: absolute;
+            width: 6px;
+            height: 48px;
+            border-radius: 999px;
+            background: #8A938F;
+            z-index: 12;
+            cursor: grab;
+            pointer-events: auto;
+            box-shadow: 0 0 0 1px rgba(12, 22, 24, 0.35);
+        }
+        .piq-scroll-nugget:hover,
+        .piq-scroll-nugget:active {
+            background: #C5CDC8;
+            cursor: grabbing;
         }
 
         /* Global Select/Dropdown Styling - Sleek Dark Theme */
@@ -127731,6 +127894,81 @@ https://www.instagram.com/p/..."></textarea>
             var ct = document.querySelector('#tab-comparison .comp-tab');
             if (ct) ct.textContent = ct.textContent.replace(/^[^\w]+/, '').trim() || 'Side-by-Side';
         };
+        window._piqBindScrollNuggets = function(root) {
+            root = root || document.getElementById('dashboardView') || document;
+            var nodes = root.querySelectorAll(
+                '.behavioral-card .behavioral-table, ' +
+                '.interests-list-section .interests-grid, #interestsGrid, ' +
+                '.location-section [id^="locationList"], [id^="locationList"], ' +
+                '.chart-card .behavioral-table, .insight-list-v2'
+            );
+            var NUG_H = 48;
+            Array.prototype.forEach.call(nodes, function(el) {
+                if (el._piqNuggetBound) {
+                    if (el._piqNuggetSync) el._piqNuggetSync();
+                    return;
+                }
+                var host = el.closest('.behavioral-card, .interest-card, .interests-list-section, .location-section, .location-table, .chart-card, .insight-card-v2');
+                if (!host) host = el.parentElement;
+                if (!host) return;
+                el._piqNuggetBound = true;
+                el.classList.add('piq-nugget-scroller');
+                var pos = window.getComputedStyle(host).position;
+                if (!pos || pos === 'static') host.style.position = 'relative';
+                var nugget = document.createElement('div');
+                nugget.className = 'piq-scroll-nugget';
+                nugget.setAttribute('aria-hidden', 'true');
+                host.appendChild(nugget);
+                function sync() {
+                    var sh = el.scrollHeight;
+                    var ch = el.clientHeight;
+                    if (ch < 8 || sh <= ch + 1) {
+                        nugget.style.display = 'none';
+                        return;
+                    }
+                    nugget.style.display = 'block';
+                    var hr = host.getBoundingClientRect();
+                    var sr = el.getBoundingClientRect();
+                    var track = Math.max(8, sr.height - NUG_H);
+                    var max = sh - ch;
+                    var y = (sr.top - hr.top) + (max <= 0 ? 0 : (el.scrollTop / max) * track);
+                    nugget.style.height = NUG_H + 'px';
+                    nugget.style.top = y + 'px';
+                    nugget.style.right = Math.max(3, (hr.right - sr.right) + 2) + 'px';
+                }
+                el._piqNuggetSync = sync;
+                el.addEventListener('scroll', sync, { passive: true });
+                nugget.addEventListener('pointerdown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try { nugget.setPointerCapture(e.pointerId); } catch (_e) {}
+                    var startY = e.clientY;
+                    var startScroll = el.scrollTop;
+                    var max = el.scrollHeight - el.clientHeight;
+                    var track = Math.max(8, el.clientHeight - NUG_H);
+                    function move(ev) {
+                        el.scrollTop = startScroll + (ev.clientY - startY) * (max / track);
+                    }
+                    function up(ev) {
+                        try { nugget.releasePointerCapture(ev.pointerId); } catch (_e2) {}
+                        nugget.removeEventListener('pointermove', move);
+                        nugget.removeEventListener('pointerup', up);
+                    }
+                    nugget.addEventListener('pointermove', move);
+                    nugget.addEventListener('pointerup', up);
+                });
+                if (typeof ResizeObserver !== 'undefined') {
+                    try { new ResizeObserver(sync).observe(el); } catch (_e3) {}
+                }
+                if (typeof MutationObserver !== 'undefined') {
+                    new MutationObserver(function() {
+                        if (el._piqNuggetRaf) cancelAnimationFrame(el._piqNuggetRaf);
+                        el._piqNuggetRaf = requestAnimationFrame(sync);
+                    }).observe(el, { childList: true, subtree: true });
+                }
+                sync();
+            });
+        };
         window._piqV4DressPages = function() {
             if (window._piqV4Dressing) return;
             var view = document.getElementById('dashboardView');
@@ -127746,6 +127984,7 @@ https://www.instagram.com/p/..."></textarea>
                 window._piqV4DressLocation();
                 window._piqV4DressTools();
                 if (window._piqV4DressTabs) window._piqV4DressTabs();
+                if (window._piqBindScrollNuggets) window._piqBindScrollNuggets(view);
             } finally {
                 window._piqV4Dressing = false;
             }
