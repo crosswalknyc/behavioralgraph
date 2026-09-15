@@ -416,6 +416,40 @@ def run_scraper(source: str, label: str, kind: str,
     except Exception as e:
         logger.exception("scraper %s failed", source)
         payload['error'] = f"{type(e).__name__}: {e}"
+        # A failed fetch must never publish an empty snapshot over a
+        # good one. `stream_estimates` and its siblings accumulate an
+        # `items` store across days; writing the bare error payload
+        # wipes it, and every downstream row then falls back to the
+        # rank-tier baseline until something re-prices the whole board.
+        # That is exactly what happened on 2026-09-15: a truncated line
+        # in the batch results stream raised out of the estimator, this
+        # handler wrote a 255-byte stub over an 18,009-item store, and
+        # the coverage gate spent the next five hours re-pricing from
+        # scratch while the dashboard served rank-derived numbers.
+        # Carry the accumulated keys forward and record the error
+        # alongside them, so a failure degrades to "yesterday's values"
+        # instead of "no values".
+        # Scoped deliberately to the `items` accumulator. `national` is
+        # left empty on failure exactly as before, so a dark scraper
+        # still reads as dark on the board instead of silently showing
+        # yesterday's rows as today's.
+        try:
+            prior = read_snapshot(source) or {}
+        except Exception:
+            prior = {}
+        prior_items = prior.get('items')
+        if isinstance(prior_items, dict) and prior_items and not payload.get('items'):
+            payload['items'] = prior_items
+            payload['count'] = len(prior_items)
+            payload['error_preserved_prior_items'] = True
+            for carried in ('target_date', 'generated_at'):
+                if prior.get(carried) and not payload.get(carried):
+                    payload[carried] = prior[carried]
+            logger.warning(
+                "scraper %s failed; preserved %d prior item(s) rather "
+                "than publishing an empty accumulator",
+                source, len(prior_items),
+            )
 
     elapsed = time.time() - started
     payload['scrape_elapsed_s'] = round(elapsed, 2)

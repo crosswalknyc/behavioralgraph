@@ -4341,6 +4341,60 @@ _BATCH_CANCEL_SETTLE_POLLS = 4
 # re-run and paid for twice.
 _BATCH_FALLBACK_MIN_SHARE = 0.25
 
+# How many consecutive undecodable lines in the results stream to
+# tolerate before giving up on the rest of it. See
+# `_iter_batch_results`.
+_BATCH_MAX_DECODE_ERRORS = 5
+
+
+def _iter_batch_results(results_iter, batch_id: str):
+    """Yield batch results, surviving a malformed line in the stream.
+
+    The SDK decodes the results endpoint as JSONL and raises straight
+    out of the iterator when a line does not parse. Because that
+    happens mid-iteration, an unguarded `for r in results_iter` throws
+    away every result already collected and takes the whole estimator
+    down with it. On 2026-09-15 one truncated line ('Unterminated
+    string') did exactly that 3,350 results into a 5,203-request batch.
+
+    A bad line costs one item, which the coverage gate re-prices, so
+    skip it and keep reading. Give up only if the stream turns into
+    consecutive garbage, and return normally either way so the caller
+    keeps everything decoded so far.
+    """
+    consecutive = 0
+    n_bad = 0
+    while True:
+        try:
+            item = next(results_iter)
+        except StopIteration:
+            break
+        except Exception as e:
+            n_bad += 1
+            consecutive += 1
+            logger.warning(
+                "stream_estimates BATCH: undecodable line %d in results "
+                "for %s (%s: %s); skipping",
+                n_bad, batch_id, type(e).__name__, e,
+            )
+            if consecutive >= _BATCH_MAX_DECODE_ERRORS:
+                logger.error(
+                    "stream_estimates BATCH: %d consecutive undecodable "
+                    "lines for %s; keeping what decoded and leaving the "
+                    "remainder to the coverage gate",
+                    consecutive, batch_id,
+                )
+                break
+            continue
+        consecutive = 0
+        yield item
+    if n_bad:
+        logger.error(
+            "stream_estimates BATCH: %d line(s) in the %s results stream "
+            "could not be decoded; those items stay unpriced for the "
+            "coverage gate", n_bad, batch_id,
+        )
+
 
 def _custom_id_for(key: str) -> str:
     """Build a batch `custom_id` from a lookup key. Anthropic requires
@@ -4580,7 +4634,7 @@ def _research_all_batch(items: list[dict],
     except Exception as e:
         logger.error("stream_estimates BATCH: results() failed: %s", e)
         return out
-    for r in results_iter:
+    for r in _iter_batch_results(results_iter, batch_id):
         cid    = getattr(r, 'custom_id', None)
         result = getattr(r, 'result', None)
         rtype  = getattr(result, 'type', None) if result else None

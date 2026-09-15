@@ -326,6 +326,68 @@ def _send_still_missing_alert(missing_rows: list[tuple[str, str]]) -> None:
         logger.exception("coverage_gate: alert email failed (non-fatal)")
 
 
+# Above this many items to re-price, the gate submits to the discounted
+# batch lane instead of pricing one item at a time. The per-item lane
+# runs at concurrency 6 and costs roughly 2.5 seconds an item, so a few
+# hundred stragglers clear in minutes and batch's ~60 minute floor is
+# not worth paying. Several thousand is a different job: on 2026-09-15
+# the gate inherited 6,769 items after the estimator's accumulator was
+# wiped and spent 4 hours 40 minutes on them, which is what pushed the
+# nightly run past nine hours and left rank-derived numbers on the
+# board all day.
+_GATE_BATCH_THRESHOLD = 400
+
+
+def _price_stream_items(se, stream_items: list[dict], *,
+                         target_date_iso: str,
+                         meter: Any) -> dict[str, dict]:
+    """Price the gate's stream-kind remainder, choosing the lane by size.
+
+    Falls back to the per-item lane when batch comes back with less
+    than `_BATCH_FALLBACK_MIN_SHARE` of what was asked for, mirroring
+    the estimator's own fallback so a refused or unusable batch never
+    strands the board on baselines.
+    """
+    n = len(stream_items)
+    if n < _GATE_BATCH_THRESHOLD:
+        return se._research_all(stream_items,
+                                 target_date_iso=target_date_iso,
+                                 spend_monitor=meter)
+
+    logger.info("coverage_gate: %d items to price; using the batch lane", n)
+    try:
+        results = se._research_all_batch(stream_items,
+                                          target_date_iso=target_date_iso,
+                                          spend_monitor=meter)
+    except Exception:
+        logger.exception("coverage_gate: batch lane raised; falling back "
+                          "to the per-item lane")
+        results = {}
+
+    if len(results) >= se._BATCH_FALLBACK_MIN_SHARE * n:
+        remaining = [it for it in stream_items
+                     if se._lookup_key(it['kind'], it['display_title'],
+                                        it.get('artist') or '') not in results]
+        if remaining:
+            logger.info("coverage_gate: batch priced %d/%d; pricing the "
+                        "%d straggler(s) per item", len(results), n,
+                        len(remaining))
+            results.update(se._research_all(remaining,
+                                             target_date_iso=target_date_iso,
+                                             spend_monitor=meter))
+        return results
+
+    logger.error("coverage_gate: batch lane returned %d/%d; pricing the "
+                  "remainder per item", len(results), n)
+    remaining = [it for it in stream_items
+                 if se._lookup_key(it['kind'], it['display_title'],
+                                    it.get('artist') or '') not in results]
+    results.update(se._research_all(remaining,
+                                     target_date_iso=target_date_iso,
+                                     spend_monitor=meter))
+    return results
+
+
 def run_gate(dry_run: bool = False) -> dict[str, Any]:
     """Run the full coverage gate. Returns a summary dict:
     {total, researched_before, researched_after, rendered_after_pct,
@@ -369,9 +431,9 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     meter = SpendMonitor(cap_usd=1e9, prefix='coverage_gate')
 
     if stream_items:
-        results = se._research_all(stream_items,
-                                    target_date_iso=target_date_iso,
-                                    spend_monitor=meter)
+        results = _price_stream_items(se, stream_items,
+                                       target_date_iso=target_date_iso,
+                                       meter=meter)
         try:
             se._apply_continuity_guard(results, target_date_iso)
         except Exception:
@@ -401,20 +463,28 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
                                        force_refresh=True)
     cards2 = (payload2 or {}).get('cards') or {}
-    total2 = researched2 = rendered2 = 0
+    total2 = researched2 = rendered2 = baseline2 = 0
     still_missing: list[tuple[str, str]] = []
+    # Per-list baseline tally. A board-wide percentage says something
+    # is wrong; the per-list split says where, which is what makes the
+    # alert actionable.
+    per_list: dict[str, dict[str, int]] = {}
     for path, _rank, it in _walk_rendered(cards2):
         if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
             continue
         if path.startswith('fused_trending') and _fused_row_is_film_only(it):
             continue
         total2 += 1
+        bucket = per_list.setdefault(path, {'total': 0, 'baseline': 0})
+        bucket['total'] += 1
         state = _audience_state(it)
         if state == 'researched':
             researched2 += 1
             rendered2 += 1
         elif state == 'baseline':
             rendered2 += 1
+            baseline2 += 1
+            bucket['baseline'] += 1
         else:
             still_missing.append((path, _item_title(it)))
 
@@ -423,13 +493,31 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     summary['rendered_after_pct'] = round(
         (100.0 * rendered2 / total2) if total2 else 100.0, 2)
     summary['still_missing'] = len(still_missing)
+    summary['total'] = total2
+    summary['baseline_after'] = baseline2
+    summary['baseline_after_pct'] = round(
+        (100.0 * baseline2 / total2) if total2 else 0.0, 2)
+    summary['baseline_by_list'] = {
+        name: {
+            'total': v['total'],
+            'baseline': v['baseline'],
+            'pct': round(100.0 * v['baseline'] / v['total'], 2),
+        }
+        for name, v in sorted(per_list.items())
+        if v['baseline']
+    }
 
     logger.info("coverage_gate: FINAL coverage researched=%.2f%% "
-                "rendered=%.2f%% (total=%d, still_missing=%d, "
-                "spend=$%.2f)",
+                "rendered=%.2f%% baseline=%.2f%% (total=%d, "
+                "still_missing=%d, spend=$%.2f)",
                 summary['researched_after_pct'],
                 summary['rendered_after_pct'],
+                summary['baseline_after_pct'],
                 total2, len(still_missing), summary['spend_usd'])
+    for name, v in sorted(summary['baseline_by_list'].items(),
+                          key=lambda kv: kv[1]['pct'], reverse=True)[:20]:
+        logger.info("coverage_gate:   baseline %5.1f%% (%d/%d) %s",
+                    v['pct'], v['baseline'], v['total'], name)
 
     if still_missing:
         _send_still_missing_alert(still_missing)

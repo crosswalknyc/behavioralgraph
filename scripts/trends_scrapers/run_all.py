@@ -422,6 +422,28 @@ def _send_freshness_alert(msg: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Take the run lock, arm the runtime watchdog, then run.
+
+    The lock keeps two runs off the same `latest/*.json` keys. Before
+    2026-09-15 nothing did: a run from 2026-07-16 was still on the
+    process table 61 days later, blocked on a driver handshake, and
+    every nightly cron since had started alongside it.
+    """
+    from scripts.trends_scrapers.run_guard import RunLock, start_watchdog
+
+    with RunLock() as lock:
+        if not lock.acquired:
+            # RunLock has already logged and alerted. Exit quietly
+            # rather than starting a second pass over the same keys.
+            return 3
+        watchdog_done = start_watchdog()
+        try:
+            return _run_main(argv)
+        finally:
+            watchdog_done.set()
+
+
+def _run_main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description='Trends IQ daily scraper orchestrator')
     p.add_argument('--only',   default='', help='comma-separated source keys to run')
     p.add_argument('--skip',   default='', help='comma-separated source keys to skip')
@@ -572,6 +594,19 @@ def main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: coverage gate crashed")
             results.append({'source': 'coverage_gate', 'error': str(e),
                             'national': []})
+        # Quality alarm on what actually got published. A row with no
+        # researched value of its own falls back to a number derived
+        # from its rank slot, which reads on the page exactly like a
+        # real one. A clean run leaves that at or near zero; on
+        # 2026-09-15 it was most of the board for most of the day and
+        # nothing noticed until a colleague did.
+        try:
+            from scripts.trends_scrapers.run_guard import check_baseline_share
+            if coverage_summary:
+                check_baseline_share(coverage_summary)
+        except Exception:
+            logging.exception("run_all: baseline share check crashed "
+                               "(non-fatal)")
 
     _write_index(results)
 
