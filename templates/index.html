@@ -175388,9 +175388,21 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #dashboardView.piq-v4 .interest-pct {
         color: #0C1618 !important;
     }
-    body[data-theme="light"] #dashboardView.piq-v4 .comp-tab.active,
-    body[data-theme="light"] #dashboardView.piq-v4 .marketing-subtab.active {
+    /* The dark-mode rules for these two carry a second id, so they
+       outrank a single-id light override no matter how many classes it
+       has. Match the id depth rather than reaching for another
+       !important that would lose anyway. The active underline was
+       Signal Green, which does not go on a light ground either. */
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-comparison .comp-tab.active,
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-marketing .marketing-subtab.active,
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-workspace .marketing-subtab.active {
+        color: #0C1618 !important;
         border-bottom-color: #5E7E12 !important;
+    }
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .count,
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-name,
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-name {
+        color: #0C1618 !important;
     }
     /* These sheets scroll, so the column header has to stay opaque to
        cover the rows passing under it. On the page rather than on the
