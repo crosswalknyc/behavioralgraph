@@ -175404,6 +175404,22 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-name {
         color: #0C1618 !important;
     }
+
+    /* The sticky header carries the same Off-White to white gradient the
+       hero panel uses, so the two read as one surface when the page
+       scrolls and the header takes over. The tab row, the toolbar and
+       the condensed profile all had their own opaque fill painting over
+       it, so they go transparent and the gradient runs the full height
+       of the header in one pass instead of restarting per row. */
+    body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile,
+    body[data-theme="light"] #piqStickyChrome.piq-v4 {
+        background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%) !important;
+    }
+    body[data-theme="light"] #piqStickyChrome.piq-v4 #profileTabsBar,
+    body[data-theme="light"] #piqStickyChrome.piq-v4 #toolbarRow,
+    body[data-theme="light"] #piqStickyChrome.piq-v4.piq-has-profile #dashProfileInfo {
+        background: transparent !important;
+    }
     /* These sheets scroll, so the column header has to stay opaque to
        cover the rows passing under it. On the page rather than on the
        panel colour it reads as a rule, not a grey box. */
