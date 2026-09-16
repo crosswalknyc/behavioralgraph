@@ -172752,6 +172752,15 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #dashboardView.piq-v4 .behavioral-item .count {
         color: #FFFFFF !important;
     }
+    /* Same story for the rank badge beside a category name. It is
+       written inline as black on var(--accent-lime), which is right in
+       dark mode where that variable is Signal Green, but light mode
+       remaps it to Signal Olive and black on a dark olive chip at
+       0.55rem is hard to read. Only the one badge fills with the
+       variable, so nothing else is caught. */
+    body[data-theme="light"] #dashboardView.piq-v4 [style*="background: var(--accent-lime)"] {
+        color: #FFFFFF !important;
+    }
 
     /* The sticky header carries the same Off-White to white gradient the
        hero panel uses, so the two read as one surface when the page
