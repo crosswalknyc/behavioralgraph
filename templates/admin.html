@@ -4461,7 +4461,7 @@
                             <span style="font-size: 1.35rem; line-height: 1;">🔗</span>
                             <div style="flex: 1; min-width: 220px;">
                                 <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Payment link</div>
-                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">Generate a link they open to add their own funds. They don't need to be signed in, and their card details never come to you. Good for 30 days, reusable, and you can turn it off any time.</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">Generate a link they open to add their own funds. If one is already live, Generate returns that same URL so you can copy it instead of making another. They don't need to be signed in. Good for 30 days. Delete an old one any time.</div>
                             </div>
                         </div>
 
@@ -4506,7 +4506,7 @@
 
                         <!-- Links already out in the wild for this user. -->
                         <div id="payLinkExisting" style="display: none; margin-top: 0.85rem;">
-                            <div style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Active links</div>
+                            <div style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Active links (copy or delete)</div>
                             <div id="payLinkExistingList"></div>
                         </div>
                     </div>
@@ -14198,6 +14198,10 @@
                 .then(function (res) {
                     if (res.ok && res.d && res.d.success) {
                         _payLinkShowResult(res.d);
+                        if (res.d.reused) {
+                            _payLinkStatus('This user already has a live ' +
+                                'link. Copy it below.', 'ok');
+                        }
                         loadPayLinks(uname);
                     } else {
                         _payLinkStatus(_payLinkErrText(res.d,
@@ -14281,18 +14285,34 @@
             var el = document.getElementById('payLinkUrl');
             var btn = document.getElementById('payLinkCopyBtn');
             if (!el || !el.value) return;
+            _copyPayLinkText(el.value, btn);
+        }
 
+        function copyPayLinkFrom(btn) {
+            if (!btn) return;
+            var url = btn.getAttribute('data-url') || '';
+            if (!url) return;
+            _copyPayLinkText(url, btn);
+        }
+
+        function _copyPayLinkText(url, btn) {
             function done() {
                 if (!btn) return;
+                var prev = btn.getAttribute('data-label') || 'Copy';
                 btn.textContent = 'Copied';
-                setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+                setTimeout(function () { btn.textContent = prev; }, 1600);
             }
             function fallback() {
-                // execCommand path for non-HTTPS origins and older Safari,
-                // where navigator.clipboard is unavailable.
                 try {
-                    el.select();
+                    var ta = document.createElement('textarea');
+                    ta.value = url;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
                     document.execCommand('copy');
+                    document.body.removeChild(ta);
                     done();
                 } catch (e) {
                     _payLinkStatus('Could not copy automatically. Select the ' +
@@ -14300,33 +14320,34 @@
                 }
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(el.value)
+                navigator.clipboard.writeText(url)
                     .then(done).catch(fallback);
             } else {
                 fallback();
             }
         }
 
-        function revokePayLink(token) {
+        function deletePayLink(token) {
             if (!token) return;
-            if (!confirm('Turn off this payment link? Anyone who already ' +
+            if (!confirm('Delete this payment link? Anyone who already ' +
                          'has it will no longer be able to use it.')) {
                 return;
             }
             fetch('/api/admin/payment-link/' + encodeURIComponent(token) +
-                  '/revoke', { method: 'POST' })
+                  '/delete', { method: 'POST' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (d && d.success) {
-                        _payLinkStatus('Link turned off.', 'ok');
+                        _payLinkStatus('Link deleted.', 'ok');
                         var shown = document.getElementById('payLinkUrl');
                         if (shown && shown.value.indexOf(token) !== -1) {
                             var box = document.getElementById('payLinkResult');
                             if (box) box.style.display = 'none';
+                            shown.value = '';
                         }
                         loadPayLinks(_currentEditUsernameForApi());
                     } else {
-                        _payLinkStatus('Could not turn off that link.',
+                        _payLinkStatus('Could not delete that link.',
                             'error');
                     }
                 })
@@ -14352,6 +14373,11 @@
                         list.innerHTML = '';
                         return;
                     }
+                    var box = document.getElementById('payLinkResult');
+                    var shown = document.getElementById('payLinkUrl');
+                    if (box && shown && !shown.value) {
+                        _payLinkShowResult(links[0]);
+                    }
                     list.innerHTML = links.map(function (L) {
                         var amt = L.amount_usd
                             ? '$' + Number(L.amount_usd).toFixed(2) +
@@ -14366,22 +14392,30 @@
                         var exp = L.expires_at
                             ? 'through ' + String(L.expires_at).slice(0, 10)
                             : '';
+                        var url = String(L.url || '');
                         return '' +
-                          '<div style="display:flex;gap:0.5rem;align-items:center;' +
-                          'flex-wrap:wrap;padding:0.45rem 0.6rem;border:1px solid ' +
-                          'var(--border-color);border-radius:6px;margin-bottom:0.35rem;">' +
-                            '<code style="flex:1;min-width:150px;font-size:0.68rem;' +
-                            'color:var(--text-secondary);word-break:break-all;">' +
-                              _payLinkEsc(String(L.token || '').slice(0, 12)) + '\u2026' +
-                            '</code>' +
-                            '<span style="font-size:0.68rem;color:var(--text-secondary);">' +
-                              _payLinkEsc(amt) + ' \u00b7 ' + _payLinkEsc(used) +
-                              (exp ? ' \u00b7 ' + _payLinkEsc(exp) : '') +
-                            '</span>' +
-                            '<button type="button" class="btn btn-small" ' +
-                            'onclick="revokePayLink(\'' +
-                              _payLinkEsc(String(L.token || '')) +
-                            '\')">Turn off</button>' +
+                          '<div style="padding:0.55rem 0.65rem;border:1px solid ' +
+                          'var(--border-color);border-radius:6px;margin-bottom:0.4rem;">' +
+                            '<input type="text" readonly value="' +
+                              _payLinkEsc(url) +
+                            '" onclick="this.select()" style="width:100%;' +
+                            'font-family:ui-monospace,monospace;font-size:0.72rem;' +
+                            'margin-bottom:0.4rem;">' +
+                            '<div style="display:flex;gap:0.5rem;align-items:center;' +
+                            'flex-wrap:wrap;">' +
+                              '<span style="flex:1;min-width:140px;font-size:0.68rem;' +
+                              'color:var(--text-secondary);">' +
+                                _payLinkEsc(amt) + ' \u00b7 ' + _payLinkEsc(used) +
+                                (exp ? ' \u00b7 ' + _payLinkEsc(exp) : '') +
+                              '</span>' +
+                              '<button type="button" class="btn btn-small btn-primary" ' +
+                              'data-url="' + _payLinkEsc(url) + '" data-label="Copy" ' +
+                              'onclick="copyPayLinkFrom(this)">Copy</button>' +
+                              '<button type="button" class="btn btn-small" ' +
+                              'onclick="deletePayLink(\'' +
+                                _payLinkEsc(String(L.token || '')) +
+                              '\')">Delete</button>' +
+                            '</div>' +
                           '</div>';
                     }).join('');
                     wrap.style.display = 'block';

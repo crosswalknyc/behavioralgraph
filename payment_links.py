@@ -319,6 +319,74 @@ def record_use(token: str, amount_usd: float = 0.0,
         print(f"[payment_links] record_use failed for {token[:8]}...: {e}")
 
 
+def find_reusable(subject_kind: str, subject_key: str,
+                  amount_usd=None, amount_locked: bool = False,
+                  single_use: bool = False, also_keys=None):
+    """Newest live link that already matches this mint request.
+
+    Generate used to mint a fresh token every click, so vsanders
+    piled up three identical open-amount links and the admin tab
+    had no way to copy the one that was already out. Same shape
+    (amount, lock, single-use) returns the existing live link.
+    """
+    want_amt = None
+    if amount_usd not in (None, "", 0, "0"):
+        try:
+            want_amt = round(float(amount_usd), 2)
+            if want_amt <= 0:
+                want_amt = None
+        except (TypeError, ValueError):
+            want_amt = None
+    want_lock = bool(amount_locked and want_amt)
+    want_single = bool(single_use)
+    for rec in list_for_subject(
+            subject_kind, subject_key, include_dead=False,
+            also_keys=also_keys):
+        rec_amt = rec.get("amount_usd")
+        rec_amt_n = None
+        if rec_amt not in (None, "", 0, "0"):
+            try:
+                rec_amt_n = round(float(rec_amt), 2)
+            except (TypeError, ValueError):
+                rec_amt_n = None
+        if rec_amt_n != want_amt:
+            continue
+        if bool(rec.get("amount_locked")) != want_lock:
+            continue
+        if bool(rec.get("single_use")) != want_single:
+            continue
+        return rec
+    return None
+
+
+def delete(token: str) -> bool:
+    """Remove a link record entirely. Returns True when it was found.
+
+    Distinct from revoke: revoke leaves the row so history is visible.
+    Delete is the admin 'this one should not exist' action.
+    """
+    token = str(token or "").strip()
+    if not token:
+        return False
+    found = {"ok": False}
+
+    def _apply(doc):
+        links = doc.setdefault("links", {})
+        rec = links.pop(token, None)
+        if not isinstance(rec, dict):
+            return None
+        found["ok"] = True
+        doc["last_updated"] = _iso(_now())
+        return doc
+
+    try:
+        _update(_apply)
+    except Exception as e:
+        print(f"[payment_links] delete failed: {e}")
+        return False
+    return found["ok"]
+
+
 def revoke(token: str, revoked_by: str = "") -> bool:
     """Kill a link. Returns True when a record was found and marked."""
     token = str(token or "").strip()

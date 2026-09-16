@@ -2838,6 +2838,26 @@ def admin_create_payment_link(target_username):
                 "min_usd": wallet.top_up_min_custom(),
             }), 400
 
+    existing = payment_links.find_reusable(
+        ctx["subject_kind"], ctx["subject_key"],
+        amount_usd=amt,
+        amount_locked=bool(body.get("lock_amount")),
+        single_use=bool(body.get("single_use")),
+        also_keys=[ctx.get("uname"), ctx.get("email")])
+    if existing:
+        out = _link_public_payload(existing, _dashboard_base_url())
+        out["success"] = True
+        out["reused"] = True
+        out["display_name"] = ctx["display_name"]
+        out["email"] = ctx["email"]
+        out["subject_kind"] = ctx["subject_kind"]
+        out["wallet_billing_on"] = bool(
+            ctx["subject"].get("paying_customer"))
+        print(f"[billing] {admin_uname} reused top-up link "
+              f"{str(existing.get('token') or '')[:8]}... for "
+              f"{ctx['subject_kind']}:{ctx['subject_key']}")
+        return jsonify(out)
+
     try:
         rec = payment_links.create_link(
             subject_kind=ctx["subject_kind"],
@@ -2861,6 +2881,7 @@ def admin_create_payment_link(target_username):
 
     out = _link_public_payload(rec, _dashboard_base_url())
     out["success"] = True
+    out["reused"] = False
     out["display_name"] = ctx["display_name"]
     out["email"] = ctx["email"]
     out["subject_kind"] = ctx["subject_kind"]
@@ -2916,6 +2937,22 @@ def admin_revoke_payment_link(token):
     if not ok:
         return jsonify({"error": "link_not_found"}), 404
     print(f"[billing] {admin_uname} revoked top-up link "
+          f"{str(token)[:8]}...")
+    return jsonify({"success": True})
+
+
+@billing_bp.route(
+    "/api/admin/payment-link/<token>/delete", methods=["POST"])
+def admin_delete_payment_link(token):
+    """Remove a link so it no longer exists and cannot be paid against."""
+    admin_uname, _admin, err = _require_super_admin()
+    if err:
+        return err
+    import payment_links  # type: ignore
+    ok = payment_links.delete(token)
+    if not ok:
+        return jsonify({"error": "link_not_found"}), 404
+    print(f"[billing] {admin_uname} deleted top-up link "
           f"{str(token)[:8]}...")
     return jsonify({"success": True})
 
