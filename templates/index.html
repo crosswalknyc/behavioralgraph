@@ -175435,6 +175435,11 @@ https://www.instagram.com/p/..."></textarea>
         background: rgba(142, 63, 168, 0.08) !important;
         color: #8E3FA8 !important;
     }
+    /* NEW sits on the page rather than on a chip, so Dusk has nothing to
+       sit against and reads at roughly 1.9:1. It takes the body grey. */
+    body[data-theme="light"] #trendsIQView .tiq-sheet-delta.new {
+        color: #5C6560 !important;
+    }
 
     body[data-theme="light"] #piqStickyChrome.piq-v4 #profileTabsBar,
     body[data-theme="light"] #piqStickyChrome.piq-v4 #toolbarRow,
