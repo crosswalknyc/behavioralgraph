@@ -44309,7 +44309,7 @@ https://www.instagram.com/p/..."></textarea>
 
         <!-- DIGITAL JOURNEY IQ VIEW -->
         <div id="journeyIQView" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
-            <div style="padding: 0.6rem 1.25rem; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="jiq-topbar" style="padding: 0.6rem 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <!-- Title cluster: label + story name on one baseline. Compressed
                      from the previous stacked layout so the whole header collapses
                      onto a single row alongside the date badge + run picker + refresh. -->
@@ -44325,12 +44325,37 @@ https://www.instagram.com/p/..."></textarea>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
                     <div id="jiqDateRangeBox" style="display: none; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap;"></div>
                     <div id="jiqMonthCutBar" style="display: none; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
-                    <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 13px; width: 320px; max-width: 320px; min-width: 0; flex: 0 0 auto;">
-                        <option value="">- pick a past run -</option>
-                    </select>
-                    <button type="button" class="btn btn-small" onclick="loadJourneyIqRunList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                 </div>
             </div>
+
+            <!-- The run picker lives in the Library drawer now, the same
+                 left-edge rail and slide-out Profile IQ uses. The select
+                 itself stays in the DOM, hidden, because every caller
+                 reads and writes it by id; the drawer list is a view of
+                 its options. -->
+            <button type="button" id="jiqLibraryRail" aria-label="Open library" title="Open library">
+                <span class="jiq-rail-dot" aria-hidden="true"></span>
+                <span class="jiq-rail-label">Library</span>
+                <span class="jiq-rail-chevron" aria-hidden="true">›</span>
+            </button>
+            <div id="jiqLibraryScrim"></div>
+            <aside id="jiqLibraryDrawer" aria-label="Journey library">
+                <div class="jiq-lib-top">
+                    <div>
+                        <div class="jiq-lib-eyebrow">Library</div>
+                        <h3>Select a journey.</h3>
+                    </div>
+                    <button type="button" class="jiq-lib-close" id="jiqLibraryClose" aria-label="Close library">×</button>
+                </div>
+                <div class="jiq-lib-search">
+                    <input type="search" id="jiqLibrarySearch" placeholder="Search journeys" autocomplete="off">
+                    <button type="button" class="jiq-lib-refresh" title="Refresh the list" onclick="loadJourneyIqRunList()">↻</button>
+                </div>
+                <div class="jiq-lib-tree" id="jiqLibraryTree"></div>
+                <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="display: none;">
+                    <option value="">- pick a past run -</option>
+                </select>
+            </aside>
             <!-- Monthly-cut note + table hang below the header. Hidden by
                  default; auto-shown by the renderer only when the run
                  carries a monthly_cuts block. Keeping them here (outside
@@ -79783,6 +79808,97 @@ https://www.instagram.com/p/..."></textarea>
             loadJourneyIqRunList(s3Key || _jiqLastKey);
         };
 
+        // ── Journey library drawer ───────────────────────────────
+        // The list mirrors whatever is in #jiqRunPicker, so it inherits
+        // the grouping the picker already builds and nothing else has
+        // to know the drawer exists.
+        function _jiqLibraryOpen(on) {
+            var dr = document.getElementById('jiqLibraryDrawer');
+            var sc = document.getElementById('jiqLibraryScrim');
+            var rail = document.getElementById('jiqLibraryRail');
+            if (!dr) return;
+            dr.classList.toggle('is-open', !!on);
+            if (sc) sc.classList.toggle('is-open', !!on);
+            if (rail) rail.classList.toggle('is-hidden', !!on);
+            if (on) {
+                var q = document.getElementById('jiqLibrarySearch');
+                if (q) { try { q.focus(); } catch (_) {} }
+            }
+        }
+
+        function _jiqLibrarySync() {
+            var picker = document.getElementById('jiqRunPicker');
+            var tree = document.getElementById('jiqLibraryTree');
+            if (!picker || !tree) return;
+            var html = '';
+            var kids = picker.children;
+            for (var i = 0; i < kids.length; i++) {
+                var node = kids[i];
+                if (node.tagName === 'OPTGROUP') {
+                    html += '<div class="jiq-lib-group">' + _jiqFragEsc(node.label) + '</div>';
+                    for (var j = 0; j < node.children.length; j++) {
+                        html += _jiqLibraryItem(node.children[j], picker.value);
+                    }
+                } else if (node.tagName === 'OPTION' && node.value) {
+                    html += _jiqLibraryItem(node, picker.value);
+                }
+            }
+            tree.innerHTML = html || '<div class="jiq-lib-empty">Nothing to show yet.</div>';
+            _jiqLibraryFilter();
+        }
+
+        function _jiqLibraryItem(opt, current) {
+            var on = (opt.value === current) ? ' is-on' : '';
+            return '<button type="button" class="jiq-lib-item' + on + '" data-key="'
+                 + _jiqFragEsc(opt.value) + '">' + _jiqFragEsc(opt.textContent) + '</button>';
+        }
+
+        function _jiqLibraryFilter() {
+            var q = (document.getElementById('jiqLibrarySearch') || {}).value || '';
+            q = q.trim().toLowerCase();
+            var tree = document.getElementById('jiqLibraryTree');
+            if (!tree) return;
+            var items = tree.querySelectorAll('.jiq-lib-item');
+            for (var i = 0; i < items.length; i++) {
+                var hit = !q || items[i].textContent.toLowerCase().indexOf(q) !== -1;
+                items[i].style.display = hit ? '' : 'none';
+            }
+            // A group heading with nothing under it just adds noise.
+            var groups = tree.querySelectorAll('.jiq-lib-group');
+            for (var g = 0; g < groups.length; g++) {
+                var any = false, n = groups[g].nextElementSibling;
+                while (n && !n.classList.contains('jiq-lib-group')) {
+                    if (n.style.display !== 'none') { any = true; break; }
+                    n = n.nextElementSibling;
+                }
+                groups[g].style.display = any ? '' : 'none';
+            }
+        }
+
+        document.addEventListener('click', function (ev) {
+            var rail = ev.target.closest && ev.target.closest('#jiqLibraryRail');
+            if (rail) { _jiqLibraryOpen(true); return; }
+            if (ev.target.closest && (ev.target.closest('#jiqLibraryClose') ||
+                                      ev.target.closest('#jiqLibraryScrim'))) {
+                _jiqLibraryOpen(false); return;
+            }
+            var item = ev.target.closest && ev.target.closest('.jiq-lib-item');
+            if (item) {
+                var key = item.getAttribute('data-key');
+                var picker = document.getElementById('jiqRunPicker');
+                if (picker) picker.value = key;
+                _jiqLibraryOpen(false);
+                _jiqLibrarySync();
+                if (typeof onJourneyIqRunPicked === 'function') onJourneyIqRunPicked(key);
+            }
+        });
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape') _jiqLibraryOpen(false);
+        });
+        document.addEventListener('input', function (ev) {
+            if (ev.target && ev.target.id === 'jiqLibrarySearch') _jiqLibraryFilter();
+        });
+
         function loadJourneyIqRunList(preferredKey) {
             var picker = document.getElementById('jiqRunPicker');
             if (!picker) return;
@@ -79971,6 +80087,8 @@ https://www.instagram.com/p/..."></textarea>
                     var keyToLoad = preferredKey
                         || (hasDefault ? JIQ_DEFAULT_KEY : null)
                         || (combined[0] && combined[0].key);
+                    if (keyToLoad) picker.value = keyToLoad;
+                    _jiqLibrarySync();
                     if (keyToLoad) {
                         picker.value = keyToLoad;
                         onJourneyIqRunPicked(keyToLoad);
@@ -81075,8 +81193,11 @@ https://www.instagram.com/p/..."></textarea>
             }
             var jiqDateBox = document.getElementById('jiqDateRangeBox');
             if (jiqDateBox) {
-                var _dateStr = (meta.start_date || '') + ' → ' + (meta.end_date || '') + ' · ' + windowStr;
-                jiqDateBox.textContent = 'Date Range: ' + _dateStr;
+                // The lookback / forward suffix was engine detail and
+                // usually printed as "?d" anyway. The range is the part
+                // that means something to a reader.
+                jiqDateBox.textContent = 'Date Range: '
+                    + (meta.start_date || '') + ' \u2192 ' + (meta.end_date || '');
                 // inline-flex so the badge stays on the shared header row
                 // alongside the run picker + (optional) month-cut pills,
                 // rather than reverting to its own line.
@@ -173274,6 +173395,130 @@ https://www.instagram.com/p/..."></textarea>
         row-gap: 3px;
         overflow: hidden !important;
     }
+    /* ================================================================
+       DIGITAL JOURNEY IQ - chrome
+       Graphite ground and the Library rail, so the view reads the same
+       as Profile IQ rather than sitting on the old navy.
+       ================================================================ */
+    #journeyIQView { background: var(--cw-page, #111F22) !important; }
+    body[data-theme="light"] #journeyIQView { background: #E9E8E1 !important; }
+    #journeyIQView .jiq-topbar {
+        background: var(--cw-page, #111F22) !important;
+        border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    body[data-theme="light"] #journeyIQView .jiq-topbar {
+        background: #E9E8E1 !important; border-bottom-color: #C9C6BA;
+    }
+    #jiqDateRangeBox {
+        background: transparent !important;
+        border-color: var(--cw-border, #2C4148) !important;
+        color: #C7F23E !important;
+    }
+    body[data-theme="light"] #jiqDateRangeBox {
+        border-color: #C9C6BA !important; color: #5E7E12 !important;
+    }
+
+    /* Left-edge rail. Same shape, colours and behaviour as the Profile
+       IQ one so the two products open their library the same way. */
+    #jiqLibraryRail {
+        display: none; position: fixed; left: 0; top: 190px;
+        z-index: 2147481500; width: 36px; min-height: 168px;
+        padding: 16px 0 14px; flex-direction: column; align-items: center;
+        justify-content: flex-start; gap: 12px;
+        background: #15252A; border: 1px solid #3B3D38;
+        border-left: 3px solid #C7F23E; border-radius: 0 12px 12px 0;
+        color: #E9E8E1; cursor: pointer;
+        font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+        box-shadow: 8px 12px 28px rgba(0, 0, 0, 0.32);
+    }
+    #journeyIQView #jiqLibraryRail { display: flex; }
+    #jiqLibraryRail.is-hidden { display: none !important; }
+    #jiqLibraryRail:hover { width: 40px; }
+    #jiqLibraryRail .jiq-rail-dot {
+        width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px;
+    }
+    #jiqLibraryRail .jiq-rail-label {
+        writing-mode: vertical-rl; transform: rotate(180deg);
+        font-size: 11px; font-weight: 600; letter-spacing: .14em;
+        text-transform: uppercase; color: #E9E8E1;
+    }
+    #jiqLibraryRail .jiq-rail-chevron { color: #C7F23E; font-size: 18px; line-height: 1; font-weight: 600; }
+    body[data-theme="light"] #jiqLibraryRail {
+        background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12;
+    }
+    body[data-theme="light"] #jiqLibraryRail .jiq-rail-dot { background: #5E7E12; }
+    body[data-theme="light"] #jiqLibraryRail .jiq-rail-chevron { color: #5E7E12; }
+    body[data-theme="light"] #jiqLibraryRail .jiq-rail-label { color: #0C1618; }
+
+    #jiqLibraryScrim {
+        display: none; position: fixed; inset: 0; z-index: 2147481900;
+        background: rgba(12, 22, 24, 0.55);
+    }
+    #jiqLibraryScrim.is-open { display: block; }
+
+    #jiqLibraryDrawer {
+        position: fixed; left: 0; top: 121px; bottom: 0; width: 360px;
+        z-index: 2147482000; display: flex; flex-direction: column;
+        background: #15252A; border-right: 1px solid #3B3D38;
+        box-shadow: 16px 0 40px rgba(0, 0, 0, .35);
+        transform: translateX(-110%); transition: transform 180ms ease;
+        visibility: hidden; pointer-events: none;
+        font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    #jiqLibraryDrawer.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+    body[data-theme="light"] #jiqLibraryDrawer { background: #FFFFFF; border-right-color: #C9C6BA; }
+    .jiq-lib-top {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 14px; padding: 20px 20px 14px;
+    }
+    .jiq-lib-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .jiq-lib-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+    body[data-theme="light"] .jiq-lib-eyebrow::before { background: #5E7E12; }
+    .jiq-lib-top h3 {
+        margin: 8px 0 0 !important; font-size: 20px; font-weight: 800;
+        letter-spacing: -.02em; text-transform: none;
+    }
+    .jiq-lib-close {
+        background: transparent; border: 0; color: #7C878A;
+        font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px;
+    }
+    .jiq-lib-close:hover { color: #E9E8E1; }
+    body[data-theme="light"] .jiq-lib-close:hover { color: #0C1618; }
+    .jiq-lib-search { display: flex; gap: 8px; padding: 0 20px 14px; }
+    .jiq-lib-search input {
+        flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px;
+        border: 1px solid #3B3D38; background: transparent; color: inherit;
+        font-size: 12.5px; font-family: inherit;
+    }
+    body[data-theme="light"] .jiq-lib-search input { border-color: #C9C6BA; }
+    .jiq-lib-refresh {
+        border: 1px solid #3B3D38; background: transparent; color: #7C878A;
+        border-radius: 8px; width: 36px; cursor: pointer; font-size: 14px;
+    }
+    body[data-theme="light"] .jiq-lib-refresh { border-color: #C9C6BA; }
+    .jiq-lib-tree { flex: 1; overflow-y: auto; padding: 0 12px 20px; }
+    .jiq-lib-group {
+        font-size: 10px; font-weight: 700; letter-spacing: .16em;
+        text-transform: uppercase; color: #7C878A;
+        padding: 16px 8px 7px; border-bottom: 1px solid #3B3D38; margin-bottom: 4px;
+    }
+    body[data-theme="light"] .jiq-lib-group { border-bottom-color: #C9C6BA; }
+    .jiq-lib-item {
+        display: block; width: 100%; text-align: left; border: 0;
+        background: transparent; color: inherit; cursor: pointer;
+        padding: 9px 10px; border-radius: 8px; font-size: 12.5px;
+        font-family: inherit; line-height: 1.35;
+    }
+    .jiq-lib-item:hover { background: rgba(233, 232, 225, .07); }
+    body[data-theme="light"] .jiq-lib-item:hover { background: rgba(12, 22, 24, .05); }
+    .jiq-lib-item.is-on { color: #C7F23E; font-weight: 700; }
+    body[data-theme="light"] .jiq-lib-item.is-on { color: #5E7E12; }
+    .jiq-lib-empty { padding: 20px 10px; font-size: 12px; color: #7C878A; }
+
     /* ================================================================
        DIGITAL JOURNEY IQ - fragrance caterpillar funnel
        ================================================================ */
