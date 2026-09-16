@@ -63325,7 +63325,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else {
                     _grBody = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                               _grItems.map(function(it, i) {
-                                  var img = _tiqPosterCell(it.image || it.cover_url);
+                                  var img = _tiqPosterCell(it.image || it.cover_url, it.title);
                                   var storyUrl = it.book_url || it.url;
                                   var titleLine = storyUrl
                                       ? '<a href="' + _tiqEsc(storyUrl) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
@@ -63409,7 +63409,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 var wpRowsFor = function(items, sourceSlug) {
                     return (items || []).map(function(it, i) {
-                        var img = _tiqPosterCell(it.cover_url || it.image);
+                        var img = _tiqPosterCell(it.cover_url || it.image, it.title);
                         var storyUrl = it.story_url || it.url;
                         var titleLine = storyUrl
                             ? '<a href="' + _tiqEsc(storyUrl) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
