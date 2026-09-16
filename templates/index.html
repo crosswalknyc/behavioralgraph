@@ -47259,9 +47259,8 @@ https://www.instagram.com/p/..."></textarea>
                             <p id="jiqFragDeck"></p>
                             <div class="jiq-frag-kpis" id="jiqFragKpis"></div>
                         </div>
-                        <div class="jiq-frag-art">
-                            <img src="{{ url_for('static', filename='fragrance-journey-hero.png') }}" alt="">
-                        </div>
+                        <div class="jiq-frag-art" id="jiqFragArt"
+                             data-default-hero="{{ url_for('static', filename='fragrance-journey-hero.png') }}"></div>
                     </div>
                     <div class="jiq-frag-sec">
                         <div class="jiq-frag-num">01 The spine</div>
@@ -80445,6 +80444,7 @@ https://www.instagram.com/p/..."></textarea>
                             category: 'brands'
                         },
                         fragrance_shop_journey: _JIQ_FRAGRANCE_DATA,
+                        hero_image: '__JIQ_DEFAULT_HERO__',
                         facts: [
                             { label: 'Window', value: 'July 1, 2025 to June 30, 2026. Unique US accounts.' },
                             { label: 'The spine', value: '329,900,000 US accounts down to 187,429 who paid for a $95 and up bottle. The single biggest fall is learning a name at all: 3.9% get that far.' },
@@ -82547,7 +82547,8 @@ https://www.instagram.com/p/..."></textarea>
 
             if (_storyMode === 'fragrance_shop_journey') {
                 if (typeof renderJourneyIqFragrance === 'function') {
-                    renderJourneyIqFragrance(_pickClickstreamBlock('fragrance_shop_journey'));
+                    renderJourneyIqFragrance(_pickClickstreamBlock('fragrance_shop_journey'),
+                                             (fullRun && fullRun.meta) || meta);
                 }
             }
 
@@ -103560,9 +103561,12 @@ https://www.instagram.com/p/..."></textarea>
               '</div>';
         }
 
-        function renderJourneyIqFragrance(p) {
+        function renderJourneyIqFragrance(p, runMeta) {
             var d = (p && p.spine) ? p
                   : (typeof _JIQ_FRAGRANCE_DATA !== 'undefined' ? _JIQ_FRAGRANCE_DATA : null);
+            var fullMeta = runMeta
+                || (_jiqCurrentRun && (_jiqCurrentRun.meta || _jiqCurrentRun))
+                || {};
             if (!d) return;
             var card = document.getElementById('jiqFragCard');
             if (!card) return;
@@ -103585,6 +103589,27 @@ https://www.instagram.com/p/..."></textarea>
             var meta = document.getElementById('jiqFragMeta');
             if (meta && d.meta) {
                 meta.textContent = 'Purchase journey \u00b7 ' + (d.meta.window || '');
+            }
+
+            // Artwork. A run can name its own image; the baked fragrance
+            // read points at the bottle that way. Anything generated
+            // carries no image, and inheriting the fragrance photo on a
+            // sneaker journey would be worse than having none, so those
+            // draw the gradient-and-initials tile instead.
+            var art = document.getElementById('jiqFragArt');
+            if (art) {
+                var hero = (p && p.hero_image)
+                        || (d.meta && d.meta.hero_image)
+                        || (fullMeta && fullMeta.hero_image) || '';
+                if (hero === '__JIQ_DEFAULT_HERO__') {
+                    hero = art.getAttribute('data-default-hero') || '';
+                }
+                var subject = (fullMeta && (fullMeta.customer_brand || fullMeta.target_name)) || '';
+                art.innerHTML = hero
+                    ? '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">'
+                    : '<span class="jiq-frag-art-ini">'
+                        + _jiqFragEsc(_tiqFastInitials ? _tiqFastInitials(subject) : '') + '</span>';
+                art.classList.toggle('is-ini', !hero);
             }
             var lead = document.getElementById('jiqFragLead');
             if (lead && paid && paidBack) {
@@ -173556,6 +173581,14 @@ https://www.instagram.com/p/..."></textarea>
     .jiq-frag-art {
         position: relative; min-height: 260px;
         overflow: hidden; border-radius: 12px 0 0 12px;
+    }
+    .jiq-frag-art.is-ini {
+        background: linear-gradient(140deg, #24506B, #5B3E86 55%, #3B6B4A);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .jiq-frag-art-ini {
+        font-size: 72px; font-weight: 800; letter-spacing: -.04em;
+        color: rgba(233, 232, 225, .9);
     }
     .jiq-frag-art img {
         position: absolute; inset: 0; width: 100%; height: 100%;
