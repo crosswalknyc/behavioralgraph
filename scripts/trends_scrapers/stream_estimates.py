@@ -5890,10 +5890,16 @@ def fetch(only: Optional[set[str]] = None,
     # until it is new. Non-fatal by construction.
     try:
         from . import value_distinctness as _vd
+        # The ledger is keyed by SNAPSHOT date (the folder this run
+        # writes), which runs one ahead of the target date it reasons
+        # about. Keying the pass on the target date would hide
+        # yesterday's snapshot from the comparison, which is the one
+        # day that matters most.
+        _snap_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         _dz = _vd.enforce_snapshot(
             researched,
             _vd.ledger_to_per_item(_vd.load_history()),
-            target_date_iso,
+            _snap_iso,
             prev_items=((yesterday or {}).get('items') or {}),
             profiles=_load_rhythm_profiles())
         if _dz.get('moved') or _dz.get('spaced'):
