@@ -54989,6 +54989,9 @@ def api_synth_chat_approve():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
     # Prometheus mode gate (2026-09-03, Jenna): the approve step
     # confirms and queues a new profile build. 'analysis'-only users
     # cannot queue a build.
@@ -55589,6 +55592,43 @@ def _queue_health_blip_email(err, tb=None):
         tb=tb)
 
 
+@app.route('/api/brief-chat/funds', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/funds')
+def api_brief_chat_funds():
+    """Whether this session may use Prometheus right now.
+
+    The widget calls this on open so a $0 account is asked to buy
+    credits before they can type. Same decision as the ask-time gate.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    uname = (session.get('username') or (user or {}).get('username')
+             or '').strip()
+    try:
+        allowed, reason = _pm_has_funding(user, uname)
+    except Exception:
+        traceback.print_exc()
+        allowed, reason = False, 'no_funding'
+    if allowed:
+        return jsonify({
+            'success': True,
+            'allowed': True,
+            'reason': reason,
+            'no_funds': False,
+        })
+    return jsonify({
+        'success': True,
+        'allowed': False,
+        'reason': reason,
+        'no_funds': True,
+        'reply': NO_FUNDS_MESSAGE,
+        'top_up_url': '/wallet',
+        'top_up_label': 'Buy credits',
+    })
+
+
 @app.route('/api/brief-chat/health', methods=['GET'])
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
@@ -56082,10 +56122,9 @@ def _pm_access_gate(user):
 
 
 NO_FUNDS_MESSAGE = (
-    "Your account has no credits and no balance on file, so Prometheus "
-    "is paused for now. Add funds on the billing page, or ask your "
-    "admin to add credits or set your account to unlimited. The moment "
-    "funding lands, your next ask goes straight through.")
+    "Your balance is $0, so Prometheus is paused. Buy credits to keep "
+    "going. The moment funding lands, your next ask goes straight "
+    "through.")
 
 
 def _pm_has_funding(user, username, data=None):
@@ -56112,7 +56151,8 @@ def _pm_has_funding(user, username, data=None):
     try:
         import wallet as _w
     except Exception:
-        return True, 'wallet_unavailable'
+        traceback.print_exc()
+        return False, 'wallet_unavailable'
     try:
         if _w.is_unlimited(user) or bool(user.get('unlimited')):
             return True, 'unlimited'
@@ -56126,7 +56166,6 @@ def _pm_has_funding(user, username, data=None):
             return True, 'credits'
     except Exception:
         traceback.print_exc()
-        return True, 'credits_lookup_failed'
     try:
         if data is None:
             data = load_users()
@@ -56143,7 +56182,6 @@ def _pm_has_funding(user, username, data=None):
             return True, 'wallet'
     except Exception:
         traceback.print_exc()
-        return True, 'wallet_lookup_failed'
     return False, 'no_funding'
 
 
@@ -56169,6 +56207,8 @@ def _pm_funds_gate(user):
             'reply': NO_FUNDS_MESSAGE,
             'followups': [],
             'no_funds': True,
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy credits',
             'offer_deck': False, 'deck_angle': None})
     except Exception:
         traceback.print_exc()

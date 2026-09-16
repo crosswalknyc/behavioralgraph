@@ -21919,6 +21919,46 @@ https://www.instagram.com/p/..."></textarea>
         #prometheusBody {
             flex: 1; display: flex; flex-direction: column; min-height: 0;
             padding: 0; background: #15252A;
+            position: relative;
+        }
+        #prometheusFundsLock {
+            display: none;
+            position: absolute; inset: 0; z-index: 20;
+            background: rgba(12, 22, 24, 0.88);
+            align-items: center; justify-content: center;
+            padding: 28px 22px; text-align: center;
+        }
+        #prometheusFundsLock.pm-on { display: flex; }
+        #prometheusFundsLock .pm-funds-card {
+            max-width: 320px;
+        }
+        #prometheusFundsLock .pm-funds-title {
+            font-size: 16px; font-weight: 700; color: #E9E8E1;
+            line-height: 1.3; margin: 0 0 8px;
+        }
+        #prometheusFundsLock .pm-funds-sub {
+            font-size: 13px; color: #9AA09B; line-height: 1.45;
+            margin: 0 0 18px;
+        }
+        #prometheusFundsLock .pm-funds-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            background: #C7F23E; color: #0C1618; border: 0;
+            border-radius: 999px; padding: 0.55rem 1.25rem;
+            font-size: 13px; font-weight: 700; font-family: inherit;
+            cursor: pointer;
+        }
+        #prometheusFundsLock .pm-funds-btn:hover { filter: brightness(1.05); }
+        #prometheusWidget.pm-funds-locked .pm-composer,
+        #prometheusWidget.pm-funds-locked .pm-empty-chips {
+            pointer-events: none; opacity: 0.28;
+        }
+        body[data-theme="light"] #prometheusFundsLock {
+            background: rgba(233, 232, 225, 0.94);
+        }
+        body[data-theme="light"] #prometheusFundsLock .pm-funds-title { color: #0C1618; }
+        body[data-theme="light"] #prometheusFundsLock .pm-funds-sub { color: #5C6560; }
+        body[data-theme="light"] #prometheusFundsLock .pm-funds-btn {
+            background: #5E7E12; color: #E9E8E1;
         }
         #prometheusWidget #synthChatMessages {
             flex: 1 !important; overflow-y: auto !important;
@@ -22175,6 +22215,12 @@ https://www.instagram.com/p/..."></textarea>
             // messages (chips only render in the empty state).
             function _pmFillFromChip(el) {
                 try {
+                    if (window._pmFundsBlocked) {
+                        if (typeof window._pmCheckFundsOnOpen === 'function') {
+                            window._pmCheckFundsOnOpen();
+                        }
+                        return;
+                    }
                     var ex = (el && el.getAttribute('data-example')) || '';
                     var input = document.getElementById('synthChatInput');
                     if (!input || !ex) return;
@@ -22223,6 +22269,13 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div id="prometheusBody">
+                <div id="prometheusFundsLock" role="alertdialog" aria-label="Buy credits to use Prometheus">
+                    <div class="pm-funds-card">
+                        <div class="pm-funds-title">Buy credits to use Prometheus.</div>
+                        <div class="pm-funds-sub">Your balance is $0, so this chat stays paused until funding lands.</div>
+                        <button type="button" class="pm-funds-btn" onclick="goBuyMoreCredits()">Buy credits</button>
+                    </div>
+                </div>
                 <div id="synthChatMessages" style="flex: 1; overflow-y: auto; min-height: 260px;">
                                 <div class="brief-chat-empty pm-empty">
                                     <div class="pm-empty-title">Ask a question.</div>
@@ -71921,6 +71974,59 @@ https://www.instagram.com/p/..."></textarea>
                     });
                 }
             }
+            window._pmFundsBlocked = false;
+            window._pmSetFundsLock = function(blocked) {
+                window._pmFundsBlocked = !!blocked;
+                var lock = document.getElementById('prometheusFundsLock');
+                var w = document.getElementById('prometheusWidget');
+                var input = document.getElementById('synthChatInput');
+                var btn = document.getElementById('synthChatSubmitBtn');
+                if (w) {
+                    if (blocked) w.classList.add('pm-funds-locked');
+                    else w.classList.remove('pm-funds-locked');
+                }
+                if (lock) {
+                    if (blocked) lock.classList.add('pm-on');
+                    else lock.classList.remove('pm-on');
+                }
+                if (input) {
+                    input.disabled = !!blocked;
+                    input.placeholder = blocked
+                        ? 'Buy credits to use Prometheus'
+                        : 'Ask something else about this audience...';
+                }
+                if (btn) btn.disabled = !!blocked;
+            };
+            window._pmShowNoFundsReply = function(data) {
+                window._pmSetFundsLock(true);
+                var url = (data && data.top_up_url) || '/wallet';
+                var lbl = (data && data.top_up_label) || 'Buy credits';
+                var reply = (data && data.reply) ||
+                    'Your balance is $0. Buy credits to use Prometheus.';
+                if (typeof _synthChatPushTurnWithMeta === 'function') {
+                    _synthChatPushTurnWithMeta('agent', reply, {
+                        options: [{ label: lbl, chipAction: 'buy_credits', url: url }]
+                    });
+                }
+            };
+            window._pmCheckFundsOnOpen = function() {
+                var input = document.getElementById('synthChatInput');
+                var btn = document.getElementById('synthChatSubmitBtn');
+                if (input) input.disabled = true;
+                if (btn) btn.disabled = true;
+                fetch('/api/brief-chat/funds', { credentials: 'same-origin' })
+                    .then(function(r) {
+                        return r.ok ? r.json() : { allowed: false, no_funds: true };
+                    })
+                    .then(function(d) {
+                        if (d && d.allowed) {
+                            window._pmSetFundsLock(false);
+                            return;
+                        }
+                        window._pmSetFundsLock(true);
+                    })
+                    .catch(function() { window._pmSetFundsLock(true); });
+            };
             window.prometheusExpand = function() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!w) return;
@@ -71934,6 +72040,9 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack();
                 var m = _el('synthChatMessages');
                 if (m) m.scrollTop = m.scrollHeight;
+                if (typeof window._pmCheckFundsOnOpen === 'function') {
+                    window._pmCheckFundsOnOpen();
+                }
             };
             window.prometheusCollapse = function() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
@@ -72426,6 +72535,12 @@ https://www.instagram.com/p/..."></textarea>
         // chips whose text is already a complete ask (e.g. a status
         // pull needs no editing).
         function synthChatChipSend(text) {
+            if (window._pmFundsBlocked) {
+                if (typeof window._pmCheckFundsOnOpen === 'function') {
+                    window._pmCheckFundsOnOpen();
+                }
+                return;
+            }
             var input = document.getElementById('synthChatInput');
             if (!input) return;
             input.value = text;
@@ -75217,6 +75332,12 @@ https://www.instagram.com/p/..."></textarea>
                                    { label: 'No', send: 'No' } ] });
                     return 'done';
                 }
+                if (data && data.no_funds) {
+                    if (typeof window._pmShowNoFundsReply === 'function') {
+                        window._pmShowNoFundsReply(data);
+                    }
+                    return 'done';
+                }
                 if (!data || !_fr.r.ok || !data.success) {
                     console.error('[brief-chat] analyze reply not ok');
                     if (!data) {
@@ -75349,6 +75470,12 @@ https://www.instagram.com/p/..."></textarea>
                                    { label: 'No', send: 'No' } ] });
                     return;
                 }
+                if (data && data.no_funds) {
+                    if (typeof window._pmShowNoFundsReply === 'function') {
+                        window._pmShowNoFundsReply(data);
+                    }
+                    return;
+                }
                 if (data && data.success && data.clarify) {
                     // Fuzzy subject suggestions (2026-08-31): each is a
                     // confirm chip that binds a profile or a whole family
@@ -75439,6 +75566,12 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         async function synthChatSubmit() {
+            if (window._pmFundsBlocked) {
+                if (typeof window._pmCheckFundsOnOpen === 'function') {
+                    window._pmCheckFundsOnOpen();
+                }
+                return;
+            }
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
             var text = (input && input.value || '').trim();
@@ -75937,6 +76070,12 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatInflightController ? synthChatInflightController.signal : undefined);
                 var r = _fr.r;
                 var data = _fr.data;
+                if (data && data.no_funds) {
+                    if (typeof window._pmShowNoFundsReply === 'function') {
+                        window._pmShowNoFundsReply(data);
+                    }
+                    return;
+                }
                 if (data == null) {
                     console.error('[brief-chat] interpret reply unparseable');
                     _synthChatReportClientError('brief-chat/interpret',
