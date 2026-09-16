@@ -141243,6 +141243,7 @@ https://www.instagram.com/p/..."></textarea>
             var n = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
             if (/^SPOTIFY\s*:/.test(n)) return 'spotify';
             if (/^SIRIUSXM\s*:/.test(n) || /^SIRIUS XM\s*:/.test(n)) return 'siriusxm';
+            if (/^AMAZON\s*MUSIC\s*:/.test(n)) return 'amazon';
             return '';
         }
 
@@ -141250,6 +141251,7 @@ https://www.instagram.com/p/..."></textarea>
             var v = String(opt || '').toLowerCase();
             if (v === 'spotify channels') return 'Spotify Channels';
             if (v === 'siriusxm channels' || v === 'sirius xm channels') return 'SiriusXM Channels';
+            if (v === 'amazon music channels' || v === 'amazonmusic channels') return 'Amazon Music Channels';
             return 'Channels';
         }
 
@@ -141259,6 +141261,7 @@ https://www.instagram.com/p/..."></textarea>
                 var kind = streamingMusicChannelKind(item && item.name);
                 if (slice === 'spotify channels') return kind === 'spotify';
                 if (slice === 'siriusxm channels' || slice === 'sirius xm channels') return kind === 'siriusxm';
+                if (slice === 'amazon music channels' || slice === 'amazonmusic channels') return kind === 'amazon';
                 return !kind;
             });
         }
@@ -141665,8 +141668,8 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;
-                // STREAMING/MUSIC default: platforms only (SPOTIFY, SIRIUSXM, VEVO, ...).
-                // Channel rows (SPOTIFY: ..., SIRIUSXM: ...) live under the Channels dropdown.
+                // STREAMING/MUSIC default: platforms only (SPOTIFY, SIRIUSXM, AMAZON MUSIC, VEVO, ...).
+                // Channel rows (SPOTIFY: ..., SIRIUSXM: ..., AMAZON MUSIC: ...) live under the Channels dropdown.
                 const listSource = isStreamingMusicCategory(cat)
                     ? filterStreamingMusicItems(filteredItems, 'all')
                     : filteredItems;
@@ -141727,7 +141730,7 @@ https://www.instagram.com/p/..."></textarea>
                 
                 // Check if this is STREAMING/MUSIC for the Channels dropdown
                 const isStreamingMusic = isStreamingMusicCategory(cat);
-                const streamingMusicSliceOptions = ['all', 'spotify channels', 'siriusxm channels'];
+                const streamingMusicSliceOptions = ['all', 'spotify channels', 'siriusxm channels', 'amazon music channels'];
                 
                 // Check if this is TALENT for slice dropdown
                 const isTalent = cat.toUpperCase() === 'TALENT';
@@ -141923,6 +141926,7 @@ https://www.instagram.com/p/..."></textarea>
                     const _live = [];
                     if (items.some(it => streamingMusicChannelKind(it.name) === 'spotify')) _live.push('spotify channels');
                     if (items.some(it => streamingMusicChannelKind(it.name) === 'siriusxm')) _live.push('siriusxm channels');
+                    if (items.some(it => streamingMusicChannelKind(it.name) === 'amazon')) _live.push('amazon music channels');
                     streamingMusicSliceOptions.length = 0; streamingMusicSliceOptions.push('all', ..._live);
                 }
                 if (isSports) {
