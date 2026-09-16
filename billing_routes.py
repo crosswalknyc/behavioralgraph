@@ -2340,6 +2340,73 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
               f"(non-fatal): {e}")
 
 
+def _stripe_ids_from_object(obj: dict) -> set:
+    """Stripe ids that all name the SAME payment.
+
+    Hosted Checkout (Add Funds + payment links) fires both
+    checkout.session.completed (cs_...) and payment_intent.succeeded
+    (pi_...). Crediting on both ids of one payment doubles the wallet.
+    """
+    ids = set()
+    if not isinstance(obj, dict):
+        return ids
+    oid = str(obj.get("id") or "").strip()
+    if oid:
+        ids.add(oid)
+    pi = obj.get("payment_intent")
+    if isinstance(pi, dict):
+        pid = str(pi.get("id") or "").strip()
+        if pid:
+            ids.add(pid)
+    elif isinstance(pi, str) and pi.strip():
+        ids.add(pi.strip())
+    md = obj.get("metadata") or {}
+    if isinstance(md, dict):
+        for k in ("checkout_session_id", "cs_id"):
+            v = str(md.get(k) or "").strip()
+            if v:
+                ids.add(v)
+    return ids
+
+
+def _credited_stripe_ids(rec: dict) -> set:
+    ids = set()
+    for t in list((rec or {}).get("wallet_transactions") or []):
+        if not isinstance(t, dict):
+            continue
+        if str(t.get("kind") or "") not in ("topup", "auto_reload"):
+            continue
+        for k in ("stripe_ref", "stripe_payment_intent",
+                  "stripe_checkout_session"):
+            v = str(t.get(k) or "").strip()
+            if v:
+                ids.add(v)
+    return ids
+
+
+def _already_credited(rec: dict, refs) -> bool:
+    refs = {str(x).strip() for x in (refs or set()) if str(x).strip()}
+    if not refs:
+        return False
+    return bool(refs & _credited_stripe_ids(rec))
+
+
+def _stamp_related_stripe_ids(txn: dict, refs, *, primary: str):
+    """Keep the sibling Stripe id on the txn so the other webhook
+    can see this payment already landed."""
+    if not isinstance(txn, dict):
+        return
+    primary = str(primary or "").strip()
+    for rid in refs or []:
+        r = str(rid or "").strip()
+        if not r or r == primary:
+            continue
+        if r.startswith("pi_") and not txn.get("stripe_payment_intent"):
+            txn["stripe_payment_intent"] = r
+        elif r.startswith("cs_") and not txn.get("stripe_checkout_session"):
+            txn["stripe_checkout_session"] = r
+
+
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
     md = obj.get("metadata") or {}
@@ -2363,29 +2430,61 @@ def _handle_checkout_session_completed(event: dict):
     ref = str(obj.get("id") or event.get("id") or "")
     md = obj.get("metadata") or {}
     desc = str(md.get("description") or "Wallet top-up").strip()
+    refs = _stripe_ids_from_object(obj)
+    if ref:
+        refs.add(ref)
 
     # Capture the post-mutation snapshot for the receipt email so we
     # report the fresh balance (not a stale pre-mutation read).
-    credited = {"new_balance": 0.0, "rec_snapshot": None}
+    credited = {"new_balance": 0.0, "rec_snapshot": None, "skipped": False}
 
     def _apply(rec):
-        wallet.apply_wallet_topup(
-            rec, amt, description=desc, stripe_ref=ref, kind="topup")
         # If a card was captured in this checkout, persist the id so
         # future auto-reload works without a separate SetupIntent
         # (this is why we set setup_future_usage='off_session' when
-        # creating the session).
+        # creating the session). Do this even when the dollars already
+        # landed via payment_intent.succeeded.
         pi = obj.get("payment_intent")
         if isinstance(pi, dict) and pi.get("payment_method"):
             pm_id = str(pi.get("payment_method") or "")
             if pm_id and not rec.get("stripe_payment_method_id"):
                 rec["stripe_payment_method_id"] = pm_id
+        if _already_credited(rec, refs):
+            credited["skipped"] = True
+            credited["new_balance"] = float(
+                rec.get("wallet_balance_usd") or 0.0)
+            credited["rec_snapshot"] = dict(rec)
+            # PI landed first: stamp this session id on that txn so
+            # a later lookup by cs_ still matches one payment.
+            for t in list(rec.get("wallet_transactions") or []):
+                if not isinstance(t, dict):
+                    continue
+                if str(t.get("kind") or "") not in ("topup", "auto_reload"):
+                    continue
+                t_ids = {
+                    str(t.get("stripe_ref") or ""),
+                    str(t.get("stripe_payment_intent") or ""),
+                    str(t.get("stripe_checkout_session") or ""),
+                }
+                if t_ids & refs:
+                    _stamp_related_stripe_ids(
+                        t, refs,
+                        primary=str(t.get("stripe_ref") or ""))
+                    break
+            return True
+        txn = wallet.apply_wallet_topup(
+            rec, amt, description=desc, stripe_ref=ref, kind="topup")
+        _stamp_related_stripe_ids(txn, refs, primary=ref)
         credited["new_balance"] = float(
             rec.get("wallet_balance_usd") or 0.0)
         credited["rec_snapshot"] = dict(rec)
         return True
 
     _mutate_billing_subject(subject_kind, subject_key, _apply)
+    if credited["skipped"]:
+        print(f"[billing] webhook skip duplicate ${amt:.2f} for "
+              f"{subject_kind}:{subject_key} (session={ref})")
+        return
     print(f"[billing] webhook credited ${amt:.2f} to "
           f"{subject_kind}:{subject_key} (session={ref})")
 
@@ -2407,8 +2506,13 @@ def _handle_payment_intent_succeeded(event: dict):
     """Fires on auto-reload charges + admin custom charges + Hosted
     Checkout follow-ups. The admin_custom_charge route already credits
     the wallet inline on success; this webhook is a belt-and-suspenders
-    backstop. Because we key idempotency off Stripe event id AND
-    stripe_ref, a duplicate credit is avoided.
+    backstop.
+
+    Idempotency is by Stripe payment identity, not event id: a
+    checkout.session.completed (cs_...) and a payment_intent.succeeded
+    (pi_...) for the same Checkout are one payment. Match either id
+    (and the sibling ids stamped on the txn) inside the CAS mutator
+    so a concurrent pair cannot both credit.
 
     Emails (buyer receipt + internal notice, Jenna 2026-09-09):
     fire from HERE for auto_reload / admin_custom_charge /
@@ -2432,57 +2536,65 @@ def _handle_payment_intent_succeeded(event: dict):
     if amt <= 0:
         return
 
-    # Idempotency by stripe_ref: if we already logged this PI id as a
-    # topup, skip. The prior admin_custom_charge inline write leaves
-    # exactly this ref on the txn row.
-    ref = str(obj.get("id") or "")
-    txns = list(subject.get("wallet_transactions") or [])
-    already = any(
-        str(t.get("stripe_ref") or "") == ref
-        and str(t.get("kind") or "") in ("topup", "auto_reload")
-        for t in txns)
-
     import wallet  # type: ignore
     kind = "auto_reload" if purpose == "auto_reload" else "topup"
+    ref = str(obj.get("id") or "")
+    refs = _stripe_ids_from_object(obj)
+    if ref:
+        refs.add(ref)
 
     # Post-mutation snapshot for the receipt email (fresh balance).
-    credited = {"new_balance": 0.0, "rec_snapshot": None}
+    credited = {"new_balance": 0.0, "rec_snapshot": None, "skipped": False}
 
-    if not already:
-        def _apply(rec):
-            wallet.apply_wallet_topup(
-                rec, amt,
-                description=str(md.get("description")
-                                or "Card charge"),
-                stripe_ref=ref, kind=kind)
+    def _apply(rec):
+        if _already_credited(rec, refs):
+            credited["skipped"] = True
             credited["new_balance"] = float(
                 rec.get("wallet_balance_usd") or 0.0)
             credited["rec_snapshot"] = dict(rec)
-            return True
+            return False
+        txn = wallet.apply_wallet_topup(
+            rec, amt,
+            description=str(md.get("description")
+                            or "Card charge"),
+            stripe_ref=ref, kind=kind)
+        _stamp_related_stripe_ids(txn, refs, primary=ref)
+        credited["new_balance"] = float(
+            rec.get("wallet_balance_usd") or 0.0)
+        credited["rec_snapshot"] = dict(rec)
+        return True
 
-        _mutate_billing_subject(subject_kind, subject_key, _apply)
+    _mutate_billing_subject(subject_kind, subject_key, _apply)
+    if credited["skipped"]:
+        print(f"[billing] webhook skip duplicate ${amt:.2f} for "
+              f"{subject_kind}:{subject_key} (pi={ref}, kind={kind})")
+    else:
         print(f"[billing] webhook confirmed ${amt:.2f} to "
               f"{subject_kind}:{subject_key} "
               f"(pi={ref}, kind={kind})")
-    else:
-        # Inline path already credited; use the current subject
-        # balance as the "post-credit" balance for the receipt.
+    if credited["skipped"] and credited["rec_snapshot"] is None:
+        # Inline path already credited before this handler ran;
+        # use the current subject balance for the receipt.
         credited["new_balance"] = float(
             subject.get("wallet_balance_usd") or 0.0)
         credited["rec_snapshot"] = subject
 
-    # Emails (Jenna 2026-09-09). SKIP wallet_topup here to avoid
-    # double-emailing on Hosted Checkout (session.completed fires the
-    # emails first). SKIP admin_custom_charge here because the inline
-    # admin route sends the emails on the acting-admin thread with
-    # exact card + user context; the webhook backstop leaves the
-    # user without a duplicate email but still ensures internal
-    # visibility if the inline send fails via its own catch.
-    if purpose in ("auto_reload", "monthly_invoice"):
-        # Translate 'topup' -> the exact kind label the email module
-        # renders in the header line.
-        email_kind = ("auto_reload" if purpose == "auto_reload"
-                      else "monthly_invoice")
+    # Emails (Jenna 2026-09-09). Whoever actually lands the dollars
+    # sends the receipt. Hosted Checkout used to credit on BOTH
+    # payment_intent.succeeded and checkout.session.completed, so
+    # wallet_topup emails were skipped here to avoid a double send.
+    # Those two events are now one payment: if this handler credited,
+    # it emails; if the checkout handler already credited, we skip.
+    # SKIP admin_custom_charge because the inline admin route sends
+    # the emails on the acting-admin thread.
+    if (not credited["skipped"]
+            and purpose in ("auto_reload", "monthly_invoice",
+                            "wallet_topup")):
+        email_kind = {
+            "auto_reload": "auto_reload",
+            "monthly_invoice": "monthly_invoice",
+            "wallet_topup": "topup",
+        }[purpose]
         _emit_topup_emails_safe(
             subject_kind=subject_kind,
             subject_key=subject_key,
