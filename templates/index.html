@@ -172812,6 +172812,18 @@ https://www.instagram.com/p/..."></textarea>
         background: rgba(142, 63, 168, 0.08) !important;
         color: #8E3FA8 !important;
     }
+    /* Person cards carry the audience read as a plain line, not a chip;
+       the card is already the container. That carve-out has been in the
+       stylesheet since these cards shipped, but the chip recolour used
+       !important and overrode it, which put a pill back around every
+       one of them. Restore it, in both themes. */
+    #trendsIQView .tiq-person-mentions .tiq-audience-chip,
+    body[data-theme="light"] #trendsIQView .tiq-person-mentions .tiq-audience-chip {
+        background: transparent !important;
+        border-color: transparent !important;
+        border-width: 0 !important;
+        padding: 0 !important;
+    }
     /* NEW sits on the page rather than on a chip, so Dusk has nothing to
        sit against and reads at roughly 1.9:1. It takes the body grey. */
     body[data-theme="light"] #trendsIQView .tiq-sheet-delta.new {
