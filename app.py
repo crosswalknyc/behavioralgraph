@@ -56134,7 +56134,6 @@ def _pm_has_funding(user, username, data=None):
     unless they've been set to unlimited").
 
     Returns (allowed, reason). Allowed when ANY funding source is open:
-      * staff: role == super_admin (ops accounts run the billing desk),
       * unlimited: personal credits == -1, the admin 'unlimited' flag,
         or an unlimited company pool reachable by this user
         (check_user_credits returns -1),
@@ -56144,10 +56143,11 @@ def _pm_has_funding(user, username, data=None):
         company-shared wallet) can absorb one metered answer at the
         configured rate - covers prepaid balance, auto-reload with a
         card on file, and monthly-invoice room.
+    Role is not a free pass. Liz (super_admin, $0, 0 credits) still
+    ran Prometheus until this check treated her like any other
+    drained account (Jenna 2026-09-16).
     Blocked only when every source above is exhausted."""
     user = user or {}
-    if str(user.get('role') or '').strip() == 'super_admin':
-        return True, 'super_admin'
     try:
         import wallet as _w
     except Exception:
