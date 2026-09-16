@@ -2019,24 +2019,82 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
             return user, "user", ""
         source = str(user.get("billing_source") or "user").strip().lower()
         if source != "company":
-            return user, "user", _user_key(user)
+            return user, "user", _user_key(user, users_data)
         company_name = str(user.get("company") or "").strip()
         if not company_name:
-            return user, "user", _user_key(user)
+            return user, "user", _user_key(user, users_data)
         companies = users_data.get("companies") or {}
         company = companies.get(company_name)
         if not isinstance(company, dict):
-            return user, "user", _user_key(user)
+            return user, "user", _user_key(user, users_data)
         return company, "company", company_name
     except Exception:
-        return user, "user", _user_key(user) if isinstance(user, dict) else ""
+        return user, "user", (
+            _user_key(user, users_data) if isinstance(user, dict) else "")
 
 
-def _user_key(user: dict) -> str:
-    """Best-effort primary key for a user record (email > username)."""
+def lookup_user(users_data: dict, key: str):
+    """Resolve a user record from a subject_key that may be the
+    users.json dict key, an email, or a username field.
+
+    Login keys are short usernames (`vsanders`). `_user_key` used to
+    return email first, so payment links and Stripe metadata minted
+    before 2026-09-15 stored `vernon.sanders327@gmail.com`. Checkout
+    then did users.get(email) and 404'd. Accept all three spellings
+    and return the canonical dict key.
+
+    Returns (canonical_key, user_dict) or (None, None).
+    """
+    users = (users_data or {}).get("users") if isinstance(
+        users_data, dict) else None
+    raw = str(key or "").strip()
+    if not raw or not isinstance(users, dict):
+        return None, None
+    rec = users.get(raw)
+    if isinstance(rec, dict):
+        return raw, rec
+    fold = raw.lower()
+    email_hit = None
+    for k, u in users.items():
+        if not isinstance(u, dict):
+            continue
+        if str(k).strip().lower() == fold:
+            return k, u
+        if str(u.get("username") or "").strip().lower() == fold:
+            return k, u
+        if str(u.get("email") or "").strip().lower() == fold:
+            email_hit = (k, u)
+    if email_hit:
+        return email_hit
+    return None, None
+
+
+def _user_key(user: dict, users_data: dict = None) -> str:
+    """Return the key in users_data['users'] for this record.
+
+    The dict key (login username) is the identity. Email is only a
+    fallback when the record cannot be found in the map. Never prefer
+    email over the live key: every dashboard user is keyed by a short
+    username and a different email (vsanders /
+    vernon.sanders327@gmail.com, 2026-09-15).
+    """
     if not isinstance(user, dict):
         return ""
-    return str(user.get("email") or user.get("username") or "")
+    users = (users_data or {}).get("users") if isinstance(
+        users_data, dict) else None
+    if isinstance(users, dict):
+        for k, u in users.items():
+            if u is user:
+                return str(k)
+        email = str(user.get("email") or "").strip()
+        uname_field = str(user.get("username") or "").strip()
+        for candidate in (uname_field, email):
+            if not candidate:
+                continue
+            found_key, _rec = lookup_user({"users": users}, candidate)
+            if found_key:
+                return found_key
+    return str(user.get("username") or user.get("email") or "")
 
 
 def company_billing_admins(company_name: str, users_data: dict) -> list:
@@ -2469,7 +2527,7 @@ __all__ = [
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
-    "resolve_billing_subject", "company_billing_admins",
+    "resolve_billing_subject", "lookup_user", "company_billing_admins",
     "company_members", "iter_paying_subjects",
     "user_can_spend_from_company", "user_spend_scope_summary",
     "SpendNotAuthorizedError",

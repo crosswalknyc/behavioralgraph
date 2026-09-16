@@ -231,15 +231,25 @@ def validate(token: str):
 
 
 def list_for_subject(subject_kind: str, subject_key: str,
-                     include_dead: bool = False) -> list:
-    """All links for one subject, newest first."""
+                     include_dead: bool = False,
+                     also_keys=None) -> list:
+    """All links for one subject, newest first.
+
+    `also_keys` accepts extra identities for the same subject
+    (login username + email). Links minted before 2026-09-15 stored
+    email as subject_key while users.json is keyed by username.
+    """
+    keys = {str(subject_key or "")}
+    for extra in (also_keys or []):
+        if extra:
+            keys.add(str(extra))
     out = []
     for rec in (_read().get("links") or {}).values():
         if not isinstance(rec, dict):
             continue
         if rec.get("subject_kind") != subject_kind:
             continue
-        if str(rec.get("subject_key") or "") != str(subject_key or ""):
+        if str(rec.get("subject_key") or "") not in keys:
             continue
         if not include_dead:
             exp = _parse_iso(str(rec.get("expires_at") or ""))

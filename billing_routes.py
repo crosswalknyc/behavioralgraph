@@ -115,6 +115,10 @@ def _resolve_caller_billing_subject():
         u, data)
     billed_via_company = (subject_kind == "company")
     company_name = subject_key if billed_via_company else ""
+    if not billed_via_company:
+        # Session username is the users.json key. Never let an email
+        # from _user_key become the persist / webhook identity.
+        subject_key = uname
     if billed_via_company:
         viewer_is_admin = bool(u.get("company_billing_admin"))
     else:
@@ -965,7 +969,10 @@ def _mutate_target_user(target_username: str, mutator):
     outcome = {"ok": False, "msg": ""}
 
     def _apply(data):
-        u = (data.get("users") or {}).get(target_username)
+        users = data.get("users") or {}
+        u = users.get(target_username)
+        if not u:
+            _found_key, u = _lookup_user_record(data, target_username)
         if not u:
             outcome["msg"] = "user_not_found"
             return None
@@ -2065,6 +2072,40 @@ def _find_user_by_customer_id(customer_id: str):
     return None, None
 
 
+def _lookup_user_record(data: dict, key: str):
+    """Find a user by users.json key, email, or username field.
+
+    Payment links minted before 2026-09-15 stored email as
+    subject_key. Checkout must still resolve those to the login key.
+    Prefers wallet.lookup_user; falls back inline so a test stub
+    that omitted the helper still behaves.
+    """
+    import wallet  # type: ignore
+    fn = getattr(wallet, "lookup_user", None)
+    if callable(fn):
+        found_key, rec = fn(data, key)
+        if found_key and isinstance(rec, dict):
+            return found_key, rec
+    users = (data or {}).get("users") or {}
+    raw = str(key or "").strip()
+    if not raw:
+        return None, None
+    rec = users.get(raw)
+    if isinstance(rec, dict):
+        return raw, rec
+    fold = raw.lower()
+    for k, u in users.items():
+        if not isinstance(u, dict):
+            continue
+        if str(k).strip().lower() == fold:
+            return k, u
+        if str(u.get("email") or "").strip().lower() == fold:
+            return k, u
+        if str(u.get("username") or "").strip().lower() == fold:
+            return k, u
+    return None, None
+
+
 def _find_user_by_event(event: dict):
     """Try to locate the target user from a webhook event. Preference
     order:
@@ -2076,9 +2117,9 @@ def _find_user_by_event(event: dict):
     md = obj.get("metadata") or {}
     uname = str(md.get("dashboard_username") or "").strip()
     if uname:
-        users = (load_users() or {}).get("users") or {}
-        if uname in users:
-            return uname, users[uname]
+        found_key, rec = _lookup_user_record(load_users() or {}, uname)
+        if found_key and rec:
+            return found_key, rec
     cus_id = str(obj.get("customer") or "")
     if cus_id:
         return _find_user_by_customer_id(cus_id)
@@ -2118,9 +2159,9 @@ def _find_subject_by_event(event: dict):
         if isinstance(c, dict):
             return "company", key, c, data
     if kind == "user" and key:
-        u = (data.get("users") or {}).get(key)
+        found_key, u = _lookup_user_record(data, key)
         if isinstance(u, dict):
-            return "user", key, u, data
+            return "user", found_key, u, data
 
     # Customer id fallback: check companies first.
     cus_id = str(obj.get("customer") or "")
@@ -2853,7 +2894,8 @@ def admin_list_payment_links(target_username):
     base = _dashboard_base_url()
     links = payment_links.list_for_subject(
         ctx["subject_kind"], ctx["subject_key"],
-        include_dead=include_dead)
+        include_dead=include_dead,
+        also_keys=[ctx.get("uname"), ctx.get("email")])
     return jsonify({
         "success": True,
         "display_name": ctx["display_name"],
@@ -2906,8 +2948,16 @@ def admin_email_payment_link(target_username):
         if not rec:
             return jsonify({"error": f"link_{reason}"}), 400
         # A token must belong to the user it is being emailed to.
+        # Accept username or email: links minted before 2026-09-15
+        # stored email as subject_key.
+        allowed_keys = {
+            str(ctx.get("subject_key") or ""),
+            str(ctx.get("uname") or ""),
+            str(ctx.get("email") or ""),
+        }
+        allowed_keys.discard("")
         if (rec.get("subject_kind") != ctx["subject_kind"]
-                or str(rec.get("subject_key")) != str(ctx["subject_key"])):
+                or str(rec.get("subject_key") or "") not in allowed_keys):
             return jsonify({"error": "link_subject_mismatch"}), 400
     else:
         resp = admin_create_payment_link(target_username)
@@ -3061,7 +3111,10 @@ def public_pay_checkout(token):
         cust_name = subject_key
         cust_email = str(subject.get("billing_email") or "")
     else:
-        subject = (data.get("users") or {}).get(subject_key) or {}
+        found_key, subject = _lookup_user_record(data, subject_key)
+        if not found_key or not subject:
+            return jsonify({"error": "account_not_found"}), 404
+        subject_key = found_key
         cust_name = (f"{subject.get('first_name', '')} "
                      f"{subject.get('last_name', '')}").strip() or subject_key
         cust_email = str(subject.get("email") or "")
