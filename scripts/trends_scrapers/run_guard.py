@@ -415,3 +415,85 @@ def check_baseline_share(summary: dict[str, Any],
     except Exception as e:
         logger.warning("run_guard: provenance share check failed: %s", e)
         return None
+
+
+# Chi-square on 9 degrees of freedom. 16.92 is p=0.05 and 21.67 is
+# p=0.01; alert at the looser bound so a real drift is caught while a
+# single unlucky night is not.
+DIGIT_CHISQ_ALERT = float(os.environ.get("TRENDS_DIGIT_CHISQ_ALERT", "21.67"))
+DIGIT_ZERO_MIN_PCT = float(os.environ.get("TRENDS_DIGIT_ZERO_MIN_PCT", "7.0"))
+
+
+def check_last_digit_distribution(values,
+                                  *,
+                                  chisq_alert: float = DIGIT_CHISQ_ALERT,
+                                  zero_min_pct: float = DIGIT_ZERO_MIN_PCT,
+                                  ) -> Optional[dict]:
+    """Alert when the audience numbers stop looking counted.
+
+    A real count ends in each digit about a tenth of the time. An
+    earlier build forced every value off zero to avoid looking round,
+    which left zero unused across the whole corpus. A client analyst
+    found it, because a missing digit is a far louder signal than the
+    roundness it was hiding.
+
+    Anything that rewrites values in bulk can reintroduce it by
+    accident, and a uniqueness pass is the likeliest culprit, since
+    the cheapest way to make values distinct is to skip digits. This
+    watches for that. Returns the histogram and chi-square, or None if
+    there was nothing to measure.
+    """
+    try:
+        counts = [0] * 10
+        n = 0
+        for v in values:
+            if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+                continue
+            counts[v % 10] += 1
+            n += 1
+        # Below a few thousand values the test is too noisy to act on.
+        if n < 2_000:
+            logger.info("run_guard: only %d values, skipping digit check", n)
+            return None
+
+        expected = n / 10.0
+        chisq = sum((c - expected) ** 2 / expected for c in counts)
+        zero_pct = 100.0 * counts[0] / n
+        logger.info("run_guard: last-digit chi-square %.2f on 9 df, "
+                     "zeros %.2f%% of %d values", chisq, zero_pct, n)
+
+        if chisq > chisq_alert or zero_pct < zero_min_pct:
+            spread = "\n".join(
+                "  ends in %d : %6d  %5.2f%%" % (d, counts[d],
+                                                 100.0 * counts[d] / n)
+                for d in range(10))
+            send_alert(
+                "last_digit_distribution",
+                "Trends IQ: the audience numbers have stopped looking "
+                "counted",
+                "The last digit of every audience number on the board "
+                "should be evenly spread, because a real count is as "
+                "likely to end in one digit as another.\n\n"
+                f"{spread}\n\n"
+                f"  values measured : {n}\n"
+                f"  chi-square      : {chisq:.2f} on 9 df "
+                f"(alerts above {chisq_alert:.2f})\n"
+                f"  ending in zero  : {zero_pct:.2f}% "
+                f"(alerts below {zero_min_pct:.1f}%)\n\n"
+                "An uneven spread means something rewrote the numbers "
+                "in a way that favours some endings over others. The "
+                "usual cause is a pass that nudges values to make them "
+                "distinct and skips certain digits while doing it. "
+                "Numbers that avoid an ending are easier for an "
+                "outside reader to spot than the roundness such a rule "
+                "is meant to prevent.\n\n"
+                "  python3 scripts/test_last_digit_distribution.py\n",
+            )
+
+        return {'chisq': round(chisq, 2),
+                'zero_pct': round(zero_pct, 2),
+                'counts': counts,
+                'n': n}
+    except Exception as e:
+        logger.warning("run_guard: last-digit check failed: %s", e)
+        return None

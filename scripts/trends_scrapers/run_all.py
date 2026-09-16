@@ -639,6 +639,27 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: provenance share check crashed "
                                "(non-fatal)")
 
+        # A bulk rewrite can quietly make the numbers stop looking
+        # counted. The cheapest way to force values apart is to skip
+        # digits, and an earlier build did exactly that to avoid round
+        # numbers, leaving zero unused corpus-wide until an outside
+        # reader spotted the gap.
+        try:
+            from scripts.trends_scrapers.run_guard import (
+                check_last_digit_distribution)
+            import boto3 as _b3
+            _blob = _b3.client('s3').get_object(
+                Bucket='dashboard-inputs',
+                Key='trends_iq_snapshots/latest/stream_estimates.json'
+            )['Body'].read()
+            _items = (json.loads(_blob).get('items') or {})
+            check_last_digit_distribution(
+                v.get('us_estimate') for v in _items.values()
+                if isinstance(v, dict))
+        except Exception:
+            logging.exception("run_all: last-digit check crashed "
+                               "(non-fatal)")
+
     _write_index(results)
 
     # ------------------------------------------------------------------
