@@ -229,6 +229,21 @@ def write_snapshot(source: str, payload: dict, *,
     payload.setdefault('source', source)
     payload['fetched_at'] = now.isoformat()
 
+    # Backstop for the 60-day distinctness rule (Jenna 2026-09-15). The
+    # estimator already applies it in the value assignment; enforcing it
+    # again here means a snapshot cannot repeat a reading no matter who
+    # composed it, including a one-off repair that merges keys forward
+    # by hand. That is how 12,467 keys came back as their predecessor's
+    # integer on 2026-09-15. Idempotent, so the second application on a
+    # clean payload changes nothing, and never raises.
+    if source == 'stream_estimates' and isinstance(payload.get('items'), dict):
+        try:
+            from . import value_distinctness as _vd
+            _vd.enforce_on_payload(payload, now.strftime('%Y-%m-%d'))
+        except Exception:
+            logger.exception('stream_estimates: distinctness backstop '
+                             'skipped (non-fatal)')
+
     body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     s3 = _s3_client()
 

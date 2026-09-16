@@ -5881,6 +5881,30 @@ def fetch(only: Optional[set[str]] = None,
         logger.exception("stream_estimates: carried-forward day walk "
                           "failed (non-fatal)")
 
+    # No item repeats a reading it already holds inside its own
+    # trailing 60 days (Jenna 2026-09-15). The walk above only ever
+    # compared against yesterday, so a value was free to land back on
+    # an older one, and a stationary rhythm around a fixed level does
+    # exactly that. This gives the assignment the item's own ledger to
+    # check against and moves a colliding reading along the same curve
+    # until it is new. Non-fatal by construction.
+    try:
+        from . import value_distinctness as _vd
+        _dz = _vd.enforce_snapshot(
+            researched,
+            _vd.ledger_to_per_item(_vd.load_history()),
+            target_date_iso,
+            prev_items=((yesterday or {}).get('items') or {}),
+            profiles=_load_rhythm_profiles())
+        if _dz.get('moved') or _dz.get('spaced'):
+            logger.info(
+                "stream_estimates: 60-day distinctness moved %d "
+                "reading(s), spaced %d band-limited, for %s",
+                _dz['moved'], _dz['spaced'], target_date_iso)
+    except Exception:
+        logger.exception("stream_estimates: 60-day distinctness pass "
+                          "failed (non-fatal)")
+
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
                                      today_iso=target_date_iso)
