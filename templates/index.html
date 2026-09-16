@@ -79961,7 +79961,19 @@ https://www.instagram.com/p/..."></textarea>
                     picker.innerHTML = opts.join('');
 
                     var combined = visibleRuns.concat(visibleArchived);
-                    var keyToLoad = preferredKey || (combined[0] && combined[0].key);
+                    // Opening view is the fragrance purchase journey. Only
+                    // when the caller did not ask for something specific and
+                    // the option is actually in this user's list, since the
+                    // demo cards only render for allow-all users. Everyone
+                    // else still opens on their first run.
+                    var JIQ_DEFAULT_KEY = '__demo_fragrance_tiktok__';
+                    var hasDefault = false;
+                    for (var _o = 0; _o < picker.options.length; _o++) {
+                        if (picker.options[_o].value === JIQ_DEFAULT_KEY) { hasDefault = true; break; }
+                    }
+                    var keyToLoad = preferredKey
+                        || (hasDefault ? JIQ_DEFAULT_KEY : null)
+                        || (combined[0] && combined[0].key);
                     if (keyToLoad) {
                         picker.value = keyToLoad;
                         onJourneyIqRunPicked(keyToLoad);
