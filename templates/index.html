@@ -63764,7 +63764,10 @@ https://www.instagram.com/p/..."></textarea>
         // are donated. Anything unknown appends at the end. Paramount+ and
         // Peacock (2026-09-04) sit with the major general-entertainment
         // platforms, ahead of ESPN+ and the premium-niche tail.
-        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz'];
+        // starz_amazon sits directly after starz so the two Starz reads
+        // read together. Anything not listed here falls through in
+        // payload order, which is how both of these ended up after AMC+.
+        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz', 'starz_amazon', 'amcplus'];
 
         function renderTIQStreaming(streaming) {
             var allKeys = Object.keys(streaming || {});
