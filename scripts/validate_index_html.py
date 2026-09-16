@@ -508,3 +508,4 @@ if __name__ == "__main__":
 # (feat/profile-family-grouping 2026-09-08 - data-cut family sync + audit)
 # (fix/bpiq-superadmin-journeys 2026-09-08 - super_admin resolves to '*')
 # (title-lookup-tool 2026-09-14 - StreamScout 19-platform identifier tool, PR #75)
+# (audible-platform 2026-09-16 - StreamScout #20 Audible: direct + via-Amazon links)
