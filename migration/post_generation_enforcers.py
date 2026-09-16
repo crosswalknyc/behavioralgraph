@@ -11836,6 +11836,164 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     return df, n
 
 
+def enforce_qc_standing_anchors(df, subject, verbose=True):
+    """Liz's QC standing checks, enforced in place on every file
+    (Crosswalk Digital Profile IQ QC Standards, 2026-09-16; wired
+    2026-09-15 per Jenna: 'make sure that it is true for all profiles
+    pulled').
+
+    Mechanical fixes:
+      1. The ChatGPT row in SEARCH ENGINE/AI reads exactly 'CHAT GPT'
+         (with the space). Any spelling variant is renamed; if both
+         spellings exist the higher-BP row wins and the other drops.
+      2. Presence: when the profile carries a SEARCH ENGINE/AI grid,
+         'CLAUDE AI' and 'GEMINI' rows exist (inserted at a
+         subject-salted share scaled to the profile's own CHAT GPT /
+         GOOGLE level when missing). When the profile carries a
+         TELECOM grid, 'AT&T' exists (salted near the grid's top-3
+         mean). All inserts are hostmap-permitted names.
+    Report-only (log lines, never a block, never an email):
+      Google not leading SEARCH ENGINE/AI; Prime Video not above the
+      combined Disney+/Hulu; PayPal not leading DIGITAL BANKING; Visa
+      not above Mastercard.
+    """
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    changes = 0
+
+    def _rows(cat):
+        return df[df['Column'].astype(str).str.upper().str.strip()
+                  == cat]
+
+    def _bpv(row):
+        v = _bp(row[bp_col])
+        return None if (v is None or pd.isna(v)) else float(v)
+
+    # -- 1. CHAT GPT label ------------------------------------------------
+    se = _rows('SEARCH ENGINE/AI')
+    if len(se):
+        gpt_idx = [i for i in se.index
+                   if _norm_brand(str(df.at[i, 'Value']))
+                   in ('CHATGPT', 'CHATGPT4', 'OPENAICHATGPT')]
+        if gpt_idx:
+            keep = max(gpt_idx, key=lambda i: _bpv(df.loc[i]) or 0.0)
+            for i in gpt_idx:
+                if i == keep:
+                    if str(df.at[i, 'Value']).strip() != 'CHAT GPT':
+                        df.at[i, 'Value'] = 'CHAT GPT'
+                        changes += 1
+                        if verbose:
+                            print(f"   [qc-anchors] ChatGPT label -> "
+                                  f"'CHAT GPT'")
+                else:
+                    df = df.drop(index=i)
+                    changes += 1
+
+    # -- 2. presence inserts ---------------------------------------------
+    def _insert(cat, value, bp_val):
+        nonlocal df, changes
+        anchor_rows = _rows(cat)
+        if not len(anchor_rows):
+            return
+        new_row = {c: '' for c in df.columns}
+        new_row['Column'] = anchor_rows.iloc[0]['Column']
+        new_row['Value'] = value
+        pos = anchor_rows.index[-1]
+        df = pd.concat(
+            [df.loc[:pos], pd.DataFrame([new_row]),
+             df.loc[pos:].iloc[1:]]).reset_index(drop=True)
+        idx = df[(df['Column'] == new_row['Column'])
+                 & (df['Value'] == value)].index[0]
+        _set_bp(df, idx, round(bp_val, 4), bp_col, cs_col, raw_col,
+                proj_col, sample_size)
+        changes += 1
+        if verbose:
+            print(f"   [qc-anchors] inserted {value} in {cat} @ "
+                  f"{bp_val:.4f}")
+
+    se = _rows('SEARCH ENGINE/AI')
+    if len(se):
+        names = {_norm_brand(str(v)) for v in se['Value']}
+        gpt_bp = None
+        goog_bp = None
+        for i in se.index:
+            nb = _norm_brand(str(df.at[i, 'Value']))
+            if nb == 'CHATGPT':
+                gpt_bp = _bpv(df.loc[i])
+            elif nb == 'GOOGLE':
+                goog_bp = _bpv(df.loc[i])
+        base = gpt_bp if gpt_bp else ((goog_bp or 40.0) * 0.38)
+        if 'CLAUDEAI' not in names and 'CLAUDE' not in names:
+            _insert('SEARCH ENGINE/AI', 'CLAUDE AI',
+                    max(0.6, base * _jitter_for(
+                        subject, 'CLAUDE AI', salt='qc-presence',
+                        lo=0.13, hi=0.23)))
+        if 'GEMINI' not in names and 'GOOGLEGEMINI' not in names:
+            _insert('SEARCH ENGINE/AI', 'GEMINI',
+                    max(1.1, base * _jitter_for(
+                        subject, 'GEMINI', salt='qc-presence',
+                        lo=0.33, hi=0.51)))
+
+    tel = _rows('TELECOM')
+    if len(tel):
+        names = {_norm_brand(str(v)) for v in tel['Value']}
+        if 'ATT' not in names and 'ATANDT' not in names:
+            tops = sorted((_bpv(df.loc[i]) or 0.0 for i in tel.index),
+                          reverse=True)[:3]
+            mean_top = (sum(tops) / len(tops)) if tops else 8.0
+            _insert('TELECOM', 'AT&T',
+                    max(1.2, mean_top * _jitter_for(
+                        subject, 'AT&T', salt='qc-presence',
+                        lo=0.74, hi=0.97)))
+
+    # -- 3. report-only anchor flags --------------------------------------
+    def _leader(cat):
+        rows = _rows(cat)
+        best_name, best_v = None, -1.0
+        for i in rows.index:
+            v = _bpv(df.loc[i])
+            nm = str(df.at[i, 'Value'])
+            if v is not None and v > best_v \
+                    and _norm_brand(nm) != _norm_brand(subject):
+                best_name, best_v = nm, v
+        return best_name, best_v
+
+    def _val_of(cat, *norms):
+        rows = _rows(cat)
+        for i in rows.index:
+            if _norm_brand(str(df.at[i, 'Value'])) in norms:
+                return _bpv(df.loc[i])
+        return None
+
+    if verbose:
+        ldr, _v = _leader('SEARCH ENGINE/AI')
+        if ldr and _norm_brand(ldr) != 'GOOGLE' \
+                and _val_of('SEARCH ENGINE/AI', 'GOOGLE') is not None:
+            print(f"   [qc-anchors] FLAG: Google not leading SEARCH "
+                  f"ENGINE/AI (leader: {ldr})")
+        prime = _val_of('STREAMING/PLATFORM', 'AMAZONPRIMEVIDEO',
+                        'PRIMEVIDEO')
+        dh = _val_of('STREAMING/PLATFORM', 'DISNEYHULU',
+                     'DISNEYPLUSHULU')
+        if prime is not None and dh is not None and prime <= dh:
+            print(f"   [qc-anchors] FLAG: Prime Video ({prime:.2f}) "
+                  f"not above Disney+/Hulu ({dh:.2f})")
+        pp = _val_of('DIGITAL BANKING', 'PAYPAL')
+        ldr_db, v_db = _leader('DIGITAL BANKING')
+        if pp is not None and ldr_db \
+                and _norm_brand(ldr_db) not in ('PAYPAL', 'VENMO'):
+            print(f"   [qc-anchors] FLAG: DIGITAL BANKING led by "
+                  f"{ldr_db}, not PayPal (Venmo exception only)")
+        visa = _val_of('CREDIT PROVIDER', 'VISA')
+        mc = _val_of('CREDIT PROVIDER', 'MASTERCARD')
+        if visa is not None and mc is not None and visa <= mc:
+            print(f"   [qc-anchors] FLAG: Visa ({visa:.2f}) not above "
+                  f"Mastercard ({mc:.2f})")
+    return df, changes
+
+
 def run_all_enforcers(df, subject, brand_category=None, verbose=True,
                        target_year=None, follower_ceiling=None,
                        keep_avid_row=False, carriage_doc=None):
@@ -12007,6 +12165,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_search_engine_ai_cohort_ceiling failed: {e}")
+    # 2026-09-15 (Liz QC standards, wired per Jenna: true for all
+    # profiles pulled): CHAT GPT label, Claude AI / Gemini / AT&T
+    # presence, report-only anchor flags. Runs after the search-grid
+    # ceiling so inserts see settled values.
+    try:
+        df, n = enforce_qc_standing_anchors(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_qc_standing_anchors failed: {e}")
     # 2026-06-04 (Jenna Adele Exarchopoulos defect): collapse exact-duplicate
     # rows AND demote partial-token 100% subject-substring pins (e.g. lone
     # "Adele" pinned to 100% across TALENT/ACTOR/MUSICIAN/BAND when the
