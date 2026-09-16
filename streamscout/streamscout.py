@@ -135,6 +135,7 @@ RESOLVER_PLATFORMS = {
     "amazonpodcasts": {"label": "Amazon Podcasts",
                        "module": "amazon_podcasts_identifier"},
     "siriusxm": {"label": "SiriusXM", "module": "siriusxm_episode_identifier"},
+    "audible": {"label": "Audible", "module": "audible_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -159,17 +160,18 @@ RESOLVER_MODULE = {
     "pandora": "pandora_episode_identifier",
     "amazonpodcasts": "amazon_podcasts_identifier",
     "siriusxm": "siriusxm_episode_identifier",
+    "audible": "audible_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
                       "youtube", "spotify", "applepodcasts", "iheart", "pandora",
-                      "amazonpodcasts", "siriusxm"}
+                      "amazonpodcasts", "siriusxm", "audible"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
                   "britbox", "youtube", "spotify", "applepodcasts", "iheart",
-                  "pandora", "amazonpodcasts", "siriusxm"]
+                  "pandora", "amazonpodcasts", "siriusxm", "audible"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -400,17 +402,23 @@ def resolver_lookup(platform, title, kind, seasons, url=None):
         show, rrows = mod.resolve(title=title, kind=kind, seasons=seasons)
     out = []
     for r in rrows:
+        # a resolver may name each row's title independently (Audible lists
+        # distinct works, not episodes of one show); default to the series name
+        row_show = r.get("show") or show or title
         out.append({
-            "show": (show or title).upper().strip(),
+            "show": (row_show).upper().strip(),
             "season": r.get("season", "") or "",
             "episode": r.get("episode", "") or "",
             "episode_title": r.get("title", "") or "",
             "identifier": r.get("identifier", "") or "",
             "watch_url": r.get("watch_url", "") or "",
+            # a resolver may override the PLATFORM label PER ROW (e.g. Audible
+            # emits an Audible row + an Amazon "via Amazon" row for each title)
+            "platform": r.get("platform", "") or "",
             "hits": "",
             # Fuzzy: a correct-but-messy client title (extra franchise prefix,
             # typo, reordering) still counts as exact against the canonical show.
-            "exact": "yes" if is_title_match(title, show) else "no",
+            "exact": "yes" if is_title_match(title, row_show) else "no",
         })
     return out
 
@@ -482,6 +490,8 @@ def choose_platform() -> str:
             tag = "direct · no login · browser · every episode URL"
         elif key == "siriusxm":
             tag = "browser · every episode URL · one-time login for title search"
+        elif key == "audible":
+            tag = "browser · no login · direct Audible + via-Amazon links"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -621,6 +631,9 @@ def main() -> int:
         elif platform == "siriusxm":
             print(f"Resolving {label} — every episode URL via SiriusXM's "
                   f"anonymous player session (no login; needs Chromium) ...")
+        elif platform == "audible":
+            print(f"Resolving {label} — direct Audible + via-Amazon listen "
+                  f"links via a headless browse (no login; needs Chromium) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
@@ -687,8 +700,8 @@ def main() -> int:
         w = csv.writer(f)
         w.writerow(["SHOW", "URL", "PRODUCTION", "PLATFORM", "SEASON"])
         for r in sorted(rows, key=sort_key):
-            w.writerow([r["show"], r["identifier"], r["production"], label,
-                        season_label(r["season"])])
+            w.writerow([r["show"], r["identifier"], r["production"],
+                        r.get("platform") or label, season_label(r["season"])])
 
     print(f"\nFound {len(rows)} result(s) for {title!r} on {label}.")
     exact = [r for r in rows if r["exact"] == "yes"]
