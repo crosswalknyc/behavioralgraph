@@ -129052,6 +129052,66 @@ https://www.instagram.com/p/..."></textarea>
             _safeRender('_renderAudienceShareBoxes',  () => _renderAudienceShareBoxes(parsed, brandName));
         }
 
+        function behavioralItemKey(name) {
+            return String(name || '').trim().toUpperCase();
+        }
+
+        // APP/PLATFORM is a short alias of APP/PLATFORM USAGE. Files sometimes
+        // also list social/music/video brands there with a second Brand
+        // Penetration that is independent of the home card — not a split of
+        // one percentage. Drop those duplicates and fold leftover apps into
+        // APP/PLATFORM USAGE so a stray APP/PLATFORM card does not appear.
+        function dedupeAppPlatformBehavioral(behavioral) {
+            if (!behavioral || typeof behavioral !== 'object') return behavioral;
+            var HOME_CATS = [
+                'SOCIAL MEDIA', 'STREAMING/MUSIC', 'STREAMING MUSIC',
+                'STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO',
+                'BROADCAST/CABLE', 'SEARCH ENGINE/AI', 'PODCAST', 'PODCASTS'
+            ];
+            var homeNames = {};
+            HOME_CATS.forEach(function(cat) {
+                (behavioral[cat] || []).forEach(function(item) {
+                    var k = behavioralItemKey(item && item.name);
+                    if (k) homeNames[k] = true;
+                });
+            });
+            function stripHomeOwned(list) {
+                return (list || []).filter(function(item) {
+                    return !homeNames[behavioralItemKey(item && item.name)];
+                });
+            }
+            var aliases = ['APP/PLATFORM', 'APPS/PLATFORMS'];
+            var canon = 'APP/PLATFORM USAGE';
+            aliases.forEach(function(alias) {
+                var items = behavioral[alias];
+                if (!items || !items.length) {
+                    delete behavioral[alias];
+                    return;
+                }
+                var keep = stripHomeOwned(items);
+                if (keep.length) {
+                    if (!behavioral[canon]) behavioral[canon] = [];
+                    behavioral[canon] = behavioral[canon].concat(keep);
+                }
+                delete behavioral[alias];
+            });
+            if (behavioral[canon]) {
+                var seen = {};
+                stripHomeOwned(behavioral[canon]).forEach(function(item) {
+                    var k = behavioralItemKey(item && item.name);
+                    if (!k) return;
+                    if (!seen[k] || (item.pct || 0) > (seen[k].pct || 0)) seen[k] = item;
+                });
+                var merged = Object.keys(seen).map(function(k) { return seen[k]; });
+                if (!merged.length) delete behavioral[canon];
+                else {
+                    merged.sort(function(a, b) { return (b.pct || 0) - (a.pct || 0); });
+                    behavioral[canon] = merged;
+                }
+            }
+            return behavioral;
+        }
+
         function parseAllData(csvData) {
             const result = {
                 sampleSize: 0,
@@ -129898,6 +129958,7 @@ https://www.instagram.com/p/..."></textarea>
             Object.keys(result.behavioral).forEach(cat => {
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
+            dedupeAppPlatformBehavioral(result.behavioral);
 
             // Do not rebase demographic percentages in the dashboard parser.
             // The CSV already contains finalized percentages that should be rendered as-is.
@@ -141260,6 +141321,10 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 });
                 
+                allBehavioralData = aggregatedBehavioral;
+            }
+            if (typeof dedupeAppPlatformBehavioral === 'function') {
+                dedupeAppPlatformBehavioral(aggregatedBehavioral);
                 allBehavioralData = aggregatedBehavioral;
             }
             const container = document.getElementById('behavioralGrid');
@@ -158893,6 +158958,7 @@ https://www.instagram.com/p/..."></textarea>
             Object.keys(result.behavioral).forEach(cat => {
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
+            dedupeAppPlatformBehavioral(result.behavioral);
 
             return result;
         }
