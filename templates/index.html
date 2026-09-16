@@ -172622,10 +172622,19 @@ https://www.instagram.com/p/..."></textarea>
        single line: each chip keeps its own width instead of being
        squeezed until its text wraps, and anything past the edge of the
        column is clipped rather than pushed onto a second line. */
+    /* A grid item defaults to min-width auto, meaning it refuses to be
+       narrower than its own min-content. Holding the meta line to one
+       line below made that min-content the full width of the longest
+       headline chip, so the Movers columns grew to 1,066px, 1,008px and
+       1,891px and the page scrolled sideways to 4,072px. Letting the
+       cards shrink is what keeps the one-line meta from dictating the
+       column width. */
+    #trendsIQView .tiq-cards-grid > .tiq-card { min-width: 0; }
     #trendsIQView[data-tiq-product="trends"] .tiq-row-meta {
         flex-wrap: nowrap !important;
         align-items: center;
         overflow: hidden;
+        min-width: 0;
     }
     #trendsIQView[data-tiq-product="trends"] .tiq-row-meta > * {
         flex: 0 0 auto;
