@@ -116,7 +116,10 @@ DEFAULT_PRICING = {
         "impact_iq": 0.0,
         "trends_iq": 0.0,
         "sentiment_iq": 0.0,
-        "brand_partnership_iq": 0.0,
+        # 2026-09-16 (Jenna): Brand Partnership Valuation and Digital
+        # Journey pulls through Prometheus are $1,000 per pull.
+        "brand_partnership_iq": 1000.0,
+        "journey_iq": 1000.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,

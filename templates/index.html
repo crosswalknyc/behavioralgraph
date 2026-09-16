@@ -22478,6 +22478,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Run a profile for [brand or talent]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a profile</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Sample size for [audience], past 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Size an audience first</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut a profile I own</button>
+                                    <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Pull a Digital Journey')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull a Digital Journey</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Pull Brand Partnership Valuation')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull Brand Partnership Valuation</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
                                 </div>
@@ -72865,6 +72866,47 @@ https://www.instagram.com/p/..."></textarea>
                 return j && j.id !== id;
             }));
         }
+        function _pmJiqIntent(text) {
+            var low = String(text || '').toLowerCase();
+            if (low.replace(/\s+/g, ' ').trim() ===
+                'pull a digital journey') return true;
+            return low.indexOf('digital journey') !== -1 &&
+                /pull|build|run|create|new|make/.test(low);
+        }
+
+        async function _pmPollJiqJob(jobId) {
+            var waited = 0;
+            while (waited < 1200000) {
+                await new Promise(function(res) { setTimeout(res, 9000); });
+                waited += 9000;
+                var st = null;
+                try {
+                    var r = await fetch('/api/brief-chat/jiq-status/' + jobId,
+                        { credentials: 'same-origin' });
+                    st = r.ok ? await r.json() : null;
+                } catch (_) { st = null; }
+                if (!st) continue;
+                if (st.status === 'done') {
+                    synthChatPushTurn('agent',
+                        'Your Digital Journey is ready: ' +
+                        (st.subject || 'the journey') +
+                        ' is live in the Digital Journey tab now.' +
+                        (st.conversions ?
+                            ' Conversions in window: ' +
+                            Number(st.conversions).toLocaleString('en-US') +
+                            ' accounts.' : ''));
+                    return;
+                }
+                if (st.status === 'error') {
+                    synthChatPushTurn('agent',
+                        'The journey hit a snag and the team has been ' +
+                        'notified. Nothing further is needed from you; ' +
+                        'we will follow up when it lands.');
+                    return;
+                }
+            }
+        }
+
         function _pmBpiqIntent(text) {
             var low = String(text || '').toLowerCase();
             if (low.replace(/\s+/g, ' ').trim() ===
@@ -74853,6 +74895,8 @@ https://www.instagram.com/p/..."></textarea>
             _pmPanelOffer = null;
             _pmBpiqCollect = false;
             _pmBpiqConfirm = null;
+            _pmJiqCollect = false;
+            _pmJiqConfirm = null;
             _synthChatClearDateState();
         }
 
@@ -74901,6 +74945,9 @@ https://www.instagram.com/p/..."></textarea>
         // a guided input step; the parsed confirm arms the charge chip.
         var _pmBpiqCollect = false;
         var _pmBpiqConfirm = null;
+        // Digital Journey pull flow (2026-09-16): same shape.
+        var _pmJiqCollect = false;
+        var _pmJiqConfirm = null;
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -75303,8 +75350,9 @@ https://www.instagram.com/p/..."></textarea>
         async function _pmAnalyze(text, ctx, mode, extra) {
             if (!ctx && mode !== 'search_demand' &&
                 !(extra && (extra.bind_subject || extra.panel_confirm ||
-                            extra.bpiq_inputs || extra.bpiq_confirm)) &&
-                !_pmBpiqIntent(text)) {
+                            extra.bpiq_inputs || extra.bpiq_confirm ||
+                            extra.jiq_inputs || extra.jiq_confirm)) &&
+                !_pmBpiqIntent(text) && !_pmJiqIntent(text)) {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
@@ -75334,6 +75382,12 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 if (extra && extra.bpiq_confirm) {
                     _abody.bpiq_confirm = extra.bpiq_confirm;
+                }
+                if (extra && extra.jiq_inputs) {
+                    _abody.jiq_inputs = true;
+                }
+                if (extra && extra.jiq_confirm) {
+                    _abody.jiq_confirm = extra.jiq_confirm;
                 }
                 var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody);
                 var data = _fr.data;
@@ -75410,6 +75464,19 @@ https://www.instagram.com/p/..."></textarea>
                     _pmBpiqCollect = false;
                     _pmBpiqConfirm = null;
                     try { _pmPollBpiqJob(data.bpiq_job_id); } catch (_) {}
+                }
+                if (data.jiq_collect) {
+                    _pmJiqCollect = true;
+                    _pmJiqConfirm = null;
+                }
+                if (data.jiq_confirm_payload) {
+                    _pmJiqConfirm = data.jiq_confirm_payload;
+                    _pmJiqCollect = false;
+                }
+                if (data.jiq_job_id) {
+                    _pmJiqCollect = false;
+                    _pmJiqConfirm = null;
+                    try { _pmPollJiqJob(data.jiq_job_id); } catch (_) {}
                 }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
@@ -75758,6 +75825,46 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 _pmMemoryConfirm = null;
+            }
+
+            // Digital Journey follow-through (2026-09-16): same
+            // machine as the valuation flow.
+            if (_pmJiqConfirm) {
+                var _jqLow = text.trim().toLowerCase();
+                if (_jqLow.indexOf('run the journey') === 0 ||
+                    /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it)[.! ]*$/i.test(_jqLow)) {
+                    var _jq = _pmJiqConfirm;
+                    _pmJiqConfirm = null;
+                    await _pmAnalyze(text, _pmCollectPageContext(), '',
+                        { jiq_confirm: _jq });
+                    return;
+                }
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_jqLow)) {
+                    _pmJiqConfirm = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was charged. Ask me ' +
+                        'anything else when ready.');
+                    return;
+                }
+                _pmJiqConfirm = null;
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { jiq_inputs: true });
+                return;
+            }
+            if (_pmJiqCollect) {
+                _pmJiqCollect = false;
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    synthChatPushTurn('agent',
+                        'No problem. Ask me anything else when ready.');
+                    return;
+                }
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { jiq_inputs: true });
+                return;
+            }
+            if (_pmJiqIntent(text)) {
+                await _pmAnalyze(text, _pmCollectPageContext(), '', {});
+                return;
             }
 
             // Brand Partnership Valuation follow-through

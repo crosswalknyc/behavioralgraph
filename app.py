@@ -58118,6 +58118,69 @@ def api_synth_chat_analyze():
             'bpiq_collect': True,
             'followups': ['Cancel'],
             'offer_deck': False, 'deck_angle': None})
+    # ---- Digital Journey flow (Jenna 2026-09-16) ----
+    _jiq_confirm = body.get('jiq_confirm')
+    if isinstance(_jiq_confirm, dict) and _jiq_confirm.get('subject'):
+        _jsubj = (f"{_jiq_confirm.get('subject')} on "
+                  f"{_jiq_confirm.get('platform')}")
+        if not consume_credit(
+                _bpiq_user,
+                description=f'Digital Journey: {_jsubj}',
+                pull_type='Digital Journey IQ',
+                credits_used=_PM_JIQ_CREDITS):
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('That journey prices at $1,000 and your '
+                          'account cannot cover it right now. Add '
+                          'funds or ask your admin, and I will run '
+                          'it the moment you are set.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        _jiq_job = uuid.uuid4().hex[:12]
+        _jiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _pm_jiq_status_write(_jiq_job, {
+            'job_id': _jiq_job, 'user': _bpiq_user,
+            'status': 'queued', 'started_at': time.time()})
+        threading.Thread(
+            target=_pm_run_jiq_job,
+            args=(_jiq_job, _bpiq_user, _jiq_confirm, _jiq_extras),
+            daemon=True).start()
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': (f'On it. Building the {_jsubj} journey now - '
+                      'the research and the path take a few minutes. '
+                      'It lands in the Digital Journey tab, and I '
+                      'will confirm here when it is ready.'),
+            'jiq_job_id': _jiq_job,
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    if body.get('jiq_inputs'):
+        _jparsed = _pm_jiq_parse(text, usage_extras=_pm_ppu)
+        if _pm_jiq_inputs_complete(_jparsed):
+            _jparsed.pop('missing', None)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pm_jiq_confirm_reply(_jparsed),
+                'jiq_confirm_payload': _jparsed,
+                'followups': ['Run the journey', 'Cancel'],
+                'offer_deck': False, 'deck_angle': None})
+        _jmissing = _jparsed.get('missing') or [
+            'the category', 'the platform', 'the conversion event']
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Almost there - I still need '
+                      + ', '.join(str(m) for m in _jmissing)
+                      + '. Send the missing piece(s) and I will '
+                        'line it up.'),
+            'jiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
+    if _pm_jiq_intent(text):
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _PM_JIQ_ASK_COPY,
+            'jiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
     # One server-side decision for every ask (prometheus_router):
     # deterministic prefilters in one fixed precedence, the fast
@@ -58702,6 +58765,142 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
         _chatbot_error_email('brief-chat/bpiq-job', e)
 
 
+# ---------------------------------------------------------------------------
+# Digital Journey via Prometheus (Jenna 2026-09-16): the "Pull a
+# Digital Journey" chip walks the user through the playbook inputs
+# (subject, platform, conversion event, window, TAM), charges the
+# $1,000 Digital Journey pull, and builds the research-anchored journey
+# on a background thread. The finished run lands in the Journey IQ
+# store and renders in the Digital Journey tab exactly like the Luxury
+# Fragrance on TikTok Shop read.
+# ---------------------------------------------------------------------------
+_PM_JIQ_JOB_PREFIX = 'system/pm_jiq_jobs/'
+_PM_JIQ_CHIP = 'Pull a Digital Journey'
+_PM_JIQ_CREDITS = 15
+
+_PM_JIQ_ASK_COPY = (
+    "Happy to build a Digital Journey. Give me, in one message:\n"
+    "1. The category or thing being bought (e.g. luxury fragrance, "
+    "running shoes, meal kits)\n"
+    "2. Where the journey converts (e.g. TikTok Shop, Amazon, a DTC "
+    "site)\n"
+    "3. The conversion event in one sentence (e.g. paid $95+ for a "
+    "house bottle on TikTok Shop). 'Engaged with the category' is "
+    "not a conversion.\n"
+    "Optional: the window (default: trailing 12 months) and a "
+    "tighter starting universe (default: US gen pop).\n\n"
+    "Example: \"Running shoes on Amazon, conversion is paid $120+ "
+    "for a performance shoe, trailing 12 months\"")
+
+
+def _pm_jiq_intent(text):
+    low = ' '.join(str(text or '').lower().split())
+    if low == _PM_JIQ_CHIP.lower():
+        return True
+    return ('digital journey' in low
+            and any(k in low for k in ('pull', 'build', 'run', 'create',
+                                       'new', 'make')))
+
+
+def _pm_jiq_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_JIQ_JOB_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_jiq_parse(text, usage_extras=None):
+    from migration.journey_synthesis import PARSE_SYSTEM_PROMPT
+    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+                             max_tokens=1200, temperature=0.0,
+                             surface='jiq_parse',
+                             usage_extras=usage_extras)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _pm_jiq_inputs_complete(parsed):
+    return bool(parsed.get('subject') and parsed.get('platform')
+                and parsed.get('conversion_event'))
+
+
+def _pm_jiq_confirm_reply(parsed):
+    win = (f"{parsed['start_date']} to {parsed['end_date']}"
+           if parsed.get('start_date') and parsed.get('end_date')
+           else 'trailing 12 months')
+    tam = parsed.get('tam_label') or 'US gen pop (329.9M)'
+    return (
+        f"Here's the Digital Journey I'll build:\n"
+        f"- {parsed['subject']} on {parsed['platform']}\n"
+        f"- Conversion: {parsed['conversion_event']}\n"
+        f"- Window: {win}\n"
+        f"- Starting universe: {tam}\n\n"
+        f"It's a full discovery-to-purchase path - where they learn "
+        f"the name, research, compare, hunt a code, bag and leave, "
+        f"get retargeted, and pay - and it lands in the Digital "
+        f"Journey tab when finished. It prices at $1,000. Run it?")
+
+
+def _pm_run_jiq_job(job_id, username, inputs, extras):
+    try:
+        from migration.journey_synthesis import synthesize, persist
+        subj = f"{inputs['subject']} on {inputs['platform']}"
+        _pm_jiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'running',
+            'subject': subj, 'started_at': time.time()})
+        tools = None
+        try:
+            import prometheus_analysis as _pma_j
+            tools = [_pma_j.WEB_SEARCH_TOOL]
+        except Exception:
+            pass
+
+        def _cj(system, user_prompt, **kw):
+            kw.setdefault('usage_extras', extras)
+            return _pm_claude_json(system, user_prompt, **kw)
+
+        payload = synthesize(inputs, _cj, tools=tools,
+                             created_by=username or 'prometheus')
+        out_key = persist(s3_client, payload, username or 'prometheus',
+                          job_id)
+        # Access: the requester must see their own run. Default-open
+        # ('*' / unset) users already do; explicit-list users get the
+        # key appended; users without the product get a scoped grant.
+        try:
+            def _grant(data):
+                u = (data.get('users') or {}).get(username)
+                if not u:
+                    return None
+                cur = u.get('allowed_journey_iq_runs')
+                changed = False
+                if isinstance(cur, list) and '*' not in cur \
+                        and out_key not in cur:
+                    u['allowed_journey_iq_runs'] = cur + [out_key]
+                    changed = True
+                if not u.get('has_journey_iq_access'):
+                    u['has_journey_iq_access'] = True
+                    changed = True
+                return data if changed else None
+            _users_cas_mutate(_grant)
+        except Exception as acc_err:
+            print(f"[jiq-job {job_id}] access grant skipped: {acc_err}")
+        _pm_jiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'done',
+            'subject': payload['meta']['project_name'],
+            's3_key': out_key,
+            'conversions': (payload.get('kpis') or {}).get('total_users'),
+            'finished_at': time.time()})
+        print(f"[jiq-job {job_id}] done -> {out_key}")
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            _pm_jiq_status_write(job_id, {
+                'job_id': job_id, 'user': username, 'status': 'error',
+                'finished_at': time.time()})
+        except Exception:
+            pass
+        _chatbot_error_email('brief-chat/jiq-job', e)
+
+
 
 def _pm_deck_fuzzy_suggestions(query):
     """Closest-catalog deck suggestions for a subject / ask that did not
@@ -59184,6 +59383,28 @@ def api_synth_chat_bpiq_status(job_id):
     try:
         resp = s3_client.get_object(
             Bucket=S3_BUCKET, Key=f"{_PM_BPIQ_JOB_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/jiq-status/<job_id>', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/jiq-status')
+def api_synth_chat_jiq_status(job_id):
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_JIQ_JOB_PREFIX}{job_id}.json")
         payload = json.loads(resp['Body'].read().decode('utf-8'))
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
