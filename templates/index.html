@@ -63224,7 +63224,7 @@ https://www.instagram.com/p/..."></textarea>
                 // chart position, so rank and audience have to move
                 // together. Same ordering the Streaming / FAST sheets use.
                 return _tiqSortByDisplayedEstimate(items).map(function(it, i) {
-                    var img = _tiqPosterCell(it.image);
+                    var img = _tiqPosterCell(it.image, it.title);
                     var titleLine = it.url
                         ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                         : _tiqEsc(it.title);
@@ -63540,7 +63540,7 @@ https://www.instagram.com/p/..."></textarea>
                 // Rank is a position index here too, so order by the
                 // audience figure the row displays.
                 return _tiqSortByDisplayedEstimate(items).map(function(it, i) {
-                    var img = _tiqPosterCell(it.image);
+                    var img = _tiqPosterCell(it.image, it.title);
                     var titleLine = it.url
                         ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                         : _tiqEsc(it.title);
@@ -64138,7 +64138,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else {
                     body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                            items.map(function(it, i) {
-                               var img = _tiqPosterCell(it.image);
+                               var img = _tiqPosterCell(it.image, it.title);
                                var titleLine = it.url
                                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                                    : _tiqEsc(it.title);
