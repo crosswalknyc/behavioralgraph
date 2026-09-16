@@ -175313,6 +175313,85 @@ https://www.instagram.com/p/..."></textarea>
         top: 10px;
         right: 0;
     }
+
+    /* ================================================================
+       LIGHT MODE - Profile IQ
+       One ground, from the pack: Neutral Off-White E9E8E1, with white
+       for raised panels and Graphite for type. Signal Green and Orchid
+       never appear on a light ground; their twins Signal Olive and
+       Amethyst carry the same jobs. Dark mode is untouched.
+       ================================================================ */
+    body[data-theme="light"] {
+        --cw-page: #E9E8E1;
+        --cw-raised: #FFFFFF;
+        --cw-input: #FFFFFF;
+        --cw-border: #C9C6BA;
+    }
+    body[data-theme="light"][data-ground="graphite"] { background: #E9E8E1 !important; }
+    body[data-theme="light"][data-ground="graphite"] header {
+        background: #E9E8E1 !important;
+        border-bottom-color: #C9C6BA !important;
+    }
+
+    /* The revamp shipped four different light grounds: an olive E7EBD2,
+       a warm F4F3EE, a cool E8EEF4 and the Off-White. Only Off-White is
+       in the pack, so everything that was acting as the page lands
+       there and white is kept for panels that sit on top of it. */
+    body[data-theme="light"] #dashboardView.piq-v4,
+    body[data-theme="light"] #dashboardView.piq-v4 .dashboard-tab-content,
+    body[data-theme="light"] #dashboardView.piq-v4 .tab-content,
+    body[data-theme="light"] #dashboardView.piq-v4 .insights-container,
+    body[data-theme="light"] #dashboardView.piq-v4 .insights-grid-v2,
+    body[data-theme="light"] #dashboardView.piq-v4 .insights-summary-grid,
+    body[data-theme="light"] #dashboardView.piq-v4 .demo-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .behavioral-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .interests-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .location-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .comparison-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .comparison-container,
+    body[data-theme="light"] #dashboardView.piq-v4 .marketing-main,
+    body[data-theme="light"] #dashboardView.piq-v4 .marketing-header,
+    body[data-theme="light"] #dashboardView.piq-v4 .dashboard-empty-state {
+        background: #E9E8E1 !important;
+        color: #0C1618;
+    }
+
+    /* Panels that kept the dark Slate fill behind light-mode type, so
+       they read as black holes on the page. */
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-item,
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-item,
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-profile-tab {
+        background: #FFFFFF !important;
+        border-color: #C9C6BA !important;
+        color: #0C1618 !important;
+    }
+
+    /* Twin rule. Signal Green blows out on Off-White, so the accent is
+       Signal Olive here; the small-text olive is used under 12px. */
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-profile-tab,
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-profile-tab-name,
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-profile-tab-primary,
+    body[data-theme="light"] #dashboardView.piq-v4 .helper-star {
+        color: #5E7E12 !important;
+    }
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-profile-tab.is-primary {
+        border-color: rgba(94, 126, 18, 0.45) !important;
+    }
+
+    /* Type that stayed Off-White or pure white and therefore vanished. */
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-tab.active,
+    body[data-theme="light"] #dashboardView.piq-v4 .marketing-subtab.active,
+    body[data-theme="light"] #dashboardView.piq-v4 .piq-cmp-av,
+    body[data-theme="light"] #dashboardView.piq-v4 .behavioral-item .count,
+    body[data-theme="light"] #dashboardView.piq-v4 .behavioral-name,
+    body[data-theme="light"] #dashboardView.piq-v4 .interest-name,
+    body[data-theme="light"] #dashboardView.piq-v4 .interest-pct {
+        color: #0C1618 !important;
+    }
+    body[data-theme="light"] #dashboardView.piq-v4 .comp-tab.active,
+    body[data-theme="light"] #dashboardView.piq-v4 .marketing-subtab.active {
+        border-bottom-color: #5E7E12 !important;
+    }
     /* These sheets scroll, so the column header has to stay opaque to
        cover the rows passing under it. On the page rather than on the
        panel colour it reads as a rule, not a grey box. */
