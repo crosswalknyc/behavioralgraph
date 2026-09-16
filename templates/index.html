@@ -47227,21 +47227,36 @@ https://www.instagram.com/p/..."></textarea>
                 <!-- Luxury fragrance TikTok Shop purchase journey.
                      Story-mode: fragrance_shop_journey. Caterpillar
                      funnel. Payload: _JIQ_FRAGRANCE_DATA. -->
-                <div class="card jiq-frag" id="jiqFragCard" style="display: none;">
-                    <div class="jiq-frag-head">
-                        <div>
-                            <div class="jiq-frag-eyebrow">Purchase journey</div>
-                            <h3 id="jiqFragTitle">Luxury fragrance on TikTok Shop.</h3>
+                <div class="jiq-frag" id="jiqFragCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqFragMeta"></div>
+                            <h2 id="jiqFragTitle">Luxury fragrance<br>on TikTok Shop.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqFragLead"></div>
                             <p id="jiqFragDeck"></p>
+                            <div class="jiq-frag-kpis" id="jiqFragKpis"></div>
                         </div>
-                        <div class="jiq-frag-meta" id="jiqFragMeta"></div>
+                        <div class="jiq-frag-art">
+                            <img src="{{ url_for('static', filename='fragrance-journey-hero.png') }}" alt="">
+                        </div>
                     </div>
-                    <div class="jiq-frag-kpis" id="jiqFragKpis"></div>
-                    <div class="jiq-frag-sec"><h4>The spine</h4><em>Each bar is what the step kept from the step before</em></div>
+                    <div class="jiq-frag-sec">
+                        <div class="jiq-frag-num">01 The spine</div>
+                        <h3 id="jiqFragSpineHead">Learning a name at all is the whole funnel.</h3>
+                        <em>Each bar is what the step kept from the step before</em>
+                    </div>
                     <div id="jiqFragSpine"></div>
-                    <div class="jiq-frag-sec"><h4>The bag splits</h4><em>Who paid on the spot and who left first</em></div>
+                    <div class="jiq-frag-sec">
+                        <div class="jiq-frag-num">02 The bag splits</div>
+                        <h3 id="jiqFragForkHead">Most of the buyer file left first.</h3>
+                        <em>Who paid on the spot and who came back</em>
+                    </div>
                     <div id="jiqFragFork"></div>
-                    <div class="jiq-frag-sec"><h4>Detours</h4><em>Where the journey came from and what closed it</em></div>
+                    <div class="jiq-frag-sec">
+                        <div class="jiq-frag-num">03 Detours</div>
+                        <h3>Where the journey came from, and what closed it.</h3>
+                        <em>Counts are unique US accounts</em>
+                    </div>
                     <div class="jiq-frag-detours" id="jiqFragDetours"></div>
                 </div>
 
@@ -103332,8 +103347,12 @@ https://www.instagram.com/p/..."></textarea>
             }
             var meta = document.getElementById('jiqFragMeta');
             if (meta && d.meta) {
-                meta.innerHTML = '<span>' + _jiqFragEsc(d.meta.window) + '</span>'
-                    + '<span>' + _jiqFragEsc(d.meta.unit) + '</span>';
+                meta.textContent = 'Purchase journey \u00b7 ' + (d.meta.window || '');
+            }
+            var lead = document.getElementById('jiqFragLead');
+            if (lead && paid && paidBack) {
+                lead.textContent = 'Leans win-back. '
+                    + _jiqFragPct(100 * paidBack / paid) + ' of buyers left first.';
             }
 
             var kpis = document.getElementById('jiqFragKpis');
@@ -103347,11 +103366,24 @@ https://www.instagram.com/p/..."></textarea>
                     { v: oneIn ? ('1 in ' + _jiqFragNum(oneIn)) : '\u2014', l: 'Of the US gen pop paid' },
                     { v: backShare ? _jiqFragPct(backShare) : '\u2014', l: 'Of buyers left first, then came back', hot: true }
                 ];
+                // Same shape as the Profile IQ hero KPIs: the label
+                // sits above the figure, and the lead one takes the accent.
                 kpis.innerHTML = tiles.map(function (t) {
                     return '<div class="jiq-frag-kpi' + (t.hot ? ' is-hot' : '') + '">'
-                         + '<div class="jiq-frag-kpi-v">' + t.v + '</div>'
-                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(t.l) + '</div></div>';
+                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(t.l) + '</div>'
+                         + '<div class="jiq-frag-kpi-v">' + t.v + '</div></div>';
                 }).join('');
+            }
+
+            var learn = spine.length > 1 ? spine[1] : null;
+            var spineHead = document.getElementById('jiqFragSpineHead');
+            if (spineHead && learn) {
+                spineHead.textContent = 'Learning a name at all is the whole funnel. '
+                    + _jiqFragPct(learn.kept) + ' get that far.';
+            }
+            var forkHead = document.getElementById('jiqFragForkHead');
+            if (forkHead && paid && paidBack) {
+                forkHead.textContent = 'Most of the buyer file left first, then came back.';
             }
 
             var spineEl = document.getElementById('jiqFragSpine');
@@ -173129,22 +173161,47 @@ https://www.instagram.com/p/..."></textarea>
     /* ================================================================
        DIGITAL JOURNEY IQ - fragrance caterpillar funnel
        ================================================================ */
+    /* The card is a page, not a box: same graphite ground and flat
+       sections Profile IQ uses, so the two products read as one. */
     #jiqFragCard {
-        padding: 26px 28px !important;
-        margin-top: 1rem;
-        background: var(--cw-raised, #1B2E34);
-        border: 1px solid var(--cw-border, #2C4148);
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
         border-radius: 14px;
+        overflow: hidden;
     }
-    body[data-theme="light"] #jiqFragCard {
-        background: #FFFFFF; border-color: #C9C6BA;
-    }
-    .jiq-frag-head {
-        display: flex; align-items: flex-start; justify-content: space-between;
-        gap: 24px; flex-wrap: wrap; padding-bottom: 16px;
+    body[data-theme="light"] #jiqFragCard { background: #E9E8E1; color: #0C1618; }
+
+    /* Cover. Copy on the left, artwork bleeding off the right edge,
+       mirroring the Profile IQ hero. */
+    .jiq-frag-cover {
+        display: grid; grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 40px; align-items: stretch;
+        padding: 34px 0 30px 34px;
         border-bottom: 1px solid var(--cw-border, #2C4148);
     }
-    body[data-theme="light"] .jiq-frag-head { border-bottom-color: #C9C6BA; }
+    body[data-theme="light"] .jiq-frag-cover { border-bottom-color: #C9C6BA; }
+    @media (max-width: 1080px) {
+        .jiq-frag-cover { grid-template-columns: 1fr; padding-right: 34px; }
+        .jiq-frag-art { display: none; }
+    }
+    .jiq-frag-copy { min-width: 0; align-self: center; }
+    .jiq-frag-art { position: relative; min-height: 260px; }
+    .jiq-frag-art img {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: center;
+        border-radius: 12px 0 0 12px;
+    }
+    /* A wash of the page colour over the left edge so the photograph
+       resolves into the ground instead of butting against it. */
+    .jiq-frag-art::after {
+        content: ''; position: absolute; inset: 0; border-radius: 12px 0 0 12px;
+        background: linear-gradient(90deg, var(--cw-page, #111F22) 0%, rgba(17,31,34,0) 42%);
+    }
+    body[data-theme="light"] .jiq-frag-art::after {
+        background: linear-gradient(90deg, #E9E8E1 0%, rgba(233,232,225,0) 42%);
+    }
+
     .jiq-frag-eyebrow {
         font-size: 10px; font-weight: 500; letter-spacing: .18em;
         text-transform: uppercase; color: #7C878A;
@@ -173155,12 +173212,20 @@ https://www.instagram.com/p/..."></textarea>
     }
     body[data-theme="light"] .jiq-frag-eyebrow::before { background: #5E7E12; }
     #jiqFragTitle {
-        margin: 7px 0 6px !important; font-size: 24px; font-weight: 800;
-        letter-spacing: -.03em; line-height: 1;
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95;
     }
+    @media (max-width: 1080px) { #jiqFragTitle { font-size: 38px; } }
+    /* The one-line read under the name, the way Profile IQ leads with
+       "Leans older and female." */
+    .jiq-frag-read-lead {
+        margin-top: 20px; font-size: 15px; font-weight: 700;
+        letter-spacing: -.01em; color: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-frag-read-lead { color: #5E7E12; }
     #jiqFragDeck {
-        margin: 0; font-size: 12.5px; line-height: 1.55;
-        color: #9AA09B; max-width: 78ch;
+        margin: 14px 0 0; font-size: 12.5px; line-height: 1.6;
+        color: #9AA09B; max-width: 62ch;
     }
     /* Journey IQ uppercases everything inside the view. That reads fine
        on a label and badly on a sentence, so the prose in this card
@@ -173173,48 +173238,51 @@ https://www.instagram.com/p/..."></textarea>
     #jiqFragCard .jiq-frag-detlab,
     #jiqFragCard .jiq-frag-kpi-v,
     #jiqFragCard .jiq-frag-count,
-    #jiqFragCard .jiq-frag-lost { text-transform: none !important; }
+    #jiqFragCard .jiq-frag-lost,
+    #jiqFragCard .jiq-frag-sec h3,
+    #jiqFragCard .jiq-frag-read-lead { text-transform: none !important; }
     body[data-theme="light"] #jiqFragDeck { color: #5C6560; }
-    .jiq-frag-meta {
-        display: flex; flex-direction: column; gap: 4px; text-align: right;
-        font-size: 10px; font-weight: 500; letter-spacing: .12em;
-        text-transform: uppercase; color: #7C878A; white-space: nowrap;
-    }
-
+    /* KPI row on the Profile IQ scale: label above at 10px / 1.4px
+       tracking, figure under it at 32px / 800, lead one in the accent.
+       No boxes, they sit on the ground. */
     .jiq-frag-kpis {
-        display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 16px; margin: 20px 0 4px;
+        display: flex; flex-wrap: wrap; gap: 40px; margin: 30px 0 0;
     }
-    @media (max-width: 1100px) { .jiq-frag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .jiq-frag-kpi {
-        border: 1px solid var(--cw-border, #2C4148); border-radius: 10px; padding: 13px 15px;
+    .jiq-frag-kpi-l {
+        font-size: 10px; font-weight: 500; letter-spacing: 1.4px;
+        text-transform: uppercase; color: #7C878A; margin-bottom: 7px;
     }
-    body[data-theme="light"] .jiq-frag-kpi { border-color: #C9C6BA; }
     .jiq-frag-kpi-v {
-        font-size: 21px; font-weight: 800; letter-spacing: -.03em;
+        font-size: 32px; font-weight: 800; letter-spacing: -.03em; line-height: 1;
         font-variant-numeric: tabular-nums;
     }
     .jiq-frag-kpi.is-hot .jiq-frag-kpi-v { color: #C7F23E; }
     body[data-theme="light"] .jiq-frag-kpi.is-hot .jiq-frag-kpi-v { color: #5E7E12; }
-    .jiq-frag-kpi-l {
-        font-size: 10px; font-weight: 500; letter-spacing: .1em;
-        text-transform: uppercase; color: #7C878A; margin-top: 6px; line-height: 1.4;
-    }
+    @media (max-width: 1080px) { .jiq-frag-kpis { gap: 26px; } .jiq-frag-kpi-v { font-size: 26px; } }
 
-    .jiq-frag-sec {
-        display: flex; align-items: baseline; justify-content: space-between;
-        gap: 16px; margin: 30px 0 14px; padding-bottom: 9px;
-        border-bottom: 1px solid var(--cw-border, #2C4148);
+    /* Numbered eyebrow with the finding as the heading, the way the
+       Profile IQ sections read. */
+    .jiq-frag-sec { margin: 36px 34px 18px; }
+    .jiq-frag-num {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
     }
-    body[data-theme="light"] .jiq-frag-sec { border-bottom-color: #C9C6BA; }
-    .jiq-frag-sec h4 {
-        margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .18em;
-        text-transform: uppercase;
+    .jiq-frag-num::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-frag-num::before { background: #5E7E12; }
+    .jiq-frag-sec h3 {
+        margin: 10px 0 0 !important; font-size: 21px; font-weight: 700;
+        letter-spacing: -.02em; line-height: 1.2; text-transform: none;
     }
     .jiq-frag-sec em {
+        display: block; margin-top: 7px;
         font-style: normal; font-size: 10px; font-weight: 500; letter-spacing: .1em;
-        text-transform: uppercase; color: #7C878A; text-align: right;
+        text-transform: uppercase; color: #7C878A;
     }
+    #jiqFragSpine, #jiqFragFork, .jiq-frag-detours { margin: 0 34px; }
+    .jiq-frag-detours { padding-bottom: 34px; }
 
     /* One step of the caterpillar. The rail on the left is what joins
        the steps into a single run; the dot marks the step itself. */
