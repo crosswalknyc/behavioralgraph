@@ -12898,6 +12898,23 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer validate_demo_sum_100 failed: {e}")
 
+    # 2026-09-16 (Ben/Kartel EL fragrance audit): exclusion-typed
+    # universes never read as buyers of their excluded brand, and
+    # persona files never print five-digit over-indexes on tiny-base
+    # rows. Both run LAST among value-mutating passes so no earlier
+    # pin/repin can undo them.
+    try:
+        df, n_excl = enforce_exclusion_semantics(df, subject,
+                                                 verbose=verbose)
+        total += n_excl
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_exclusion_semantics failed: {e}")
+    try:
+        df, n_oidx = cap_persona_overindex(df, subject, verbose=verbose)
+        total += n_oidx
+    except Exception as e:
+        print(f"   ⚠️ enforcer cap_persona_overindex failed: {e}")
+
     # 2026-08-18 (Andy Grammer defect - defense in depth): re-sync
     # Raw + Proj + Category Share to final BP one more time. Many
     # post-recompute enforcers (enforce_bp_hard_ceiling,
@@ -15221,6 +15238,238 @@ def validate_income_monotonicity(df, *, subject=None, verbose=True):
 # ============================================================================
 
 
+
+def _persona_scrape_bi(bi_val, subject=None):
+    """True when BRAND INPUT reads as a persona SCRAPE-TERM list, not a
+    multi-brand subject seed (Ben/Kartel EL fragrance audit,
+    2026-09-16). A genuine multi-brand subject ("Spectrum, Starlink")
+    carries 2-4 clean brand tokens. A persona universe carries a long
+    screening list plus interest/topic phrases ("perfume dupe
+    recommendations, fragrance notes guide, ..."). Signals (any one):
+
+      * any comma token with 3+ words (interest/search phrase)
+      * any lowercase multi-word token (scrape phrases keep their
+        natural casing; brand seeds ride canonical casing)
+      * 6+ comma tokens (no subject is co-branded six ways)
+    """
+    s = str(bi_val or "").strip()
+    if not s or "," not in s:
+        return False
+    tokens = [t.strip() for t in s.split(",") if t.strip()]
+    if len(tokens) >= 6:
+        return True
+    for t in tokens:
+        words = t.split()
+        if len(words) >= 3:
+            return True
+        if len(words) >= 2 and t == t.lower():
+            return True
+    return False
+
+
+_EXCLUSION_TAIL_RE = _re.compile(
+    r"\s+(BRAND\s+AWARE\s+NON\s*-?\s*PURCHASERS?"
+    r"|AWARE\s+NON\s*-?\s*PURCHASERS?"
+    r"|NON\s*-?\s*PURCHASERS?"
+    r"|POTENTIAL\s+(CONSUMERS?|CUSTOMERS?|BUYERS?)"
+    r"|PROSPECTS?|INTENDERS?|CONSIDERERS?)\s*$",
+    _re.IGNORECASE,
+)
+_EXCLUSION_CATEGORY_NOUNS = (
+    "FRAGRANCE", "PERFUME", "BEAUTY", "SKINCARE", "MAKEUP", "COSMETICS",
+    "HAIRCARE", "APPAREL", "FOOTWEAR", "STREAMING", "BANKING", "GROCERY",
+)
+
+
+def _excluded_brands_from_label(subject):
+    """Derive the excluded brand candidates from an exclusion-typed
+    universe label. 'Estee Lauder Fragrance Brand Aware Non Purchaser'
+    -> ['ESTEE LAUDER FRAGRANCE', 'ESTEE LAUDER']. Returns [] when the
+    label carries no exclusion qualifier - this never fires on ordinary
+    subjects."""
+    u = str(subject or "").strip().upper()
+    m = _EXCLUSION_TAIL_RE.search(u)
+    if not m:
+        return []
+    head = u[:m.start()].strip(" -")
+    if not head:
+        return []
+    out = [head]
+    parts = head.split()
+    while len(parts) >= 2 and parts[-1] in _EXCLUSION_CATEGORY_NOUNS:
+        parts = parts[:-1]
+        out.append(" ".join(parts))
+    return out
+
+
+def enforce_exclusion_semantics(df, subject, excluded=None, verbose=True):
+    """Exclusion-typed universes (X Non Purchaser / X Potential
+    Consumer / X Prospects) must never read as buyers of X (Ben/Kartel
+    EL fragrance audit, 2026-09-16: 'Estee Lauder Fragrance Brand Aware
+    Non Purchaser' shipped ESTEE LAUDER at 100.0000 in MOST PURCHASED
+    BRANDS - "the Non-Purchaser audience is 100% purchasers").
+
+    For every excluded brand, each purchase-family occurrence lands at
+    ONE subject-salted low residual (0.6-2.4: aware, browsing, not
+    transacting), mirror-equal across the family per Rule #3b. Any
+    other non-meta occurrence of the brand at >= 95 collapses to the
+    same residual - an excluded brand never pins. Never zero, never a
+    shared constant. Idempotent."""
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    names = [str(b).strip() for b in (excluded or []) if str(b).strip()]
+    if not names:
+        names = _excluded_brands_from_label(subject)
+    if not names:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, raw_col, proj_col)):
+        return df, 0
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    _norm = lambda s: _re.sub(r'[^A-Z0-9]', '', str(s).upper())
+    fam = {
+        'MOST PURCHASED BRANDS', 'CPG', 'APPAREL/FOOTWEAR',
+        'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'ACCESSORIES', 'PETS',
+        'TOYS', 'TECHNOLOGY BRAND', 'HEAVY MACHINERY',
+        'WHERE THEY SHOP', 'WHERE THEY DINE',
+    }
+    meta = {'BRAND INPUT', 'SAMPLE SIZE', 'SUBJECT', 'BRAND CATEGORY'}
+    sample_size = None
+    sz = col_u == 'SAMPLE SIZE'
+    if sz.any():
+        try:
+            sample_size = float(str(df.loc[sz].iloc[0][raw_col])
+                                .replace(',', ''))
+        except Exception:
+            sample_size = None
+    if not sample_size:
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    n = 0
+    subj_norm = _norm(subject)
+    for b in names:
+        bn = _norm(b)
+        if not bn or bn == subj_norm:
+            # the label itself (SUBJECT row) keeps its 100 metadata pin
+            pass
+        target = _jitter_for(subject, b, salt='exclusion-residual',
+                             lo=0.6, hi=2.4)
+        for idx in df.index:
+            cu = col_u.at[idx]
+            if cu in meta or cu in DEPIN_DEMO_CATS:
+                continue
+            vn = _norm(df.at[idx, 'Value'])
+            if vn != bn:
+                continue
+            cur = _bp(df.at[idx, bp_col])
+            if cur is None:
+                continue
+            in_family = cu in fam
+            if in_family or cur >= 95.0:
+                if abs(cur - target) > 1e-6:
+                    _set_bp(df, idx, target, bp_col, cs_col, raw_col,
+                            proj_col, sample_size)
+                    n += 1
+                    if verbose:
+                        print(f"   🚫 exclusion-semantics [{subject}]: "
+                              f"[{cu}] {df.at[idx, 'Value']!r} "
+                              f"{cur:.4f}% -> {target:.4f}% "
+                              f"(excluded brand never reads as a buyer)")
+    return df, n
+
+
+def cap_persona_overindex(df, subject, verbose=True):
+    """Persona-universe over-index guard (Ben/Kartel EL fragrance
+    audit, 2026-09-16: Planet Cruise printed ~12,000x the national base
+    on <4% reach; Jenny Packham ~6,900x). On persona-style files (the
+    BRAND INPUT is a scrape-term list), any non-seed row whose national
+    baseline is tiny (< 0.5) may not claim more than ~25x that
+    baseline; rows with NO baseline at all cap in a low salted band
+    once they exceed 3.5. Seed brands named in BRAND INPUT are exempt -
+    the universe is literally defined by them, so an extreme over-index
+    there is the definition, not noise. Every clamp is subject-salted
+    (never a shared constant), Raw/Proj/Share recomputed via _set_bp."""
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, raw_col, proj_col)):
+        return df, 0
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_val = str(df.loc[bi_mask].iloc[0].get('Value', '') or '')
+    label_persona = bool(_EXCLUSION_TAIL_RE.search(str(subject or '')) or
+                         _re.search(r'\b(CONSUMERS?|ENTHUSIASTS?|BUYERS?|'
+                                    r'SHOPPERS?|VIEWERS?|USERS?|OWNERS?|'
+                                    r'MEMBERS?|VOTERS?|SUBSCRIBERS?)\b',
+                                    str(subject or '').upper()))
+    if not (_persona_scrape_bi(bi_val, subject) or label_persona):
+        return df, 0
+    gp = _load_gp_raw_map()
+    if not gp:
+        return df, 0
+    _norm = lambda s: _re.sub(r'[^A-Z0-9]', '', str(s).upper())
+    # Punctuation/category-alias tolerant national-base lookup
+    # (2026-09-16 second pass: the exact-string lookup false-flagged
+    # 'COCA COLA' vs Gen Pop 'Coca-Cola' and 'STREAMING MUSIC' vs
+    # 'STREAMING/MUSIC', clamping legitimate mass-brand rows).
+    gp_norm = {}
+    for (_gc, _gv), _gt in gp.items():
+        gp_norm.setdefault((_norm(_gc), _norm(_gv)), _gt)
+    seed_norms = {_norm(t) for t in bi_val.split(',') if t.strip()}
+    meta = {'BRAND INPUT', 'SAMPLE SIZE', 'SUBJECT', 'BRAND CATEGORY',
+            'AVID FAN', 'INTEREST', 'MOST PURCHASED CATEGORIES'}
+    sample_size = None
+    sz = col_u == 'SAMPLE SIZE'
+    if sz.any():
+        try:
+            sample_size = float(str(df.loc[sz].iloc[0][raw_col])
+                                .replace(',', ''))
+        except Exception:
+            sample_size = None
+    if not sample_size:
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    n = 0
+    for idx in df.index:
+        cu = col_u.at[idx]
+        if cu in meta or cu in DEPIN_DEMO_CATS:
+            continue
+        cur = _bp(df.at[idx, bp_col])
+        if cur is None or cur <= 0 or cur >= 95.0:
+            continue
+        val = str(df.at[idx, 'Value'])
+        vn = _norm(val)
+        if vn in seed_norms or vn == _norm(subject):
+            continue
+        gp_entry = gp_norm.get((_norm(cu), vn))
+        gp_bp = gp_entry[0] if gp_entry else None
+        if gp_bp is not None and gp_bp >= 0.5:
+            continue
+        if gp_bp is not None and gp_bp > 0:
+            ceiling = max(25.0 * gp_bp, 0.9)
+            if cur <= ceiling:
+                continue
+            new = ceiling * _jitter_for(subject, val, salt='overidx',
+                                        lo=0.62, hi=0.93)
+        else:
+            # No national base under any spelling: clamp only clear
+            # outliers (a truly unknown entity has no business above
+            # 8 on a persona file), conservatively.
+            if cur <= 8.0:
+                continue
+            new = _jitter_for(subject, val, salt='overidx-unknown',
+                              lo=0.9, hi=1.8)
+        new = round(max(new, 0.05), 4)
+        _set_bp(df, idx, new, bp_col, cs_col, raw_col, proj_col,
+                sample_size)
+        n += 1
+        if verbose:
+            print(f"   📉 persona over-index cap [{subject}]: [{cu}] "
+                  f"{val!r} {cur:.4f}% -> {new:.4f}% "
+                  f"(national base {gp_bp if gp_bp is not None else 'unknown'})")
+    return df, n
+
+
 def enforce_multi_brand_input_self_pin(df, subject=None, verbose=True):
     """Pin each component brand of a multi-brand BRAND INPUT to 100%.
 
@@ -15254,6 +15503,21 @@ def enforce_multi_brand_input_self_pin(df, subject=None, verbose=True):
         return df, 0
     bi_val = str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip()
     if not bi_val:
+        return df, 0
+
+    # 2026-09-16 (Ben/Kartel EL fragrance audit): a persona universe's
+    # BRAND INPUT is a SCRAPE-TERM list ("Chanel, Dior, ..., perfume
+    # dupe recommendations, fragrance notes guide"), not a multi-brand
+    # subject. Treating it as one pinned eight screening brands to
+    # 100.0000 on 'Estee Lauder Fragrance Brand Aware Non Purchaser'
+    # (a file whose whole point is that they do NOT buy those brands).
+    # Multi-brand self-pin only ever applies to genuine co-equal
+    # subject seeds (2-4 clean brand tokens, e.g. "Spectrum, Starlink").
+    if _persona_scrape_bi(bi_val, subject):
+        if verbose:
+            print("   🔗 enforce_multi_brand_input_self_pin: BRAND INPUT "
+                  "is a persona scrape-term list - multi-brand self-pin "
+                  "skipped (screening brands are reasoned, never pinned)")
         return df, 0
 
     # Prefer SAMPLE SIZE row -> BRAND INPUT row -> _detect_sample_size fallback.
