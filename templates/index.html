@@ -141151,6 +141151,35 @@ https://www.instagram.com/p/..."></textarea>
             return items.some(item => sportsItemMatchesSlice(item, sliceOption));
         }
 
+        function isStreamingMusicCategory(cat) {
+            var u = String(cat || '').toUpperCase();
+            return u === 'STREAMING/MUSIC' || u === 'STREAMING MUSIC';
+        }
+
+        function streamingMusicChannelKind(name) {
+            var n = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            if (/^SPOTIFY\s*:/.test(n)) return 'spotify';
+            if (/^SIRIUSXM\s*:/.test(n) || /^SIRIUS XM\s*:/.test(n)) return 'siriusxm';
+            return '';
+        }
+
+        function streamingMusicSliceLabel(opt) {
+            var v = String(opt || '').toLowerCase();
+            if (v === 'spotify channels') return 'Spotify Channels';
+            if (v === 'siriusxm channels' || v === 'sirius xm channels') return 'SiriusXM Channels';
+            return 'Channels';
+        }
+
+        function filterStreamingMusicItems(items, sliceValue) {
+            var slice = String(sliceValue || 'all').toLowerCase().replace(/[_-]+/g, ' ').trim();
+            return (items || []).filter(function(item) {
+                var kind = streamingMusicChannelKind(item && item.name);
+                if (slice === 'spotify channels') return kind === 'spotify';
+                if (slice === 'siriusxm channels' || slice === 'sirius xm channels') return kind === 'siriusxm';
+                return !kind;
+            });
+        }
+
         function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
             let aggregatedBehavioral;
             
@@ -141546,9 +141575,14 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;
+                // STREAMING/MUSIC default: platforms only (SPOTIFY, SIRIUSXM, VEVO, ...).
+                // Channel rows (SPOTIFY: ..., SIRIUSXM: ...) live under the Channels dropdown.
+                const listSource = isStreamingMusicCategory(cat)
+                    ? filterStreamingMusicItems(filteredItems, 'all')
+                    : filteredItems;
                 
                 // Default sort by percentage descending
-                const sortedItems = filteredItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                const sortedItems = listSource.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 sortedItems.forEach((item, i) => { item._rank = i + 1; });
                 // Apply item limit (default top 15)
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
@@ -141600,6 +141634,10 @@ https://www.instagram.com/p/..."></textarea>
                     if (b === 'all') return 1;
                     return a.localeCompare(b);
                 });
+                
+                // Check if this is STREAMING/MUSIC for the Channels dropdown
+                const isStreamingMusic = isStreamingMusicCategory(cat);
+                const streamingMusicSliceOptions = ['all', 'spotify channels', 'siriusxm channels'];
                 
                 // Check if this is TALENT for slice dropdown
                 const isTalent = cat.toUpperCase() === 'TALENT';
@@ -141791,6 +141829,12 @@ https://www.instagram.com/p/..."></textarea>
                     const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
                 }
+                if (isStreamingMusic) {
+                    const _live = [];
+                    if (items.some(it => streamingMusicChannelKind(it.name) === 'spotify')) _live.push('spotify channels');
+                    if (items.some(it => streamingMusicChannelKind(it.name) === 'siriusxm')) _live.push('siriusxm channels');
+                    streamingMusicSliceOptions.length = 0; streamingMusicSliceOptions.push('all', ..._live);
+                }
                 if (isSports) {
                     const _live = sportsSliceOptions.filter(o => {
                         if (o === 'all') return false;
@@ -141816,7 +141860,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (isNonProfit) { const _live = _hasGenericItems(nonProfitSliceOptions); nonProfitSliceOptions.length = 0; nonProfitSliceOptions.push('all', ..._live); }
 
                 // Check if any slicer should be shown
-                const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
+                const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isStreamingMusic || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
                 
                 return `
                     <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}${has100Pct ? ' has-100-pct' : ''}${dashDisplayMode === 'projection' ? ' hide-gp' : ''}" 
@@ -141875,6 +141919,12 @@ https://www.instagram.com/p/..."></textarea>
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Show All</option>
                                     ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isStreamingMusic ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Channels</option>
+                                    ${streamingMusicSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${streamingMusicSliceLabel(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isAppPlatform ? `
@@ -142650,7 +142700,9 @@ https://www.instagram.com/p/..."></textarea>
             let filtered = items;
             
             // Apply slice filter first if active
-            if (sliceSelect && sliceSelect.value && sliceSelect.value !== 'all') {
+            if (isStreamingMusicCategory(cat)) {
+                filtered = filterStreamingMusicItems(items, (sliceSelect && sliceSelect.value) || 'all');
+            } else if (sliceSelect && sliceSelect.value && sliceSelect.value !== 'all') {
                 const sliceValue = sliceSelect.value;
                 const catUpper = cat.toUpperCase();
                 
@@ -142745,6 +142797,10 @@ https://www.instagram.com/p/..."></textarea>
             if (!listEl) return;
             
             let items = [...(allBehavioralData[cat] || [])];
+            if (isStreamingMusicCategory(cat)) {
+                const sliceSelectMusic = document.getElementById('slice-' + catId);
+                items = filterStreamingMusicItems(items, (sliceSelectMusic && sliceSelectMusic.value) || 'all');
+            }
             
             // Apply current sort
             const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
@@ -142894,7 +142950,9 @@ https://www.instagram.com/p/..."></textarea>
             
             // Apply slice filter if active
             const sliceSelect = document.getElementById('slice-' + catId);
-            if (sliceSelect && sliceSelect.value && sliceSelect.value !== 'all') {
+            if (isStreamingMusicCategory(cat)) {
+                items = filterStreamingMusicItems(items, (sliceSelect && sliceSelect.value) || 'all');
+            } else if (sliceSelect && sliceSelect.value && sliceSelect.value !== 'all') {
                 const sliceValue = sliceSelect.value;
                 const catUpper = cat.toUpperCase();
                 
@@ -143392,7 +143450,9 @@ https://www.instagram.com/p/..."></textarea>
             
             // Filter items based on slice
             let filtered = items;
-            if (sliceValue && sliceValue !== 'all') {
+            if (isStreamingMusicCategory(cat)) {
+                filtered = filterStreamingMusicItems(items, sliceValue);
+            } else if (sliceValue && sliceValue !== 'all') {
                 const sliceUpper = sliceValue.toUpperCase();
                 
                 // Filter items that match the slice value in name, subcategory, or tags
@@ -143439,6 +143499,10 @@ https://www.instagram.com/p/..."></textarea>
             listEl.innerHTML = displayItems.length > 0 
                 ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
+            if (isStreamingMusicCategory(cat)) {
+                const countEl = listEl.closest('.behavioral-card') && listEl.closest('.behavioral-card').querySelector('.count');
+                if (countEl) countEl.textContent = filtered.length + ' Items';
+            }
         }
 
         // Store location data for filtering
@@ -147060,6 +147124,9 @@ https://www.instagram.com/p/..."></textarea>
                 ? allBehavioralData[cat]
                 : ((currentDashboardData && currentDashboardData.behavioral && currentDashboardData.behavioral[cat]) || []);
             var items = Array.isArray(source) ? source.slice() : [];
+            if (isStreamingMusicCategory(cat)) {
+                return filterStreamingMusicItems(items, sliceValue || 'all');
+            }
             if (!sliceValue || sliceValue === 'all') return items;
             var catUpper = String(cat || '').toUpperCase();
             var sliceLower = String(sliceValue).toLowerCase();
