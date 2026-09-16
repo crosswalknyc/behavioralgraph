@@ -5374,7 +5374,10 @@ def update_user(username):
         if 'credit_source' in req_data:
             user['credit_source'] = req_data['credit_source']
         if 'access_expires' in req_data:
-            user['access_expires'] = req_data['access_expires']
+            # '' and null both mean "never expires" - normalize to None
+            # so the edit modal derives the checkbox deterministically
+            # (Jenna 2026-09-16).
+            user['access_expires'] = req_data['access_expires'] or None
         if 'allowed_categories' in req_data:
             user['allowed_categories'] = req_data['allowed_categories']
         if 'allowed_runs' in req_data:

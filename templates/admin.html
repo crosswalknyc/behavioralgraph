@@ -3811,7 +3811,7 @@
                             <input type="date" id="accessExpires" style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                             <label class="checkbox-group" style="white-space: nowrap;">
                                 <input type="checkbox" id="unlimitedAccess" checked onchange="toggleAccessExpires()">
-                                <span>Unlimited</span>
+                                <span>Never expires</span>
                             </label>
                         </div>
                         <small style="color: var(--text-secondary); font-size: 0.65rem;">User will be archived after expiration</small>
@@ -14665,6 +14665,16 @@
             const editUsername = document.getElementById('editUsername').value;
             const isEdit = !!editUsername;
 
+            // Access expiry sanity (Jenna 2026-09-16): unchecking "Never
+            // expires" without picking a date used to save an empty date,
+            // which reads back as never-expires and re-checks the box on
+            // every reload. Make the contradiction impossible to save.
+            if (!document.getElementById('unlimitedAccess').checked &&
+                !document.getElementById('accessExpires').value) {
+                showToast('Pick an expiration date, or check "Never expires". (Billing unlimited is managed on the Billing tab.)', true);
+                return;
+            }
+
             const userData = {
                 username: document.getElementById('newUsername').value,
                 email: document.getElementById('newEmail').value,
@@ -14786,6 +14796,18 @@
             // above.
             if (currentUserRole !== 'super_admin') {
                 SUPER_ADMIN_ONLY_USER_FIELDS.forEach(k => { delete userData[k]; });
+            }
+
+            // Billing lives on the Billing tab (Jenna 2026-09-16). The
+            // legacy credits / consulting inputs in this modal are hidden,
+            // but their snapshot values still rode every edit save - a
+            // stale checked "unlimited credits" box (populated from
+            // credits === -1 at modal open) silently restored unlimited
+            // billing the Billing tab had just turned off. Edit saves no
+            // longer send either field; create keeps its defaults.
+            if (isEdit) {
+                delete userData.credits;
+                delete userData.consulting_hour_pool;
             }
 
             // Include original username if changed
