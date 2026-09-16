@@ -172644,6 +172644,35 @@ https://www.instagram.com/p/..."></textarea>
        never the thing that gets clipped. Price, holds and genre are
        secondary and give way first. */
     #trendsIQView[data-tiq-product="trends"] .tiq-row-meta .tiq-audience-chip { order: -1; }
+
+    /* Books and Comics put the count and the author on one line, and in
+       a 291px column the two need 316px, so the author was being sliced
+       mid-word against the column edge. These rows carry few enough
+       items to stack instead: the count on its own line, the author
+       under it in full. Two lines are reserved either way, so rows stay
+       a single height, and a row with extra chips shows two of them
+       rather than the one and a half that fit across. Scoped to these
+       two panels because Movers and Trending carry several chips each
+       and genuinely read better running across. */
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-meta,
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="comics"] .tiq-row-meta {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-start !important;
+        height: 44px !important;
+        row-gap: 3px;
+        overflow: hidden !important;
+    }
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-meta > *,
+    #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="comics"] .tiq-row-meta > * {
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
     /* The watchlist and trend controls sat inline after the title and
        took a line of their own when the title ran long. Park them in
        the corner of the row instead. */
