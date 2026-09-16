@@ -129112,6 +129112,26 @@ https://www.instagram.com/p/..."></textarea>
             return behavioral;
         }
 
+        // PRIMARY_LANGUAGE is a demo-like extra and must never render as a
+        // behavioral card. STREAMING MUSIC / STREAMING VIDEO (space, no slash)
+        // are leftover alias columns whose Brand Penetration does not match
+        // STREAMING/MUSIC or STREAMING/PLATFORM. Baby This Is Keke Palmer
+        // Listeners: Spotify 99.04% on STREAMING MUSIC vs 32.22% on
+        // STREAMING/MUSIC; Netflix 5.17% on STREAMING VIDEO vs 73.26% on
+        // STREAMING/PLATFORM. Never merge those leak rows — delete the cards.
+        function isLeakBehavioralCategory(cat) {
+            var u = String(cat || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            return u === 'PRIMARY_LANGUAGE' || u === 'PRIMARY LANGUAGE'
+                || u === 'STREAMING MUSIC' || u === 'STREAMING VIDEO';
+        }
+        function dropLeakBehavioralCategories(obj) {
+            if (!obj || typeof obj !== 'object') return obj;
+            Object.keys(obj).forEach(function(cat) {
+                if (isLeakBehavioralCategory(cat)) delete obj[cat];
+            });
+            return obj;
+        }
+
         function parseAllData(csvData) {
             const result = {
                 sampleSize: 0,
@@ -129142,7 +129162,7 @@ https://www.instagram.com/p/..."></textarea>
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'AGE_OF_CHILDREN', 'NUMBER_OF_CHILDREN'];
-            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
+            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'PRIMARY_LANGUAGE', 'PRIMARY LANGUAGE', 'STREAMING MUSIC', 'STREAMING VIDEO'];
             const US_POPULATION = 329900000;
             
             function normAgeKey(s) {
@@ -129959,6 +129979,8 @@ https://www.instagram.com/p/..."></textarea>
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
             dedupeAppPlatformBehavioral(result.behavioral);
+            dropLeakBehavioralCategories(result.behavioral);
+            if (result.categories) dropLeakBehavioralCategories(result.categories);
 
             // Do not rebase demographic percentages in the dashboard parser.
             // The CSV already contains finalized percentages that should be rendered as-is.
@@ -141325,8 +141347,11 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (typeof dedupeAppPlatformBehavioral === 'function') {
                 dedupeAppPlatformBehavioral(aggregatedBehavioral);
-                allBehavioralData = aggregatedBehavioral;
             }
+            if (typeof dropLeakBehavioralCategories === 'function') {
+                dropLeakBehavioralCategories(aggregatedBehavioral);
+            }
+            allBehavioralData = aggregatedBehavioral;
             const container = document.getElementById('behavioralGrid');
             
             // Get all categories and sort them
@@ -158855,7 +158880,7 @@ https://www.instagram.com/p/..."></textarea>
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'AGE_OF_CHILDREN', 'NUMBER_OF_CHILDREN'];
             const demoKeyByCategory = { AGE: 'age', GENDER: 'gender', ETHNICITY: 'ethnicity', INCOME: 'income', EDUCATION: 'education', RELATIONSHIP: 'relationship', SEXUAL_ORIENTATION: 'sexual_orientation', PARENTAL_STATUS: 'parental_status', OCCUPATION: 'occupation', AGE_OF_CHILDREN: 'age_of_children', NUMBER_OF_CHILDREN: 'number_of_children' };
-            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'MEDIAN AGE'];
+            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'MEDIAN AGE', 'PRIMARY_LANGUAGE', 'PRIMARY LANGUAGE', 'STREAMING MUSIC', 'STREAMING VIDEO'];
 
             csvData.forEach(row => {
                 const category = (row.Column || row[0] || '').toString().toUpperCase().trim();
@@ -158959,6 +158984,8 @@ https://www.instagram.com/p/..."></textarea>
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
             dedupeAppPlatformBehavioral(result.behavioral);
+            dropLeakBehavioralCategories(result.behavioral);
+            if (result.categories) dropLeakBehavioralCategories(result.categories);
 
             return result;
         }
