@@ -6,7 +6,13 @@ echo "🚀 Starting application..."
 echo "PORT: ${PORT:-10000}"
 
 WORKERS="${GUNICORN_WORKERS:-1}"
-THREADS="${GUNICORN_THREADS:-4}"
+# 2026-09-16: default threads 4 -> 12. A burst of partner API
+# interpret calls (60-220s each) filled every thread slot, /healthz
+# stopped answering, and Render restarted the instance - a ~75s full
+# 502 outage. Threads share the worker heap, so the memory cost is
+# small; 3 workers x 12 threads = 36 slots keeps health checks
+# answering under the same burst.
+THREADS="${GUNICORN_THREADS:-12}"
 TIMEOUT="${GUNICORN_TIMEOUT:-600}"
 echo "Gunicorn: workers=${WORKERS} threads=${THREADS} timeout=${TIMEOUT}"
 

@@ -467,6 +467,89 @@ def dedupe_against_ledger(subject, value, entries, salt='tu'):
     return new_value, True
 
 
+def _sig_constraints(sig):
+    """Flatten a persona signature into (demo_tuple, constraint_set).
+    Constraints = interest tokens + intensity modifiers; demo pins are
+    compared separately (containment only applies within the same
+    demographic frame)."""
+    if not isinstance(sig, dict):
+        return None, None
+    demo = tuple(sorted(str(d).lower() for d in (sig.get('demo') or [])))
+    cons = {f"i:{str(t).lower()}" for t in (sig.get('interests') or [])}
+    cons |= {f"m:{str(m).lower()}" for m in (sig.get('modifiers') or [])}
+    if not cons:
+        return None, None
+    return demo, cons
+
+
+def enforce_refinement_containment(subject, value, signature, entries,
+                                   salt='tu', log=print):
+    """Audience containment across related asks (2026-09-15 partner
+    finding: 'as you added parameters, the counts went up'). A persona
+    ask whose constraint set is a strict SUPERSET of a recently sized
+    ask (same demographic frame) describes a subset of that audience
+    and must size strictly below it; a strict-subset ask must size
+    strictly above. Sizes each ask against the rolling S3 ledger, so
+    three independent API calls stay mutually possible.
+
+    Returns (new_value, changed_bool, note_or_None)."""
+    demo, cons = _sig_constraints(signature)
+    if cons is None:
+        return value, False, None
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return value, False, None
+    me = _norm_subject(str(subject).split('|', 1)[0])
+    ceiling = None   # tightest parent (I am narrower than it)
+    floor = None     # largest child (I am broader than it)
+    ceil_of = floor_of = None
+    for e in entries or []:
+        if not isinstance(e, dict) or e.get('kind') != 'tu':
+            continue
+        if _norm_subject(str(e.get('subject', '')).split('|', 1)[0]) == me:
+            continue
+        o_demo, o_cons = _sig_constraints(e.get('sig'))
+        if o_cons is None or o_demo != demo:
+            continue
+        try:
+            ov = int(e.get('value'))
+        except (TypeError, ValueError):
+            continue
+        if ov <= 0:
+            continue
+        if o_cons < cons and (ceiling is None or ov < ceiling):
+            ceiling = ov
+            ceil_of = e.get('subject')
+        elif cons < o_cons and (floor is None or ov > floor):
+            floor = ov
+            floor_of = e.get('subject')
+    h = hashlib.sha256(f"{subject}|containment|{salt}".encode()).hexdigest()
+    if ceiling is not None and value >= ceiling:
+        frac = 0.42 + (int(h[:6], 16) % 3601) / 10000.0   # 0.42-0.78
+        new_value = ensure_messy_sample_size(
+            f"{subject}|containment|{salt}", int(round(ceiling * frac)))
+        note = (f"constraint superset of {ceil_of!r} "
+                f"({ceiling:,}); {value:,} -> {new_value:,}")
+        try:
+            log(f"[sizing-guard] {subject!r}: {note}")
+        except Exception:
+            pass
+        return new_value, True, note
+    if floor is not None and value <= floor:
+        frac = 1.22 + (int(h[6:12], 16) % 4001) / 10000.0  # 1.22-1.62
+        new_value = ensure_messy_sample_size(
+            f"{subject}|containment|{salt}", int(round(floor * frac)))
+        note = (f"constraint subset of {floor_of!r} "
+                f"({floor:,}); {value:,} -> {new_value:,}")
+        try:
+            log(f"[sizing-guard] {subject!r}: {note}")
+        except Exception:
+            pass
+        return new_value, True, note
+    return value, False, None
+
+
 def load_recent_subject_raws(s3_client, bucket):
     """Read the rolling ledger from S3. Never raises; returns []."""
     try:
@@ -496,12 +579,19 @@ def record_subject_raws(s3_client, bucket, entries, records):
             update_json = None
     try:
         now = int(time.time())
-        new_records = [{
-            'subject': str(r.get('subject', '')),
-            'value': int(r.get('value', 0)),
-            'kind': str(r.get('kind', 'tu')),
-            'ts': now,
-        } for r in records]
+        new_records = []
+        for r in records:
+            rec = {
+                'subject': str(r.get('subject', '')),
+                'value': int(r.get('value', 0)),
+                'kind': str(r.get('kind', 'tu')),
+                'ts': now,
+            }
+            # Persona constraint signature (2026-09-15) rides along so
+            # the refinement-containment guard can compare later asks.
+            if isinstance(r.get('sig'), dict):
+                rec['sig'] = r['sig']
+            new_records.append(rec)
 
         if update_json is not None:
             def _mutate(data):
@@ -531,7 +621,7 @@ def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
                         universe_anchor=None, engaged_share=None,
                         anchor_source=None, prose=None, s3_client=None,
                         bucket='dashboard-inputs', log=print, country='US',
-                        refresh_locked=False):
+                        refresh_locked=False, persona_signature=None):
     """One-call convenience wrapper used by both wire points.
 
     Runs the MANDATORY anchor derivation on TU (Jenna 2026-08-24:
@@ -574,12 +664,33 @@ def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
                 except Exception:
                     pass
                 subject_raw_avid = new_av
+        # 3. Refinement containment (2026-09-15): a persona ask whose
+        # constraints strictly extend a recently sized ask must land
+        # strictly below it (and a strictly broader ask above), so
+        # related asks quote mutually possible sizes.
+        if persona_signature:
+            new_tu, ch_c, _note = enforce_refinement_containment(
+                subject, subject_raw_tu, persona_signature, entries,
+                salt='tu', log=log)
+            if ch_c:
+                if subject_raw_avid and subject_raw_tu:
+                    try:
+                        ratio = float(subject_raw_avid) / float(subject_raw_tu)
+                        subject_raw_avid = ensure_messy_sample_size(
+                            f"{subject}|avid|containment",
+                            max(int(new_tu * ratio), 500))
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        pass
+                subject_raw_tu = new_tu
         if subject_raw_avid and subject_raw_avid >= subject_raw_tu:
             subject_raw_avid = ensure_messy_sample_size(
                 f"{subject}|avid|subset",
                 max(int(subject_raw_tu * 0.24), 500),
             )
-        records = [{'subject': subject, 'value': subject_raw_tu, 'kind': 'tu'}]
+        rec_tu = {'subject': subject, 'value': subject_raw_tu, 'kind': 'tu'}
+        if persona_signature:
+            rec_tu['sig'] = persona_signature
+        records = [rec_tu]
         if subject_raw_avid:
             records.append({'subject': subject, 'value': subject_raw_avid,
                             'kind': 'avid'})
