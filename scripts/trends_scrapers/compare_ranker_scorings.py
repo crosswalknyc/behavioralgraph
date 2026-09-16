@@ -41,7 +41,10 @@ CH_HOST = os.environ.get('CLICKHOUSE_HOST', '168.119.215.48')
 CH_PORT = os.environ.get('CLICKHOUSE_PORT', '8123')
 CH_USER = os.environ.get('CLICKHOUSE_USER', 'bgapp')
 CH_PASS = os.environ.get('CLICKHOUSE_PASSWORD', '')
-NEW_TABLE = 'reference.profile_iq_daily_signal_metrics'
+# Read through the view, never the table: a ReplacingMergeTree shows
+# both rows for a re-run day until its parts merge, which doubles every
+# sum. The view picks the latest write per (day, entity).
+NEW_VIEW = 'reference.v_iq_daily_signal_metrics'
 OLD_VIEW = 'reference.v_iq_daily_metrics'
 
 
@@ -100,7 +103,7 @@ def new_window(start: str, end: str) -> dict[str, dict]:
                sum(signal_volume), max(signal_reach),
                max(has_signal), sum(matched_items),
                arrayStringConcat(arrayDistinct(arrayFlatten(groupArray(surfaces))), ',')
-        FROM {NEW_TABLE}
+        FROM {NEW_VIEW}
         WHERE snapshot_date BETWEEN toDate('{start}') AND toDate('{end}')
           AND {_EXCLUDE}
         GROUP BY profile_subject FORMAT TSV""")

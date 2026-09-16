@@ -90,6 +90,12 @@ BUCKET = os.environ.get('IQR_SIGNAL_BUCKET', sig.S3_DEFAULT_BUCKET)
 CACHE_KEY = 'system/s3_cache.json'
 TERMS_CACHE_KEY = f'{sig.SNAPSHOT_PREFIX}/system/iq_ranker_entity_terms.json'
 TABLE = 'reference.profile_iq_daily_signal_metrics'
+# Every read goes through the view, never the table. A ReplacingMergeTree
+# only collapses duplicates when its parts merge, so a re-run of the same
+# day shows both rows until then and every sum doubles. The view picks the
+# latest write per (day, entity) on read, which is the same pattern
+# `reference.v_iq_daily_metrics` already uses for the clickstream table.
+VIEW = 'reference.v_iq_daily_signal_metrics'
 
 CH_HOST = os.environ.get('CLICKHOUSE_HOST', '168.119.215.48')
 CH_PORT = os.environ.get('CLICKHOUSE_PORT', '8123')
@@ -117,6 +123,29 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
     generated_at      DateTime
 ) ENGINE = ReplacingMergeTree(generated_at)
 ORDER BY (snapshot_date, category, subcategory, profile_subject)
+"""
+
+DDL_VIEW = f"""
+CREATE OR REPLACE VIEW {VIEW} AS
+SELECT snapshot_date,
+       profile_subject,
+       argMax(project_name, generated_at)      AS project_name,
+       argMax(category, generated_at)          AS category,
+       argMax(subcategory, generated_at)       AS subcategory,
+       argMax(s3_key, generated_at)            AS s3_key,
+       argMax(signal_volume, generated_at)     AS signal_volume,
+       argMax(signal_reach, generated_at)      AS signal_reach,
+       argMax(matched_items, generated_at)     AS matched_items,
+       argMax(surfaces, generated_at)          AS surfaces,
+       argMax(surface_mix, generated_at)       AS surface_mix,
+       argMax(has_signal, generated_at)        AS has_signal,
+       argMax(cw_iq_score, generated_at)       AS cw_iq_score,
+       argMax(prev_volume, generated_at)       AS prev_volume,
+       argMax(prev_cw_iq_score, generated_at)  AS prev_cw_iq_score,
+       argMax(top_items, generated_at)         AS top_items,
+       max(generated_at)                       AS last_generated_at
+FROM {TABLE}
+GROUP BY snapshot_date, profile_subject
 """
 
 
@@ -218,7 +247,7 @@ def _history_from_db(day: str) -> dict[str, list[dict]]:
     start = (date.fromisoformat(day)
              - timedelta(days=R.CW_IQ_BASELINE_DAYS)).isoformat()
     sql = (f"SELECT profile_subject, toString(snapshot_date), signal_volume, "
-           f"signal_reach, ifNull(cw_iq_score, -1) FROM {TABLE} "
+           f"signal_reach, ifNull(cw_iq_score, -1) FROM {VIEW} "
            f"WHERE snapshot_date >= toDate('{start}') "
            f"AND snapshot_date < toDate('{day}') "
            f"ORDER BY snapshot_date DESC FORMAT TSV")
@@ -353,7 +382,8 @@ def main() -> int:
 
     if args.create_table:
         ch(DDL)
-        print(f'[signal_daily] {TABLE} ready')
+        ch(DDL_VIEW)
+        print(f'[signal_daily] {TABLE} and {VIEW} ready')
 
     s3 = boto3.client('s3')
     entities = load_entities(s3)
