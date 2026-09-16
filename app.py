@@ -51036,6 +51036,10 @@ def api_synth_chat_clarify():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Funds gate (2026-09-16, Jenna): clarify steps cost model calls.
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -52679,6 +52683,11 @@ def api_synth_chat_interpret():
     # build-oriented chips and the backend refuses the pull entry.
     if not _pm_gate_pull(user):
         return _pm_gate_refusal('pull')
+    # Funds gate (2026-09-16, Jenna): interpreting a brief costs model
+    # calls; a drained account gets the paused reply, not free work.
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -56060,8 +56069,103 @@ def _pm_access_gate(user):
         'offer_deck': False, 'deck_angle': None})
 
 
+NO_FUNDS_MESSAGE = (
+    "Your account has no credits and no balance on file, so Prometheus "
+    "is paused for now. Add funds on the billing page, or ask your "
+    "admin to add credits or set your account to unlimited. The moment "
+    "funding lands, your next ask goes straight through.")
+
+
+def _pm_has_funding(user, username, data=None):
+    """Pure funding decision for the Prometheus ask surfaces (Jenna
+    2026-09-16: "make sure that no one gets free metered usage of
+    prometheus if they do not have any credits/money in their account
+    unless they've been set to unlimited").
+
+    Returns (allowed, reason). Allowed when ANY funding source is open:
+      * staff: role == super_admin (ops accounts run the billing desk),
+      * unlimited: personal credits == -1, the admin 'unlimited' flag,
+        or an unlimited company pool reachable by this user
+        (check_user_credits returns -1),
+      * credits: personal / company-pool credits remaining > 0 within
+        the user's ceiling,
+      * money: the resolved billing subject (personal wallet or the
+        company-shared wallet) can absorb one metered answer at the
+        configured rate - covers prepaid balance, auto-reload with a
+        card on file, and monthly-invoice room.
+    Blocked only when every source above is exhausted."""
+    user = user or {}
+    if str(user.get('role') or '').strip() == 'super_admin':
+        return True, 'super_admin'
+    try:
+        import wallet as _w
+    except Exception:
+        return True, 'wallet_unavailable'
+    try:
+        if _w.is_unlimited(user) or bool(user.get('unlimited')):
+            return True, 'unlimited'
+    except Exception:
+        pass
+    try:
+        has_cr, left = check_user_credits(username)
+        if left == -1:
+            return True, 'unlimited_pool'
+        if has_cr and left > 0:
+            return True, 'credits'
+    except Exception:
+        traceback.print_exc()
+        return True, 'credits_lookup_failed'
+    try:
+        if data is None:
+            data = load_users()
+        subject, _kind, _key = _w.resolve_billing_subject(user, data)
+    except Exception:
+        subject = user
+    try:
+        rate = float(_w.metered_answer_usd())
+    except Exception:
+        rate = 2.10
+    try:
+        ok, _why = _w.wallet_can_absorb(subject or {}, rate)
+        if ok:
+            return True, 'wallet'
+    except Exception:
+        traceback.print_exc()
+        return True, 'wallet_lookup_failed'
+    return False, 'no_funding'
+
+
+def _pm_funds_gate(user):
+    """Prometheus funds gate: None when the user may proceed, else the
+    partner-safe paused reply. Session surfaces only. Fails open on
+    internal lookup errors (a billing-file hiccup must never take
+    Prometheus down for funded users); the pure decision lives in
+    _pm_has_funding."""
+    try:
+        uname = (session.get('username') or (user or {}).get('username')
+                 or '').strip()
+        allowed, reason = _pm_has_funding(user, uname)
+        if allowed:
+            return None
+        try:
+            _pm_ask_hint(outcome='declined_no_funds')
+        except Exception:
+            pass
+        print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': NO_FUNDS_MESSAGE,
+            'followups': [],
+            'no_funds': True,
+            'offer_deck': False, 'deck_angle': None})
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _pm_usage_extras(user):
     """Attribution extras for a pay-as-you-go user's model calls.
+
 
     Returns None for subscribed (full-tier) users so their usage
     records stay exactly as before. For a pulls_only user who opted
@@ -57883,6 +57987,12 @@ def api_synth_chat_analyze():
     _gate_resp = _pm_access_gate(user)
     if _gate_resp is not None:
         return _gate_resp
+    # Funds gate (2026-09-16, Jenna): no credits, no balance, not
+    # unlimited = no metered usage. Runs before any replay or model
+    # call so a drained account never accrues usage it cannot cover.
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
     # Pay-as-you-go attribution (None for subscribed users): rides
     # every model call this request makes, and switches billing from
     # credits to per-session dollar usage.
@@ -58686,6 +58796,10 @@ def api_synth_chat_deck():
     _gate_resp = _pm_access_gate(user)
     if _gate_resp is not None:
         return _gate_resp
+    # Funds gate (2026-09-16, Jenna): decks are metered work too.
+    _funds_resp = _pm_funds_gate(user)
+    if _funds_resp is not None:
+        return _funds_resp
     _pm_ppu = _pm_usage_extras(user)
     text = str(body.get('text') or '').strip()[:600]
     angle = ((body.get('angle') or '').strip()
