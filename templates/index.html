@@ -173284,7 +173284,13 @@ https://www.instagram.com/p/..."></textarea>
         background: var(--cw-page, #111F22);
         color: #E9E8E1;
         border-radius: 14px;
-        overflow: hidden;
+        /* No overflow clip here. The card is a flex child of the view,
+           and hidden overflow drops its automatic minimum size to zero,
+           which let it be squeezed to the visible 805px while its real
+           content ran to 2,780px. Everything below the cover was then
+           unreachable because the view had nothing left to scroll. The
+           artwork does its own clipping instead. */
+        flex: 0 0 auto;
     }
     body[data-theme="light"] #jiqFragCard { background: #E9E8E1; color: #0C1618; }
 
@@ -173302,7 +173308,10 @@ https://www.instagram.com/p/..."></textarea>
         .jiq-frag-art { display: none; }
     }
     .jiq-frag-copy { min-width: 0; align-self: center; }
-    .jiq-frag-art { position: relative; min-height: 260px; }
+    .jiq-frag-art {
+        position: relative; min-height: 260px;
+        overflow: hidden; border-radius: 12px 0 0 12px;
+    }
     .jiq-frag-art img {
         position: absolute; inset: 0; width: 100%; height: 100%;
         object-fit: cover; object-position: center;
