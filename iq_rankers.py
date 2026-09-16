@@ -1003,6 +1003,7 @@ def compute_cw_iq_score(
     today: dict[str, float],
     history: list[dict[str, float]],
     snapshot_date: str | None = None,
+    damping_basis: str = "rows",
 ) -> float:
     """Compose the 0..100 CW IQ Score.
 
@@ -1036,7 +1037,23 @@ def compute_cw_iq_score(
     # Cold-start damping: with <3 days of history, z-scores are unstable —
     # ramp them in linearly so brand-new profiles can't outscore established
     # ones purely on first-day novelty noise.
-    history_factor = min(1.0, len(h_mentions) / 3.0) if h_mentions else 0.0
+    #
+    # `damping_basis` decides what counts as a day of history.
+    #   "rows"      counts every stored day, including days the entity was
+    #               not seen at all. This is the original behaviour and
+    #               stays the default so nothing already scored moves.
+    #   "observed"  counts only days the entity actually registered. A
+    #               nightly pass that writes a row for every entity every
+    #               day (both paths do) otherwise hands a full history
+    #               factor to an entity that has never been seen, and its
+    #               first day of signal scores against a baseline of pure
+    #               zeros, which lands on 100.0. Counting observed days is
+    #               what the ramp was always meant to do.
+    if damping_basis == "observed":
+        observed = sum(1 for x in h_mentions if x > 0)
+        history_factor = min(1.0, observed / 3.0)
+    else:
+        history_factor = min(1.0, len(h_mentions) / 3.0) if h_mentions else 0.0
     z_volume *= history_factor
     z_reach  *= history_factor
 
