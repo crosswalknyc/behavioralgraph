@@ -172725,7 +172725,6 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #dashboardView.piq-v4 .comp-tab.active,
     body[data-theme="light"] #dashboardView.piq-v4 .marketing-subtab.active,
     body[data-theme="light"] #dashboardView.piq-v4 .piq-cmp-av,
-    body[data-theme="light"] #dashboardView.piq-v4 .behavioral-item .count,
     body[data-theme="light"] #dashboardView.piq-v4 .behavioral-name,
     body[data-theme="light"] #dashboardView.piq-v4 .interest-name,
     body[data-theme="light"] #dashboardView.piq-v4 .interest-pct {
@@ -172742,10 +172741,16 @@ https://www.instagram.com/p/..."></textarea>
         color: #0C1618 !important;
         border-bottom-color: #5E7E12 !important;
     }
-    body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .count,
     body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .behavioral-name,
     body[data-theme="light"] #dashboardView.piq-v4 #tab-interests .interest-name {
         color: #0C1618 !important;
+    }
+    /* The item-count badge is the one place white type is right on a
+       light page: it sits on a filled purple pill, not on the ground.
+       Darkening it with the rest of the pale type put black on purple. */
+    body[data-theme="light"] #dashboardView.piq-v4 #tab-behavioral .count,
+    body[data-theme="light"] #dashboardView.piq-v4 .behavioral-item .count {
+        color: #FFFFFF !important;
     }
 
     /* The sticky header carries the same Off-White to white gradient the
