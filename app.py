@@ -41946,6 +41946,21 @@ def cron_iq_rankers_daily():
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    # 2026-09-15 (Jenna): the Culture Ranker is no longer a live surface,
+    # so this nightly pass was spending 2 to 3 hours of database time a
+    # night scoring a board nobody reads. A scheduler somewhere still
+    # calls this at 11:00 UTC; declining here stops the work whoever the
+    # caller turns out to be. Set IQ_RANKERS_DAILY_ENABLED=1 to re-arm,
+    # or pass ?force=1 for a one-off manual run.
+    if (os.environ.get('IQ_RANKERS_DAILY_ENABLED', '').strip() != '1'
+            and (request.args.get('force') or '').strip() != '1'):
+        app.logger.info("iq-rankers-daily: declined, surface is retired")
+        return jsonify({
+            'success': True,
+            'skipped': True,
+            'reason': 'This scheduled refresh is switched off.',
+        }), 200
     snapshot_date = (request.args.get('date') or '').strip() or None
     only_subject  = (request.args.get('only') or '').strip() or None
     days_raw      = (request.args.get('days') or '').strip()
