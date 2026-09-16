@@ -47171,6 +47171,27 @@ https://www.instagram.com/p/..."></textarea>
 
 
 
+                <!-- Luxury fragrance TikTok Shop purchase journey.
+                     Story-mode: fragrance_shop_journey. Caterpillar
+                     funnel. Payload: _JIQ_FRAGRANCE_DATA. -->
+                <div class="card jiq-frag" id="jiqFragCard" style="display: none;">
+                    <div class="jiq-frag-head">
+                        <div>
+                            <div class="jiq-frag-eyebrow">Purchase journey</div>
+                            <h3 id="jiqFragTitle">Luxury fragrance on TikTok Shop.</h3>
+                            <p id="jiqFragDeck"></p>
+                        </div>
+                        <div class="jiq-frag-meta" id="jiqFragMeta"></div>
+                    </div>
+                    <div class="jiq-frag-kpis" id="jiqFragKpis"></div>
+                    <div class="jiq-frag-sec"><h4>The spine</h4><em>Each bar is what the step kept from the step before</em></div>
+                    <div id="jiqFragSpine"></div>
+                    <div class="jiq-frag-sec"><h4>The bag splits</h4><em>Who paid on the spot and who left first</em></div>
+                    <div id="jiqFragFork"></div>
+                    <div class="jiq-frag-sec"><h4>Detours</h4><em>Where the journey came from and what closed it</em></div>
+                    <div class="jiq-frag-detours" id="jiqFragDetours"></div>
+                </div>
+
                 <!-- Heated Rivalry x Barbie song-to-title journey.
                      Story-mode: song_to_title. Single card with title
                      pills and stage tabs. Payload: _JIQ_SONG_DATA. -->
@@ -79603,6 +79624,9 @@ https://www.instagram.com/p/..."></textarea>
                             { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
                             { value: '__demo_song_to_title__', label: 'Heated Rivalry x Barbie · song journey' }
                         ],
+                        brands: [
+                            { value: '__demo_fragrance_tiktok__', label: 'Luxury Fragrance \u00b7 TikTok Shop purchase journey' }
+                        ],
                         movie: [
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
                             { value: '__demo_michael__',            label: 'Michael' },
@@ -80013,6 +80037,31 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Reach',    value: '43.87M unique U.S. viewers touched at least one of the 6 handles in the window - 22.1% of the social-active panel. 3.64M viewers touched 2 or more handles.' },
                             { label: 'Discovery', value: 'Hubs run on clip-repost economics: Rick and Morty, Family Guy, and Simpsons clips together account for the top three cross-hub sources. Solo creators run on the algorithmic homepage + creator-name search axis, with YT search converting at 78-82% when a viewer is looking for that specific person.' },
                             { label: 'Retention', value: 'Median follow rate 24.6%. 51.8% of first-touch viewers return within 30 days. Hub retention lands at 62-68% for 3-plus plays on the same show; solo creators land at 46-62% for 3-plus videos.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_fragrance_tiktok__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'fragrance_shop_journey',
+                            target_name: 'Luxury Fragrance on TikTok Shop',
+                            target_display: 'Luxury Fragrance \u00b7 TikTok Shop purchase journey',
+                            project_name: 'Luxury Fragrance TikTok Shop Journey',
+                            customer_brand: 'Prestige fragrance houses',
+                            start_date: '2025-07-01',
+                            end_date: '2026-06-30',
+                            target_type: 'purchase_journey',
+                            category: 'brands'
+                        },
+                        fragrance_shop_journey: _JIQ_FRAGRANCE_DATA,
+                        facts: [
+                            { label: 'Window', value: 'July 1, 2025 to June 30, 2026. Unique US accounts.' },
+                            { label: 'The spine', value: '329,900,000 US accounts down to 187,429 who paid for a $95 and up bottle. The single biggest fall is learning a name at all: 3.9% get that far.' },
+                            { label: 'The bag', value: '412,847 put a prestige bottle in the bag and 340,994 of them closed the app with it still there. That leftover pool is the largest unpaid audience still in play.' },
+                            { label: 'Where the money is', value: '115,576 of the 187,429 who paid, 61.7%, left first and came back after a retarget. Same-session payers are the smaller half at 71,853.' }
                         ]
                     }
                 };
@@ -82102,6 +82151,12 @@ https://www.instagram.com/p/..."></textarea>
             if (_isSongStory) {
                 if (typeof renderJourneyIqSong === 'function') {
                     renderJourneyIqSong(_pickClickstreamBlock('song_to_title'));
+                }
+            }
+
+            if (_storyMode === 'fragrance_shop_journey') {
+                if (typeof renderJourneyIqFragrance === 'function') {
+                    renderJourneyIqFragrance(_pickClickstreamBlock('fragrance_shop_journey'));
                 }
             }
 
@@ -103061,6 +103116,157 @@ https://www.instagram.com/p/..."></textarea>
             return stages;
         }
 
+        // ──────────────────────────────────────────────────────────────
+        // LUXURY FRAGRANCE - TIKTOK SHOP PURCHASE JOURNEY
+        // A caterpillar funnel. The spine falls from 329.9M to 187K, so
+        // a bar drawn as share-of-TAM would be a hairline from step two
+        // on. Each bar is instead what that step kept from the step
+        // before, which keeps every step on the same 0-100 scale and
+        // puts the drop where you can actually see it.
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_FRAGRANCE_DATA = {"meta":{"window":"2025-07-01 to 2026-06-30","unit":"unique US accounts","sample":48217,"usGenPop":329900000},"spine":[{"id":"us_gen_pop","label":"US gen pop","doing":"US gen pop. The TAM for this file","where":"United States","accounts":329900000,"kept":100.0,"dropped":0,"ofUs":100.0,"next":"Learn a named luxury bottle, or never","surface":"","job":"","timing":""},{"id":"discovered","label":"Learned a bottle name","doing":"Learn a name","where":"First named luxury bottle on the account","accounts":12847263,"kept":3.8943,"dropped":317052737,"ofUs":3.8943,"next":"TikTok fragrance, or stay on search / Sephora / review","surface":"TikTok in-feed, paid search, YouTube, off-site retailer","job":"Name the bottle on the first surface.","timing":"Same session as first named bottle"},{"id":"tiktok_fragrance","label":"Opened fragrance on TikTok","doing":"Opened fragrance on TikTok","where":"TikTok fragrance content","accounts":6891247,"kept":53.6398,"dropped":5956016,"ofUs":2.0889,"next":"A shop card, or bounce","surface":"TikTok shop cards and Spark on fragrance content","job":"Put a house card on the content they are in.","timing":"Same session"},{"id":"any_card","label":"Opened any shop card","doing":"Opened any fragrance shop card","where":"TikTok Shop fragrance listing","accounts":3186204,"kept":46.2355,"dropped":3705043,"ofUs":0.9658,"next":"Prestige listing, or cheaper only","surface":"Shop ads pinned to the open listing","job":"Keep them on a house listing.","timing":"Same session"},{"id":"prestige_card","label":"Opened a $95+ listing","doing":"Opened a $95 and up listing","where":"Jo Malone, Kilian, Le Labo, Tom Ford or peer house listing","accounts":1042773,"kept":32.7278,"dropped":2143431,"ofUs":0.3161,"next":"Bag, or leave the listing","surface":"Shop ads and live pinned to that SKU","job":"Hold the $95 card. 2143431 never got here.","timing":"Same session"},{"id":"bag","label":"Added $95+ to bag","doing":"Added $95 and up","where":"Prestige in the TikTok Shop bag","accounts":412847,"kept":39.5913,"dropped":629926,"ofUs":0.1251,"next":"Pay, or leave","surface":"Checkout reminder and live code before they close the app","job":"Close in-session. Most bags leave.","timing":"0 to 30 minutes"},{"id":"paid_prestige","label":"Paid a $95+ bottle","doing":"Paid a $95 and up house bottle","where":"TikTok Shop checkout","accounts":187429,"kept":45.3991,"dropped":225418,"ofUs":0.0568,"next":"Done for this bottle","surface":"Next bottle in the note family. Not the same SKU","job":"Stop the same-SKU retarget.","timing":"8 to 30 days after pay"}],"fork":[{"id":"abandoned","label":"Left with it in the bag","doing":"Closed the app with the bottle still in bag","accounts":340994,"kept":82.5957,"dropped":71853,"surface":"Shop ad, live, creator, email, SMS","timing":"2 hours to 7 days"},{"id":"retargeted","label":"Saw a retarget","doing":"Saw a retarget","accounts":241867,"kept":70.93,"dropped":99127,"surface":"Keep the retarget. Pair it with a code","timing":"2 to 7 days"},{"id":"returned","label":"Came back","doing":"Came back after a retarget","accounts":156423,"kept":64.6731,"dropped":85444,"surface":"Live with a stated code on the SKU in the bag","timing":"Same session as the return"},{"id":"paid_return","label":"Paid after coming back","doing":"Paid prestige after leave and return","accounts":115576,"kept":73.8868,"dropped":40847,"surface":"Do not retarget the same SKU","timing":"8 to 30 days after pay"},{"id":"paid_first","label":"Paid in the same session","doing":"Paid prestige in the same session as the bag","accounts":71853,"kept":17.4043,"dropped":340994,"surface":"Do not retarget the same SKU","timing":"0 to 30 minutes"}],"detours":[{"title":"Where they first learned a name","note":"","rows":[{"label":"TikTok creator or organic","accounts":4218647,"pct":32.8369,"doing":"First time a named luxury bottle appears"},{"label":"Search","accounts":2847193,"pct":22.1619,"doing":"Typed the name or a note family"},{"label":"YouTube","accounts":1862471,"pct":14.497,"doing":"Opened a review or unbox"},{"label":"Sephora or Ulta","accounts":1641829,"pct":12.7796,"doing":"Opened a prestige PDP. Often added to loves"},{"label":"Instagram","accounts":1028364,"pct":8.0045,"doing":"Saw a bottle on a creator or a shop tag"},{"label":"Reddit or a forum","accounts":412847,"pct":3.2135,"doing":"Asked for a clone or a close match"},{"label":"Brand site or email","accounts":387291,"pct":3.0146,"doing":"Opened the house site or an owned mail"},{"label":"Other","accounts":448621,"pct":3.492,"doing":"First named bottle was not one of the seven above"}]},{"title":"Which retarget brought them back","note":"","rows":[{"label":"TikTok shop ad","accounts":98413,"pct":40.6889,"doing":"Saw a retarget ad"},{"label":"TikTok live","accounts":67241,"pct":27.8008,"doing":"Saw a live with the same bottle"},{"label":"Creator shop video","accounts":41829,"pct":17.2942,"doing":"Saw a creator with a shop tag"},{"label":"Email or SMS","accounts":21847,"pct":9.0327,"doing":"Got owned mail or a text"},{"label":"Other","accounts":12537,"pct":5.1834,"doing":"Saw a retarget that was not shop ad, live, creator, or mail"}]},{"title":"How long until they paid","note":"","rows":[{"label":"Same session","accounts":71853,"pct":38.3361,"doing":"Paid in the session they bagged"},{"label":"Later the same day","accounts":18247,"pct":9.7354,"doing":"Left and paid later that day"},{"label":"2 to 7 days","accounts":54813,"pct":29.2447,"doing":"Paid later in the week"},{"label":"8 to 30 days","accounts":31471,"pct":16.7909,"doing":"Paid later in the month"},{"label":"31 days or more","accounts":11045,"pct":5.8929,"doing":"Paid after a month"}]},{"title":"First touch on the paid file","note":"","rows":[{"label":"Search","accounts":58871,"pct":31.4098,"doing":"First click on the paid order"},{"label":"Fragrantica or a review site","accounts":35062,"pct":18.7068,"doing":"First click on the paid order"},{"label":"Sephora or Ulta","accounts":30371,"pct":16.204,"doing":"First click on the paid order"},{"label":"YouTube","accounts":23984,"pct":12.7963,"doing":"First click on the paid order"},{"label":"TikTok, not the shop","accounts":20817,"pct":11.1066,"doing":"First click on the paid order"},{"label":"Brand site","accounts":11993,"pct":6.3987,"doing":"First click on the paid order"},{"label":"Other","accounts":6331,"pct":3.3778,"doing":"First click on the paid order"}]},{"title":"Last touch before they paid","note":"","rows":[{"label":"TikTok Shop live","accounts":72341,"pct":38.5965,"doing":"Last click on the paid order"},{"label":"Creator shop link","accounts":55087,"pct":29.3909,"doing":"Last click on the paid order"},{"label":"Shop tab search","accounts":27741,"pct":14.8008,"doing":"Last click on the paid order"},{"label":"Paid shop ad","accounts":18184,"pct":9.7018,"doing":"Last click on the paid order"},{"label":"Seller video","accounts":14076,"pct":7.51,"doing":"Last click on the paid order"}]},{"title":"What assisted the sale","note":"","rows":[{"label":"A coupon query or extension","accounts":118247,"pct":63.089,"doing":"Assist on the paid order"},{"label":"Fragrantica or Parfumo","accounts":101586,"pct":54.1997,"doing":"Assist on the paid order"},{"label":"A retarget after they left","accounts":96413,"pct":51.4397,"doing":"Assist on the paid order"},{"label":"A second shop listing, different house","accounts":89591,"pct":47.8,"doing":"Assist on the paid order"},{"label":"Sephora or Ulta","accounts":77408,"pct":41.2999,"doing":"Assist on the paid order"},{"label":"YouTube long-form","accounts":53230,"pct":28.4001,"doing":"Assist on the paid order"},{"label":"Reddit","accounts":26427,"pct":14.0997,"doing":"Assist on the paid order"}]}]};
+
+        function _jiqFragNum(n) {
+            if (n === null || n === undefined || isNaN(n)) return '\u2014';
+            return Number(n).toLocaleString('en-US');
+        }
+        function _jiqFragPct(n) {
+            if (n === null || n === undefined || isNaN(n)) return '\u2014';
+            return (Math.round(Number(n) * 10) / 10) + '%';
+        }
+        function _jiqFragEsc(s) {
+            return String(s === null || s === undefined ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function _jiqFragStep(s, opts) {
+            opts = opts || {};
+            // A first step has nothing before it, so it shows the whole
+            // track filled rather than a kept share of nothing.
+            var keep = (s.kept === null || s.kept === undefined) ? 100 : Number(s.kept);
+            var keepW = Math.max(0.6, Math.min(100, keep));
+            var lost = (s.dropped === null || s.dropped === undefined || s.dropped === 0)
+                ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' left here</span>';
+            var sub = [s.doing, s.where].filter(Boolean).join(' \u00b7 ');
+            return '' +
+              '<div class="jiq-frag-step' + (opts.branch ? ' is-branch' : '') +
+                   (opts.terminal ? ' is-terminal' : '') + '">' +
+                '<div class="jiq-frag-rail"><i></i></div>' +
+                '<div class="jiq-frag-body">' +
+                  '<div class="jiq-frag-line">' +
+                    '<span class="jiq-frag-label">' + _jiqFragEsc(s.label) + '</span>' +
+                    '<span class="jiq-frag-count">' + _jiqFragNum(s.accounts) + '</span>' +
+                  '</div>' +
+                  (sub ? '<div class="jiq-frag-doing">' + _jiqFragEsc(sub) + '</div>' : '') +
+                  '<div class="jiq-frag-track">' +
+                    '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
+                  '</div>' +
+                  '<div class="jiq-frag-foot">' +
+                    '<span class="jiq-frag-kept">' + _jiqFragPct(keep) + ' of the step before</span>' +
+                    lost +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+        }
+
+        function renderJourneyIqFragrance(p) {
+            var d = (p && p.spine) ? p
+                  : (typeof _JIQ_FRAGRANCE_DATA !== 'undefined' ? _JIQ_FRAGRANCE_DATA : null);
+            if (!d) return;
+            var card = document.getElementById('jiqFragCard');
+            if (!card) return;
+            card.style.display = '';
+
+            var spine = d.spine || [], fork = d.fork || [];
+            var tam = spine.length ? spine[0].accounts : null;
+            var entered = spine.length > 1 ? spine[1].accounts : null;
+            var paid = spine.length ? spine[spine.length - 1].accounts : null;
+            var byId = {};
+            fork.forEach(function (f) { byId[f.id] = f; });
+            var paidBack = byId.paid_return ? byId.paid_return.accounts : null;
+
+            var deck = document.getElementById('jiqFragDeck');
+            if (deck) {
+                deck.textContent = 'Every account that could have bought a prestige bottle on TikTok Shop, '
+                    + 'down to the ones who did. Each bar is what the step kept from the step before, so the '
+                    + 'fall from ' + _jiqFragNum(tam) + ' to ' + _jiqFragNum(paid) + ' stays readable the whole way.';
+            }
+            var meta = document.getElementById('jiqFragMeta');
+            if (meta && d.meta) {
+                meta.innerHTML = '<span>' + _jiqFragEsc(d.meta.window) + '</span>'
+                    + '<span>' + _jiqFragEsc(d.meta.unit) + '</span>';
+            }
+
+            var kpis = document.getElementById('jiqFragKpis');
+            if (kpis) {
+                var oneIn = (tam && paid) ? Math.round(tam / paid) : null;
+                var backShare = (paid && paidBack) ? (100 * paidBack / paid) : null;
+                var tiles = [
+                    { v: _jiqFragNum(tam), l: 'US accounts in the window' },
+                    { v: _jiqFragNum(entered), l: 'Learned a luxury bottle name' },
+                    { v: _jiqFragNum(paid), l: 'Paid for a $95 and up bottle' },
+                    { v: oneIn ? ('1 in ' + _jiqFragNum(oneIn)) : '\u2014', l: 'Of the US gen pop paid' },
+                    { v: backShare ? _jiqFragPct(backShare) : '\u2014', l: 'Of buyers left first, then came back', hot: true }
+                ];
+                kpis.innerHTML = tiles.map(function (t) {
+                    return '<div class="jiq-frag-kpi' + (t.hot ? ' is-hot' : '') + '">'
+                         + '<div class="jiq-frag-kpi-v">' + t.v + '</div>'
+                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(t.l) + '</div></div>';
+                }).join('');
+            }
+
+            var spineEl = document.getElementById('jiqFragSpine');
+            if (spineEl) {
+                spineEl.innerHTML = spine.map(function (s, i) {
+                    return _jiqFragStep(s, { terminal: i === spine.length - 1 });
+                }).join('');
+            }
+
+            var forkEl = document.getElementById('jiqFragFork');
+            if (forkEl) {
+                var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
+                var html = '';
+                order.forEach(function (id) {
+                    var f = byId[id];
+                    if (!f) return;
+                    if (id === 'paid_first') {
+                        html += '<div class="jiq-frag-branchnote">Paid on the spot</div>';
+                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += '<div class="jiq-frag-branchnote">Left, and what happened next</div>';
+                    } else {
+                        html += _jiqFragStep(f, { branch: true, terminal: id === 'paid_return' });
+                    }
+                });
+                if (paid && paidBack) {
+                    html += '<p class="jiq-frag-read">' + _jiqFragNum(paidBack) + ' of the '
+                          + _jiqFragNum(paid) + ' who paid, ' + _jiqFragPct(100 * paidBack / paid)
+                          + ', came back after leaving. The leftover bag is the larger half of the buyer file, '
+                          + 'not the edge case.</p>';
+                }
+                forkEl.innerHTML = html;
+            }
+
+            var detEl = document.getElementById('jiqFragDetours');
+            if (detEl) {
+                detEl.innerHTML = (d.detours || []).map(function (t) {
+                    var rows = (t.rows || []);
+                    var top = rows.reduce(function (m, r) {
+                        return Math.max(m, Number(r.accounts) || 0); }, 0) || 1;
+                    return '<div class="jiq-frag-det">'
+                      + '<h5>' + _jiqFragEsc(t.title) + '</h5>'
+                      + rows.map(function (r) {
+                          var w = Math.max(1, Math.round(100 * (Number(r.accounts) || 0) / top));
+                          return '<div class="jiq-frag-detrow">'
+                            + '<span class="jiq-frag-detlab">' + _jiqFragEsc(r.label) + '</span>'
+                            + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
+                            + '<span class="jiq-frag-detval">' + _jiqFragNum(r.accounts) + '</span>'
+                          + '</div>';
+                        }).join('')
+                      + '</div>';
+                }).join('');
+            }
+        }
+
         function renderJourneyIqSong(p) {
             var data = (p && p.heated_rivalry) ? p : (typeof _JIQ_SONG_DATA !== 'undefined' ? _JIQ_SONG_DATA : null);
             if (!data) return;
@@ -106853,7 +107059,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, fragrance_shop_journey: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
@@ -172781,6 +172987,178 @@ https://www.instagram.com/p/..."></textarea>
         row-gap: 3px;
         overflow: hidden !important;
     }
+    /* ================================================================
+       DIGITAL JOURNEY IQ - fragrance caterpillar funnel
+       ================================================================ */
+    #jiqFragCard {
+        padding: 26px 28px !important;
+        margin-top: 1rem;
+        background: var(--cw-raised, #1B2E34);
+        border: 1px solid var(--cw-border, #2C4148);
+        border-radius: 14px;
+    }
+    body[data-theme="light"] #jiqFragCard {
+        background: #FFFFFF; border-color: #C9C6BA;
+    }
+    .jiq-frag-head {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 24px; flex-wrap: wrap; padding-bottom: 16px;
+        border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    body[data-theme="light"] .jiq-frag-head { border-bottom-color: #C9C6BA; }
+    .jiq-frag-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .jiq-frag-eyebrow::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-frag-eyebrow::before { background: #5E7E12; }
+    #jiqFragTitle {
+        margin: 7px 0 6px !important; font-size: 24px; font-weight: 800;
+        letter-spacing: -.03em; line-height: 1;
+    }
+    #jiqFragDeck {
+        margin: 0; font-size: 12.5px; line-height: 1.55;
+        color: #9AA09B; max-width: 78ch;
+    }
+    body[data-theme="light"] #jiqFragDeck { color: #5C6560; }
+    .jiq-frag-meta {
+        display: flex; flex-direction: column; gap: 4px; text-align: right;
+        font-size: 10px; font-weight: 500; letter-spacing: .12em;
+        text-transform: uppercase; color: #7C878A; white-space: nowrap;
+    }
+
+    .jiq-frag-kpis {
+        display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px; margin: 20px 0 4px;
+    }
+    @media (max-width: 1100px) { .jiq-frag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .jiq-frag-kpi {
+        border: 1px solid var(--cw-border, #2C4148); border-radius: 10px; padding: 13px 15px;
+    }
+    body[data-theme="light"] .jiq-frag-kpi { border-color: #C9C6BA; }
+    .jiq-frag-kpi-v {
+        font-size: 21px; font-weight: 800; letter-spacing: -.03em;
+        font-variant-numeric: tabular-nums;
+    }
+    .jiq-frag-kpi.is-hot .jiq-frag-kpi-v { color: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-kpi.is-hot .jiq-frag-kpi-v { color: #5E7E12; }
+    .jiq-frag-kpi-l {
+        font-size: 10px; font-weight: 500; letter-spacing: .1em;
+        text-transform: uppercase; color: #7C878A; margin-top: 6px; line-height: 1.4;
+    }
+
+    .jiq-frag-sec {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 16px; margin: 30px 0 14px; padding-bottom: 9px;
+        border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    body[data-theme="light"] .jiq-frag-sec { border-bottom-color: #C9C6BA; }
+    .jiq-frag-sec h4 {
+        margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .18em;
+        text-transform: uppercase;
+    }
+    .jiq-frag-sec em {
+        font-style: normal; font-size: 10px; font-weight: 500; letter-spacing: .1em;
+        text-transform: uppercase; color: #7C878A; text-align: right;
+    }
+
+    /* One step of the caterpillar. The rail on the left is what joins
+       the steps into a single run; the dot marks the step itself. */
+    .jiq-frag-step { display: grid; grid-template-columns: 22px 1fr; gap: 14px; }
+    .jiq-frag-step.is-branch { margin-left: 26px; }
+    .jiq-frag-rail { position: relative; }
+    .jiq-frag-rail::before {
+        content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
+        width: 1px; background: var(--cw-border, #2C4148); transform: translateX(-50%);
+    }
+    body[data-theme="light"] .jiq-frag-rail::before { background: #C9C6BA; }
+    .jiq-frag-step.is-terminal .jiq-frag-rail::before { bottom: 50%; }
+    .jiq-frag-rail i {
+        position: absolute; left: 50%; top: 13px; width: 9px; height: 9px;
+        margin-left: -4.5px; border-radius: 50%;
+        background: var(--cw-raised, #1B2E34);
+        border: 2px solid #7C878A;
+    }
+    body[data-theme="light"] .jiq-frag-rail i { background: #FFFFFF; }
+    .jiq-frag-step.is-terminal .jiq-frag-rail i { border-color: #C7F23E; background: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-step.is-terminal .jiq-frag-rail i { border-color: #5E7E12; background: #5E7E12; }
+    .jiq-frag-body { padding: 7px 0 17px; min-width: 0; }
+    .jiq-frag-line {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 16px;
+    }
+    .jiq-frag-label { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+    .jiq-frag-count {
+        font-size: 17px; font-weight: 800; letter-spacing: -.02em;
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .jiq-frag-doing {
+        font-size: 11px; color: #7C878A; margin-top: 3px; line-height: 1.45;
+    }
+    .jiq-frag-track {
+        position: relative; height: 9px; border-radius: 999px; margin-top: 9px;
+        background: #3B3D38; overflow: hidden;
+    }
+    body[data-theme="light"] .jiq-frag-track { background: #DDDACE; }
+    .jiq-frag-keep {
+        position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
+        background: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-frag-keep { background: #5E7E12; }
+    .jiq-frag-foot {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 16px; margin-top: 6px;
+    }
+    .jiq-frag-kept {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-frag-kept { color: #5E7E12; }
+    .jiq-frag-lost {
+        font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+        color: #E682FF; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    body[data-theme="light"] .jiq-frag-lost { color: #8E3FA8; }
+    .jiq-frag-branchnote {
+        font-size: 10px; font-weight: 700; letter-spacing: .16em;
+        text-transform: uppercase; color: #7C878A; margin: 10px 0 8px;
+    }
+    .jiq-frag-read {
+        margin: 14px 0 0 26px; font-size: 12.5px; line-height: 1.6; color: #9AA09B;
+        border-left: 2px solid #C7F23E; padding-left: 14px; max-width: 80ch;
+    }
+    body[data-theme="light"] .jiq-frag-read { color: #5C6560; border-left-color: #5E7E12; }
+
+    .jiq-frag-detours {
+        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px 36px;
+    }
+    @media (max-width: 1100px) { .jiq-frag-detours { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 720px)  { .jiq-frag-detours { grid-template-columns: 1fr; } }
+    .jiq-frag-det h5 {
+        margin: 0 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; color: #9AA09B;
+        padding-bottom: 7px; border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    body[data-theme="light"] .jiq-frag-det h5 { color: #5C6560; border-bottom-color: #C9C6BA; }
+    .jiq-frag-detrow {
+        display: grid; grid-template-columns: 1fr 74px auto; gap: 11px;
+        align-items: center; padding: 5px 0;
+    }
+    .jiq-frag-detlab {
+        font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .jiq-frag-detbar { height: 5px; border-radius: 999px; background: #3B3D38; overflow: hidden; }
+    body[data-theme="light"] .jiq-frag-detbar { background: #DDDACE; }
+    .jiq-frag-detbar i { display: block; height: 100%; border-radius: 999px; background: #B7B3D8; }
+    body[data-theme="light"] .jiq-frag-detbar i { background: #8E3FA8; }
+    .jiq-frag-detval {
+        font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+        text-align: right; white-space: nowrap;
+    }
+
     #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-meta > *,
     #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="comics"] .tiq-row-meta > * {
         flex: 0 0 auto !important;
