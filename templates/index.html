@@ -175415,6 +175415,27 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #piqStickyChrome.piq-v4 {
         background: linear-gradient(135deg, #E9E8E1 0%, #FFFFFF 100%) !important;
     }
+    /* ---- Light mode: Rankers and Trends ----------------------------
+       The magazine variables already carry their light twins, so the
+       grounds, rules and the up/down accents come across correctly.
+       Two things did not. The ground was a warm F4F3EE rather than the
+       Off-White in the pack, and the two chip families were unreadable:
+       Dusk is a recessive colour on a dark ground and turns to roughly
+       1.9:1 against Off-White, while the older badge rule was a violet
+       that is not in the pack at all. Both become the same recessive
+       pairing they have in dark mode, translated for light. */
+    body[data-theme="light"] #trendsIQView { --mag-ground: #E9E8E1; }
+    body[data-theme="light"] #trendsIQView .tiq-audience-chip,
+    body[data-theme="light"] #trendsIQView .tiq-badge {
+        background: rgba(12, 22, 24, 0.05) !important;
+        color: #5C6560 !important;
+        border-color: #C9C6BA !important;
+    }
+    body[data-theme="light"] #trendsIQView .tiq-badge.tiq-origin-person {
+        background: rgba(142, 63, 168, 0.08) !important;
+        color: #8E3FA8 !important;
+    }
+
     body[data-theme="light"] #piqStickyChrome.piq-v4 #profileTabsBar,
     body[data-theme="light"] #piqStickyChrome.piq-v4 #toolbarRow,
     body[data-theme="light"] #piqStickyChrome.piq-v4 #profileAndToolbarRow,
