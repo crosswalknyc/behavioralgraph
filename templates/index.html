@@ -173023,6 +173023,18 @@ https://www.instagram.com/p/..."></textarea>
         margin: 0; font-size: 12.5px; line-height: 1.55;
         color: #9AA09B; max-width: 78ch;
     }
+    /* Journey IQ uppercases everything inside the view. That reads fine
+       on a label and badly on a sentence, so the prose in this card
+       opts out and only the chrome keeps the caps. */
+    #jiqFragTitle,
+    #jiqFragDeck,
+    #jiqFragCard .jiq-frag-label,
+    #jiqFragCard .jiq-frag-doing,
+    #jiqFragCard .jiq-frag-read,
+    #jiqFragCard .jiq-frag-detlab,
+    #jiqFragCard .jiq-frag-kpi-v,
+    #jiqFragCard .jiq-frag-count,
+    #jiqFragCard .jiq-frag-lost { text-transform: none !important; }
     body[data-theme="light"] #jiqFragDeck { color: #5C6560; }
     .jiq-frag-meta {
         display: flex; flex-direction: column; gap: 4px; text-align: right;
