@@ -509,3 +509,4 @@ if __name__ == "__main__":
 # (fix/bpiq-superadmin-journeys 2026-09-08 - super_admin resolves to '*')
 # (title-lookup-tool 2026-09-14 - StreamScout 19-platform identifier tool, PR #75)
 # (audible-platform 2026-09-16 - StreamScout #20 Audible: direct + via-Amazon links)
+# (jenna-package-20 2026-09-16 - StreamScout Jenna package: 20-platform how-to + Excel)
