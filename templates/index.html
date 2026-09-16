@@ -172761,6 +172761,17 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #dashboardView.piq-v4 [style*="background: var(--accent-lime)"] {
         color: #FFFFFF !important;
     }
+    /* The count chip never converted to light: a Slate fill with muted
+       grey type, so it read as a black slab inside a white card and the
+       label was low contrast against it. Unlike the purple and olive
+       badges this one is not meant to be a filled accent, it is a
+       recessive chip, so it takes the light tint the other recessive
+       chips use rather than white type on a dark pill. */
+    body[data-theme="light"] #dashboardView.piq-v4 .piq-chip {
+        background: rgba(12, 22, 24, 0.05) !important;
+        color: #5C6560 !important;
+        border: 1px solid #C9C6BA !important;
+    }
 
     /* The sticky header carries the same Off-White to white gradient the
        hero panel uses, so the two read as one surface when the page
