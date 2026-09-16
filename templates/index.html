@@ -172686,8 +172686,15 @@ https://www.instagram.com/p/..."></textarea>
         height: 35px;
         overflow: hidden;
     }
+    /* The chips are 23px tall and this box was also 23px, so with the
+       overflow hidden that holds the row height, every chip had its
+       rounded top and bottom shaved flat against the edge. Four pixels
+       of room is enough for them to sit inside the line properly.
+       Height only, no max-height, so the taller stacked box that Books
+       and Comics use still wins. */
     #trendsIQView[data-tiq-product="trends"] .tiq-row-meta {
-        height: 23px;
+        height: 27px;
+        align-items: center;
     }
     #trendsIQView[data-tiq-product="trends"] .tiq-row-title .tiq-actions {
         position: absolute;
