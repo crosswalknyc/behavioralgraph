@@ -58009,6 +58009,75 @@ def api_synth_chat_analyze():
     # every model call this request makes, and switches billing from
     # credits to per-session dollar usage.
     _pm_ppu = _pm_usage_extras(user)
+    # ---- Brand Partnership Valuation flow (Jenna 2026-09-16) ----
+    # Chip -> guided inputs -> confirm -> charge -> background build.
+    _bpiq_user = (session.get('username') or user.get('username')
+                  or '').strip()
+    _bpiq_confirm = body.get('bpiq_confirm')
+    if isinstance(_bpiq_confirm, dict) and _bpiq_confirm.get(
+            'brand_partner'):
+        _subj = (f"{_bpiq_confirm.get('qualifier')} x "
+                 f"{_bpiq_confirm.get('brand_partner')}")
+        if not consume_credit(
+                _bpiq_user,
+                description=f'Brand Partnership Valuation: {_subj}',
+                pull_type='Brand Partnership IQ',
+                credits_used=_PM_BPIQ_CREDITS):
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('That valuation needs '
+                          f'{_PM_BPIQ_CREDITS} credits and your '
+                          'account cannot cover it right now. Add '
+                          'funds or ask your admin, and I will run '
+                          'it the moment you are set.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        _bpiq_job = uuid.uuid4().hex[:12]
+        _bpiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _pm_bpiq_status_write(_bpiq_job, {
+            'job_id': _bpiq_job, 'user': _bpiq_user,
+            'status': 'queued', 'started_at': time.time()})
+        threading.Thread(
+            target=_pm_run_bpiq_job,
+            args=(_bpiq_job, _bpiq_user, _bpiq_confirm, _bpiq_extras),
+            daemon=True).start()
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': (f'On it. Building the {_subj} valuation now - '
+                      'the research and the numbers take a few '
+                      'minutes. It lands in the Brand Partnership '
+                      'tab, and I will confirm here when it is '
+                      'ready.'),
+            'bpiq_job_id': _bpiq_job,
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    if body.get('bpiq_inputs'):
+        _parsed = _pm_bpiq_parse(text, usage_extras=_pm_ppu)
+        if _pm_bpiq_inputs_complete(_parsed):
+            _parsed.pop('missing', None)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pm_bpiq_confirm_reply(_parsed),
+                'bpiq_confirm_payload': _parsed,
+                'followups': ['Run the valuation', 'Cancel'],
+                'offer_deck': False, 'deck_angle': None})
+        _missing = _parsed.get('missing') or [
+            'the brand', 'the partner', 'the campaign window']
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Almost there - I still need '
+                      + ', '.join(str(m) for m in _missing)
+                      + '. Send the missing piece(s) and I will '
+                        'line it up.'),
+            'bpiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
+    if _pm_bpiq_intent(text):
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _PM_BPIQ_ASK_COPY,
+            'bpiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
     # ------------------ SINGLE ROUTER (2026-08-28) ------------------
     # One server-side decision for every ask (prometheus_router):
     # deterministic prefilters in one fixed precedence, the fast
@@ -58422,6 +58491,176 @@ def _pm_deck_status_write(job_id, payload):
 
 
 _PM_DECK_FILE_PREFIX = 'generated_decks/'
+
+# ---------------------------------------------------------------------------
+# Brand Partnership Valuation via Prometheus (Jenna 2026-09-16): the
+# "Pull Brand Partnership Valuation" chip collects the partnership
+# inputs in chat, confirms, charges the standard Brand Partnership IQ
+# pull, and runs the research + reasoning build on a background thread.
+# The finished read lands in brand-partnership-iq/ and renders in the
+# dashboard's Brand Partnership tab like every other valuation.
+# ---------------------------------------------------------------------------
+_PM_BPIQ_JOB_PREFIX = 'system/pm_bpiq_jobs/'
+_PM_BPIQ_CHIP = 'Pull Brand Partnership Valuation'
+_PM_BPIQ_CREDITS = 15
+
+_PM_BPIQ_ASK_COPY = (
+    "Happy to run a Brand Partnership Valuation. Give me, in one "
+    "message:\n"
+    "1. The brand being valued (e.g. RAM Trucks)\n"
+    "2. The partner - talent, show, event, or franchise (e.g. Glen "
+    "Powell)\n"
+    "3. The campaign window (e.g. Apr 2024 - Dec 2024)\n"
+    "Optional: a pre window (default: the year before), a post window "
+    "(default: campaign end through today), and the audience to "
+    "measure against (e.g. show viewers, ticket purchasers).\n\n"
+    "Example: \"Glen Powell x RAM Trucks, campaign Apr 2024 - Dec "
+    "2024, post through Jun 2025\"")
+
+
+def _pm_bpiq_intent(text):
+    low = ' '.join(str(text or '').lower().split())
+    if low == _PM_BPIQ_CHIP.lower():
+        return True
+    return ('brand partnership' in low
+            and any(k in low for k in ('valuation', 'value', 'pull',
+                                       'run one', 'measure')))
+
+
+def _pm_bpiq_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_BPIQ_JOB_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_bpiq_parse(text, usage_extras=None):
+    """One small model call: free text -> the valuation inputs."""
+    from migration.bpiq_synthesis import PARSE_SYSTEM_PROMPT
+    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+                             max_tokens=1200, temperature=0.0,
+                             surface='bpiq_parse',
+                             usage_extras=usage_extras)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _pm_bpiq_inputs_complete(parsed):
+    return bool(parsed.get('brand_partner') and parsed.get('qualifier')
+                and parsed.get('event_start')
+                and parsed.get('event_end'))
+
+
+def _pm_bpiq_confirm_reply(parsed):
+    ev = f"{parsed.get('event_start')} to {parsed.get('event_end')}"
+    pre = (f"{parsed['pre_start']} to {parsed['pre_end']}"
+           if parsed.get('pre_start') and parsed.get('pre_end')
+           else 'the year before the campaign')
+    post = (f"{parsed['post_start']} to {parsed['post_end']}"
+            if parsed.get('post_start') and parsed.get('post_end')
+            else 'campaign end through today')
+    aud = parsed.get('audience') or 'the partner audience'
+    return (
+        f"Here's the valuation I'll run:\n"
+        f"- {parsed['qualifier']} x {parsed['brand_partner']}\n"
+        f"- Campaign window: {ev}\n"
+        f"- Baseline window: {pre}\n"
+        f"- Post window: {post}\n"
+        f"- Audience: {aud}\n\n"
+        f"It prices at {_PM_BPIQ_CREDITS} credits and lands in the "
+        f"Brand Partnership tab when finished. Run it?")
+
+
+def _pm_run_bpiq_job(job_id, username, inputs, extras):
+    """Background build: research + reason the partnership read, write
+    the payload, register the metadata sidecar, and open access for
+    the requesting user. Mirrors the deck job's thread pattern."""
+    try:
+        from migration.bpiq_synthesis import synthesize, s3_key_for
+        _pm_bpiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'running',
+            'subject': f"{inputs['qualifier']} x "
+                       f"{inputs['brand_partner']}",
+            'started_at': time.time()})
+        tools = None
+        try:
+            import prometheus_analysis as _pma_b
+            tools = [_pma_b.WEB_SEARCH_TOOL]
+        except Exception:
+            pass
+
+        def _cj(system, user_prompt, **kw):
+            kw.setdefault('usage_extras', extras)
+            return _pm_claude_json(system, user_prompt, **kw)
+
+        payload = synthesize(inputs, _cj, tools=tools,
+                             created_by=username or 'prometheus')
+        category = payload.pop('_bpiq_category', None)
+        out_key = s3_key_for(inputs)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=out_key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json')
+        bare_key = out_key.replace('brand-partnership-iq/', '')
+        # Metadata sidecar: title + category so the tab and the admin
+        # CMS render it immediately.
+        try:
+            meta = load_bpiq_metadata()
+            meta[bare_key] = {
+                **(meta.get(bare_key) or {}),
+                'display_name': payload.get('project_name') or bare_key,
+                'category': (category or 'ENTERTAINMENT'),
+            }
+            s3_client.put_object(
+                Bucket=S3_BUCKET, Key=BPIQ_METADATA_KEY,
+                Body=json.dumps(meta, indent=2).encode('utf-8'),
+                ContentType='application/json')
+        except Exception as meta_err:
+            print(f"[bpiq-job {job_id}] metadata sidecar failed "
+                  f"(non-fatal): {meta_err}")
+        # Access: the requester must see their own result. '*' and
+        # legacy-full users already do; list-scoped users get the new
+        # file appended; users without the product get a scoped grant
+        # of exactly this file.
+        try:
+            def _grant(u):
+                if not u:
+                    return False
+                cur = u.get('brand_partnership_iq_journeys')
+                if cur == '*':
+                    return False
+                if isinstance(cur, list):
+                    if bare_key in cur:
+                        return False
+                    u['brand_partnership_iq_journeys'] = cur + [bare_key]
+                    return True
+                if u.get('has_brand_partnership_iq_access'):
+                    return False  # legacy '*' compat
+                u['has_brand_partnership_iq_access'] = True
+                u['brand_partnership_iq_journeys'] = [bare_key]
+                return True
+            _users_cas_mutate(
+                lambda data: _grant((data.get('users') or {})
+                                    .get(username)) or None)
+        except Exception as acc_err:
+            print(f"[bpiq-job {job_id}] access grant skipped: {acc_err}")
+        _pm_bpiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'done',
+            'subject': payload.get('project_name'),
+            's3_key': bare_key,
+            'total_brand_value': (payload.get('valuation') or {})
+            .get('total_brand_value'),
+            'finished_at': time.time()})
+        print(f"[bpiq-job {job_id}] done -> {out_key}")
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            _pm_bpiq_status_write(job_id, {
+                'job_id': job_id, 'user': username, 'status': 'error',
+                'finished_at': time.time()})
+        except Exception:
+            pass
+        _chatbot_error_email('brief-chat/bpiq-job', e)
+
 
 
 def _pm_deck_fuzzy_suggestions(query):
@@ -58890,6 +59129,28 @@ def api_synth_chat_deck_status(job_id):
         # poll reply carries no failure detail (calm-failure contract).
         payload = dict(payload)
         payload['error'] = ''
+    return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/bpiq-status/<job_id>', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/bpiq-status')
+def api_synth_chat_bpiq_status(job_id):
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_BPIQ_JOB_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
 
