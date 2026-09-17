@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""
+stores.py — per-store search + URL parsing for GameTool.
+
+Reliability tiers (see STORES registry at the bottom):
+  • "api"     — live title search over a public HTTP/JSON endpoint (no login).
+  • "catalog" — a small built-in map (Battle.net's fixed Blizzard line-up).
+  • "paste"   — no clean anonymous search; we parse a pasted product URL into a
+                clean id (and the runner offers a paste-URL prompt). These are
+                the bot-walled storefronts/retailers (Nintendo, PlayStation,
+                Xbox, Epic, Luna, Eneba, Loaded, Amazon, Best Buy, GameStop,
+                Walmart, Target) — headless-browser search can be added later,
+                reusing StreamScout's Playwright resolvers.
+"""
+import re
+
+from common import (best_matches, hit, http_get, http_json, q, qplus,
+                    similarity, tokens)
+from playstation_store import search as playstation_search
+
+
+# ── Steam (public storesearch JSON) ───────────────────────────────────────────
+def steam_search(title, limit=4):
+    d = http_json(f"https://store.steampowered.com/api/storesearch/?term={q(title)}"
+                  f"&cc=us&l=en") or {}
+    out = []
+    for it in d.get("items", []):
+        appid = it.get("id")
+        if not appid:
+            continue
+        out.append(hit(it.get("name", ""),
+                       f"https://store.steampowered.com/app/{appid}/",
+                       appid, "Digital (PC)"))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit)
+
+
+# ── Apple App Store (iTunes Search API) ───────────────────────────────────────
+def apple_search(title, limit=3):
+    d = http_json(f"https://itunes.apple.com/search?term={q(title)}"
+                  f"&entity=software&country=us&limit=12") or {}
+    out = []
+    for r in d.get("results", []):
+        tid = r.get("trackId")
+        url = r.get("trackViewUrl", "")
+        if not (tid and url):
+            continue
+        out.append(hit(r.get("trackName", ""), url.split("?")[0], tid,
+                       "App (iOS)", r.get("artistName", "")))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit)
+
+
+# ── Google Play (search HTML -> package ids -> details og:title) ───────────────
+def googleplay_search(title, limit=3):
+    html = http_get(f"https://play.google.com/store/search?q={qplus(title)}&c=apps")
+    seen, pkgs = set(), []
+    for m in re.finditer(r"store/apps/details\?id=([A-Za-z0-9._]+)", html):
+        p = m.group(1)
+        if p not in seen:
+            seen.add(p)
+            pkgs.append(p)
+        if len(pkgs) >= limit * 2:
+            break
+    out = []
+    for pkg in pkgs:
+        d = http_get(f"https://play.google.com/store/apps/details?id={pkg}")
+        m = re.search(r'<meta property="og:title" content="([^"]+)"', d)
+        name = (m.group(1) if m else "").split(" - ")[0].strip()
+        if not name:
+            continue
+        dev = re.search(r'href="/store/apps/dev(?:eloper)?\?id=[^"]*"[^>]*>'
+                        r'<[^>]*>([^<]+)<', d)
+        out.append(hit(name, f"https://play.google.com/store/apps/details?id={pkg}",
+                       pkg, "App (Android)", dev.group(1) if dev else ""))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit)
+
+
+# ── GOG (catalog v1 JSON) ─────────────────────────────────────────────────────
+def gog_search(title, limit=4):
+    d = http_json(f"https://catalog.gog.com/v1/catalog?query={q(title)}&limit=12"
+                  f"&locale=en-US&currencyCode=USD&countryCode=US") or {}
+    out = []
+    for p in d.get("products", []):
+        link = p.get("storeLink") or ""
+        if not link:
+            continue
+        pub = (p.get("publishers") or [""])[0]
+        out.append(hit(p.get("title", ""), link.split("?")[0],
+                       p.get("id", ""), "Digital (PC)", pub))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit)
+
+
+# ── Battle.net (fixed Blizzard catalog) ───────────────────────────────────────
+_BNET = [
+    ("World of Warcraft", "world-of-warcraft"),
+    ("Diablo IV", "diablo-iv"),
+    ("Diablo III", "diablo-iii"),
+    ("Diablo II: Resurrected", "diablo-ii-resurrected"),
+    ("Diablo Immortal", "diablo-immortal"),
+    ("Overwatch 2", "overwatch-2"),
+    ("StarCraft II", "starcraft-ii"),
+    ("StarCraft: Remastered", "starcraft-remastered"),
+    ("Warcraft III: Reforged", "warcraft-iii-reforged"),
+    ("Warcraft Rumble", "warcraft-rumble"),
+    ("Hearthstone", "hearthstone"),
+    ("Heroes of the Storm", "heroes-of-the-storm"),
+]
+
+
+def battlenet_search(title, limit=6):
+    out = []
+    for name, slug in _BNET:
+        if similarity(title, name) >= 0.45 or set(tokens(title)) & set(tokens(name)):
+            out.append(hit(name,
+                           f"https://us.shop.battle.net/en-us/product/{slug}",
+                           slug, "Digital (PC)", "Blizzard"))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit) \
+        if out else []
+
+
+# ── URL parsing (works for every store, powers the paste-URL fallback) ─────────
+# label -> (regex capturing the id, canonical-url builder from that id or None)
+_URL_RULES = {
+    "Steam": (r"store\.steampowered\.com/app/(\d+)",
+              lambda i: f"https://store.steampowered.com/app/{i}/"),
+    "Apple App Store": (r"apps\.apple\.com/[^/]+/app/[^/]+/id(\d+)", None),
+    "Google Play": (r"play\.google\.com/store/apps/details\?id=([A-Za-z0-9._]+)",
+                    lambda i: f"https://play.google.com/store/apps/details?id={i}"),
+    "GOG": (r"gog\.com/(?:\w+/)?game/([A-Za-z0-9_]+)", None),
+    "Green Man Gaming": (r"greenmangaming\.com/games/([a-z0-9-]+)",
+                         lambda i: f"https://www.greenmangaming.com/games/{i}/"),
+    "Nintendo eShop": (r"nintendo\.com/[^\s]*?/store/products/([A-Za-z0-9-]+)", None),
+    "PlayStation Store": (
+        r"store\.playstation\.com/[^/]+/(?:product|concept)/([A-Za-z0-9_-]+)", None),
+    "Xbox": (r"xbox\.com/[^\s]*?/store/[^/]+/([A-Za-z0-9]{12})", None),
+    "Epic Games Store": (r"store\.epicgames\.com/[^/]+/p/([A-Za-z0-9-]+)", None),
+    "Amazon Luna": (r"luna\.amazon\.[a-z.]+/game/(?:[a-z0-9-]+/)?(B0[0-9A-Z]{8})",
+                    None),
+    # marketplaces: Eneba is /<region>/<slug>; Loaded is a flat root slug
+    # (loaded.com/hogwarts-legacy-pc-steam). Require a hyphen so category
+    # landings (/pc, /playstation/games) don't parse as products.
+    "Eneba": (r"eneba\.com/(?:[a-z]{2}/)?([a-z0-9]+(?:-[a-z0-9]+)+)", None),
+    "Loaded": (r"loaded\.com/([a-z0-9]+(?:-[a-z0-9]+)+)", None),
+    # G2A: slug carries the stable numeric product id as a "-i<digits>" suffix
+    "G2A": (r"g2a\.com/[a-z0-9-]+-i(\d+)", None),
+    "Amazon": (r"amazon\.[a-z.]+/(?:.*?/)?(?:dp|gp/product)/([A-Z0-9]{10})",
+               lambda i: f"https://www.amazon.com/dp/{i}"),
+    "Best Buy": (r"bestbuy\.com/.*?(?:/sku/(\d+)|/(\d{7}))", None),
+    "GameStop": (r"gamestop\.com/.*?/products/[^/]+/(\d+)\.html", None),
+    "Walmart": (r"walmart\.com/ip/(?:[A-Za-z0-9-]+/)?(\d+)", None),
+    "Target": (r"target\.com/p/[^/]*/-/A-(\d+)", None),
+}
+
+
+# stores whose product URLs we can parse — used for the paste-URL fallback even
+# when a live/headless search happens to return nothing
+URL_PARSE_LABELS = set(_URL_RULES)
+
+
+def parse_url(url):
+    """Return (label, store_id, canonical_url) for a pasted product URL, or None."""
+    for label, (rx, canon) in _URL_RULES.items():
+        m = re.search(rx, url or "", re.I)
+        if m:
+            sid = next((g for g in m.groups() if g), "")
+            return label, sid, (canon(sid) if canon else url.split("?")[0])
+    return None
+
+
+# ── hostmap search-term builder ───────────────────────────────────────────────
+# Turn a product URL into the normalized "hostmap" term we key clickstream on:
+#   • keep only the operative path segment(s) — locale prefixes and tracking
+#     suffixes are dropped (they sit outside these captures);
+#   • replace every non-alphanumeric with a space (case + digits preserved);
+#   • keep at most ONE "/" on the meaningful boundary;
+#   • anchor on the store's stable id where it has one, else prefix/slug at
+#     franchise grain (the base slug naturally absorbs sequels/editions).
+# These reproduce the agreed forms in the Desktop sample sheets.
+def _sp(s):
+    """Non-alphanumerics -> single spaces; case + digits preserved."""
+    return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9]+", " ", s or "")).strip()
+
+
+def _t_steam(u):
+    m = re.search(r"/app/(\d+)", u)
+    return f"app/{m.group(1)}" if m else ""
+
+
+def _t_epic(u):
+    m = re.search(r"/p/([A-Za-z0-9-]+)", u)
+    return f"p/{_sp(m.group(1))}" if m else ""
+
+
+def _t_gog(u):
+    m = re.search(r"/game/([A-Za-z0-9_]+)", u)
+    return f"game/{_sp(m.group(1))}" if m else ""
+
+
+def _t_battlenet(u):
+    m = re.search(r"/product/([A-Za-z0-9-]+)", u)
+    return f"product/{_sp(m.group(1))}" if m else ""
+
+
+def _t_nintendo(u):
+    m = re.search(r"/products/([A-Za-z0-9-]+)", u)
+    return f"products/{_sp(m.group(1))}" if m else ""
+
+
+def _t_playstation(u):
+    m = re.search(r"/(?:product|concept)/([A-Za-z0-9_-]+)", u)
+    return f"product/{_sp(m.group(1))}" if m else ""
+
+
+def _t_xbox(u):
+    m = re.search(r"/store/([A-Za-z0-9-]+)/([A-Za-z0-9]{12})", u)
+    return f"{_sp(m.group(1))}/{m.group(2)}" if m else ""
+
+
+def _t_luna(u):
+    m = re.search(r"/game/([A-Za-z0-9-]+)/(B0[0-9A-Z]{8})", u)
+    if m:
+        return f"{_sp(m.group(1))}/{m.group(2)}"
+    m = re.search(r"/game/(?:[a-z0-9-]+/)?(B0[0-9A-Z]{8})", u)
+    return f"game/{m.group(1)}" if m else ""
+
+
+def _t_apple(u):
+    m = re.search(r"/app/([A-Za-z0-9-]+)/id(\d+)", u)
+    return f"{_sp(m.group(1))}/id{m.group(2)}" if m else ""
+
+
+def _t_googleplay(u):
+    m = re.search(r"[?&]id=([A-Za-z0-9._]+)", u)
+    return _sp(m.group(1)) if m else ""
+
+
+def _t_gmg(u):
+    m = re.search(r"/games/([A-Za-z0-9-]+)", u)
+    return f"games/{_sp(m.group(1))}" if m else ""
+
+
+def _t_eneba(u):
+    m = re.search(r"eneba\.com/(?:[a-z]{2}/)?([A-Za-z0-9-]+)", u)
+    return f"eneba com/{_sp(m.group(1))}" if m else ""
+
+
+def _t_loaded(u):
+    m = re.search(r"loaded\.com/([A-Za-z0-9-]+)", u)
+    return f"loaded com/{_sp(m.group(1))}" if m else ""
+
+
+def _t_g2a(u):
+    m = re.search(r"g2a\.com/([A-Za-z0-9-]+)", u)
+    return f"g2a com/{_sp(m.group(1))}" if m else ""
+
+
+def _t_amazon(u):
+    m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", u)
+    return f"dp/{m.group(1)}" if m else ""
+
+
+def _t_bestbuy(u):
+    m = re.search(r"/site/([A-Za-z0-9-]+)/(\d+)\.p", u)
+    return f"{_sp(m.group(1))}/{m.group(2)} p" if m else ""
+
+
+def _t_gamestop(u):
+    m = re.search(r"/products/([A-Za-z0-9.-]+)/(\d+)\.html", u)
+    return f"{_sp(m.group(1))}/{m.group(2)}" if m else ""
+
+
+def _t_walmart(u):
+    m = re.search(r"/ip/([A-Za-z0-9-]+)/(\d+)", u)
+    return f"{_sp(m.group(1))}/{m.group(2)}" if m else ""
+
+
+def _t_target(u):
+    m = re.search(r"/A-(\d+)", u)
+    return f"A {m.group(1)}" if m else ""
+
+
+_TERM_BUILDERS = {
+    "Steam": _t_steam,
+    "Epic Games Store": _t_epic,
+    "GOG": _t_gog,
+    "Battle.net": _t_battlenet,
+    "Nintendo eShop": _t_nintendo,
+    "PlayStation Store": _t_playstation,
+    "Xbox": _t_xbox,
+    "Amazon Luna": _t_luna,
+    "Apple App Store": _t_apple,
+    "Google Play": _t_googleplay,
+    "Green Man Gaming": _t_gmg,
+    "Eneba": _t_eneba,
+    "Loaded": _t_loaded,
+    "G2A": _t_g2a,
+    "Amazon": _t_amazon,
+    "Best Buy": _t_bestbuy,
+    "GameStop": _t_gamestop,
+    "Walmart": _t_walmart,
+    "Target": _t_target,
+}
+
+
+def to_term(label, url):
+    """Normalized hostmap search term for a store URL ('' if unbuildable)."""
+    fn = _TERM_BUILDERS.get(label)
+    return fn(url or "") if fn else ""
+
+
+# ── registry ──────────────────────────────────────────────────────────────────
+# key: (label, format, tier, search-callable-or-None)
+STORES = [
+    ("steam",       ("Steam",             "Digital (PC)",   "api",     steam_search)),
+    ("epic",        ("Epic Games Store",  "Digital (PC)",   "paste",   None)),
+    ("gog",         ("GOG",               "Digital (PC)",   "api",     gog_search)),
+    ("battlenet",   ("Battle.net",        "Digital (PC)",   "catalog", battlenet_search)),
+    ("nintendo",    ("Nintendo eShop",    "Digital",        "paste",   None)),
+    ("playstation", ("PlayStation Store", "Digital",        "headless", playstation_search)),
+    ("xbox",        ("Xbox",              "Digital",        "paste",   None)),
+    ("luna",        ("Amazon Luna",       "Cloud",          "paste",   None)),
+    ("apple",       ("Apple App Store",   "App (iOS)",      "api",     apple_search)),
+    ("googleplay",  ("Google Play",       "App (Android)",  "api",     googleplay_search)),
+    ("gmg",         ("Green Man Gaming",  "Key (PC)",       "paste",   None)),
+    ("eneba",       ("Eneba",             "Key (market)",   "paste",   None)),
+    ("loaded",      ("Loaded",            "Key (market)",   "paste",   None)),
+    ("g2a",         ("G2A",               "Key (market)",   "paste",   None)),
+    ("amazon",      ("Amazon",            "Physical/Digital", "paste", None)),
+    ("bestbuy",     ("Best Buy",          "Physical/Digital", "paste", None)),
+    ("gamestop",    ("GameStop",          "Physical",       "paste",   None)),
+    ("walmart",     ("Walmart",           "Physical/Digital", "paste", None)),
+    ("target",      ("Target",            "Physical/Digital", "paste", None)),
+]
+STORE_MAP = {k: v for k, v in STORES}

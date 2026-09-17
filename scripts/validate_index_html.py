@@ -526,3 +526,4 @@ if __name__ == "__main__":
 # (title-lookup-tool 2026-09-14 - StreamScout 19-platform identifier tool, PR #75)
 # (audible-platform 2026-09-16 - StreamScout #20 Audible: direct + via-Amazon links)
 # (jenna-package-20 2026-09-16 - StreamScout Jenna package: 20-platform how-to + Excel)
+# (gametool-package 2026-09-17 - GameTool: 19-store game URL resolver + hostmap terms)
