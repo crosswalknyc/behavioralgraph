@@ -121871,6 +121871,140 @@ https://www.instagram.com/p/..."></textarea>
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
         }
         
+        // ── Subscriber IQ: the cover deck and the ledger ────────
+        var _SUB_GLOSS = {
+            'total accounts viewed': 'Anyone who watched in the window',
+            'accounts acquired or reactivated': 'Signed up or came back to watch it',
+            'new accounts acquisition': 'No prior subscription on record',
+            'reactivated accounts': 'Lapsed subscribers who returned',
+            'acquired and reactivated accounts': 'Share of everyone who watched',
+            'completion rate': 'Watched it through',
+            'second screen activity': 'On a phone or tablet during play'
+        };
+        var _SUB_SECOND = { 'reactivated accounts': 1, 'second screen activity': 1 };
+
+        function _subLabelKey(el) {
+            return (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+        function _subNum(txt) {
+            var t = (txt || '').trim();
+            var mult = 1;
+            if (/[Bb]\s*$/.test(t)) mult = 1e9;
+            else if (/[Mm]\s*$/.test(t)) mult = 1e6;
+            else if (/[Kk]\s*$/.test(t)) mult = 1e3;
+            var n = parseFloat(t.replace(/[^0-9.\-]/g, ''));
+            if (!isFinite(n)) return null;
+            return n * mult;
+        }
+        function _subLedger() {
+            var root = document.getElementById('subscriberIQView');
+            if (!root) return;
+            [].forEach.call(root.querySelectorAll('.exec-summary-grid'), function (grid) {
+                var cells = [].slice.call(grid.querySelectorAll('.exec-summary-metric'));
+                if (!cells.length) return;
+                var vals = cells.map(function (c) {
+                    var v = c.querySelector('.exec-metric-value');
+                    return v ? _subNum(v.textContent) : null;
+                });
+                var max = 0;
+                vals.forEach(function (n) { if (n !== null && n > max) max = n; });
+                cells.forEach(function (cell, i) {
+                    if (cell.dataset.subLedger === '1') return;
+                    var lab = cell.querySelector('.exec-metric-label');
+                    var val = cell.querySelector('.exec-metric-value');
+                    if (!lab || !val) return;
+                    var key = _subLabelKey(lab);
+                    if (_SUB_GLOSS[key] && !lab.querySelector('.sub-gloss')) {
+                        var g = document.createElement('small');
+                        g.className = 'sub-gloss';
+                        g.textContent = _SUB_GLOSS[key];
+                        lab.appendChild(g);
+                    }
+                    var n = vals[i], pct = null;
+                    if (n !== null) {
+                        // A percentage is its own length. A count is shown
+                        // against the largest figure in the same section,
+                        // which is a comparison rather than a claim.
+                        pct = /%/.test(val.textContent) ? n : (max > 0 ? (n / max) * 100 : 0);
+                    }
+                    if (pct !== null && !cell.querySelector('.sub-bar')) {
+                        var bar = document.createElement('div');
+                        bar.className = 'sub-bar' + (_SUB_SECOND[key] ? ' is-second' : '');
+                        var fill = document.createElement('i');
+                        fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+                        bar.appendChild(fill);
+                        cell.appendChild(bar);
+                    }
+                    if (i === 0 && n !== null && n === max) cell.classList.add('is-lead');
+                    cell.dataset.subLedger = '1';
+                });
+            });
+        }
+
+        function _subFigure(label) {
+            var root = document.getElementById('subscriberIQView');
+            if (!root) return null;
+            var hit = null;
+            [].forEach.call(root.querySelectorAll('.exec-metric-label'), function (l) {
+                if (hit) return;
+                if (_subLabelKey(l).indexOf(label) === 0) {
+                    var cell = l.closest('.exec-summary-metric');
+                    var v = cell && cell.querySelector('.exec-metric-value');
+                    if (v) hit = (v.textContent || '').trim();
+                }
+            });
+            return hit;
+        }
+        function _subMasthead() {
+            var info = document.querySelector('#subscriberIQView .dash-profile-info');
+            if (!info) return;
+
+            // Cover art: a gradient with the initials when the poster
+            // is missing, rather than a broken-image box.
+            var art = document.getElementById('subscriberProfileImage');
+            var name = (document.getElementById('subscriberShowNameHeader') || {}).textContent || '';
+            if (art) {
+                var img = art.querySelector('img');
+                var hasArt = img && img.getAttribute('src') && img.style.display !== 'none';
+                var ini = art.querySelector('.sub-cover-ini');
+                if (!hasArt && !ini && name.trim()) {
+                    var s = document.createElement('div');
+                    s.className = 'sub-cover-ini';
+                    s.textContent = name.trim().toUpperCase();
+                    art.appendChild(s);
+                } else if (hasArt && ini) { ini.remove(); }
+            }
+
+            // The deck restates what the season did, in a sentence,
+            // so the page says something before the figures start.
+            var acquired = _subFigure('accounts acquired or reactivated');
+            var fresh = _subFigure('new accounts acquisition');
+            var done = _subFigure('completion rate');
+            var parts = [];
+            if (acquired) {
+                var line = '<b>' + acquired + '</b> accounts arrived because of it';
+                var a = _subNum(acquired), f = _subNum(fresh);
+                if (a && f && f <= a) {
+                    line += ', ' + Math.round((f / a) * 100) + '% of them with no prior subscription';
+                }
+                parts.push(line + '.');
+            }
+            if (done) parts.push('<b>' + done + '</b> watched it through.');
+            var html = parts.join(' ');
+            var deck = document.getElementById('subDeck');
+            if (!html) { if (deck) deck.remove(); return; }
+            if (!deck) {
+                deck = document.createElement('p');
+                deck.id = 'subDeck';
+                deck.className = 'sub-deck';
+                var container = info.querySelector('.dash-brand-container');
+                if (container && container.nextSibling) {
+                    info.insertBefore(deck, container.nextSibling);
+                } else { info.appendChild(deck); }
+            }
+            if (deck.innerHTML !== html) deck.innerHTML = html;
+        }
+
         // ── Subscriber IQ: no emoji in the headings ─────────────
         // The pictographs are shared with older screens all over the
         // template, so rather than editing markup other views depend
@@ -121893,7 +122027,10 @@ https://www.instagram.com/p/..."></textarea>
             var root = null, pending = 0;
             function schedule() {
                 if (pending) return;
-                pending = setTimeout(function () { pending = 0; _subStripEmoji(); }, 120);
+                pending = setTimeout(function () {
+                    pending = 0;
+                    _subStripEmoji(); _subLedger(); _subMasthead();
+                }, 120);
             }
             function attach() {
                 root = document.getElementById('subscriberIQView');
@@ -174547,6 +174684,127 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #subscriberIQView .median-highlight,
     body[data-theme="light"] #subscriberIQView .median-display,
     body[data-theme="light"] #subscriberIQView .median-display * { color: #5E7E12 !important; }
+
+    /* ---- Subscriber IQ: the cover masthead -----------------------
+       The show name, the poster and the run facts were three blocks
+       sitting side by side, and five pills to the right outweighed
+       the title. They are one masthead: cover, title, a deck that
+       says what happened, then the facts as a dateline. */
+    #subscriberIQView .dash-profile-info {
+        display: grid !important;
+        grid-template-columns: 196px minmax(0, 1fr) !important;
+        column-gap: 34px !important; row-gap: 0 !important;
+        align-items: start !important; width: 100% !important;
+    }
+    #subscriberIQView #subscriberProfileImage {
+        grid-column: 1; grid-row: 1 / span 3;
+        width: 196px !important; height: auto !important;
+        aspect-ratio: 2 / 3; border-radius: 4px !important;
+        overflow: hidden; flex: none !important; margin: 0 !important;
+        background: linear-gradient(200deg, #2C4148, #15252A 70%);
+        display: flex !important; align-items: flex-end; padding: 0 !important;
+    }
+    #subscriberIQView #subscriberProfileImage img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    #subscriberIQView .sub-cover-ini {
+        width: 100%; padding: 18px; font-size: 24px; font-weight: 900;
+        letter-spacing: -.03em; line-height: .95; color: #E9E8E1;
+    }
+    #subscriberIQView .dash-brand-container {
+        grid-column: 2; grid-row: 1; min-width: 0; margin: 0 !important;
+    }
+    #subscriberIQView .sub-deck {
+        grid-column: 2; grid-row: 2; min-width: 0;
+        font-size: 17px; font-weight: 300; line-height: 1.5;
+        color: #9AA09B; margin: 16px 0 0; max-width: 64ch;
+    }
+    #subscriberIQView .sub-deck b { font-weight: 700; color: #E9E8E1; }
+    body[data-theme="light"] #subscriberIQView .sub-deck { color: #5C6560; }
+    body[data-theme="light"] #subscriberIQView .sub-deck b { color: #0C1618; }
+
+    /* The run facts stop being five pills and become a dateline. */
+    #subscriberIQView .dash-meta-grid {
+        grid-column: 2; grid-row: 3; display: block !important;
+        min-width: 0; margin: 22px 0 0 !important; padding-top: 15px;
+        border-top: 1px solid #3B3D38;
+    }
+    body[data-theme="light"] #subscriberIQView .dash-meta-grid { border-top-color: #C9C6BA; }
+    #subscriberIQView .dash-meta-grid .dash-meta-box {
+        display: inline !important; border: 0 !important; padding: 0 !important;
+        background: transparent !important; line-height: 2 !important;
+    }
+    #subscriberIQView .dash-meta-grid .dash-meta-box + .dash-meta-box::before {
+        content: '  ·  '; color: #7C878A;
+    }
+    #subscriberIQView #subscriberPlatformHeader {
+        border: 0 !important; padding: 0 !important; background: transparent !important;
+        display: block !important; margin-top: 12px !important;
+        color: #7C878A !important; letter-spacing: .1em !important;
+    }
+    #subscriberIQView .dash-brand-box {
+        font-size: 60px !important; line-height: .92 !important;
+    }
+    @media (max-width: 1340px) {
+        #subscriberIQView .dash-brand-box { font-size: 44px !important; }
+        #subscriberIQView .dash-profile-info { grid-template-columns: 150px minmax(0, 1fr) !important; }
+        #subscriberIQView #subscriberProfileImage { width: 150px !important; }
+    }
+
+    /* ---- Subscriber IQ: the ledger -------------------------------
+       Seven identical tiles gave the same weight to 16,989,857 and
+       to 3.88%, and wrapped five-then-two at most widths. Each
+       figure is a row instead: what it is on the left, how long it
+       is in the middle, the number set right in tabular figures so
+       the column can be read down. */
+    #subscriberIQView .exec-summary-grid {
+        display: block !important; margin-top: 4px !important;
+    }
+    #subscriberIQView .exec-summary-metric {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 190px 230px !important;
+        column-gap: 30px !important; align-items: baseline !important;
+        background: transparent !important; border: 0 !important;
+        border-bottom: 1px solid #2A2D2A !important; border-radius: 0 !important;
+        padding: 18px 0 !important; text-align: left !important;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-summary-metric { border-bottom-color: #DBD8CD !important; }
+    #subscriberIQView .exec-summary-metric:last-child { border-bottom: 0 !important; }
+    #subscriberIQView .exec-metric-label {
+        grid-column: 1; text-align: left !important;
+        font-size: 15px !important; font-weight: 500 !important;
+        letter-spacing: 0 !important; text-transform: none !important;
+        color: #E9E8E1 !important; line-height: 1.3 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-metric-label { color: #0C1618 !important; }
+    #subscriberIQView .exec-metric-label br { display: none; }
+    #subscriberIQView .sub-gloss {
+        display: block; font-size: 11.5px; font-weight: 400;
+        letter-spacing: 0; text-transform: none; color: #7C878A;
+        margin-top: 5px; line-height: 1.5;
+    }
+    body[data-theme="light"] #subscriberIQView .sub-gloss { color: #888C89; }
+    #subscriberIQView .exec-metric-value {
+        grid-column: 3; text-align: right !important;
+        font-size: 30px !important; font-variant-numeric: tabular-nums;
+    }
+    #subscriberIQView .exec-summary-metric.is-lead .exec-metric-value { font-size: 40px !important; }
+    #subscriberIQView .sub-bar {
+        grid-column: 2; position: relative; height: 5px; border-radius: 99px;
+        background: #2A2D2A; align-self: center;
+    }
+    body[data-theme="light"] #subscriberIQView .sub-bar { background: #DBD8CD; }
+    #subscriberIQView .sub-bar i {
+        position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px;
+        background: #C7F23E; min-width: 3px;
+    }
+    #subscriberIQView .sub-bar.is-second i { background: #B7B3D8; }
+    body[data-theme="light"] #subscriberIQView .sub-bar i { background: #5E7E12; }
+    body[data-theme="light"] #subscriberIQView .sub-bar.is-second i { background: #8E3FA8; }
+    @media (max-width: 1180px) {
+        #subscriberIQView .exec-summary-metric { grid-template-columns: minmax(0, 1fr) 170px !important; }
+        #subscriberIQView .sub-bar { display: none; }
+    }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
