@@ -128259,7 +128259,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (!t || !t.closest) return;
                     var stamp = document._piqV4NavSwallow || 0;
                     if (Date.now() - stamp > 1200) return;
-                    if (!t.closest('#toolbarRow .tab-btn, #profileTabsBar .profile-tab, #profileTabsBar .profile-tab-close, #profileTabsBar .profile-tab-close-all, #profileTabsBar .profile-help-pill, #piqChangeProfileBtn, #dashViewDeltasBtn, #piqLibraryRail, #hoverToggle, #dashDisplayToggle')) return;
+                    if (!t.closest('#toolbarRow .tab-btn, #toolbarRow .dash-dropdown, #profileTabsBar .profile-tab, #profileTabsBar .profile-tab-close, #profileTabsBar .profile-tab-close-all, #profileTabsBar .profile-help-pill, #piqChangeProfileBtn, #dashViewDeltasBtn, #piqLibraryRail, #hoverToggle, #dashDisplayToggle')) return;
                     e.preventDefault();
                     e.stopImmediatePropagation();
                 }, true);
@@ -128317,6 +128317,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (e.target && e.target.closest && e.target.closest('#tabExportDropdown')) return;
                 e.preventDefault();
                 e.stopImmediatePropagation();
+                // pointerdown already toggled; a second toggle on click
+                // would snap the menu shut (hold-to-select). Keyboard
+                // activation still reaches here because it has no press stamp.
+                var stamp = document._piqV4NavSwallow || 0;
+                if (Date.now() - stamp <= 1200) return;
                 if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
             });
             once(document.getElementById('hoverToggle'), '_piqHoverBound', function(e) {
