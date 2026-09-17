@@ -58818,17 +58818,23 @@ _PM_JIQ_CREDITS = 15
 
 _PM_JIQ_ASK_COPY = (
     "Happy to build a Digital Journey. Give me, in one message:\n"
-    "1. The category or thing being bought (e.g. luxury fragrance, "
-    "running shoes, meal kits)\n"
-    "2. Where the journey converts (e.g. TikTok Shop, Amazon, a DTC "
-    "site)\n"
-    "3. The conversion event in one sentence (e.g. paid $95+ for a "
-    "house bottle on TikTok Shop). 'Engaged with the category' is "
-    "not a conversion.\n"
-    "Optional: the window (default: trailing 12 months) and a "
-    "tighter starting universe (default: US gen pop).\n\n"
-    "Example: \"Running shoes on Amazon, conversion is paid $120+ "
-    "for a performance shoe, trailing 12 months\"")
+    "1. The category or title the journey follows (e.g. luxury "
+    "fragrance, running shoes, Young Sheldon)\n"
+    "2. The end step in one sentence. It can be a purchase (e.g. "
+    "paid $95+ for a house bottle on TikTok Shop) or a behavior "
+    "(e.g. watched a paid episode on Amazon after a clip). 'Engaged "
+    "with the category' is not an end step.\n"
+    "3. Where that end step happens (e.g. TikTok Shop, Amazon, a "
+    "DTC site, Peacock)\n"
+    "Optional: a defined starting point (e.g. accounts that watched "
+    "short-form clips of the title; default is US gen pop) and the "
+    "window (default: trailing 12 months).\n\n"
+    "Examples:\n"
+    "\"Running shoes on Amazon, end step is paid $120+ for a "
+    "performance shoe, trailing 12 months\"\n"
+    "\"Young Sheldon, start from accounts that watched short-form "
+    "clips of the show, end step is watched a paid episode on "
+    "Amazon\"")
 
 
 def _pm_jiq_intent(text):
@@ -58866,16 +58872,27 @@ def _pm_jiq_confirm_reply(parsed):
            if parsed.get('start_date') and parsed.get('end_date')
            else 'trailing 12 months')
     tam = parsed.get('tam_label') or 'US gen pop (329.9M)'
+    start_line = (f"- Starting point: {parsed['start_behavior']} "
+                  f"(out of {tam})"
+                  if parsed.get('start_behavior')
+                  else f"- Starting universe: {tam}")
+    if str(parsed.get('journey_kind') or '') == 'watch':
+        shape = ("It's a full discovery-to-watch path - where the "
+                 "title first reaches them, where they cross to the "
+                 "platform, where they stall or hunt a free play, "
+                 "what pulls them back, and the watch itself")
+    else:
+        shape = ("It's a full discovery-to-purchase path - where "
+                 "they learn the name, research, compare, hunt a "
+                 "code, bag and leave, get retargeted, and pay")
     return (
         f"Here's the Digital Journey I'll build:\n"
         f"- {parsed['subject']} on {parsed['platform']}\n"
-        f"- Conversion: {parsed['conversion_event']}\n"
+        f"- End step: {parsed['conversion_event']}\n"
         f"- Window: {win}\n"
-        f"- Starting universe: {tam}\n\n"
-        f"It's a full discovery-to-purchase path - where they learn "
-        f"the name, research, compare, hunt a code, bag and leave, "
-        f"get retargeted, and pay - and it lands in the Digital "
-        f"Journey tab when finished. It prices at $1,000. Run it?")
+        f"{start_line}\n\n"
+        f"{shape} - and it lands in the Digital Journey tab when "
+        f"finished. It prices at $1,000. Run it?")
 
 
 def _pm_run_jiq_job(job_id, username, inputs, extras):

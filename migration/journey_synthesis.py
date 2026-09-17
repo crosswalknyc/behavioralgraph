@@ -40,14 +40,29 @@ US_GEN_POP = 329_900_000
 PARSE_SYSTEM_PROMPT = """You extract Digital Journey inputs from a
 user's message. Return STRICT JSON only:
 {
-  "subject": str|null,          // the category or thing bought/consumed
-                                // (e.g. "luxury fragrance", "running
-                                // shoes", "true crime podcasts")
-  "platform": str|null,         // where the journey converts (TikTok
+  "subject": str|null,          // the category or title the journey
+                                // follows (e.g. "luxury fragrance",
+                                // "running shoes", "Young Sheldon")
+  "platform": str|null,         // where the END STEP happens (TikTok
                                 // Shop, Amazon, a DTC site, Peacock)
-  "conversion_event": str|null, // ONE sentence naming the paid /
-                                // committed event ("paid $95+ for a
-                                // house bottle on TikTok Shop")
+  "conversion_event": str|null, // ONE sentence naming the end step.
+                                // Either a PAID event ("paid $95+ for
+                                // a house bottle on TikTok Shop") or a
+                                // committed WATCH/PLAY behavior
+                                // ("watched a paid episode on Amazon
+                                // after a clip", "streamed the title
+                                // on Peacock")
+  "journey_kind": "purchase"|"watch",
+                                // infer from the end step: money
+                                // changes hands -> "purchase"; the end
+                                // step is watching / streaming /
+                                // playing / listening -> "watch"
+  "start_behavior": str|null,   // a DEFINED starting behavior cohort
+                                // when the user names one ("accounts
+                                // that watched short-form clips of the
+                                // title", "searched the category").
+                                // null -> the journey starts at the
+                                // plain TAM
   "start_date": "YYYY-MM-DD"|null,  // window (null -> trailing 12 mo)
   "end_date": "YYYY-MM-DD"|null,
   "tam_label": str|null,        // null -> "US gen pop"
@@ -56,9 +71,10 @@ user's message. Return STRICT JSON only:
   "missing": [str, ...]         // which of subject / platform /
                                 // conversion_event are still missing
 }
-"Engaged with X" is NOT a conversion event - if the user gave no paid
-or committed event, list conversion_event in missing. Never invent
-what the user did not give."""
+"Engaged with X" is NOT an end step - if the user gave neither a paid
+event nor a concrete watch/play behavior, list conversion_event in
+missing. A start_behavior is never required; only capture one the user
+actually described. Never invent what the user did not give."""
 
 
 RESEARCH_SYSTEM_PROMPT = """You are building a discovery-to-purchase
@@ -124,7 +140,27 @@ Rules that do not move:
 - Ground every level in the researched reality of THIS category and
   platform. If the category cannot produce a leave-and-return majority
   of conversions, do not copy the fragrance file's shape - re-reason.
-- Rates are messy (never .0 / .5 endings), no two rates identical."""
+- Rates are messy (never .0 / .5 endings), no two rates identical.
+
+Two journey families. journey_kind in the input decides which:
+- "purchase": the shop family. The last stage is the paid event; the
+  penultimate stage is the cart-like step (bag, buy page); the fork is
+  left-without-paying -> retarget -> return -> paid return.
+- "watch": the clip-to-episode family. The last stage is the WATCH /
+  PLAY event itself (a behavior, not a payment); the penultimate stage
+  is the title / platform page; the fork is opened-but-did-not-watch
+  -> nudge or retarget -> came back -> watched after returning. Name
+  surfaces accordingly (clips, title pages, watch pages, continue
+  rows) - never force a bag or checkout onto a watch journey. Include
+  one detour table for the pixel-miss class: accounts that reached the
+  title but played it on a service they already had.
+
+start_behavior in the input, when present, IS stage 1 of the nest: a
+defined behavior cohort (e.g. accounts that watched short-form clips
+of the title) whose share_of_tam_pct is the researched share of the
+TAM that did that behavior in window. Later stages narrow from it.
+When start_behavior is null, stage 1 is the discovery step of the
+plain TAM. The TAM row itself never changes."""
 
 
 _norm = lambda s: re.sub(r'[^A-Z0-9]', '', str(s).upper())
@@ -319,7 +355,9 @@ def build_journey(inputs: dict, prim: dict, *,
             'target': proj_name,
             'customer_brand': prim.get('customer_brand') or subject,
             'start_date': start, 'end_date': end,
-            'target_type': 'purchase_journey',
+            'target_type': ('watch_journey'
+                            if (inputs.get('journey_kind') == 'watch')
+                            else 'purchase_journey'),
             'category': str(prim.get('category') or 'brands'),
             'created_by': created_by, 'created_at': now,
         },
@@ -345,6 +383,8 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'subject': inputs['subject'],
         'platform': inputs['platform'],
         'conversion_event': inputs.get('conversion_event') or '',
+        'journey_kind': inputs.get('journey_kind') or 'purchase',
+        'start_behavior': inputs.get('start_behavior') or None,
         'window': {'start': start, 'end': end},
         'tam_label': inputs.get('tam_label') or 'US gen pop',
         'tam_accounts': int(inputs.get('tam_accounts') or US_GEN_POP),
