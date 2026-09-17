@@ -528,3 +528,4 @@ if __name__ == "__main__":
 # (jenna-package-20 2026-09-16 - StreamScout Jenna package: 20-platform how-to + Excel)
 # (gametool-package 2026-09-17 - GameTool: 19-store game URL resolver + hostmap terms)
 # (gametool-ps-relevance 2026-09-17 - GameTool: tighten PlayStation match, no inflation)
+# (gametool-hostmap-output 2026-09-17 - GameTool: BRAND/HOSTNAME/CATEGORY/SECTION sheet)
