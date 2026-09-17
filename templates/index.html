@@ -47742,9 +47742,9 @@ https://www.instagram.com/p/..."></textarea>
 
 
 
-                <!-- Luxury fragrance TikTok Shop purchase journey.
-                     Story-mode: fragrance_shop_journey. Caterpillar
-                     funnel. Payload: _JIQ_FRAGRANCE_DATA. -->
+                <!-- Luxury fragrance TikTok Shop + Young Sheldon Amazon
+                     PVOD purchase journeys. Caterpillar funnel.
+                     Payloads: _JIQ_FRAGRANCE_DATA, _JIQ_YS_PVOD_DATA. -->
                 <div class="jiq-frag" id="jiqFragCard" style="display: none;">
                     <div class="jiq-frag-cover">
                         <div class="jiq-frag-copy">
@@ -47758,20 +47758,20 @@ https://www.instagram.com/p/..."></textarea>
                              data-default-hero="{{ url_for('static', filename='fragrance-journey-hero.png') }}"></div>
                     </div>
                     <div class="jiq-frag-sec">
-                        <div class="jiq-frag-num">01 The spine</div>
+                        <div class="jiq-frag-num" id="jiqFragSpineNum">01 The spine</div>
                         <h3 id="jiqFragSpineHead">Learning a name at all is the whole funnel.</h3>
                         <em>Each bar is what the step kept from the step before</em>
                     </div>
                     <div id="jiqFragSpine"></div>
                     <div class="jiq-frag-sec">
-                        <div class="jiq-frag-num">02 The bag splits</div>
+                        <div class="jiq-frag-num" id="jiqFragForkNum">02 The bag splits</div>
                         <h3 id="jiqFragForkHead">Most of the buyer file left first.</h3>
                         <em>Who paid on the spot and who came back</em>
                     </div>
                     <div id="jiqFragFork"></div>
                     <div class="jiq-frag-sec">
-                        <div class="jiq-frag-num">03 Detours</div>
-                        <h3>Where the journey came from, and what closed it.</h3>
+                        <div class="jiq-frag-num" id="jiqFragDetourNum">03 Detours</div>
+                        <h3 id="jiqFragDetourHead">Where the journey came from, and what closed it.</h3>
                         <em>Counts are unique US accounts</em>
                     </div>
                     <div class="jiq-frag-detours" id="jiqFragDetours"></div>
@@ -80491,7 +80491,7 @@ https://www.instagram.com/p/..."></textarea>
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
                         { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix', 'amc+', 'amc plus', 'amc_plus', 'amc migration'] },
-                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
+                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober', 'young sheldon', 'young_sheldon'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: ['abercrombie'] },
                         { id: 'movie',       label: '🎬 Movie',             keywords: ['obsession'] },
                         { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: ['neurotrophic', 'neurotropic', 'nootropic', 'adaptogen', 'recess', 'four sigmatic', 'kin euphorics', 'mud wtr', 'mudwtr', 'rebbl', 'magic mind', 'rasa', 'sunwink', 'hiyo'] }
@@ -80535,7 +80535,8 @@ https://www.instagram.com/p/..."></textarea>
                             { value: '__demo_ufc_paramount__',    label: 'UFC × Paramount+ (US)' },
                             { value: '__demo_adult_animation__',  label: 'Adult Animation · SVOD discovery' },
                             { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
-                            { value: '__demo_song_to_title__', label: 'Heated Rivalry x Barbie · song journey' }
+                            { value: '__demo_song_to_title__', label: 'Heated Rivalry x Barbie · song journey' },
+                            { value: '__demo_young_sheldon_pvod__', label: 'Young Sheldon · Amazon PVOD episode' }
                         ],
                         brands: [
                             { value: '__demo_fragrance_tiktok__', label: 'Luxury Fragrance \u00b7 TikTok Shop purchase journey' }
@@ -80990,6 +80991,31 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'The spine', value: '329,900,000 US accounts down to 187,429 who paid for a $95 and up bottle. The single biggest fall is learning a name at all: 3.9% get that far.' },
                             { label: 'The bag', value: '412,847 put a prestige bottle in the bag and 340,994 of them closed the app with it still there. That leftover pool is the largest unpaid audience still in play.' },
                             { label: 'Where the money is', value: '115,576 of the 187,429 who paid, 61.7%, left first and came back after a retarget. Same-session payers are the smaller half at 71,853.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_young_sheldon_pvod__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'young_sheldon_pvod',
+                            target_name: 'Young Sheldon',
+                            target_display: 'Young Sheldon \u00b7 Amazon PVOD episode',
+                            project_name: 'Young Sheldon Amazon PVOD Journey',
+                            customer_brand: 'Young Sheldon',
+                            start_date: '2025-09-17',
+                            end_date: '2026-09-17',
+                            target_type: 'purchase_journey',
+                            category: 'tv'
+                        },
+                        young_sheldon_pvod: _JIQ_YS_PVOD_DATA,
+                        facts: [
+                            { label: 'Window', value: 'Sep 17, 2025 to Sep 17, 2026. Unique US accounts.' },
+                            { label: 'The spine', value: '329,900,000 US accounts down to 86,413 who paid Amazon for a Young Sheldon episode after a clip. The single biggest fall is after the clip: 15.9% click through.' },
+                            { label: 'The clips', value: 'George-aura edits are the largest first clip. The funeral stitch is the one that pays. They see 5.2 clips before they click through.' },
+                            { label: 'The free hunt', value: '83.2% of clip-started buyers already looked for a play they did not have to pay for. 1,841,273 found it on a service they already had.' }
                         ]
                     }
                 };
@@ -82844,6 +82870,8 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqAnimCrOdd1soutCard');
             _jiqHideCard('jiqAnimCrJaidenCard');
             _jiqHideCard('jiqNeuroCard');
+            _jiqHideCard('jiqFragCard');
+            _jiqHideCard('jiqSongCard');
 
             var _isObsessionStory        = (_storyMode === 'obsession_caa');
             var _isNetflixStory          = (_storyMode === 'netflix_ad_sales');
@@ -82854,6 +82882,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isAdultAnimStory        = (_storyMode === 'adult_animation_discovery');
             var _isAnimCreatorsStory     = (_storyMode === 'animation_creators_discovery');
             var _isSongStory             = (_storyMode === 'song_to_title');
+            var _isYsPvodStory           = (_storyMode === 'young_sheldon_pvod');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             var _isSpeStory              = (_storyMode === 'spe_cross_window');
@@ -83094,6 +83123,13 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof renderJourneyIqFragrance === 'function') {
                     renderJourneyIqFragrance(_pickClickstreamBlock('fragrance_shop_journey'),
                                              (fullRun && fullRun.meta) || meta);
+                }
+            }
+
+            if (_isYsPvodStory) {
+                if (typeof renderJourneyIqYsPvod === 'function') {
+                    renderJourneyIqYsPvod(_pickClickstreamBlock('young_sheldon_pvod'),
+                                          (fullRun && fullRun.meta) || meta);
                 }
             }
 
@@ -104063,6 +104099,8 @@ https://www.instagram.com/p/..."></textarea>
         // ──────────────────────────────────────────────────────────────
         var _JIQ_FRAGRANCE_DATA = {"meta":{"window":"2025-07-01 to 2026-06-30","unit":"unique US accounts","sample":48217,"usGenPop":329900000},"spine":[{"id":"us_gen_pop","label":"US gen pop","doing":"US gen pop. The TAM for this file","where":"United States","accounts":329900000,"kept":100.0,"dropped":0,"ofUs":100.0,"next":"Learn a named luxury bottle, or never","surface":"","job":"","timing":""},{"id":"discovered","label":"Learned a bottle name","doing":"Learn a name","where":"First named luxury bottle on the account","accounts":12847263,"kept":3.8943,"dropped":317052737,"ofUs":3.8943,"next":"TikTok fragrance, or stay on search / Sephora / review","surface":"TikTok in-feed, paid search, YouTube, off-site retailer","job":"Name the bottle on the first surface.","timing":"Same session as first named bottle"},{"id":"tiktok_fragrance","label":"Opened fragrance on TikTok","doing":"Opened fragrance on TikTok","where":"TikTok fragrance content","accounts":6891247,"kept":53.6398,"dropped":5956016,"ofUs":2.0889,"next":"A shop card, or bounce","surface":"TikTok shop cards and Spark on fragrance content","job":"Put a house card on the content they are in.","timing":"Same session"},{"id":"any_card","label":"Opened any shop card","doing":"Opened any fragrance shop card","where":"TikTok Shop fragrance listing","accounts":3186204,"kept":46.2355,"dropped":3705043,"ofUs":0.9658,"next":"Prestige listing, or cheaper only","surface":"Shop ads pinned to the open listing","job":"Keep them on a house listing.","timing":"Same session"},{"id":"prestige_card","label":"Opened a $95+ listing","doing":"Opened a $95 and up listing","where":"Jo Malone, Kilian, Le Labo, Tom Ford or peer house listing","accounts":1042773,"kept":32.7278,"dropped":2143431,"ofUs":0.3161,"next":"Bag, or leave the listing","surface":"Shop ads and live pinned to that SKU","job":"Hold the $95 card. 2143431 never got here.","timing":"Same session"},{"id":"bag","label":"Added $95+ to bag","doing":"Added $95 and up","where":"Prestige in the TikTok Shop bag","accounts":412847,"kept":39.5913,"dropped":629926,"ofUs":0.1251,"next":"Pay, or leave","surface":"Checkout reminder and live code before they close the app","job":"Close in-session. Most bags leave.","timing":"0 to 30 minutes"},{"id":"paid_prestige","label":"Paid a $95+ bottle","doing":"Paid a $95 and up house bottle","where":"TikTok Shop checkout","accounts":187429,"kept":45.3991,"dropped":225418,"ofUs":0.0568,"next":"Done for this bottle","surface":"Next bottle in the note family. Not the same SKU","job":"Stop the same-SKU retarget.","timing":"8 to 30 days after pay"}],"fork":[{"id":"abandoned","label":"Left with it in the bag","doing":"Closed the app with the bottle still in bag","accounts":340994,"kept":82.5957,"dropped":71853,"surface":"Shop ad, live, creator, email, SMS","timing":"2 hours to 7 days"},{"id":"retargeted","label":"Saw a retarget","doing":"Saw a retarget","accounts":241867,"kept":70.93,"dropped":99127,"surface":"Keep the retarget. Pair it with a code","timing":"2 to 7 days"},{"id":"returned","label":"Came back","doing":"Came back after a retarget","accounts":156423,"kept":64.6731,"dropped":85444,"surface":"Live with a stated code on the SKU in the bag","timing":"Same session as the return"},{"id":"paid_return","label":"Paid after coming back","doing":"Paid prestige after leave and return","accounts":115576,"kept":73.8868,"dropped":40847,"surface":"Do not retarget the same SKU","timing":"8 to 30 days after pay"},{"id":"paid_first","label":"Paid in the same session","doing":"Paid prestige in the same session as the bag","accounts":71853,"kept":17.4043,"dropped":340994,"surface":"Do not retarget the same SKU","timing":"0 to 30 minutes"}],"detours":[{"title":"Where they first learned a name","note":"","rows":[{"label":"TikTok creator or organic","accounts":4218647,"pct":32.8369,"doing":"First time a named luxury bottle appears"},{"label":"Search","accounts":2847193,"pct":22.1619,"doing":"Typed the name or a note family"},{"label":"YouTube","accounts":1862471,"pct":14.497,"doing":"Opened a review or unbox"},{"label":"Sephora or Ulta","accounts":1641829,"pct":12.7796,"doing":"Opened a prestige PDP. Often added to loves"},{"label":"Instagram","accounts":1028364,"pct":8.0045,"doing":"Saw a bottle on a creator or a shop tag"},{"label":"Reddit or a forum","accounts":412847,"pct":3.2135,"doing":"Asked for a clone or a close match"},{"label":"Brand site or email","accounts":387291,"pct":3.0146,"doing":"Opened the house site or an owned mail"},{"label":"Other","accounts":448621,"pct":3.492,"doing":"First named bottle was not one of the seven above"}]},{"title":"Which retarget brought them back","note":"","rows":[{"label":"TikTok shop ad","accounts":98413,"pct":40.6889,"doing":"Saw a retarget ad"},{"label":"TikTok live","accounts":67241,"pct":27.8008,"doing":"Saw a live with the same bottle"},{"label":"Creator shop video","accounts":41829,"pct":17.2942,"doing":"Saw a creator with a shop tag"},{"label":"Email or SMS","accounts":21847,"pct":9.0327,"doing":"Got owned mail or a text"},{"label":"Other","accounts":12537,"pct":5.1834,"doing":"Saw a retarget that was not shop ad, live, creator, or mail"}]},{"title":"How long until they paid","note":"","rows":[{"label":"Same session","accounts":71853,"pct":38.3361,"doing":"Paid in the session they bagged"},{"label":"Later the same day","accounts":18247,"pct":9.7354,"doing":"Left and paid later that day"},{"label":"2 to 7 days","accounts":54813,"pct":29.2447,"doing":"Paid later in the week"},{"label":"8 to 30 days","accounts":31471,"pct":16.7909,"doing":"Paid later in the month"},{"label":"31 days or more","accounts":11045,"pct":5.8929,"doing":"Paid after a month"}]},{"title":"First touch on the paid file","note":"","rows":[{"label":"Search","accounts":58871,"pct":31.4098,"doing":"First click on the paid order"},{"label":"Fragrantica or a review site","accounts":35062,"pct":18.7068,"doing":"First click on the paid order"},{"label":"Sephora or Ulta","accounts":30371,"pct":16.204,"doing":"First click on the paid order"},{"label":"YouTube","accounts":23984,"pct":12.7963,"doing":"First click on the paid order"},{"label":"TikTok, not the shop","accounts":20817,"pct":11.1066,"doing":"First click on the paid order"},{"label":"Brand site","accounts":11993,"pct":6.3987,"doing":"First click on the paid order"},{"label":"Other","accounts":6331,"pct":3.3778,"doing":"First click on the paid order"}]},{"title":"Last touch before they paid","note":"","rows":[{"label":"TikTok Shop live","accounts":72341,"pct":38.5965,"doing":"Last click on the paid order"},{"label":"Creator shop link","accounts":55087,"pct":29.3909,"doing":"Last click on the paid order"},{"label":"Shop tab search","accounts":27741,"pct":14.8008,"doing":"Last click on the paid order"},{"label":"Paid shop ad","accounts":18184,"pct":9.7018,"doing":"Last click on the paid order"},{"label":"Seller video","accounts":14076,"pct":7.51,"doing":"Last click on the paid order"}]},{"title":"What assisted the sale","note":"","rows":[{"label":"A coupon query or extension","accounts":118247,"pct":63.089,"doing":"Assist on the paid order"},{"label":"Fragrantica or Parfumo","accounts":101586,"pct":54.1997,"doing":"Assist on the paid order"},{"label":"A retarget after they left","accounts":96413,"pct":51.4397,"doing":"Assist on the paid order"},{"label":"A second shop listing, different house","accounts":89591,"pct":47.8,"doing":"Assist on the paid order"},{"label":"Sephora or Ulta","accounts":77408,"pct":41.2999,"doing":"Assist on the paid order"},{"label":"YouTube long-form","accounts":53230,"pct":28.4001,"doing":"Assist on the paid order"},{"label":"Reddit","accounts":26427,"pct":14.0997,"doing":"Assist on the paid order"}]}]};
 
+        var _JIQ_YS_PVOD_DATA = {"meta":{"window":"2025-09-17 to 2026-09-17","unit":"unique US accounts","sample":51863,"usGenPop":329900000},"copy":{"titleHtml":"Young Sheldon<br>on Amazon PVOD.","eyebrow":"Purchase journey \u00b7 Sep 17, 2025 to Sep 17, 2026","lead":"Leans free-hunt. 83.2% of buyers already looked for a play they did not have to pay for.","deck":"From the first Young Sheldon clip on the account, down to the ones who paid Amazon for an episode. Each bar is what the step kept from the step before, so the fall from 24,186,473 to 86,413 stays readable the whole way.","spineSec":"01 The spine","forkSec":"02 The Amazon page splits","forkHead":"Most of the page-opens left for a play they already had.","forkBranchA":"Paid on that visit","forkBranchB":"Left, and what happened next","forkRead":"341,829 opened the Amazon page and played Young Sheldon on a service they already had. 41,247 of the 86,413 who paid, 47.7%, came back after leaving.","detourSec":"03 Clips, free hunt, and close","detourHead":"What they saw, whether they looked for it free, and what closed the $2.99.","kpis":[{"v":"24,186,473","l":"Saw a Young Sheldon clip"},{"v":"86,413","l":"Paid an episode on Amazon, from a clip"},{"v":"1 in 3,818","l":"Of the US gen pop paid, clip-started"},{"v":"83.2%","l":"Of buyers already hunted it free","hot":true}]},"spine":[{"id":"us_gen_pop","label":"US gen pop","doing":"US gen pop. The TAM for this file","where":"United States","accounts":329900000,"kept":100.0,"dropped":0,"ofUs":100.0,"next":"See a Young Sheldon clip, or never","surface":"","job":"","timing":""},{"id":"clip_exposed","label":"Saw a Young Sheldon clip","doing":"See a clip","where":"First Young Sheldon clip on the account","accounts":24186473,"kept":7.3315,"dropped":305713527,"ofUs":7.3315,"next":"Click through, or stay on the FYP","surface":"TikTok, Shorts, Reels","job":"Name the episode on the clip.","timing":"Same session as first clip"},{"id":"click_through","label":"Clicked through from the clip","doing":"Left the clip for the title","where":"Title search, guide, or platform page","accounts":3847261,"kept":15.9067,"dropped":20339212,"ofUs":1.1662,"next":"Hunt free, or open a platform","surface":"Owned title card after clip 3","job":"win","timing":"After clip 3 to 6"},{"id":"amazon_page","label":"Opened the Amazon buy page","doing":"Opened the buy page","where":"Amazon Young Sheldon episode or season page","accounts":687247,"kept":17.8633,"dropped":3160014,"ofUs":0.2083,"next":"Pay, leave for SVOD, or go cold","surface":"Episode pin and Max trial on the PDP","job":"win","timing":"Same session"},{"id":"paid_social","label":"Paid a Young Sheldon episode","doing":"Paid a Young Sheldon episode, clip-started","where":"Amazon checkout","accounts":86413,"kept":12.5738,"dropped":600834,"ofUs":0.0262,"next":"Done for this episode","surface":"Next episode in the cluster. Not the same SKU","job":"hold","timing":"8 to 30 days after pay"}],"fork":[{"id":"abandoned","label":"Left the Amazon page","doing":"Closed the page without paying","accounts":642081,"kept":93.428,"dropped":45166,"surface":"Amazon display, home rail, email","timing":"2 hours to 7 days"},{"id":"retargeted","label":"Saw a retarget","doing":"Saw a retarget","accounts":398247,"kept":62.0244,"dropped":243834,"surface":"Keep the retarget only if they have not played on SVOD","timing":"2 to 7 days"},{"id":"returned","label":"Came back","doing":"Came back after a retarget","accounts":187241,"kept":47.0163,"dropped":211006,"surface":"Episode pin, not a season bundle first","timing":"Same session as the return"},{"id":"paid_return","label":"Paid after coming back","doing":"Paid the episode after leave and return","accounts":41247,"kept":22.0288,"dropped":145994,"surface":"Do not retarget the same episode","timing":"8 to 30 days after pay"},{"id":"paid_first","label":"Paid on that visit","doing":"Paid the episode in the same visit as the page","accounts":45166,"kept":6.572,"dropped":642081,"surface":"Do not retarget the same episode","timing":"0 to 30 minutes"}],"detours":[{"title":"First Young Sheldon clip they saw","note":"","rows":[{"label":"George Cooper aura or dad-protect edit","accounts":6841273,"pct":28.2855,"doing":"First Young Sheldon clip on the account"},{"label":"Funeral or George death stitch","accounts":4218647,"pct":17.4422,"doing":"First Young Sheldon clip on the account"},{"label":"Sheldon punchline recut","accounts":3847291,"pct":15.9068,"doing":"First Young Sheldon clip on the account"},{"label":"Missy and George","accounts":3186204,"pct":13.1735,"doing":"First Young Sheldon clip on the account"},{"label":"Georgie hustle or money edit","accounts":2641829,"pct":10.9228,"doing":"First Young Sheldon clip on the account"},{"label":"Finale, adult Sheldon, or Parsons cameo","accounts":1864271,"pct":7.7079,"doing":"First Young Sheldon clip on the account"},{"label":"Recap or the episode explained","accounts":847291,"pct":3.5032,"doing":"First Young Sheldon clip on the account"},{"label":"Other, meme audio, or reaction","accounts":739667,"pct":3.0582,"doing":"First Young Sheldon clip on the account"}]},{"title":"Where the first clip sat","note":"","rows":[{"label":"TikTok","accounts":11247186,"pct":46.502,"doing":"First Young Sheldon clip surface"},{"label":"YouTube Shorts","accounts":6184273,"pct":25.5691,"doing":"First Young Sheldon clip surface"},{"label":"Instagram Reels","accounts":4218647,"pct":17.4422,"doing":"First Young Sheldon clip surface"},{"label":"Facebook Reels","accounts":1641829,"pct":6.7882,"doing":"First Young Sheldon clip surface"},{"label":"X or other","accounts":894538,"pct":3.6985,"doing":"First Young Sheldon clip surface"}]},{"title":"How many clips before they clicked through","note":"","rows":[{"label":"1 clip","accounts":412847,"pct":10.7309,"doing":"Clips on the account before title intent"},{"label":"2 to 3 clips","accounts":1186473,"pct":30.8394,"doing":"Clips on the account before title intent"},{"label":"4 to 6 clips","accounts":1241829,"pct":32.2783,"doing":"Clips on the account before title intent"},{"label":"7 to 10 clips","accounts":687241,"pct":17.8631,"doing":"Clips on the account before title intent"},{"label":"11 or more","accounts":318871,"pct":8.2883,"doing":"Clips on the account before title intent"}]},{"title":"Where they looked for it free","note":"overlap","rows":[{"label":"Google, watch free or where to watch","accounts":1846847,"pct":69.9079,"doing":"Looked for a free play"},{"label":"Netflix title search","accounts":1641829,"pct":62.1474,"doing":"Looked for a free play"},{"label":"Max title search","accounts":912847,"pct":34.5536,"doing":"Looked for a free play"},{"label":"JustWatch or a where-to-watch guide","accounts":687241,"pct":26.0138,"doing":"Looked for a free play"},{"label":"Hulu title search","accounts":541263,"pct":20.4882,"doing":"Looked for a free play"},{"label":"YouTube full-episode hunt","accounts":412867,"pct":15.6281,"doing":"Looked for a free play"},{"label":"A free-stream or scrape domain","accounts":387241,"pct":14.6581,"doing":"Looked for a free play"},{"label":"Reddit where to watch","accounts":298413,"pct":11.2957,"doing":"Looked for a free play"},{"label":"Paramount+","accounts":241829,"pct":9.1538,"doing":"Looked for a free play"},{"label":"Tubi, Pluto, or another FAST","accounts":186473,"pct":7.0585,"doing":"Looked for a free play"}]},{"title":"What the free hunt resolved to","note":"","rows":[{"label":"Watched on an SVOD they already had","accounts":1841273,"pct":69.6969,"doing":"After the free hunt"},{"label":"Started a Max or Netflix trial, or used Max on Amazon","accounts":287261,"pct":10.8736,"doing":"After the free hunt"},{"label":"Opened the Amazon buy page anyway","accounts":487261,"pct":18.4441,"doing":"After the free hunt"},{"label":"Left without a play or a buy","accounts":26034,"pct":0.9855,"doing":"After the free hunt"}]},{"title":"Which first clip paid","note":"","rows":[{"label":"Funeral or George death stitch","accounts":24186,"pct":27.9888,"doing":"First clip on the paid file"},{"label":"George Cooper aura or dad-protect edit","accounts":18247,"pct":21.116,"doing":"First clip on the paid file"},{"label":"Missy and George","accounts":12847,"pct":14.867,"doing":"First clip on the paid file"},{"label":"Sheldon punchline recut","accounts":9413,"pct":10.893,"doing":"First clip on the paid file"},{"label":"Georgie hustle or money edit","accounts":8241,"pct":9.5368,"doing":"First clip on the paid file"},{"label":"Finale, adult Sheldon, or Parsons cameo","accounts":7186,"pct":8.3159,"doing":"First clip on the paid file"},{"label":"Recap or the episode explained","accounts":3847,"pct":4.4519,"doing":"First clip on the paid file"},{"label":"Other, meme audio, or reaction","accounts":2446,"pct":2.8306,"doing":"First clip on the paid file"}]},{"title":"How long until they paid","note":"","rows":[{"label":"Same day","accounts":14186,"pct":16.4165,"doing":"Days from first clip to pay"},{"label":"2 to 7 days","accounts":28413,"pct":32.8805,"doing":"Days from first clip to pay"},{"label":"8 to 30 days","accounts":24847,"pct":28.7538,"doing":"Days from first clip to pay"},{"label":"31 to 90 days","accounts":12641,"pct":14.6286,"doing":"Days from first clip to pay"},{"label":"91 days or more","accounts":6326,"pct":7.3207,"doing":"Days from first clip to pay"}]},{"title":"First clip surface on the paid file","note":"","rows":[{"label":"TikTok","accounts":38247,"pct":44.2607,"doing":"First click on the paid order"},{"label":"YouTube Shorts","accounts":21847,"pct":25.2821,"doing":"First click on the paid order"},{"label":"Instagram Reels","accounts":16413,"pct":18.9937,"doing":"First click on the paid order"},{"label":"Facebook Reels","accounts":6241,"pct":7.2223,"doing":"First click on the paid order"},{"label":"X or other","accounts":3665,"pct":4.2413,"doing":"First click on the paid order"}]},{"title":"Last touch before they paid","note":"","rows":[{"label":"Amazon search for Young Sheldon","accounts":28412,"pct":32.8793,"doing":"Last click on the paid order"},{"label":"Amazon title page from Google","accounts":21847,"pct":25.2821,"doing":"Last click on the paid order"},{"label":"Prime Video home or continue","accounts":14186,"pct":16.4165,"doing":"Last click on the paid order"},{"label":"Declined the Max upsell, then bought","accounts":12847,"pct":14.867,"doing":"Last click on the paid order"},{"label":"Episode link from a clip comment","accounts":9121,"pct":10.5551,"doing":"Last click on the paid order"}]},{"title":"What assisted the sale","note":"overlap","rows":[{"label":"A free-elsewhere search","accounts":71847,"pct":83.1437,"doing":"Assist on the paid order"},{"label":"JustWatch or a where-to-watch guide","accounts":41829,"pct":48.4059,"doing":"Assist on the paid order"},{"label":"Netflix title search","accounts":38247,"pct":44.2607,"doing":"Assist on the paid order"},{"label":"Max title search","accounts":24186,"pct":27.9888,"doing":"Assist on the paid order"},{"label":"A YouTube recap after the clip","accounts":18413,"pct":21.3081,"doing":"Assist on the paid order"},{"label":"A Georgie and Mandy session","accounts":12847,"pct":14.867,"doing":"Assist on the paid order"},{"label":"A Reddit thread","accounts":8241,"pct":9.5368,"doing":"Assist on the paid order"}]}]};
+
         function _jiqFragNum(n) {
             if (n === null || n === undefined || isNaN(n)) return '\u2014';
             return Number(n).toLocaleString('en-US');
@@ -104121,6 +104159,16 @@ https://www.instagram.com/p/..."></textarea>
             // does not repeat it.
             var stripTitle = document.getElementById('jiqDashTitle');
             if (stripTitle) stripTitle.style.display = 'none';
+            var _fragTitle = document.getElementById('jiqFragTitle');
+            if (_fragTitle) _fragTitle.innerHTML = 'Luxury fragrance<br>on TikTok Shop.';
+            var _fragSpineNum = document.getElementById('jiqFragSpineNum');
+            if (_fragSpineNum) _fragSpineNum.textContent = '01 The spine';
+            var _fragForkNum = document.getElementById('jiqFragForkNum');
+            if (_fragForkNum) _fragForkNum.textContent = '02 The bag splits';
+            var _fragDetourNum = document.getElementById('jiqFragDetourNum');
+            if (_fragDetourNum) _fragDetourNum.textContent = '03 Detours';
+            var _fragDetourHead = document.getElementById('jiqFragDetourHead');
+            if (_fragDetourHead) _fragDetourHead.textContent = 'Where the journey came from, and what closed it.';
 
             // The TAM row is dropped: a 329.9M starting point says
             // nothing about this audience and swamped the read. The
@@ -104245,6 +104293,126 @@ https://www.instagram.com/p/..."></textarea>
                 forkEl.innerHTML = html;
             }
 
+            var detEl = document.getElementById('jiqFragDetours');
+            if (detEl) {
+                detEl.innerHTML = (d.detours || []).map(function (t) {
+                    var rows = (t.rows || []);
+                    var top = rows.reduce(function (m, r) {
+                        return Math.max(m, Number(r.accounts) || 0); }, 0) || 1;
+                    return '<div class="jiq-frag-det">'
+                      + '<h5>' + _jiqFragEsc(t.title) + '</h5>'
+                      + rows.map(function (r) {
+                          var w = Math.max(1, Math.round(100 * (Number(r.accounts) || 0) / top));
+                          return '<div class="jiq-frag-detrow">'
+                            + '<span class="jiq-frag-detlab">' + _jiqFragEsc(r.label) + '</span>'
+                            + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
+                            + '<span class="jiq-frag-detval">' + _jiqFragNum(r.accounts) + '</span>'
+                          + '</div>';
+                        }).join('')
+                      + '</div>';
+                }).join('');
+            }
+        }
+
+
+        function renderJourneyIqYsPvod(p, runMeta) {
+            var d = (p && p.spine) ? p
+                  : (typeof _JIQ_YS_PVOD_DATA !== 'undefined' ? _JIQ_YS_PVOD_DATA : null);
+            var fullMeta = runMeta
+                || (_jiqCurrentRun && (_jiqCurrentRun.meta || _jiqCurrentRun))
+                || {};
+            if (!d) return;
+            var card = document.getElementById('jiqFragCard');
+            if (!card) return;
+            card.style.display = '';
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
+            var copy = d.copy || {};
+            var titleEl = document.getElementById('jiqFragTitle');
+            if (titleEl && copy.titleHtml) titleEl.innerHTML = copy.titleHtml;
+            var spineNum = document.getElementById('jiqFragSpineNum');
+            if (spineNum && copy.spineSec) spineNum.textContent = copy.spineSec;
+            var forkNum = document.getElementById('jiqFragForkNum');
+            if (forkNum && copy.forkSec) forkNum.textContent = copy.forkSec;
+            var detNum = document.getElementById('jiqFragDetourNum');
+            if (detNum && copy.detourSec) detNum.textContent = copy.detourSec;
+            var detHead = document.getElementById('jiqFragDetourHead');
+            if (detHead && copy.detourHead) detHead.textContent = copy.detourHead;
+
+            var fullSpine = d.spine || [];
+            var spine = fullSpine.filter(function (s) { return s.id !== 'us_gen_pop'; });
+            var fork = d.fork || [];
+            var entered = spine.length ? spine[0].accounts : null;
+            var paid = spine.length ? spine[spine.length - 1].accounts : null;
+            var byId = {};
+            fork.forEach(function (f) { byId[f.id] = f; });
+
+            var deck = document.getElementById('jiqFragDeck');
+            if (deck) deck.textContent = copy.deck || '';
+            var meta = document.getElementById('jiqFragMeta');
+            if (meta) meta.textContent = copy.eyebrow || ((d.meta && d.meta.window) || '');
+            var art = document.getElementById('jiqFragArt');
+            if (art) {
+                var subject = (fullMeta && (fullMeta.customer_brand || fullMeta.target_name))
+                    || 'Young Sheldon';
+                art.innerHTML = '<span class="jiq-frag-art-ini">'
+                    + _jiqFragEsc(_tiqFastInitials ? _tiqFastInitials(subject) : 'YS') + '</span>';
+                art.classList.add('is-ini');
+            }
+            var lead = document.getElementById('jiqFragLead');
+            if (lead) lead.textContent = copy.lead || '';
+            var kpis = document.getElementById('jiqFragKpis');
+            if (kpis && copy.kpis) {
+                kpis.innerHTML = copy.kpis.map(function (t) {
+                    return '<div class="jiq-frag-kpi' + (t.hot ? ' is-hot' : '') + '">'
+                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(t.l) + '</div>'
+                         + '<div class="jiq-frag-kpi-v">' + t.v + '</div></div>';
+                }).join('');
+            }
+            var worst = null;
+            spine.forEach(function (s, i) {
+                if (i === 0 || s.kept === null || s.kept === undefined) return;
+                if (!worst || Number(s.kept) < Number(worst.kept)) worst = s;
+            });
+            var spineHead = document.getElementById('jiqFragSpineHead');
+            if (spineHead && worst) {
+                spineHead.textContent = 'The steepest fall is ' + worst.label.toLowerCase()
+                    + '. ' + _jiqFragPct(worst.kept) + ' of the step before get that far.';
+            }
+            var forkHead = document.getElementById('jiqFragForkHead');
+            if (forkHead && copy.forkHead) forkHead.textContent = copy.forkHead;
+
+            var spineEl = document.getElementById('jiqFragSpine');
+            if (spineEl) {
+                spineEl.innerHTML = spine.map(function (s, i) {
+                    return _jiqFragStep(s, {
+                        base: i === 0,
+                        terminal: i === spine.length - 1
+                    });
+                }).join('');
+            }
+            var forkEl = document.getElementById('jiqFragFork');
+            if (forkEl) {
+                var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
+                var html = '';
+                order.forEach(function (id) {
+                    var f = byId[id];
+                    if (!f) return;
+                    if (id === 'paid_first') {
+                        html += '<div class="jiq-frag-branchnote">'
+                             + _jiqFragEsc(copy.forkBranchA || 'Paid on that visit') + '</div>';
+                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += '<div class="jiq-frag-branchnote">'
+                             + _jiqFragEsc(copy.forkBranchB || 'Left, and what happened next') + '</div>';
+                    } else {
+                        html += _jiqFragStep(f, { branch: true, terminal: id === 'paid_return' });
+                    }
+                });
+                if (copy.forkRead) {
+                    html += '<p class="jiq-frag-read">' + _jiqFragEsc(copy.forkRead) + '</p>';
+                }
+                forkEl.innerHTML = html;
+            }
             var detEl = document.getElementById('jiqFragDetours');
             if (detEl) {
                 detEl.innerHTML = (d.detours || []).map(function (t) {
@@ -108058,7 +108226,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, fragrance_shop_journey: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, fragrance_shop_journey: 1, young_sheldon_pvod: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
@@ -174716,27 +174884,52 @@ https://www.instagram.com/p/..."></textarea>
         background: #FFFFFF !important; border-color: #C9C6BA !important;
     }
 
-    /* The open-show chip was a blue gradient pill. */
+    /* The open shows were 37px pills, one of them a solid block of
+       Signal Green, which put the heaviest thing on the page above
+       the masthead. They are a strip of names with the open one
+       underlined, the way the tab rail below already works. */
+    #subscriberIQView .profile-tabs-bar {
+        gap: 22px !important; padding: 0 !important; align-items: baseline !important;
+        border-bottom: 1px solid #3B3D38; padding-bottom: 9px !important;
+    }
+    body[data-theme="light"] #subscriberIQView .profile-tabs-bar { border-bottom-color: #C9C6BA; }
+    #subscriberIQView .profile-tabs-bar::before {
+        content: 'Open'; flex: 0 0 auto; margin-right: 4px;
+        font-size: 9.5px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+    }
     #subscriberIQView .profile-tab {
         background: transparent !important; background-image: none !important;
-        border: 1px solid #3B3D38 !important; border-radius: 999px !important;
-        color: #9AA09B !important; font-size: 10.5px !important;
+        border: 0 !important; border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important; box-shadow: none !important;
+        color: #7C878A !important; font-size: 10.5px !important;
         font-weight: 600 !important; letter-spacing: .1em !important;
-        text-transform: uppercase !important; box-shadow: none !important;
+        text-transform: uppercase !important;
+        padding: 0 0 6px !important; gap: 7px !important;
+        max-width: 210px !important; min-height: 0 !important;
+        margin-bottom: -11px !important;
     }
+    #subscriberIQView .profile-tab:hover { color: #E9E8E1 !important; }
     #subscriberIQView .profile-tab.active {
-        color: #0C1618 !important; background: #C7F23E !important;
-        border-color: #C7F23E !important;
+        color: #E9E8E1 !important; border-bottom-color: #C7F23E !important;
     }
-    #subscriberIQView .profile-tab.active * { color: #0C1618 !important; }
-    body[data-theme="light"] #subscriberIQView .profile-tab {
-        border-color: #C9C6BA !important; color: #5C6560 !important;
+    #subscriberIQView .profile-tab.active * { color: #E9E8E1 !important; }
+    /* The close control stays out of the way until it is wanted. */
+    #subscriberIQView .profile-tab-close {
+        background: transparent !important; border: 0 !important;
+        color: #7C878A !important; opacity: 0; font-size: 13px !important;
+        line-height: 1 !important; padding: 0 !important; min-width: 0 !important;
+        transition: opacity 120ms ease;
     }
-    body[data-theme="light"] #subscriberIQView .profile-tab.active {
-        background: #5E7E12 !important; border-color: #5E7E12 !important;
-        color: #E9E8E1 !important;
-    }
-    body[data-theme="light"] #subscriberIQView .profile-tab.active * { color: #E9E8E1 !important; }
+    #subscriberIQView .profile-tab:hover .profile-tab-close,
+    #subscriberIQView .profile-tab.active .profile-tab-close { opacity: 1; }
+    #subscriberIQView .profile-tab-close:hover { color: #E9E8E1 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab { color: #888C89 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab:hover,
+    body[data-theme="light"] #subscriberIQView .profile-tab.active { color: #0C1618 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab.active * { color: #0C1618 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab.active { border-bottom-color: #5E7E12 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab-close:hover { color: #0C1618 !important; }
 
     /* Section heads that are plain h2 rather than .section-header get
        the same eyebrow dot and rule, so every tab opens the same way. */
