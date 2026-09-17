@@ -13,14 +13,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/newsletter_admin.css">
     <script>
-        // Auto-reload admin panel when a new deploy lands. Mirrors the
-        // version-poller in index.html so admins never sit on stale UI.
+        // Auto-reload admin panel when a new deploy lands. Compare the
+        // git SHA only. boot_time differs across Render instances and
+        // was looping this page every 20s, wiping Edit User mid-save
+        // (Jenna 2026-09-17). Also wait until any modal is closed so
+        // an in-progress user edit is never discarded.
         (function() {
             var POLL_MS = 20000;
             var HIDDEN_POLL_MS = 60000;
             var bootVersion = null;
-            var bootTime = null;
             var reloading = false;
+            var pendingVersion = null;
 
             function fetchVersion() {
                 return fetch('/api/version', {
@@ -32,30 +35,53 @@
                 });
             }
 
+            function modalOpen() {
+                try {
+                    return !!document.querySelector(
+                        '.modal.show, #userModal.show, #userDetailsModal.show');
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function doReload(version) {
+                reloading = true;
+                try { console.log('[auto-reload] admin deploy detected - reloading'); } catch (e) {}
+                setTimeout(function() {
+                    try {
+                        var url = new URL(window.location.href);
+                        url.searchParams.set('_v', version || String(Date.now()));
+                        window.location.replace(url.toString());
+                    } catch (e) {
+                        window.location.reload();
+                    }
+                }, 250);
+            }
+
             function check() {
                 if (reloading) return Promise.resolve();
                 return fetchVersion().then(function(v) {
+                    var ver = v && v.version;
                     if (bootVersion === null) {
-                        bootVersion = v.version;
-                        bootTime = v.boot_time;
+                        bootVersion = ver;
                         try { console.log('[auto-reload] admin armed at', bootVersion); } catch (e) {}
                         return;
                     }
-                    if (v.version !== bootVersion || v.boot_time !== bootTime) {
-                        reloading = true;
-                        try { console.log('[auto-reload] admin deploy detected - reloading'); } catch (e) {}
-                        setTimeout(function() {
-                            try {
-                                var url = new URL(window.location.href);
-                                url.searchParams.set('_v', v.version || String(Date.now()));
-                                window.location.replace(url.toString());
-                            } catch (e) {
-                                window.location.reload();
-                            }
-                        }, 250);
+                    if (ver && ver !== bootVersion) {
+                        if (modalOpen()) {
+                            pendingVersion = ver;
+                            window._adminPendingReloadVersion = ver;
+                            return;
+                        }
+                        doReload(ver);
                     }
                 }).catch(function() { /* server mid-deploy - keep polling */ });
             }
+
+            window._adminFlushPendingReload = function() {
+                if (reloading || !pendingVersion || modalOpen()) return;
+                doReload(pendingVersion);
+            };
 
             function schedule() {
                 var delay = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
@@ -10502,7 +10528,11 @@
         async function editUser(username) {
             const user = allUsers[username];
             if (!user) return;
+            try {
+                document.getElementById('userModal').classList.add('show');
+            } catch (_) {}
 
+            try {
             document.getElementById('modalTitle').textContent = 'Edit User: ' + username;
             // 2026-09-09: Billing link — visible in edit mode only. New users
             // must be saved first (stripe_customer_id is created lazily).
@@ -10830,6 +10860,12 @@
                 });
                 if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
             } catch (_) { /* toolbar helpers are best-effort */ }
+            } catch (err) {
+                console.error('editUser failed', err);
+                if (typeof showToast === 'function') {
+                    showToast('Edit form hit a snag loading this user. You can still save the fields that loaded.', true);
+                }
+            }
         }
 
         function userModalSetAvatarPreview(srcOrDataUrl, initialsFor) {
@@ -10940,6 +10976,9 @@
 
         function closeModal() {
             document.getElementById('userModal').classList.remove('show');
+            if (typeof window._adminFlushPendingReload === 'function') {
+                setTimeout(window._adminFlushPendingReload, 50);
+            }
         }
 
         // 2026-09-09: deep-link into /admin/billing?user=<username> so
@@ -14997,7 +15036,7 @@
                     showToast(data.error || 'Failed to save user', true);
                 }
             } catch (error) {
-                showToast('Network error', true);
+                showToast('Could not save: ' + ((error && error.message) || 'network error'), true);
             }
         });
 
