@@ -24522,12 +24522,19 @@ https://www.instagram.com/p/..."></textarea>
             display: none !important;
         }
         #dashboardView.piq-v4 #tab-insights #piqInsightsLead {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 44px !important;
-            align-items: start !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 36px !important;
+            align-items: stretch !important;
             grid-column: 1 / -1;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0 0 36px;
+        }
+        #dashboardView.piq-v4 #tab-insights #piqInsightsLead > * {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0;
         }
         #dashboardView.piq-v4 #tab-insights #piqMomentumHost {
             min-width: 0;
@@ -24537,14 +24544,6 @@ https://www.instagram.com/p/..."></textarea>
             margin: 0 0 14px;
         }
         #dashboardView.piq-v4 #tab-insights #piqMomentumHost:empty { display: none; }
-        #dashboardView.piq-v4 #tab-insights #piqInsightsLead:has(#piqMomentumHost:empty) {
-            grid-template-columns: 1fr !important;
-        }
-        @media (max-width: 900px) {
-            #dashboardView.piq-v4 #tab-insights #piqInsightsLead {
-                grid-template-columns: 1fr !important;
-            }
-        }
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-no-data,
         #dashboardView.piq-v4 #tab-demographics .demo-insight-card.piq-no-data,
         #dashboardView.piq-v4 #tab-demographics .chart-card.piq-no-data {
@@ -27849,7 +27848,7 @@ https://www.instagram.com/p/..."></textarea>
                             
                             <div id="piqInsightsLead" class="piq-insights-lead">
                             <div id="piqMomentumHost" class="piq-momentum-host"></div>
-                                <!-- Behavioral Profile sits beside Momentum -->
+                                <!-- Behavioral Profile stacks full-width under Momentum -->
                                 <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
                                     <div class="insight-card-header">
                                         <h3 class="has-tooltip" data-tooltip="Behavioral Profile: analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
