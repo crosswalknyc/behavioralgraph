@@ -174567,9 +174567,18 @@ https://www.instagram.com/p/..."></textarea>
         background: #E9E8E1 !important; color: #0C1618;
         --bg-card: #FFFFFF; --bg-input: #FFFFFF; --border-color: #C9C6BA;
     }
-    /* The drawer is out of flow, so the content takes the full width. */
-    #subscriberIQView .dashboard-layout { display: block !important; }
-    #subscriberIQView .dashboard-tab-content { width: 100% !important; }
+    /* The drawer is out of flow, so the content takes the full width.
+       This stays a flex COLUMN rather than a block: the content pane
+       has to be height-bounded by the layout for its own overflow
+       pane to scroll, and a block parent lets it grow to its content
+       instead, which clips the page. */
+    #subscriberIQView .dashboard-layout {
+        display: flex !important; flex-direction: column !important;
+        min-height: 0 !important;
+    }
+    #subscriberIQView .dashboard-tab-content {
+        width: 100% !important; flex: 1 1 0% !important; min-height: 0 !important;
+    }
 
     /* Rail */
     #subLibraryRail {
@@ -174779,7 +174788,7 @@ https://www.instagram.com/p/..."></textarea>
         font-size: 13px !important; font-weight: 600 !important;
         letter-spacing: .14em !important; text-transform: uppercase !important;
         display: flex !important; align-items: center; gap: 9px;
-        padding-bottom: 12px; margin-bottom: 20px !important;
+        padding-bottom: 11px; margin-bottom: 8px !important;
         border-bottom: 1px solid #3B3D38;
     }
     body[data-theme="light"] #subscriberIQView .section-header { border-bottom-color: #C9C6BA; }
@@ -174795,6 +174804,7 @@ https://www.instagram.com/p/..."></textarea>
     #subscriberIQView .insight-card, #subscriberIQView .chart-container {
         background: transparent !important; border: 1px solid #3B3D38 !important;
         border-radius: 12px !important; box-shadow: none !important;
+        padding: 22px 26px !important;
     }
     body[data-theme="light"] #subscriberIQView .executive-summary-card,
     body[data-theme="light"] #subscriberIQView .metric-card,
@@ -174950,7 +174960,7 @@ https://www.instagram.com/p/..."></textarea>
         font-size: 13px !important; font-weight: 600 !important;
         letter-spacing: .14em !important; text-transform: uppercase !important;
         display: flex !important; align-items: center; gap: 9px;
-        padding-bottom: 12px; margin: 0 0 22px !important;
+        padding-bottom: 11px; margin: 0 0 8px !important;
         border-bottom: 1px solid #3B3D38;
     }
     body[data-theme="light"] #subscriberIQView .executive-summary-card > h2,
@@ -174998,7 +175008,7 @@ https://www.instagram.com/p/..."></textarea>
         letter-spacing: .14em !important; text-transform: uppercase !important;
         color: #E9E8E1 !important;
         display: flex !important; align-items: center; gap: 9px;
-        padding-bottom: 12px; margin: 0 0 22px !important;
+        padding-bottom: 11px; margin: 0 0 8px !important;
         border-bottom: 1px solid #3B3D38;
     }
     body[data-theme="light"] #subscriberIQView .exec-summary-header h2,
@@ -175126,7 +175136,7 @@ https://www.instagram.com/p/..."></textarea>
        is in the middle, the number set right in tabular figures so
        the column can be read down. */
     #subscriberIQView .exec-summary-grid {
-        display: block !important; margin-top: 4px !important;
+        display: block !important; margin-top: 0 !important;
         max-width: 1080px !important;
     }
     #subscriberIQView .exec-summary-metric {
@@ -175135,7 +175145,7 @@ https://www.instagram.com/p/..."></textarea>
         column-gap: 30px !important; align-items: center !important;
         background: transparent !important; border: 0 !important;
         border-bottom: 1px solid #2A2D2A !important; border-radius: 0 !important;
-        padding: 15px 0 !important; text-align: left !important;
+        padding: 13px 0 !important; text-align: left !important;
     }
     body[data-theme="light"] #subscriberIQView .exec-summary-metric { border-bottom-color: #DBD8CD !important; }
     #subscriberIQView .exec-summary-metric:last-child { border-bottom: 0 !important; }
