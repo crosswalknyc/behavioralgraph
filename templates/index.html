@@ -81182,7 +81182,12 @@ https://www.instagram.com/p/..."></textarea>
             if (_jiqCurrentClusterIdx >= clusters.length) _jiqCurrentClusterIdx = 0;
 
             var title = document.getElementById('jiqDashTitle');
-            if (title) title.textContent = (meta.project_name || meta.target || 'Digital Journey');
+            if (title) {
+                title.textContent = (meta.project_name || meta.target || 'Digital Journey');
+                // Shown by default. A story that sets its own name in the
+                // card turns this off rather than printing it twice.
+                title.style.display = '';
+            }
             var cohortModeLbl = meta.cohort_mode || 'mention';
             var windowStr;
             if (cohortModeLbl === 'conversion') {
@@ -103573,6 +103578,10 @@ https://www.instagram.com/p/..."></textarea>
             var card = document.getElementById('jiqFragCard');
             if (!card) return;
             card.style.display = '';
+            // The cover states the name at full size, so the strip above
+            // does not repeat it.
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
 
             // The TAM row is dropped: a 329.9M starting point says
             // nothing about this audience and swamped the read. The
