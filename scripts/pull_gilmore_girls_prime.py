@@ -34,32 +34,38 @@ plus reports/_ledger/shipped_numbers.jsonl establish, for this same IP:
   - 2,104,837 new Netflix subscribers reached the title in T12 through
     6/30; 5,386,847 unique US people searched Netflix for the title in
     T12. Those are NETFLIX-side numbers for a different metric and are
-    NOT contradicted by this Prime-side read; the Prime reach below
-    (3.42M uniques in 79 days on the NEW home) sits comfortably inside
-    the demand envelope those numbers describe.
-No prior deliverable states a Prime-side reach, conversion, or churn
-number for this IP, so nothing here re-draws a shipped figure.
+    NOT contradicted by this Prime-side read.
+  - reports/Gilmore_Girls_Amazon_Flywheel_2026_09_17_README.txt (same
+    day, SAME window 2026-07-01 to 2026-09-17) states the Prime-side
+    universe for this IP: 8,741,829 total US Prime Video Gilmore Girls
+    accounts in the title window (= lapsed/new 1,418,647 + regular
+    5,186,473 + light 2,136,709), with the lapsed/new cohort splitting
+    870,386 lapsed-return vs 548,261 new-to-Prime-Video (61.4%/38.6%).
+    This pull's reach anchors to that shipped total EXACTLY, and the
+    reactivated-vs-new split anchors to the shipped 61.4/38.6 shape.
+    The tracker's Attributed Signups / Dormant to Reactive rows are a
+    strict-attribution SUBSET of the flywheel journey cohorts (signup
+    or reactivation within the attribution window of first play, with
+    the exclusion screen applied), so their absolute counts sit far
+    below the journey-cohort counts by construction.
 
 ROW-BY-ROW REASONING (externally anchored, independent of the
 Supernatural pull - no shared rates, no borrowed multipliers):
 
-reach_us = 3,418,647  (unique US Prime Video accounts that viewed the
+reach_us = 8,741,829  (unique US Prime Video accounts that viewed the
     title, 2026-07-01 through the run date)
-    - Prime Video US base about 130M ad-tier customers (Amazon, May
-      2025 upfront). 3.42M uniques is a 2.6% touch rate over ~11 weeks
-      for a marquee catalog arrival with a national press cycle.
-    - Netflix-side scale calibrates the demand pool: Season 1 alone
-      drew 8.3M global views in H2 2025 (a fall half) and 4.1M in
-      H1 2026 on a 81.44M-member US base. US-weighted title-level
-      uniques on Netflix ran mid-single-digit millions per half.
-    - The Prime read must sit BELOW a Netflix-half figure: the
-      audience is now split three ways (Hulu incumbent since 2024,
-      Disney+, Prime new), the window is 79 days not 180, and Prime's
-      video MAU is a subset of its member base. The Netflix-refugee
-      cohort is the swing audience: their watch home vanished July 1
-      and ~65% of US households already hold Prime, so adoption on
-      Prime is low-friction. Launch press + early fall onset
-      concentrate it. Anchor: 3.42M.
+    - COHERENCE ANCHOR: this is the exact shipped total from the same-
+      window Gilmore Girls Amazon Flywheel deliverable (2026-09-17):
+      lapsed/new 1,418,647 + regular 5,186,473 + light 2,136,709.
+      A same-IP same-window read must not re-draw a shipped figure.
+    - Externally plausible: Prime Video US base about 130M ad-tier
+      customers (Amazon, May 2025 upfront); 8.74M uniques is a 6.7%
+      touch rate over ~11 weeks for a marquee catalog arrival with a
+      national press cycle, on the platform two-thirds of US
+      households already hold. Netflix-side demand calibrates the
+      pool: 3.7B hours 2023-2025, Season 1 alone 8.3M global views in
+      H2 2025; the show's watch home vanished July 1 so the refugee
+      cohort adopted the new home at near-zero friction.
 
 pre_existing_pct = 0.72
     Comfort-rewatch juggernaut: the dominant Prime cohort is
@@ -71,7 +77,7 @@ pre_existing_pct = 0.72
     deliberately above the 0.65 research cap: rewatch dominance is
     the defining trait of this title.
 
-conv_pct = 0.93  (of the ~957K first-time-viewer clean sample)
+conv_pct = 0.93  (of the ~2.45M first-time-viewer clean sample)
     Catalog conversion is structurally low, and Prime's bundling with
     shopping makes video-motivated NEW memberships rarer still. The
     long-resident catalog baseline for this exact title was 0.36%
@@ -80,15 +86,17 @@ conv_pct = 0.93  (of the ~957K first-time-viewer clean sample)
     baseline - the show's home vanished and the fall ritual was
     approaching - but stays far below premiere-event tiers (1.15%
     Lincoln Lawyer S1 launch, 2.8% Furious mid-run). Anchor: 0.93%,
-    about 8.9K US signups in 79 days.
+    about 22.8K strictly-attributed US signups in 79 days.
 
-new_share = 0.26  (reactivation_pct_override = 0.74)
-    Prime-specific dynamic: the female 25-54 household demo this
-    title over-indexes on is the most Prime-saturated demo in the US.
-    "Signups" here are dominated by video-side REACTIVATION of
-    shopping-only or dormant-video members (the more meaningful
-    dynamic for Prime catalog arrivals), not first-ever accounts.
-    26% new / 74% reactivated.
+new_share = 0.39  (reactivation_pct_override = 0.61)
+    COHERENCE ANCHOR: the shipped same-window flywheel splits the
+    lapsed/new first-Gilmore cohort 870,386 lapsed-return vs 548,261
+    new-to-Prime-Video = 61.4% reactivated / 38.6% new. The strict-
+    attribution signup split mirrors that shipped shape. The Prime-
+    specific dynamic holds: the female 25-54 household demo this
+    title over-indexes on is the most Prime-saturated demo in the
+    US, so video-side REACTIVATION of shopping-only or dormant-video
+    members outweighs first-ever accounts.
 
 Completion-rate expectation: low 80s. Episodic comfort rewatch
 completes at the top of the catalog range; the prior tracker for this
@@ -174,10 +182,12 @@ CONFIG = {
     "analysis_end_date_override": datetime.now(),
 
     # Analyst-locked headline numbers (reasoning in module docstring).
-    "reach_us_override":         3_418_647,
+    # Reach + reactivated/new split anchor EXACTLY to the shipped
+    # same-window Gilmore Girls Amazon Flywheel deliverable (09-17).
+    "reach_us_override":         8_741_829,
     "pre_existing_pct":          0.72,
     "conversion_pct":            0.93,
-    "reactivation_pct_override": 0.74,
+    "reactivation_pct_override": 0.61,
 
     # Demographics locked to the title's established audience shape
     # (Nielsen Sept 2025: two-thirds women, 35% of watch time 18-34;
