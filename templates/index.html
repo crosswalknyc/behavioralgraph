@@ -174878,6 +174878,7 @@ https://www.instagram.com/p/..."></textarea>
     }
     #subscriberIQView .sub-deck {
         grid-column: 2; grid-row: 2; min-width: 0;
+        text-transform: none !important; letter-spacing: 0 !important;
         font-size: 17px; font-weight: 300; line-height: 1.5;
         color: #9AA09B; margin: 16px 0 0; max-width: 64ch;
     }
@@ -174928,10 +174929,10 @@ https://www.instagram.com/p/..."></textarea>
     #subscriberIQView .exec-summary-metric {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) 190px 230px !important;
-        column-gap: 30px !important; align-items: baseline !important;
+        column-gap: 30px !important; align-items: center !important;
         background: transparent !important; border: 0 !important;
         border-bottom: 1px solid #2A2D2A !important; border-radius: 0 !important;
-        padding: 18px 0 !important; text-align: left !important;
+        padding: 15px 0 !important; text-align: left !important;
     }
     body[data-theme="light"] #subscriberIQView .exec-summary-metric { border-bottom-color: #DBD8CD !important; }
     #subscriberIQView .exec-summary-metric:last-child { border-bottom: 0 !important; }
@@ -174951,9 +174952,10 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #subscriberIQView .sub-gloss { color: #888C89; }
     #subscriberIQView .exec-metric-value {
         grid-column: 3; text-align: right !important;
-        font-size: 30px !important; font-variant-numeric: tabular-nums;
+        font-size: 27px !important; line-height: 1.1 !important;
+        font-variant-numeric: tabular-nums;
     }
-    #subscriberIQView .exec-summary-metric.is-lead .exec-metric-value { font-size: 40px !important; }
+    #subscriberIQView .exec-summary-metric.is-lead .exec-metric-value { font-size: 36px !important; }
     #subscriberIQView .sub-bar {
         grid-column: 2; position: relative; height: 5px; border-radius: 99px;
         background: #2A2D2A; align-self: center;
