@@ -122033,7 +122033,17 @@ https://www.instagram.com/p/..."></textarea>
         var _SUB_SECOND = { 'reactivated accounts': 1, 'second screen activity': 1 };
 
         function _subLabelKey(el) {
-            return (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            var html = (el.innerHTML || '').replace(/<br\s*\/?>/gi, ' ');
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return (tmp.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+        // The same break has to come out of the rendered text, or the
+        // row reads "Total AccountsViewed".
+        function _subFixLabelBreaks(el) {
+            [].slice.call(el.querySelectorAll('br')).forEach(function (br) {
+                br.parentNode.replaceChild(document.createTextNode(' '), br);
+            });
         }
         function _subNum(txt) {
             var t = (txt || '').trim();
@@ -122063,6 +122073,7 @@ https://www.instagram.com/p/..."></textarea>
                     var val = cell.querySelector('.exec-metric-value');
                     if (!lab || !val) return;
                     var key = _subLabelKey(lab);
+                    _subFixLabelBreaks(lab);
                     if (_SUB_GLOSS[key] && !lab.querySelector('.sub-gloss')) {
                         var g = document.createElement('small');
                         g.className = 'sub-gloss';
@@ -174848,6 +174859,8 @@ https://www.instagram.com/p/..."></textarea>
     #subscriberIQView #subscriberProfileImage {
         grid-column: 1; grid-row: 1 / span 3;
         width: 196px !important; height: auto !important;
+        max-width: 196px !important; max-height: none !important;
+        min-width: 196px !important;
         aspect-ratio: 2 / 3; border-radius: 4px !important;
         overflow: hidden; flex: none !important; margin: 0 !important;
         background: linear-gradient(200deg, #2C4148, #15252A 70%);
@@ -174897,7 +174910,9 @@ https://www.instagram.com/p/..."></textarea>
     @media (max-width: 1340px) {
         #subscriberIQView .dash-brand-box { font-size: 44px !important; }
         #subscriberIQView .dash-profile-info { grid-template-columns: 150px minmax(0, 1fr) !important; }
-        #subscriberIQView #subscriberProfileImage { width: 150px !important; }
+        #subscriberIQView #subscriberProfileImage {
+            width: 150px !important; max-width: 150px !important; min-width: 150px !important;
+        }
     }
 
     /* ---- Subscriber IQ: the ledger -------------------------------
@@ -174908,6 +174923,7 @@ https://www.instagram.com/p/..."></textarea>
        the column can be read down. */
     #subscriberIQView .exec-summary-grid {
         display: block !important; margin-top: 4px !important;
+        max-width: 1080px !important;
     }
     #subscriberIQView .exec-summary-metric {
         display: grid !important;
