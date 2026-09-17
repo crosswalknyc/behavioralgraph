@@ -2,30 +2,30 @@
 
 GameTool is **StreamScout's sibling for video games**. Give it a game title and
 it returns the product / purchase / download URL on every store it can reach,
-then writes ONE consistent CSV to your Desktop:
+then writes ONE hostmap-ready CSV to your Desktop:
 
 ```
-SHOW · HOSTMAP_TERM · URL · PRODUCTION · PLATFORM · FORMAT · STORE_ID
+BRAND · HOSTNAME · CATEGORY · SECTION
 ```
 
-- **HOSTMAP_TERM** = the normalized clickstream key, ready to drop into the
-  hostmap. It keeps only the operative path segment(s), replaces every
-  non-alphanumeric with a space, keeps **one `/` max** on the meaningful
-  boundary, and drops locale prefixes / tracking suffixes. It anchors on the
-  store's stable id where there is one (`app/413150`, `dp/B08F8KRRGL`,
-  `A 1013051464`) and otherwise on `prefix/slug` at **franchise grain** — the
-  base slug naturally absorbs sequels/editions (`p/mickey-mouse-big-game` also
-  catches `…-big-game-2`). Locale is a prefix and tracking is a suffix, both
-  outside the term, so region / referral / device don't affect the match; the id
-  (or `prefix/` boundary) keeps passive media/social links from matching.
-- **PLATFORM** = the store (Steam, Nintendo eShop, GameStop, …)
-- **FORMAT** = Digital / Physical / App / Cloud / Key
-- **STORE_ID** = the raw stable id embedded in the URL (Steam appid, ASIN, Xbox
-  Store id, TCIN, Target A-number, …) — the verification anchor behind the term.
+- **BRAND** (column A) = the **searched title, identical on every row** — the
+  franchise all the terms roll up to.
+- **HOSTNAME** = the normalized hostmap term, ready to drop into the hostmap. It
+  keeps only the operative path segment(s), replaces every non-alphanumeric with
+  a space, keeps **one `/` max** on the meaningful boundary, and drops locale
+  prefixes / tracking suffixes. It anchors on the store's stable id where there
+  is one (`app/413150`, `dp/B08F8KRRGL`, `A 1013051464`) and otherwise on
+  `prefix/slug` at **franchise grain** — the base slug naturally absorbs
+  sequels/editions (`p/mickey-mouse-big-game` also catches `…-big-game-2`).
+  Locale is a prefix and tracking is a suffix, both outside the term, so
+  region / referral / device don't affect the match; the id (or `prefix/`
+  boundary) keeps passive media/social links from matching.
+- **CATEGORY** / **SECTION** = constant for the whole file — default `Gaming` /
+  `Games` (override with `--category` / `--section`).
 
-### The per-store term recipes
+### The per-store HOSTNAME recipes
 
-| Store | HOSTMAP_TERM shape | Example |
+| Store | HOSTNAME shape | Example |
 |---|---|---|
 | Steam | `app/<appid>` | `app/413150` |
 | Epic Games Store | `p/<slug>` | `p/fall guys` |

@@ -3,16 +3,16 @@
 GameTool (gametool.py) — StreamScout's sibling for video games.
 ================================================================
 Give it a game title; it fetches the product / purchase / download URL on every
-store it can reach and writes ONE consistent CSV to your Desktop:
+store it can reach and writes ONE hostmap-ready CSV to your Desktop:
 
-    SHOW · HOSTMAP_TERM · URL · PRODUCTION · PLATFORM · FORMAT · STORE_ID
+    BRAND · HOSTNAME · CATEGORY · SECTION
 
-HOSTMAP_TERM = the normalized clickstream key — the operative path segment(s)
+BRAND = the searched title, identical on every row (the franchise the terms roll
+up to). HOSTNAME = the normalized hostmap term — the operative path segment(s)
 only, non-alphanumerics → spaces, one "/" max, region/tracking dropped, anchored
-on the stable id (or prefix/slug at franchise grain). Drop it straight into the
-hostmap. PLATFORM = the store (Steam, Nintendo eShop, GameStop, …); FORMAT =
-Digital / Physical / App / Cloud / Key; STORE_ID = the stable id embedded in the
-URL (Steam appid, ASIN, Xbox Store id, TCIN, …).
+on the stable id (or prefix/slug at franchise grain). CATEGORY / SECTION are
+constant for the whole file (default "Gaming" / "Games", override with
+--category / --section).
 
 Two ways to run:
   • Interactive:   python3 gametool.py
@@ -101,22 +101,27 @@ def run(title, only=None, want_paste=True):
     return rows
 
 
-def write_csv(title, rows, outdir):
+def write_csv(title, rows, outdir, category="Gaming", section="Games"):
+    """Write the hostmap sheet: BRAND · HOSTNAME · CATEGORY · SECTION.
+
+    BRAND (column A) is the SAME searched title on every row — the franchise the
+    terms roll up to. HOSTNAME is the normalized hostmap term. CATEGORY/SECTION
+    are constant (Gaming/Games) for the whole file."""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     path = os.path.join(outdir, f"gametool_{slug(title)}_{stamp}.csv")
     order = {k: i for i, (k, _) in enumerate(STORES)}
     rows = sorted(rows, key=lambda r: (order.get(r.get("_key"), 99),
                                        r.get("title", "")))
+    seen = set()
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["SHOW", "HOSTMAP_TERM", "URL", "PRODUCTION", "PLATFORM",
-                    "FORMAT", "STORE_ID"])
+        w.writerow(["BRAND", "HOSTNAME", "CATEGORY", "SECTION"])
         for r in rows:
-            w.writerow([r.get("title", ""),
-                        to_term(r.get("_store", ""), r.get("url", "")),
-                        r["url"], r.get("production", ""),
-                        r.get("_store", ""), r.get("format", ""),
-                        r.get("store_id", "")])
+            term = to_term(r.get("_store", ""), r.get("url", ""))
+            if not term or term in seen:       # skip blanks / dupe terms
+                continue
+            seen.add(term)
+            w.writerow([title, term, category, section])
     return path
 
 
@@ -128,6 +133,10 @@ def main():
     ap.add_argument("--stores", help="comma list to limit stores "
                                      "(e.g. steam,gog,nintendo)")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
+    ap.add_argument("--category", default="Gaming",
+                    help="constant CATEGORY column value (default: Gaming)")
+    ap.add_argument("--section", default="Games",
+                    help="constant SECTION column value (default: Games)")
     ap.add_argument("--no-paste", action="store_true",
                     help="skip the interactive paste-URL prompts")
     args = ap.parse_args()
@@ -141,7 +150,8 @@ def main():
         rows = [{"title": title, "url": canon, "store_id": sid, "format": "",
                  "production": "", "_store": label,
                  "_key": next((k for k, v in STORES if v[0] == label), "")}]
-        path = write_csv(title or slug(canon), rows, args.outdir)
+        path = write_csv(title or slug(canon), rows, args.outdir,
+                         args.category, args.section)
         print(f"\n  [{label}] {sid}  ->  {canon}\n  CSV: {path}")
         return 0
 
@@ -162,7 +172,7 @@ def main():
     if not rows:
         print("\n  Nothing found. Try --url with a product link."); return 2
 
-    path = write_csv(title, rows, args.outdir)
+    path = write_csv(title, rows, args.outdir, args.category, args.section)
     stores = len({r["_store"] for r in rows})
     print(f"\nFound {len(rows)} link(s) across {stores} store(s) for {title!r}:")
     for r in sorted(rows, key=lambda r: r.get("_store", "")):
