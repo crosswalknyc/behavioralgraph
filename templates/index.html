@@ -33861,7 +33861,8 @@ https://www.instagram.com/p/..."></textarea>
             // writes in the same order as the campaign's audiences array
             // on normalized_assets.json).
             function _iiqMTAAudienceOptions(d) {
-                var opts = [{ slug: '', label: 'All exposed viewers', size: 0 }];
+                var opts = [{ slug: '', label: 'All exposed viewers', size: 0,
+                              category: '', overlap_bp: 0, isDefault: true }];
                 if (!d || !d.audiences) return opts;
                 for (var slug in d.audiences) {
                     if (!Object.prototype.hasOwnProperty.call(d.audiences, slug)) continue;
@@ -33869,7 +33870,11 @@ https://www.instagram.com/p/..."></textarea>
                     var meta = slice.cohort_meta || {};
                     var label = meta.audience_label || slug;
                     var size = meta.cohort_size || slice.sample_size || 0;
-                    opts.push({ slug: slug, label: label, size: size });
+                    var cat = String(meta.category || '').trim().toUpperCase();
+                    var overlap = Number(meta.overlap_bp || 0);
+                    opts.push({ slug: slug, label: label, size: size,
+                                category: cat, overlap_bp: overlap,
+                                isDefault: false });
                 }
                 return opts;
             }
@@ -33878,19 +33883,84 @@ https://www.instagram.com/p/..."></textarea>
             // the campaign has no audience slices, we still render the row
             // with just the all-viewers option so the layout is consistent
             // across campaigns.
+            // Canonical order for the audience-dropdown category groups. The
+            // categories that appear on GOAT + Chime + MyPay + Big Beef + Hades
+            // + Dhar Mann today lead, in the priority order the operator asked
+            // for; any category the backend adds later that isn't in this list
+            // sinks to the tail in alphabetical order so the layout stays
+            // stable without a frontend deploy per new category.
+            var _IIQ_MTA_CATEGORY_ORDER = [
+                'GENRE', 'STUDIO', 'TALENT', 'SPORT', 'DEMO',
+                'SEGMENT', 'LIFESTAGE', 'INCOME', 'AGE'
+            ];
+
             function _iiqMTARenderAudienceDropdown(d, currentSlug) {
                 var opts = _iiqMTAAudienceOptions(d);
-                var options = opts.map(function(o) {
+                // Split the default (All exposed viewers) off the rest.
+                var defaultOpt = null;
+                var rest = [];
+                for (var i = 0; i < opts.length; i++) {
+                    if (opts[i].isDefault) defaultOpt = opts[i];
+                    else rest.push(opts[i]);
+                }
+                // Decide grouped vs flat: only group when every non-default
+                // option carries a non-empty category. Any campaign whose
+                // audiences don't ship a category field falls through to
+                // today's flat behavior with no <optgroup> wrapping.
+                var everyHasCat = rest.length > 0 && rest.every(function(o) { return !!o.category; });
+
+                function _renderOption(o) {
                     var label = escapeHtml(o.label);
-                    if (o.slug && o.size) label += ' (n=' + Number(o.size).toLocaleString() + ')';
+                    if (o.slug && Number(o.overlap_bp) > 0) {
+                        label += ' (' + Number(o.overlap_bp).toFixed(1) + '%)';
+                    } else if (o.slug && o.size) {
+                        label += ' (n=' + Number(o.size).toLocaleString() + ')';
+                    }
                     var sel = (o.slug === currentSlug) ? ' selected' : '';
                     return '<option value="' + escapeHtml(o.slug) + '"' + sel + '>' + label + '</option>';
-                }).join('');
+                }
+
+                var optionsHtml = '';
+                if (defaultOpt) optionsHtml += _renderOption(defaultOpt);
+
+                if (!everyHasCat) {
+                    // Flat fallback: preserve today's behavior verbatim for
+                    // campaigns whose audiences don't tag a category. Sort
+                    // by overlap_bp desc when we have it, else by insertion.
+                    rest.sort(function(a, b) { return Number(b.overlap_bp || 0) - Number(a.overlap_bp || 0); });
+                    optionsHtml += rest.map(_renderOption).join('');
+                } else {
+                    // Grouped layout. Bucket by category, sort each bucket by
+                    // overlap_bp desc, emit groups in canonical priority
+                    // order and drop unknown categories alphabetically after.
+                    var buckets = {};
+                    for (var j = 0; j < rest.length; j++) {
+                        var c = rest[j].category || 'OTHER';
+                        (buckets[c] = buckets[c] || []).push(rest[j]);
+                    }
+                    var seen = {};
+                    var groupOrder = [];
+                    for (var k = 0; k < _IIQ_MTA_CATEGORY_ORDER.length; k++) {
+                        var cat = _IIQ_MTA_CATEGORY_ORDER[k];
+                        if (buckets[cat]) { groupOrder.push(cat); seen[cat] = true; }
+                    }
+                    var tail = Object.keys(buckets).filter(function(c) { return !seen[c]; });
+                    tail.sort();
+                    groupOrder = groupOrder.concat(tail);
+                    for (var m = 0; m < groupOrder.length; m++) {
+                        var cn = groupOrder[m];
+                        var arr = buckets[cn].slice();
+                        arr.sort(function(a, b) { return Number(b.overlap_bp || 0) - Number(a.overlap_bp || 0); });
+                        optionsHtml += '<optgroup label="' + escapeHtml(cn) + '">'
+                                     + arr.map(_renderOption).join('')
+                                     + '</optgroup>';
+                    }
+                }
                 return (
                     '<div style="display:flex; align-items:center; gap:0.75rem; margin: 0 0 0.85rem 0; padding: 0.55rem 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; flex-wrap: wrap;">'
                   + '  <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color: var(--text-secondary); font-weight:600;">View by audience</div>'
                   + '  <select id="iiqMTAAudienceSelect" onchange="_iiqMTASetAudience(this.value)" style="flex:1; min-width:220px; max-width:420px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-primary); font-size: 0.78rem; padding: 0.35rem 0.6rem; border-radius: 6px; font-family: inherit;">'
-                  +      options
+                  +      optionsHtml
                   + '  </select>'
                   + '  <div style="font-size:0.66rem; color: var(--text-secondary); flex:0 0 auto;">Each cohort re-fits on that cohort\u2019s exposures only.</div>'
                   + '</div>'
@@ -34423,14 +34493,28 @@ https://www.instagram.com/p/..."></textarea>
                         ? '<div style="flex:1;"><div style="width:' + w.toFixed(2) + '%; height:14px; background:' + color + '; border-radius:9999px;"></div></div>'
                         : '<div style="flex:1;"><div style="width:0; height:14px;"></div></div>';
                     var centerRule = '<div style="width:1px; align-self:stretch; background:rgba(255,255,255,0.10); margin:0 2px;"></div>';
+                    // Odds ratio + 95% Wald band from the logistic fit.
+                    // Backend clamps the band to [0.01, 100] before it
+                    // ships so a pathological cohort never emits an
+                    // out-of-scale interval. Missing keys on a legacy
+                    // slice fall back to the point estimate so the row
+                    // still renders (no NaN in the CI text).
+                    var orPoint = Number(r.odds_ratio);
+                    var orLoRaw = (r.odds_ratio_low_95 !== undefined && r.odds_ratio_low_95 !== null) ? Number(r.odds_ratio_low_95) : orPoint;
+                    var orHiRaw = (r.odds_ratio_high_95 !== undefined && r.odds_ratio_high_95 !== null) ? Number(r.odds_ratio_high_95) : orPoint;
+                    var orText = (isFinite(orPoint) ? orPoint.toFixed(2) : '-') + ' (95% CI ' + (isFinite(orLoRaw) ? orLoRaw.toFixed(2) : '-') + ' to ' + (isFinite(orHiRaw) ? orHiRaw.toFixed(2) : '-') + ')';
+                    var notSigChip = '';
+                    if (isFinite(orLoRaw) && isFinite(orHiRaw) && orLoRaw <= 1.0 && 1.0 <= orHiRaw) {
+                        notSigChip = ' <span style="display:inline-block; margin-left:0.35rem; padding:1px 6px; font-size:0.6rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; color:#7C878A; border:1px solid rgba(124,135,138,0.35);">not significant</span>';
+                    }
                     return (
-                        '<div style="display:grid; grid-template-columns: 240px 1fr 140px 90px; gap:0.6rem; align-items:center; padding:0.35rem 0;">'
+                        '<div style="display:grid; grid-template-columns: 240px 1fr 220px 90px; gap:0.6rem; align-items:center; padding:0.35rem 0;">'
                       + '  <div style="min-width:0;">'
                       + '    <div style="font-size:0.78rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.asset_title) + '">' + escapeHtml(r.asset_title) + '</div>'
                       + '    <div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.1rem;">' + escapeHtml(r.channel) + ' \u00b7 ' + escapeHtml(r.phase || '') + '</div>'
                       + '  </div>'
                       + '  <div style="display:flex; align-items:center; background: rgba(255,255,255,0.02); border-radius:9999px; padding:2px 6px;">' + leftHalf + centerRule + rightHalf + '</div>'
-                      + '  <div style="font-size:0.75rem; color: var(--text-primary); text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap;">' + _iiqMTAFmtSigned(c) + ' <span style="color: var(--text-secondary);">(' + Number(r.odds_ratio).toFixed(2) + 'x)</span></div>'
+                      + '  <div style="font-size:0.75rem; color: var(--text-primary); text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap;">' + orText + notSigChip + '</div>'
                       + '  <div style="text-align:right;">' + _iiqMTASigChip(r.significance) + '</div>'
                       + '</div>'
                     );
@@ -34440,10 +34524,10 @@ https://www.instagram.com/p/..."></textarea>
                 var barRowsTop = visible.map(_renderCoefRow).join('');
                 var barRowsExtra = extra.map(_renderCoefRow).join('');
                 var chartHead =
-                    '<div style="display:grid; grid-template-columns: 240px 1fr 140px 90px; gap:0.6rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
+                    '<div style="display:grid; grid-template-columns: 240px 1fr 220px 90px; gap:0.6rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
                   + '  <div>Touchpoint</div>'
                   + '  <div style="text-align:center;">Lift shape</div>'
-                  + '  <div style="text-align:right;">Lift value</div>'
+                  + '  <div style="text-align:right;">Odds ratio (95% CI)</div>'
                   + '  <div style="text-align:right;">Read strength</div>'
                   + '</div>';
                 var rootId = 'iiqMTACoefChart_' + Math.floor(Math.random() * 1e9);
@@ -34461,6 +34545,63 @@ https://www.instagram.com/p/..."></textarea>
                   + '</div>';
 
                 return header + chart;
+            }
+
+            // Sample-sufficiency mini-card. Renders below the cohort meta
+            // strip and above the Paths card so a reader looking at any
+            // cohort knows immediately whether the cohort has enough
+            // exposed panellists to read at the +/-5 point margin at
+            // 95% confidence (n = 384 is the standard binomial threshold
+            // for a half-width of 5 points on a proportion around 50%).
+            //
+            // Data source: the active slice's sample_size (that is the
+            // exposed panellist count on this cohort). When the slice
+            // does not carry sample_size (defensive - every current
+            // slice ships one) we fall back to
+            // round(overall.sample_size * overlap_bp / 100) and mark
+            // the count "(cohort-derived)".
+            //
+            // Uses UK spelling `panellists` per the ask (grammatically
+            // correct across markets, and Omaze is a UK operator).
+            function _iiqMTARenderSufficiencyCard(activePayload, d, audienceSlug) {
+                var overall = (d && d.overall) || {};
+                var isCohort = !!audienceSlug;
+                var exposedN = 0;
+                var derived = false;
+                if (activePayload && Number(activePayload.sample_size) > 0) {
+                    exposedN = Number(activePayload.sample_size);
+                } else if (isCohort) {
+                    var meta = (activePayload && activePayload.cohort_meta) || {};
+                    var ob = Number(meta.overlap_bp || 0);
+                    var overallN = Number(overall.sample_size || 0);
+                    if (ob > 0 && overallN > 0) {
+                        exposedN = Math.round(overallN * ob / 100.0);
+                        derived = true;
+                    }
+                } else {
+                    exposedN = Number(overall.sample_size || 0);
+                }
+                var threshold = 384;
+                var passes = exposedN >= threshold;
+                var chipBg = passes ? 'rgba(199,242,62,0.14)' : 'rgba(234,179,8,0.18)';
+                var chipFg = passes ? '#C7F23E' : '#F5C242';
+                var chipBorder = passes ? 'rgba(199,242,62,0.35)' : 'rgba(234,179,8,0.45)';
+                var chipLabel = passes ? 'Clears sufficiency' : 'Below sufficiency threshold';
+                var derivedTag = derived ? ' <span style="color: var(--text-secondary); font-size:0.66rem;">(cohort-derived)</span>' : '';
+                var exposedLabel = isCohort ? 'Exposed panellists in this cohort' : 'Exposed panellists in this read';
+                return (
+                    '<div style="display:flex; align-items:center; gap: 0.9rem; margin: 0.15rem 0 0.65rem 0; padding: 0.55rem 0.85rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; flex-wrap: wrap;">'
+                  + '  <div style="font-size:0.72rem; color: var(--text-primary);">'
+                  +      escapeHtml(exposedLabel) + ': <strong style="font-variant-numeric: tabular-nums;">' + Number(exposedN).toLocaleString() + '</strong>' + derivedTag
+                  + '  </div>'
+                  + '  <div style="font-size:0.68rem; color: var(--text-secondary); flex: 1 1 auto;">'
+                  + '    95% confidence, 5-point margin threshold: n = ' + threshold
+                  + '  </div>'
+                  + '  <div style="flex: 0 0 auto;">'
+                  + '    <span style="display:inline-block; padding: 2px 10px; font-size:0.68rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + chipBg + '; color:' + chipFg + '; border: 1px solid ' + chipBorder + ';">' + chipLabel + '</span>'
+                  + '  </div>'
+                  + '</div>'
+                );
             }
 
             function _iiqMTARender(d) {
@@ -34488,9 +34629,10 @@ https://www.instagram.com/p/..."></textarea>
                 // touchpoints have arrived on a fresh campaign.
                 var dropdownRow = _iiqMTARenderAudienceDropdown(d, audienceSlug);
                 var cohortStrip = _iiqMTARenderCohortMetaStrip(activePayload);
+                var sufficiencyCard = _iiqMTARenderSufficiencyCard(activePayload, d, audienceSlug);
 
                 if (!tps.length) {
-                    host.innerHTML = dropdownRow + cohortStrip + '<div class="iiq-empty" style="padding:1.5rem;">No touchpoints available for this cohort yet.</div>';
+                    host.innerHTML = dropdownRow + cohortStrip + sufficiencyCard + '<div class="iiq-empty" style="padding:1.5rem;">No touchpoints available for this cohort yet.</div>';
                     return;
                 }
 
@@ -34504,6 +34646,7 @@ https://www.instagram.com/p/..."></textarea>
                   + '    How to read this.'
                   + '  </summary>'
                   + '  <div style="margin-top: 0.55rem; font-size: 0.76rem; line-height: 1.55; color: var(--text-secondary);">'
+                  + '    <p style="margin: 0 0 0.5rem 0;"><strong style="color: #cbd5e1;">How the numbers come from.</strong> The engine fits a logistic regression on the panelist-level exposure matrix, assigning a conversion coefficient (log-odds) to every touchpoint. Each coefficient is expressed as an odds ratio with a 95% confidence interval. First-touch, last-touch, and assist attribution sit on top of the fitted coefficients as views, not as the primary method.</p>'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">What you\u2019re looking at.</strong> Three views on the same set of viewers, in the order they build:</p>'
                   + '    <ul style="margin: 0 0 0.5rem 1.1rem; padding: 0;">'
                   + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Paths</strong> show how exposed accounts moved from first campaign touch down to a paid conversion, and where the drop-offs live. The nest is the funnel; the forks, surfaces, attribution cuts, timing, archetypes, and pixel-invisible leaks all read off the same cohort.</li>'
@@ -34559,7 +34702,7 @@ https://www.instagram.com/p/..."></textarea>
                 var coefCard =
                     '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoefficientCard(activePayload) + '</section>';
 
-                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + pathsCard + coExpCard + coefCard;
+                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + sufficiencyCard + pathsCard + coExpCard + coefCard;
             }
             // ============================================================
             // // end __IIQ_MTA_MODULE_v1__

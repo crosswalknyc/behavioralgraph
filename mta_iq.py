@@ -89,10 +89,15 @@ CACHE_KEY_FMT = "intent/{slug}/mta/coefficients_{as_of}.json"
 # audience) next to ``touchpoints``, ``journeys``, and ``co_exposure`` --
 # same TAM-to-conversion nest + forks + where + attribution + time +
 # archetypes + leaks shape as the Luxury Fragrance TTS Journey playbook.
-# Any cached payload with schema_version < SCHEMA_VERSION is force-rebuilt
-# in place under the same S3 key. Bump this integer whenever the payload
-# shape changes so old caches never leak into the new render.
-SCHEMA_VERSION = 4
+# Bumped 2026-09-17 (v4 -> v5) when every touchpoint row gained
+# ``odds_ratio_low_95`` + ``odds_ratio_high_95`` (95% Wald bands on the
+# odds ratio, exp of the log-odds CI, clamped to [0.01, 100]) and the
+# paths nest rows gained the funnel-stage prefixes Top of funnel / Mid
+# funnel / Lower funnel / Conversion. Any cached payload with
+# schema_version < SCHEMA_VERSION is force-rebuilt in place under the
+# same S3 key. Bump this integer whenever the payload shape changes so
+# old caches never leak into the new render.
+SCHEMA_VERSION = 5
 
 # Salt for the audience membership synthesis. Combines with campaign_slug
 # and audience_slug so every panelist gets a stable but campaign-and-cohort
@@ -286,6 +291,20 @@ def _load_cached(slug: str, as_of: str) -> Optional[dict]:
             slug, as_of, payload.get("schema_version"),
         )
         return None
+    # v5 defense in depth: a v5-stamped payload whose overall touchpoint
+    # rows don't carry the odds-ratio 95% band is malformed. The
+    # frontend coefficient card renders the band inline; missing keys
+    # would collapse the CI text to "1.00 to 1.00" and misfire the
+    # "not significant" chip on every row. Force a re-fit in place.
+    if int(payload.get("schema_version") or 0) >= 5:
+        tps = overall.get("touchpoints") or []
+        if tps and "odds_ratio_low_95" not in (tps[0] or {}):
+            logger.info(
+                "MTA: cache for %s at %s is v%s but overall.touchpoints[0] "
+                "lacks odds_ratio_low_95; forcing re-fit",
+                slug, as_of, payload.get("schema_version"),
+            )
+            return None
     return payload
 
 
@@ -807,6 +826,14 @@ def _dejitter_ties_4dp(subject: str, rows: list[dict]) -> None:
             sign = 1.0 if r["coefficient"] >= 0 else -1.0
             r["coefficient"] = float(r["coefficient"] + sign * nudge)
             r["odds_ratio"] = float(math.exp(r["coefficient"]))
+            # Odds-ratio 95% band moves with the coefficient. Nudge is
+            # tiny (<= ~0.001) so the shift is essentially invisible,
+            # but recompute for internal consistency so the band always
+            # brackets the shown odds ratio.
+            se = float(r.get("std_error") or 0.0)
+            or_lo, or_hi = _odds_ratio_band(r["coefficient"], se)
+            r["odds_ratio_low_95"] = round(or_lo, 4)
+            r["odds_ratio_high_95"] = round(or_hi, 4)
         seen[f"{r['coefficient']:.4f}"] = r["touchpoint_id"]
 
 
@@ -820,6 +847,52 @@ def _summary_fit_quality(pseudo_r2: float, converged: bool) -> str:
     if pseudo_r2 >= 0.05:
         return "moderate"
     return "weak"
+
+
+# Hard clamp for the odds-ratio 95% band. A pathological cohort can push
+# the raw exp(coef +/- 1.96*se) into the millions or into a de-facto
+# zero; either extreme reads as a defect on the coefficient card. The
+# [0.01, 100] band matches what a media buyer would read as "at most a
+# 100x lift, at worst a 100x drop" without collapsing legitimate wide
+# bands to a single point.
+_OR_BAND_LO = 0.01
+_OR_BAND_HI = 100.0
+
+
+def _odds_ratio_band(coef: float, se: float) -> tuple[float, float]:
+    """95% Wald band on the odds ratio for one touchpoint coefficient.
+
+    Returns ``(low, high)`` where ``low = exp(coef - 1.96 * se)`` and
+    ``high = exp(coef + 1.96 * se)``, both clamped to ``[0.01, 100]``.
+    Non-finite ``coef`` collapses the band to ``(1.0, 1.0)`` so the
+    "not significant" chip fires on the frontend rather than the row
+    reading as an extreme lift or drop. Non-finite or non-positive
+    ``se`` fall back to a ~5% floor so the band still has a visible
+    width instead of pinning to ``exp(coef)``.
+    """
+    if not math.isfinite(coef):
+        return (1.0, 1.0)
+    if not math.isfinite(se) or se <= 0:
+        se = 0.05
+    lo_c = coef - 1.96 * se
+    hi_c = coef + 1.96 * se
+    try:
+        lo = float(math.exp(lo_c))
+    except OverflowError:
+        lo = _OR_BAND_HI
+    try:
+        hi = float(math.exp(hi_c))
+    except OverflowError:
+        hi = _OR_BAND_HI
+    if not math.isfinite(lo):
+        lo = _OR_BAND_LO
+    if not math.isfinite(hi):
+        hi = _OR_BAND_HI
+    lo = max(_OR_BAND_LO, min(_OR_BAND_HI, lo))
+    hi = max(_OR_BAND_LO, min(_OR_BAND_HI, hi))
+    if hi < lo:
+        lo, hi = hi, lo
+    return (lo, hi)
 
 
 def _compute_slice_impl(*, slug: str,
@@ -919,6 +992,7 @@ def _compute_slice_impl(*, slug: str,
             p_val = _norm_sf(z)
             lo = c - 1.96 * se
             hi = c + 1.96 * se
+            or_lo, or_hi = _odds_ratio_band(c, se)
             exposed_n = int(round(float(np.sum(X_bin[:, k]))))
             converted_n = int(round(float(np.sum(X_bin[:, k] * y))))
             rows.append({
@@ -929,6 +1003,8 @@ def _compute_slice_impl(*, slug: str,
                 "paid_or_organic":     t["paid_or_organic"],
                 "coefficient":         round(c, 4),
                 "odds_ratio":          round(float(math.exp(c)), 4),
+                "odds_ratio_low_95":   round(or_lo, 4),
+                "odds_ratio_high_95":  round(or_hi, 4),
                 "confidence_interval": [round(lo, 4), round(hi, 4)],
                 "std_error":           round(se, 4),
                 "p_value":             round(float(p_val), 4),
@@ -948,6 +1024,7 @@ def _compute_slice_impl(*, slug: str,
             p_val = _norm_sf(z)
             lo = c - 1.96 * se
             hi = c + 1.96 * se
+            or_lo, or_hi = _odds_ratio_band(c, se)
             exposed_n = int(round(n_slice * t["exposure_rate"]))
             converted_n = int(round(
                 exposed_n * float(baseline_hint) *
@@ -961,6 +1038,8 @@ def _compute_slice_impl(*, slug: str,
                 "paid_or_organic":     t["paid_or_organic"],
                 "coefficient":         round(c, 4),
                 "odds_ratio":          round(float(math.exp(c)), 4),
+                "odds_ratio_low_95":   round(or_lo, 4),
+                "odds_ratio_high_95":  round(or_hi, 4),
                 "confidence_interval": [round(lo, 4), round(hi, 4)],
                 "std_error":           round(se, 4),
                 "p_value":             round(float(p_val), 4),
@@ -1850,22 +1929,32 @@ def _card_config(slug: str, ttype: str, display_name: str,
 def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
                         terminology: Optional[dict]) -> dict:
     """Nest row labels for each stage. Adapts per campaign type so the
-    ladder reads naturally on both film and brand campaigns."""
+    ladder reads naturally on both film and brand campaigns.
+
+    Every label carries the funnel-stage prefix ('Top of funnel', 'Mid
+    funnel', 'Lower funnel', 'Conversion') so the ladder reads as a
+    tier on its own without cross-referencing the stage code. The
+    specific action after the colon still varies per campaign kind and
+    per campaign terminology ('Ticket purchased' vs the brand's own
+    conversion noun, 'Ticketing-site visit' vs 'Website or app visit',
+    the attribution-window days from the terminology block).
+    """
     term = terminology or {}
     window_days = int(term.get("attribution_window_days") or (7 if kind == "film" else 14))
     if kind == "film":
         return {
-            "1_exposed":  f"Exposed to {display_name} campaign",
-            "2_infoseek": f"Info-seek within {window_days}d",
-            "3_ticketer": f"Ticketing-site visit within {window_days}d",
-            "4_paid":     "Ticket purchased",
+            "1_exposed":  f"Top of funnel: Exposed to {display_name}",
+            "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
+            "3_ticketer": f"Lower funnel: Ticketing-site visit within {window_days}d",
+            "4_paid":     "Conversion: Ticket purchased",
         }
+    conv_action = (conversion_noun[:1].upper() + conversion_noun[1:]
+                    if conversion_noun else "Converted")
     return {
-        "1_exposed":  f"Exposed to {display_name} campaign",
-        "2_infoseek": f"Research within {window_days}d",
-        "3_ticketer": f"Website or app visit within {window_days}d",
-        "4_paid":     (conversion_noun[:1].upper() + conversion_noun[1:] if conversion_noun
-                        else "Converted"),
+        "1_exposed":  f"Top of funnel: Exposed to {display_name}",
+        "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
+        "3_ticketer": f"Lower funnel: Website or app visit within {window_days}d",
+        "4_paid":     f"Conversion: {conv_action}",
     }
 
 
