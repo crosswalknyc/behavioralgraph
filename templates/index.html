@@ -174481,6 +174481,42 @@ https://www.instagram.com/p/..."></textarea>
     #subscriberIQView td { color: #E9E8E1; }
     body[data-theme="light"] #subscriberIQView td { color: #0C1618; }
 
+    /* Section heads across the tabs are written under three
+       different parents. They open the same way: eyebrow dot, small
+       caps, hairline rule. Subheads stay lighter so the hierarchy
+       inside a section still reads. */
+    #subscriberIQView .exec-summary-header h2,
+    #subscriberIQView .tab-section > h3,
+    #subscriberIQView .tab-pane > div > h3 {
+        font-family: 'Inter 18pt', -apple-system, sans-serif !important;
+        font-size: 13px !important; font-weight: 600 !important;
+        letter-spacing: .14em !important; text-transform: uppercase !important;
+        color: #E9E8E1 !important;
+        display: flex !important; align-items: center; gap: 9px;
+        padding-bottom: 12px; margin: 0 0 22px !important;
+        border-bottom: 1px solid #3B3D38;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-summary-header h2,
+    body[data-theme="light"] #subscriberIQView .tab-section > h3,
+    body[data-theme="light"] #subscriberIQView .tab-pane > div > h3 {
+        color: #0C1618 !important; border-bottom-color: #C9C6BA;
+    }
+    #subscriberIQView .exec-summary-header h2::before,
+    #subscriberIQView .tab-section > h3::before,
+    #subscriberIQView .tab-pane > div > h3::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: #C7F23E; flex: 0 0 6px;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-summary-header h2::before,
+    body[data-theme="light"] #subscriberIQView .tab-section > h3::before,
+    body[data-theme="light"] #subscriberIQView .tab-pane > div > h3::before { background: #5E7E12; }
+    #subscriberIQView .exec-summary-subheader h3 {
+        font-size: 11px !important; font-weight: 600 !important;
+        letter-spacing: .1em !important; text-transform: uppercase !important;
+        color: #9AA09B !important; border: 0 !important; padding: 0 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-summary-subheader h3 { color: #5C6560 !important; }
+
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
        Graphite ground and the Library rail, so the view reads the same
