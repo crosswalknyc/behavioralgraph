@@ -92,12 +92,25 @@ def _products(payloads):
     return found
 
 
+# tiny words that don't decide identity — an edition may add/drop these freely
+_STOP = {"the", "a", "an", "of", "and", "or", "to", "for", "vs", "x",
+         "de", "la", "el", "le"}
+
+
 def _relevant(title, name):
-    """Light on-topic guard (classification already ensures it's a game): keep
-    editions that share a query word and aren't wildly dissimilar."""
-    if set(tokens(title)) & set(tokens(name)):
-        return similarity(title, name) >= 0.18
-    return False
+    """Keep only editions of the SAME game. PlayStation's search returns anything
+    that shares a single word, so "8 Ball Pool" drags in every generic *pool*
+    game. But edition/region SKUs only ADD words to the base title (e.g.
+    "…Infinite - Deluxe Edition", "…Arcade Classics"), so we require the
+    candidate to contain EVERY distinctive query word. That drops different games
+    that merely share a common noun ("pool", "ball") without hurting real
+    multi-edition enumeration."""
+    q = [t for t in tokens(title) if t not in _STOP]
+    if not q:                                    # query was all stop-words
+        q = tokens(title)
+    if not set(q).issubset(set(tokens(name))):
+        return False
+    return similarity(title, name) >= 0.2
 
 
 def search(title, limit=25):
