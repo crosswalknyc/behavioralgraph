@@ -205,6 +205,39 @@ def _ensure_hostmap_loaded():
     return False
 
 
+_HOSTMAP_SECTIONS = None
+
+
+def _load_hostmap_sections():
+    """brand -> SECTION map for per-brand column routing (Jessie
+    2026-09-16). File-cache pattern like every other hostmap cache in
+    this module; refreshed alongside the brand caches. Returns {} when
+    no cache is present (callers fall back to the alias-canonical
+    column)."""
+    global _HOSTMAP_SECTIONS
+    if _HOSTMAP_SECTIONS is not None:
+        return _HOSTMAP_SECTIONS
+    candidates = [
+        '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_sections_cache.tsv',
+        '/root/finished_codes/reference/hostmap_sections_cache.tsv',
+        '/tmp/hostmap_sections.tsv',
+    ]
+    out = {}
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    for line in f:
+                        if '\t' in line:
+                            b, s = line.rstrip('\n').split('\t', 1)
+                            out[b] = s.strip()
+                break
+            except Exception:
+                continue
+    _HOSTMAP_SECTIONS = out
+    return out
+
+
 def _is_in_hostmap(brand):
     """Workspace rule #4 — gate ALL brand lifts/additions through this.
     Returns True if the brand (case+punctuation-insensitive) exists in
@@ -19119,7 +19152,7 @@ def merge_stray_category_variants(df, subject, verbose=True):
 
     hostmap_home = {}
     try:
-        hm = _load_hostmap() or {}
+        hm = _load_hostmap_sections() or {}
         try:
             from migration.synth_hostmap_augment import SECTION_TO_COLUMNS
         except ImportError:
