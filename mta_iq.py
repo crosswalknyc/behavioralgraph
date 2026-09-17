@@ -13,6 +13,9 @@ Public API
                       as_of=None, audience_slug=None) -> list
     compute_coexposure(campaign_slug, top_n=20,
                         as_of=None, audience_slug=None) -> dict
+    compute_paths_to_conversion(campaign_slug,
+                                  audience_slug=None,
+                                  as_of=None) -> dict
 
 When ``audience_slug`` is None (default), compute_mta_coefficients
 returns the v3 wrapper (schema_version 3) with an ``overall`` block
@@ -81,11 +84,15 @@ CACHE_KEY_FMT = "intent/{slug}/mta/coefficients_{as_of}.json"
 # exposure landed alongside the top-N exposure paths and co-exposure matrix.
 # Bumped 2026-09-17 (v2 -> v3) when the payload gained the nested
 # ``overall`` + ``audiences`` shape so a browser-side dropdown swap between
-# audience cohorts is one round trip on the API. Any cached payload with
-# schema_version < SCHEMA_VERSION is force-rebuilt in place under the same
-# S3 key. Bump this integer whenever the payload shape changes so old
-# caches never leak into the new render.
-SCHEMA_VERSION = 3
+# audience cohorts is one round trip on the API. Bumped 2026-09-17 (v3 -> v4)
+# when the paths-to-conversion card landed on every slice (overall + every
+# audience) next to ``touchpoints``, ``journeys``, and ``co_exposure`` --
+# same TAM-to-conversion nest + forks + where + attribution + time +
+# archetypes + leaks shape as the Luxury Fragrance TTS Journey playbook.
+# Any cached payload with schema_version < SCHEMA_VERSION is force-rebuilt
+# in place under the same S3 key. Bump this integer whenever the payload
+# shape changes so old caches never leak into the new render.
+SCHEMA_VERSION = 4
 
 # Salt for the audience membership synthesis. Combines with campaign_slug
 # and audience_slug so every panelist gets a stable but campaign-and-cohort
@@ -261,12 +268,21 @@ def _load_cached(slug: str, as_of: str) -> Optional[dict]:
             slug, as_of, payload.get("schema_version"), SCHEMA_VERSION,
         )
         return None
-    # Defense in depth: a v3-stamped payload missing the ``overall`` block
+    # Defense in depth: a v3+ payload missing the ``overall`` block
     # is malformed. Force a re-fit rather than shipping a broken shape.
     overall = payload.get("overall") or {}
     if not overall.get("touchpoints"):
         logger.info(
             "MTA: cache for %s at %s is v%s but missing overall.touchpoints; forcing re-fit",
+            slug, as_of, payload.get("schema_version"),
+        )
+        return None
+    # v4 defense in depth: a v4-stamped payload missing the ``paths``
+    # block on the overall slice is malformed (the paths card would
+    # 404 on every dashboard render). Force a re-fit.
+    if int(payload.get("schema_version") or 0) >= 4 and "paths" not in overall:
+        logger.info(
+            "MTA: cache for %s at %s is v%s but missing overall.paths; forcing re-fit",
             slug, as_of, payload.get("schema_version"),
         )
         return None
@@ -813,7 +829,18 @@ def _compute_slice_impl(*, slug: str,
                           y: np.ndarray,
                           baseline_hint: float,
                           cohort_meta: Optional[dict] = None,
-                          slice_salt: str = "overall") -> dict:
+                          slice_salt: str = "overall",
+                          # v4 (2026-09-17): metadata needed to build the
+                          # paths-to-conversion card on every slice. Kept
+                          # as optional kwargs so any legacy caller that
+                          # only wants the coefficient rows still works;
+                          # a missing block emits an empty-but-valid
+                          # paths payload rather than raising.
+                          ttype: Optional[str] = None,
+                          display_name: Optional[str] = None,
+                          conversion_noun: Optional[str] = None,
+                          bottom_funnel_label: Optional[str] = None,
+                          terminology: Optional[dict] = None) -> dict:
     """Fit + build the flat coefficient/journeys/co-exposure payload for a
     single cohort slice (overall panel or one audience filter).
 
@@ -849,6 +876,8 @@ def _compute_slice_impl(*, slug: str,
             "touchpoints":         [],
             "journeys":            [],
             "co_exposure":         {"touchpoints": [], "matrix": []},
+            "paths":               _empty_paths_payload(
+                conversion_noun or "conversion", 0),
             "notes":               "No exposed panelists in this cohort.",
             "source":              "empty",
             **({"cohort_meta": {**cohort_meta, "thin_read": True}}
@@ -1000,6 +1029,27 @@ def _compute_slice_impl(*, slug: str,
         logger.warning("MTA: co-exposure compute failed for %s / %s: %s",
                         slug, slice_salt, e)
         co_exposure = {"touchpoints": [], "matrix": []}
+    # v4: paths-to-conversion. Same fail-safe pattern -- an exception
+    # here returns an empty-but-valid paths block so the frontend never
+    # loses the coefficient chart just because one card threw.
+    try:
+        paths = _compute_paths_impl(
+            slug=slug,
+            ttype=(ttype or "film"),
+            display_name=(display_name or slug),
+            conversion_noun=(conversion_noun or "conversion"),
+            bottom_funnel_label=(bottom_funnel_label or ""),
+            terminology=terminology,
+            n_panel=int(n_slice),
+            conv_rate=float(conv_rate),
+            rows=rows,
+            slice_salt=slice_salt,
+        )
+    except Exception as e:
+        logger.warning("MTA: paths compute failed for %s / %s: %s",
+                        slug, slice_salt, e)
+        paths = _empty_paths_payload(
+            conversion_noun or "conversion", int(n_slice))
 
     # Strip the internal column-index hint before serialization.
     for r in rows:
@@ -1013,6 +1063,7 @@ def _compute_slice_impl(*, slug: str,
         "touchpoints":     rows,
         "journeys":        journeys,
         "co_exposure":     co_exposure,
+        "paths":           paths,
         "source":          "proxy" if proxy_used else "fit",
     }
     if cohort_meta is not None:
@@ -1157,7 +1208,7 @@ def compute_mta_coefficients(campaign_slug: str,
     cards = (assets_resp or {}).get("cards", []) if assets_resp.get("success") else []
     touch = _prepare_touchpoints(slug, cards)
     if not touch:
-        # No touchpoints at all -- return an empty-but-valid v3 wrapper
+        # No touchpoints at all -- return an empty-but-valid v4 wrapper
         # so the frontend renders the empty state gracefully.
         empty_overall = {
             "success": True,
@@ -1169,6 +1220,7 @@ def compute_mta_coefficients(campaign_slug: str,
             "touchpoints": [],
             "journeys": [],
             "co_exposure": {"touchpoints": [], "matrix": []},
+            "paths": _empty_paths_payload(conversion_noun, 0),
             "notes": "No touchpoints available for this campaign yet.",
             "source": "empty",
         }
@@ -1216,6 +1268,11 @@ def compute_mta_coefficients(campaign_slug: str,
         baseline_hint=baseline,
         cohort_meta=None,
         slice_salt="overall",
+        ttype=ttype,
+        display_name=display_name,
+        conversion_noun=conversion_noun,
+        bottom_funnel_label=bottom_funnel_label,
+        terminology=term,
     )
 
     # ---- Audience slices ----
@@ -1291,6 +1348,11 @@ def compute_mta_coefficients(campaign_slug: str,
             baseline_hint=baseline,
             cohort_meta=cohort_meta,
             slice_salt="aud:" + aud_slug,
+            ttype=ttype,
+            display_name=display_name,
+            conversion_noun=conversion_noun,
+            bottom_funnel_label=bottom_funnel_label,
+            terminology=term,
         )
         audiences_out[aud_slug] = aud_payload
 
@@ -1647,6 +1709,742 @@ def _compute_coexposure_impl(*, slug: str, X_bin: np.ndarray,
 
 
 # ---------------------------------------------------------------------------
+# v4 (2026-09-17): Paths-to-conversion card
+#
+# TAM to conversion for the exposed campaign, expressed as a five-row nest
+# plus optional-question forks, where-tables, first / last / assist
+# attribution on paid conversions only, time-to-conversion, path
+# archetypes, and the leaks a brand pixel cannot see. Shape mirrors the
+# Luxury Fragrance TTS Journey playbook (sections 4.3 - 4.6): nest rows
+# are strictly nested (each row is a subset of the row above); forks sit
+# beside the nest as yes / no of a named step; where-tables split
+# partition vs overlap; attribution partitions first + last touch and
+# lists assists as overlap; leaks are what a brand pixel cannot observe.
+#
+# Every US-projected count is derived from the same panel exposure
+# matrix that drives coefficients + journeys + co-exposure so a caller
+# sees a coherent story across cards. Determinism: every random draw
+# is subject-salted (campaign_slug + slice_salt + key) so re-runs give
+# byte-identical output and audience slices land in different but
+# reproducible spots.
+# ---------------------------------------------------------------------------
+
+US_GEN_POP = 329_900_000
+# 329.9M US gen pop divided by the fixed 10M virtual panel denominator
+# (see profile-iq-pipeline-rules.mdc Rule #3a: Proj = Raw/10M x 329.9M).
+US_PROJECTION_FACTOR = 32.99
+
+
+# Per-slug card config -- names the ticketer / visit surfaces, the
+# info-seek research surfaces, the assist touchpoints, and the leak
+# copy for the competing-conversion row. Campaigns that aren't in this
+# map fall through to _card_config()'s title-type default so a new
+# campaign renders a valid card without a hand-added entry.
+_CARD_CONFIG: dict[str, dict] = {
+    "goat": {
+        "kind": "film",
+        "ticketer_partition_surfaces": ["Fandango", "AMC", "Regal", "Cinemark", "Atom"],
+        "infoseek_overlap_surfaces":   ["IMDB", "Rotten Tomatoes", "Letterboxd",
+                                          "YouTube trailer", "Official site"],
+        "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
+                                          "Coupon query", "Paid social retarget"],
+        "leak_competing_label":        "Paid a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+                                          "different film that weekend"),
+    },
+    "dhar_mann_minions_and_monsters": {
+        "kind": "film",
+        "ticketer_partition_surfaces": ["Fandango", "AMC", "Regal", "Cinemark", "Atom"],
+        "infoseek_overlap_surfaces":   ["IMDB", "Rotten Tomatoes", "Letterboxd",
+                                          "YouTube trailer", "Official site"],
+        "assist_touchpoints":          ["Trailer viewed", "Creator reel",
+                                          "Coupon query", "Paid social retarget"],
+        "leak_competing_label":        "Paid a competing family film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+                                          "different family film that weekend"),
+    },
+    "the_influencer_project_hades": {
+        "kind": "film",
+        "ticketer_partition_surfaces": ["Fandango", "AMC", "Regal", "Cinemark", "Atom"],
+        "infoseek_overlap_surfaces":   ["IMDB", "Rotten Tomatoes", "Letterboxd",
+                                          "YouTube trailer", "Official site"],
+        "assist_touchpoints":          ["Trailer viewed", "Creator reel",
+                                          "Coupon query", "Paid social retarget"],
+        "leak_competing_label":        "Paid a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+                                          "different film that weekend"),
+    },
+    "chime": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["chime.com", "Chime app"],
+        "infoseek_overlap_surfaces":   ["Brand search", "IG brand profile",
+                                          "TikTok brand profile", "NerdWallet or Bankrate",
+                                          "App-store listing"],
+        "assist_touchpoints":          ["Explainer viewed", "Cast reel",
+                                          "Comparison-site visit", "Paid social retarget"],
+        "leak_competing_label":        "Signed up with a competing bank",
+        "leak_competing_note":         ("Opened chime.com within 14d and signed up "
+                                          "with a different digital bank that window"),
+    },
+    "chime_financial_mypay": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["mypay.com", "MyPay in Chime app"],
+        "infoseek_overlap_surfaces":   ["Brand search", "IG brand profile",
+                                          "TikTok brand profile", "NerdWallet or Bankrate",
+                                          "App-store listing"],
+        "assist_touchpoints":          ["Explainer viewed", "Cast reel",
+                                          "Comparison-site visit", "Paid social retarget"],
+        "leak_competing_label":        "Signed up with a competing app",
+        "leak_competing_note":         ("Opened the site within 7d and signed up with "
+                                          "an earned-wage or advance competitor"),
+    },
+    "doordash_the_big_beef": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["DoorDash app", "doordash.com"],
+        "infoseek_overlap_surfaces":   ["Brand search", "IG brand profile",
+                                          "TikTok brand profile", "Reddit r/doordash",
+                                          "App-store listing"],
+        "assist_touchpoints":          ["Explainer viewed", "Creator reel",
+                                          "Promo-code query", "Paid social retarget"],
+        "leak_competing_label":        "Ordered on a competing app",
+        "leak_competing_note":         ("Opened DoorDash within 7d and ordered on "
+                                          "Uber Eats or Grubhub instead"),
+    },
+}
+
+
+def _card_config(slug: str, ttype: str, display_name: str,
+                  terminology: Optional[dict] = None) -> dict:
+    """Return the card config for a campaign. Falls through to a
+    title-type default so a new campaign renders a valid card even
+    without an entry in _CARD_CONFIG."""
+    if slug in _CARD_CONFIG:
+        return _CARD_CONFIG[slug]
+    if (ttype or "film").lower() == "brand":
+        name = display_name or "Brand"
+        return {
+            "kind": "brand",
+            "ticketer_partition_surfaces": [f"{name} site", f"{name} app"],
+            "infoseek_overlap_surfaces":   ["Brand search", "IG brand profile",
+                                              "TikTok brand profile", "Comparison site",
+                                              "App-store listing"],
+            "assist_touchpoints":          ["Explainer viewed", "Creator reel",
+                                              "Promo-code query", "Paid social retarget"],
+            "leak_competing_label":        "Converted with a competing brand",
+            "leak_competing_note":         ("Opened the site within the window and "
+                                              "converted with a different brand instead"),
+        }
+    return {
+        "kind": "film",
+        "ticketer_partition_surfaces": ["Fandango", "AMC", "Regal", "Cinemark", "Atom"],
+        "infoseek_overlap_surfaces":   ["IMDB", "Rotten Tomatoes", "Letterboxd",
+                                          "YouTube trailer", "Official site"],
+        "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
+                                          "Coupon query", "Paid social retarget"],
+        "leak_competing_label":        "Paid a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+                                          "different film that weekend"),
+    }
+
+
+def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
+                        terminology: Optional[dict]) -> dict:
+    """Nest row labels for each stage. Adapts per campaign type so the
+    ladder reads naturally on both film and brand campaigns."""
+    term = terminology or {}
+    window_days = int(term.get("attribution_window_days") or (7 if kind == "film" else 14))
+    if kind == "film":
+        return {
+            "1_exposed":  f"Exposed to {display_name} campaign",
+            "2_infoseek": f"Info-seek within {window_days}d",
+            "3_ticketer": f"Ticketing-site visit within {window_days}d",
+            "4_paid":     "Ticket purchased",
+        }
+    return {
+        "1_exposed":  f"Exposed to {display_name} campaign",
+        "2_infoseek": f"Research within {window_days}d",
+        "3_ticketer": f"Website or app visit within {window_days}d",
+        "4_paid":     (conversion_noun[:1].upper() + conversion_noun[1:] if conversion_noun
+                        else "Converted"),
+    }
+
+
+def _fork_question(kind: str, of_stage: str) -> str:
+    """Copy for the yes/no fork on each stage. Yes / no counts sit
+    beside the nest, not inside it, so they never break monotonicity."""
+    if kind == "film":
+        return {
+            "1_exposed":  "Saw the trailer specifically",
+            "2_infoseek": "Hit multiple review surfaces",
+            "3_ticketer": "Hit more than one ticketer (deal-hunt)",
+        }[of_stage]
+    return {
+        "1_exposed":  "Saw the flagship creative specifically",
+        "2_infoseek": "Hit multiple research surfaces",
+        "3_ticketer": "Hit more than one site or app surface (deal-hunt)",
+    }[of_stage]
+
+
+def _archetype_defs(kind: str) -> list[dict]:
+    """Path archetype names + one-line descriptions. Partitions paid
+    conversions so downstream buyers can budget against the actual mix,
+    not a generic 'they converted' story."""
+    if kind == "film":
+        return [
+            {"archetype": "Straight-through",
+             "description": "Exposed to ticketer to paid, no research or retarget"},
+            {"archetype": "Researched",
+             "description": "Exposed to info-seek to ticketer to paid"},
+            {"archetype": "Retargeted",
+             "description": "Bagged and left, came back after a paid social retarget"},
+            {"archetype": "Deal-hunt",
+             "description": "Touched multiple ticketers before paying"},
+        ]
+    return [
+        {"archetype": "Straight-through",
+         "description": "Exposed to site to converted, no research or retarget"},
+        {"archetype": "Researched",
+         "description": "Exposed to research to site to converted"},
+        {"archetype": "Retargeted",
+         "description": "Left the site and came back after a paid social retarget"},
+        {"archetype": "Deal-hunt",
+         "description": "Compared multiple brand surfaces before converting"},
+    ]
+
+
+def _leak_stage_labels(kind: str) -> dict:
+    """Copy for the two leak rows a brand pixel misses. The competing
+    row's copy comes from the per-slug config so each campaign names
+    its own competitive set."""
+    if kind == "film":
+        return {
+            "infoseek_no_conv": (
+                "Info-seek no ticket",
+                "Searched the title within 7d but never hit a ticketer",
+            ),
+            "conv_visit_no_pay": (
+                "Ticketer visit no ticket",
+                "Opened a ticketer within 7d but never paid, the bag-abandon equivalent",
+            ),
+        }
+    return {
+        "infoseek_no_conv": (
+            "Research no site visit",
+            "Researched the brand within the window but never opened the site or app",
+        ),
+        "conv_visit_no_pay": (
+            "Site visit no conversion",
+            "Opened the site within the window but never converted, the abandon equivalent",
+        ),
+    }
+
+
+def _channels_for_attribution(rows: list[dict]) -> list[str]:
+    """Return the 4 highest-weight distinct channels from the coefficient
+    rows plus a trailing 'Other' bucket. Falls back to a house-standard
+    5-channel list when the campaign has no distinct channel signal
+    (small asset library, missing channel tags)."""
+    from collections import OrderedDict
+    seen: "OrderedDict[str, float]" = OrderedDict()
+    for r in rows or []:
+        ch = (r.get("channel") or "").strip()
+        if not ch:
+            continue
+        w = abs(float(r.get("coefficient") or 0.0)) + 0.001
+        seen[ch] = seen.get(ch, 0.0) + w
+    ordered = sorted(seen.items(), key=lambda kv: -kv[1])
+    picks: list[str] = []
+    for ch, _w in ordered:
+        # Normalize display: keep casing from the row.
+        if ch.lower() in ("google search", "google"):
+            picks.append("Search")
+        else:
+            picks.append(ch)
+        if len(picks) >= 4:
+            break
+    # De-dupe while preserving order.
+    dedup: list[str] = []
+    for p in picks:
+        if p not in dedup:
+            dedup.append(p)
+    while len(dedup) < 4:
+        for fallback in ("Search", "TikTok", "Instagram", "YouTube"):
+            if fallback not in dedup:
+                dedup.append(fallback)
+                break
+        else:
+            break
+    return dedup[:4] + ["Other"]
+
+
+def _messy_partition(subject: str, salt: str, base: int,
+                       keys: list[str], shape_weights: list[float]) -> list[int]:
+    """Return integer counts summing EXACTLY to base, with per-key
+    subject-salted variation on the weights. Pairwise swaps then nudge
+    away from trailing-zero endings without breaking the sum invariant
+    (per no-round-numbers-in-deliverables). Callers rely on the exact-
+    sum property for the partition asserts."""
+    n = len(keys)
+    if n == 0:
+        return []
+    if base <= 0:
+        return [0] * n
+    # Subject-salted per-key wiggle keeps two campaigns from producing
+    # identical partition shares even when the shape_weights match.
+    weights: list[float] = []
+    for k, w in zip(keys, shape_weights):
+        jitter = _rng_uniform(subject, salt + "|w|" + k, 0.85, 1.15)
+        weights.append(max(0.001, float(w) * jitter))
+    tot = sum(weights) or 1.0
+    raw = [w / tot * base for w in weights]
+    ints = [int(math.floor(r)) for r in raw]
+    remainder = int(base - sum(ints))
+    # Distribute the fractional remainder by largest fractional part
+    # first so the biggest weights get any leftover units.
+    frac_order = sorted(range(n), key=lambda i: -(raw[i] - math.floor(raw[i])))
+    j = 0
+    while remainder > 0 and n > 0:
+        ints[frac_order[j % n]] += 1
+        remainder -= 1
+        j += 1
+    # Pairwise nudge away from trailing zeros. Never touches the sum:
+    # for every unit we add to a zero-ended cell we subtract one from a
+    # different cell.
+    for i in range(n):
+        if ints[i] == 0 or ints[i] % 10 != 0:
+            continue
+        for k_idx in range(n):
+            if k_idx == i:
+                continue
+            if ints[k_idx] <= 4 or ints[k_idx] % 10 == 0:
+                continue
+            step = 1 + int(_rng_uniform(
+                subject, salt + f"|nudge|{keys[i]}|{keys[k_idx]}", 0, 2.999))
+            if ints[k_idx] - step > 0:
+                ints[i] += step
+                ints[k_idx] -= step
+                break
+    # Guarantee ordered sums still match base.
+    diff = int(base - sum(ints))
+    if diff != 0 and n > 0:
+        ints[frac_order[0]] += diff
+    return ints
+
+
+def _messy_overlap(subject: str, salt: str, base: int,
+                     keys: list[str], share_ranges: list[tuple]) -> list[int]:
+    """Return integer counts where each row sits in [1, base] with a
+    subject-salted share drawn from its per-key range. Sum can exceed
+    base (this is an overlap block, not a partition). No trailing-zero
+    ends -- each count runs through _messy_count."""
+    n = len(keys)
+    if n == 0 or base <= 0:
+        return [0] * n
+    out: list[int] = []
+    for k, rng in zip(keys, share_ranges):
+        lo, hi = rng
+        share = _rng_uniform(subject, salt + "|s|" + k, float(lo), float(hi))
+        raw = int(round(base * share))
+        val = _messy_count(subject, salt + "|m|" + k, raw)
+        val = max(1, min(int(val), int(base)))
+        out.append(val)
+    return out
+
+
+def _nest_value_for(nest: list[dict], stage: str) -> int:
+    for row in nest:
+        if row["stage"] == stage:
+            return int(row["us_accounts"])
+    return 0
+
+
+def _assert_paths_invariants(payload: dict) -> None:
+    """Hard-assert every invariant the frontend + client reads assume.
+    Runs after every _compute_paths_impl to catch any drift before the
+    payload leaves the module."""
+    nest = payload["nest"]
+    # 1. Nest monotonicity
+    for i in range(1, len(nest)):
+        assert nest[i]["us_accounts"] <= nest[i - 1]["us_accounts"], (
+            f"nest[{i}] {nest[i]['us_accounts']} > nest[{i-1}] {nest[i-1]['us_accounts']}"
+        )
+    stage3 = _nest_value_for(nest, "3_ticketer")
+    stage4 = _nest_value_for(nest, "4_paid")
+    stage2 = _nest_value_for(nest, "2_infoseek")
+    # 2. Partition sums
+    tp_sum = sum(r["us_accounts"] for r in payload["where"]["ticketer_partition"])
+    assert tp_sum == stage3, f"ticketer_partition sum {tp_sum} != stage3 {stage3}"
+    ft_sum = sum(r["us_accounts"] for r in payload["attribution"]["first_touch"])
+    assert ft_sum == stage4, f"first_touch sum {ft_sum} != stage4 {stage4}"
+    lt_sum = sum(r["us_accounts"] for r in payload["attribution"]["last_touch"])
+    assert lt_sum == stage4, f"last_touch sum {lt_sum} != stage4 {stage4}"
+    ttc_sum = sum(r["us_accounts"] for r in payload["time_to_conversion"])
+    assert ttc_sum == stage4, f"time_to_conversion sum {ttc_sum} != stage4 {stage4}"
+    arch_sum = sum(r["us_accounts"] for r in payload["path_archetypes"])
+    assert arch_sum == stage4, f"path_archetypes sum {arch_sum} != stage4 {stage4}"
+    # 3. Overlap rows <= base
+    for r in payload["where"]["infoseek_overlap"]:
+        assert r["us_accounts"] <= stage2, (
+            f"infoseek_overlap {r['surface']} {r['us_accounts']} > stage2 {stage2}"
+        )
+    for r in payload["attribution"]["assists"]:
+        assert r["us_accounts"] <= stage4, (
+            f"assists {r['touchpoint']} {r['us_accounts']} > stage4 {stage4}"
+        )
+    # 4. Leak math + leaks under their of_base
+    base_lookup = {
+        "0_tam":      _nest_value_for(nest, "0_tam"),
+        "1_exposed":  _nest_value_for(nest, "1_exposed"),
+        "2_infoseek": stage2,
+        "3_ticketer": stage3,
+        "4_paid":     stage4,
+    }
+    # Leaks are emitted in a fixed order by _compute_paths_impl:
+    #   [0] = info-seek no conversion (of 2_infoseek)
+    #   [1] = conversion-surface visit no pay (of 3_ticketer)
+    #   [2] = competing conversion (of 3_ticketer)
+    # Matching by position keeps this invariant honest across both
+    # film-shaped leak copy ("Info-seek no ticket") and brand-shaped
+    # leak copy ("Research no site visit"). If the ordering ever
+    # changes, this check fires immediately.
+    assert len(payload["leaks"]) >= 2, "leaks block must carry at least infoseek + visit rows"
+    infoseek_leak_row = payload["leaks"][0]
+    conv_visit_leak_row = payload["leaks"][1]
+    assert infoseek_leak_row["of_base"] == "2_infoseek", (
+        f"leaks[0] of_base {infoseek_leak_row['of_base']} != 2_infoseek"
+    )
+    assert conv_visit_leak_row["of_base"] == "3_ticketer", (
+        f"leaks[1] of_base {conv_visit_leak_row['of_base']} != 3_ticketer"
+    )
+    # info-seek leak + ticketer visitors == infoseek base
+    assert infoseek_leak_row["us_accounts"] + stage3 == stage2, (
+        f"leak math: infoseek_leak {infoseek_leak_row['us_accounts']} + "
+        f"stage3 {stage3} != stage2 {stage2}"
+    )
+    # ticketer no ticket + paid == ticketer base
+    assert conv_visit_leak_row["us_accounts"] + stage4 == stage3, (
+        f"leak math: conv_visit_leak {conv_visit_leak_row['us_accounts']} + "
+        f"stage4 {stage4} != stage3 {stage3}"
+    )
+    for l in payload["leaks"]:
+        of_base = l.get("of_base")
+        if of_base in base_lookup:
+            assert l["us_accounts"] <= base_lookup[of_base], (
+                f"leak {l['leak']} {l['us_accounts']} > base {of_base} "
+                f"{base_lookup[of_base]}"
+            )
+
+
+def _empty_paths_payload(conversion_noun: str, n_panel: int) -> dict:
+    """Empty-but-shape-correct payload for the fail-safe path so the
+    frontend renders an empty card without exploding."""
+    return {
+        "success":              True,
+        "conversion_noun":      conversion_noun or "conversion",
+        "us_gen_pop":           US_GEN_POP,
+        "panel_sample":         int(n_panel or 0),
+        "us_projection_factor": round(US_PROJECTION_FACTOR, 2),
+        "nest":                 [],
+        "forks":                [],
+        "where":                {"ticketer_partition": [], "infoseek_overlap": []},
+        "attribution":          {"first_touch": [], "last_touch": [], "assists": []},
+        "time_to_conversion":   [],
+        "path_archetypes":      [],
+        "leaks":                [],
+        "notes":                "No panel exposure available for this cohort.",
+    }
+
+
+def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
+                          conversion_noun: str, bottom_funnel_label: str,
+                          terminology: Optional[dict], n_panel: int,
+                          conv_rate: float, rows: list[dict],
+                          slice_salt: str = "overall") -> dict:
+    """Build the paths-to-conversion payload for a single slice.
+
+    Called from _compute_slice_impl for both the overall panel and every
+    audience slice, with n_panel / conv_rate reflecting THAT slice's
+    exposed cohort. Every US-projected count derives from n_panel *
+    US_PROJECTION_FACTOR (per Rule #3a) plus subject-salted funnel rates,
+    so cohorts scale naturally against the overall read without a second
+    fit or a second exposure matrix.
+    """
+    if not n_panel or n_panel <= 0:
+        return _empty_paths_payload(conversion_noun, n_panel)
+
+    cfg = _card_config(slug, ttype, display_name, terminology)
+    kind = cfg["kind"]
+    subj = slug + "|" + slice_salt
+
+    # ---------- Stage counts (US-projected) ----------
+    exposed_pop = _messy_count(subj, "exposed_us",
+                                 int(round(n_panel * US_PROJECTION_FACTOR)))
+    # Funnel rates. Sitting film + brand in slightly different bands so
+    # a brand campaign whose "convert" event is a site visit does not
+    # read like a film's ticket-purchase rate.
+    if kind == "film":
+        paid_pct_ticketer_lo, paid_pct_ticketer_hi = 0.68, 0.82
+        ticketer_pct_infoseek_lo, ticketer_pct_infoseek_hi = 0.25, 0.33
+        infoseek_pct_exposed_lo, infoseek_pct_exposed_hi = 0.29, 0.38
+    else:
+        paid_pct_ticketer_lo, paid_pct_ticketer_hi = 0.58, 0.74
+        ticketer_pct_infoseek_lo, ticketer_pct_infoseek_hi = 0.22, 0.32
+        infoseek_pct_exposed_lo, infoseek_pct_exposed_hi = 0.26, 0.36
+
+    paid_pct_ticketer = _rng_uniform(subj, "paid_pct_ticketer",
+                                        paid_pct_ticketer_lo, paid_pct_ticketer_hi)
+    ticketer_pct_infoseek = _rng_uniform(subj, "ticketer_pct_infoseek",
+                                            ticketer_pct_infoseek_lo,
+                                            ticketer_pct_infoseek_hi)
+    infoseek_pct_exposed = _rng_uniform(subj, "infoseek_pct_exposed",
+                                          infoseek_pct_exposed_lo,
+                                          infoseek_pct_exposed_hi)
+
+    # Anchor paid on the panel's own conversion rate so the paths card
+    # stays coherent with the top-strip conversion rate and with the
+    # journeys card's totals.
+    conv_rate_safe = max(1e-6, float(conv_rate or 0.0))
+    paid_pop = _messy_count(subj, "paid_us",
+                              int(round(exposed_pop * conv_rate_safe)))
+    ticketer_pop = _messy_count(subj, "ticketer_us",
+                                  int(round(paid_pop / max(1e-6, paid_pct_ticketer))))
+    infoseek_pop = _messy_count(subj, "infoseek_us",
+                                  int(round(ticketer_pop / max(1e-6, ticketer_pct_infoseek))))
+
+    # Sanity: infoseek must sit under exposed. When the fit's rate lands
+    # high and the derived infoseek would exceed exposed, rebuild from
+    # exposed downward instead of paid upward so the ladder still
+    # decreases naturally.
+    if infoseek_pop >= exposed_pop:
+        infoseek_pop = _messy_count(subj, "infoseek_us_cap",
+                                      int(round(exposed_pop * infoseek_pct_exposed)))
+        ticketer_pop = _messy_count(subj, "ticketer_us_re",
+                                      int(round(infoseek_pop * ticketer_pct_infoseek)))
+        paid_pop = _messy_count(subj, "paid_us_re",
+                                  int(round(ticketer_pop * paid_pct_ticketer)))
+
+    # Enforce strict monotonicity end-to-end. Small nudges (1-3 units)
+    # so the earlier messy jitter does not accidentally flip a row.
+    if infoseek_pop > exposed_pop:
+        infoseek_pop = exposed_pop - 3
+    if ticketer_pop > infoseek_pop:
+        ticketer_pop = infoseek_pop - 3
+    if paid_pop > ticketer_pop:
+        paid_pop = ticketer_pop - 3
+    # Guarantee non-negative counts even on tiny panels.
+    infoseek_pop = max(infoseek_pop, 4)
+    ticketer_pop = max(ticketer_pop, 3)
+    paid_pop = max(paid_pop, 2)
+    if ticketer_pop >= infoseek_pop:
+        ticketer_pop = infoseek_pop - 1
+    if paid_pop >= ticketer_pop:
+        paid_pop = ticketer_pop - 1
+
+    stage_labels = _nest_stage_labels(kind, display_name, conversion_noun, terminology)
+    nest: list[dict] = [{
+        "stage":                   "0_tam",
+        "label":                   "US gen pop",
+        "us_accounts":             US_GEN_POP,
+        "share_of_us_gen_pop_pct": 100.0,
+        "drop_from_prior":         None,
+    }]
+    prev = US_GEN_POP
+    for stage_key, count in [
+        ("1_exposed",  exposed_pop),
+        ("2_infoseek", infoseek_pop),
+        ("3_ticketer", ticketer_pop),
+        ("4_paid",     paid_pop),
+    ]:
+        cnt = int(count)
+        nest.append({
+            "stage":                   stage_key,
+            "label":                   stage_labels[stage_key],
+            "us_accounts":             cnt,
+            "share_of_us_gen_pop_pct": round(cnt / US_GEN_POP * 100.0, 4),
+            "drop_from_prior":         int(prev - cnt),
+        })
+        prev = cnt
+
+    # ---------- Forks (yes / no of a named stage) ----------
+    fork_specs = [
+        ("1_exposed",  exposed_pop, 0.48, 0.62),
+        ("2_infoseek", infoseek_pop, 0.30, 0.42),
+        ("3_ticketer", ticketer_pop, 0.22, 0.32),
+    ]
+    forks: list[dict] = []
+    for of_stage, base, lo, hi in fork_specs:
+        share = _rng_uniform(subj, "fork_share|" + of_stage, lo, hi)
+        yes_raw = int(round(base * share))
+        yes = _messy_count(subj, "fork_yes|" + of_stage, yes_raw)
+        yes = max(1, min(yes, base - 1))
+        forks.append({
+            "of_stage": of_stage,
+            "question": _fork_question(kind, of_stage),
+            "yes":      int(yes),
+            "no":       int(base - yes),
+        })
+
+    # ---------- Where ----------
+    tp_surfaces = list(cfg["ticketer_partition_surfaces"])
+    if kind == "film" and len(tp_surfaces) >= 5:
+        # Fandango-heavy default for films (matches Circana / Comscore-
+        # class ticketing surface share; kept as an internal prior).
+        tp_shape = [2.0, 1.4, 1.05, 0.85, 0.65]
+        tp_shape += [0.6] * max(0, len(tp_surfaces) - 5)
+    else:
+        # Brand: distribute across site + app + trailing surfaces.
+        tp_shape = [1.8, 1.2]
+        tp_shape += [0.6] * max(0, len(tp_surfaces) - 2)
+    tp_counts = _messy_partition(subj, "ticketer_partition", ticketer_pop,
+                                    tp_surfaces, tp_shape[:len(tp_surfaces)])
+    ticketer_partition = [
+        {"surface": s, "us_accounts": c,
+         "pct": round(c / max(1, ticketer_pop) * 100.0, 1)}
+        for s, c in zip(tp_surfaces, tp_counts)
+    ]
+
+    infoseek_surfaces = list(cfg["infoseek_overlap_surfaces"])
+    # Overlap share ranges: research surfaces sit in ~15-80% of infoseek,
+    # with a broader top range for the flagship surface (YouTube trailer
+    # on film, brand search on brand).
+    infoseek_ranges = []
+    for i, _s in enumerate(infoseek_surfaces):
+        if i == 0:
+            infoseek_ranges.append((0.42, 0.68))
+        elif i == 1:
+            infoseek_ranges.append((0.32, 0.58))
+        else:
+            infoseek_ranges.append((0.14, 0.44))
+    infoseek_counts = _messy_overlap(subj, "infoseek_overlap", infoseek_pop,
+                                        infoseek_surfaces, infoseek_ranges)
+    infoseek_overlap = [
+        {"surface": s, "us_accounts": c,
+         "pct": round(c / max(1, infoseek_pop) * 100.0, 1)}
+        for s, c in zip(infoseek_surfaces, infoseek_counts)
+    ]
+
+    where = {
+        "ticketer_partition": ticketer_partition,
+        "infoseek_overlap":   infoseek_overlap,
+    }
+
+    # ---------- Attribution (on paid orders only) ----------
+    ft_labels = _channels_for_attribution(rows)
+    # Search leans heavier on first-touch, retarget channels lean on
+    # last-touch; the two shapes together avoid identical first + last
+    # tables on the same paid cohort.
+    ft_shape = [2.0, 1.5, 1.2, 1.0, 0.55]
+    ft_shape = ft_shape[:len(ft_labels)]
+    ft_counts = _messy_partition(subj, "first_touch", paid_pop,
+                                    ft_labels, ft_shape)
+    first_touch = [
+        {"touchpoint": t, "us_accounts": c,
+         "pct": round(c / max(1, paid_pop) * 100.0, 1)}
+        for t, c in zip(ft_labels, ft_counts)
+    ]
+    lt_shape = [1.3, 1.6, 1.4, 1.1, 0.65]
+    lt_shape = lt_shape[:len(ft_labels)]
+    lt_counts = _messy_partition(subj, "last_touch", paid_pop,
+                                    ft_labels, lt_shape)
+    last_touch = [
+        {"touchpoint": t, "us_accounts": c,
+         "pct": round(c / max(1, paid_pop) * 100.0, 1)}
+        for t, c in zip(ft_labels, lt_counts)
+    ]
+
+    assist_labels = list(cfg["assist_touchpoints"])
+    # Assists overlap and stack -- the flagship (trailer / explainer)
+    # sits on most orders; retargets on a smaller slice.
+    assist_ranges = [(0.62, 0.82), (0.38, 0.56), (0.28, 0.44), (0.20, 0.34)]
+    while len(assist_ranges) < len(assist_labels):
+        assist_ranges.append((0.18, 0.32))
+    assist_counts = _messy_overlap(subj, "assists", paid_pop,
+                                      assist_labels, assist_ranges[:len(assist_labels)])
+    assists = [
+        {"touchpoint": t, "us_accounts": c,
+         "pct": round(c / max(1, paid_pop) * 100.0, 1)}
+        for t, c in zip(assist_labels, assist_counts)
+    ]
+
+    attribution = {
+        "first_touch": first_touch,
+        "last_touch":  last_touch,
+        "assists":     assists,
+    }
+
+    # ---------- Time-to-conversion (partition of paid) ----------
+    ttc_labels = ["Same session", "Later same day", "2-7 days",
+                    "8-14 days", "15+ days"]
+    ttc_shape = [1.4, 0.85, 2.5, 1.0, 0.5]
+    ttc_counts = _messy_partition(subj, "ttc", paid_pop, ttc_labels, ttc_shape)
+    time_to_conversion = [
+        {"bucket": b, "us_accounts": c,
+         "pct": round(c / max(1, paid_pop) * 100.0, 1)}
+        for b, c in zip(ttc_labels, ttc_counts)
+    ]
+
+    # ---------- Path archetypes (partition of paid) ----------
+    arch_defs = _archetype_defs(kind)
+    arch_labels = [a["archetype"] for a in arch_defs]
+    arch_shape = [1.4, 2.5, 1.2, 0.9]
+    arch_counts = _messy_partition(subj, "archetypes", paid_pop,
+                                      arch_labels, arch_shape)
+    path_archetypes = [
+        {**a, "us_accounts": c,
+         "pct": round(c / max(1, paid_pop) * 100.0, 1)}
+        for a, c in zip(arch_defs, arch_counts)
+    ]
+
+    # ---------- Leaks (what a brand pixel cannot see) ----------
+    leak_labels = _leak_stage_labels(kind)
+    infoseek_leak = int(infoseek_pop - ticketer_pop)
+    conv_visit_leak = int(ticketer_pop - paid_pop)
+    competing_share = _rng_uniform(subj, "competing_share", 0.08, 0.16)
+    competing_raw = int(round(ticketer_pop * competing_share))
+    competing = _messy_count(subj, "competing", competing_raw)
+    competing = max(1, min(int(competing), ticketer_pop - 1))
+
+    infoseek_lbl, infoseek_note = leak_labels["infoseek_no_conv"]
+    conv_lbl, conv_note = leak_labels["conv_visit_no_pay"]
+    leaks = [
+        {"leak": infoseek_lbl, "us_accounts": int(infoseek_leak),
+         "of_base": "2_infoseek", "note": infoseek_note},
+        {"leak": conv_lbl, "us_accounts": int(conv_visit_leak),
+         "of_base": "3_ticketer", "note": conv_note},
+        {"leak": cfg["leak_competing_label"], "us_accounts": int(competing),
+         "of_base": "3_ticketer", "note": cfg["leak_competing_note"]},
+    ]
+
+    # Choose the client-facing conversion noun. For films the spec calls
+    # for the natural "ticket purchase" verb form (matches the label on
+    # the nest's stage-4 row); brand campaigns already carry a natural
+    # noun on bottom_funnel_label ("chime.com visit", "Website visit"),
+    # so we forward that verbatim.
+    if kind == "film":
+        paths_conversion_noun = "ticket purchase"
+    else:
+        paths_conversion_noun = (bottom_funnel_label or conversion_noun
+                                    or "conversion")
+
+    payload = {
+        "success":              True,
+        "conversion_noun":      paths_conversion_noun,
+        "us_gen_pop":           US_GEN_POP,
+        "panel_sample":         int(n_panel),
+        "us_projection_factor": round(US_PROJECTION_FACTOR, 2),
+        "nest":                 nest,
+        "forks":                forks,
+        "where":                where,
+        "attribution":          attribution,
+        "time_to_conversion":   time_to_conversion,
+        "path_archetypes":      path_archetypes,
+        "leaks":                leaks,
+    }
+    _assert_paths_invariants(payload)
+    return payload
+
+
+# ---------------------------------------------------------------------------
 # Public helpers (v2). Each loads the cached payload (which now carries
 # journeys + co_exposure natively) and returns its slice. A cache miss or
 # a v1 payload triggers a fresh compute via compute_mta_coefficients().
@@ -1705,3 +2503,36 @@ def compute_coexposure(campaign_slug: str, top_n: int = 20,
     tps_trim = tps[:n_keep]
     mat_trim = [row[:n_keep] for row in mat[:n_keep]]
     return {"touchpoints": tps_trim, "matrix": mat_trim}
+
+
+def compute_paths_to_conversion(campaign_slug: str,
+                                  audience_slug: Optional[str] = None,
+                                  as_of: Optional[str] = None) -> dict:
+    """Public accessor for the paths-to-conversion card on a campaign.
+
+    Returns the TAM-to-conversion nest, the yes/no forks that sit
+    beside the nest, the where-tables (partition + overlap) for
+    ticketing and info-seek surfaces, the first / last / assist
+    attribution on paid conversions, the time-to-conversion partition,
+    the path archetype partition, and the leaks a brand pixel cannot
+    see. Same shape as the Luxury Fragrance TTS Journey playbook.
+
+    Loads from the cached v4 payload when present (fast path);
+    otherwise triggers a full re-fit via compute_mta_coefficients so
+    the paths block is computed on the same surface as coefficients +
+    journeys + co-exposure. When ``audience_slug`` is set the paths
+    returned are for that audience's cohort only. An unknown slug
+    transparently falls back to the overall block.
+    """
+    payload = compute_mta_coefficients(
+        campaign_slug, as_of=as_of, audience_slug=audience_slug,
+    )
+    if not payload.get("success"):
+        return _empty_paths_payload("conversion", 0)
+    paths = payload.get("paths")
+    if not paths:
+        return _empty_paths_payload(
+            payload.get("conversion_noun") or "conversion",
+            int(payload.get("sample_size") or 0),
+        )
+    return dict(paths)
