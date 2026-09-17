@@ -80442,10 +80442,10 @@ https://www.instagram.com/p/..."></textarea>
                             start_date: '2025-07-01',
                             end_date: '2026-06-30',
                             target_type: 'purchase_journey',
-                            category: 'brands'
+                            category: 'brands',
+                            hero_image: '__JIQ_DEFAULT_HERO__'
                         },
                         fragrance_shop_journey: _JIQ_FRAGRANCE_DATA,
-                        hero_image: '__JIQ_DEFAULT_HERO__',
                         facts: [
                             { label: 'Window', value: 'July 1, 2025 to June 30, 2026. Unique US accounts.' },
                             { label: 'The spine', value: '329,900,000 US accounts down to 187,429 who paid for a $95 and up bottle. The single biggest fall is learning a name at all: 3.9% get that far.' },
@@ -103536,9 +103536,9 @@ https://www.instagram.com/p/..."></textarea>
             opts = opts || {};
             // A first step has nothing before it, so it shows the whole
             // track filled rather than a kept share of nothing.
-            var keep = (s.kept === null || s.kept === undefined) ? 100 : Number(s.kept);
+            var keep = (opts.base || s.kept === null || s.kept === undefined) ? 100 : Number(s.kept);
             var keepW = Math.max(0.6, Math.min(100, keep));
-            var lost = (s.dropped === null || s.dropped === undefined || s.dropped === 0)
+            var lost = (opts.base || s.dropped === null || s.dropped === undefined || s.dropped === 0)
                 ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' left here</span>';
             var sub = [s.doing, s.where].filter(Boolean).join(' \u00b7 ');
             return '' +
@@ -103555,7 +103555,8 @@ https://www.instagram.com/p/..."></textarea>
                     '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
                   '</div>' +
                   '<div class="jiq-frag-foot">' +
-                    '<span class="jiq-frag-kept">' + _jiqFragPct(keep) + ' of the step before</span>' +
+                    '<span class="jiq-frag-kept">' + (opts.base ? 'Everyone in this journey'
+                        : _jiqFragPct(keep) + ' of the step before') + '</span>' +
                     lost +
                   '</div>' +
                 '</div>' +
@@ -103573,9 +103574,16 @@ https://www.instagram.com/p/..."></textarea>
             if (!card) return;
             card.style.display = '';
 
-            var spine = d.spine || [], fork = d.fork || [];
-            var tam = spine.length ? spine[0].accounts : null;
-            var entered = spine.length > 1 ? spine[1].accounts : null;
+            // The TAM row is dropped: a 329.9M starting point says
+            // nothing about this audience and swamped the read. The
+            // journey opens where the audience does, on the first named
+            // bottle, and that step becomes the base everything else is
+            // measured against.
+            var fullSpine = d.spine || [];
+            var tam = fullSpine.length ? fullSpine[0].accounts : null;
+            var spine = fullSpine.filter(function (s) { return s.id !== 'us_gen_pop'; });
+            var fork = d.fork || [];
+            var entered = spine.length ? spine[0].accounts : null;
             var paid = spine.length ? spine[spine.length - 1].accounts : null;
             var byId = {};
             fork.forEach(function (f) { byId[f.id] = f; });
@@ -103583,9 +103591,10 @@ https://www.instagram.com/p/..."></textarea>
 
             var deck = document.getElementById('jiqFragDeck');
             if (deck) {
-                deck.textContent = 'Every account that could have bought a prestige bottle on TikTok Shop, '
-                    + 'down to the ones who did. Each bar is what the step kept from the step before, so the '
-                    + 'fall from ' + _jiqFragNum(tam) + ' to ' + _jiqFragNum(paid) + ' stays readable the whole way.';
+                deck.textContent = 'From the first time an account learns a luxury bottle name, '
+                    + 'down to the ones who paid for one. Each bar is what the step kept from the step '
+                    + 'before, so the fall from ' + _jiqFragNum(entered) + ' to ' + _jiqFragNum(paid)
+                    + ' stays readable the whole way.';
             }
             var meta = document.getElementById('jiqFragMeta');
             if (meta && d.meta) {
@@ -103623,7 +103632,6 @@ https://www.instagram.com/p/..."></textarea>
                 var oneIn = (tam && paid) ? Math.round(tam / paid) : null;
                 var backShare = (paid && paidBack) ? (100 * paidBack / paid) : null;
                 var tiles = [
-                    { v: _jiqFragNum(tam), l: 'US accounts in the window' },
                     { v: _jiqFragNum(entered), l: 'Learned a luxury bottle name' },
                     { v: _jiqFragNum(paid), l: 'Paid for a $95 and up bottle' },
                     { v: oneIn ? ('1 in ' + _jiqFragNum(oneIn)) : '\u2014', l: 'Of the US gen pop paid' },
@@ -103638,11 +103646,17 @@ https://www.instagram.com/p/..."></textarea>
                 }).join('');
             }
 
-            var learn = spine.length > 1 ? spine[1] : null;
+            // Written from whichever step actually loses the most, so
+            // it stays true if the numbers move.
+            var worst = null;
+            spine.forEach(function (s, i) {
+                if (i === 0 || s.kept === null || s.kept === undefined) return;
+                if (!worst || Number(s.kept) < Number(worst.kept)) worst = s;
+            });
             var spineHead = document.getElementById('jiqFragSpineHead');
-            if (spineHead && learn) {
-                spineHead.textContent = 'Learning a name at all is the whole funnel. '
-                    + _jiqFragPct(learn.kept) + ' get that far.';
+            if (spineHead && worst) {
+                spineHead.textContent = 'The steepest fall is ' + worst.label.toLowerCase()
+                    + '. ' + _jiqFragPct(worst.kept) + ' of the step before get that far.';
             }
             var forkHead = document.getElementById('jiqFragForkHead');
             if (forkHead && paid && paidBack) {
@@ -103652,7 +103666,10 @@ https://www.instagram.com/p/..."></textarea>
             var spineEl = document.getElementById('jiqFragSpine');
             if (spineEl) {
                 spineEl.innerHTML = spine.map(function (s, i) {
-                    return _jiqFragStep(s, { terminal: i === spine.length - 1 });
+                    return _jiqFragStep(s, {
+                        base: i === 0,
+                        terminal: i === spine.length - 1
+                    });
                 }).join('');
             }
 
