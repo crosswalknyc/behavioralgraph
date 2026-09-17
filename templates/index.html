@@ -22084,6 +22084,14 @@ https://www.instagram.com/p/..."></textarea>
             opacity: 1 !important;
             white-space: normal !important;
         }
+        /* 2026-09-16 (Jenna): Pull Custom Data reads as THE pull
+           entry point - cobalt border + soft glow (Cobalt #3358FF is
+           the house focus-ring accent on both grounds). */
+        #prometheusWidget #synthChatSuggestBtn {
+            border: 1px solid #3358FF !important;
+            box-shadow: 0 0 8px rgba(51, 88, 255, 0.50),
+                        0 0 18px rgba(51, 88, 255, 0.22) !important;
+        }
         #synthChatSubmitBtn.pm-stop {
             background: rgba(255, 107, 107, 0.16) !important;
             color: var(--accent-red, #ff6b6b) !important;
@@ -72560,7 +72568,21 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatChipSend(String((o && o.send) || (o && o.label) || o));
                 });
             }
-            box.scrollTop = box.scrollHeight;
+            // 2026-09-16 (Jenna): a long reply opens at its TOP so
+            // the reader starts at the start and scrolls down to the
+            // rest. Short replies clamp to the bottom exactly as
+            // before (scrollTop maxes out), and the reader's own sends
+            // keep the classic follow-to-bottom.
+            var _lastEl = box.lastElementChild;
+            var _lastTurn = synthChatHistory[synthChatHistory.length - 1];
+            if (_lastEl && _lastTurn &&
+                    (_lastTurn.role || 'user') !== 'user') {
+                var _top = _lastEl.getBoundingClientRect().top -
+                    box.getBoundingClientRect().top + box.scrollTop;
+                box.scrollTop = Math.max(_top - 6, 0);
+            } else {
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         function synthChatChipFill(template) {
