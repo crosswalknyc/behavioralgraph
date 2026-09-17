@@ -44947,6 +44947,7 @@ https://www.instagram.com/p/..."></textarea>
                     <!-- Download the journey as it stands. Hidden until a
                          run is loaded, alongside the date badge. -->
                     <div id="jiqExportBar" style="display: none; gap: 8px; align-items: center;">
+                        <span class="jiq-export-lab">Download</span>
                         <button type="button" class="jiq-export-btn" id="jiqExportPdfBtn"
                                 onclick="jiqExportPdf()" title="Download this journey as a one-sheet PDF">PDF</button>
                         <button type="button" class="jiq-export-btn" id="jiqExportCsvBtn"
@@ -175752,17 +175753,27 @@ https://www.instagram.com/p/..."></textarea>
     }
 
     /* ---- Journey IQ: the download controls ---------------------- */
-    .jiq-export-btn {
-        background: transparent; border: 1px solid #3B3D38; border-radius: 999px;
-        color: #9AA09B; cursor: pointer; padding: 5px 14px;
-        font-family: 'Inter 18pt', -apple-system, sans-serif;
-        font-size: 10px; font-weight: 600; letter-spacing: .14em;
-        text-transform: uppercase;
+    .jiq-export-lab {
+        font-size: 9.5px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A; white-space: nowrap;
     }
-    .jiq-export-btn:hover { color: #C7F23E; border-color: #C7F23E; }
+    body[data-theme="light"] .jiq-export-lab { color: #888C89; }
+    .jiq-export-btn {
+        background: transparent; border: 1px solid #7C878A; border-radius: 999px;
+        color: #E9E8E1; cursor: pointer; padding: 6px 15px;
+        font-family: 'Inter 18pt', -apple-system, sans-serif;
+        font-size: 11px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; white-space: nowrap;
+    }
+    .jiq-export-btn:hover {
+        color: #0C1618; background: #C7F23E; border-color: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-export-btn { color: #0C1618; border-color: #888C89; }
+    body[data-theme="light"] .jiq-export-btn:hover {
+        color: #E9E8E1; background: #5E7E12; border-color: #5E7E12;
+    }
     .jiq-export-btn[disabled] { opacity: .45; cursor: progress; }
-    body[data-theme="light"] .jiq-export-btn { border-color: #C9C6BA; color: #5C6560; }
-    body[data-theme="light"] .jiq-export-btn:hover { color: #5E7E12; border-color: #5E7E12; }
+
     #jiqExportVeil {
         position: fixed; inset: 0; z-index: 2147483000; display: none;
         align-items: center; justify-content: center; flex-direction: column;
