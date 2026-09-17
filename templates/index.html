@@ -72530,6 +72530,10 @@ https://www.instagram.com/p/..."></textarea>
                     '</div></div>';
             }).join('');
             box.innerHTML = rows;
+            // Capture the last TURN before live bubbles (thinking dots,
+            // notify offers) re-append below it - they sit at the
+            // bottom and must not steal the scroll anchor.
+            var _lastTurnEl = box.lastElementChild;
             _pmReattachLiveBubbles(box);
             if (!box._synthOptWired) {
                 box._synthOptWired = true;
@@ -72573,11 +72577,10 @@ https://www.instagram.com/p/..."></textarea>
             // rest. Short replies clamp to the bottom exactly as
             // before (scrollTop maxes out), and the reader's own sends
             // keep the classic follow-to-bottom.
-            var _lastEl = box.lastElementChild;
             var _lastTurn = synthChatHistory[synthChatHistory.length - 1];
-            if (_lastEl && _lastTurn &&
+            if (_lastTurnEl && _lastTurn &&
                     (_lastTurn.role || 'user') !== 'user') {
-                var _top = _lastEl.getBoundingClientRect().top -
+                var _top = _lastTurnEl.getBoundingClientRect().top -
                     box.getBoundingClientRect().top + box.scrollTop;
                 box.scrollTop = Math.max(_top - 6, 0);
             } else {
