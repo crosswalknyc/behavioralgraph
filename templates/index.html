@@ -121871,6 +121871,41 @@ https://www.instagram.com/p/..."></textarea>
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
         }
         
+        // ── Subscriber IQ: no emoji in the headings ─────────────
+        // The pictographs are shared with older screens all over the
+        // template, so rather than editing markup other views depend
+        // on, they are taken off the text as this view renders.
+        var _SUB_PICTO = /^[\s]*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{20E3}]+[\s]*)+/u;
+        function _subStripEmoji() {
+            var root = document.getElementById('subscriberIQView');
+            if (!root) return;
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            var node, hits = [];
+            while ((node = walker.nextNode())) {
+                if (node.nodeValue && _SUB_PICTO.test(node.nodeValue)) hits.push(node);
+            }
+            hits.forEach(function (n) {
+                var next = n.nodeValue.replace(_SUB_PICTO, '');
+                if (next !== n.nodeValue) n.nodeValue = next;
+            });
+        }
+        (function () {
+            var root = null, pending = 0;
+            function schedule() {
+                if (pending) return;
+                pending = setTimeout(function () { pending = 0; _subStripEmoji(); }, 120);
+            }
+            function attach() {
+                root = document.getElementById('subscriberIQView');
+                if (!root) { setTimeout(attach, 800); return; }
+                new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
+                schedule();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attach);
+            } else { attach(); }
+        })();
+
         // ── Subscriber library drawer ────────────────────────────
         function _subLibraryOpen(on) {
             var dr = document.getElementById('subLibraryDrawer');
@@ -174428,6 +174463,23 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] #subscriberIQView .executive-summary-section > h2::before,
     body[data-theme="light"] #subscriberIQView .tab-panel > h2::before,
     body[data-theme="light"] #subscriberIQView .tab-content > h2::before { background: #5E7E12; }
+
+    /* Cyan is not in the palette. It was labelling the view-number
+       rows and the demographics table headers. */
+    #subscriberIQView .view-number-label,
+    #subscriberIQView th, #subscriberIQView thead td,
+    #subscriberIQView .table-header, #subscriberIQView .col-header {
+        color: #7C878A !important; font-family: 'Inter 18pt', -apple-system, sans-serif !important;
+        font-size: 10px !important; font-weight: 500 !important;
+        letter-spacing: .14em !important; text-transform: uppercase !important;
+    }
+    body[data-theme="light"] #subscriberIQView .view-number-label,
+    body[data-theme="light"] #subscriberIQView th,
+    body[data-theme="light"] #subscriberIQView thead td,
+    body[data-theme="light"] #subscriberIQView .table-header,
+    body[data-theme="light"] #subscriberIQView .col-header { color: #888C89 !important; }
+    #subscriberIQView td { color: #E9E8E1; }
+    body[data-theme="light"] #subscriberIQView td { color: #0C1618; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
