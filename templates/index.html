@@ -24515,10 +24515,25 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics #piqDemoChartsHead {
             display: none !important;
         }
-        #dashboardView.piq-v4 #tab-demographics .demo-insights-row {
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) !important;
-            margin-bottom: 16px;
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row,
+        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead,
+        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Key Differentiators"],
+        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Demographic Profile Summary"] {
+            display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-insights #piqMomentumHost {
+            grid-column: 1 / -1;
+            margin: 0 0 32px;
+        }
+        #dashboardView.piq-v4 #tab-insights #piqMomentumHost:empty { display: none; }
+        #dashboardView.piq-v4 #tab-insights .piq-mom-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: 48px;
+        }
+        #dashboardView.piq-v4 #tab-insights .piq-mom-list::before { display: none; }
+        @media (max-width: 900px) {
+            #dashboardView.piq-v4 #tab-insights .piq-mom-list { grid-template-columns: minmax(0, 1fr); }
         }
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-no-data,
         #dashboardView.piq-v4 #tab-demographics .demo-insight-card.piq-no-data,
@@ -27813,6 +27828,8 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
                             
+                            <div id="piqMomentumHost" class="piq-momentum-host"></div>
+
                             <!-- Two-column layout: left (TUC + Audience Snapshot) / right (Behavioral Profile) -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; grid-column: 1 / -1;">
                                 <!-- Left column -->
@@ -128195,6 +128212,9 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             if (!view || !view.classList.contains('piq-has-profile')) return;
             if (window._piqV4ParkChrome) window._piqV4ParkChrome();
+            if (window._piqV4LoadMomentum) {
+                try { window._piqV4LoadMomentum(); } catch (_e) {}
+            }
             function ensureHead(host, id, eyebrow, headline, beforeEl) {
                 if (!host || host.querySelector('#' + id)) return host.querySelector('#' + id);
                 var wrap = document.createElement('div');
@@ -128591,30 +128611,40 @@ https://www.instagram.com/p/..."></textarea>
             if (mi < 0 || mi > 11) return '';
             return months[mi] + ' ' + Number(m[3]) + ', ' + m[1];
         };
-        window._piqV4MomentumTeardown = function() {
-            var rail = document.getElementById('piqMomentumRail');
-            if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
-            var row = document.getElementById('demoInsightsRow');
-            if (row) row.classList.remove('piq-has-rail');
-        };
-        window._piqV4MomentumRender = function(events) {
-            var row = document.getElementById('demoInsightsRow');
-            if (!row) return;
-            if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
+        window._piqV4MomentumMount = function() {
+            var host = document.getElementById('piqMomentumHost');
+            if (!host) {
+                var grid = document.querySelector('#tab-insights .insights-summary-grid');
+                if (!grid) return null;
+                host = document.createElement('div');
+                host.id = 'piqMomentumHost';
+                host.className = 'piq-momentum-host';
+                var twoCol = grid.querySelector('div[style*="grid-template-columns"]');
+                grid.insertBefore(host, twoCol || grid.firstChild);
+            }
             var rail = document.getElementById('piqMomentumRail');
             if (!rail) {
                 rail = document.createElement('aside');
                 rail.id = 'piqMomentumRail';
-                row.appendChild(rail);
             }
-            row.classList.add('piq-has-rail');
+            if (rail.parentNode !== host) host.appendChild(rail);
+            return rail;
+        };
+        window._piqV4MomentumTeardown = function() {
+            var rail = document.getElementById('piqMomentumRail');
+            if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
+        };
+        window._piqV4MomentumRender = function(events) {
+            if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
+            var rail = window._piqV4MomentumMount();
+            if (!rail) return;
             // Newest first. Cached payloads are stored oldest first, so sort
             // here rather than upstream and every existing entry flips too.
             var ordered = events.slice().sort(function(a, b) {
                 return String(b.date || '').localeCompare(String(a.date || ''));
             });
             var html = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<div class="piq-eyebrow"><span class="num">01</span>Momentum</div>' +
                 '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
             ordered.forEach(function(ev) {
                 var when = window._piqV4MomentumDate(ev.date);
@@ -128628,21 +128658,14 @@ https://www.instagram.com/p/..."></textarea>
             if (rail.innerHTML !== html) rail.innerHTML = html;
         };
         window._piqV4MomentumSkeleton = function() {
-            var row = document.getElementById('demoInsightsRow');
-            if (!row) return;
-            var rail = document.getElementById('piqMomentumRail');
-            if (!rail) {
-                rail = document.createElement('aside');
-                rail.id = 'piqMomentumRail';
-                row.appendChild(rail);
-            }
-            row.classList.add('piq-has-rail');
+            var rail = window._piqV4MomentumMount();
+            if (!rail) return;
             var bars = '';
             [70, 96, 88, 60, 96, 82].forEach(function(w, i) {
                 bars += '<div class="piq-mom-skel" style="width:' + w + '%;opacity:' + (0.55 - i * 0.06).toFixed(2) + '"></div>';
             });
             rail.innerHTML = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<div class="piq-eyebrow"><span class="num">01</span>Momentum</div>' +
                 '<h3>What moved in this window</h3></div></div>' + bars;
         };
         window._piqV4LoadMomentum = function() {
