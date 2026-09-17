@@ -24515,35 +24515,11 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics #piqDemoChartsHead {
             display: none !important;
         }
-        #dashboardView.piq-v4 #tab-demographics .demo-insights-row,
-        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead,
-        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Key Differentiators"],
-        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Demographic Profile Summary"] {
-            display: none !important;
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            margin-bottom: 16px;
         }
-        #dashboardView.piq-v4 #tab-insights #piqInsightsLead {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 36px !important;
-            align-items: stretch !important;
-            grid-column: 1 / -1;
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 0 36px;
-        }
-        #dashboardView.piq-v4 #tab-insights #piqInsightsLead > * {
-            width: 100% !important;
-            max-width: 100% !important;
-            min-width: 0;
-        }
-        #dashboardView.piq-v4 #tab-insights #piqMomentumHost {
-            min-width: 0;
-            margin: 0;
-        }
-        #dashboardView.piq-v4 #tab-insights #piqMomHead {
-            margin: 0 0 14px;
-        }
-        #dashboardView.piq-v4 #tab-insights #piqMomentumHost:empty { display: none; }
         #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-no-data,
         #dashboardView.piq-v4 #tab-demographics .demo-insight-card.piq-no-data,
         #dashboardView.piq-v4 #tab-demographics .chart-card.piq-no-data {
@@ -26694,29 +26670,20 @@ https://www.instagram.com/p/..."></textarea>
             display: block;
             background: #15252A;
             border: 1px solid #3B3D38;
-            border-radius: 12px;
-            padding: 22px;
-            position: relative;
-            overflow: hidden;
-        }
-        #dashboardView.piq-v4 #piqMomentumRail::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(180deg, #3358FF 0%, #E682FF 100%);
+            border-radius: 14px;
+            padding: 18px 20px 14px;
         }
         body[data-theme="light"] #dashboardView.piq-v4 #piqMomentumRail {
             background: #FFFFFF;
             border-color: #C9C6BA;
         }
+        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head { margin-bottom: 16px; }
         /* The insights row sets uppercase for its table chrome. Sentences
            in the rail have to opt back out. */
         #dashboardView.piq-v4 #piqMomentumRail,
         #dashboardView.piq-v4 #piqMomentumRail .what,
-        #dashboardView.piq-v4 #piqMomentumRail .why {
+        #dashboardView.piq-v4 #piqMomentumRail .why,
+        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head h3 {
             text-transform: none !important;
         }
         #dashboardView.piq-v4 .piq-mom-list {
@@ -27846,28 +27813,10 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
                             
-                            <div id="piqInsightsLead" class="piq-insights-lead">
-                            <div id="piqMomentumHost" class="piq-momentum-host"></div>
-                                <!-- Behavioral Profile stacks full-width under Momentum -->
-                                <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
-                                    <div class="insight-card-header">
-                                        <h3 class="has-tooltip" data-tooltip="Behavioral Profile: analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
-                                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                            <span>🧠 Behavioral Profile</span>
-                                        </h3>
-                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-profile')" data-tooltip="Add to Deck">➕</button>
-                                    </div>
-                                    <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
-                                        <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
-                                            <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                            Analyzing behavioral patterns...
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- TUC + Audience Snapshot -->
-                            <div style="display: flex; flex-direction: column; gap: 1rem; grid-column: 1 / -1;">
+                            <!-- Two-column layout: left (TUC + Audience Snapshot) / right (Behavioral Profile) -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; grid-column: 1 / -1;">
+                                <!-- Left column -->
+                                <div style="display: flex; flex-direction: column; gap: 1rem;">
                                     <!-- Total Universe Composition (Insights tab only) -->
                                     <div class="insight-card-v2" id="tucCard" style="display: none; padding: 0.75rem 1.25rem;">
                                         <div class="insight-card-header" style="margin-bottom: 0.6rem;">
@@ -27903,6 +27852,24 @@ https://www.instagram.com/p/..."></textarea>
                                         <div id="audienceTakeaways" class="audience-takeaways" style="display: none;">
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- Right column: Behavioral Profile -->
+                                <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
+                                    <div class="insight-card-header">
+                                        <h3 class="has-tooltip" data-tooltip="Behavioral Profile: analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
+                                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                            <span>🧠 Behavioral Profile</span>
+                                        </h3>
+                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-profile')" data-tooltip="Add to Deck">➕</button>
+                                    </div>
+                                    <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                                            <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                            Analyzing behavioral patterns...
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                         </div>
@@ -128597,18 +128564,9 @@ https://www.instagram.com/p/..."></textarea>
             var view = document.getElementById('dashboardView');
             if (!view || !view.classList.contains('piq-has-profile')) return;
             if (window._piqV4ParkChrome) window._piqV4ParkChrome();
-            if (window._piqV4LoadMomentum) {
-                try { window._piqV4LoadMomentum(); } catch (_e) {}
-            }
             function ensureHead(host, id, eyebrow, headline, beforeEl) {
-                if (!host) return null;
-                var wrap = host.querySelector('#' + id);
-                if (wrap) {
-                    var n = wrap.querySelector('.piq-eyebrow .num');
-                    if (n && eyebrow) n.textContent = eyebrow;
-                    return wrap;
-                }
-                wrap = document.createElement('div');
+                if (!host || host.querySelector('#' + id)) return host.querySelector('#' + id);
+                var wrap = document.createElement('div');
                 wrap.id = id;
                 wrap.className = 'piq-section-head';
                 wrap.innerHTML = '<div class="piq-eyebrow"><span class="num">' + eyebrow + '</span></div><h2>' + headline + '</h2>';
@@ -128618,7 +128576,7 @@ https://www.instagram.com/p/..."></textarea>
             var tuc = document.getElementById('tucCard');
             var boxes = document.getElementById('audienceShareBoxes');
             if (tuc && boxes) {
-                ensureHead(tuc, 'piqTucHead', '03 Total Universe Composition', 'Leans toward the strongest digital channel.', boxes);
+                ensureHead(tuc, 'piqTucHead', '02 Total Universe Composition', 'Leans toward the strongest digital channel.', boxes);
                 var chans = [];
                 boxes.querySelectorAll('.asb-box').forEach(function(box) {
                     var lbl = ((box.querySelector('.asb-label') || {}).textContent || '').trim().toLowerCase();
@@ -128651,7 +128609,7 @@ https://www.instagram.com/p/..."></textarea>
             var snap = document.getElementById('audienceSnapshot');
             var snapCard = snap ? snap.closest('.insight-card-v2') : null;
             if (snapCard && snap) {
-                ensureHead(snapCard, 'piqSnapHead', '04 Audience Snapshot', 'Dominant characteristic per category.', snap);
+                ensureHead(snapCard, 'piqSnapHead', '03 Audience Snapshot', 'Dominant characteristic per category.', snap);
                 if (!snap.querySelector('.piq-data-row') && snap.querySelector('.snapshot-item')) {
                     var catMap = {
                         'dominant gender': 'Gender',
@@ -128694,7 +128652,7 @@ https://www.instagram.com/p/..."></textarea>
             var bpCard = document.getElementById('behavioralProfileCard');
             var right = bpCard ? bpCard.closest('.insight-card-v2') : null;
             if (right && !right.querySelector('#piqBehHead')) {
-                ensureHead(right, 'piqBehHead', '02 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
+                ensureHead(right, 'piqBehHead', '04 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
             }
             if (bpCard) {
                 bpCard.querySelectorAll('li, p').forEach(function(el) {
@@ -129002,50 +128960,31 @@ https://www.instagram.com/p/..."></textarea>
             if (mi < 0 || mi > 11) return '';
             return months[mi] + ' ' + Number(m[3]) + ', ' + m[1];
         };
-        window._piqV4MomentumMount = function() {
-            var host = document.getElementById('piqMomentumHost');
-            if (!host) {
-                var lead = document.getElementById('piqInsightsLead');
-                var grid = document.querySelector('#tab-insights .insights-summary-grid');
-                if (!lead && !grid) return null;
-                host = document.createElement('div');
-                host.id = 'piqMomentumHost';
-                host.className = 'piq-momentum-host';
-                if (lead) lead.insertBefore(host, lead.firstChild);
-                else grid.insertBefore(host, grid.firstChild);
-            }
-            var head = document.getElementById('piqMomHead');
-            if (!head) {
-                head = document.createElement('div');
-                head.id = 'piqMomHead';
-                head.className = 'piq-section-head';
-                head.innerHTML = '<div class="piq-eyebrow"><span class="num">01 What moved in this window</span></div><h2>What moved in this window</h2>';
-            }
-            if (head.parentNode !== host) host.insertBefore(head, host.firstChild);
+        window._piqV4MomentumTeardown = function() {
+            var rail = document.getElementById('piqMomentumRail');
+            if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
+            var row = document.getElementById('demoInsightsRow');
+            if (row) row.classList.remove('piq-has-rail');
+        };
+        window._piqV4MomentumRender = function(events) {
+            var row = document.getElementById('demoInsightsRow');
+            if (!row) return;
+            if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
             var rail = document.getElementById('piqMomentumRail');
             if (!rail) {
                 rail = document.createElement('aside');
                 rail.id = 'piqMomentumRail';
+                row.appendChild(rail);
             }
-            if (rail.parentNode !== host) host.appendChild(rail);
-            return rail;
-        };
-        window._piqV4MomentumTeardown = function() {
-            var rail = document.getElementById('piqMomentumRail');
-            if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
-            var head = document.getElementById('piqMomHead');
-            if (head && head.parentNode) head.parentNode.removeChild(head);
-        };
-        window._piqV4MomentumRender = function(events) {
-            if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
-            var rail = window._piqV4MomentumMount();
-            if (!rail) return;
+            row.classList.add('piq-has-rail');
             // Newest first. Cached payloads are stored oldest first, so sort
             // here rather than upstream and every existing entry flips too.
             var ordered = events.slice().sort(function(a, b) {
                 return String(b.date || '').localeCompare(String(a.date || ''));
             });
-            var html = '<ol class="piq-mom-list">';
+            var html = '<div class="piq-panel-head"><div class="stack">' +
+                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
             ordered.forEach(function(ev) {
                 var when = window._piqV4MomentumDate(ev.date);
                 html += '<li class="piq-mom-item"><span class="dot"></span>' +
@@ -129058,13 +128997,22 @@ https://www.instagram.com/p/..."></textarea>
             if (rail.innerHTML !== html) rail.innerHTML = html;
         };
         window._piqV4MomentumSkeleton = function() {
-            var rail = window._piqV4MomentumMount();
-            if (!rail) return;
+            var row = document.getElementById('demoInsightsRow');
+            if (!row) return;
+            var rail = document.getElementById('piqMomentumRail');
+            if (!rail) {
+                rail = document.createElement('aside');
+                rail.id = 'piqMomentumRail';
+                row.appendChild(rail);
+            }
+            row.classList.add('piq-has-rail');
             var bars = '';
             [70, 96, 88, 60, 96, 82].forEach(function(w, i) {
                 bars += '<div class="piq-mom-skel" style="width:' + w + '%;opacity:' + (0.55 - i * 0.06).toFixed(2) + '"></div>';
             });
-            rail.innerHTML = bars;
+            rail.innerHTML = '<div class="piq-panel-head"><div class="stack">' +
+                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<h3>What moved in this window</h3></div></div>' + bars;
         };
         window._piqV4LoadMomentum = function() {
             var view = document.getElementById('dashboardView');
