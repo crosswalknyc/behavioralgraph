@@ -47755,7 +47755,8 @@ https://www.instagram.com/p/..."></textarea>
                             <div class="jiq-frag-kpis" id="jiqFragKpis"></div>
                         </div>
                         <div class="jiq-frag-art" id="jiqFragArt"
-                             data-default-hero="{{ url_for('static', filename='fragrance-journey-hero.png') }}"></div>
+                             data-default-hero="{{ url_for('static', filename='fragrance-journey-hero.png') }}"
+                             data-ys-hero="{{ url_for('static', filename='young-sheldon-pvod-hero.jpg') }}"></div>
                     </div>
                     <div class="jiq-frag-sec">
                         <div class="jiq-frag-num" id="jiqFragSpineNum">01 The spine</div>
@@ -104216,6 +104217,7 @@ https://www.instagram.com/p/..."></textarea>
                     : '<span class="jiq-frag-art-ini">'
                         + _jiqFragEsc(_tiqFastInitials ? _tiqFastInitials(subject) : '') + '</span>';
                 art.classList.toggle('is-ini', !hero);
+                art.classList.remove('is-ys');
             }
             var lead = document.getElementById('jiqFragLead');
             if (lead && paid && paidBack) {
@@ -104353,11 +104355,19 @@ https://www.instagram.com/p/..."></textarea>
             if (meta) meta.textContent = copy.eyebrow || ((d.meta && d.meta.window) || '');
             var art = document.getElementById('jiqFragArt');
             if (art) {
+                var hero = art.getAttribute('data-ys-hero') || '';
                 var subject = (fullMeta && (fullMeta.customer_brand || fullMeta.target_name))
                     || 'Young Sheldon';
-                art.innerHTML = '<span class="jiq-frag-art-ini">'
-                    + _jiqFragEsc(_tiqFastInitials ? _tiqFastInitials(subject) : 'YS') + '</span>';
-                art.classList.add('is-ini');
+                if (hero) {
+                    art.innerHTML = '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">';
+                    art.classList.remove('is-ini');
+                    art.classList.add('is-ys');
+                } else {
+                    art.innerHTML = '<span class="jiq-frag-art-ini">'
+                        + _jiqFragEsc(_tiqFastInitials ? _tiqFastInitials(subject) : 'YS') + '</span>';
+                    art.classList.add('is-ini');
+                    art.classList.remove('is-ys');
+                }
             }
             var lead = document.getElementById('jiqFragLead');
             if (lead) lead.textContent = copy.lead || '';
@@ -175349,6 +175359,7 @@ https://www.instagram.com/p/..."></textarea>
         object-fit: cover; object-position: center;
         border-radius: 12px 0 0 12px;
     }
+    .jiq-frag-art.is-ys img { object-position: center 18%; }
     /* A wash of the page colour over the left edge so the photograph
        resolves into the ground instead of butting against it. */
     .jiq-frag-art::after {
