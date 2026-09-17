@@ -79835,7 +79835,13 @@ https://www.instagram.com/p/..."></textarea>
             for (var i = 0; i < kids.length; i++) {
                 var node = kids[i];
                 if (node.tagName === 'OPTGROUP') {
-                    html += '<div class="jiq-lib-group">' + _jiqFragEsc(node.label) + '</div>';
+                    // The picker labels carry an emoji. Profile IQ marks
+                    // its categories with a palette dot instead, so the
+                    // emoji is stripped and a dot takes its place.
+                    var gname = String(node.label || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                    html += '<div class="jiq-lib-group">'
+                          + '<span class="jiq-lib-dot ' + _jiqLibraryDot(gname) + '" aria-hidden="true"></span>'
+                          + '<span>' + _jiqFragEsc(gname) + '</span></div>';
                     for (var j = 0; j < node.children.length; j++) {
                         html += _jiqLibraryItem(node.children[j], picker.value);
                     }
@@ -79845,6 +79851,16 @@ https://www.instagram.com/p/..."></textarea>
             }
             tree.innerHTML = html || '<div class="jiq-lib-empty">Nothing to show yet.</div>';
             _jiqLibraryFilter();
+        }
+
+        // Same palette convention Profile IQ uses on its folder dots.
+        function _jiqLibraryDot(label) {
+            var k = String(label || '').toUpperCase().trim();
+            if (k.indexOf('PLATFORM') === 0) return 'cobalt';
+            if (k.indexOf('TV') === 0) return 'signal';
+            if (k.indexOf('BRAND') === 0) return 'dusk';
+            if (k.indexOf('MOVIE') === 0) return 'orchid';
+            return 'muted';
         }
 
         function _jiqLibraryItem(opt, current) {
@@ -173718,10 +173734,18 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] .jiq-lib-refresh { border-color: #C9C6BA; }
     .jiq-lib-tree { flex: 1; overflow-y: auto; padding: 0 12px 20px; }
     .jiq-lib-group {
+        display: flex; align-items: center; gap: 8px;
         font-size: 10px; font-weight: 700; letter-spacing: .16em;
         text-transform: uppercase; color: #7C878A;
         padding: 16px 8px 7px; border-bottom: 1px solid #3B3D38; margin-bottom: 4px;
     }
+    .jiq-lib-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; background: #7C878A; }
+    .jiq-lib-dot.signal { background: #C7F23E; }
+    .jiq-lib-dot.orchid { background: #E682FF; }
+    .jiq-lib-dot.cobalt { background: #3358FF; }
+    .jiq-lib-dot.dusk   { background: #B7B3D8; }
+    body[data-theme="light"] .jiq-lib-dot.signal { background: #5E7E12; }
+    body[data-theme="light"] .jiq-lib-dot.orchid { background: #8E3FA8; }
     body[data-theme="light"] .jiq-lib-group { border-bottom-color: #C9C6BA; }
     .jiq-lib-item {
         display: block; width: 100%; text-align: left; border: 0;
