@@ -44944,6 +44944,14 @@ https://www.instagram.com/p/..."></textarea>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
                     <div id="jiqDateRangeBox" style="display: none; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap;"></div>
                     <div id="jiqMonthCutBar" style="display: none; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+                    <!-- Download the journey as it stands. Hidden until a
+                         run is loaded, alongside the date badge. -->
+                    <div id="jiqExportBar" style="display: none; gap: 8px; align-items: center;">
+                        <button type="button" class="jiq-export-btn" id="jiqExportPdfBtn"
+                                onclick="jiqExportPdf()" title="Download this journey as a one-sheet PDF">PDF</button>
+                        <button type="button" class="jiq-export-btn" id="jiqExportCsvBtn"
+                                onclick="jiqExportCsv()" title="Download the figures on this page as a CSV">CSV</button>
+                    </div>
                 </div>
             </div>
 
@@ -80436,6 +80444,263 @@ https://www.instagram.com/p/..."></textarea>
             }
             return r;
         }
+        // ── Journey IQ downloads: one-sheet PDF and CSV ─────────
+        //
+        // The journey cards are flat children of the view with no
+        // wrapper, and there are dozens of story modes with different
+        // markup, so both exports work off what is actually on screen
+        // rather than off any one mode's shape.
+        var _JIQ_EXPORT_SKIP = {
+            jiqLibraryRail: 1, jiqLibraryScrim: 1, jiqLibraryDrawer: 1,
+            jiqDashLoading: 1, jiqDashEmpty: 1, jiqExportVeil: 1
+        };
+        function _jiqVisibleCards() {
+            var view = document.getElementById('journeyIQView');
+            if (!view) return [];
+            return [].slice.call(view.children).filter(function (el) {
+                if (!el.id && !el.className) return false;
+                if (_JIQ_EXPORT_SKIP[el.id]) return false;
+                if (el.classList && el.classList.contains('jiq-topbar')) return false;
+                var r = el.getBoundingClientRect();
+                return r.height > 12 && getComputedStyle(el).display !== 'none';
+            });
+        }
+        function _jiqRunTitle() {
+            var r = window._jiqCurrentRun;
+            var m = (r && r.meta) || {};
+            return m.target_name || m.project_name || m.target_display
+                || (document.getElementById('jiqDashTitle') || {}).textContent
+                || 'Digital journey';
+        }
+        function _jiqRunWindow() {
+            var r = window._jiqCurrentRun;
+            var m = (r && r.meta) || {};
+            if (m.start_date && m.end_date) return m.start_date + ' to ' + m.end_date;
+            var box = document.getElementById('jiqDateRangeBox');
+            return box ? (box.textContent || '').trim() : '';
+        }
+        function _jiqSlug(s) {
+            return String(s || 'journey').replace(/[^A-Za-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '').slice(0, 70) || 'journey';
+        }
+        function _jiqExportVeil(on, msg) {
+            var v = document.getElementById('jiqExportVeil');
+            if (!v) {
+                v = document.createElement('div');
+                v.id = 'jiqExportVeil';
+                v.innerHTML = '<span class="dot"></span><span id="jiqExportVeilMsg"></span>';
+                document.body.appendChild(v);
+            }
+            var m = document.getElementById('jiqExportVeilMsg');
+            if (m) m.textContent = msg || 'Preparing the download';
+            v.classList.toggle('is-on', !!on);
+        }
+        function _jiqShowExportBar(on) {
+            var b = document.getElementById('jiqExportBar');
+            if (b) b.style.display = on ? 'flex' : 'none';
+        }
+
+        // ---- PDF ----------------------------------------------------
+        // Each visible card is captured on its own so the print
+        // document can break between them instead of slicing through
+        // one. The page is put in light mode for the capture and put
+        // back afterwards: a dark screenshot is unreadable on paper.
+        function jiqExportPdf() {
+            var cards = _jiqVisibleCards();
+            if (!cards.length) { alert('Open a journey first.'); return; }
+            var btn = document.getElementById('jiqExportPdfBtn');
+            if (btn) btn.disabled = true;
+            _jiqExportVeil(true, 'Preparing the PDF');
+
+            var prevTheme = document.body.getAttribute('data-theme');
+            document.body.setAttribute('data-theme', 'light');
+
+            function restore() {
+                if (prevTheme) document.body.setAttribute('data-theme', prevTheme);
+                else document.body.removeAttribute('data-theme');
+                _jiqExportVeil(false);
+                if (btn) btn.disabled = false;
+            }
+            function run() {
+                setTimeout(function () {
+                    var shots = [];
+                    var i = 0;
+                    function next() {
+                        if (i >= cards.length) { compose(shots); return; }
+                        window.html2canvas(cards[i], {
+                            backgroundColor: '#FFFFFF', scale: 2,
+                            logging: false, useCORS: true, allowTaint: false
+                        }).then(function (c) {
+                            shots.push(c.toDataURL('image/png'));
+                            i++; next();
+                        }).catch(function (err) {
+                            console.warn('Journey PDF: skipped a card', err);
+                            i++; next();
+                        });
+                    }
+                    next();
+                }, 260);
+            }
+            function compose(shots) {
+                restore();
+                if (!shots.length) { alert('Nothing on the page to export.'); return; }
+                var title = _jiqRunTitle();
+                var win = _jiqRunWindow();
+                var when = new Date().toLocaleDateString('en-US',
+                    { year: 'numeric', month: 'long', day: 'numeric' });
+                var w = window.open('', '_blank');
+                if (!w) { alert('Allow pop-ups for this site to download the PDF.'); return; }
+                var imgs = shots.map(function (s) {
+                    return '<figure><img src="' + s + '"/></figure>';
+                }).join('');
+                w.document.write(
+                    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
+                  + _jiqEsc(title) + '</title><style>'
+                  + '@page{size:letter;margin:0.5in;}'
+                  + 'body{margin:0;background:#FFFFFF;color:#0C1618;'
+                  +   "font-family:'Inter 18pt',-apple-system,BlinkMacSystemFont,sans-serif;}"
+                  + '.mast{display:flex;justify-content:space-between;align-items:flex-end;'
+                  +   'gap:24px;padding-bottom:12px;border-bottom:2px solid #0C1618;margin-bottom:22px;}'
+                  + '.eyebrow{font-size:9px;font-weight:500;letter-spacing:.2em;'
+                  +   'text-transform:uppercase;color:#888C89;}'
+                  + 'h1{margin:8px 0 0;font-size:26px;font-weight:800;letter-spacing:-.035em;}'
+                  + '.meta{text-align:right;font-size:9px;letter-spacing:.1em;'
+                  +   'text-transform:uppercase;color:#888C89;line-height:1.9;}'
+                  + 'figure{margin:0 0 20px;page-break-inside:avoid;break-inside:avoid;}'
+                  + 'img{max-width:100%;height:auto;display:block;}'
+                  + '.foot{margin-top:18px;padding-top:10px;border-top:1px solid #C9C6BA;'
+                  +   'font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#888C89;}'
+                  + '</style></head><body>'
+                  + '<div class="mast"><div><div class="eyebrow">Crosswalk · Digital Journey IQ</div>'
+                  + '<h1>' + _jiqEsc(title) + '</h1></div>'
+                  + '<div class="meta">' + (win ? _jiqEsc(win) + '<br>' : '')
+                  + 'Prepared ' + _jiqEsc(when) + '</div></div>'
+                  + imgs
+                  + '<div class="foot">Crosswalk Technologies · ' + _jiqEsc(title) + '</div>'
+                  + '</body></html>'
+                );
+                w.document.close();
+                // The images are data URLs, so they are decoded by the
+                // time the load event fires; printing before that gives
+                // a blank sheet.
+                w.onload = function () { setTimeout(function () { w.print(); }, 350); };
+                setTimeout(function () { try { w.print(); } catch (_) {} }, 2200);
+            }
+            if (typeof window.html2canvas === 'undefined') {
+                var s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                s.onload = run;
+                s.onerror = function () { restore(); alert('Could not load the PDF library.'); };
+                document.head.appendChild(s);
+            } else { run(); }
+        }
+        function _jiqEsc(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // ---- CSV ----------------------------------------------------
+        // Walks the loaded payload rather than scraping the rendered
+        // page, so the numbers come out at full precision. Any array
+        // of objects anywhere in the payload becomes its own block,
+        // which is what makes this work across every story mode
+        // instead of only the one it was written against.
+        function _jiqCsvCell(v) {
+            if (v == null) return '';
+            if (typeof v === 'object') return '';
+            var s = String(v);
+            return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }
+        function _jiqCsvBlocks(node, path, out, depth) {
+            if (!node || typeof node !== 'object' || depth > 5) return;
+            if (Array.isArray(node)) {
+                var objs = node.filter(function (r) { return r && typeof r === 'object' && !Array.isArray(r); });
+                if (!objs.length) return;
+                var cols = [];
+                objs.forEach(function (r) {
+                    Object.keys(r).forEach(function (k) {
+                        if (cols.indexOf(k) === -1 && !Array.isArray(r[k]) &&
+                            (r[k] === null || typeof r[k] !== 'object')) cols.push(k);
+                    });
+                });
+                if (cols.length) {
+                    out.push([]);
+                    out.push([path]);
+                    out.push(cols);
+                    objs.forEach(function (r) {
+                        out.push(cols.map(function (c) { return _jiqCsvCell(r[c]); }));
+                    });
+                }
+                // A row can carry its own table, the way a detour
+                // carries the lines underneath it.
+                objs.forEach(function (r, i) {
+                    Object.keys(r).forEach(function (k) {
+                        if (r[k] && typeof r[k] === 'object') {
+                            var name = r.title || r.label || r.name || ('row ' + (i + 1));
+                            _jiqCsvBlocks(r[k], path + ' · ' + name + ' · ' + k, out, depth + 1);
+                        }
+                    });
+                });
+                return;
+            }
+            Object.keys(node).forEach(function (k) {
+                var v = node[k];
+                if (v && typeof v === 'object') {
+                    _jiqCsvBlocks(v, path ? path + ' · ' + k : k, out, depth + 1);
+                }
+            });
+        }
+        function jiqExportCsv() {
+            var payload = window._jiqCurrentRun;
+            if (!payload) { alert('Open a journey first.'); return; }
+            var title = _jiqRunTitle();
+            var rows = [];
+            rows.push(['Crosswalk · Digital Journey IQ']);
+            rows.push([title]);
+            var win = _jiqRunWindow();
+            if (win) rows.push(['Window', win]);
+            rows.push(['Prepared', new Date().toISOString().slice(0, 10)]);
+
+            var meta = payload.meta || {};
+            var scalars = Object.keys(meta).filter(function (k) {
+                return meta[k] !== null && typeof meta[k] !== 'object'
+                    && String(meta[k]).indexOf('__') !== 0;
+            });
+            if (scalars.length) {
+                rows.push([]);
+                rows.push(['Run']);
+                rows.push(['Field', 'Value']);
+                scalars.forEach(function (k) { rows.push([k, _jiqCsvCell(meta[k])]); });
+            }
+            if (Array.isArray(payload.facts) && payload.facts.length) {
+                rows.push([]);
+                rows.push(['Notes']);
+                rows.push(['Label', 'Value']);
+                payload.facts.forEach(function (f) {
+                    rows.push([_jiqCsvCell(f && f.label), _jiqCsvCell(f && f.value)]);
+                });
+            }
+            Object.keys(payload).forEach(function (k) {
+                if (k === 'meta' || k === 'facts') return;
+                if (payload[k] && typeof payload[k] === 'object') {
+                    _jiqCsvBlocks(payload[k], k, rows, 0);
+                }
+            });
+            if (rows.length < 6) { alert('No figures found on this journey to export.'); return; }
+
+            var csv = rows.map(function (r) {
+                return (r || []).map(function (c) { return _jiqCsvCell(c); }).join(',');
+            }).join('\n');
+            var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = _jiqSlug(title) + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        }
+
         var _jiqCurrentRun = null;
         var _jiqCurrentClusterIdx = 0;
         var _jiqCurrentCut = 'inception';
@@ -80762,6 +81027,7 @@ https://www.instagram.com/p/..."></textarea>
                         onJourneyIqRunPicked(keyToLoad);
                     } else {
                         _jiqCurrentRun = null;
+                        _jiqShowExportBar(false);
                         var empty = document.getElementById('jiqDashEmpty');
                         var content = document.getElementById('jiqDashContent');
                         var loading = document.getElementById('jiqDashLoading');
@@ -81927,6 +82193,9 @@ https://www.instagram.com/p/..."></textarea>
                 // rather than reverting to its own line.
                 jiqDateBox.style.display = 'inline-flex';
             }
+            // The downloads ride with the run, not with the date badge,
+            // because a demo card can render without a date range.
+            _jiqShowExportBar(true);
 
             // Cohort-mode banner: explains how the cohort was built and whether
             // we had to fall back to a wider cohort to render the visual.
@@ -175481,6 +175750,28 @@ https://www.instagram.com/p/..."></textarea>
         #subscriberIQView .exec-summary-metric { grid-template-columns: minmax(0, 1fr) 170px !important; }
         #subscriberIQView .sub-bar { display: none; }
     }
+
+    /* ---- Journey IQ: the download controls ---------------------- */
+    .jiq-export-btn {
+        background: transparent; border: 1px solid #3B3D38; border-radius: 999px;
+        color: #9AA09B; cursor: pointer; padding: 5px 14px;
+        font-family: 'Inter 18pt', -apple-system, sans-serif;
+        font-size: 10px; font-weight: 600; letter-spacing: .14em;
+        text-transform: uppercase;
+    }
+    .jiq-export-btn:hover { color: #C7F23E; border-color: #C7F23E; }
+    .jiq-export-btn[disabled] { opacity: .45; cursor: progress; }
+    body[data-theme="light"] .jiq-export-btn { border-color: #C9C6BA; color: #5C6560; }
+    body[data-theme="light"] .jiq-export-btn:hover { color: #5E7E12; border-color: #5E7E12; }
+    #jiqExportVeil {
+        position: fixed; inset: 0; z-index: 2147483000; display: none;
+        align-items: center; justify-content: center; flex-direction: column;
+        gap: 14px; background: rgba(12, 22, 24, .82); color: #E9E8E1;
+        font-family: 'Inter 18pt', -apple-system, sans-serif;
+        font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+    }
+    #jiqExportVeil.is-on { display: flex; }
+    #jiqExportVeil .dot { width: 8px; height: 8px; border-radius: 50%; background: #C7F23E; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
