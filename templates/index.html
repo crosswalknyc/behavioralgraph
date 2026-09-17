@@ -174348,6 +174348,87 @@ https://www.instagram.com/p/..."></textarea>
         background: transparent !important; border: 0 !important;
     }
 
+    /* ---- Subscriber IQ: remaining legacy blocks -------------------
+       The view inherited a set of filled navy tiles and a blue tab
+       chip from the old system. Panels sit on the ground with a
+       hairline, so the figures carry the page. */
+    #subscriberIQView .exec-summary-metric,
+    #subscriberIQView .value-metric-card,
+    #subscriberIQView .value-assessment-card,
+    #subscriberIQView .timing-card, #subscriberIQView .platform-card,
+    #subscriberIQView .demo-card, #subscriberIQView .revenue-card,
+    #subscriberIQView .episode-card, #subscriberIQView .stat-card,
+    #subscriberIQView .summary-card, #subscriberIQView .kpi-card,
+    #subscriberIQView .data-table-container {
+        background: transparent !important;
+        border: 1px solid #3B3D38 !important; border-radius: 12px !important;
+        box-shadow: none !important;
+    }
+    body[data-theme="light"] #subscriberIQView .exec-summary-metric,
+    body[data-theme="light"] #subscriberIQView .value-metric-card,
+    body[data-theme="light"] #subscriberIQView .value-assessment-card,
+    body[data-theme="light"] #subscriberIQView .timing-card,
+    body[data-theme="light"] #subscriberIQView .platform-card,
+    body[data-theme="light"] #subscriberIQView .demo-card,
+    body[data-theme="light"] #subscriberIQView .revenue-card,
+    body[data-theme="light"] #subscriberIQView .episode-card,
+    body[data-theme="light"] #subscriberIQView .stat-card,
+    body[data-theme="light"] #subscriberIQView .summary-card,
+    body[data-theme="light"] #subscriberIQView .kpi-card,
+    body[data-theme="light"] #subscriberIQView .data-table-container {
+        background: #FFFFFF !important; border-color: #C9C6BA !important;
+    }
+
+    /* The open-show chip was a blue gradient pill. */
+    #subscriberIQView .profile-tab {
+        background: transparent !important; background-image: none !important;
+        border: 1px solid #3B3D38 !important; border-radius: 999px !important;
+        color: #9AA09B !important; font-size: 10.5px !important;
+        font-weight: 600 !important; letter-spacing: .1em !important;
+        text-transform: uppercase !important; box-shadow: none !important;
+    }
+    #subscriberIQView .profile-tab.active {
+        color: #0C1618 !important; background: #C7F23E !important;
+        border-color: #C7F23E !important;
+    }
+    #subscriberIQView .profile-tab.active * { color: #0C1618 !important; }
+    body[data-theme="light"] #subscriberIQView .profile-tab {
+        border-color: #C9C6BA !important; color: #5C6560 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .profile-tab.active {
+        background: #5E7E12 !important; border-color: #5E7E12 !important;
+        color: #E9E8E1 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .profile-tab.active * { color: #E9E8E1 !important; }
+
+    /* Section heads that are plain h2 rather than .section-header get
+       the same eyebrow dot and rule, so every tab opens the same way. */
+    #subscriberIQView .executive-summary-card > h2,
+    #subscriberIQView .executive-summary-section > h2,
+    #subscriberIQView .tab-panel > h2,
+    #subscriberIQView .tab-content > h2 {
+        font-size: 13px !important; font-weight: 600 !important;
+        letter-spacing: .14em !important; text-transform: uppercase !important;
+        display: flex !important; align-items: center; gap: 9px;
+        padding-bottom: 12px; margin: 0 0 22px !important;
+        border-bottom: 1px solid #3B3D38;
+    }
+    body[data-theme="light"] #subscriberIQView .executive-summary-card > h2,
+    body[data-theme="light"] #subscriberIQView .executive-summary-section > h2,
+    body[data-theme="light"] #subscriberIQView .tab-panel > h2,
+    body[data-theme="light"] #subscriberIQView .tab-content > h2 { border-bottom-color: #C9C6BA; }
+    #subscriberIQView .executive-summary-card > h2::before,
+    #subscriberIQView .executive-summary-section > h2::before,
+    #subscriberIQView .tab-panel > h2::before,
+    #subscriberIQView .tab-content > h2::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: #C7F23E; flex: 0 0 6px;
+    }
+    body[data-theme="light"] #subscriberIQView .executive-summary-card > h2::before,
+    body[data-theme="light"] #subscriberIQView .executive-summary-section > h2::before,
+    body[data-theme="light"] #subscriberIQView .tab-panel > h2::before,
+    body[data-theme="light"] #subscriberIQView .tab-content > h2::before { background: #5E7E12; }
+
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
        Graphite ground and the Library rail, so the view reads the same
