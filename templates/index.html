@@ -24533,6 +24533,9 @@ https://www.instagram.com/p/..."></textarea>
             min-width: 0;
             margin: 0;
         }
+        #dashboardView.piq-v4 #tab-insights #piqMomHead {
+            margin: 0 0 14px;
+        }
         #dashboardView.piq-v4 #tab-insights #piqMomentumHost:empty { display: none; }
         #dashboardView.piq-v4 #tab-insights #piqInsightsLead:has(#piqMomentumHost:empty) {
             grid-template-columns: 1fr !important;
@@ -26692,20 +26695,29 @@ https://www.instagram.com/p/..."></textarea>
             display: block;
             background: #15252A;
             border: 1px solid #3B3D38;
-            border-radius: 14px;
-            padding: 18px 20px 14px;
+            border-radius: 12px;
+            padding: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+        #dashboardView.piq-v4 #piqMomentumRail::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, #3358FF 0%, #E682FF 100%);
         }
         body[data-theme="light"] #dashboardView.piq-v4 #piqMomentumRail {
             background: #FFFFFF;
             border-color: #C9C6BA;
         }
-        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head { margin-bottom: 16px; }
         /* The insights row sets uppercase for its table chrome. Sentences
            in the rail have to opt back out. */
         #dashboardView.piq-v4 #piqMomentumRail,
         #dashboardView.piq-v4 #piqMomentumRail .what,
-        #dashboardView.piq-v4 #piqMomentumRail .why,
-        #dashboardView.piq-v4 #piqMomentumRail .piq-panel-head h3 {
+        #dashboardView.piq-v4 #piqMomentumRail .why {
             text-transform: none !important;
         }
         #dashboardView.piq-v4 .piq-mom-list {
@@ -128634,6 +128646,14 @@ https://www.instagram.com/p/..."></textarea>
                 if (lead) lead.insertBefore(host, lead.firstChild);
                 else grid.insertBefore(host, grid.firstChild);
             }
+            var head = document.getElementById('piqMomHead');
+            if (!head) {
+                head = document.createElement('div');
+                head.id = 'piqMomHead';
+                head.className = 'piq-section-head';
+                head.innerHTML = '<div class="piq-eyebrow"><span class="num">01 What moved in this window</span></div><h2>What moved in this window</h2>';
+            }
+            if (head.parentNode !== host) host.insertBefore(head, host.firstChild);
             var rail = document.getElementById('piqMomentumRail');
             if (!rail) {
                 rail = document.createElement('aside');
@@ -128645,6 +128665,8 @@ https://www.instagram.com/p/..."></textarea>
         window._piqV4MomentumTeardown = function() {
             var rail = document.getElementById('piqMomentumRail');
             if (rail && rail.parentNode) rail.parentNode.removeChild(rail);
+            var head = document.getElementById('piqMomHead');
+            if (head && head.parentNode) head.parentNode.removeChild(head);
         };
         window._piqV4MomentumRender = function(events) {
             if (!events || !events.length) { window._piqV4MomentumTeardown(); return; }
@@ -128655,9 +128677,7 @@ https://www.instagram.com/p/..."></textarea>
             var ordered = events.slice().sort(function(a, b) {
                 return String(b.date || '').localeCompare(String(a.date || ''));
             });
-            var html = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">01 What moved in this window</span></div>' +
-                '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
+            var html = '<ol class="piq-mom-list">';
             ordered.forEach(function(ev) {
                 var when = window._piqV4MomentumDate(ev.date);
                 html += '<li class="piq-mom-item"><span class="dot"></span>' +
@@ -128676,9 +128696,7 @@ https://www.instagram.com/p/..."></textarea>
             [70, 96, 88, 60, 96, 82].forEach(function(w, i) {
                 bars += '<div class="piq-mom-skel" style="width:' + w + '%;opacity:' + (0.55 - i * 0.06).toFixed(2) + '"></div>';
             });
-            rail.innerHTML = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">01 What moved in this window</span></div>' +
-                '<h3>What moved in this window</h3></div></div>' + bars;
+            rail.innerHTML = bars;
         };
         window._piqV4LoadMomentum = function() {
             var view = document.getElementById('dashboardView');
