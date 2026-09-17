@@ -22084,6 +22084,11 @@ https://www.instagram.com/p/..."></textarea>
             opacity: 1 !important;
             white-space: normal !important;
         }
+        #synthChatSubmitBtn.pm-stop {
+            background: rgba(255, 107, 107, 0.16) !important;
+            color: var(--accent-red, #ff6b6b) !important;
+            border: 1px solid var(--accent-red, #ff6b6b) !important;
+        }
         #synthChatSubmitBtn.btn-primary {
             background: #C7F23E !important;
             border: 0 !important;
@@ -73721,30 +73726,27 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _synthChatShowStopButton() {
+            // 2026-09-16 (Jenna): the Working button ITSELF becomes the
+            // Stop button - one control, no sibling. Click routes
+            // through synthChatSubmit's stop guard.
             var btn = document.getElementById('synthChatSubmitBtn');
             if (!btn) return;
-            var stop = document.getElementById('synthChatStopBtn');
-            if (!stop) {
-                stop = document.createElement('button');
-                stop.id = 'synthChatStopBtn';
-                stop.type = 'button';
-                stop.textContent = 'Stop';
-                stop.className = 'btn';
-                stop.style.cssText =
-                    'margin-left: 0.4rem; width: auto; min-width: 80px; ' +
-                    'padding: 0.55rem 1rem; font-size: 0.85rem; ' +
-                    'background: rgba(255,107,107,0.15); ' +
-                    'color: var(--accent-red); ' +
-                    'border: 1px solid var(--accent-red);';
-                stop.onclick = _synthChatStopInflight;
-                btn.parentNode.insertBefore(stop, btn.nextSibling);
-            }
-            stop.style.display = 'inline-block';
+            var legacy = document.getElementById('synthChatStopBtn');
+            if (legacy) legacy.remove();
+            btn.dataset.pmStop = '1';
+            btn.disabled = false;
+            btn.textContent = 'Stop';
+            btn.classList.add('pm-stop');
         }
 
         function _synthChatHideStopButton() {
-            var stop = document.getElementById('synthChatStopBtn');
-            if (stop) stop.style.display = 'none';
+            var btn = document.getElementById('synthChatSubmitBtn');
+            if (btn) {
+                delete btn.dataset.pmStop;
+                btn.classList.remove('pm-stop');
+            }
+            var legacy = document.getElementById('synthChatStopBtn');
+            if (legacy) legacy.style.display = 'none';
         }
 
         function _synthChatStopInflight() {
@@ -75385,6 +75387,9 @@ https://www.instagram.com/p/..."></textarea>
             var prevLabel = btn ? btn.textContent : null;
             if (btn) { btn.disabled = true; btn.textContent = 'Working...'; }
             var _end = _synthChatBeginThinking('analyze');
+            synthChatInflightController = (typeof AbortController !== 'undefined')
+                ? new AbortController() : null;
+            _synthChatShowStopButton();
             try {
                 var _abody = {
                     text: text,
@@ -75411,7 +75416,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (extra && extra.jiq_confirm) {
                     _abody.jiq_confirm = extra.jiq_confirm;
                 }
-                var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody);
+                var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody,
+                    synthChatInflightController ? synthChatInflightController.signal : undefined);
                 var data = _fr.data;
                 if (data && data.success && data.pay_per_use_offer) {
                     // Not subscribed to analysis: show Jenna's offer
@@ -75515,12 +75521,21 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 return 'done';
             } catch (e) {
+                if (e && (e.name === 'AbortError' ||
+                          String(e).indexOf('AbortError') !== -1)) {
+                    synthChatPushTurn('agent',
+                        'Stopped. Nothing further is running - ask me ' +
+                        'anything else when ready.');
+                    return 'done';
+                }
                 console.error('[brief-chat] analyze failed', e);
                 _synthChatReportClientError('brief-chat/analyze', e);
                 synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 return 'done';
             } finally {
                 _end();
+                _synthChatHideStopButton();
+                synthChatInflightController = null;
                 if (btn) { btn.disabled = false; btn.textContent = prevLabel || 'Send'; }
             }
         }
@@ -75670,6 +75685,13 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         async function synthChatSubmit() {
+            var _stopBtn = document.getElementById('synthChatSubmitBtn');
+            if (_stopBtn && _stopBtn.dataset.pmStop === '1') {
+                // The button is in its Stop state: abort the in-flight
+                // ask instead of sending.
+                _synthChatStopInflight();
+                return;
+            }
             if (window._pmFundsBlocked) {
                 if (typeof window._pmCheckFundsOnOpen === 'function') {
                     window._pmCheckFundsOnOpen();
