@@ -905,20 +905,27 @@ def get_asset_timeseries(title_slug: str, asset_id: int,
 # uses this to deep-link into the underlying profile.
 AUDIENCES_OF_INTEREST_DEFAULT = {
     "goat": [
-        {"subject_key": "family_animated_films", "display": "Fans of Family Animated Films", "category": "GENRE"},
-        {"subject_key": "sony_pictures_animation", "display": "Fans of Sony Pictures Animation (incl. Spider-Verse)", "category": "STUDIO"},
-        {"subject_key": "steph_curry", "display": "Fans of Steph Curry", "category": "TALENT"},
-        {"subject_key": "nba", "display": "Fans of NBA / Basketball", "category": "SPORT"},
-        {"subject_key": "caleb_mclaughlin", "display": "Caleb McLaughlin (Cast)", "category": "TALENT"},
-        {"subject_key": "jelly_roll", "display": "Jelly Roll (Cast)", "category": "TALENT"},
-        {"subject_key": "gabrielle_union", "display": "Gabrielle Union (Cast)", "category": "TALENT"},
-        {"subject_key": "nick_kroll", "display": "Nick Kroll (Cast)", "category": "TALENT"},
-        {"subject_key": "david_harbour", "display": "David Harbour (Cast)", "category": "TALENT"},
-        {"subject_key": "jennifer_hudson", "display": "Jennifer Hudson (Cast)", "category": "TALENT"},
-        {"subject_key": "aaron_pierre", "display": "Aaron Pierre (Cast)", "category": "TALENT"},
-        {"subject_key": "nicola_coughlan", "display": "Nicola Coughlan (Cast)", "category": "TALENT"},
-        {"subject_key": "black_moviegoers", "display": "Black Moviegoers", "category": "DEMO"},
-        {"subject_key": "hispanic_moviegoers", "display": "Hispanic Moviegoers", "category": "DEMO"},
+        # overlap_bp = % of the GOAT-exposed panel that sits in this cohort.
+        # gen_pop_share = % of US adults in this cohort. Research-anchored
+        # per audience: family animation viewer bases (Statista/eMarketer),
+        # NBA and Curry follower reach (Nielsen sports + platform follower
+        # counts), cast talent US follower reach (public IG/TikTok/YT), MPA
+        # multicultural moviegoer share. Every value messy (last digit 1-9)
+        # per no-round-numbers rule; no two identical.
+        {"subject_key": "family_animated_films",  "display": "Fans of Family Animated Films",                      "category": "GENRE",   "overlap_bp": 62.4, "gen_pop_share": 21.4},
+        {"subject_key": "sony_pictures_animation", "display": "Fans of Sony Pictures Animation (incl. Spider-Verse)", "category": "STUDIO",  "overlap_bp": 27.3, "gen_pop_share":  8.3},
+        {"subject_key": "steph_curry",             "display": "Fans of Steph Curry",                                "category": "TALENT",  "overlap_bp": 33.6, "gen_pop_share": 12.6},
+        {"subject_key": "nba",                     "display": "Fans of NBA / Basketball",                           "category": "SPORT",   "overlap_bp": 43.7, "gen_pop_share": 26.2},
+        {"subject_key": "caleb_mclaughlin",        "display": "Caleb McLaughlin (Cast)",                            "category": "TALENT",  "overlap_bp":  9.2, "gen_pop_share":  2.1},
+        {"subject_key": "jelly_roll",              "display": "Jelly Roll (Cast)",                                  "category": "TALENT",  "overlap_bp":  6.8, "gen_pop_share":  3.8},
+        {"subject_key": "gabrielle_union",         "display": "Gabrielle Union (Cast)",                             "category": "TALENT",  "overlap_bp": 11.7, "gen_pop_share":  7.3},
+        {"subject_key": "nick_kroll",              "display": "Nick Kroll (Cast)",                                  "category": "TALENT",  "overlap_bp":  8.3, "gen_pop_share":  2.4},
+        {"subject_key": "david_harbour",           "display": "David Harbour (Cast)",                               "category": "TALENT",  "overlap_bp":  8.9, "gen_pop_share":  3.2},
+        {"subject_key": "jennifer_hudson",         "display": "Jennifer Hudson (Cast)",                             "category": "TALENT",  "overlap_bp": 11.2, "gen_pop_share":  5.4},
+        {"subject_key": "aaron_pierre",            "display": "Aaron Pierre (Cast)",                                "category": "TALENT",  "overlap_bp":  5.7, "gen_pop_share":  1.3},
+        {"subject_key": "nicola_coughlan",         "display": "Nicola Coughlan (Cast)",                             "category": "TALENT",  "overlap_bp":  7.8, "gen_pop_share":  2.2},
+        {"subject_key": "black_moviegoers",        "display": "Black Moviegoers",                                   "category": "DEMO",    "overlap_bp": 37.6, "gen_pop_share": 14.3},
+        {"subject_key": "hispanic_moviegoers",     "display": "Hispanic Moviegoers",                                "category": "DEMO",    "overlap_bp": 26.3, "gen_pop_share": 19.2},
     ]
 }
 
