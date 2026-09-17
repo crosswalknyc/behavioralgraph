@@ -33976,133 +33976,276 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             // ------------------------------------------------------------
-            // Card 1: journeys. Table with columns:
-            //   Journey | Path length | Exposed | Converted |
-            //   Conversion rate | Lift vs baseline | Share of exposed
-            // Sortable headers (click to sort). Default sort: Converted desc.
-            // Table state is kept in a closure so a re-sort re-renders the
-            // <tbody> only, not the whole card.
+            // Card 1: paths to ticketing / paths to conversion. Renders the
+            // seven sections from data.overall.paths (or the active audience
+            // slice's paths block):
+            //   1. The nest        - 5-row TAM-to-conversion drop table
+            //   2. Forks           - yes/no branches at named stages
+            //   3. Where they went - ticketer_partition + infoseek_overlap
+            //   4. Attribution     - first_touch / last_touch / assists on
+            //                        the paid cohort only
+            //   5. Time to convert - 5-bucket partition of paid
+            //   6. Path archetypes - 4-row shape partition of paid
+            //   7. Leaks           - what a brand pixel cannot see
+            // Numbers are rendered as-is from the payload; no re-rounding.
             // ------------------------------------------------------------
-            function _iiqMTARenderJourneysCard(d, containerId) {
-                var journeys = (d.journeys || []).slice();
-                if (!journeys.length) {
-                    return '<div class="iiq-empty" style="padding:1rem;">Not enough exposure paths yet to break out the top journeys on this campaign.</div>';
+            function _iiqMTARenderPathsCard(d) {
+                var paths = d.paths || {};
+                var titleType = String(d.title_type || 'film').toLowerCase();
+                var isFilm = (titleType !== 'brand');
+                var overallConvNoun = paths.conversion_noun || d.conversion_noun || 'conversion';
+
+                var nest = paths.nest || [];
+                var forks = paths.forks || [];
+                var where = paths.where || {};
+                var ticketerPart = where.ticketer_partition || [];
+                var infoseekOv = where.infoseek_overlap || [];
+                var attribution = paths.attribution || {};
+                var firstTouch = attribution.first_touch || [];
+                var lastTouch = attribution.last_touch || [];
+                var assists = attribution.assists || [];
+                var ttc = paths.time_to_conversion || [];
+                var archetypes = paths.path_archetypes || [];
+                var leaks = paths.leaks || [];
+
+                if (!nest.length && !forks.length && !leaks.length) {
+                    return '<div class="iiq-empty" style="padding:1rem;">Not enough exposure signal on this campaign to break out the full paths view yet.</div>';
                 }
-                var bfl = d.bottom_funnel_label || 'Ticketing';
+
+                var cardTitle = isFilm ? 'Paths to ticketing.' : 'Paths to conversion.';
+                var caption = isFilm
+                    ? 'How exposed viewers moved from first campaign touch to a paid ticket, and where the drop-offs live.'
+                    : 'How exposed viewers moved from first campaign touch to ' + escapeHtml(overallConvNoun) + ', and where the drop-offs live.';
+                var attrScope = isFilm ? 'on paid tickets only' : 'on conversions only';
+                var paidCount = 0;
+                if (nest.length >= 5) paidCount = Number(nest[4].us_accounts || 0);
+
                 var audLabel = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
-                var introLead = audLabel
-                    ? ('Within ' + escapeHtml(audLabel) + ': the ' + journeys.length + ' exposure paths')
-                    : ('The ' + journeys.length + ' exposure paths');
+                var audPrefix = audLabel ? ('Within ' + escapeHtml(audLabel) + ': ') : '';
                 var intro =
-                    '<div style="margin-bottom: 0.6rem;">'
-                  + '  <h4 style="margin: 0;">How the journeys built up to this.</h4>'
-                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + introLead + ' that generated the most conversions on this campaign. Each row is a distinct combination of touchpoints a set of viewers all saw.</div>'
+                    '<div style="margin-bottom: 0.85rem;">'
+                  + '  <h4 style="margin: 0;">' + cardTitle + '</h4>'
+                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + audPrefix + caption + '</div>'
                   + '</div>';
 
-                var tableId = containerId + '_tbl';
-                var cols = [
-                    { key: 'journey',        label: 'Journey',           align: 'left'  },
-                    { key: 'path_length',    label: 'Path length',       align: 'right' },
-                    { key: 'exposed_n',      label: 'Exposed',           align: 'right' },
-                    { key: 'converted_n',    label: 'Converted',         align: 'right' },
-                    { key: 'conversion_rate',label: 'Conversion rate',   align: 'right' },
-                    { key: 'lift_vs_baseline', label: 'Lift vs baseline', align: 'right' },
-                    { key: 'share_of_exposed', label: 'Share of exposed', align: 'right' }
-                ];
-                var headers = cols.map(function(c) {
-                    var arrow = '<span data-arrow="' + c.key + '" style="opacity:0.35; margin-left:0.25rem;">\u2195</span>';
-                    return '<th data-sort-key="' + c.key + '" style="cursor:pointer; user-select:none; text-align:' + c.align + '; padding:0.4rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);">' + escapeHtml(c.label) + arrow + '</th>';
-                }).join('');
-
-                function renderChipStrip(tps) {
-                    if (!tps || !tps.length) return '';
-                    return '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; max-width:520px;">' + tps.map(function(t) {
-                        var glyph = _iiqMTAChannelGlyph(t.channel);
-                        var title = _iiqMTATrunc(t.asset_title, 25);
-                        return (
-                            '<span style="display:inline-flex; align-items:center; padding:2px 8px 2px 4px; border:1px solid rgba(255,255,255,0.12); border-radius:9999px; background: rgba(255,255,255,0.03); font-size:0.7rem; line-height:1.2; color:#e2e8f0; white-space:nowrap;" title="' + escapeHtml(t.channel + ' ' + t.asset_title) + '">'
-                          + '<span style="display:inline-block; margin-right:4px; padding:1px 5px; border-radius:9999px; background: rgba(199,242,62,0.14); color:#C7F23E; font-size:0.6rem; font-weight:700; letter-spacing:0.05em;">' + escapeHtml(glyph) + '</span>'
-                          + escapeHtml(title)
-                          + '</span>'
-                        );
-                    }).join('') + '</div>';
+                // Section 1: the nest (drop table). Log-scaled reach bar so
+                // the US-gen-pop row doesn't dominate the visualization.
+                var maxLog = 0;
+                for (var iN = 0; iN < nest.length; iN++) {
+                    var lg = Math.log10(Math.max(1, Number(nest[iN].us_accounts || 1)));
+                    if (lg > maxLog) maxLog = lg;
                 }
-
-                function renderRow(r) {
-                    var liftStyle = _iiqMTALiftStyle(r.lift_vs_baseline);
-                    var chipStrip = renderChipStrip(r.touchpoints || []);
-                    var rate = _iiqMTAFmtPct(r.conversion_rate, 2);
-                    var share = _iiqMTAFmtPct(r.share_of_exposed, 1);
-                    var liftTxt = (Number(r.lift_vs_baseline) || 0).toFixed(2) + 'x';
+                if (maxLog < 0.01) maxLog = 1;
+                var nestRows = nest.map(function(r, idx) {
+                    var accts = Number(r.us_accounts || 0);
+                    var pct = Number(r.share_of_us_gen_pop_pct || 0);
+                    var drop = r.drop_from_prior;
+                    var indent = idx * 10;
+                    var bw = (Math.log10(Math.max(1, accts)) / maxLog) * 100;
+                    var barOpacity = (idx === 0) ? '0.45' : '0.95';
+                    var dropTxt = (drop === null || drop === undefined || drop === 0)
+                        ? '<span style="color: var(--text-secondary);">-</span>'
+                        : ('<span style="color: var(--text-secondary);">-' + fmtInt(drop) + '</span>');
+                    var arrow = (idx > 0) ? ('<span style="color: var(--text-secondary); margin-right:4px;">' + '\u21B3' + '</span>') : '';
                     return (
-                        '<tr>'
-                      + '<td style="padding:0.5rem 0.55rem; vertical-align:middle; border-bottom: 1px solid rgba(255,255,255,0.05);">' + chipStrip + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.75rem; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + (r.path_length || 0) + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.78rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + fmtInt(r.exposed_n) + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.78rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.05); font-weight:600;">' + fmtInt(r.converted_n) + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.78rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(rate) + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.78rem; border-bottom: 1px solid rgba(255,255,255,0.05);">'
-                      +   '<span style="display:inline-block; padding:2px 8px; border-radius:6px; background:' + liftStyle.bg + '; color:' + liftStyle.color + '; outline:' + liftStyle.outline + '; font-weight:600; white-space:nowrap;">' + escapeHtml(liftTxt) + '</span>'
-                      + '</td>'
-                      + '<td style="padding:0.5rem 0.55rem; text-align:right; font-variant-numeric: tabular-nums; font-size:0.75rem; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(share) + '</td>'
-                      + '</tr>'
+                        '<div style="display:grid; grid-template-columns: 260px 1fr 130px 110px 130px; gap:0.6rem; align-items:center; padding:0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
+                      + '  <div style="padding-left:' + indent + 'px; font-size:0.78rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.label || '') + '">'
+                      +      arrow + escapeHtml(r.label || '')
+                      + '  </div>'
+                      + '  <div style="display:flex; align-items:center;"><div style="width:' + bw.toFixed(2) + '%; height:12px; background:#C7F23E; border-radius:9999px; opacity:' + barOpacity + ';"></div></div>'
+                      + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(accts) + '</div>'
+                      + '  <div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + pct.toFixed(2) + '% of US</div>'
+                      + '  <div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums;">' + dropTxt + '</div>'
+                      + '</div>'
+                    );
+                }).join('');
+                var nestHead =
+                    '<div style="display:grid; grid-template-columns: 260px 1fr 130px 110px 130px; gap:0.6rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.10); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
+                  + '  <div>Stage</div>'
+                  + '  <div>Reach (log scale)</div>'
+                  + '  <div style="text-align:right;">US accounts</div>'
+                  + '  <div style="text-align:right;">Share of US</div>'
+                  + '  <div style="text-align:right;">Drop from prior</div>'
+                  + '</div>';
+                var nestSection = nest.length ?
+                    '<section style="margin-top:0.4rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary); letter-spacing:0.01em;">The nest.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Each row is a strict subset of the row above it. The drop column is how many US accounts fell out between stages.</div>'
+                  + '  <div style="padding: 0.55rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">' + nestHead + nestRows + '</div>'
+                  + '</section>' : '';
+
+                // Section 2: forks. Yes/no branches beside the nest stages.
+                var forkRows = forks.map(function(f) {
+                    var yes = Number(f.yes || 0), no = Number(f.no || 0);
+                    var total = yes + no;
+                    var yesPct = total > 0 ? (yes / total * 100) : 0;
+                    return (
+                        '<div style="display:grid; grid-template-columns: 1fr auto 80px; gap:0.75rem; align-items:center; padding:0.5rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px; margin-bottom:0.4rem;">'
+                      + '  <div style="font-size:0.78rem; color: var(--text-primary);">' + escapeHtml(f.question || '') + '</div>'
+                      + '  <div style="display:flex; align-items:center; gap:0.35rem;">'
+                      + '    <span style="display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:9999px; background: rgba(199,242,62,0.14); color:#C7F23E; font-size:0.72rem; font-weight:600; font-variant-numeric: tabular-nums;">' + fmtInt(yes) + ' yes</span>'
+                      + '    <span style="display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:9999px; background: rgba(255,255,255,0.05); color: var(--text-secondary); font-size:0.72rem; font-variant-numeric: tabular-nums;">' + fmtInt(no) + ' no</span>'
+                      + '  </div>'
+                      + '  <div style="font-size:0.7rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + yesPct.toFixed(0) + '% yes</div>'
+                      + '</div>'
+                    );
+                }).join('');
+                var forkSection = forks.length ?
+                    '<section style="margin-top:1.1rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Forks along the way.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">At each stage, whether that group did or did not do the follow-on action.</div>'
+                  +      forkRows
+                  + '</section>' : '';
+
+                // Section 3: where they went.
+                function renderWhereList(rows, isOverlap) {
+                    var mx = 0;
+                    for (var mm = 0; mm < rows.length; mm++) if (Number(rows[mm].pct || 0) > mx) mx = Number(rows[mm].pct);
+                    if (mx < 0.01) mx = 100;
+                    var barColor = isOverlap ? '#E682FF' : '#C7F23E';
+                    var barOp = isOverlap ? '0.75' : '0.85';
+                    return rows.map(function(r) {
+                        var w = (Number(r.pct || 0) / Math.max(0.01, mx)) * 100;
+                        return (
+                            '<div style="display:grid; grid-template-columns: 200px 1fr 110px 70px; gap:0.6rem; align-items:center; padding:0.3rem 0;">'
+                          + '  <div style="font-size:0.74rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.surface || '') + '">' + escapeHtml(r.surface || '') + '</div>'
+                          + '  <div><div style="width:' + w.toFixed(2) + '%; height:10px; background:' + barColor + '; border-radius:9999px; opacity:' + barOp + ';"></div></div>'
+                          + '  <div style="font-size:0.74rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'
+                          + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(r.pct || 0).toFixed(1) + '%</div>'
+                          + '</div>'
+                        );
+                    }).join('');
+                }
+                var whereTicketLabel = isFilm
+                    ? 'Ticketing surface (partition, sums to 100%)'
+                    : 'Conversion surface (partition, sums to 100%)';
+                var whereSection = (ticketerPart.length || infoseekOv.length) ?
+                    '<section style="margin-top:1.1rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Where they went.</h5>'
+                  + '  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">'
+                  + '    <div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">'
+                  + '      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); margin-bottom:0.4rem;">' + whereTicketLabel + '</div>'
+                  +          renderWhereList(ticketerPart, false)
+                  + '    </div>'
+                  + '    <div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">'
+                  + '      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); margin-bottom:0.4rem;">Info-seek surface (overlap, may exceed 100%)</div>'
+                  +          renderWhereList(infoseekOv, true)
+                  + '    </div>'
+                  + '  </div>'
+                  + '</section>' : '';
+
+                // Section 4: attribution on paid orders only.
+                function renderAttrTable(label, rows, isOverlap) {
+                    var mx2 = 0;
+                    for (var m2 = 0; m2 < rows.length; m2++) if (Number(rows[m2].pct || 0) > mx2) mx2 = Number(rows[m2].pct);
+                    if (mx2 < 0.01) mx2 = 100;
+                    var body = rows.map(function(r) {
+                        var w = (Number(r.pct || 0) / Math.max(0.01, mx2)) * 100;
+                        var barColor = isOverlap ? '#E682FF' : '#C7F23E';
+                        var barOp = isOverlap ? '0.75' : '0.85';
+                        return (
+                            '<div style="display:grid; grid-template-columns: 130px 1fr 90px 60px; gap:0.5rem; align-items:center; padding:0.28rem 0;">'
+                          + '  <div style="font-size:0.72rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.touchpoint || '') + '">' + escapeHtml(r.touchpoint || '') + '</div>'
+                          + '  <div><div style="width:' + w.toFixed(2) + '%; height:8px; background:' + barColor + '; border-radius:9999px; opacity:' + barOp + ';"></div></div>'
+                          + '  <div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'
+                          + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(r.pct || 0).toFixed(1) + '%</div>'
+                          + '</div>'
+                        );
+                    }).join('');
+                    return (
+                        '<div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">'
+                      + '  <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); margin-bottom:0.4rem;">' + escapeHtml(label) + '</div>'
+                      +      body
+                      + '</div>'
                     );
                 }
+                var attrPaidNoun = isFilm ? 'paid ticket purchase' : escapeHtml(overallConvNoun);
+                var attrSection = (firstTouch.length || lastTouch.length || assists.length) ?
+                    '<section style="margin-top:1.1rem;">'
+                  + '  <h5 style="margin: 0 0 0.25rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Attribution ' + escapeHtml(attrScope) + '.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">These three cuts read only the ' + fmtInt(paidCount) + ' US accounts that completed a ' + attrPaidNoun + '.</div>'
+                  + '  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.75rem;">'
+                  +      renderAttrTable('First touch (partition)', firstTouch, false)
+                  +      renderAttrTable('Last touch (partition)', lastTouch, false)
+                  +      renderAttrTable('Assists (overlap)', assists, true)
+                  + '  </div>'
+                  + '</section>' : '';
 
-                var body = journeys.map(renderRow).join('');
-                var table =
-                    '<div style="padding: 0.75rem 0.9rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow-x: auto;">'
-                  + '  <table id="' + tableId + '" style="width:100%; border-collapse: collapse; font-family: inherit;">'
-                  + '    <thead>' + headers + '</thead>'
-                  + '    <tbody>' + body + '</tbody>'
-                  + '  </table>'
+                // Section 5: time-to-convert (5 buckets sum to 100%).
+                var ttcMax = 0;
+                for (var iT = 0; iT < ttc.length; iT++) if (Number(ttc[iT].pct || 0) > ttcMax) ttcMax = Number(ttc[iT].pct);
+                if (ttcMax < 0.01) ttcMax = 100;
+                var ttcRows = ttc.map(function(r) {
+                    var w = (Number(r.pct || 0) / Math.max(0.01, ttcMax)) * 100;
+                    return (
+                        '<div style="display:grid; grid-template-columns: 160px 1fr 110px 70px; gap:0.6rem; align-items:center; padding:0.32rem 0;">'
+                      + '  <div style="font-size:0.76rem; color: var(--text-primary); white-space:nowrap;">' + escapeHtml(r.bucket || '') + '</div>'
+                      + '  <div><div style="width:' + w.toFixed(2) + '%; height:10px; background:#C7F23E; border-radius:9999px; opacity:0.85;"></div></div>'
+                      + '  <div style="font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'
+                      + '  <div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(r.pct || 0).toFixed(1) + '%</div>'
+                      + '</div>'
+                    );
+                }).join('');
+                var ttcToNoun = isFilm ? 'paid ticket' : escapeHtml(overallConvNoun);
+                var ttcSection = ttc.length ?
+                    '<section style="margin-top:1.1rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Time to convert.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">From first exposure to the ' + ttcToNoun + '. Buckets sum to 100%.</div>'
+                  + '  <div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + ttcRows + '</div>'
+                  + '</section>' : '';
+
+                // Section 6: path archetypes.
+                var archRows = archetypes.map(function(a) {
+                    return (
+                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 80px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
+                      + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
+                      + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
+                      + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
+                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of paid</div>'
+                      + '</div>'
+                    );
+                }).join('');
+                var archSection = archetypes.length ?
+                    '<section style="margin-top:1.1rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Path archetypes.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every paid account falls into one of these four shapes.</div>'
+                  + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
+                  + '</section>' : '';
+
+                // Section 7: leaks (the hero). Signal Green callouts.
+                var leakRows = leaks.map(function(L) {
+                    return (
+                        '<div style="display:grid; grid-template-columns: 1fr 170px; gap:0.75rem; align-items:start; padding:0.7rem 0.9rem; margin-bottom:0.5rem; background: rgba(199,242,62,0.05); border: 1px solid rgba(199,242,62,0.28); border-left: 3px solid #C7F23E; border-radius:8px;">'
+                      + '  <div>'
+                      + '    <div style="font-size:0.85rem; font-weight:700; color:#C7F23E; letter-spacing:0.01em;">' + escapeHtml(L.leak || '') + '</div>'
+                      + '    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.3rem; line-height:1.5;">' + escapeHtml(L.note || '') + '</div>'
+                      + '  </div>'
+                      + '  <div style="text-align:right; white-space:nowrap;">'
+                      + '    <div style="font-size:1.05rem; font-variant-numeric: tabular-nums; font-weight:700; color: var(--text-primary);">' + fmtInt(L.us_accounts) + '</div>'
+                      + '    <div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em; color: var(--text-secondary); margin-top:0.2rem;">US accounts</div>'
+                      + '  </div>'
+                      + '</div>'
+                    );
+                }).join('');
+                var leakSection = leaks.length ?
+                    '<section style="margin-top:1.25rem;">'
+                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Leaks the pixel cannot see.</h5>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Where a single-surface tag would go dark. These accounts are visible to the full-panel read and invisible to any brand pixel on one site.</div>'
+                  +      leakRows
+                  + '</section>' : '';
+
+                var body =
+                    '<div style="padding: 0.9rem 1rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">'
+                  +      intro
+                  +      nestSection
+                  +      forkSection
+                  +      whereSection
+                  +      attrSection
+                  +      ttcSection
+                  +      archSection
+                  +      leakSection
                   + '</div>';
-
-                // Wire sort handlers after mount.
-                setTimeout(function() {
-                    var tbl = document.getElementById(tableId);
-                    if (!tbl) return;
-                    var state = { key: 'converted_n', dir: 'desc' };
-                    // Reflect default sort in the header arrows.
-                    var defA = tbl.querySelector('[data-arrow="' + state.key + '"]');
-                    if (defA) { defA.textContent = '\u25BE'; defA.style.opacity = '1'; }
-                    tbl.querySelectorAll('th[data-sort-key]').forEach(function(th) {
-                        th.addEventListener('click', function() {
-                            var k = th.getAttribute('data-sort-key');
-                            if (state.key === k) {
-                                state.dir = (state.dir === 'desc') ? 'asc' : 'desc';
-                            } else {
-                                state.key = k;
-                                state.dir = (k === 'journey' || k === 'path_length') ? 'asc' : 'desc';
-                            }
-                            var sorted = journeys.slice().sort(function(a, b) {
-                                var av, bv;
-                                if (k === 'journey') {
-                                    av = (a.touchpoints && a.touchpoints.length) ? String(a.touchpoints[0].asset_title || '').toLowerCase() : '';
-                                    bv = (b.touchpoints && b.touchpoints.length) ? String(b.touchpoints[0].asset_title || '').toLowerCase() : '';
-                                    return (av < bv ? -1 : av > bv ? 1 : 0) * (state.dir === 'asc' ? 1 : -1);
-                                }
-                                av = Number(a[k] || 0);
-                                bv = Number(b[k] || 0);
-                                return (av - bv) * (state.dir === 'asc' ? 1 : -1);
-                            });
-                            var tb = tbl.querySelector('tbody');
-                            if (tb) tb.innerHTML = sorted.map(renderRow).join('');
-                            tbl.querySelectorAll('[data-arrow]').forEach(function(a) {
-                                var ak = a.getAttribute('data-arrow');
-                                if (ak === state.key) {
-                                    a.textContent = (state.dir === 'asc') ? '\u25B4' : '\u25BE';
-                                    a.style.opacity = '1';
-                                } else {
-                                    a.textContent = '\u2195';
-                                    a.style.opacity = '0.35';
-                                }
-                            });
-                        });
-                    });
-                }, 0);
-
-                return intro + table;
+                return body;
             }
 
             // ------------------------------------------------------------
@@ -34197,8 +34340,25 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             // ------------------------------------------------------------
-            // Card 3: touchpoint contribution chart. Preserved from v1.
+            // Card 3: touchpoint contribution chart. Top 20 by default; a
+            // Show-all / Show-top-20 button expands the chart in place to
+            // show every touchpoint. The separate details table has been
+            // consolidated into this same chart per the v4 UI rework.
             // ------------------------------------------------------------
+            function _iiqMTACoefToggle(rootId) {
+                var extra = document.getElementById(rootId + '_extra');
+                var btn = document.getElementById(rootId + '_btn');
+                if (!extra || !btn) return;
+                var isHidden = (extra.style.display === 'none' || !extra.style.display);
+                if (isHidden) {
+                    extra.style.display = '';
+                    btn.textContent = 'Show top 20 only';
+                } else {
+                    extra.style.display = 'none';
+                    btn.textContent = btn.getAttribute('data-show-all-label') || 'Show all touchpoints';
+                }
+            }
+
             function _iiqMTARenderCoefficientCard(d) {
                 var tps = (d.touchpoints || []).slice();
                 if (!tps.length) return '';
@@ -34216,12 +34376,10 @@ https://www.instagram.com/p/..."></textarea>
                   + '</div>';
 
                 var visLimit = 20;
-                var visible = tps.slice(0, visLimit);
-                var extra = tps.length - visible.length;
                 var maxAbs = 0;
-                for (var i = 0; i < tps.length; i++) { var v = Math.abs(Number(tps[i].coefficient) || 0); if (v > maxAbs) maxAbs = v; }
+                for (var iC = 0; iC < tps.length; iC++) { var v = Math.abs(Number(tps[iC].coefficient) || 0); if (v > maxAbs) maxAbs = v; }
                 if (maxAbs < 1e-6) maxAbs = 1;
-                var barRows = visible.map(function(r) {
+                function _renderCoefRow(r) {
                     var c = Number(r.coefficient) || 0;
                     var w = (Math.abs(c) / maxAbs) * 100.0;
                     var color = _iiqMTABarColor(r.significance, c);
@@ -34243,7 +34401,11 @@ https://www.instagram.com/p/..."></textarea>
                       + '  <div style="text-align:right;">' + _iiqMTASigChip(r.significance) + '</div>'
                       + '</div>'
                     );
-                }).join('');
+                }
+                var visible = tps.slice(0, visLimit);
+                var extra = tps.slice(visLimit);
+                var barRowsTop = visible.map(_renderCoefRow).join('');
+                var barRowsExtra = extra.map(_renderCoefRow).join('');
                 var chartHead =
                     '<div style="display:grid; grid-template-columns: 240px 1fr 140px 90px; gap:0.6rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
                   + '  <div>Touchpoint</div>'
@@ -34251,59 +34413,21 @@ https://www.instagram.com/p/..."></textarea>
                   + '  <div style="text-align:right;">Lift value</div>'
                   + '  <div style="text-align:right;">Read strength</div>'
                   + '</div>';
+                var rootId = 'iiqMTACoefChart_' + Math.floor(Math.random() * 1e9);
+                var showAllLabel = 'Show all ' + tps.length + ' touchpoints';
+                var toggleBtn = (extra.length > 0) ?
+                    '<div style="margin-top:0.9rem; text-align:center;">'
+                  + '  <button type="button" id="' + rootId + '_btn" data-show-all-label="' + escapeHtml(showAllLabel) + '" onclick="_iiqMTACoefToggle(\'' + rootId + '\')" style="cursor:pointer; padding: 0.42rem 0.95rem; font-size: 0.74rem; font-weight:600; letter-spacing:0.02em; color:#C7F23E; background: rgba(199,242,62,0.08); border: 1px solid rgba(199,242,62,0.35); border-radius:9999px; font-family: inherit;">' + escapeHtml(showAllLabel) + '</button>'
+                  + '</div>' : '';
                 var chart =
                     '<div style="padding: 0.75rem 0.9rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">'
-                  + chartHead
-                  + '<div style="margin-top: 0.15rem;">' + barRows + '</div>'
-                  + (extra > 0 ? '<div style="margin-top:0.5rem; font-size:0.7rem; color: var(--text-secondary); text-align:center;">' + extra + ' more touchpoints below the top ' + visLimit + '. Open the details table for the full list.</div>' : '')
+                  +      chartHead
+                  + '  <div id="' + rootId + '_top" style="margin-top: 0.15rem;">' + barRowsTop + '</div>'
+                  + '  <div id="' + rootId + '_extra" style="display:none;">' + barRowsExtra + '</div>'
+                  +      toggleBtn
                   + '</div>';
 
-                // Details table (default hidden). Preserved from v1, minus the
-                // v1 "p-value" column heading which was renamed to a
-                // reader-friendly "Signal" chip label.
-                var tableHeadRow =
-                    '<tr>'
-                  + '<th style="text-align:left;  padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Individual touchpoint (creative + channel)">Touchpoint</th>'
-                  + '<th style="text-align:left;  padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Content platform / distribution surface">Channel</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Marginal contribution of one additional exposure to conversion, holding all other touchpoints constant">Lift</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Multiplicative form of lift. 1.20 means 1.20x more likely to convert per additional exposure.">Odds ratio</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Plausible band around the lift. Tighter = higher precision.">Band</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Number of exposed viewers included in this touchpoint\u2019s read">Exposed</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Of the exposed, how many took the bottom-funnel action">Converted</th>'
-                  + '<th style="text-align:right; padding:0.35rem 0.55rem; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.10);" title="Read strength: Strong / Moderate / Weak">Signal</th>'
-                  + '</tr>';
-                var tableRows = tps.map(function(r) {
-                    var c = Number(r.coefficient) || 0;
-                    var band = r.confidence_interval || [];
-                    var bandText = (band.length === 2) ? '[' + Number(band[0]).toFixed(3) + ', ' + Number(band[1]).toFixed(3) + ']' : '\u2014';
-                    return (
-                        '<tr>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(r.asset_title) + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.05);">' + escapeHtml(r.channel) + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: ' + (c >= 0 ? '#e2e8f0' : '#fda4af') + ';">' + _iiqMTAFmtSigned(c) + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-primary);">' + Number(r.odds_ratio).toFixed(3) + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + bandText + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + (r.exposed_n || 0).toLocaleString() + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">' + (r.converted_n || 0).toLocaleString() + '</td>'
-                      + '<td style="padding:0.32rem 0.55rem; font-size:0.72rem; text-align:right; border-bottom: 1px solid rgba(255,255,255,0.05);">' + _iiqMTASigChip(r.significance) + '</td>'
-                      + '</tr>'
-                    );
-                }).join('');
-                var detailsTable =
-                    '<details style="margin-top: 0.85rem; padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">'
-                  + '  <summary style="cursor: pointer; user-select: none; font-weight: 600; font-size: 0.82rem; color: var(--text-primary); list-style: none;">'
-                  + '    <span class="iiq-disclosure-arrow" style="display:inline-block; transition: transform 0.15s; margin-right:0.35rem;">&#9654;</span>'
-                  + '    Show details (all ' + tps.length + ' touchpoints).'
-                  + '  </summary>'
-                  + '  <div style="margin-top: 0.45rem; overflow-x: auto;">'
-                  + '    <table style="width:100%; border-collapse: collapse; font-family: inherit;">'
-                  + '      <thead>' + tableHeadRow + '</thead>'
-                  + '      <tbody>' + tableRows + '</tbody>'
-                  + '    </table>'
-                  + '  </div>'
-                  + '</details>';
-
-                return header + chart + detailsTable;
+                return header + chart;
             }
 
             function _iiqMTARender(d) {
@@ -34349,18 +34473,18 @@ https://www.instagram.com/p/..."></textarea>
                   + '  <div style="margin-top: 0.55rem; font-size: 0.76rem; line-height: 1.55; color: var(--text-secondary);">'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">What you\u2019re looking at.</strong> Three views on the same set of viewers, in the order they build:</p>'
                   + '    <ul style="margin: 0 0 0.5rem 1.1rem; padding: 0;">'
-                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Journeys</strong> show which combinations of exposures produced conversions. Each row is a distinct set of touchpoints a group of viewers all saw.</li>'
+                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Paths</strong> show how exposed accounts moved from first campaign touch down to a paid conversion, and where the drop-offs live. The nest is the funnel; the forks, surfaces, attribution cuts, timing, archetypes, and pixel-invisible leaks all read off the same cohort.</li>'
                   + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">The heatmap</strong> shows which touchpoints travel together. Bright cells sit on pairs viewers see together a lot; dark cells sit on pairs that rarely overlap.</li>'
-                  + '      <li><strong style="color:#cbd5e1;">The lift chart</strong> shows the marginal contribution of one more exposure to each touchpoint, holding every other touchpoint constant.</li>'
+                  + '      <li><strong style="color:#cbd5e1;">The lift chart</strong> shows the marginal contribution of one more exposure to each touchpoint, holding every other touchpoint constant. Top 20 by default; click the button below the chart to open the full list.</li>'
                   + '    </ul>'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">Why this is multi-touch.</strong> Every person\u2019s full exposure vector goes into one read. A person who saw five things contributes evidence for all five simultaneously. If two touchpoints always show up together and one is doing the real work, the other\u2019s lift will collapse toward zero. That is what \u201cholding every other touchpoint constant\u201d means.</p>'
-                  + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">Filter by audience.</strong> Each cohort re-fits the model on only that cohort\u2019s exposures. A touchpoint that reads strong overall may sit quiet inside a specific audience, and vice versa. That is the point of the filter.</p>'
+                  + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">Filter by audience.</strong> Each cohort re-fits on only that cohort\u2019s exposures. A touchpoint that reads strong overall may sit quiet inside a specific audience, and vice versa. That is the point of the filter.</p>'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">What each metric means.</strong></p>'
                   + '    <ul style="margin: 0 0 0.5rem 1.1rem; padding: 0;">'
-                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Conversion rate per path.</strong> Share of the exposed group in that path who went on to visit the ' + escapeHtml(bfl.toLowerCase()) + ' page.</li>'
-                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Lift vs baseline.</strong> Path conversion rate divided by the campaign\u2019s baseline conversion rate. 1.5x means viewers on that path converted at 1.5 times the campaign average.</li>'
+                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Drop from prior.</strong> On each nest row, how many US accounts fell out between the row above and this row. That is where the funnel is leaking.</li>'
+                  + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Attribution cuts.</strong> First-touch and last-touch each split the paid cohort by one starting or closing surface (partitions sum to 100%). Assists sit on the same paid cohort and stack: one paid account can be assisted by several surfaces at once.</li>'
                   + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Co-exposure percentage.</strong> Of the viewers exposed to the ROW touchpoint, what share were also exposed to the COLUMN touchpoint. Reading the diagonal is a check: it always sits at 100% by construction.</li>'
-                  + '      <li><strong style="color:#cbd5e1;">Coefficient / lift.</strong> Marginal log-odds contribution of one more exposure to that touchpoint. The odds ratio in the details table is the same number in an easier form: an odds ratio of 1.20 means one more exposure makes the viewer 1.20x more likely to convert.</li>'
+                  + '      <li><strong style="color:#cbd5e1;">Coefficient / lift.</strong> Marginal log-odds contribution of one more exposure to that touchpoint. The odds ratio is the same number in an easier form: an odds ratio of 1.20 means one more exposure makes the viewer 1.20x more likely to convert.</li>'
                   + '    </ul>'
                   + '    <p style="margin: 0.55rem 0 0 0; padding: 0.4rem 0.55rem; background: rgba(234,179,8,0.10); border-left: 2px solid rgba(234,179,8,0.5); border-radius: 4px; color:#fde68a;"><strong>One caveat.</strong> Lifts read at the campaign level. Adding or removing a touchpoint will move every other lift a little, so treat the ranking as a spend prompt, not a fixed rate card.</p>'
                   + '  </div>'
@@ -34391,18 +34515,18 @@ https://www.instagram.com/p/..."></textarea>
                 // own container so future tweaks (drag-to-reorder, per-card
                 // filters, etc.) stay local. All three cards read from the
                 // ACTIVE payload so the audience filter cascades through.
-                var journeysHost = 'iiqMTAJourneysCard';
+                var pathsHost    = 'iiqMTAPathsCard';
                 var coExpHost    = 'iiqMTACoExpCard';
                 var coefHost     = 'iiqMTACoefCard';
 
-                var journeysCard =
-                    '<section id="' + journeysHost + '" style="margin-top:0.75rem;">' + _iiqMTARenderJourneysCard(activePayload, journeysHost) + '</section>';
+                var pathsCard =
+                    '<section id="' + pathsHost + '" style="margin-top:0.75rem;">' + _iiqMTARenderPathsCard(activePayload) + '</section>';
                 var coExpCard =
                     '<section id="' + coExpHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoExposureCard(activePayload) + '</section>';
                 var coefCard =
                     '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoefficientCard(activePayload) + '</section>';
 
-                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + journeysCard + coExpCard + coefCard;
+                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + pathsCard + coExpCard + coefCard;
             }
             // ============================================================
             // // end __IIQ_MTA_MODULE_v1__
