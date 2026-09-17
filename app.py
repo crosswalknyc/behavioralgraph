@@ -50790,27 +50790,64 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
         except Exception:
             payload_str = str(payload)[:2000]
         ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-        subject_line = f"Chatbot error: {route}"
-        # Surface the user's ask explicitly (it also lives inside the
-        # payload dump, but a labeled line is faster to read). Defensive:
-        # any extraction failure just yields '(unavailable)' so the email
-        # still sends.
-        query_text = '(unavailable)'
+        # The user and their question lead the email (Jenna 2026-09-17:
+        # "send me the user who got the error and the question the user
+        # asked... then you can put all of this stuff"). Extraction is
+        # defensive and tries every field name the chat surfaces use,
+        # falling back to the last user turn of a history array.
+        def _last_user_turn(seq):
+            try:
+                for t in reversed(list(seq or [])):
+                    if isinstance(t, dict):
+                        role = str(t.get('role') or t.get('sender')
+                                   or '').lower()
+                        txt = str(t.get('content') or t.get('text')
+                                  or t.get('message') or '').strip()
+                        if txt and role in ('user', 'human', ''):
+                            return txt
+                    elif isinstance(t, str) and t.strip():
+                        return t.strip()
+            except Exception:
+                pass
+            return ''
+
+        query_text = ''
         try:
             _pl = payload if isinstance(payload, dict) else {}
             _sd = (_pl.get('spec_draft')
                    if isinstance(_pl.get('spec_draft'), dict) else {})
             query_text = (str(_pl.get('prompt') or '').strip()
+                          or str(_pl.get('message') or '').strip()
+                          or str(_pl.get('question') or '').strip()
+                          or str(_pl.get('ask') or '').strip()
+                          or str(_pl.get('text') or '').strip()
+                          or str(_pl.get('q') or '').strip()
                           or str(_sd.get('user_prompt') or '').strip()
+                          or _last_user_turn(_pl.get('history'))
+                          or _last_user_turn(_pl.get('messages'))
+                          or _last_user_turn(_pl.get('turns'))
                           or str(_sd.get('subject') or '').strip()
-                          or '(unavailable)')[:1500]
+                          or '')[:1500]
         except Exception:
-            query_text = '(unavailable)'
+            query_text = ''
+        if not query_text:
+            _r = route.lower()
+            if ('health' in _r or 'status' in _r or 'poll' in _r
+                    or 'heartbeat' in _r):
+                query_text = ('(system check - no user question; '
+                              'nobody saw this error)')
+            else:
+                query_text = '(no question captured on this request)'
+        subject_line = f"Chatbot error: {route}"
+        if user_email:
+            subject_line += f" ({str(user_email)[:80]})"
         body_text = (
+            f"User: {user_email or '(unknown)'}\n"
+            f"Question: {query_text}\n"
+            f"\n"
+            f"----- detail -----\n"
             f"Timestamp: {ts}\n"
             f"Route: {route}\n"
-            f"User: {user_email or '(unknown)'}\n"
-            f"Query: {query_text}\n"
             f"Error: {err_name}: {err_text}\n\n"
             f"Request payload (truncated):\n{payload_str}\n\n"
             f"Traceback:\n{str(tb)[:12000]}\n"
