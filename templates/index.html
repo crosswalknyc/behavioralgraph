@@ -131070,6 +131070,19 @@ https://www.instagram.com/p/..."></textarea>
             return obj;
         }
 
+        // AUTOMOBILE card spelling. Existing CSVs and new drafts both
+        // arrive with KELLY BLUE BOOK / VOLKSWAGON; show the canonical
+        // names without rewriting S3. Dedupe-by-name below collapses
+        // a file that already carries both spellings.
+        function correctAutomobileSpelling(category, name) {
+            var cat = String(category || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+            if (cat !== 'AUTOMOBILE') return name;
+            var key = String(name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (key === 'KELLYBLUEBOOK') return 'KELLEY BLUE BOOK';
+            if (key === 'VOLKSWAGON') return 'VOLKSWAGEN';
+            return name;
+        }
+
         function parseAllData(csvData) {
             const result = {
                 sampleSize: 0,
@@ -131563,7 +131576,7 @@ https://www.instagram.com/p/..."></textarea>
 
             csvData.forEach(row => {
                 let category = (row.Column || '').toUpperCase();
-                const value = row.Value || '';
+                let value = correctAutomobileSpelling(category, row.Value || '');
                 const valUpper = (value || '').trim().toUpperCase();
                 if (category === 'SEARCH ENGINE/AI' && _itemCategoryOverrides[valUpper]) {
                     row.Column = _itemCategoryOverrides[valUpper];
@@ -160826,7 +160839,7 @@ https://www.instagram.com/p/..."></textarea>
 
             csvData.forEach(row => {
                 const category = (row.Column || row[0] || '').toString().toUpperCase().trim();
-                const value = row.Value || row[1] || '';
+                let value = correctAutomobileSpelling(category, row.Value || row[1] || '');
                 const brandPen = parseFloat(row['Brand Penetration (Row)'] || row[2] || 0);
                 const catShare = parseFloat(row['Category Share'] || row[3] || 0);
                 const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);

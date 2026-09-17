@@ -11869,6 +11869,73 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     return df, n
 
 
+# AUTOMOBILE card spelling (Jessie 2026-09-17). Misspellings show up
+# in existing corpus files and in new LLM drafts. Canonical labels:
+#   KELLY BLUE BOOK → KELLEY BLUE BOOK
+#   VOLKSWAGON      → VOLKSWAGEN
+_AUTOMOBILE_SPELLING = {
+    'KELLYBLUEBOOK': 'KELLEY BLUE BOOK',
+    'VOLKSWAGON': 'VOLKSWAGEN',
+}
+
+
+def correct_automobile_spellings(df, subject, verbose=True):
+    """Rewrite misspelled AUTOMOBILE values to the canonical labels.
+
+    Idempotent. If both the misspelling and the canonical row exist in
+    the same card, keep the higher-BP row. Wired into run_all_enforcers
+    (before same-column dedupe) and run_write_safety_net so full gens
+    and derived cuts both land on the correct spelling.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    auto_idx = list(df.index[col_u == 'AUTOMOBILE'])
+    if not auto_idx:
+        return df, 0
+
+    changes = 0
+    for i in auto_idx:
+        raw = df.at[i, 'Value']
+        canon = _AUTOMOBILE_SPELLING.get(_norm_brand(raw))
+        if canon and str(raw).strip() != canon:
+            df.at[i, 'Value'] = canon
+            changes += 1
+            if verbose:
+                print(f"   🚗 AUTOMOBILE spelling [{subject or ''}]: "
+                      f"{raw!r} → {canon!r}")
+
+    if not bp_col:
+        return df, changes
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    auto_idx = list(df.index[col_u == 'AUTOMOBILE'])
+    by_key: dict = {}
+    for i in auto_idx:
+        by_key.setdefault(_norm_brand(df.at[i, 'Value']), []).append(i)
+    drop = []
+    for idxs in by_key.values():
+        if len(idxs) < 2:
+            continue
+
+        def _bp_or_0(i, _bp_col=bp_col):
+            v = _bp(df.at[i, _bp_col])
+            return float(v) if v is not None and not pd.isna(v) else 0.0
+
+        keep = max(idxs, key=_bp_or_0)
+        drop.extend(i for i in idxs if i != keep)
+    if drop:
+        df = df.drop(index=drop).reset_index(drop=True)
+        changes += len(drop)
+        if verbose:
+            print(f"   🚗 AUTOMOBILE spelling [{subject or ''}]: "
+                  f"dropped {len(drop)} duplicate row(s) after rename")
+    return df, changes
+
+
 def enforce_qc_standing_anchors(df, subject, verbose=True):
     """Liz's QC standing checks, enforced in place on every file
     (Crosswalk Digital Profile IQ QC Standards, 2026-09-16; wired
@@ -12103,6 +12170,14 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_disney_hulu_rollup failed: {e}")
+    # 2026-09-17 (Jessie): AUTOMOBILE KELLY BLUE BOOK / VOLKSWAGON
+    # spelling. Runs before same-column dedupe so a file that carries
+    # both the misspelling and the canonical name collapses to one row.
+    try:
+        df, n = correct_automobile_spellings(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer correct_automobile_spellings failed: {e}")
     # 2026-08-19 (Gilmore Girls incident): general dedupe within
     # (Column, normalized(Value)). Catches the case where the row-by-row
     # engine or hybrid sanity check produced TWO 'Disney+/Hulu' rows in
@@ -17336,6 +17411,9 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # consolidated shape (single Disney+/Hulu row instead of two
         # sibling rows that could look like a duplicate).
         ("apply_disney_hulu_rollup", apply_disney_hulu_rollup),
+        # 2026-09-17 (Jessie): AUTOMOBILE spelling on cut paths that
+        # skip run_all_enforcers.
+        ("correct_automobile_spellings", correct_automobile_spellings),
         # BP hard ceiling (wired 2026-08-25, partner HEINZ 100.965
         # finding): the derived-cut paths (audience_cut_synthesis,
         # addon_cut_synthesis) run ONLY this safety net, never
