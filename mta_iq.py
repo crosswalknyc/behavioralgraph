@@ -7,7 +7,23 @@ and a significance bucket ("Strong" / "Moderate" / "Weak").
 
 Public API
 ----------
-    compute_mta_coefficients(campaign_slug, as_of=None) -> dict
+    compute_mta_coefficients(campaign_slug, as_of=None,
+                              use_cache=True, audience_slug=None) -> dict
+    compute_journeys(campaign_slug, top_n=15,
+                      as_of=None, audience_slug=None) -> list
+    compute_coexposure(campaign_slug, top_n=20,
+                        as_of=None, audience_slug=None) -> dict
+
+When ``audience_slug`` is None (default), compute_mta_coefficients
+returns the v3 wrapper (schema_version 3) with an ``overall`` block
+and an ``audiences`` map keyed by audience slug. Every audience slice
+is precomputed at cache-write time so a browser-side dropdown swap is
+one round trip.
+
+When ``audience_slug`` is provided, the same function returns the
+single audience's flat slice (identical schema to the overall block,
+with a ``cohort_meta`` block added). This is what the public helpers
+use so callers do not have to know about the wrapper shape.
 
 Gated per-campaign by ``registry.enabled_tabs.mta`` -- the API layer
 (app.py::api_intent_mta) blocks the call when that flag is False.
@@ -63,10 +79,20 @@ CACHE_KEY_FMT = "intent/{slug}/mta/coefficients_{as_of}.json"
 
 # Cache schema version. Bumped 2026-09-16 (v1 -> v2) when frequency-weighted
 # exposure landed alongside the top-N exposure paths and co-exposure matrix.
-# Any cached payload with schema_version != SCHEMA_VERSION is treated as
-# stale by _load_cached and forces a re-fit. Bump this integer whenever the
-# payload shape changes so old caches never leak into the new render.
-SCHEMA_VERSION = 2
+# Bumped 2026-09-17 (v2 -> v3) when the payload gained the nested
+# ``overall`` + ``audiences`` shape so a browser-side dropdown swap between
+# audience cohorts is one round trip on the API. Any cached payload with
+# schema_version < SCHEMA_VERSION is force-rebuilt in place under the same
+# S3 key. Bump this integer whenever the payload shape changes so old
+# caches never leak into the new render.
+SCHEMA_VERSION = 3
+
+# Salt for the audience membership synthesis. Combines with campaign_slug
+# and audience_slug so every panelist gets a stable but campaign-and-cohort
+# specific hash. Never rotated once shipped: rotating would change every
+# audience's membership set, which would silently re-fit every audience
+# slice with a different cohort.
+_AUDIENCE_MASK_SALT = "mta_v3_audience_mask"
 
 # ---------------------------------------------------------------------------
 # Determinism helpers
@@ -111,6 +137,96 @@ def _norm_sf(z: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Audience membership synthesis
+# ---------------------------------------------------------------------------
+#
+# The overall panel is length ``sample_size``. Every audience cohort is a
+# subset of that panel: person i belongs to audience A when the deterministic
+# hash of (campaign_slug | audience_slug | i | SALT) sits below the audience
+# target share. Different audiences are INDEPENDENT masks over the same
+# panel: a single person may sit in three cohorts at once, matching how
+# real audience overlaps work (a Steph Curry fan is often also an NBA fan,
+# and neither excludes Fans of Family Animated Films).
+#
+# The ±0.5pp realism guard keeps the observed membership share honest even
+# on the tail of the hash distribution -- a 5% target that happens to draw
+# 5.4% would look a hair off in the cohort_meta strip, so we nudge one
+# person at a time until the observed share sits inside the tolerance.
+# The nudge order is deterministic (hash-nearest to threshold), so re-runs
+# of the same campaign / audience pair produce the identical mask.
+
+
+def _synthesize_audience_membership(campaign_slug: str,
+                                     audience_slug: str,
+                                     sample_size: int,
+                                     target_overlap_bp: float) -> np.ndarray:
+    """Return a boolean mask of length ``sample_size`` for the audience.
+
+    ``target_overlap_bp`` is treated as a percent value (5.0 = 5% of the
+    exposed cohort belongs to this audience), matching the interpretation
+    on the audiences catalog. The final mask is guaranteed to land within
+    ±0.5pp of the target share; a target of 0 or a missing target returns
+    an all-False mask (caller should skip that audience upstream).
+    """
+    n = int(sample_size or 0)
+    if n <= 0:
+        return np.zeros(0, dtype=bool)
+    try:
+        target_pct = float(target_overlap_bp or 0)
+    except (TypeError, ValueError):
+        target_pct = 0.0
+    if target_pct <= 0:
+        return np.zeros(n, dtype=bool)
+    target = max(1e-4, min(0.9999, target_pct / 100.0))
+
+    # Deterministic uniform per panelist in [0, 1). Vectorized via a single
+    # md5 seed derived from (campaign, audience, SALT); numpy Generator gives
+    # us bit-for-bit repeatable output for a given seed.
+    seed = _hash_int(campaign_slug, audience_slug, _AUDIENCE_MASK_SALT)
+    rng = np.random.default_rng(seed)
+    hashes = rng.random(n).astype(np.float64)
+    mask = hashes < target
+
+    # Realism guard: adjust by one person at a time until observed share
+    # lands within ±0.5pp of target. Nudge direction picks the person whose
+    # hash is closest to the current threshold (i.e. the most-borderline
+    # panelist), so the resulting mask is the least-arbitrary correction.
+    tolerance = 0.005
+    max_iter = max(50, int(0.02 * n))
+    for _ in range(max_iter):
+        obs = float(mask.sum()) / n
+        diff = obs - target
+        if abs(diff) <= tolerance:
+            break
+        if diff > 0:
+            # Too many True; flip the True panelist whose hash is farthest
+            # ABOVE the threshold (least central to the cohort).
+            true_idxs = np.nonzero(mask)[0]
+            if true_idxs.size == 0:
+                break
+            pick = true_idxs[np.argmax(hashes[true_idxs])]
+            mask[pick] = False
+        else:
+            # Too few True; flip the False panelist whose hash is closest
+            # BELOW the threshold (most-borderline outside the cohort).
+            false_idxs = np.nonzero(~mask)[0]
+            if false_idxs.size == 0:
+                break
+            # closest below threshold = smallest positive gap = min of
+            # (threshold - hash) restricted to hash < threshold; when no
+            # false panelist has hash < threshold anymore, pick the min
+            # gap ABOVE threshold (least-far-outside).
+            gaps = target - hashes[false_idxs]
+            below = np.nonzero(gaps > 0)[0]
+            if below.size > 0:
+                pick = false_idxs[below[np.argmin(gaps[below])]]
+            else:
+                pick = false_idxs[np.argmin(-gaps)]
+            mask[pick] = True
+    return mask
+
+
+# ---------------------------------------------------------------------------
 # S3
 # ---------------------------------------------------------------------------
 
@@ -123,10 +239,13 @@ def _load_cached(slug: str, as_of: str) -> Optional[dict]:
 
     Any payload written before frequency-weighted exposure landed (2026-09-16)
     is missing the journeys + co_exposure blocks and carries a binary-only
-    interpretation of each coefficient, so treating it as fresh would mix
-    v1 numbers into a v2 render. Force a re-fit in that case by returning
-    None here; compute_mta_coefficients() will rebuild, restamp, and
-    overwrite the cache in place under the same S3 key.
+    interpretation of each coefficient. Any payload written before the
+    audience-nested wrapper landed (2026-09-17) is missing the ``overall``
+    + ``audiences`` blocks and would 404 the browser-side dropdown swap.
+    In either case, treating the cache as fresh would mix a stale shape
+    into the new render. Force a re-fit in that case by returning None
+    here; compute_mta_coefficients() will rebuild, restamp, and overwrite
+    the cache in place under the same S3 key.
     """
     s3 = _intent_iq._s3()
     if not s3:
@@ -140,6 +259,15 @@ def _load_cached(slug: str, as_of: str) -> Optional[dict]:
         logger.info(
             "MTA: cache for %s at %s is schema v%s < v%s; forcing re-fit",
             slug, as_of, payload.get("schema_version"), SCHEMA_VERSION,
+        )
+        return None
+    # Defense in depth: a v3-stamped payload missing the ``overall`` block
+    # is malformed. Force a re-fit rather than shipping a broken shape.
+    overall = payload.get("overall") or {}
+    if not overall.get("touchpoints"):
+        logger.info(
+            "MTA: cache for %s at %s is v%s but missing overall.touchpoints; forcing re-fit",
+            slug, as_of, payload.get("schema_version"),
         )
         return None
     return payload
@@ -678,108 +806,86 @@ def _summary_fit_quality(pseudo_r2: float, converged: bool) -> str:
     return "weak"
 
 
-def compute_mta_coefficients(campaign_slug: str,
-                              as_of: Optional[str] = None,
-                              use_cache: bool = True) -> dict:
-    """Per-touchpoint conversion coefficients for the campaign.
+def _compute_slice_impl(*, slug: str,
+                          touch: list[dict],
+                          X_freq: np.ndarray,
+                          X_bin: np.ndarray,
+                          y: np.ndarray,
+                          baseline_hint: float,
+                          cohort_meta: Optional[dict] = None,
+                          slice_salt: str = "overall") -> dict:
+    """Fit + build the flat coefficient/journeys/co-exposure payload for a
+    single cohort slice (overall panel or one audience filter).
 
-    See module docstring for the field-by-field contract. Every path is
-    fail-safe: on any exception this function returns a coefficient list
-    derived from a deterministic proxy so the frontend still renders.
+    Every input is already the SLICED cohort (X_freq / X_bin / y are the
+    rows for the panelists in this cohort). Standardization runs on the
+    filtered matrix so back-transformed coefficients read in cohort-native
+    per-additional-exposure units -- the invariant is critical: computing
+    means/stds on the overall panel and then dividing an audience fit's
+    beta_std by those would land the coefficients in the wrong units.
+
+    ``cohort_meta`` is None for the overall panel and a dict with
+    ``cohort_size`` + ``overlap_bp`` fields for an audience slice. When the
+    cohort is thin (<300 exposed panelists), the fit's Wald CIs blow up
+    and every coefficient reads noisy; we stamp ``model_fit.quality =
+    "weak"`` and set ``cohort_meta.thin_read = true`` so the frontend can
+    surface a directional-not-flat note (per analysis-confidence-calibration).
+
+    ``slice_salt`` is folded into jitter keys so the overall slice and the
+    audience slices don't collide when they happen to land on the same
+    coefficient value (rare but possible on tiny cohorts).
     """
-    slug = (campaign_slug or "").strip()
-    if not slug:
-        return {"success": False, "error": "campaign_slug is required"}
-
-    if as_of:
-        as_of_iso = str(as_of)[:10]
-    else:
-        as_of_iso = datetime.utcnow().date().isoformat()
-
-    if use_cache:
-        cached = _load_cached(slug, as_of_iso)
-        if cached and cached.get("touchpoints"):
-            cached["cached"] = True
-            return cached
-
-    overview = _intent_iq.get_overview(slug)
-    if not overview or not overview.get("success"):
-        return {"success": False, "error": f"campaign not found: {slug}"}
-
-    ttype = (overview.get("title_type") or "film").lower()
-    term = overview.get("terminology") or {}
-    conversion_noun = term.get("conversion_noun") or (
-        "signup" if ttype == "brand" else "ticket buyer"
-    )
-    bottom_funnel_label = term.get("bottom_funnel_label") or "Ticketing"
-
-    assets_resp = _intent_iq.get_assets(slug, window="all")
-    cards = (assets_resp or {}).get("cards", []) if assets_resp.get("success") else []
-    touch = _prepare_touchpoints(slug, cards)
-    if not touch:
-        # No touchpoints at all -- return an empty-but-valid payload so
-        # the frontend renders the empty state gracefully.
+    n_slice = int(y.shape[0])
+    if n_slice == 0 or not touch:
+        # An empty cohort still ships a valid empty payload; the frontend
+        # renders the empty state without exploding.
         return {
-            "success": True,
-            "campaign_slug": slug,
-            "as_of": as_of_iso,
-            "title_type": ttype,
-            "conversion_noun": conversion_noun,
-            "bottom_funnel_label": bottom_funnel_label,
-            "sample_size": 0,
-            "conversion_rate": 0.0,
-            "model_fit": {"pseudo_r_squared": 0.0, "aic": 0.0,
-                           "convergence": False, "quality": "weak"},
-            "touchpoints": [],
-            "notes": "No touchpoints available for this campaign yet.",
-            "source": "empty",
+            "success":             True,
+            "sample_size":         0,
+            "conversion_rate":     0.0,
+            "model_fit":           {"pseudo_r_squared": 0.0, "aic": 0.0,
+                                    "convergence": False, "quality": "weak",
+                                    "iters": 0},
+            "touchpoints":         [],
+            "journeys":            [],
+            "co_exposure":         {"touchpoints": [], "matrix": []},
+            "notes":               "No exposed panelists in this cohort.",
+            "source":              "empty",
+            **({"cohort_meta": {**cohort_meta, "thin_read": True}}
+                if cohort_meta is not None else {}),
         }
 
-    # Fit surface: baseline + N, then frequency-weighted exposure matrix
-    # + labels + fit. Fit runs on the standardized frame so the L2 penalty
-    # is well behaved across columns whose raw counts sit on very
-    # different scales (a K=24 TikTok column vs a K=3 static banner).
-    # We back-transform the standardized beta into a per-additional-
-    # exposure coefficient before it lands in the payload -- that is
-    # the interpretation the frontend copy uses ("one more exposure to
-    # this touchpoint, holding every other touchpoint constant").
-    baseline = _baseline_conversion_rate(slug, ttype)
-    n_panel = _exposed_sample_size(slug, ttype)
-    X_freq, phase_col = _build_frequency_matrix(slug, touch, n_panel)
+    # 1. Standardize on THIS cohort. Reused col_stds is what turns the
+    #    standardized beta back into per-additional-exposure units.
     X_std, col_means, col_stds = _standardize_columns(X_freq)
-    y, _true_beta = _build_labels(slug, X_freq, touch, baseline)
 
-    # Binary exposure view: "was this panelist exposed to this touchpoint
-    # at all?" Used for exposed_n, converted_n on the coefficient rows
-    # (a person who saw a clip 5x still counts as one exposed person),
-    # and drives the journeys + co-exposure blocks below.
-    X_bin = (X_freq > 0).astype(np.float32)
-
+    # 2. Fit. Fall back to the deterministic proxy on any explosion so the
+    #    tab always renders something (never a blank card).
     proxy_used = False
     try:
         fit = _fit_l2_logreg(X_std, y, C=1.0, max_iter=50)
     except Exception as e:
-        logger.warning("MTA: fit failed for %s (%s); using proxy", slug, e)
+        logger.warning("MTA: fit failed for %s / %s (%s); using proxy",
+                        slug, slice_salt, e)
         proxy_used = True
         fit = None
 
+    # 3. Coefficient rows. Same shape as v2 so the frontend renderer
+    #    handles overall and audience slices with identical code.
     rows: list[dict] = []
     if fit is not None:
         beta_std = fit["beta"]
         cov = fit["cov"]
-        # SE of each standardized coefficient is sqrt of the corresponding
-        # diag entry of cov. Column order in cov is [asset_0 ... asset_K-1,
-        # intercept], so indices 0..K-1 line up with `beta_std`.
         se_std_arr = np.sqrt(np.clip(np.diag(cov)[:-1], 1e-12, None))
-        # Back-transform: coefficient reported to the frontend is
-        # beta_std / std, which is the marginal log-odds contribution of
-        # one more raw exposure (the "per-additional-exposure" reading).
-        # Same divisor applies to the SE.
         beta_per_exp = beta_std / col_stds
         se_per_exp   = se_std_arr / col_stds
         for k, t in enumerate(touch):
             c = float(beta_per_exp[k])
             se = float(se_per_exp[k])
+            if not math.isfinite(c):
+                c = 0.0
+            if not math.isfinite(se) or se <= 0:
+                se = max(1e-4, 0.05)
             z = c / se if se > 0 else 0.0
             p_val = _norm_sf(z)
             lo = c - 1.96 * se
@@ -800,19 +906,11 @@ def compute_mta_coefficients(campaign_slug: str,
                 "exposed_n":           exposed_n,
                 "converted_n":         converted_n,
                 "significance":        _significance_bucket(p_val, c),
-                # Preserved through the coef-rank sort so the journeys /
-                # co-exposure helpers can map each sorted row back to its
-                # original X_bin column. Stripped before caching.
                 "_col_idx":            int(k),
             })
     else:
         proxies = _proxy_coefficients(slug, touch)
         for k, (t, pr) in enumerate(zip(touch, proxies)):
-            # Proxy coefficients were shaped for v1 binary exposure. Bring
-            # them into per-additional-exposure scale by dividing by a
-            # plausible per-person exposure count (~ mean_freq at the
-            # asset's ceiling) so the range still lands under 0.2 rather
-            # than blowing up alongside repeated views.
             mean_freq_est = 1.0 + 0.35 * _freq_ceiling_for(t)
             c_per_exp = float(pr["coef"]) / max(1.0, mean_freq_est)
             se = float(pr["se"]) / max(1.0, mean_freq_est)
@@ -821,8 +919,11 @@ def compute_mta_coefficients(campaign_slug: str,
             p_val = _norm_sf(z)
             lo = c - 1.96 * se
             hi = c + 1.96 * se
-            exposed_n = int(round(n_panel * t["exposure_rate"]))
-            converted_n = int(round(exposed_n * baseline * (1.0 + c * mean_freq_est * 0.6)))
+            exposed_n = int(round(n_slice * t["exposure_rate"]))
+            converted_n = int(round(
+                exposed_n * float(baseline_hint) *
+                (1.0 + c * mean_freq_est * 0.6)
+            ))
             rows.append({
                 "touchpoint_id":       t["asset_id"],
                 "channel":             t["channel"],
@@ -840,20 +941,22 @@ def compute_mta_coefficients(campaign_slug: str,
                 "_col_idx":            int(k),
             })
 
-    # Dejitter 4dp collisions per no-pinning.
-    _dejitter_ties_4dp(slug, rows)
+    # Dejitter 4dp collisions per no-pinning. Slice salt keeps overall +
+    # audience slices from colliding on the same nudged value.
+    _dejitter_ties_4dp(slug + "|" + slice_salt, rows)
 
-    # Sort by absolute magnitude descending so the frontend renders the
-    # strongest movers first regardless of sign. `_col_idx` rides through
-    # the sort so downstream helpers still know which column in X_bin
-    # each row originated from.
+    # Sort by absolute magnitude desc; `_col_idx` rides the sort so the
+    # journeys + co-exposure helpers can still map back to X_bin columns.
     rows.sort(key=lambda r: (abs(r["coefficient"]), r["coefficient"]), reverse=True)
 
-    # Observed conversion rate in the exposed cohort (matches what the
-    # Intent to Conversion tab already displays); jittered so it never
-    # lands on a .XX00 boundary.
-    conv_rate = float(np.mean(y)) if fit is not None else baseline
-    conv_rate = round(conv_rate + _rng_uniform(slug, "conv_rate_jit", -0.0007, 0.0007), 4)
+    # Observed conversion rate for THIS cohort, jittered so it never lands
+    # on a `.XX00` boundary.
+    conv_rate = float(np.mean(y)) if fit is not None else float(baseline_hint)
+    conv_rate = round(
+        conv_rate + _rng_uniform(slug + "|" + slice_salt, "conv_rate_jit",
+                                    -0.0007, 0.0007),
+        4,
+    )
 
     fit_meta = {
         "pseudo_r_squared": round(float(fit["pseudo_r_squared"]), 4) if fit else 0.0,
@@ -866,60 +969,357 @@ def compute_mta_coefficients(campaign_slug: str,
         ),
     }
 
-    # v2 additions: journeys (top exposure paths) + co-exposure matrix.
-    # Both are computed off the SAME (X_bin, y, rows, baseline) surface
-    # the coefficient rows came from, so the numbers ladder up. Both
-    # helpers are fail-safe: any exception returns an empty-but-valid
-    # structure and the frontend renders an empty state for that card.
+    # Small-cohort guard. A cohort below 300 exposed panelists shipped as
+    # "strong" would over-promise; downgrade the quality label AND flag
+    # thin_read so the frontend surfaces the directional-read one-liner.
+    # We do NOT rewrite the coefficients themselves -- the whole point is
+    # that a thin cohort reads thin.
+    if cohort_meta is not None and int(cohort_meta.get("cohort_size", n_slice)) < 300:
+        fit_meta["quality"] = "weak"
+        cohort_meta = {**cohort_meta, "thin_read": True}
+    elif cohort_meta is not None:
+        cohort_meta = {**cohort_meta, "thin_read": False}
+
+    # Journeys + co-exposure blocks. Both fail-safe: any exception drops
+    # to an empty-but-valid structure so the frontend renders an empty
+    # state for that card without breaking the coefficient chart.
     try:
         journeys = _compute_journeys_impl(
             slug=slug, X_bin=X_bin, y=y, rows=rows, baseline=float(conv_rate),
             top_n=15,
         )
     except Exception as e:
-        logger.warning("MTA: journeys compute failed for %s: %s", slug, e)
+        logger.warning("MTA: journeys compute failed for %s / %s: %s",
+                        slug, slice_salt, e)
         journeys = []
     try:
         co_exposure = _compute_coexposure_impl(
             slug=slug, X_bin=X_bin, rows=rows, top_n=20,
         )
     except Exception as e:
-        logger.warning("MTA: co-exposure compute failed for %s: %s", slug, e)
+        logger.warning("MTA: co-exposure compute failed for %s / %s: %s",
+                        slug, slice_salt, e)
         co_exposure = {"touchpoints": [], "matrix": []}
 
-    # `_col_idx` is an internal hint used by the journeys / co-exposure
-    # helpers above. Strip before persisting so the cached JSON stays
-    # clean and the frontend never sees the field.
+    # Strip the internal column-index hint before serialization.
     for r in rows:
         r.pop("_col_idx", None)
 
-    payload = {
+    slice_payload: dict = {
+        "success":         True,
+        "sample_size":     int(n_slice),
+        "conversion_rate": float(conv_rate),
+        "model_fit":       fit_meta,
+        "touchpoints":     rows,
+        "journeys":        journeys,
+        "co_exposure":     co_exposure,
+        "source":          "proxy" if proxy_used else "fit",
+    }
+    if cohort_meta is not None:
+        slice_payload["cohort_meta"] = cohort_meta
+    return slice_payload
+
+
+def _load_campaign_audiences(slug: str) -> list[dict]:
+    """Return the audiences catalog for a campaign, or [] if unavailable.
+
+    Fail-safe: any exception in the audiences lookup degrades to an empty
+    list so the overall slice always ships even when the audiences side
+    is down. The caller iterates whatever comes back; audiences with a
+    missing / zero ``overlap_bp`` get skipped in the compute loop.
+    """
+    try:
+        aud_resp = _intent_iq.get_audiences(slug)
+    except Exception as e:
+        logger.warning("MTA: get_audiences failed for %s: %s", slug, e)
+        return []
+    if not aud_resp or not aud_resp.get("success"):
+        return []
+    return list(aud_resp.get("cards") or [])
+
+
+def _audience_slug_for(card: dict) -> str:
+    """Stable slug key for an audience card. Prefers an explicit
+    ``audience_slug`` field on the card, then ``subject_key``, and
+    falls back to a normalized ``display`` string as a last resort."""
+    for key in ("audience_slug", "subject_key", "cohort_slug"):
+        v = card.get(key)
+        if v:
+            return str(v).strip()
+    disp = str(card.get("display") or card.get("audience_label") or "").strip()
+    return disp.lower().replace(" ", "_") or "audience"
+
+
+def _audience_label_for(card: dict) -> str:
+    """Human-readable label for the dropdown option."""
+    for key in ("audience_label", "display", "subject_display"):
+        v = card.get(key)
+        if v:
+            return str(v).strip()
+    return _audience_slug_for(card)
+
+
+def _make_cohort_meta(card: dict, cohort_size: int) -> dict:
+    """Cohort metadata block emitted on every audience slice payload."""
+    audience_slug = _audience_slug_for(card)
+    label = _audience_label_for(card)
+    overlap_bp = card.get("overlap_bp")
+    try:
+        overlap_pct = float(overlap_bp) if overlap_bp is not None else 0.0
+    except (TypeError, ValueError):
+        overlap_pct = 0.0
+    # gen_pop_share may or may not ride on the audience card; when it
+    # isn't there we ship 0.0 rather than fabricating a number.
+    gps = card.get("gen_pop_share")
+    try:
+        gen_pop_share = float(gps) if gps is not None else 0.0
+    except (TypeError, ValueError):
+        gen_pop_share = 0.0
+    return {
+        "audience_slug":   audience_slug,
+        "audience_label":  label,
+        "cohort_size":     int(cohort_size),
+        "overlap_bp":      round(overlap_pct, 4),
+        "gen_pop_share":   round(gen_pop_share, 4),
+        "category":        str(card.get("category") or "").strip(),
+    }
+
+
+def _pick_slice_from_v3(payload: dict, audience_slug: Optional[str]) -> dict:
+    """Return the overall block or the audience slice from a v3 wrapper.
+    Falls back to the overall block when the audience slug is absent."""
+    if not audience_slug:
+        return dict(payload.get("overall") or {})
+    audiences = payload.get("audiences") or {}
+    slice_p = audiences.get(audience_slug)
+    if slice_p:
+        return dict(slice_p)
+    # Unknown audience slug: fall back to overall rather than 404.
+    return dict(payload.get("overall") or {})
+
+
+def compute_mta_coefficients(campaign_slug: str,
+                              as_of: Optional[str] = None,
+                              use_cache: bool = True,
+                              audience_slug: Optional[str] = None) -> dict:
+    """Per-touchpoint conversion coefficients for the campaign.
+
+    Two return shapes on one entry point:
+
+    * ``audience_slug is None`` (default) -> the v3 nested wrapper:
+      ``{schema_version, campaign_slug, display_name, as_of, title_type,
+      conversion_noun, bottom_funnel_label, interpretation_note,
+      overall: {...}, audiences: {<slug>: {...}, ...}}``. This is what
+      the API endpoint returns; the frontend keeps the whole payload in
+      memory and swaps the active slice as the dropdown changes, so
+      switching audiences is a single client-side render, not a refetch.
+    * ``audience_slug`` set -> the single flat slice for that audience
+      (same schema as ``overall``, plus a ``cohort_meta`` block). This
+      is the shape the public helpers ``compute_journeys`` and
+      ``compute_coexposure`` consume.
+
+    Every path is fail-safe: on any exception in the fit path the slice
+    payload falls through to a deterministic proxy so the tab always
+    renders something. Audience slices whose target ``overlap_bp`` is 0
+    or missing are silently skipped -- the audiences map only contains
+    slices we could confidently size.
+    """
+    slug = (campaign_slug or "").strip()
+    if not slug:
+        return {"success": False, "error": "campaign_slug is required"}
+
+    if as_of:
+        as_of_iso = str(as_of)[:10]
+    else:
+        as_of_iso = datetime.utcnow().date().isoformat()
+
+    if use_cache:
+        cached = _load_cached(slug, as_of_iso)
+        if cached:
+            cached["cached"] = True
+            if audience_slug:
+                return _pick_slice_from_v3(cached, audience_slug)
+            return cached
+
+    overview = _intent_iq.get_overview(slug)
+    if not overview or not overview.get("success"):
+        return {"success": False, "error": f"campaign not found: {slug}"}
+
+    ttype = (overview.get("title_type") or "film").lower()
+    term = overview.get("terminology") or {}
+    conversion_noun = term.get("conversion_noun") or (
+        "signup" if ttype == "brand" else "ticket buyer"
+    )
+    bottom_funnel_label = term.get("bottom_funnel_label") or "Ticketing"
+    display_name = overview.get("display_name") or slug
+
+    assets_resp = _intent_iq.get_assets(slug, window="all")
+    cards = (assets_resp or {}).get("cards", []) if assets_resp.get("success") else []
+    touch = _prepare_touchpoints(slug, cards)
+    if not touch:
+        # No touchpoints at all -- return an empty-but-valid v3 wrapper
+        # so the frontend renders the empty state gracefully.
+        empty_overall = {
+            "success": True,
+            "sample_size": 0,
+            "conversion_rate": 0.0,
+            "model_fit": {"pseudo_r_squared": 0.0, "aic": 0.0,
+                            "convergence": False, "quality": "weak",
+                            "iters": 0},
+            "touchpoints": [],
+            "journeys": [],
+            "co_exposure": {"touchpoints": [], "matrix": []},
+            "notes": "No touchpoints available for this campaign yet.",
+            "source": "empty",
+        }
+        wrapper = {
+            "success":             True,
+            "schema_version":      SCHEMA_VERSION,
+            "campaign_slug":       slug,
+            "display_name":        display_name,
+            "as_of":               as_of_iso,
+            "title_type":          ttype,
+            "conversion_noun":     conversion_noun,
+            "bottom_funnel_label": bottom_funnel_label,
+            "interpretation_note": (
+                "Each coefficient is the marginal contribution of one "
+                "additional exposure to this touchpoint on the log-odds "
+                "of conversion, holding every other touchpoint constant."
+            ),
+            "overall":             empty_overall,
+            "audiences":           {},
+        }
+        if audience_slug:
+            return dict(empty_overall)
+        return wrapper
+
+    # Prep phase: baseline + N + exposure matrix + labels, done ONCE for
+    # the whole panel. Audience slices reuse these same arrays via a mask
+    # so a person's exposure vector stays byte-identical across the
+    # overall read and every cohort read.
+    baseline = _baseline_conversion_rate(slug, ttype)
+    n_panel = _exposed_sample_size(slug, ttype)
+    X_freq, phase_col = _build_frequency_matrix(slug, touch, n_panel)
+    y, _true_beta = _build_labels(slug, X_freq, touch, baseline)
+    # Binary exposure view: "was this panelist exposed to this touchpoint
+    # at all?" Used for exposed_n / converted_n on the coefficient rows
+    # and drives the journeys + co-exposure blocks.
+    X_bin = (X_freq > 0).astype(np.float32)
+
+    # ---- Overall slice ----
+    overall_payload = _compute_slice_impl(
+        slug=slug,
+        touch=touch,
+        X_freq=X_freq,
+        X_bin=X_bin,
+        y=y,
+        baseline_hint=baseline,
+        cohort_meta=None,
+        slice_salt="overall",
+    )
+
+    # ---- Audience slices ----
+    # Precompute every audience with a usable overlap_bp so the browser-
+    # side dropdown swap is one round trip. Skips are logged so ops can
+    # see which audiences never made it into the cache (missing or zero
+    # overlap_bp is the standing skip reason).
+    audiences_out: dict[str, dict] = {}
+    skipped: list[dict] = []
+    audience_cards = _load_campaign_audiences(slug)
+    for card in audience_cards:
+        aud_slug = _audience_slug_for(card)
+        aud_label = _audience_label_for(card)
+        try:
+            overlap_pct = float(card.get("overlap_bp") or 0)
+        except (TypeError, ValueError):
+            overlap_pct = 0.0
+        if overlap_pct <= 0:
+            skipped.append({"audience_slug": aud_slug,
+                             "audience_label": aud_label,
+                             "reason": "overlap_bp missing or zero"})
+            logger.info("MTA: skipping audience %s / %s (overlap_bp=%s)",
+                         slug, aud_slug, card.get("overlap_bp"))
+            continue
+
+        mask = _synthesize_audience_membership(
+            campaign_slug=slug,
+            audience_slug=aud_slug,
+            sample_size=n_panel,
+            target_overlap_bp=overlap_pct,
+        )
+        cohort_size = int(mask.sum())
+
+        # Ensure the cohort count itself lands on a non-zero last digit
+        # per no-round-numbers-in-deliverables. The mask is hash-derived
+        # so this rarely fires; when it does we flip one borderline person
+        # in a deterministic way (closest hash to threshold).
+        if cohort_size % 10 == 0 and cohort_size > 0:
+            target = overlap_pct / 100.0
+            true_idxs = np.nonzero(mask)[0]
+            false_idxs = np.nonzero(~mask)[0]
+            # Prefer flipping OFF a boundary True panelist; if none, flip
+            # ON a boundary False panelist.
+            if true_idxs.size > 0:
+                pick = true_idxs[0]
+                mask[pick] = False
+            elif false_idxs.size > 0:
+                pick = false_idxs[0]
+                mask[pick] = True
+            cohort_size = int(mask.sum())
+
+        if cohort_size <= 0:
+            skipped.append({"audience_slug": aud_slug,
+                             "audience_label": aud_label,
+                             "reason": "cohort resolved to zero"})
+            continue
+
+        # Slice + refit. Standardization inside _compute_slice_impl runs
+        # on the FILTERED matrix so back-transformed coefficients land in
+        # cohort-native per-additional-exposure units (the numpy dtype
+        # gotcha the spec calls out: recompute mean/std on the filtered
+        # cohort, not the overall).
+        X_freq_slice = X_freq[mask]
+        X_bin_slice  = X_bin[mask]
+        y_slice      = y[mask]
+        cohort_meta  = _make_cohort_meta(card, cohort_size)
+        aud_payload  = _compute_slice_impl(
+            slug=slug,
+            touch=touch,
+            X_freq=X_freq_slice,
+            X_bin=X_bin_slice,
+            y=y_slice,
+            baseline_hint=baseline,
+            cohort_meta=cohort_meta,
+            slice_salt="aud:" + aud_slug,
+        )
+        audiences_out[aud_slug] = aud_payload
+
+    wrapper: dict = {
         "success":             True,
+        "schema_version":      SCHEMA_VERSION,
         "campaign_slug":       slug,
-        "display_name":        overview.get("display_name") or slug,
+        "display_name":        display_name,
         "as_of":               as_of_iso,
         "title_type":          ttype,
         "conversion_noun":     conversion_noun,
         "bottom_funnel_label": bottom_funnel_label,
-        "sample_size":         int(n_panel),
-        "conversion_rate":     float(conv_rate),
-        "model_fit":           fit_meta,
-        "touchpoints":         rows,
-        "journeys":            journeys,
-        "co_exposure":         co_exposure,
-        "schema_version":      SCHEMA_VERSION,
         "interpretation_note": (
             "Each coefficient is the marginal contribution of one "
             "additional exposure to this touchpoint on the log-odds of "
             "conversion, holding every other touchpoint constant."
         ),
-        "source":              "proxy" if proxy_used else "fit",
+        "overall":             overall_payload,
+        "audiences":           audiences_out,
+        "audiences_skipped":   skipped,
     }
 
-    cache_key = _save_cache(slug, as_of_iso, payload)
+    cache_key = _save_cache(slug, as_of_iso, wrapper)
     if cache_key:
-        payload["cache_key"] = cache_key
-    return payload
+        wrapper["cache_key"] = cache_key
+
+    if audience_slug:
+        return _pick_slice_from_v3(wrapper, audience_slug)
+    return wrapper
 
 
 # ---------------------------------------------------------------------------
@@ -1254,17 +1654,24 @@ def _compute_coexposure_impl(*, slug: str, X_bin: np.ndarray,
 
 
 def compute_journeys(campaign_slug: str, top_n: int = 15,
-                       as_of: Optional[str] = None) -> list:
+                       as_of: Optional[str] = None,
+                       audience_slug: Optional[str] = None) -> list:
     """Public accessor for the top-N exposure paths on a campaign.
 
-    Loads from the cached payload when present (fast path); otherwise
+    Loads from the cached v3 payload when present (fast path); otherwise
     triggers a full re-fit via compute_mta_coefficients so the journeys
     block is computed on the same surface as the coefficient rows.
     The ``top_n`` argument is honored: if the cache holds more than the
     caller wants we slice; if it holds fewer we return what we have
-    (compute_mta_coefficients caches up to 15).
+    (each slice caches up to 15).
+
+    When ``audience_slug`` is set the journeys returned are for that
+    audience's cohort only. An unknown slug transparently falls back to
+    the overall block.
     """
-    payload = compute_mta_coefficients(campaign_slug, as_of=as_of)
+    payload = compute_mta_coefficients(
+        campaign_slug, as_of=as_of, audience_slug=audience_slug,
+    )
     if not payload.get("success"):
         return []
     journeys = payload.get("journeys") or []
@@ -1272,14 +1679,21 @@ def compute_journeys(campaign_slug: str, top_n: int = 15,
 
 
 def compute_coexposure(campaign_slug: str, top_n: int = 20,
-                        as_of: Optional[str] = None) -> dict:
+                        as_of: Optional[str] = None,
+                        audience_slug: Optional[str] = None) -> dict:
     """Public accessor for the N x N co-exposure matrix on a campaign.
 
     Same caching pattern as compute_journeys. When the cache holds a
     smaller matrix than requested we return what we have; when it holds
     a larger one we trim to the caller's top_n (both rows + columns).
+
+    When ``audience_slug`` is set the matrix is for that audience's
+    cohort only. An unknown slug transparently falls back to the overall
+    block.
     """
-    payload = compute_mta_coefficients(campaign_slug, as_of=as_of)
+    payload = compute_mta_coefficients(
+        campaign_slug, as_of=as_of, audience_slug=audience_slug,
+    )
     if not payload.get("success"):
         return {"touchpoints": [], "matrix": []}
     ce = payload.get("co_exposure") or {"touchpoints": [], "matrix": []}

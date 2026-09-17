@@ -33723,7 +33723,7 @@ https://www.instagram.com/p/..."></textarea>
             // never "coefficient" in a headline (kept in the details
             // table only where a statistical audience expects the term).
             // ------------------------------------------------------------
-            window.__iiqMTACache = window.__iiqMTACache || { slug: null, data: null, ts: 0 };
+            window.__iiqMTACache = window.__iiqMTACache || { slug: null, audience_slug: '', data: null, ts: 0 };
 
             function _iiqMTAFmtPct(x, digits) {
                 if (x === null || x === undefined || isNaN(x)) return '-';
@@ -33761,7 +33761,10 @@ https://www.instagram.com/p/..."></textarea>
                 var host = document.getElementById('iiqMTAContent');
                 if (!host) { console.warn('[MTA] host div #iiqMTAContent missing'); return; }
                 if (!slug) { host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Load a campaign first.</div>'; return; }
-                // Serve from cache if same slug fetched within 5 min.
+                // Serve from cache if same slug fetched within 5 min. The
+                // audience_slug lives ON the cache so a dropdown swap reuses
+                // the same payload without a refetch; a campaign switch
+                // (below) resets audience_slug back to the all-viewers view.
                 if (window.__iiqMTACache.slug === slug && window.__iiqMTACache.data && (Date.now() - window.__iiqMTACache.ts) < 300000) {
                     _iiqMTARender(window.__iiqMTACache.data);
                     return;
@@ -33779,13 +33782,122 @@ https://www.instagram.com/p/..."></textarea>
                             host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">Load failed: ' + escapeHtml((d && d.error) || 'no error message') + '</div>';
                             return;
                         }
-                        window.__iiqMTACache = { slug: slug, data: d, ts: Date.now() };
+                        // Campaign switch: fresh data + reset audience filter
+                        // back to All exposed viewers (the standing default).
+                        window.__iiqMTACache = { slug: slug, audience_slug: '', data: d, ts: Date.now() };
                         _iiqMTARender(d);
                     })
                     .catch(function(e) {
                         console.error('[MTA] fetch chain failed:', e);
                         host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">' + escapeHtml(e.message || String(e)) + '</div>';
                     });
+            };
+
+            // ------------------------------------------------------------
+            // v3 audience filter: merge the wrapper + selected slice into a
+            // single "active payload" the existing card renderers already
+            // know how to consume. When d is a v2-shape payload (no
+            // ``overall`` block), we fall through to d itself so the
+            // renderer still works for older cache reads.
+            // ------------------------------------------------------------
+            function _iiqMTAActivePayload(d, audienceSlug) {
+                if (!d) return {};
+                var overall = d.overall || null;
+                var auds = d.audiences || {};
+                var slice = null;
+                if (audienceSlug && auds && auds[audienceSlug]) {
+                    slice = auds[audienceSlug];
+                } else if (overall) {
+                    slice = overall;
+                }
+                if (!slice) return d;   // v2-shape fallback
+                // Wrapper metadata (campaign_slug, display_name, title_type,
+                // conversion_noun, bottom_funnel_label, interpretation_note)
+                // rides through; slice-specific fields (touchpoints, journeys,
+                // co_exposure, model_fit, sample_size, conversion_rate,
+                // cohort_meta, source) override.
+                var merged = {};
+                for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
+                for (var k2 in slice) { if (Object.prototype.hasOwnProperty.call(slice, k2)) merged[k2] = slice[k2]; }
+                return merged;
+            }
+
+            // Return the sorted list of dropdown options for the current
+            // wrapper. First entry is always the all-viewers reset. Order
+            // preserves the audiences map iteration (which the backend
+            // writes in the same order as the campaign's audiences array
+            // on normalized_assets.json).
+            function _iiqMTAAudienceOptions(d) {
+                var opts = [{ slug: '', label: 'All exposed viewers', size: 0 }];
+                if (!d || !d.audiences) return opts;
+                for (var slug in d.audiences) {
+                    if (!Object.prototype.hasOwnProperty.call(d.audiences, slug)) continue;
+                    var slice = d.audiences[slug] || {};
+                    var meta = slice.cohort_meta || {};
+                    var label = meta.audience_label || slug;
+                    var size = meta.cohort_size || slice.sample_size || 0;
+                    opts.push({ slug: slug, label: label, size: size });
+                }
+                return opts;
+            }
+
+            // Dropdown row rendered ABOVE the three summary tiles. When
+            // the campaign has no audience slices, we still render the row
+            // with just the all-viewers option so the layout is consistent
+            // across campaigns.
+            function _iiqMTARenderAudienceDropdown(d, currentSlug) {
+                var opts = _iiqMTAAudienceOptions(d);
+                var options = opts.map(function(o) {
+                    var label = escapeHtml(o.label);
+                    if (o.slug && o.size) label += ' (n=' + Number(o.size).toLocaleString() + ')';
+                    var sel = (o.slug === currentSlug) ? ' selected' : '';
+                    return '<option value="' + escapeHtml(o.slug) + '"' + sel + '>' + label + '</option>';
+                }).join('');
+                return (
+                    '<div style="display:flex; align-items:center; gap:0.75rem; margin: 0 0 0.85rem 0; padding: 0.55rem 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; flex-wrap: wrap;">'
+                  + '  <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color: var(--text-secondary); font-weight:600;">View by audience</div>'
+                  + '  <select id="iiqMTAAudienceSelect" onchange="_iiqMTASetAudience(this.value)" style="flex:1; min-width:220px; max-width:420px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-primary); font-size: 0.78rem; padding: 0.35rem 0.6rem; border-radius: 6px; font-family: inherit;">'
+                  +      options
+                  + '  </select>'
+                  + '  <div style="font-size:0.66rem; color: var(--text-secondary); flex:0 0 auto;">Each cohort re-fits on that cohort\u2019s exposures only.</div>'
+                  + '</div>'
+                );
+            }
+
+            // Cohort meta strip. Hidden when no audience is selected;
+            // shown as a small muted line + optional "Thin read" chip when
+            // an audience is selected. Numbers use individual-level nouns
+            // per individual-level-language.mdc.
+            function _iiqMTARenderCohortMetaStrip(activePayload) {
+                var meta = activePayload && activePayload.cohort_meta;
+                if (!meta || !meta.audience_label) return '';
+                var n = Number(meta.cohort_size || 0);
+                var overlap = Number(meta.overlap_bp || 0);
+                var gps = Number(meta.gen_pop_share || 0);
+                var parts = [];
+                if (n > 0) parts.push('n=' + n.toLocaleString() + ' viewers in this cohort');
+                if (overlap > 0) parts.push(overlap.toFixed(1) + '% of exposed');
+                if (gps > 0) parts.push(gps.toFixed(1) + '% of US');
+                var line = parts.join(' \u00b7 ');
+                var thinChip = '';
+                if (meta.thin_read) {
+                    thinChip = ' <span title="This cohort is small; read the ranking directionally, not as an exact rate card." style="display:inline-block; margin-left:0.5rem; padding:1px 8px; font-size:0.62rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background: rgba(199,242,62,0.14); color:#C7F23E; border:1px solid rgba(199,242,62,0.35);">Thin read</span>';
+                }
+                return (
+                    '<div style="margin: -0.35rem 0 0.65rem 0; padding: 0.3rem 0.75rem; font-size: 0.72rem; color: var(--text-secondary);">'
+                  +   escapeHtml(line) + thinChip
+                  + '</div>'
+                );
+            }
+
+            // Global change handler wired to the dropdown's onchange.
+            // Writes the new selection to the cache and re-renders the
+            // whole MTA panel from the same in-memory payload -- no
+            // refetch, instant swap.
+            window._iiqMTASetAudience = function(newSlug) {
+                if (!window.__iiqMTACache || !window.__iiqMTACache.data) return;
+                window.__iiqMTACache.audience_slug = String(newSlug || '');
+                _iiqMTARender(window.__iiqMTACache.data);
             };
 
             // ------------------------------------------------------------
@@ -33877,10 +33989,14 @@ https://www.instagram.com/p/..."></textarea>
                     return '<div class="iiq-empty" style="padding:1rem;">Not enough exposure paths yet to break out the top journeys on this campaign.</div>';
                 }
                 var bfl = d.bottom_funnel_label || 'Ticketing';
+                var audLabel = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
+                var introLead = audLabel
+                    ? ('Within ' + escapeHtml(audLabel) + ': the ' + journeys.length + ' exposure paths')
+                    : ('The ' + journeys.length + ' exposure paths');
                 var intro =
                     '<div style="margin-bottom: 0.6rem;">'
                   + '  <h4 style="margin: 0;">How the journeys built up to this.</h4>'
-                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">The ' + journeys.length + ' exposure paths that generated the most conversions on this campaign. Each row is a distinct combination of touchpoints a set of viewers all saw.</div>'
+                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + introLead + ' that generated the most conversions on this campaign. Each row is a distinct combination of touchpoints a set of viewers all saw.</div>'
                   + '</div>';
 
                 var tableId = containerId + '_tbl';
@@ -34002,10 +34118,14 @@ https://www.instagram.com/p/..."></textarea>
                     return '<div class="iiq-empty" style="padding:1rem;">Co-exposure grid needs at least a handful of overlapping touchpoints. Come back once the campaign has more exposure paths logged.</div>';
                 }
                 var N = Math.min(tps.length, mat.length);
+                var audLabelCe = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
+                var introLeadCe = audLabelCe
+                    ? ('Within ' + escapeHtml(audLabelCe) + ': for the top ' + N + ' touchpoints by lift')
+                    : ('For the top ' + N + ' touchpoints by lift');
                 var intro =
                     '<div style="margin-bottom: 0.6rem;">'
                   + '  <h4 style="margin: 0;">Which touchpoints travel together.</h4>'
-                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">For the top ' + N + ' touchpoints by lift, the share of people exposed to the row that were also exposed to the column. Diagonal is always 100%. Bright cells travel together.</div>'
+                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + introLeadCe + ', the share of people exposed to the row that were also exposed to the column. Diagonal is always 100%. Bright cells travel together.</div>'
                   + '</div>';
 
                 // Cell + label sizing. Column labels get vertical room via a
@@ -34084,10 +34204,14 @@ https://www.instagram.com/p/..."></textarea>
                 if (!tps.length) return '';
                 var bfl = d.bottom_funnel_label || 'Ticketing';
                 var convNoun = d.conversion_noun || 'conversion';
+                var audLabelCoef = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
+                var introLeadCoef = audLabelCoef
+                    ? ('Within ' + escapeHtml(audLabelCoef) + ': per-touchpoint lift on ' + escapeHtml(convNoun) + ' conversion, ranked by absolute lift.')
+                    : ('Per-touchpoint lift on ' + escapeHtml(convNoun) + ' conversion, ranked by absolute lift.');
                 var header =
                     '<div style="margin-bottom: 0.6rem;">'
                   + '  <h4 style="margin: 0;">Touchpoint contribution to ' + escapeHtml(bfl.toLowerCase()) + '.</h4>'
-                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">Per-touchpoint lift on ' + escapeHtml(convNoun) + ' conversion, ranked by absolute lift.</div>'
+                  + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">' + introLeadCoef + '</div>'
                   + '  <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.2rem;">These lifts are the multi-touch answer: each coefficient is the marginal contribution of one additional exposure to that touchpoint, holding every other touchpoint constant.</div>'
                   + '</div>';
 
@@ -34185,17 +34309,37 @@ https://www.instagram.com/p/..."></textarea>
             function _iiqMTARender(d) {
                 var host = document.getElementById('iiqMTAContent');
                 if (!host) return;
-                var tps = (d.touchpoints || []).slice();
-                var bfl = d.bottom_funnel_label || 'Ticketing';
-                var convNoun = d.conversion_noun || 'conversion';
+
+                // Pick the active audience filter from the cache. Falls
+                // back to '' (All exposed viewers) when the cache is
+                // fresh or the previous selection was reset by a
+                // campaign switch. An audience_slug that no longer maps
+                // to a valid slice transparently degrades to overall.
+                var audienceSlug = (window.__iiqMTACache && window.__iiqMTACache.audience_slug) || '';
+                if (audienceSlug && d && d.audiences && !d.audiences[audienceSlug]) {
+                    audienceSlug = '';
+                    if (window.__iiqMTACache) window.__iiqMTACache.audience_slug = '';
+                }
+                var activePayload = _iiqMTAActivePayload(d, audienceSlug);
+                var tps = (activePayload.touchpoints || []).slice();
+                var bfl = activePayload.bottom_funnel_label || d.bottom_funnel_label || 'Ticketing';
+                var convNoun = activePayload.conversion_noun || d.conversion_noun || 'conversion';
+
+                // Dropdown row + cohort meta strip render UNCONDITIONALLY
+                // (dropdown always; strip only when an audience is selected)
+                // so the reader always has the filter available even before
+                // touchpoints have arrived on a fresh campaign.
+                var dropdownRow = _iiqMTARenderAudienceDropdown(d, audienceSlug);
+                var cohortStrip = _iiqMTARenderCohortMetaStrip(activePayload);
 
                 if (!tps.length) {
-                    host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">No touchpoints available for this campaign yet.</div>';
+                    host.innerHTML = dropdownRow + cohortStrip + '<div class="iiq-empty" style="padding:1.5rem;">No touchpoints available for this cohort yet.</div>';
                     return;
                 }
 
                 // How-to-read (collapsible). Rewritten to cover all three
-                // cards on the tab. Keeps the standing caveat from v1.
+                // cards on the tab and the new audience filter. Keeps the
+                // standing caveat from v1.
                 var howToRead =
                     '<details style="margin: 0 0 0.85rem 0; padding: 0.6rem 0.9rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">'
                   + '  <summary style="cursor: pointer; user-select: none; font-weight: 600; font-size: 0.82rem; color: var(--text-primary); list-style: none;">'
@@ -34210,6 +34354,7 @@ https://www.instagram.com/p/..."></textarea>
                   + '      <li><strong style="color:#cbd5e1;">The lift chart</strong> shows the marginal contribution of one more exposure to each touchpoint, holding every other touchpoint constant.</li>'
                   + '    </ul>'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">Why this is multi-touch.</strong> Every person\u2019s full exposure vector goes into one read. A person who saw five things contributes evidence for all five simultaneously. If two touchpoints always show up together and one is doing the real work, the other\u2019s lift will collapse toward zero. That is what \u201cholding every other touchpoint constant\u201d means.</p>'
+                  + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">Filter by audience.</strong> Each cohort re-fits the model on only that cohort\u2019s exposures. A touchpoint that reads strong overall may sit quiet inside a specific audience, and vice versa. That is the point of the filter.</p>'
                   + '    <p style="margin: 0 0 0.35rem 0;"><strong style="color: #cbd5e1;">What each metric means.</strong></p>'
                   + '    <ul style="margin: 0 0 0.5rem 1.1rem; padding: 0;">'
                   + '      <li style="margin-bottom:0.2rem;"><strong style="color:#cbd5e1;">Conversion rate per path.</strong> Share of the exposed group in that path who went on to visit the ' + escapeHtml(bfl.toLowerCase()) + ' page.</li>'
@@ -34221,16 +34366,19 @@ https://www.instagram.com/p/..."></textarea>
                   + '  </div>'
                   + '</details>';
 
-                // Top strip: three summary tiles (unchanged from v1).
-                var fit = d.model_fit || {};
+                // Top strip: three summary tiles. Reads from the ACTIVE
+                // payload so the tiles reflect the cohort's baseline +
+                // exposed count when an audience is selected.
+                var fit = activePayload.model_fit || {};
                 var quality = String(fit.quality || 'weak');
                 var qLabel = { strong: 'Strong read', moderate: 'Moderate read', weak: 'Weak read' }[quality] || 'Weak read';
                 var qColor = { strong: '#C7F23E', moderate: '#9FD628', weak: '#94a3b8' }[quality] || '#94a3b8';
                 var qBg    = { strong: 'rgba(199,242,62,0.14)', moderate: 'rgba(159,214,40,0.14)', weak: 'rgba(148,163,184,0.14)' }[quality] || 'rgba(148,163,184,0.14)';
                 var qChip  = '<span style="display:inline-block; padding:0.1rem 0.55rem; font-size:0.68rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + qBg + '; color:' + qColor + ';">' + qLabel + '</span>';
+                var exposedLabel = audienceSlug ? 'Viewers in this cohort' : 'Exposed viewers';
                 var tiles = [
-                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(d.conversion_rate, 2), 'share of exposed viewers who visited the ' + bfl.toLowerCase() + ' page in the attribution window'),
-                    iiqSummaryTile('Exposed viewers', fmtCompact(d.sample_size), 'individual viewers used in the read'),
+                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), 'share of exposed viewers who visited the ' + bfl.toLowerCase() + ' page in the attribution window'),
+                    iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read'),
                     '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
                       + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">Read strength</div>'
                       + '<div style="margin-top:0.35rem;">' + qChip + '</div>'
@@ -34241,19 +34389,20 @@ https://www.instagram.com/p/..."></textarea>
 
                 // Card wrappers. Each of the three cards renders inside its
                 // own container so future tweaks (drag-to-reorder, per-card
-                // filters, etc.) stay local.
+                // filters, etc.) stay local. All three cards read from the
+                // ACTIVE payload so the audience filter cascades through.
                 var journeysHost = 'iiqMTAJourneysCard';
                 var coExpHost    = 'iiqMTACoExpCard';
                 var coefHost     = 'iiqMTACoefCard';
 
                 var journeysCard =
-                    '<section id="' + journeysHost + '" style="margin-top:0.75rem;">' + _iiqMTARenderJourneysCard(d, journeysHost) + '</section>';
+                    '<section id="' + journeysHost + '" style="margin-top:0.75rem;">' + _iiqMTARenderJourneysCard(activePayload, journeysHost) + '</section>';
                 var coExpCard =
-                    '<section id="' + coExpHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoExposureCard(d) + '</section>';
+                    '<section id="' + coExpHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoExposureCard(activePayload) + '</section>';
                 var coefCard =
-                    '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoefficientCard(d) + '</section>';
+                    '<section id="' + coefHost + '" style="margin-top:1.1rem;">' + _iiqMTARenderCoefficientCard(activePayload) + '</section>';
 
-                host.innerHTML = howToRead + topStrip + journeysCard + coExpCard + coefCard;
+                host.innerHTML = dropdownRow + cohortStrip + howToRead + topStrip + journeysCard + coExpCard + coefCard;
             }
             // ============================================================
             // // end __IIQ_MTA_MODULE_v1__
