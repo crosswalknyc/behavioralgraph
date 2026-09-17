@@ -12114,6 +12114,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         strip_url_variant_seed_rows,       # 2026-07-29 (Elton MUSICIAN/BAND) — hide URL-variant seed lists from category displays
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
         strip_reddit_from_social_media,    # 2026-09-04 (Rule #4d, Jenna) — Reddit lives in APP/PLATFORM only, never SOCIAL MEDIA
+        merge_stray_category_variants,     # 2026-09-16 (Jessie, Keke Palmer) — legacy-variant category twins merge into the hostmap-canonical column
         pin_platform_scope_to_100,         # 2026-09-04 (Jenna perceptionbox rerun) — SOCIAL MEDIA platform row pinned to 100 on platform-scoped follower universes
         strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
@@ -19071,3 +19072,115 @@ def validate_profile_raw_le_gp_raw(df, subject='', verbose=True,
     elif verbose:
         print(f'   🟢 G12 raw>gp_raw: clean ({subject or "profile"})')
     return warnings, bumps
+
+
+# ---------------------------------------------------------------------------
+# Stray category-variant twins (Jessie 2026-09-16, Keke Palmer Listeners
+# defect): the section map carries a canonical column plus a legacy
+# variant spelling (STREAMING/MUSIC + STREAMING MUSIC, STREAMING/PLATFORM
+# + STREAMING VIDEO, APP/PLATFORM USAGE + APP/PLATFORM). Interpret pins
+# and inserts occasionally land on the variant while the reasoned rows
+# sit in the canonical column, shipping BOTH spellings with duplicate,
+# contradictory readings (Spotify 99.04 on the stray twin vs 32.22 on
+# the canonical). Jessie's ruling: "it should always map to the
+# category in the hostmap."
+# ---------------------------------------------------------------------------
+
+_VARIANT_TWINS = (
+    ("STREAMING/MUSIC", "STREAMING MUSIC"),
+    ("STREAMING/PLATFORM", "STREAMING VIDEO"),
+    ("APP/PLATFORM USAGE", "APP/PLATFORM"),
+)
+
+
+def merge_stray_category_variants(df, subject, verbose=True):
+    """Merge legacy-variant category twins into their canonical column.
+
+    Fires ONLY when both spellings exist on the file (a profile whose
+    only spelling is the variant keeps it - that IS its column). Rules:
+      * a variant row whose brand already sits in its target column is
+        a duplicate reading - DROP the stray, keep the target's value;
+      * a variant row missing from the target MOVES across with its
+        value;
+      * per-brand hostmap routing wins when it names a different home
+        that exists on the file (YouTube in a stray APP/PLATFORM maps
+        to SOCIAL MEDIA, not APP/PLATFORM USAGE);
+      * category share recomputes on every touched column; the emptied
+        variant column disappears.
+    Idempotent; never invents a column (rule 0)."""
+    if df is None or len(df) == 0:
+        return df, 0
+    import re as _re
+    _n = lambda s: _re.sub(r"[^A-Z0-9]", "", str(s).upper())
+    col_u = df["Column"].astype(str).str.upper().str.strip()
+    file_cols = {c: df.loc[col_u == c, "Column"].iloc[0]
+                 for c in col_u.unique()}
+    bp_col, cs_col, _raw, _proj = _detect_cols(df)
+
+    hostmap_home = {}
+    try:
+        hm = _load_hostmap() or {}
+        try:
+            from migration.synth_hostmap_augment import SECTION_TO_COLUMNS
+        except ImportError:
+            from synth_hostmap_augment import (  # type: ignore
+                SECTION_TO_COLUMNS,
+            )
+        for brand, section in hm.items():
+            cols = SECTION_TO_COLUMNS.get(section) or []
+            if cols:
+                hostmap_home[_n(brand)] = cols[0].upper()
+    except Exception:
+        hostmap_home = {}
+
+    total = 0
+    touched = set()
+    for canonical, variant in _VARIANT_TWINS:
+        if canonical not in file_cols or variant not in file_cols:
+            continue
+        drops, moves = [], []
+        for idx in df.index[col_u == variant]:
+            bn = _n(df.at[idx, "Value"])
+            home = hostmap_home.get(bn)
+            target = (home if home and home in file_cols
+                      and home != variant else canonical)
+            t_real = file_cols[target]
+            m2 = (col_u == target) & (df["Value"].map(_n) == bn)
+            if m2.any():
+                drops.append(idx)
+                if verbose:
+                    print(f"   \U0001f9f9 variant twin [{variant}] "
+                          f"{df.at[idx, 'Value']}: duplicate of a "
+                          f"{t_real} row - stray copy dropped")
+            else:
+                moves.append((idx, t_real))
+                if verbose:
+                    print(f"   \U0001f9f9 variant twin [{variant}] "
+                          f"{df.at[idx, 'Value']} -> {t_real}")
+        for idx, t_real in moves:
+            df.at[idx, "Column"] = t_real
+            touched.add(t_real)
+        if drops:
+            df = df.drop(index=drops)
+        if drops or moves:
+            touched.add(file_cols[canonical])
+            total += len(drops) + len(moves)
+        col_u = df["Column"].astype(str).str.upper().str.strip()
+    if total:
+        df = df.reset_index(drop=True)
+        col_u = df["Column"].astype(str).str.upper().str.strip()
+        if cs_col:
+            for cat in touched:
+                m = df["Column"] == cat
+                vals = pd.to_numeric(
+                    df.loc[m, bp_col].astype(str).str.replace("%", ""),
+                    errors="coerce")
+                s = vals.sum()
+                if s and s > 0:
+                    df.loc[m, cs_col] = (vals / s * 100).round(4).map(
+                        lambda x: f"{x:.4f}")
+        if verbose:
+            print(f"   \U0001f9f9 merge_stray_category_variants: "
+                  f"{total} rows merged or dropped")
+    return df, total
+

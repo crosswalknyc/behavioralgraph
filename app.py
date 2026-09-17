@@ -44989,8 +44989,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "The Bear -> [['STREAMING/PLATFORM','FX'],"
         "['STREAMING/PLATFORM','Hulu']]; an Audible Original / "
         "Audible-exclusive audiobook or podcast -> "
-        "[['APP/PLATFORM','Audible']]; a Spotify-exclusive podcast -> "
-        "[['STREAMING MUSIC','Spotify']]; a book -> retailer/platform "
+        "[['APP/PLATFORM USAGE','Audible']]; a Spotify-exclusive podcast -> "
+        "[['STREAMING/MUSIC','Spotify']]; a book -> retailer/platform "
         "homes like [['WHERE THEY SHOP','Amazon']] only if truly "
         "canonical, else []. Null/[] when not IP.\n"
         "  * HOME-PLATFORM PIN (applies ONLY when ip_scope = "
@@ -45014,11 +45014,11 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "      Any Netflix-original viewers -> "
         "['STREAMING/PLATFORM', 'Netflix'] at 100\n"
         "      Audible-exclusive audiobook / Audible Original "
-        "listeners -> ['APP/PLATFORM', 'Audible'] at 100 (audiobooks "
+        "listeners -> ['APP/PLATFORM USAGE', 'Audible'] at 100 (audiobooks "
         "and audio originals sold or streamed only on Audible - the "
         "listener universe is Audible by construction)\n"
         "      Spotify-exclusive podcast listeners -> "
-        "['STREAMING MUSIC', 'Spotify'] at 100\n"
+        "['STREAMING/MUSIC', 'Spotify'] at 100\n"
         "    When ip_scope='consumers': copy home_platform_rows into "
         "subject_rows (pinned 100), title the subject "
         "'{IP Name} {consumer_verb Capitalized}' ('Gilmore Girls "
@@ -54104,7 +54104,8 @@ def _spec_from_draft(draft):
         'STREAMING/PLATFORM', 'STREAMING VIDEO', 'BROADCAST/CABLE',
         'APP/PLATFORM', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST',
         'VIRTUAL MVPD FAST', 'VMVPD', 'FAST PLATFORM', 'FAST CHANNEL',
-        'MOVIE THEATER', 'STREAMING MUSIC',
+        'MOVIE THEATER', 'STREAMING MUSIC', 'STREAMING/MUSIC',
+        'APP/PLATFORM USAGE',
         # Sports companions (team + league + conference pins)
         'SPORTS TEAM', 'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA',
         'MILB', 'EPL', 'LA LIGA', 'SERIE A', 'LIGUE 1', 'BUNDESLIGA',
