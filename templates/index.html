@@ -81131,9 +81131,23 @@ https://www.instagram.com/p/..."></textarea>
                     // load them by S3 key directly. To unhide a run just
                     // pull its name out of this list.
                     var hiddenRuns = ['backrooms', 'courtside', 'mandalorian', 'breadwinner', 'the_goat'];
+                    var hiddenRunHas = [
+                        'neurotrophic', 'neurotropic', 'coffee to adaptogens',
+                        'sober curious', 'discipline hero', 'wellness curious',
+                        'multicultural urban', 'recess buyers',
+                        'banking research', 'obsession', 'spe cross window',
+                        'abercrombie', 'gilmore', 'landman',
+                        'pop culture jeopardy', 'mark rober'
+                    ];
                     function _isHiddenRun(r) {
-                        var name = ((r.project_name || r.target || '') + '').trim().toLowerCase();
-                        return hiddenRuns.indexOf(name) !== -1;
+                        var raw = ((r.project_name || '') + ' ' + (r.target || '')).toLowerCase();
+                        var name = raw.replace(/[_\-]+/g, ' ').replace(/[\u2014\u2013]/g, ' ').replace(/\s+/g, ' ').trim();
+                        if (hiddenRuns.indexOf(name) !== -1) return true;
+                        if (name === 'michael' || name.indexOf('michael ') === 0) return true;
+                        for (var i = 0; i < hiddenRunHas.length; i++) {
+                            if (name.indexOf(hiddenRunHas[i]) !== -1) return true;
+                        }
+                        return false;
                     }
                     var visibleRuns     = runs.filter(function(r)     { return !_isHiddenRun(r); });
                     var visibleArchived = archived.filter(function(r) { return !_isHiddenRun(r); });
@@ -81150,10 +81164,10 @@ https://www.instagram.com/p/..."></textarea>
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
                         { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix', 'amc+', 'amc plus', 'amc_plus', 'amc migration'] },
-                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober', 'young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab', 'gilmore', 'gilmore girls', 'stars hollow'] },
-                        { id: 'brands',      label: '🛍️ Brands',            keywords: ['abercrombie'] },
-                        { id: 'movie',       label: '🎬 Movie',             keywords: ['obsession'] },
-                        { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: ['neurotrophic', 'neurotropic', 'nootropic', 'adaptogen', 'recess', 'four sigmatic', 'kin euphorics', 'mud wtr', 'mudwtr', 'rebbl', 'magic mind', 'rasa', 'sunwink', 'hiyo'] }
+                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab'] },
+                        { id: 'brands',      label: '🛍️ Brands',            keywords: [] },
+                        { id: 'movie',       label: '🎬 Movie',             keywords: [] },
+                        { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: [] }
                     ];
                     function _runMatchesCategory(r, cat) {
                         var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
@@ -81196,29 +81210,13 @@ https://www.instagram.com/p/..."></textarea>
                             { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
                             { value: '__demo_song_to_title__', label: 'Heated Rivalry x Barbie · song journey' },
                             { value: '__demo_young_sheldon_pvod__', label: 'Young Sheldon · Amazon PVOD episode' },
-                            { value: '__demo_dexters_lab_pvod__', label: "Dexter's Laboratory · Amazon PVOD episode" },
-                            { value: '__demo_gg_lapsed_flywheel__', label: 'Gilmore Girls · lapsed or new, Amazon flywheel' },
-                            { value: '__demo_gg_regular_flywheel__', label: 'Gilmore Girls · regular Prime Video, Amazon flywheel' }
+                            { value: '__demo_dexters_lab_pvod__', label: "Dexter's Laboratory · Amazon PVOD episode" }
                         ],
                         brands: [
                             { value: '__demo_fragrance_tiktok__', label: 'Luxury Fragrance \u00b7 TikTok Shop purchase journey' }
                         ],
-                        movie: [
-                            { value: '__demo_obsession_caa__',      label: 'Obsession' },
-                            { value: '__demo_michael__',            label: 'Michael' },
-                            { value: '__demo_obsession_peacock__',  label: 'Obsession — Peacock' },
-                            { value: '__demo_spe_cross_window__',   label: 'SPE Cross-Window Overlap' }
-                        ],
-                        neurotropic: [
-                            { value: '__demo_neuro_coffee_to_adaptogens__', label: 'Coffee-to-Adaptogens Convertors' },
-                            { value: '__demo_neuro_nolo_social__',          label: 'Sober-Curious Social Drinkers' },
-                            { value: '__demo_neuro_discipline_hero__',      label: 'The Discipline Hero' },
-                            { value: '__demo_neuro_gen_z_wellness__',       label: 'Wellness-Curious Gen Z' },
-                            { value: '__demo_neuro_multicultural_pro__',    label: 'Multicultural Urban Professional' },
-                            { value: '__demo_neuro_current_purchasers__',   label: 'Current Neurotrophic Purchasers' },
-                            { value: '__demo_neuro_recess_buyers__',        label: 'Recess Buyers' },
-                            { value: '__demo_neuro_curious__',              label: 'Neurotrophic-Curious (Searched, Never Bought)' }
-                        ]
+                        movie: [],
+                        neurotropic: []
                     };
 
                     // Cleans up an S3 run's project_name/target for display
