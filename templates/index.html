@@ -81767,6 +81767,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Masthead. The cohort row carries the headline count and
             // the split that the whole study hangs off.
             var cohort = B.cohort || [];
+            var watched = _fwFindRow(cohort, 'total_watched');
             var head = _fwFindRow(cohort, 'acquired_or_reactivated');
             var fresh = _fwFindRow(cohort, 'new_signup');
             var back = _fwFindRow(cohort, 'reactivated_dormant');
@@ -81792,7 +81793,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                  + (S.window ? ' \u00b7 ' + _fwEsc(S.window) : '') + '</div>'
                  + '<h1>' + _fwEsc(run.label || 'Flywheel study') + '.</h1>';
             if (head) {
-                var lead = '<b>' + _fwNum(total) + '</b> accounts were acquired or reactivated.';
+                var lead = '';
+                // The watched total is the denominator the cohort came
+                // out of, so it leads the sentence when a study
+                // carries it.
+                if (watched && watched.accounts) {
+                    lead += '<b>' + _fwNum(watched.accounts) + '</b> accounts watched. ';
+                }
+                lead += '<b>' + _fwNum(total) + '</b> accounts were acquired or reactivated.';
                 if (fresh && back && total) {
                     lead += ' <b>' + _fwPct((back.accounts / total) * 100, 1) + '</b> of them'
                          + ' were dormant memberships coming back, not new ones.';
@@ -81804,6 +81812,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html += '<div class="fw-kpi"><div class="fw-kpi-l">' + _fwEsc(label)
                      + '</div><div class="fw-kpi-v">' + _fwEsc(value) + '</div></div>';
             }
+            if (watched && watched.accounts) kpi('Accounts that watched', _fwNum(watched.accounts));
             if (head) kpi('Acquired or reactivated', _fwNum(head.accounts));
             if (fresh) kpi('New Prime signups', _fwNum(fresh.accounts));
             if (back) kpi('Dormant memberships restored', _fwNum(back.accounts));
@@ -81844,23 +81853,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 var rowsHtml = comp.map(function (r) {
                     var lift = Number(r.lift_pp || 0);
-                    var w = maxAbs ? (Math.abs(lift) / maxAbs) * 50 : 0;
-                    var side = lift >= 0
-                        ? '<i class="pos" style="left:50%;width:' + w + '%"></i>'
-                        : '<i class="neg" style="right:50%;width:' + w + '%"></i>';
+                    var pre = Number(r.pre_180d_share_of_cohort_pct || 0);
+                    var post = Number(r.share_of_cohort_pct || 0);
+                    var up = lift >= 0;
+                    // Two bars on a shared 0-100 axis. The pair shows
+                    // the level as well as the move, which a single
+                    // diverging bar could not: it only ever showed the
+                    // gap, never how big the thing was to begin with.
+                    function bar(cls, pct) {
+                        return '<div class="fw-pbar ' + cls + '">'
+                             + '<i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i>'
+                             + '<span>' + _fwPct(pct, 1) + '</span></div>';
+                    }
                     return '<div class="fw-row fw-liftrow">'
-                         + '<div class="fw-row-k">' + _fwEsc(r.surface_label)
-                         + '<small>' + _fwPct(r.pre_180d_share_of_cohort_pct, 1)
-                         + ' before \u00b7 ' + _fwPct(r.share_of_cohort_pct, 1) + ' after</small></div>'
-                         + '<div class="fw-lift"><span class="fw-lift-mid"></span>' + side + '</div>'
-                         + '<div class="fw-row-v' + (lift >= 0 ? ' is-up' : ' is-down') + '">'
-                         + (lift >= 0 ? '+' : '\u2212') + Math.abs(lift).toFixed(1)
+                         + '<div class="fw-row-k">' + _fwEsc(r.surface_label) + '</div>'
+                         + '<div class="fw-pair">'
+                         + bar('is-after' + (up ? '' : ' is-down'), post)
+                         + bar('is-before', pre)
+                         + '</div>'
+                         + '<div class="fw-row-v' + (up ? ' is-up' : ' is-down') + '">'
+                         + (up ? '+' : '\u2212') + Math.abs(lift).toFixed(1)
                          + '<small>points</small></div></div>';
                 }).join('');
                 html += _fwSection('02', 'The flywheel',
                     'The same flywheel touch points, the 30 days before the play against the 30 days after it.',
                     '<div class="fw-liftlegend"><span class="fw-legend-pair">'
-                    + '<span>Used less after</span><span>Used more after</span></span></div>'
+                    + '<span><i class="k-after"></i>After</span>'
+                    + '<span><i class="k-before"></i>Before</span></span></div>'
                     + rowsHtml);
             }
 
@@ -177263,13 +177282,39 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         display: block; margin-top: 4px; font-size: 10px; font-weight: 500;
         letter-spacing: .1em; text-transform: uppercase; color: #7C878A;
     }
+    .fw-liftrow { padding: 15px 0 !important; align-items: center; }
+    .fw-liftlegend .fw-legend-pair { justify-content: flex-start; gap: 28px; }
     .fw-row-v.is-up { color: #C7F23E; }
     .fw-row-v.is-down { color: #B7B3D8; }
     body[data-theme="light"] .fw-row-v.is-up { color: #5E7E12; }
     body[data-theme="light"] .fw-row-v.is-down { color: #8E3FA8; }
 
-    /* The lift track runs both ways from a centre line, so a surface
-       that fell after the play is as legible as one that rose. */
+    /* Before and after stack on a shared 0-100 axis. A surface that
+       fell reads as the lower bar being the longer one. */
+    .fw-pair { display: grid; row-gap: 6px; }
+    .fw-pbar { position: relative; height: 15px; }
+    .fw-pbar i {
+        position: absolute; left: 0; top: 5px; height: 5px; min-width: 3px;
+        border-radius: 99px; background: #C7F23E;
+    }
+    .fw-pbar span {
+        position: absolute; right: 0; top: 0; font-size: 10.5px;
+        font-variant-numeric: tabular-nums; color: #7C878A;
+    }
+    .fw-pbar.is-before i { background: #3B3D38; }
+    .fw-pbar.is-after.is-down i { background: #B7B3D8; }
+    body[data-theme="light"] .fw-pbar i { background: #5E7E12; }
+    body[data-theme="light"] .fw-pbar.is-before i { background: #C9C6BA; }
+    body[data-theme="light"] .fw-pbar.is-after.is-down i { background: #8E3FA8; }
+    body[data-theme="light"] .fw-pbar span { color: #888C89; }
+    .fw-liftlegend .fw-legend-pair i {
+        display: inline-block; width: 14px; height: 4px; border-radius: 99px;
+        background: #C7F23E; margin-right: 7px; vertical-align: middle;
+    }
+    .fw-liftlegend .fw-legend-pair i.k-before { background: #3B3D38; }
+    body[data-theme="light"] .fw-liftlegend .fw-legend-pair i { background: #5E7E12; }
+    body[data-theme="light"] .fw-liftlegend .fw-legend-pair i.k-before { background: #C9C6BA; }
+    /* Legacy single-track styles, kept for any study still drawing one. */
     .fw-lift { position: relative; height: 7px; }
     .fw-lift-mid {
         position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px;
