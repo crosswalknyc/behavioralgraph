@@ -81445,6 +81445,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _jiqSaveTabs();
             _jiqRenderTabs();
         }
+        function _jiqResetToEmpty() {
+            _jiqCurrentRun = null;
+            window._jiqCurrentRun = null;
+            window._jiqOriginalRun = null;
+            var picker = document.getElementById('jiqRunPicker');
+            if (picker) picker.value = '';
+            var title = document.getElementById('jiqDashTitle');
+            if (title) { title.textContent = 'Select a run'; title.style.display = ''; }
+            if (typeof _jiqShowExportBar === 'function') _jiqShowExportBar(false);
+            ['jiqDateRangeBox', 'jiqMonthCutBar', 'jiqMonthCutNote', 'jiqMonthCutTable'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            var view = document.getElementById('journeyIQView');
+            if (view) {
+                var keep = {
+                    jiqTabsBar: 1, jiqLibraryRail: 1, jiqLibraryScrim: 1,
+                    jiqLibraryDrawer: 1, jiqDashLoading: 1, jiqDashEmpty: 1,
+                    jiqExportVeil: 1
+                };
+                [].slice.call(view.children).forEach(function (el) {
+                    if (keep[el.id]) return;
+                    if (el.classList && el.classList.contains('jiq-topbar')) return;
+                    if (el.querySelector && el.querySelector('#jiqMonthCutNote')) return;
+                    el.style.display = 'none';
+                });
+            }
+            var empty = document.getElementById('jiqDashEmpty');
+            var loading = document.getElementById('jiqDashLoading');
+            if (empty) empty.style.display = '';
+            if (loading) loading.style.display = 'none';
+        }
+        function _jiqCloseAllTabs() {
+            if (!_jiqOpenTabs.length) return;
+            if (!confirm('Close all open Digital Journey IQ tabs?')) return;
+            _jiqOpenTabs = [];
+            _jiqActiveTab = null;
+            _jiqSaveTabs();
+            _jiqRenderTabs();
+            _jiqResetToEmpty();
+        }
+        window._jiqCloseAllTabs = _jiqCloseAllTabs;
         function _jiqRenderTabs() {
             var bar = document.getElementById('jiqTabsBar');
             if (!bar) return;
@@ -81462,10 +81504,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + '<button type="button" class="jiq-tab-x" data-jiq-close="' + safe
                      + '" aria-label="Close">\u00d7</button></span>';
             });
+            html += '<button type="button" class="jiq-tab-close-all" data-jiq-close-all="1" title="Close all open tabs">Close all tabs</button>';
             bar.innerHTML = html;
         }
         document.addEventListener('click', function (ev) {
             if (!ev.target.closest) return;
+            if (ev.target.closest('[data-jiq-close-all]')) {
+                ev.stopPropagation();
+                _jiqCloseAllTabs();
+                return;
+            }
             var x = ev.target.closest('[data-jiq-close]');
             if (x) {
                 ev.stopPropagation();
@@ -176978,7 +177026,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     /* ---- Journey IQ: open-journey tabs -------------------------- */
     #jiqTabsBar {
         display: flex; flex-wrap: wrap; align-items: baseline; gap: 22px;
-        padding: 0 1.25rem 9px; margin: 0;
+        padding: 16px 1.25rem 10px; margin: 0;
         border-bottom: 1px solid #3B3D38;
         font-family: 'Inter 18pt', -apple-system, sans-serif;
     }
@@ -177009,6 +177057,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-tab:hover .jiq-tab-x, .jiq-tab.is-active .jiq-tab-x { opacity: 1; }
     .jiq-tab-x:hover { color: #E9E8E1; }
     body[data-theme="light"] .jiq-tab-x:hover { color: #0C1618; }
+    .jiq-tab-close-all {
+        margin-left: auto; flex-shrink: 0; align-self: center;
+        padding: 6px 11px; cursor: pointer;
+        border: 1px solid rgba(255,107,107,0.35); border-radius: 6px;
+        background: rgba(255,107,107,0.08); color: #ff6b6b;
+        font-size: 9.5px; font-weight: 600; letter-spacing: .12em;
+        text-transform: uppercase; font-family: inherit;
+    }
+    .jiq-tab-close-all:hover {
+        background: rgba(255,107,107,0.18); border-color: rgba(255,107,107,0.55);
+    }
 
     /* ================================================================
        FLYWHEEL IQ
