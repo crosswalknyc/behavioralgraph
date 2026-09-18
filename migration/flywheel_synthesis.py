@@ -333,7 +333,7 @@ def build_flywheel(inputs: dict, prim: dict, *,
     }
     blob = {
         'meta': {'window': f'{start} to {end}',
-                 'unit': 'unique US accounts', 'sample': cohort,
+                 'unit': 'unique US accounts',
                  'usGenPop': US_GEN_POP},
         'copy': copy, 'spine': spine, 'fork': fork, 'detours': detours,
     }

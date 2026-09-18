@@ -139,6 +139,7 @@ Rules that do not move:
   platform. If the category cannot produce a leave-and-return majority
   of conversions, do not copy the fragrance file's shape - re-reason.
 - Rates are messy (never .0 / .5 endings), no two rates identical.
+- Do not invent a sample / observed-file n. Never emit a sample field. The path counts are the file.
 
 Two journey families. journey_kind in the input decides which:
 - "purchase": the shop family. The last stage is the paid event; the
