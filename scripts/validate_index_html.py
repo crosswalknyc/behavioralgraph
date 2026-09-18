@@ -534,3 +534,4 @@ if __name__ == "__main__":
 # (gametool-live-first-party 2026-09-18 - GameTool: live Xbox/Nintendo/Epic search + Apple games-only)
 # (gametool-tighten-googleplay 2026-09-18 - GameTool: Play games-only + sharper short-query prefix)
 # (gametool-hostmap-rename 2026-09-18 - rename gametool/ -> gametool_hostmap/ (vs Books content-map))
+# (streamscout-gametool-content 2026-09-18 - StreamScout gametool_content: content-map game terms)
