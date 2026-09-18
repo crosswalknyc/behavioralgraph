@@ -63,9 +63,8 @@ AUDIO = [
 BOOKS = [
     ("Books",           0, 0, "no",   "buy + listen + library links",   "Whole franchise → ONE show, SEASON = Book N. Amazon Kindle/Print/Audio, Audible, Apple Books, Libby holds, + retail proxies (Target/BAM, Walmart, B&N, Bookshop, Costco). Feeds the CONTENT map (punctuation kept)."),
 ]
-# companion resolver — not a menu pick, so kept out of the TOTAL count
 GAMES = [
-    ("Games", 0, 0, "no", "buy + play links · 19 stores", "streamscout/gametool_content — every buy/play URL across Steam, Epic, GOG, Nintendo, PlayStation, Xbox, Apple, Google Play, Battle.net (live) + Amazon/Luna/Best Buy/GameStop/Walmart/Target/Eneba/Loaded/G2A. Content-map terms; sibling gametool_hostmap emits the hostmap form."),
+    ("Games", 0, 0, "no", "buy + play links · 19 stores", "Menu pick like any other platform. Every buy/play URL across Steam, Epic, GOG, Nintendo, PlayStation, Xbox, Apple, Google Play, Battle.net (live) + Amazon/Luna/Best Buy/GameStop/Walmart/Target/Eneba/Loaded/G2A. Engine: streamscout/gametool_content; content-map terms; sibling gametool_hostmap emits the hostmap form."),
 ]
 ACCESS = {
     "no":    ("No login",      NOLOGIN),
@@ -74,7 +73,7 @@ ACCESS = {
     "situ":  ("Situational",   SITU),
 }
 
-TOTAL = len(VIDEO) + len(POD) + len(AUDIO) + len(BOOKS)
+TOTAL = len(VIDEO) + len(POD) + len(AUDIO) + len(BOOKS) + len(GAMES)
 
 # ── workbook ──────────────────────────────────────────────────────────────────
 wb = Workbook()
@@ -108,7 +107,7 @@ r = 1
 # title banner
 band(r, "  🛰  StreamScout", NAVY, WHITE, size=22, h=40)
 r += 1
-band(r, f"  One tool → every watch / play id  ·  {TOTAL} platforms + games companion  ·  movies, series, podcasts, audiobooks, books & games",
+band(r, f"  One tool → every watch / play id  ·  {TOTAL} platforms  ·  movies, series, podcasts, audiobooks, books & games",
      NAVY2, "BFD3EE", size=11, bold=False, h=22)
 r += 1
 band(r, "", WHITE, WHITE, h=6)   # spacer
@@ -190,8 +189,8 @@ band(r, f"📖  Books  ·  {len(BOOKS)}   (buy · listen · library — feeds th
      "E8F0FC", NAVY2, size=10, h=20)
 r += 1
 r = data_rows(BOOKS, r, zebra_offset=0)
-# section: games (companion resolver — content map)
-band(r, f"🎮  Games companion  ·  {len(GAMES)}   (gametool_content — buy · play, feeds the content map)",
+# section: games
+band(r, f"🎮  Games  ·  {len(GAMES)}   (buy · play — feeds the content map)",
      "E8F0FC", NAVY2, size=10, h=20)
 r += 1
 r = data_rows(GAMES, r, zebra_offset=0)
@@ -204,7 +203,7 @@ r += 1
 band(r, "  Good to know", NAVY, WHITE, size=12, h=26)
 r += 1
 NOTES = [
-    f"16 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
+    f"17 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
     "Spotify (free API key), and Disney+ & SiriusXM (situational).",
     "Access legend:  No login = anonymous  ·  Browser login = a Firefox/Chromium window drives itself  ·  "
     "Free API key = Spotify Client ID+Secret  ·  Situational = usually none, occasional login.",
@@ -214,9 +213,9 @@ NOTES = [
     "Books resolves a whole franchise to ONE show: purchase (Amazon Kindle/Print, Bookshop, Costco…), audiobook "
     "(Audible, Apple, Amazon), and LIBRARY holds (Libby/OverDrive) — with content-map retail proxies for the "
     "bot-walled stores. Its URLs feed the CONTENT map, so slugs keep their punctuation (p/merciless-saints).",
-    "Companion resolver: gametool_content (in streamscout/gametool_content) does the same job for VIDEO GAMES — "
-    "every buy/play URL across 19 stores, also as content-map terms. Its sibling gametool_hostmap emits the "
-    "punctuation-stripped hostmap form for a different pipeline.",
+    "Games works like any other platform: pick Games, type a title/franchise, and get every buy/play URL across "
+    "19 stores as content-map terms (SHOW = the franchise on every row). Engine lives in streamscout/gametool_content; "
+    "its sibling gametool_hostmap emits the punctuation-stripped hostmap form for a different pipeline.",
     "Podcast platforms return one row per episode. Streaming platforms handle both movies and series, "
     "with flexible season picks (all · 1-3 · 1,4,6).",
     "SiriusXM title search is Netflix-style: one device code the first time on a new computer, then automatic. "

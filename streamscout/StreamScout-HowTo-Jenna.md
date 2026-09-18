@@ -5,7 +5,7 @@ questions**. You give it a movie, series, podcast, or audiobook; it finds that
 title's exact watch/play/listen identifier(s) on the platform you pick, and
 drops them into a spreadsheet on your Desktop.
 
-It works for **movies and series across all 21 platforms** — streaming video,
+It works for **movies and series across all 22 platforms** — streaming video,
 podcasts, audiobooks *and* books (buy · listen · borrow).
 
 Every run writes one consistent CSV:
@@ -24,7 +24,7 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 
 > 💡 This how-to is all you need to run the tool. There's also an optional
 > flashy one-page grid, `StreamScout-Platforms.xlsx`, to show the wider team all
-> 21 platforms at a glance — nice to have, not needed to run anything.
+> 22 platforms at a glance — nice to have, not needed to run anything.
 
 ---
 
@@ -38,7 +38,7 @@ git checkout main
 git pull
 ```
 
-That's it — `streamscout/` is right there with all 21 platforms (StreamScout
+That's it — `streamscout/` is right there with all 22 platforms (StreamScout
 first shipped in PR #75; Audible, #20, in PR #163; **Books, #21, in PR #185**).
 
 <details>
@@ -91,7 +91,7 @@ python3 -m playwright install firefox chromium
 *(Netflix / HBO Max / Disney+ drive **Firefox**; Amazon Podcasts, SiriusXM and
 Audible drive **Chromium** — so install both.)*
 
-**d) Credentials — only 5 of the 21 platforms need anything.** Put them in a
+**d) Credentials — only 5 of the 22 platforms need anything.** Put them in a
 file named `.env.local` at the **repo root** (the folder *above* `streamscout/`):
 
 ```
@@ -144,11 +144,11 @@ The CSV appears on your **Desktop**. That's the whole job.
 
 ## The platforms (quick version)
 
-**21 platforms.** Only **5** need anything:
+**22 platforms.** Only **5** need anything:
 
-- 🔓 **No login (16):** Peacock, Hulu, Apple TV+, Paramount Plus, Starz,
+- 🔓 **No login (17):** Peacock, Hulu, Apple TV+, Paramount Plus, Starz,
   Hallmark Plus, Amazon, MGM Plus, BritBox, YouTube, Apple Podcasts, iHeart,
-  Pandora, Amazon Podcasts, **Audible**, **Books**
+  Pandora, Amazon Podcasts, **Audible**, **Books**, **Games**
 - 🔐 **Browser login — a Firefox window opens and drives itself (2):**
   Netflix, HBO Max
 - 🔑 **Free API key (1):** Spotify (Client ID + Secret in `.env.local`)
@@ -160,7 +160,7 @@ The CSV appears on your **Desktop**. That's the whole job.
 When a browser platform runs, **let the Firefox/Chromium window do its thing** —
 don't click around in it.
 
-*(The flashy at-a-glance grid of all 21 platforms lives in the shared
+*(The flashy at-a-glance grid of all 22 platforms lives in the shared
 `StreamScout-Platforms.xlsx` if you ever want it.)*
 
 ---
@@ -250,11 +250,23 @@ python3 streamscout/books_identifier.py --franchise "Merciless Saints" \
 > slugs **keep their punctuation** (hyphens) — the mirror image of the
 > hostmap's space-stripped form.
 
-> **Companion — Games.** Same idea for **video games**:
-> `streamscout/gametool_content/gametool_content.py` returns every buy/play URL
-> across 19 stores as content-map terms (`SHOW · URL · PRODUCTION · PLATFORM ·
-> SEASON`). Its top-level sibling `gametool_hostmap/` emits the
-> punctuation-stripped hostmap form for a different pipeline.
+---
+
+## 🎮 Games — buy + play URLs, like any other platform
+
+Games is a normal menu pick (#22). Choose **Games**, type a title or franchise,
+and it returns **every buy/play URL** across **19 stores** as content-map terms
+in the same CSV (`SHOW · URL · PRODUCTION · PLATFORM · SEASON`). `SHOW` is the
+franchise on every row; `SEASON` is blank.
+
+- **Searched live (no login):** Steam, Epic, GOG, Nintendo eShop, PlayStation,
+  Xbox, Apple App Store, Google Play, Battle.net.
+- **Paste a product link when prompted** for the bot-walled stores: Amazon,
+  Amazon Luna, Best Buy, GameStop, Walmart, Target, Eneba, Loaded, G2A.
+
+The engine lives in `streamscout/gametool_content/`; a top-level sibling
+`gametool_hostmap/` emits the punctuation-stripped **hostmap** form for a
+different pipeline. (You don't run either directly — just pick **Games**.)
 
 ---
 
@@ -310,7 +322,8 @@ machine, so title search there just works.
 - `*_identifier.py` — one resolver per platform (Peacock, Hulu, Netflix,
   Apple TV+, Paramount Plus, HBO Max, Disney+, Starz, Hallmark Plus, Amazon,
   MGM Plus, BritBox, YouTube, Spotify, Apple Podcasts, iHeart, Pandora,
-  Amazon Podcasts, SiriusXM, **Audible**, **Books** = `books_identifier.py`)
-- `gametool_content/` — the games sibling (buy/play URLs → content-map terms)
+  Amazon Podcasts, SiriusXM, **Audible**, **Books** = `books_identifier.py`,
+  **Games** = `games_identifier.py`)
+- `gametool_content/` — the Games engine (buy/play URLs → content-map terms)
 
 That's it — four questions, one spreadsheet. Happy scouting. 🛰️
