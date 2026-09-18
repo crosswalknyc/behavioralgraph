@@ -32143,6 +32143,26 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #intentIQView {
                 accent-color: #15803d;
             }
+            /* Intent to Conversion: dark-UI input fills (rgba(0,0,0,0.4)
+               and slate Secret Sauce) read as heavy grey in light mode. */
+            body[data-theme="light"] #intentIQView #iiqPanel-conversion input,
+            body[data-theme="light"] #intentIQView #iiqPanel-conversion select {
+                background: #F3F4F6 !important;
+                border-color: #E5E7EB !important;
+            }
+            body[data-theme="light"] #intentIQView #iiqConvWindow,
+            body[data-theme="light"] #intentIQView #iiqConvTicketPrice,
+            body[data-theme="light"] #intentIQView #iiqConvTicketsPerBuyer,
+            body[data-theme="light"] #intentIQView #iiqConvRunWindow,
+            body[data-theme="light"] #intentIQView #iiqConvRunDays {
+                color: #0C1618 !important;
+            }
+            body[data-theme="light"] #intentIQView #iiqConvSecretSauce {
+                background: #F3F4F6 !important;
+            }
+            body[data-theme="light"] #intentIQView #iiqConvHero [style*="color:#fff"] {
+                color: #0C1618 !important;
+            }
 body[data-theme="light"] #intentIQView [style^="color:#C7F23E"],
 body[data-theme="light"] #intentIQView [style*=";color:#C7F23E"],
 body[data-theme="light"] #intentIQView [style*="; color:#C7F23E"],
