@@ -136,6 +136,7 @@ RESOLVER_PLATFORMS = {
                        "module": "amazon_podcasts_identifier"},
     "siriusxm": {"label": "SiriusXM", "module": "siriusxm_episode_identifier"},
     "audible": {"label": "Audible", "module": "audible_identifier"},
+    "books": {"label": "Books", "module": "books_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -161,6 +162,7 @@ RESOLVER_MODULE = {
     "amazonpodcasts": "amazon_podcasts_identifier",
     "siriusxm": "siriusxm_episode_identifier",
     "audible": "audible_identifier",
+    "books": "books_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
@@ -171,7 +173,7 @@ URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney"
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
                   "britbox", "youtube", "spotify", "applepodcasts", "iheart",
-                  "pandora", "amazonpodcasts", "siriusxm", "audible"]
+                  "pandora", "amazonpodcasts", "siriusxm", "audible", "books"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -492,6 +494,8 @@ def choose_platform() -> str:
             tag = "browser · every episode URL · one-time login for title search"
         elif key == "audible":
             tag = "browser · no login · direct Audible + via-Amazon links"
+        elif key == "books":
+            tag = "APIs + browser · no login · buy + listen + Libby, every store"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -634,6 +638,10 @@ def main() -> int:
         elif platform == "audible":
             print(f"Resolving {label} — direct Audible + via-Amazon listen "
                   f"links via a headless browse (no login; needs Chromium) ...")
+        elif platform == "books":
+            print(f"Resolving {label} — purchase, audiobook, and Libby links "
+                  f"across every store (public APIs + a headless browse; "
+                  f"no login) ...")
         else:
             print(f"Resolving {label} episodes ...")
         try:
