@@ -62562,13 +62562,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             'TikTok':      'TikTok: Trending videos in the US right now.',
             'Instagram':   'Instagram: Trending posts and reels in the US right now.',
             'X':           'X: Trending tweets in the US right now.',
-            // Streaming platform sub-tabs
-            'Netflix':     'Netflix: Daily Top-10 titles.',
-            'Disney+':     'Disney+: Trending titles right now.',
-            'Hulu':        'Hulu: Trending titles right now.',
-            'Max':         'Max: Trending titles right now.',
-            'Prime Video': 'Prime Video: Trending titles right now.',
-            'ESPN+':       'ESPN+: Trending programs right now.',
+            // Streaming platform sub-tabs are stamped in
+            // _tiqApplyTooltips from the pill label (standalone vs
+            // Starz / Starz on Amazon), not from this map.
             // Headlines sub-tabs. Keys match _tiqNormalizeHeader output
             // of the actual pill text (emoji stripped, trailing count
             // stripped).
@@ -62650,7 +62646,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             panels.querySelectorAll('.tiq-social-tab, .tiq-retailer-tab').forEach(function(el) {
                 if (el.classList.contains('has-tooltip')) return;
                 var raw = _tiqNormalizeHeader(el.textContent);
-                var tip = _tiqLookup(TIQ_SUBTAB_TOOLTIPS, raw);
+                var tip = '';
+                if (el.closest('[data-tiq-panel="streaming"]')) {
+                    if (raw === 'Starz') {
+                        tip = 'Indicates viewing on standalone Starz + Starz via Amazon';
+                    } else if (raw === 'Starz on Amazon') {
+                        tip = 'Indicates viewing on Starz via Amazon';
+                    } else if (raw) {
+                        tip = 'Indicates viewing on standalone ' + raw;
+                    }
+                } else {
+                    tip = _tiqLookup(TIQ_SUBTAB_TOOLTIPS, raw);
+                }
                 if (tip) {
                     el.classList.add('has-tooltip');
                     el.setAttribute('data-tooltip', tip);
