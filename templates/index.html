@@ -123308,6 +123308,56 @@ https://www.instagram.com/p/..."></textarea>
             if (row.style.display !== want) row.style.display = want;
         }
 
+        // SVOD Platforms and the demographic tables get the same
+        // treatment the Insights ledger has: the figure alone on the
+        // right, and a length beside it so the column can be read
+        // down instead of one number at a time.
+        function _subPlatformRows() {
+            var root = document.getElementById('subscriberIQView');
+            if (!root) return;
+            [].forEach.call(root.querySelectorAll('.platform-item'), function (row) {
+                if (row.dataset.subRow === '1') return;
+                var pct = row.querySelector('.platform-pct');
+                if (!pct) return;
+                var m = (pct.textContent || '').match(/(-?[\d.]+)\s*%/);
+                if (!m) return;
+                // "70.34% of show watchers" repeated on ten rows is
+                // noise; the subhead already says whose share it is.
+                pct.textContent = m[1] + '%';
+                if (!row.querySelector('.sub-bar')) {
+                    var bar = document.createElement('div');
+                    bar.className = 'sub-bar';
+                    var fill = document.createElement('i');
+                    fill.style.width = Math.max(0, Math.min(100, parseFloat(m[1]))) + '%';
+                    bar.appendChild(fill);
+                    row.insertBefore(bar, pct);
+                }
+                row.dataset.subRow = '1';
+            });
+        }
+        function _subTableBars() {
+            var root = document.getElementById('subscriberIQView');
+            if (!root) return;
+            [].forEach.call(root.querySelectorAll('table'), function (tbl) {
+                var body = tbl.tBodies && tbl.tBodies[0];
+                if (!body) return;
+                [].forEach.call(body.rows, function (tr) {
+                    if (tr.dataset.subBar === '1') return;
+                    var last = tr.cells[tr.cells.length - 1];
+                    if (!last) return;
+                    var m = (last.textContent || '').trim().match(/^(-?[\d.]+)\s*%$/);
+                    if (!m) { tr.dataset.subBar = '1'; return; }
+                    var bar = document.createElement('span');
+                    bar.className = 'sub-cellbar';
+                    var fill = document.createElement('i');
+                    fill.style.width = Math.max(0, Math.min(100, parseFloat(m[1]))) + '%';
+                    bar.appendChild(fill);
+                    last.insertBefore(bar, last.firstChild);
+                    tr.dataset.subBar = '1';
+                });
+            });
+        }
+
         function _subStripEmoji() {
             var root = document.getElementById('subscriberIQView');
             if (!root) return;
@@ -123327,7 +123377,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (pending) return;
                 pending = setTimeout(function () {
                     pending = 0;
-                    _subReflowHeader(); _subStripEmoji(); _subLedger(); _subMasthead();
+                    _subReflowHeader(); _subStripEmoji(); _subLedger();
+                    _subPlatformRows(); _subTableBars(); _subMasthead();
                 }, 120);
             }
             function attach() {
@@ -176198,6 +176249,95 @@ https://www.instagram.com/p/..."></textarea>
     /* The rail's own underline would double the sticky rule. */
     #subscriberIQView #subscriberTabs { border-bottom: 0 !important; }
     #subscriberIQView #subscriberActionRow .display-mode-toggle { flex-shrink: 0; }
+
+    /* ---- Subscriber IQ: SVOD Platforms and Demographics ---------
+       Both pages were still on the old system: filled navy rows, the
+       figure in acid green with its unit repeated on every line, and
+       body copy set uppercase in a pale lavender that is not in the
+       palette. They read like the Insights ledger now. */
+
+    /* Every remaining section panel sits on the ground. */
+    #subscriberIQView .tab-section,
+    #subscriberIQView .strategic-section > div,
+    #subscriberIQView .platform-section {
+        background: transparent !important;
+        border: 1px solid #3B3D38 !important; border-radius: 12px !important;
+        padding: 22px 26px !important; box-shadow: none !important;
+    }
+    body[data-theme="light"] #subscriberIQView .tab-section,
+    body[data-theme="light"] #subscriberIQView .strategic-section > div,
+    body[data-theme="light"] #subscriberIQView .platform-section {
+        background: #FFFFFF !important; border-color: #C9C6BA !important;
+    }
+
+    /* Copy is sentence case in a recessive grey, not uppercase in
+       lavender. The pale blue was a legacy secondary-text colour. */
+    #subscriberIQView .tab-section p,
+    #subscriberIQView .tab-section > div:not([class]),
+    #subscriberIQView .section-note, #subscriberIQView .tab-note,
+    #subscriberIQView .chart-subtitle, #subscriberIQView .section-subtitle {
+        text-transform: none !important; letter-spacing: 0 !important;
+        color: #9AA09B !important; font-size: 12.5px !important;
+        line-height: 1.6 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .tab-section p,
+    body[data-theme="light"] #subscriberIQView .tab-section > div:not([class]),
+    body[data-theme="light"] #subscriberIQView .section-note,
+    body[data-theme="light"] #subscriberIQView .tab-note,
+    body[data-theme="light"] #subscriberIQView .chart-subtitle,
+    body[data-theme="light"] #subscriberIQView .section-subtitle { color: #5C6560 !important; }
+
+    /* Platform rows: name and gloss left, length in the middle, the
+       figure right in ink. The unit moves to the subhead rather than
+       repeating on all ten lines. */
+    #subscriberIQView .platform-item {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 190px 120px !important;
+        column-gap: 30px !important; align-items: center !important;
+        background: transparent !important; border: 0 !important;
+        border-bottom: 1px solid #2A2D2A !important; border-radius: 0 !important;
+        padding: 14px 0 !important; min-height: 0 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .platform-item { border-bottom-color: #DBD8CD !important; }
+    #subscriberIQView .platform-item:last-child { border-bottom: 0 !important; }
+    #subscriberIQView .platform-name {
+        grid-column: 1; grid-row: 1; font-size: 15px !important;
+        font-weight: 500 !important; letter-spacing: 0 !important;
+        text-transform: none !important; color: #E9E8E1 !important;
+    }
+    body[data-theme="light"] #subscriberIQView .platform-name { color: #0C1618 !important; }
+    #subscriberIQView .platform-pct {
+        grid-column: 3; grid-row: 1; text-align: right !important;
+        font-size: 24px !important; font-weight: 800 !important;
+        letter-spacing: -.03em !important; color: #E9E8E1 !important;
+        font-variant-numeric: tabular-nums; text-transform: none !important;
+    }
+    body[data-theme="light"] #subscriberIQView .platform-pct { color: #0C1618 !important; }
+    #subscriberIQView .platform-item .sub-bar { grid-column: 2; grid-row: 1; }
+
+    /* A share bar in the percentage cell turns a column of numbers
+       into a distribution you can read down. */
+    #subscriberIQView td .sub-cellbar {
+        display: inline-block; vertical-align: middle; position: relative;
+        width: 96px; height: 5px; border-radius: 99px;
+        background: #2A2D2A; margin-right: 12px;
+    }
+    body[data-theme="light"] #subscriberIQView td .sub-cellbar { background: #DBD8CD; }
+    #subscriberIQView td .sub-cellbar i {
+        position: absolute; left: 0; top: 0; bottom: 0; min-width: 3px;
+        border-radius: 99px; background: #C7F23E;
+    }
+    body[data-theme="light"] #subscriberIQView td .sub-cellbar i { background: #5E7E12; }
+    #subscriberIQView table { border-collapse: collapse !important; }
+    #subscriberIQView tbody td {
+        border-bottom: 1px solid #2A2D2A !important; padding: 13px 14px !important;
+    }
+    body[data-theme="light"] #subscriberIQView tbody td { border-bottom-color: #DBD8CD !important; }
+    #subscriberIQView thead th {
+        border-bottom: 1px solid #3B3D38 !important; padding: 10px 14px !important;
+        background: transparent !important;
+    }
+    body[data-theme="light"] #subscriberIQView thead th { border-bottom-color: #C9C6BA !important; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
