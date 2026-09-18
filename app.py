@@ -19086,14 +19086,23 @@ def _brand_tracking_load_json(key: str):
 # ---------------------------------------------------------------------
 # Flywheel IQ
 #
-# A flywheel study is one CSV in data/flywheel. The long format is the
-# same every time: a `table` column names the block, `surface_label`
-# names the row, and the measure columns sit beside it. Parsing on the
-# server rather than shipping a payload in the template means a new
-# study is a file drop, and the frontend never learns the shape of any
-# one study.
+# A flywheel study is one CSV. The long format is the same every time:
+# a `table` column names the block, `surface_label` names the row, and
+# the measure columns sit beside it. Parsing on the server rather than
+# shipping a payload in the template means a new study is a file drop,
+# and the frontend never learns the shape of any one study.
+#
+# Studies live in S3 alongside every other dashboard input, so that
+# file drop is an upload and not a deploy, and a corrected number
+# reaches the page without shipping code. The repo copy under
+# data/flywheel is a fallback for when S3 cannot be reached, never the
+# source of truth.
 # ---------------------------------------------------------------------
 _FLYWHEEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'flywheel')
+FLYWHEEL_IQ_S3_PREFIX = 'flywheel/'
+_FLYWHEEL_CACHE_TTL = 60
+_flywheel_study_cache = {}
+_flywheel_index_cache = {'at': 0.0, 'runs': None}
 
 # Columns that are constant for a whole study rather than per row.
 _FLYWHEEL_STUDY_COLS = ('window', 'unit', 'cohort_accounts', 'panel')
@@ -19140,19 +19149,69 @@ def _flywheel_hero_for(stem):
     return None
 
 
-def _flywheel_list_files():
-    out = []
+def _flywheel_s3_list():
+    """Study file names in S3, or None when S3 could not be read."""
+    if s3_client is None:
+        return None
+    names, token = [], None
     try:
-        for fn in sorted(os.listdir(_FLYWHEEL_DIR)):
-            if not fn.lower().endswith('.csv'):
-                continue
-            out.append({
-                'key': fn,
-                'label': _flywheel_title_from_name(fn[:-4]),
-            })
-    except Exception:
-        pass
-    return out
+        while True:
+            kw = {'Bucket': S3_BUCKET, 'Prefix': FLYWHEEL_IQ_S3_PREFIX}
+            if token:
+                kw['ContinuationToken'] = token
+            resp = s3_client.list_objects_v2(**kw)
+            for obj in resp.get('Contents', []):
+                name = obj['Key'][len(FLYWHEEL_IQ_S3_PREFIX):]
+                if name and '/' not in name and name.lower().endswith('.csv'):
+                    names.append(name)
+            if not resp.get('IsTruncated'):
+                break
+            token = resp.get('NextContinuationToken')
+    except Exception as exc:
+        app.logger.warning('Flywheel IQ S3 list failed: %s', exc)
+        return None
+    return sorted(names)
+
+
+def _flywheel_s3_text(key):
+    """('ok', text) | ('missing', None) | ('error', None) for one study."""
+    if s3_client is None:
+        return 'error', None
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET,
+                                   Key=FLYWHEEL_IQ_S3_PREFIX + key)
+        return 'ok', obj['Body'].read().decode('utf-8-sig')
+    except ClientError as e:
+        code = (e.response.get('Error') or {}).get('Code', '')
+        if code in ('NoSuchKey', 'NoSuchBucket', '404'):
+            return 'missing', None
+        app.logger.warning('Flywheel IQ S3 get failed for %s: %s', key, e)
+        return 'error', None
+    except Exception as exc:
+        app.logger.warning('Flywheel IQ S3 get failed for %s: %s', key, exc)
+        return 'error', None
+
+
+def _flywheel_list_files():
+    now = time.time()
+    if (_flywheel_index_cache['runs'] is not None
+            and now - _flywheel_index_cache['at'] < _FLYWHEEL_CACHE_TTL):
+        return _flywheel_index_cache['runs']
+    names = _flywheel_s3_list()
+    if names is None:
+        # S3 unreachable. Serve whatever shipped with the deploy so the
+        # product stays up, and say so in the log.
+        app.logger.warning('Flywheel IQ falling back to the bundled studies')
+        try:
+            names = sorted(fn for fn in os.listdir(_FLYWHEEL_DIR)
+                           if fn.lower().endswith('.csv'))
+        except Exception:
+            names = []
+    runs = [{'key': fn, 'label': _flywheel_title_from_name(fn[:-4])}
+            for fn in names]
+    _flywheel_index_cache['at'] = now
+    _flywheel_index_cache['runs'] = runs
+    return runs
 
 
 def _flywheel_num(v):
@@ -19168,34 +19227,54 @@ def _flywheel_num(v):
     return int(f) if f.is_integer() and abs(f) < 1e15 else f
 
 
-def _flywheel_parse(path):
+def _flywheel_parse_text(text):
     import csv as _csv
+    import io as _io
     blocks = {}
     order = []
     study = {}
-    with open(path, 'r', encoding='utf-8-sig', newline='') as fh:
-        for raw in _csv.DictReader(fh):
-            table = (raw.get('table') or '').strip()
-            if not table:
+    for raw in _csv.DictReader(_io.StringIO(text)):
+        table = (raw.get('table') or '').strip()
+        if not table:
+            continue
+        if table not in blocks:
+            blocks[table] = []
+            order.append(table)
+        row = {}
+        for k, v in raw.items():
+            if k is None or k == 'table':
                 continue
-            if table not in blocks:
-                blocks[table] = []
-                order.append(table)
-            row = {}
-            for k, v in raw.items():
-                if k is None or k == 'table':
-                    continue
-                key = k.strip()
-                if key in _FLYWHEEL_STUDY_COLS:
-                    if key not in study and (v or '').strip():
-                        study[key] = _flywheel_num(v) if key == 'cohort_accounts' else v.strip()
-                    continue
-                if key in _FLYWHEEL_NUMERIC_COLS:
-                    row[key] = _flywheel_num(v)
-                else:
-                    row[key] = (v or '').strip()
-            blocks[table].append(row)
+            key = k.strip()
+            if key in _FLYWHEEL_STUDY_COLS:
+                if key not in study and (v or '').strip():
+                    study[key] = _flywheel_num(v) if key == 'cohort_accounts' else v.strip()
+                continue
+            if key in _FLYWHEEL_NUMERIC_COLS:
+                row[key] = _flywheel_num(v)
+            else:
+                row[key] = (v or '').strip()
+        blocks[table].append(row)
     return {'blocks': blocks, 'block_order': order, 'study': study}
+
+
+def _flywheel_load(key):
+    """Parsed study for one file name. None when there is no such study."""
+    now = time.time()
+    hit = _flywheel_study_cache.get(key)
+    if hit and now - hit[0] < _FLYWHEEL_CACHE_TTL:
+        return hit[1]
+    status, text = _flywheel_s3_text(key)
+    if status != 'ok':
+        if status == 'error':
+            app.logger.warning('Flywheel IQ falling back to the bundled %s', key)
+        path = os.path.join(_FLYWHEEL_DIR, key)
+        if not os.path.isfile(path):
+            return None
+        with open(path, 'r', encoding='utf-8-sig', newline='') as fh:
+            text = fh.read()
+    payload = _flywheel_parse_text(text)
+    _flywheel_study_cache[key] = (now, payload)
+    return payload
 
 
 @app.route('/api/flywheel-iq/runs')
@@ -19218,14 +19297,13 @@ def api_flywheel_run():
     # is refused rather than normalized.
     if not key or '/' in key or '\\' in key or key.startswith('.') or not key.lower().endswith('.csv'):
         return jsonify({'success': False, 'error': 'run not found'}), 404
-    path = os.path.join(_FLYWHEEL_DIR, key)
-    if not os.path.isfile(path):
-        return jsonify({'success': False, 'error': 'run not found'}), 404
     try:
-        payload = _flywheel_parse(path)
+        payload = _flywheel_load(key)
     except Exception as exc:
         app.logger.warning('Flywheel parse failed for %s: %s', key, exc)
         return jsonify({'success': False, 'error': 'could not read this study'}), 500
+    if payload is None:
+        return jsonify({'success': False, 'error': 'run not found'}), 404
     payload['key'] = key
     payload['label'] = _flywheel_title_from_name(key[:-4])
     payload['hero_image'] = _flywheel_hero_for(key[:-4])
