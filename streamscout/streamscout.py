@@ -137,6 +137,7 @@ RESOLVER_PLATFORMS = {
     "siriusxm": {"label": "SiriusXM", "module": "siriusxm_episode_identifier"},
     "audible": {"label": "Audible", "module": "audible_identifier"},
     "books": {"label": "Books", "module": "books_identifier"},
+    "games": {"label": "Games", "module": "games_identifier"},
 }
 
 # title -> episode-watch-id resolver modules (used for both pure RESOLVER
@@ -163,17 +164,19 @@ RESOLVER_MODULE = {
     "siriusxm": "siriusxm_episode_identifier",
     "audible": "audible_identifier",
     "books": "books_identifier",
+    "games": "games_identifier",
 }
 # resolvers that accept a pasted URL / UUID as a discovery hint
 URL_HINT_RESOLVERS = {"hulu", "peacock", "appletv", "paramount", "max", "disney",
                       "starz", "hallmark", "amazon", "mgmplus", "britbox",
                       "youtube", "spotify", "applepodcasts", "iheart", "pandora",
-                      "amazonpodcasts", "siriusxm", "audible"}
+                      "amazonpodcasts", "siriusxm", "audible", "games"}
 
 PLATFORM_ORDER = ["peacock", "hulu", "netflix", "appletv", "paramount",
                   "max", "disney", "starz", "hallmark", "amazon", "mgmplus",
                   "britbox", "youtube", "spotify", "applepodcasts", "iheart",
-                  "pandora", "amazonpodcasts", "siriusxm", "audible", "books"]
+                  "pandora", "amazonpodcasts", "siriusxm", "audible", "books",
+                  "games"]
 
 # ── PRODUCTION (studio) tag ────────────────────────────────────────────────────
 # Sourced centrally for EVERY platform by production_tags.py:
@@ -496,6 +499,8 @@ def choose_platform() -> str:
             tag = "browser · no login · direct Audible + via-Amazon links"
         elif key == "books":
             tag = "APIs + browser · no login · buy + listen + Libby, every store"
+        elif key == "games":
+            tag = "APIs + browser · no login · buy + play URLs, every store"
         elif key in RESOLVER_PLATFORMS:
             tag = "resolver"
         else:
@@ -641,6 +646,10 @@ def main() -> int:
         elif platform == "books":
             print(f"Resolving {label} — purchase, audiobook, and Libby links "
                   f"across every store (public APIs + a headless browse; "
+                  f"no login) ...")
+        elif platform == "games":
+            print(f"Resolving {label} — buy/play URLs across every store as "
+                  f"content-map terms (public APIs + a headless browse; "
                   f"no login) ...")
         else:
             print(f"Resolving {label} episodes ...")

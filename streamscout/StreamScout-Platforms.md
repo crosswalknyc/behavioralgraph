@@ -1,8 +1,8 @@
 # StreamScout — Platforms We Support
 
-StreamScout takes a **title** (movie, series, podcast, audiobook, or book) and
-returns the platform's unique **watch / play / listen / read identifier(s)** for
-it, written to a CSV on your Desktop.
+StreamScout takes a **title** (movie, series, podcast, audiobook, book, or game)
+and returns the platform's unique **watch / play / listen / read identifier(s)**
+for it, written to a CSV on your Desktop.
 
 Every lookup asks four questions — *Movie or Series? → Title → Season(s) (series
 only) → Platform* — and every platform writes the **same CSV**:
@@ -59,18 +59,17 @@ blank SEASON.
 |---|----------|:---:|:---:|:---:|:---:|---|
 | 21 | **Books** | No login | ✅ | ✅ | ✅ | One franchise → **one SHOW**, `SEASON = Book N`. Real URLs for **Amazon** (Kindle / Print / Audiobook), **Audible**, **Apple Books**, and **Libby/OverDrive** holds; plus **content-map retail proxies** for the bot-walled stores — `p/<title>` (Target / Books-A-Million), `ip/<title>` (Walmart), `w/<title>` (B&N), `books/<title>` (Bookshop.org), `<title>.product` (Costco). Feeds the **content map**, so slugs keep punctuation (`p/merciless-saints`). |
 
-> **Companion resolver — Games.** `streamscout/gametool_content/` does the same
-> job for **video games**: every buy/play URL across 19 stores (Steam, Epic,
-> GOG, Nintendo, PlayStation, Xbox, Apple, Google Play, Battle.net live; retail
-> & key-markets via paste), emitted as **content-map** terms. Its top-level
-> sibling `gametool_hostmap/` emits the punctuation-stripped **hostmap** form for
-> a different pipeline.
+## 🎮 Games (1)
+
+| # | Platform | Access | Buy | Play | What the URL column holds |
+|---|----------|:---:|:---:|:---:|---|
+| 22 | **Games** | No login | ✅ | ✅ | Pick **Games**, type a title/franchise → every buy/play URL across **19 stores** as **content-map** terms. Live: **Steam, Epic, GOG, Nintendo, PlayStation, Xbox, Apple, Google Play, Battle.net**; paste a product link for **Amazon / Luna / Best Buy / GameStop / Walmart / Target / Eneba / Loaded / G2A**. `SHOW` = the franchise on every row, `SEASON` blank. Engine lives in `streamscout/gametool_content/`; sibling `gametool_hostmap/` emits the punctuation-stripped **hostmap** form for a different pipeline. |
 
 ---
 
 ## Good to know
 
-- **No login for 16 of 21.** Only **5** need anything: **Netflix** & **HBO Max**
+- **No login for 17 of 22.** Only **5** need anything: **Netflix** & **HBO Max**
   (browser login), **Spotify** (a free developer API key), and **Disney+** &
   **SiriusXM** (situational). Those credentials live in a local, gitignored
   `.env.local` file — never in the tool.
