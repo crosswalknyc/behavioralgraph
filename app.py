@@ -40241,7 +40241,15 @@ def get_journey_iq_result(s3_key):
         return jsonify({'success': False, 'error': f'journey_iq import failed: {e}'}), 500
     try:
         # Allow callers to pass either the bare key suffix or the full key.
-        full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
+        # Story-journey ids ('__demo_*') live in S3 under journey-iq/demos/
+        # (2026-09-17, Jenna: journeys are S3 objects like Profile IQ
+        # files, so an edit is an update, never a redeploy).
+        is_demo = s3_key.startswith('__demo_')
+        if is_demo:
+            full_key = f"{_jiq.S3_PREFIX}demos/{s3_key}.json.gz"
+        else:
+            full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) \
+                else _jiq.S3_PREFIX + s3_key
 
         user = get_current_user()
         # Access guard #1: anyone with Digital Journey IQ access can load any
@@ -40249,6 +40257,15 @@ def get_journey_iq_result(s3_key):
         if not user_can_run_analysis_module(user, 'journey_iq'):
             return jsonify({'success': False,
                             'error': 'Digital Journey IQ access required'}), 403
+        if is_demo:
+            # Story journeys are the shared catalog: module access is the
+            # only gate, same visibility they had when baked into the page.
+            data = _jiq.load_run_from_s3(s3_client, full_key)
+            if data is None:
+                return jsonify({'success': False,
+                                'error': 'Run not found'}), 404
+            return jsonify({'success': True, 'data': data,
+                            's3_key': full_key, 'archived': False})
 
         # Access guard #2: archive keys are admin-only.
         is_admin, allow_all, allowed = _user_jiq_run_access(user)
