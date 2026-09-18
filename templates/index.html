@@ -123904,7 +123904,7 @@ https://www.instagram.com/p/..."></textarea>
             'new accounts acquisition': 'No prior subscription on record',
             'reactivated accounts': 'Lapsed subscribers who returned',
             'acquired and reactivated accounts': 'Share of everyone who watched',
-            'completion rate': 'Watched it through',
+            'completion rate': 'Average completion rate x episode',
             'second screen activity': 'On a phone or tablet during play'
         };
         var _SUB_SECOND = { 'reactivated accounts': 1, 'second screen activity': 1 };
@@ -124026,7 +124026,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 parts.push(line + '.');
             }
-            if (done) parts.push('<b>' + done + '</b> watched it through.');
+            if (done) parts.push('Completion averaged <b>' + done + '</b> an episode.');
             var html = parts.join(' ');
             var deck = document.getElementById('subDeck');
             if (!html) { if (deck) deck.remove(); return; }
