@@ -538,3 +538,4 @@ if __name__ == "__main__":
 # (jenna-package-21 2026-09-18 - Jenna package refresh: 21-platform Books + games content-map how-to/Excel)
 # (jenna-package-games-row 2026-09-18 - coverage Excel: add Games (gametool_content) companion row)
 # (games-as-platform 2026-09-18 - StreamScout #22 Games: gametool_content as a first-class menu resolver)
+# (jenna-md-tidy 2026-09-18 - how-to: Books is resolver #21 wording (Games #22 is newest))
