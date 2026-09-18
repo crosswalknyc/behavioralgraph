@@ -58585,7 +58585,7 @@ def api_synth_chat_analyze():
                 credits_used=_PM_JIQ_CREDITS):
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': ('That journey prices at $1,000 and your '
+                'reply': ('That journey prices at $500 and your '
                           'account cannot cover it right now. Add '
                           'funds or ask your admin, and I will run '
                           'it the moment you are set.'),
@@ -59309,7 +59309,7 @@ def _pm_jiq_confirm_reply(parsed):
         f"- Window: {win}\n"
         f"{start_line}\n\n"
         f"{shape} - and it lands in the Digital Journey tab when "
-        f"finished. It prices at $1,000. Run it?")
+        f"finished. It prices at $500. Run it?")
 
 
 def _pm_run_jiq_job(job_id, username, inputs, extras):
