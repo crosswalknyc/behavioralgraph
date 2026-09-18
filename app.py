@@ -58541,7 +58541,7 @@ def api_synth_chat_analyze():
             'reply': (f'On it. Building the {_fsubj} now - it starts '
                       'at your captured users and maps their '
                       'ecosystem life before and after the event. '
-                      'It lands in the Digital Journey tab, and I '
+                      'It lands on the Flywheel IQ page, and I '
                       'will confirm here when it is ready.'),
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
@@ -59394,8 +59394,9 @@ _PM_FW_ASK_COPY = (
     "4. The conversion inside that ecosystem (e.g. an Amazon-owned "
     "checkout inside 30 days of the play)\n"
     "Optional: a two-way split (new vs reactivated), the before / "
-    "after windows (default 180 days before, 30 after), and the "
-    "overall window (default: trailing 12 months).\n\n"
+    "after windows (default: matched, 30 days each - a long before "
+    "against a short after is a clock artifact, not a compare), and "
+    "the overall window (default: trailing 12 months).\n\n"
     "Example: \"Gilmore Girls, start from the 22,764 who acquired or "
     "reactivated Prime after their first play, Amazon-owned "
     "ecosystem, conversion is an Amazon-owned checkout inside 30 "
@@ -59441,20 +59442,20 @@ def _pm_fw_confirm_reply(parsed):
             if parsed.get('cohort_count') else '')
     split = (f"\n- Split: {parsed['splits_hint']}"
              if parsed.get('splits_hint') else '')
-    pre = int(parsed.get('pre_days') or 180)
-    post = int(parsed.get('post_days') or 30)
+    pre = int(parsed.get('pre_days') or 30)
+    post = int(parsed.get('post_days') or pre)
     return (
         f"Here's the Flywheel I'll build:\n"
         f"- {parsed['subject']} on {parsed['ecosystem']} surfaces\n"
         f"- Starting point: {parsed['captured_action']}{lock}\n"
         f"- Conversion: {parsed['conversion_event']}\n"
-        f"- Windows: {pre} days before, {post} days after, "
-        f"inside {win}{split}\n\n"
+        f"- Windows: {pre} days before vs {post} days after the "
+        f"event (matched), inside {win}{split}\n\n"
         f"It starts at those captured users (never the whole "
-        f"country), shows their owned-ecosystem life before and "
-        f"after the event, the second surface, and the conversion - "
-        f"and it lands in the Digital Journey tab next to the "
-        f"flywheel cards when finished. It prices at $1,000. Run it?")
+        f"country) and shows three things: who they are, every "
+        f"owned touch point before the event against after it, and "
+        f"what the converters bought. It lands on the Flywheel IQ "
+        f"page when finished. It prices at $1,000. Run it?")
 
 
 def _pm_run_fw_job(job_id, username, inputs, extras):
@@ -59475,33 +59476,27 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
             kw.setdefault('usage_extras', extras)
             return _pm_claude_json(system, user_prompt, **kw)
 
-        payload = synthesize(inputs, _cf, tools=tools,
-                             created_by=username or 'prometheus')
-        out_key = persist(s3_client, payload, username or 'prometheus',
-                          job_id)
+        csv_text, study_name, summary = synthesize(
+            inputs, _cf, tools=tools,
+            created_by=username or 'prometheus')
+        out_key = persist(s3_client, csv_text, study_name)
         try:
             def _grant(data):
                 u = (data.get('users') or {}).get(username)
                 if not u:
                     return None
-                cur = u.get('allowed_journey_iq_runs')
-                changed = False
-                if isinstance(cur, list) and '*' not in cur \
-                        and out_key not in cur:
-                    u['allowed_journey_iq_runs'] = cur + [out_key]
-                    changed = True
-                if not u.get('has_journey_iq_access'):
-                    u['has_journey_iq_access'] = True
-                    changed = True
-                return data if changed else None
+                if not u.get('has_flywheel_iq_access'):
+                    u['has_flywheel_iq_access'] = True
+                    return data
+                return None
             _users_cas_mutate(_grant)
         except Exception as acc_err:
             print(f"[fw-job {job_id}] access grant skipped: {acc_err}")
         _pm_fw_status_write(job_id, {
             'job_id': job_id, 'user': username, 'status': 'done',
-            'subject': payload['meta']['project_name'],
+            'subject': summary['title'],
             's3_key': out_key,
-            'conversions': (payload.get('kpis') or {}).get('total_users'),
+            'conversions': summary.get('conversions'),
             'finished_at': time.time()})
         print(f"[fw-job {job_id}] done -> {out_key}")
     except Exception as e:
