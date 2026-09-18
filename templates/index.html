@@ -26767,6 +26767,41 @@ https://www.instagram.com/p/..."></textarea>
                 grid-row: auto !important;
             }
         }
+        /* Demographics: Key Differentiators table is gone. Momentum is
+           01 and runs the full width as a horizontal strip. */
+        #dashboardView.piq-v4 #tab-demographics .demo-insight-card[data-module="Key Differentiators"],
+        #dashboardView.piq-v4 #tab-demographics #demoDifferentiators,
+        #dashboardView.piq-v4 #tab-demographics #piqDemoDiffHead {
+            display: none !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail {
+            grid-template-columns: minmax(0, 1fr) !important;
+            column-gap: 0;
+        }
+        #dashboardView.piq-v4 #tab-demographics .demo-insights-row.piq-has-rail > #piqMomentumRail {
+            grid-column: 1 / -1 !important;
+            grid-row: auto !important;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px 28px;
+            padding: 0;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-list::before {
+            display: none;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item,
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item:last-child {
+            padding: 0;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .dot {
+            position: relative;
+            left: 0;
+            top: 0;
+            display: block;
+            margin: 0 0 8px;
+        }
     </style>
 
         <!-- DASHBOARD VIEW -->
@@ -129686,7 +129721,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return String(b.date || '').localeCompare(String(a.date || ''));
             });
             var html = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<div class="piq-eyebrow"><span class="num">01</span>Momentum</div>' +
                 '<h3>What moved in this window</h3></div></div><ol class="piq-mom-list">';
             ordered.forEach(function(ev) {
                 var when = window._piqV4MomentumDate(ev.date);
@@ -129714,7 +129749,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 bars += '<div class="piq-mom-skel" style="width:' + w + '%;opacity:' + (0.55 - i * 0.06).toFixed(2) + '"></div>';
             });
             rail.innerHTML = '<div class="piq-panel-head"><div class="stack">' +
-                '<div class="piq-eyebrow"><span class="num">02</span>Momentum</div>' +
+                '<div class="piq-eyebrow"><span class="num">01</span>Momentum</div>' +
                 '<h3>What moved in this window</h3></div></div>' + bars;
         };
         window._piqV4LoadMomentum = function() {
@@ -129810,6 +129845,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     csvWrap.innerHTML = window._piqV4CsvBtn('demographic', 'Key Differentiators');
                     diffCard.insertBefore(csvWrap, diffCard.firstChild);
                 }
+                if (insights) insights.classList.remove('piq-no-data');
                 if (rows.length) {
                     var html = '<div class="piq-data-row head"><span>Category</span><span>Segment</span><span>Profile</span><span>Gen Pop</span><span>Index</span></div>';
                     rows.forEach(function(r) {
@@ -129822,11 +129858,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             '<span class="idx ' + window._piqV4IdxCls(r.idx) + '">' + Math.round(r.idx) + '</span></div>';
                     });
                     if (host.innerHTML !== html) host.innerHTML = html;
-                    if (insights) insights.classList.remove('piq-no-data');
                     if (diffCard) diffCard.classList.remove('piq-no-data');
                 } else {
                     if (host.innerHTML) host.innerHTML = '';
-                    if (insights) insights.classList.add('piq-no-data');
                     if (diffCard) diffCard.classList.add('piq-no-data');
                 }
             }
