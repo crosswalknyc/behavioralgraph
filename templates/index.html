@@ -26793,14 +26793,28 @@ https://www.instagram.com/p/..."></textarea>
         }
         #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item,
         #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item:last-child {
+            display: grid;
+            grid-template-columns: 9px minmax(0, 1fr);
+            column-gap: 8px;
+            align-items: start;
             padding: 0;
         }
         #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .dot {
+            grid-column: 1;
+            grid-row: 1;
             position: relative;
             left: 0;
-            top: 0;
+            top: 3px;
             display: block;
-            margin: 0 0 8px;
+            margin: 0;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .when {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .what,
+        #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .why {
+            grid-column: 2;
         }
     </style>
 
