@@ -58,3 +58,8 @@ rokufast_ranker_cache.json
 *.backup
 *.bak.*
 .env.iproyal_proxy
+
+# Flywheel studies are product data, not scratch output. The blanket
+# *.csv ignore above would keep them off the server, where the
+# Flywheel routes read them.
+!data/flywheel/*.csv
