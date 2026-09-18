@@ -60,6 +60,9 @@ POD = [
 AUDIO = [
     ("Audible",         1, 1, "no",   "direct Audible + via-Amazon",    "TWO rows / title: audible.com/pd + amazon.com/dp (different ASINs)"),
 ]
+BOOKS = [
+    ("Books",           0, 0, "no",   "buy + listen + library links",   "Whole franchise → ONE show, SEASON = Book N. Amazon Kindle/Print/Audio, Audible, Apple Books, Libby holds, + retail proxies (Target/BAM, Walmart, B&N, Bookshop, Costco). Feeds the CONTENT map (punctuation kept)."),
+]
 ACCESS = {
     "no":    ("No login",      NOLOGIN),
     "login": ("Browser login", LOGIN),
@@ -67,7 +70,7 @@ ACCESS = {
     "situ":  ("Situational",   SITU),
 }
 
-TOTAL = len(VIDEO) + len(POD) + len(AUDIO)
+TOTAL = len(VIDEO) + len(POD) + len(AUDIO) + len(BOOKS)
 
 # ── workbook ──────────────────────────────────────────────────────────────────
 wb = Workbook()
@@ -101,7 +104,7 @@ r = 1
 # title banner
 band(r, "  🛰  StreamScout", NAVY, WHITE, size=22, h=40)
 r += 1
-band(r, f"  One tool → every watch / play id  ·  {TOTAL} platforms  ·  movies, series, podcasts & audiobooks",
+band(r, f"  One tool → every watch / play id  ·  {TOTAL} platforms  ·  movies, series, podcasts, audiobooks & books",
      NAVY2, "BFD3EE", size=11, bold=False, h=22)
 r += 1
 band(r, "", WHITE, WHITE, h=6)   # spacer
@@ -178,6 +181,11 @@ r = data_rows(POD, r, zebra_offset=0)
 band(r, f"📚  Audiobooks  ·  {len(AUDIO)}", "E8F0FC", NAVY2, size=10, h=20)
 r += 1
 r = data_rows(AUDIO, r, zebra_offset=0)
+# section: books
+band(r, f"📖  Books  ·  {len(BOOKS)}   (buy · listen · library — feeds the content map)",
+     "E8F0FC", NAVY2, size=10, h=20)
+r += 1
+r = data_rows(BOOKS, r, zebra_offset=0)
 
 # freeze under header
 ws.freeze_panes = f"A{header_start + 1}"
@@ -187,12 +195,19 @@ r += 1
 band(r, "  Good to know", NAVY, WHITE, size=12, h=26)
 r += 1
 NOTES = [
-    f"15 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
+    f"16 of {TOTAL} platforms need NO login. Only 5 need anything: Netflix & HBO Max (browser login), "
     "Spotify (free API key), and Disney+ & SiriusXM (situational).",
     "Access legend:  No login = anonymous  ·  Browser login = a Firefox/Chromium window drives itself  ·  "
     "Free API key = Spotify Client ID+Secret  ·  Situational = usually none, occasional login.",
     "Every run writes one CSV to your Desktop:  SHOW · URL · PRODUCTION · PLATFORM · SEASON.  "
-    "PRODUCTION (studio) fills in automatically; SEASON is blank for movies, podcasts, audiobooks, Apple TV+, BritBox & YouTube.",
+    "PRODUCTION (studio) fills in automatically; SEASON is blank for movies, podcasts & audiobooks (and Apple TV+, "
+    "BritBox & YouTube), and carries Book N for a book franchise.",
+    "Books resolves a whole franchise to ONE show: purchase (Amazon Kindle/Print, Bookshop, Costco…), audiobook "
+    "(Audible, Apple, Amazon), and LIBRARY holds (Libby/OverDrive) — with content-map retail proxies for the "
+    "bot-walled stores. Its URLs feed the CONTENT map, so slugs keep their punctuation (p/merciless-saints).",
+    "Companion resolver: gametool_content (in streamscout/gametool_content) does the same job for VIDEO GAMES — "
+    "every buy/play URL across 19 stores, also as content-map terms. Its sibling gametool_hostmap emits the "
+    "punctuation-stripped hostmap form for a different pipeline.",
     "Podcast platforms return one row per episode. Streaming platforms handle both movies and series, "
     "with flexible season picks (all · 1-3 · 1,4,6).",
     "SiriusXM title search is Netflix-style: one device code the first time on a new computer, then automatic. "
