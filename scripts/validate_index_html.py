@@ -536,3 +536,4 @@ if __name__ == "__main__":
 # (gametool-hostmap-rename 2026-09-18 - rename gametool/ -> gametool_hostmap/ (vs Books content-map))
 # (streamscout-gametool-content 2026-09-18 - StreamScout gametool_content: content-map game terms)
 # (jenna-package-21 2026-09-18 - Jenna package refresh: 21-platform Books + games content-map how-to/Excel)
+# (jenna-package-games-row 2026-09-18 - coverage Excel: add Games (gametool_content) companion row)
