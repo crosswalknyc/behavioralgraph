@@ -58521,7 +58521,9 @@ def api_synth_chat_analyze():
                 credits_used=_PM_FW_CREDITS):
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': ('That flywheel prices at $1,000 and your '
+                'reply': ('That flywheel prices at '
+                          + _pm_tool_price_label('flywheel_iq', '$300')
+                          + ' and your '
                           'account cannot cover it right now. Add '
                           'funds or ask your admin, and I will run '
                           'it the moment you are set.'),
@@ -58585,7 +58587,9 @@ def api_synth_chat_analyze():
                 credits_used=_PM_JIQ_CREDITS):
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': ('That journey prices at $500 and your '
+                'reply': ('That journey prices at '
+                          + _pm_tool_price_label('journey_iq', '$500')
+                          + ' and your '
                           'account cannot cover it right now. Add '
                           'funds or ask your admin, and I will run '
                           'it the moment you are set.'),
@@ -59309,7 +59313,8 @@ def _pm_jiq_confirm_reply(parsed):
         f"- Window: {win}\n"
         f"{start_line}\n\n"
         f"{shape} - and it lands in the Digital Journey tab when "
-        f"finished. It prices at $500. Run it?")
+        f"finished. It prices at "
+        f"{_pm_tool_price_label('journey_iq', '$500')}. Run it?")
 
 
 def _pm_run_jiq_job(job_id, username, inputs, extras):
@@ -59377,9 +59382,23 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 # Method: the revised acquired/reactivated playbook. The nest starts
 # at the captured users (the people who did the thing the ask wants
 # to capture) - never at US gen pop.
+def _pm_tool_price_label(tool_key, fallback):
+    """Live per-pull price from the billing panel (system/pricing.json
+    via wallet.tool_price_usd), so chat copy never drifts from what
+    admins set. Falls back to the last known label on any failure."""
+    try:
+        import wallet as _w
+        v = float(_w.tool_price_usd(tool_key) or 0)
+        if v > 0:
+            return f'${v:,.0f}'
+    except Exception:
+        pass
+    return fallback
+
+
 _PM_FW_JOB_PREFIX = 'system/pm_fw_jobs/'
 _PM_FW_CHIP = 'Build a Flywheel'
-_PM_FW_CREDITS = 15
+_PM_FW_CREDITS = 5
 
 _PM_FW_ASK_COPY = (
     "Happy to build a Flywheel. Give me, in one message:\n"
@@ -59455,7 +59474,8 @@ def _pm_fw_confirm_reply(parsed):
         f"country) and shows three things: who they are, every "
         f"owned touch point before the event against after it, and "
         f"what the converters bought. It lands on the Flywheel IQ "
-        f"page when finished. It prices at $1,000. Run it?")
+        f"page when finished. It prices at "
+        f"{_pm_tool_price_label('flywheel_iq', '$300')}. Run it?")
 
 
 def _pm_run_fw_job(job_id, username, inputs, extras):
