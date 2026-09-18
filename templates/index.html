@@ -129200,7 +129200,8 @@ https://www.instagram.com/p/..."></textarea>
             var mw = Math.max(200, menu.offsetWidth || 200);
             var left = Math.min(window.innerWidth - mw - 8, Math.max(8, r.right - mw));
             var top = r.bottom + 6;
-            if (top + 280 > window.innerHeight) top = Math.max(8, r.top - 6 - Math.min(280, menu.offsetHeight || 280));
+            var room = Math.max(120, window.innerHeight - top - 8);
+            menu.style.maxHeight = Math.min(320, room) + 'px';
             menu.style.left = left + 'px';
             menu.style.top = top + 'px';
         };
