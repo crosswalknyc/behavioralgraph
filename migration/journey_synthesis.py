@@ -86,8 +86,6 @@ Everything must read as observed first-party data: messy values, no
 round numbers, no two identical rates. Return STRICT JSON only:
 
 {
-  "sample": int,                  // messy observed-file count
-                                  // (tens of thousands)
   "customer_brand": str,          // who this file is for
   "category": str,                // short category tag
   "facts": [                      // exactly 4 {label, value} card
@@ -337,8 +335,6 @@ def build_journey(inputs: dict, prim: dict, *,
         'meta': {
             'window': f'{start} to {end}',
             'unit': 'unique US accounts',
-            'sample': _messy((seedbase, 'sample'),
-                             float(prim.get('sample') or 48000)),
             'usGenPop': US_GEN_POP,
         },
         'spine': spine,
