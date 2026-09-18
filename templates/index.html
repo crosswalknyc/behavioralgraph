@@ -28262,12 +28262,12 @@ https://www.instagram.com/p/..."></textarea>
                                 <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('revenue')"><span class="tab-icon">💰</span><span class="tab-label">REVENUE</span></button>
                                 <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')" style="display: none;"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
-                                <button class="tab-btn" id="subscriberTimingTabBtn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
+                                <button class="tab-btn" id="subscriberTimingTabBtn" onclick="showSubscriberTab('timing')" style="display: none;"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                                 <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')" style="display: none;"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                                 <button class="tab-btn" id="subscriberEpisodeDatesTabBtn" onclick="showSubscriberTab('epdates')"><span class="tab-icon">📅</span><span class="tab-label">EPISODE DATES</span></button>
-                                <button class="tab-btn" onclick="showSubscriberTab('compare')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
+                                <button class="tab-btn" id="subscriberCompareTabBtn" onclick="showSubscriberTab('compare')" style="display: none;"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
@@ -123252,7 +123252,7 @@ https://www.instagram.com/p/..."></textarea>
             var done = _subFigure('completion rate');
             var parts = [];
             if (acquired) {
-                var line = '<b>' + acquired + '</b> accounts arrived because of it';
+                var line = '<b>' + acquired + '</b> accounts were acquired or reactivated';
                 var a = _subNum(acquired), f = _subNum(fresh);
                 if (a && f && f <= a) {
                     line += ', ' + Math.round((f / a) * 100) + '% of them with no prior subscription';
@@ -123280,6 +123280,23 @@ https://www.instagram.com/p/..."></textarea>
         // template, so rather than editing markup other views depend
         // on, they are taken off the text as this view renders.
         var _SUB_PICTO = /^[\s]*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{20E3}]+[\s]*)+/u;
+        // The masthead belongs to the page, not to the chrome. It is
+        // moved inside the scroll pane so it scrolls away, and the tab
+        // rail follows it in so it can stick to the top of that pane
+        // rather than sitting frozen above it.
+        function _subReflowHeader() {
+            var pane = document.getElementById('subscriberTabContent');
+            var head = document.querySelector('.subscriber-fixed-header');
+            var row = document.getElementById('subscriberActionRow');
+            if (!pane || !head || !row) return;
+            if (head.parentElement !== pane) pane.insertBefore(head, pane.firstChild);
+            if (row.parentElement !== pane) pane.insertBefore(row, head.nextSibling);
+            // The row used to inherit the header's hide; out here it
+            // needs the same one, or an empty view shows a bare rail.
+            var want = (head.style.display === 'none') ? 'none' : 'flex';
+            if (row.style.display !== want) row.style.display = want;
+        }
+
         function _subStripEmoji() {
             var root = document.getElementById('subscriberIQView');
             if (!root) return;
@@ -123299,7 +123316,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (pending) return;
                 pending = setTimeout(function () {
                     pending = 0;
-                    _subStripEmoji(); _subLedger(); _subMasthead();
+                    _subReflowHeader(); _subStripEmoji(); _subLedger(); _subMasthead();
                 }, 120);
             }
             function attach() {
@@ -176165,6 +176182,27 @@ https://www.instagram.com/p/..."></textarea>
     }
     #jiqExportVeil.is-on { display: flex; }
     #jiqExportVeil .dot { width: 8px; height: 8px; border-radius: 50%; background: #C7F23E; }
+
+    /* ---- Subscriber IQ: the rail pins, the masthead does not ----
+       Both now live inside the scroll pane (see _subReflowHeader), so
+       the masthead scrolls off and the rail sticks once it arrives at
+       the top. The rail carries the page ground and a rule so the
+       figures pass under it cleanly rather than showing through. */
+    #subscriberIQView .subscriber-fixed-header {
+        flex-shrink: 0; padding-top: 4px;
+    }
+    #subscriberIQView #subscriberActionRow {
+        position: sticky !important; top: 0; z-index: 40;
+        background: var(--cw-page, #111F22);
+        margin: 0 0 4px !important; padding: 2px 0 0 !important;
+        border-bottom: 1px solid #3B3D38;
+    }
+    body[data-theme="light"] #subscriberIQView #subscriberActionRow {
+        background: #E9E8E1; border-bottom-color: #C9C6BA;
+    }
+    /* The rail's own underline would double the sticky rule. */
+    #subscriberIQView #subscriberTabs { border-bottom: 0 !important; }
+    #subscriberIQView #subscriberActionRow .display-mode-toggle { flex-shrink: 0; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
