@@ -80657,7 +80657,8 @@ https://www.instagram.com/p/..."></textarea>
         // rather than off any one mode's shape.
         var _JIQ_EXPORT_SKIP = {
             jiqLibraryRail: 1, jiqLibraryScrim: 1, jiqLibraryDrawer: 1,
-            jiqDashLoading: 1, jiqDashEmpty: 1, jiqExportVeil: 1
+            jiqDashLoading: 1, jiqDashEmpty: 1, jiqExportVeil: 1,
+            jiqTabsBar: 1, jiqMonthCutBar: 1
         };
         function _jiqVisibleCards() {
             var view = document.getElementById('journeyIQView');
@@ -80766,8 +80767,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (i >= cards.length) return build(shots);
                     return window.html2canvas(cards[i], {
                         backgroundColor: bg, scale: 2, logging: false,
-                        useCORS: true, allowTaint: false,
-                        windowWidth: document.documentElement.clientWidth
+                        useCORS: true, allowTaint: false
                     }).then(function (c) {
                         if (c.width && c.height) shots.push(c);
                         i++; return next();
@@ -80791,17 +80791,25 @@ https://www.instagram.com/p/..."></textarea>
                 if (!shots.length) { alert('Nothing on the page to export.'); return; }
                 var JsPDF = window.jspdf.jsPDF;
                 var doc = null;
+                // Letter width in points. The capture stays at 2x, so
+                // the page is a normal sheet carrying a high-resolution
+                // image rather than a sheet the size of a wall.
+                var PAGE_W = 792;
+                var PAGE_H_MAX = 1025;
 
                 shots.forEach(function (canvas) {
                     var w = canvas.width;
+                    var k = PAGE_W / w;
                     // Pages stay close to letter proportions so the file
                     // is a document rather than one endless strip, but
                     // a short card keeps its own height instead of
                     // being padded out to a full sheet.
-                    var maxPage = Math.round(w * 1.294);
+                    var maxPage = Math.round(PAGE_H_MAX / k);
                     var offset = 0;
                     while (offset < canvas.height) {
                         var sliceH = Math.min(maxPage, canvas.height - offset);
+                        var ptW = PAGE_W;
+                        var ptH = Math.max(12, Math.round(sliceH * k));
                         var part = document.createElement('canvas');
                         part.width = w;
                         part.height = sliceH;
@@ -80810,12 +80818,12 @@ https://www.instagram.com/p/..."></textarea>
                         ctx.fillRect(0, 0, w, sliceH);
                         ctx.drawImage(canvas, 0, offset, w, sliceH, 0, 0, w, sliceH);
 
-                        var orient = w >= sliceH ? 'landscape' : 'portrait';
+                        var orient = ptW >= ptH ? 'landscape' : 'portrait';
                         if (!doc) {
-                            doc = new JsPDF({ orientation: orient, unit: 'px',
-                                              format: [w, sliceH], compress: true });
+                            doc = new JsPDF({ orientation: orient, unit: 'pt',
+                                              format: [ptW, ptH], compress: true });
                         } else {
-                            doc.addPage([w, sliceH], orient);
+                            doc.addPage([ptW, ptH], orient);
                         }
                         // jsPDF keys page size to the orientation it was
                         // given, so the drawing box is read back rather
