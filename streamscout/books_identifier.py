@@ -403,11 +403,11 @@ def _amazon_edition(A, page, title, author=None, edition="print", tries=2):
 # NOT strip punctuation, so the slug stays URL-shaped (hyphenated): p/merciless-
 # saints, NOT the space-normalized hostmap form. Each template embeds {slug}.
 _PROXY_PREFIXES = [
-    ("p/{slug}",       "Target / Books-A-Million (/p/)"),
-    ("ip/{slug}",      "Walmart (/ip/)"),
-    ("w/{slug}",       "Barnes & Noble (/w/)"),
-    ("books/{slug}",   "Bookshop.org (/p/books/)"),
-    ("{slug}.product", "Costco (.product.)"),
+    ("p/{slug}",       "Target / Books-A-Million"),
+    ("ip/{slug}",      "Walmart"),
+    ("w/{slug}",       "Barnes & Noble"),
+    ("books/{slug}",   "Bookshop.org"),
+    ("{slug}.product", "Costco"),
 ]
 
 

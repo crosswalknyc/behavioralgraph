@@ -530,3 +530,4 @@ if __name__ == "__main__":
 # (gametool-ps-relevance 2026-09-17 - GameTool: tighten PlayStation match, no inflation)
 # (gametool-hostmap-output 2026-09-17 - GameTool: BRAND/HOSTNAME/CATEGORY/SECTION sheet)
 # (books-platform 2026-09-18 - StreamScout #21 Books: buy/listen/Libby + retail proxies)
+# (books-clean-platform-labels 2026-09-18 - Books: clean retailer names in PLATFORM col)
