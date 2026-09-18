@@ -1275,8 +1275,8 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "profile analysis":              "profile_iq_build",
     "profile iq":                    "profile_iq_build",
     "profile iq build":              "profile_iq_build",
-    "chatbot profile iq":            "chatbot_profile_iq_build",
-    "chatbot profile iq build":      "chatbot_profile_iq_build",
+    "chatbot profile iq":            "api_chatbot_profile_iq_build",
+    "chatbot profile iq build":      "api_chatbot_profile_iq_build",
     # Derived cuts (any cohort cut of an existing profile).
     "derived cut":                   "profile_iq_derived_cut",
     "derive cut":                    "profile_iq_derived_cut",
@@ -1390,7 +1390,13 @@ def pull_type_to_tool_key(pull_type: str) -> str:
         # on the exact decision string.)
         if decision == "derive_cut":
             return "api_profile_iq_cut" if is_v1 else "profile_iq_derived_cut"
-        return "api_chatbot_profile_iq_build" if is_v1 else "chatbot_profile_iq_build"
+        # Dashboard Prometheus and Partner API v1 both charge the
+        # live Profile IQ build price. The old dashboard-only key
+        # (`chatbot_profile_iq_build`) is retired and returns $0, which
+        # blocked paying wallets (Kartel $4,100, leftover credits 0)
+        # from approving a $275 pull. Route both surfaces to the
+        # canonical priced key.
+        return "api_chatbot_profile_iq_build"
 
     # Normalized fallback: strip parens + collapse spaces/dashes.
     if "(" in pt:
@@ -2322,6 +2328,41 @@ def _tool_display_name(tool_key: str) -> str:
     return tool_key
 
 
+def user_wallet_covers_pull(user: dict, users_data: dict,
+                            pull_type: str = None) -> bool:
+    """True when the resolved billing subject (personal or company
+    wallet) can pay for this pull on dollars, not leftover credits.
+
+    Dashboard approve and the Partner API still preflight through
+    `has_credits_for`, which used to look only at the credits /
+    credit_pool integers. A paying Kartel user with $4,100 on the
+    company wallet and 0 credits was blocked even though
+    consume_credit would have taken the dollars. This is the
+    wallet-side half of that preflight.
+    """
+    try:
+        if not isinstance(user, dict):
+            return False
+        subject, kind, _key = resolve_billing_subject(user, users_data or {})
+        if not is_paying_customer(subject):
+            return False
+        tool_key = pull_type_to_tool_key(pull_type) if pull_type else ""
+        if not tool_key:
+            tool_key = "profile_iq_build"
+        usd, mode = should_charge_wallet(subject, tool_key)
+        if mode != "wallet" or usd <= 0:
+            return False
+        if kind == "company":
+            allowed, _why, _scope = user_can_spend_from_company(
+                user, tool_key, subject)
+            if not allowed:
+                return False
+        ok, _reason = wallet_can_absorb(subject, usd)
+        return bool(ok)
+    except Exception:
+        return False
+
+
 def user_can_spend_from_company(user: dict, tool_key: str,
                                 company: dict) -> tuple:
     """Return (allowed: bool, reason: str, allowed_scope).
@@ -2540,5 +2581,6 @@ __all__ = [
     "resolve_billing_subject", "lookup_user", "company_billing_admins",
     "company_members", "iter_paying_subjects",
     "user_can_spend_from_company", "user_spend_scope_summary",
+    "user_wallet_covers_pull",
     "SpendNotAuthorizedError",
 ]

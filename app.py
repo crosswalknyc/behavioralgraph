@@ -2318,14 +2318,61 @@ def check_user_credits(username):
     return user_credits > 0, user_credits
 
 
-def has_credits_for(username, amount):
-    """Return True if user has at least `amount` credits (or unlimited)."""
+def has_credits_for(username, amount, pull_type=None):
+    """Return True if the user can pay for this pull.
+
+    Internal credits (personal or company pool) still win when they
+    cover `amount`. When those are at 0, a paying customer's dollar
+    wallet (personal or company-shared) can cover the same pull so a
+    Kartel user with $4,100 and 0 leftover credits is not blocked.
+    `pull_type` selects the priced tool; omitted pulls use the
+    Profile IQ full-build price as the conservative default.
+    """
     has_credits, credits_left = check_user_credits(username)
-    if not has_credits:
-        return False
-    if credits_left == -1:
+    if has_credits and credits_left == -1:
         return True
-    return credits_left >= amount
+    if has_credits and credits_left >= amount:
+        return True
+    try:
+        import wallet as _w
+        data = load_users()
+        user = (data.get('users') or {}).get(username)
+        if not user:
+            return False
+        return bool(_w.user_wallet_covers_pull(user, data, pull_type))
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def _caller_wallet_snapshot(username):
+    """Dollar wallet on the resolved billing subject for display.
+
+    Used by the dashboard credits modal / header chip so a paying
+    company wallet ($4,100 on Kartel) shows instead of the user's
+    leftover 0 credits integer.
+    """
+    out = {
+        'wallet_balance_usd': 0.0,
+        'paying_customer': False,
+        'billed_via_company': False,
+        'company_name': '',
+        'unlimited': False,
+    }
+    try:
+        import wallet as _w
+        data = load_users()
+        user = (data.get('users') or {}).get(username or '') or {}
+        subject, kind, key = _w.resolve_billing_subject(user, data)
+        out['wallet_balance_usd'] = round(float(_w.wallet_balance(subject)), 2)
+        out['paying_customer'] = bool(_w.is_paying_customer(subject))
+        out['billed_via_company'] = kind == 'company'
+        out['company_name'] = key if kind == 'company' else ''
+        out['unlimited'] = bool(
+            _w.is_unlimited(user) or _w.is_unlimited(subject))
+    except Exception:
+        traceback.print_exc()
+    return out
 
 
 def _sanitize_spend_scope(value):
@@ -9109,12 +9156,18 @@ def get_credit_usage():
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
     history = user.get('credit_usage_history', [])
-    _, credits_left = check_user_credits(session.get('username') or '')
+    uname = session.get('username') or ''
+    _, credits_left = check_user_credits(uname)
+    snap = _caller_wallet_snapshot(uname)
     return jsonify({
         'success': True,
         'usage': history,
         'credits_used': user.get('credits_used', 0),
         'credits_left': credits_left,
+        'wallet_balance_usd': snap['wallet_balance_usd'],
+        'paying_customer': snap['paying_customer'],
+        'billed_via_company': snap['billed_via_company'],
+        'company_name': snap['company_name'],
     })
 
 
@@ -9658,7 +9711,9 @@ def index():
     profile_picture = (user.get('profile_picture') or '').strip() if user else ''
     if not profile_picture:
         profile_picture = load_default_profile_photo() or ''
-    _, effective_credits = check_user_credits(session.get('username')) if session.get('username') else (False, 0)
+    _uname = session.get('username') or ''
+    _, effective_credits = check_user_credits(_uname) if _uname else (False, 0)
+    _wallet_snap = _caller_wallet_snapshot(_uname) if _uname else {}
     return render_template('index.html', 
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
@@ -9667,6 +9722,10 @@ def index():
                            role=role,
                            credits=effective_credits,
                            credits_used=user.get('credits_used', 0) if user else 0,
+                           wallet_balance_usd=_wallet_snap.get('wallet_balance_usd', 0.0),
+                           paying_customer=_wallet_snap.get('paying_customer', False),
+                           billed_via_company=_wallet_snap.get('billed_via_company', False),
+                           wallet_company_name=_wallet_snap.get('company_name', ''),
                            profile_picture=profile_picture,
                            default_profile_photo=load_default_profile_photo() or '',
                            company_logo=company_logo,
@@ -55381,15 +55440,36 @@ def api_synth_chat_approve():
                                         or {}).get('addon_profile'):
         # Tracker + Profile IQ add-on: both deliverables price in.
         price += CREDITS_PROFILE_ANALYSIS
-    if price > 0 and _charge_user and not has_credits_for(_charge_user, price):
+    _approve_pull_type = f'Chatbot Profile IQ ({decision})'
+    if price > 0 and _charge_user and not has_credits_for(
+            _charge_user, price, pull_type=_approve_pull_type):
         _, _left = check_user_credits(_charge_user)
+        _snap = _caller_wallet_snapshot(_charge_user)
+        _wallet = float(_snap.get('wallet_balance_usd') or 0.0)
+        _usd = 0.0
+        try:
+            import wallet as _w_live
+            _data = load_users()
+            _u = (_data.get('users') or {}).get(_charge_user) or {}
+            _subj, _, _ = _w_live.resolve_billing_subject(_u, _data)
+            _usd, _ = _w_live.should_charge_wallet(
+                _subj, _w_live.pull_type_to_tool_key(_approve_pull_type)
+                or 'api_chatbot_profile_iq_build')
+        except Exception:
+            traceback.print_exc()
+        if _snap.get('paying_customer'):
+            _err = (f"This run costs ${_usd:.2f}. Wallet balance is "
+                    f"${_wallet:.2f}. Top up to keep going.")
+        else:
+            _err = (f"You're out of credits for this run - {price} needed, "
+                    f"{_left} remaining. Top up to keep going.")
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': (f"You're out of credits for this run - {price} needed, "
-                      f"{_left} remaining. Top up to keep going."),
+            'error': _err,
             'credits_required': price,
             'credits_remaining': _left,
+            'wallet_balance_usd': _wallet,
             'top_up_url': '/wallet',
             'top_up_label': 'Buy more credits',
         }), 402
@@ -60466,11 +60546,13 @@ def _v1_balance_usd(username: str) -> float:
     try:
         import wallet as _w
         data = load_users()
-        subject = _w.resolve_billing_subject(username, data)
-        rec = subject.get('record') or {}
-        if _w.is_unlimited(rec):
+        user = (data.get('users') or {}).get(username) or {}
+        if not user:
+            return 0.0
+        subject, _kind, _key = _w.resolve_billing_subject(user, data)
+        if _w.is_unlimited(user) or _w.is_unlimited(subject):
             return -1.0
-        return round(float(_w.wallet_balance(rec)), 2)
+        return round(float(_w.wallet_balance(subject)), 2)
     except Exception:
         return 0.0
 
@@ -60732,7 +60814,9 @@ def _partner_credit_preflight(username: str, min_credits: int):
     if min_credits <= 0:
         return None, None
     try:
-        if has_credits_for(username, min_credits):
+        _pt = ('Chatbot Profile IQ v1 (derive_cut)' if min_credits <= 3
+               else 'Chatbot Profile IQ v1 (new_build)')
+        if has_credits_for(username, min_credits, pull_type=_pt):
             return None, None
     except Exception:
         # If the credit lookup blows up, fail closed - don't spend Claude.
@@ -65528,7 +65612,8 @@ def api_v1_profiles_run():
     # Exact-tier credit re-check (some tiers cost more than the median
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
     # tier that exceeds the partner's balance, refuse cleanly.
-    if price > 0 and not has_credits_for(username, price):
+    _v1_pt = f'Chatbot Profile IQ v1 ({decision})'
+    if price > 0 and not has_credits_for(username, price, pull_type=_v1_pt):
         _, credits_left = check_user_credits(username)
         _price_usd_tier = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
         _bal_usd = _v1_balance_usd(username)

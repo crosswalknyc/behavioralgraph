@@ -19398,8 +19398,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             <h2>Your credits.</h2>
             <div class="credits-info">
                 <div class="credits-info-row">
-                    <span class="credits-info-label">Available Credits</span>
-                    <span class="credits-info-value" id="modalCreditsAvailable">{{ 'Unlimited' if credits == -1 else credits }}</span>
+                    <span class="credits-info-label" id="modalCreditsAvailableLabel">{% if paying_customer|default(false) and credits != -1 %}Available{% else %}Available Credits{% endif %}</span>
+                    <span class="credits-info-value" id="modalCreditsAvailable">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}${{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                 </div>
                 <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each credit was used for">
                     <span class="credits-info-label">Credits Used</span>
@@ -19596,8 +19596,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                 <div class="user-info-bar">
                     <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view credits and buy more">
                         <span class="credits-icon">💳</span>
-                        <span class="credits-label">Credits:</span>
-                        <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
+                        <span class="credits-label" id="creditsLabel">{% if paying_customer|default(false) and credits != -1 %}Wallet:{% else %}Credits:{% endif %}</span>
+                        <span class="credits-value" id="creditsValue">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}${{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                     </div>
                     <div class="user-menu">
                         <div class="user-menu-hover-wrap" id="userMenuWrap">
@@ -131615,15 +131615,55 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+        function formatWalletUsd(n) {
+            const v = Number(n);
+            if (!isFinite(v)) return '$0.00';
+            return '$' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        function applyCreditsSurface(data) {
+            const availEl = document.getElementById('modalCreditsAvailable');
+            const labelEl = document.getElementById('modalCreditsAvailableLabel');
+            const headerLabel = document.getElementById('creditsLabel');
+            const left = (data && typeof data.credits_left === 'number') ? data.credits_left : null;
+            const paying = !!(data && data.paying_customer);
+            if (left === -1) {
+                if (availEl) availEl.textContent = 'Unlimited';
+                if (labelEl) labelEl.textContent = 'Available Credits';
+                if (headerLabel) headerLabel.textContent = 'Credits:';
+                updateCreditsDisplay(-1);
+                return;
+            }
+            if (paying) {
+                const shown = formatWalletUsd(data.wallet_balance_usd);
+                if (availEl) availEl.textContent = shown;
+                if (labelEl) labelEl.textContent = 'Available';
+                if (headerLabel) headerLabel.textContent = 'Wallet:';
+                updateCreditsDisplay(shown);
+                return;
+            }
+            if (availEl && left !== null) availEl.textContent = left;
+            if (labelEl) labelEl.textContent = 'Available Credits';
+            if (headerLabel) headerLabel.textContent = 'Credits:';
+            if (left !== null) updateCreditsDisplay(left);
+        }
+
         function updateCreditsDisplay(credits) {
             const creditsValue = document.getElementById('creditsValue');
+            if (!creditsValue) return;
             if (credits === -1) {
                 creditsValue.textContent = 'Unlimited';
                 creditsValue.className = 'credits-value';
-            } else {
-                creditsValue.textContent = credits;
-                creditsValue.className = 'credits-value' + (credits <= 1 ? ' low' : '') + (credits === 0 ? ' empty' : '');
+                return;
             }
+            if (typeof credits === 'string') {
+                const n = parseFloat(String(credits).replace(/[^0-9.-]/g, ''));
+                creditsValue.textContent = credits;
+                creditsValue.className = 'credits-value' + ((isFinite(n) && n <= 0) ? ' empty' : '');
+                return;
+            }
+            creditsValue.textContent = credits;
+            creditsValue.className = 'credits-value' + (credits <= 1 ? ' low' : '') + (credits === 0 ? ' empty' : '');
         }
 
         // The previous "rerun with different dates" YES/NO chooser was removed.
@@ -175295,13 +175335,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (usedEl && typeof data.credits_used === 'number') {
                         usedEl.textContent = data.credits_used;
                     }
-                    const availEl = document.getElementById('modalCreditsAvailable');
-                    if (availEl && typeof data.credits_left === 'number') {
-                        availEl.textContent = data.credits_left === -1 ? 'Unlimited' : data.credits_left;
-                    }
-                    if (typeof data.credits_left === 'number') {
-                        try { updateCreditsDisplay(data.credits_left); } catch (_) {}
-                    }
+                    try { applyCreditsSurface(data); } catch (_) {}
                 })
                 .catch(() => {});
         }
