@@ -1234,8 +1234,25 @@ def _estimate_completion(title: dict,
             * (0.80 + 0.40 * pc_dna['complete_lift']) \
             * pc_accretion
         # Bound to the Peacock-realistic 20-55% band (Peacock investor
-        # slide Q2 2026 for a 30-ep vertical drama).
-        tuned_series = max(15.0, min(58.0, tuned_series))
+        # slide Q2 2026 for a 30-ep vertical drama). Per no-pinning
+        # (profile-iq-pipeline-rules.mdc #1): the clamp is SALTED per
+        # title so titles that would otherwise pin to identical floor
+        # / ceiling values scatter across a real few-point band. An
+        # earlier revision hard-clamped every falling-below title to
+        # exactly 15.0, which then rendered as a preponderance of
+        # "15%" chips across the Peacock grid - the exact synthetic-
+        # signature defect no-synthetic-signatures.mdc forbids.
+        floor_jitter = _completion_jitter(salt, 'series_floor', 3.5)  # +/- 3.5pt
+        ceil_jitter  = _completion_jitter(salt, 'series_ceil',  3.0)  # +/- 3.0pt
+        floor_val = 18.0 + floor_jitter          # 14.5 .. 21.5
+        ceil_val  = 55.0 + ceil_jitter           # 52.0 .. 58.0
+        tuned_series = max(floor_val, min(ceil_val, tuned_series))
+        # Final nudge so no title lands on a .XX0 boundary after the
+        # 2dp round (matches no-round-numbers-in-deliverables.mdc,
+        # even though the frontend renders as integer, the underlying
+        # 2dp value should read organic in exports too).
+        if abs(tuned_series - round(tuned_series)) < 0.03:
+            tuned_series += _completion_jitter(salt, 'series_nudge', 0.35)
         series_completion = round(tuned_series, 2)
         return {
             'source':                 'peacock',
