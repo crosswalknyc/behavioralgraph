@@ -190,7 +190,9 @@
 
   <div class="foot">{% if not (amount_locked and amount_usd) %}Minimum
     ${{ '{:,.2f}'.format(min_usd) }}. {% endif %}Funds are added to the
-    account above and are available as soon as the payment clears.</div>
+    account above and are available as soon as the payment clears.
+    Prepaid purchases are non-refundable. Unused funds have no cash
+    value and cannot be refunded or transferred.</div>
 
   {% else %}
   <div class="eyebrow"><span class="dot"></span><span>Crosswalk</span></div>
