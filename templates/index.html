@@ -81621,15 +81621,28 @@ https://www.instagram.com/p/..."></textarea>
                         'multicultural urban', 'recess buyers',
                         'banking research', 'obsession', 'spe cross window',
                         'abercrombie', 'gilmore', 'landman',
-                        'pop culture jeopardy', 'mark rober'
+                        'pop culture jeopardy', 'mark rober',
+                        'backrooms', 'courtside', 'mandalorian',
+                        'breadwinner', 'the goat', 'the_goat'
                     ];
+                    function _normHide(s) {
+                        return String(s || '').toLowerCase()
+                            .replace(/[_\-]+/g, ' ')
+                            .replace(/[\u2014\u2013]/g, ' ')
+                            .replace(/\s+/g, ' ').trim();
+                    }
                     function _isHiddenRun(r) {
-                        var raw = ((r.project_name || '') + ' ' + (r.target || '')).toLowerCase();
-                        var name = raw.replace(/[_\-]+/g, ' ').replace(/[\u2014\u2013]/g, ' ').replace(/\s+/g, ' ').trim();
-                        if (hiddenRuns.indexOf(name) !== -1) return true;
-                        if (name === 'michael' || name.indexOf('michael ') === 0) return true;
-                        for (var i = 0; i < hiddenRunHas.length; i++) {
-                            if (name.indexOf(hiddenRunHas[i]) !== -1) return true;
+                        var parts = [_normHide(r.project_name), _normHide(r.target),
+                                     _normHide((r.project_name || '') + ' ' + (r.target || ''))];
+                        for (var p = 0; p < parts.length; p++) {
+                            var name = parts[p];
+                            if (!name) continue;
+                            if (hiddenRuns.indexOf(name) !== -1) return true;
+                            if (hiddenRuns.indexOf(name.replace(/ /g, '_')) !== -1) return true;
+                            if (name === 'michael' || name.indexOf('michael ') === 0) return true;
+                            for (var i = 0; i < hiddenRunHas.length; i++) {
+                                if (name.indexOf(hiddenRunHas[i]) !== -1) return true;
+                            }
                         }
                         return false;
                     }
