@@ -67,22 +67,25 @@ It asks one thing — the game title — then sweeps the stores and drops a
 |---|---|
 | **Steam** | public `storesearch` JSON API → appid |
 | **GOG** | `catalog.gog.com` v1 API → slug + publisher |
-| **Apple App Store** | iTunes Search API → trackId + publisher |
+| **Apple App Store** | iTunes Search API → trackId + publisher (Games genre only) |
 | **Google Play** | search HTML → package id (+ `og:title`) |
+| **Nintendo eShop** | public Algolia index (`ncom_game_en_us`) → `products/<slug>` |
 | **Battle.net** | built-in Blizzard catalog (fixed line-up) |
 | **PlayStation Store** | headless Chromium → harvests the store's own `getSearchResults` JSON → **every** PS4 (`CUSA…`) + PS5 (`PPSA…`) edition/region SKU + demos, filtered to game classifications (costumes/passes/DLC dropped) |
+| **Xbox** | headless Chromium → reads the server-rendered search grid → `<slug>/<12-char storeId>` per edition (Game Pass tiles dropped) |
+| **Epic Games Store** | headless Chromium (clears the Cloudflare JS challenge) → the query-filtered `/browse?q=` grid → `p/<slug>` per edition (add-ons/DLC dropped) |
 
-**Paste-a-URL stores** (bot-walled storefronts / retailers — GameTool parses a
+**Paste-a-URL stores** (bot-walled marketplaces / retailers — GameTool parses a
 pasted product URL into a clean id, and offers a paste prompt at the end of an
 interactive run):
 
-Nintendo eShop · Xbox · Epic Games Store · Amazon Luna ·
-Green Man Gaming · Eneba · Loaded · G2A · Amazon · Best Buy · GameStop · Walmart · Target
+Amazon Luna · Green Man Gaming · Eneba · Loaded · G2A ·
+Amazon · Best Buy · GameStop · Walmart · Target
 
-> Roadmap: the remaining storefronts (Nintendo, Xbox, …) can graduate to live
-> search with the same headless resolver pattern as PlayStation. PlayStation
-> still accepts a pasted product URL too, as a fallback if the browser search
-> ever comes back empty.
+> A hands-off run now investigates all six first-party storefronts live
+> (Steam, GOG, Nintendo, PlayStation, Xbox, Epic) plus the app stores — no URL
+> pasting or store expertise required. The paste path remains as a fallback for
+> the retail/key marketplaces and for any headless store that returns empty.
 
 ## Matching
 

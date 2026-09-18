@@ -3,20 +3,24 @@
 stores.py — per-store search + URL parsing for GameTool.
 
 Reliability tiers (see STORES registry at the bottom):
-  • "api"     — live title search over a public HTTP/JSON endpoint (no login).
+  • "api"     — live title search over a public HTTP/JSON endpoint (no login):
+                Steam, GOG, Apple App Store, Google Play, Nintendo eShop.
   • "catalog" — a small built-in map (Battle.net's fixed Blizzard line-up).
+  • "headless"— a headless Chromium drives the real search page (for stores whose
+                search is bot-walled to plain HTTP): PlayStation, Xbox, Epic.
   • "paste"   — no clean anonymous search; we parse a pasted product URL into a
                 clean id (and the runner offers a paste-URL prompt). These are
-                the bot-walled storefronts/retailers (Nintendo, PlayStation,
-                Xbox, Epic, Luna, Eneba, Loaded, Amazon, Best Buy, GameStop,
-                Walmart, Target) — headless-browser search can be added later,
-                reusing StreamScout's Playwright resolvers.
+                the bot-walled marketplaces/retailers (Amazon Luna, Eneba,
+                Loaded, G2A, Green Man Gaming, Amazon, Best Buy, GameStop,
+                Walmart, Target).
 """
 import re
 
 from common import (best_matches, hit, http_get, http_json, q, qplus,
                     similarity, tokens)
+from epic_store import search as epic_search
 from playstation_store import search as playstation_search
+from xbox_store import search as xbox_search
 
 
 # ── Steam (public storesearch JSON) ───────────────────────────────────────────
@@ -44,8 +48,42 @@ def apple_search(title, limit=3):
         url = r.get("trackViewUrl", "")
         if not (tid and url):
             continue
+        # Games only. iTunes "software" returns every app category, so a
+        # same-named non-game app (e.g. a 2014 "Big Hops" Entertainment app)
+        # would otherwise exact-title-match and masquerade as the game. 6014 is
+        # the App Store "Games" genre id.
+        gids = {str(g) for g in (r.get("genreIds") or [])}
+        if "6014" not in gids and r.get("primaryGenreName") != "Games":
+            continue
         out.append(hit(r.get("trackName", ""), url.split("?")[0], tid,
                        "App (iOS)", r.get("artistName", "")))
+    return best_matches(title, out, key=lambda h: h["title"], limit=limit)
+
+
+# ── Nintendo eShop (public Algolia index the US store search itself uses) ──────
+_NINTENDO_APP = "U3B6GR4UA3"
+_NINTENDO_KEY = "c4da8be7fd29f0f5bfa42920b0a99dc7"
+_NINTENDO_IDX = "ncom_game_en_us"
+
+
+def nintendo_search(title, limit=4):
+    d = http_json(
+        f"https://{_NINTENDO_APP.lower()}-dsn.algolia.net/1/indexes/"
+        f"{_NINTENDO_IDX}/query",
+        headers={"X-Algolia-Application-Id": _NINTENDO_APP,
+                 "X-Algolia-API-Key": _NINTENDO_KEY},
+        data={"params": f"query={q(title)}&hitsPerPage=12"}) or {}
+    out = []
+    for h in d.get("hits", []):
+        m = re.search(r"/games/detail/([a-z0-9-]+)", h.get("url") or "")
+        if not m:
+            continue
+        slug = m.group(1)
+        pubs = h.get("publishers")
+        pub = pubs[0] if isinstance(pubs, list) and pubs else ""
+        out.append(hit(h.get("title", ""),
+                       f"https://www.nintendo.com/us/store/products/{slug}/",
+                       slug, "Digital", pub))
     return best_matches(title, out, key=lambda h: h["title"], limit=limit)
 
 
@@ -311,12 +349,12 @@ def to_term(label, url):
 # key: (label, format, tier, search-callable-or-None)
 STORES = [
     ("steam",       ("Steam",             "Digital (PC)",   "api",     steam_search)),
-    ("epic",        ("Epic Games Store",  "Digital (PC)",   "paste",   None)),
+    ("epic",        ("Epic Games Store",  "Digital (PC)",   "headless", epic_search)),
     ("gog",         ("GOG",               "Digital (PC)",   "api",     gog_search)),
     ("battlenet",   ("Battle.net",        "Digital (PC)",   "catalog", battlenet_search)),
-    ("nintendo",    ("Nintendo eShop",    "Digital",        "paste",   None)),
+    ("nintendo",    ("Nintendo eShop",    "Digital",        "api",     nintendo_search)),
     ("playstation", ("PlayStation Store", "Digital",        "headless", playstation_search)),
-    ("xbox",        ("Xbox",              "Digital",        "paste",   None)),
+    ("xbox",        ("Xbox",              "Digital",        "headless", xbox_search)),
     ("luna",        ("Amazon Luna",       "Cloud",          "paste",   None)),
     ("apple",       ("Apple App Store",   "App (iOS)",      "api",     apple_search)),
     ("googleplay",  ("Google Play",       "App (Android)",  "api",     googleplay_search)),
