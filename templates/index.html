@@ -24212,6 +24212,30 @@ https://www.instagram.com/p/..."></textarea>
             border-color: #5E7E12;
             color: #5E7E12;
         }
+        #dashboardView.piq-v4 .piq-head-actions .piq-csv-btn {
+            margin-left: 0;
+        }
+        #dashboardView.piq-v4 .piq-pop-btn {
+            flex: 0 0 auto;
+            margin: 0;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: #1B2F35;
+            border: 1px solid #3B3D38;
+            font-size: 13px;
+            line-height: 1.2;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4 .piq-pop-btn:hover {
+            border-color: #C7F23E;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-pop-btn {
+            background: #FFFFFF;
+            border-color: #C9C6BA;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-pop-btn:hover {
+            border-color: #5E7E12;
+        }
         #piqCsvMenu.piq-csv-menu {
             position: fixed;
             min-width: 200px;
@@ -26815,6 +26839,32 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .what,
         #dashboardView.piq-v4 #tab-demographics #piqMomentumRail .piq-mom-item .why {
             grid-column: 1 / -1;
+        }
+        /* Card popcorn pop-out sits above sticky chrome. */
+        #dashboardView.piq-v4 .spotlight-modal {
+            z-index: 2147483646;
+        }
+        #dashboardView.piq-v4 .spotlight-content.spotlight-whole-card {
+            width: min(1100px, calc(100vw - 48px));
+            max-width: min(1100px, calc(100vw - 48px));
+            max-height: calc(100vh - 40px);
+        }
+        #dashboardView.piq-v4 .spotlight-whole-card .piq-card-popout {
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            cursor: default !important;
+            aspect-ratio: auto !important;
+        }
+        #dashboardView.piq-v4 .spotlight-whole-card .piq-card-popout .behavioral-table,
+        #dashboardView.piq-v4 .spotlight-whole-card .piq-card-popout .piq-bar-list {
+            max-height: none !important;
+            overflow: visible !important;
+            flex: 0 1 auto !important;
+        }
+        #dashboardView.piq-v4 .spotlight-whole-card .piq-pop-btn {
+            display: none !important;
         }
     </style>
 
@@ -129462,6 +129512,44 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             return '<button ' + attrs + '>' + (opts.menu ? 'CSV \u25BE' : 'CSV') + '</button>';
         };
+        window._piqV4PopBtn = function(label) {
+            return '<button type="button" class="piq-pop-btn has-tooltip" data-tooltip="Pop out: Open this whole card in a larger window." data-piq-pop-label="' +
+                window._piqV4Attr(label || '') + '" aria-label="Pop out card">🍿</button>';
+        };
+        window._piqV4HeadActions = function(label, csvHtml) {
+            return '<div class="piq-head-actions">' + (window._piqV4PopBtn ? window._piqV4PopBtn(label) : '') + (csvHtml || '') + '</div>';
+        };
+        window._piqV4OpenCardSpotlight = function(card, label) {
+            if (!card) return;
+            if (window._piqV4CloseCsvMenu) window._piqV4CloseCsvMenu();
+            var oldM = document.getElementById('spotlightModalContainer');
+            if (oldM && oldM.parentNode) oldM.parentNode.removeChild(oldM);
+            try {
+                if (typeof trackActivity === 'function') trackActivity('spotlight_open', label || '');
+                var clone = card.cloneNode(true);
+                clone.classList.add('piq-card-popout', 'behavioral-card-popout');
+                clone.removeAttribute('data-index');
+                clone.removeAttribute('draggable');
+                clone.setAttribute('draggable', 'false');
+                Array.prototype.forEach.call(clone.querySelectorAll('.piq-pop-btn, .module-btn.spotlight-btn, .drag-handle'), function(el) {
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                });
+                var wrap = document.createElement('div');
+                wrap.id = 'spotlightModalContainer';
+                wrap.innerHTML = '<div class="spotlight-modal" onclick="closeSpotlightModal(event)">' +
+                    '<div class="spotlight-content spotlight-whole-card" onclick="event.stopPropagation()">' +
+                    '<div class="spotlight-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);">' +
+                    '<span style="font-size:0.85rem;color:var(--text-secondary);">🍿 ' + window._piqV4Esc(label || '') + '</span>' +
+                    '<button class="spotlight-close" onclick="closeSpotlightModal()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:1.5rem;line-height:1;padding:0.25rem;">&times;</button>' +
+                    '</div><div class="spotlight-body" style="padding:1rem;max-height:85vh;overflow:auto;"></div></div></div>';
+                wrap.querySelector('.spotlight-body').appendChild(clone);
+                var host = card.closest('[id^="tab-"]') || document.getElementById('dashboardView') || document.body;
+                host.appendChild(wrap);
+                if (typeof handleSpotlightEscape === 'function') document.addEventListener('keydown', handleSpotlightEscape);
+            } catch (err) {
+                console.error('Error opening pop-out:', err);
+            }
+        };
         window._piqV4CsvMenuEl = function() {
             var menu = document.getElementById('piqCsvMenu');
             if (menu) return menu;
@@ -129516,6 +129604,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             menu.style.left = left + 'px';
             menu.style.top = top + 'px';
         };
+        if (!window._piqV4PopBound) {
+            window._piqV4PopBound = true;
+            document.addEventListener('click', function(e) {
+                var t = e.target;
+                var btn = t && t.closest ? t.closest('.piq-pop-btn') : null;
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                var card = btn.closest('.chart-card, .behavioral-card, .location-section, .heatmap-container, .regional-breakdown, #allLocationsContainer');
+                var label = btn.getAttribute('data-piq-pop-label') || '';
+                if (window._piqV4OpenCardSpotlight) window._piqV4OpenCardSpotlight(card, label);
+            }, true);
+        }
         if (!window._piqV4CsvBound) {
             window._piqV4CsvBound = true;
             document.addEventListener('click', function(e) {
@@ -129939,7 +130040,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     card.insertBefore(chead, card.firstChild);
                 }
                 chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span>' +
-                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : '');
+                    (window._piqV4HeadActions ? window._piqV4HeadActions(mod, window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : '') : (window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : ''));
             });
         };
         window._piqV4DressBehavioral = function() {
@@ -129961,13 +130062,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var existing = eye.querySelector('.piq-csv-btn');
                 var same = existing && existing.getAttribute('data-piq-csv-cat') === cat &&
                     !!existing.getAttribute('data-piq-csv-menu') === wantMenu;
-                if (same) {
+                if (same && eye.querySelector('.piq-pop-btn')) {
                     var numEl = eye.querySelector('.piq-eyebrow .num');
                     if (numEl) numEl.textContent = num;
                     return;
                 }
                 eye.innerHTML = '<div class="piq-eyebrow"><span class="num">' + num + '</span>' + window._piqV4Esc(cat) + '</div>' +
-                    (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : '');
+                    (window._piqV4HeadActions ? window._piqV4HeadActions(cat, window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : '') : (window._piqV4CsvBtn ? window._piqV4CsvBtn('behavioral', cat, wantMenu ? { menu: true } : {}) : ''));
             });
             var sel = document.getElementById('categoryReorderSelect');
             var jump = document.getElementById('piqBehJump');
@@ -130147,7 +130248,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     el.insertBefore(h, el.firstChild);
                 }
                 var csv = (csvType && window._piqV4CsvBtn) ? window._piqV4CsvBtn(csvType, csvCat) : '';
-                h.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>' + csv;
+                var actions = window._piqV4HeadActions ? window._piqV4HeadActions(csvCat || title, csv) : csv;
+                h.innerHTML = '<div class="stack"><div class="piq-eyebrow"><span class="num">' + num + '</span>' + eyebrow + '</div><h3>' + title + '</h3></div>' + actions;
             }
             fillLocHead(tab.querySelector('#allLocationsContainer'), 'piqLocAllHead', '01', 'All Locations by penetration', 'Top DMAs', 'location', 'All Locations');
             fillLocHead(tab.querySelector('.heatmap-container'), 'piqLocMapHead', '02', 'DMA Concentration Map', 'US bubble map');
@@ -149598,57 +149700,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         
         // Pop-out modal: show the whole behavioral card in a larger window
         function openBehavioralSpotlight(category) {
-            console.log('Opening pop-out for category:', category);
-            
-            if (!currentDashboardData || !currentProfileData) {
-                alert('Please select a profile first');
+            var card = document.querySelector('.behavioral-card[data-category="' + String(category || '').replace(/"/g, '\\"') + '"]');
+            if (!card) {
+                alert('Card not found. Try scrolling to the Behavioral tab and opening again.');
                 return;
             }
-            
-            try {
-                trackActivity('spotlight_open', category);
-                
-                const card = document.querySelector(`.behavioral-card[data-category="${category.replace(/"/g, '\\"')}"]`);
-                if (!card) {
-                    alert('Card not found. Try scrolling to the Behavioral tab and opening again.');
-                    return;
-                }
-                
-                const clone = card.cloneNode(true);
-                clone.classList.add('behavioral-card-popout');
-                clone.removeAttribute('data-index');
-                clone.querySelectorAll('.drag-handle').forEach(el => el.remove());
-                const spotlightBtn = clone.querySelector('.module-btn.spotlight-btn');
-                if (spotlightBtn) spotlightBtn.remove();
-                
-                const modalHtml = `
-                    <div class="spotlight-modal" onclick="closeSpotlightModal(event)">
-                        <div class="spotlight-content spotlight-whole-card" onclick="event.stopPropagation()">
-                            <div class="spotlight-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">
-                                <span style="font-size: 0.85rem; color: var(--text-secondary);">🍿 ${category}</span>
-                                <button class="spotlight-close" onclick="closeSpotlightModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 0.25rem;">&times;</button>
-                            </div>
-                            <div class="spotlight-body" style="padding: 1rem; max-height: 85vh; overflow: auto;">
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                const modalContainer = document.createElement('div');
-                modalContainer.id = 'spotlightModalContainer';
-                modalContainer.innerHTML = modalHtml;
-                const bodyEl = modalContainer.querySelector('.spotlight-body');
-                bodyEl.appendChild(clone);
-                document.body.appendChild(modalContainer);
-                
-                document.addEventListener('keydown', handleSpotlightEscape);
-                console.log('Pop-out modal opened successfully');
-            } catch (error) {
-                console.error('Error opening pop-out:', error);
-                alert('Error opening pop-out: ' + error.message);
+            if (window._piqV4OpenCardSpotlight) {
+                window._piqV4OpenCardSpotlight(card, category);
+                return;
             }
         }
-        
         function closeSpotlightModal(event) {
             if (event && event.target && !event.target.classList.contains('spotlight-modal')) {
                 return;
