@@ -81988,6 +81988,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var runs     = (data && data.runs) || [];
                     var archived = (data && data.archived_runs) || [];
                     window.__jiqAllowAll = !!(data && (data.is_admin || data.allow_all));
+                    window.__jiqAllowedDemos = (data && data.allowed_demos) || [];
 
                     var opts = ['<option value="">- pick a past run -</option>'];
 
@@ -82126,7 +82127,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // Only users with default-open / admin access see them;
                         // an explicit allow-list (e.g. Landman + Fandango) must
                         // not still list Netflix, UFC, neurotrophic demos, etc.
-                        var demos = window.__jiqAllowAll ? (DEMO_CARDS[cat.id] || []) : [];
+                        var demos = (DEMO_CARDS[cat.id] || []).filter(function(d) {
+                            if (window.__jiqAllowAll) return true;
+                            return (window.__jiqAllowedDemos || []).indexOf(d.value) !== -1;
+                        });
                         var s3    = byCategory[cat.id] || [];
                         if (!demos.length && !s3.length) return;
                         opts.push('<optgroup label="' + cat.label + '">');

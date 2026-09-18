@@ -40197,18 +40197,125 @@ def list_journey_iq():
                             'runs': []}), 403
         all_runs = _jiq.list_runs(s3_client, limit=500)
 
+        # ---- S3 truth (2026-09-18, Jenna: the per-user picker showed
+        # deleted journeys and missed published ones). The index is
+        # metadata; EXISTENCE comes from a live S3 listing. Index rows
+        # whose object is gone are dropped here and pruned back into
+        # the index best-effort, so a failed prune on delete can never
+        # resurface a run.
+        try:
+            live_keys = set()
+            token = None
+            while True:
+                kw = {'Bucket': S3_BUCKET, 'Prefix': _jiq.S3_PREFIX}
+                if token:
+                    kw['ContinuationToken'] = token
+                resp = s3_client.list_objects_v2(**kw)
+                for obj in resp.get('Contents', []):
+                    live_keys.add(obj['Key'])
+                if not resp.get('IsTruncated'):
+                    break
+                token = resp.get('NextContinuationToken')
+            before = len(all_runs)
+            all_runs = [r for r in all_runs
+                        if r.get('key') in live_keys]
+            if len(all_runs) != before:
+                try:
+                    obj = s3_client.get_object(Bucket=S3_BUCKET,
+                                               Key=_jiq.S3_INDEX_KEY)
+                    idx = json.loads(obj['Body'].read().decode('utf-8')) \
+                        or {'runs': []}
+                    idx['runs'] = [r for r in (idx.get('runs') or [])
+                                   if r.get('key') in live_keys]
+                    s3_client.put_object(
+                        Bucket=S3_BUCKET, Key=_jiq.S3_INDEX_KEY,
+                        Body=json.dumps(idx, ensure_ascii=False
+                                        ).encode('utf-8'),
+                        ContentType='application/json')
+                except Exception:
+                    pass
+        except Exception:
+            live_keys = None
+
+        # Runs retired from the tab picker stay out of the admin picker
+        # too (payloads stay in S3; unhide by pulling the name out).
+        _retired = ('landman', 'abercrombie', 'pop culture jeopardy',
+                    'moviesphere', 'lionsgate', 'mark rober',
+                    'banking research', 'obsession', 'spe cross window',
+                    'gilmore', 'michael', 'backrooms', 'courtside',
+                    'mandalorian', 'breadwinner', 'the goat',
+                    'paramount: subscriber lifecycle')
+
+        def _is_retired(r):
+            name = ' '.join(str(r.get(k) or '') for k in
+                            ('project_name', 'target')).lower()
+            name = re.sub(r'[_\-]+', ' ', name)
+            return any(t in name for t in _retired)
+
+        all_runs = [r for r in all_runs if not _is_retired(r)]
+
+        # ---- story journeys (journey-iq/demos/) join the pickers ----
+        demo_runs = []
+        try:
+            demo_ids = []
+            resp = s3_client.list_objects_v2(
+                Bucket=S3_BUCKET, Prefix=f'{_jiq.S3_PREFIX}demos/')
+            for obj in resp.get('Contents', []):
+                nm = obj['Key'].rsplit('/', 1)[-1]
+                if nm.endswith('.json.gz'):
+                    demo_ids.append(nm[:-len('.json.gz')])
+            now = time.time()
+            cache = globals().setdefault(
+                '_JIQ_DEMO_LABELS', {'at': 0.0, 'labels': {}})
+            for did in demo_ids:
+                if did not in cache['labels'] \
+                        or now - cache['at'] > 600:
+                    data = _jiq.load_run_from_s3(
+                        s3_client,
+                        f'{_jiq.S3_PREFIX}demos/{did}.json.gz')
+                    meta = (data or {}).get('meta') or {}
+                    cache['labels'][did] = (
+                        meta.get('project_name')
+                        or meta.get('target_display')
+                        or did.strip('_').replace('demo_', ''
+                                                  ).replace('_', ' ').title())
+            cache['at'] = now
+            for did in sorted(demo_ids):
+                demo_runs.append({
+                    'key': f'{_jiq.S3_PREFIX}demos/{did}.json.gz',
+                    'demo_id': did,
+                    'project_name': cache['labels'].get(did, did),
+                    'target': 'story journey', 'demo': True,
+                })
+        except Exception:
+            demo_runs = []
+
         # Optional admin-only archive include
         include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
         is_admin, allow_all, _allowed = _user_jiq_run_access(user)
         archived_runs = []
         if include_archive and is_admin:
             archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
+            if live_keys is not None:
+                archived_runs = [r for r in archived_runs
+                                 if r.get('key') in live_keys]
 
         # Apply per-user run gating to LIVE runs (archive list is admin-only
         # so it's already past the gate above).
         visible_runs = _filter_jiq_runs_for_user(all_runs, user)
 
-        return jsonify({
+        # Which story journeys may THIS caller open (drives the tab's
+        # demo cards for explicit-list users).
+        if is_admin or allow_all:
+            allowed_demos = [d['demo_id'] for d in demo_runs]
+        else:
+            allowed_set = set(_allowed or [])
+            allowed_demos = [
+                d['demo_id'] for d in demo_runs
+                if d['demo_id'] in allowed_set
+                or d['key'] in allowed_set]
+
+        resp_out = jsonify({
             'success':       True,
             'runs':          visible_runs[:200],
             'archived_runs': archived_runs,
@@ -40217,7 +40324,11 @@ def list_journey_iq():
             # Frontend uses this to hide baked-in demo cards when the
             # user has an explicit allow-list (cloak included).
             'allow_all':     bool(is_admin or allow_all),
+            'demo_runs':     demo_runs if is_admin else [],
+            'allowed_demos': allowed_demos,
         })
+        resp_out.headers['Cache-Control'] = 'no-store'
+        return resp_out
     except Exception as e:
         return jsonify({'success': True, 'runs': [], 'archived_runs': [], 'error': str(e)})
 
@@ -40258,8 +40369,15 @@ def get_journey_iq_result(s3_key):
             return jsonify({'success': False,
                             'error': 'Digital Journey IQ access required'}), 403
         if is_demo:
-            # Story journeys are the shared catalog: module access is the
-            # only gate, same visibility they had when baked into the page.
+            # Story journeys honor the same per-user allow-list as any
+            # run (2026-09-18, Jenna: per-user journey access). Grants
+            # may store either the demo id or the full S3 key.
+            _adm, _all, _alw = _user_jiq_run_access(user)
+            if not (_adm or _all or s3_key in (_alw or [])
+                    or full_key in (_alw or [])):
+                return jsonify({'success': False,
+                                'error': 'You do not have access to '
+                                         'this Journey IQ run'}), 403
             data = _jiq.load_run_from_s3(s3_client, full_key)
             if data is None:
                 return jsonify({'success': False,

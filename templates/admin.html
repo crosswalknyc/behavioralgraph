@@ -13362,9 +13362,14 @@
             // we fetch on-demand so the picker isn't empty.
             if (window._jiqAdminRuns && !force) return window._jiqAdminRuns;
             try {
-                const resp = await fetch('/api/journey-iq/list?include_archive=1', { credentials: 'same-origin' });
+                // Cache-busted: the list is S3 truth (deleted journeys
+                // vanish, new publishes appear) and must read real time.
+                const resp = await fetch('/api/journey-iq/list?include_archive=1&_=' + Date.now(),
+                                         { credentials: 'same-origin', cache: 'no-store' });
                 const data = await resp.json();
-                window._jiqAdminRuns = (data.runs || []).concat(data.archived_runs || []);
+                window._jiqAdminRuns = (data.runs || [])
+                    .concat(data.demo_runs || [])
+                    .concat(data.archived_runs || []);
             } catch (e) {
                 window._jiqAdminRuns = [];
             }
@@ -13467,7 +13472,10 @@
             //   undefined / null / ['*']  →  default-open (ALL)
             //   []                        →  explicit zero (product on, no journeys)
             //   array of keys             →  explicit allow-list
-            await loadJourneyIqRunsForAdmin();
+            // Always refetch: the picker must reflect S3 truth in real
+            // time (2026-09-18) - published journeys appear, deleted
+            // ones vanish, no session-stale cache.
+            await loadJourneyIqRunsForAdmin(true);
             if (!Array.isArray(allowed) || allowed.includes('*')) {
                 _jiqRunIsAll = true;
                 _jiqRunSelected = new Set();
