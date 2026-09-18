@@ -122,6 +122,28 @@ def _seq_sets(toks):
     return sets
 
 
+def _franchise_prefix(query, cand, nq, nt):
+    """For SHORT (1–2 word) queries: is `cand` the same title, a numbered sequel,
+    or a genuinely subtitled edition of `query` — as opposed to a DIFFERENT game
+    that merely shares the leading word? "Hades" should reach "Hades" and
+    "Hades II" and "Hades: Subtitle", but not "Hades' Star" or "Portal Knights".
+    """
+    if not (nq and nt.startswith(nq)):
+        return False
+    rest = nt[len(nq):].split()
+    if not rest:
+        return True                        # same normalized title (editions collapse here)
+    if rest[0].isdigit() or rest[0] in _ROMAN:
+        return True                        # numbered sequel ("Portal 2", "Hades II")
+    # a real subtitle has a separator right after the query — a colon or a
+    # SPACED dash — so the head before it equals the query ("Half-Life: Alyx");
+    # a bare extra word ("Hades' Star", "Portal Knights") does not. (We don't
+    # split on intra-word hyphens like "Half-Life".)
+    head = re.split(r"\s*:\s*|\s+[-\u2013\u2014]\s+|\s*[\u2013\u2014]\s*",
+                    cand or "", 1)[0]
+    return norm(head) == nq
+
+
 def best_matches(title, cands, key=lambda c: c, limit=6):
     """Keep only candidates whose title genuinely matches the query — no forced
     top-1 fallback, so a game that isn't on a store yields nothing (not junk)."""
@@ -142,10 +164,11 @@ def best_matches(title, cands, key=lambda c: c, limit=6):
         if not exact and qseq and any(not (s & ct) for s in qseq):
             continue
         prefix = bool(nq) and nt.startswith(nq)
-        # For SHORT queries (1-2 words) demand an exact or prefix match, so
-        # "Hades" won't drag in "Zeus vs Hades" and "Elden Ring" won't pull
+        # For SHORT queries (1-2 words) demand an exact match, a numbered sequel,
+        # or a true subtitle — so "Hades" won't drag in "Zeus vs Hades",
+        # "Hades' Star", or "Portal Knights", and "Elden Ring" won't pull
         # "MapGenie Elden Ring". Longer queries keep fuzzy reorder tolerance.
-        if len(qtok) <= 2 and not (exact or prefix):
+        if len(qtok) <= 2 and not (exact or _franchise_prefix(title, t, nq, nt)):
             continue
         sc = 1.0 if exact else similarity(title, t)
         # a title that STARTS with the full query is the canonical game

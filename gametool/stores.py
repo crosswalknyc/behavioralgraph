@@ -14,6 +14,7 @@ Reliability tiers (see STORES registry at the bottom):
                 Loaded, G2A, Green Man Gaming, Amazon, Best Buy, GameStop,
                 Walmart, Target).
 """
+import html
 import re
 
 from common import (best_matches, hit, http_get, http_json, q, qplus,
@@ -89,9 +90,9 @@ def nintendo_search(title, limit=4):
 
 # ── Google Play (search HTML -> package ids -> details og:title) ───────────────
 def googleplay_search(title, limit=3):
-    html = http_get(f"https://play.google.com/store/search?q={qplus(title)}&c=apps")
+    page = http_get(f"https://play.google.com/store/search?q={qplus(title)}&c=apps")
     seen, pkgs = set(), []
-    for m in re.finditer(r"store/apps/details\?id=([A-Za-z0-9._]+)", html):
+    for m in re.finditer(r"store/apps/details\?id=([A-Za-z0-9._]+)", page):
         p = m.group(1)
         if p not in seen:
             seen.add(p)
@@ -101,14 +102,22 @@ def googleplay_search(title, limit=3):
     out = []
     for pkg in pkgs:
         d = http_get(f"https://play.google.com/store/apps/details?id={pkg}")
+        # Games only. Play search mixes in tools/utilities that share a game's
+        # name (e.g. a "Hades PC" TOOLS app), so require a GAME_* category —
+        # the same games-genre guard used for the Apple App Store.
+        if not re.search(r"/store/apps/category/GAME", d):
+            continue
         m = re.search(r'<meta property="og:title" content="([^"]+)"', d)
-        name = (m.group(1) if m else "").split(" - ")[0].strip()
+        # decode HTML entities so "Hades&#39; Star" tokenizes as "Hades ' Star",
+        # not a bogus "39" token that would fake a prefix match
+        name = html.unescape(m.group(1) if m else "").split(" - ")[0].strip()
         if not name:
             continue
         dev = re.search(r'href="/store/apps/dev(?:eloper)?\?id=[^"]*"[^>]*>'
                         r'<[^>]*>([^<]+)<', d)
         out.append(hit(name, f"https://play.google.com/store/apps/details?id={pkg}",
-                       pkg, "App (Android)", dev.group(1) if dev else ""))
+                       pkg, "App (Android)",
+                       html.unescape(dev.group(1)) if dev else ""))
     return best_matches(title, out, key=lambda h: h["title"], limit=limit)
 
 

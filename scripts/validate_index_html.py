@@ -532,3 +532,4 @@ if __name__ == "__main__":
 # (books-platform 2026-09-18 - StreamScout #21 Books: buy/listen/Libby + retail proxies)
 # (books-clean-platform-labels 2026-09-18 - Books: clean retailer names in PLATFORM col)
 # (gametool-live-first-party 2026-09-18 - GameTool: live Xbox/Nintendo/Epic search + Apple games-only)
+# (gametool-tighten-googleplay 2026-09-18 - GameTool: Play games-only + sharper short-query prefix)
