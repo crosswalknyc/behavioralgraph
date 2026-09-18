@@ -81642,7 +81642,8 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             // 02 The flywheel itself. This is the argument: the same
-            // surfaces measured before the play and after it.
+            // flywheel touch points measured before the play and after
+            // it, on matched windows.
             var comp = (B.flywheel_compare || []).slice();
             if (comp.length) {
                 comp.sort(function (a, b2) { return (b2.lift_pp || 0) - (a.lift_pp || 0); });
@@ -81667,7 +81668,7 @@ https://www.instagram.com/p/..."></textarea>
                          + '<small>points</small></div></div>';
                 }).join('');
                 html += _fwSection('02', 'The flywheel',
-                    'The same surfaces, 180 days before the play against 30 days after it.',
+                    'The same flywheel touch points, the 30 days before the play against the 30 days after it.',
                     '<div class="fw-liftlegend"><span class="fw-legend-pair">'
                     + '<span>Used less after</span><span>Used more after</span></span></div>'
                     + rowsHtml);
