@@ -81495,7 +81495,8 @@ https://www.instagram.com/p/..."></textarea>
                 }).join('');
                 html += _fwSection('02', 'The flywheel',
                     'The same surfaces, 180 days before the play against 30 days after it.',
-                    '<div class="fw-liftlegend"><span>Used less after</span><span>Used more after</span></div>'
+                    '<div class="fw-liftlegend"><span class="fw-legend-pair">'
+                    + '<span>Used less after</span><span>Used more after</span></span></div>'
                     + rowsHtml);
             }
 
@@ -177106,6 +177107,15 @@ https://www.instagram.com/p/..."></textarea>
         font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     body[data-theme="light"] #flywheelIQView { background: #E9E8E1; color: #0C1618; }
+    #flywheelIQView .fw-head h1, #flywheelIQView .fw-deck,
+    #flywheelIQView .fw-sec h3, #flywheelIQView .fw-row-k,
+    #flywheelIQView .fw-cover h2, #flywheelIQView .fw-cover p,
+    #flywheelIQView .fw-lib-item, #flywheelIQView .fw-lib-top h3 {
+        text-transform: none !important; letter-spacing: normal;
+    }
+    #flywheelIQView .fw-head h1 { letter-spacing: -.045em; }
+    #flywheelIQView .fw-cover h2 { letter-spacing: -.045em; }
+    #flywheelIQView .fw-sec h3 { letter-spacing: -.02em; }
     .fw-topbar {
         display: flex; align-items: center; justify-content: space-between;
         gap: 16px; padding: 14px 24px 12px; flex: 0 0 auto;
@@ -177371,11 +177381,12 @@ https://www.instagram.com/p/..."></textarea>
     body[data-theme="light"] .fw-lift i.neg { background: #8E3FA8; }
     .fw-liftlegend {
         display: grid; grid-template-columns: minmax(0, 1fr) 210px 150px;
-        column-gap: 28px; padding-bottom: 8px;
+        column-gap: 28px; padding-bottom: 10px;
         font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: #7C878A;
     }
-    .fw-liftlegend span:first-child { grid-column: 2; text-align: left; }
-    .fw-liftlegend span:last-child { grid-column: 2; text-align: right; }
+    .fw-liftlegend .fw-legend-pair {
+        grid-column: 2; display: flex; justify-content: space-between; gap: 10px;
+    }
     .fw-foot {
         padding: 34px 40px 10px; max-width: 1180px; margin-top: 20px;
         border-top: 1px solid #3B3D38;
