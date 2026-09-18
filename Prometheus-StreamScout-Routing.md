@@ -194,13 +194,13 @@ def run_a_profile():
 
 ## Open build items for Jenna (the only new plumbing)
 
-1. **`streamscout_query(title, platforms=…)` — a programmatic entry point.**
-   StreamScout is interactive today, but every resolver already exposes
-   `resolve(title, kind, seasons) -> (show, rows)` (video, podcasts, Audible,
-   **Books**, **Games**). We need a thin wrapper that, given **one title** (and
-   optionally the relevant platform(s)), calls the right resolver(s) and returns
-   the standard rows. The caller loops it over the franchise's title list and
-   pools + `SHOW`-stamps the results. (I can build this next.)
+1. ✅ **`streamscout_query(title, platforms=…, show=…)` — DONE.** Provided at
+   `streamscout/streamscout_query.py`. Non-interactive entry point that calls the
+   same resolvers the menu uses and returns the standard
+   `SHOW · URL · PRODUCTION · PLATFORM · SEASON` rows. `platforms` takes a key, a
+   list, or a group (`video|podcasts|audio|books|games|all`); pass `show=` to
+   stamp the franchise name on every row. The caller loops it over the
+   franchise's title list.
 2. **`content_mapping_lookup(show)`** — normalized `SHOW` match against
    `reference.content_mapping` (reuse the ingest's `norm_token`).
 3. **`content_mapping_insert(rows)` + `email_team_added_csv`** — reuse the

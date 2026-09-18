@@ -540,3 +540,4 @@ if __name__ == "__main__":
 # (games-as-platform 2026-09-18 - StreamScout #22 Games: gametool_content as a first-class menu resolver)
 # (jenna-md-tidy 2026-09-18 - how-to: Books is resolver #21 wording (Games #22 is newest))
 # (prometheus-routing-docs 2026-09-18 - Prometheus content_map-first routing spec + Jenna how-to)
+# (streamscout-query-wrapper 2026-09-18 - streamscout_query() non-interactive entry point for Prometheus)

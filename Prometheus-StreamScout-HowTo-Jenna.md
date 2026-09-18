@@ -104,11 +104,25 @@ Most of this already exists — you're mostly connecting it:
       `SHOW, URL, PRODUCTION, PLATFORM, SEASON, CATEGORY, SUB_CATEGORY`).
 - [ ] **Franchise `SHOW` stamp** — set `SHOW` = franchise name on every row
       before insert.
-- [ ] **`streamscout_query(title)`** — the one genuinely new piece: a
-      non-interactive entry point to StreamScout (a "wrapper"). Each StreamScout
-      resolver already exposes `resolve(title, kind, seasons)`; this just calls
-      it without the menu and returns the standard rows. **Cousin can hand you
-      this wrapper — just say the word.**
+- [x] **`streamscout_query(title, platforms=…, show=…)`** — ✅ **provided** at
+      `streamscout/streamscout_query.py`. A non-interactive entry point (the
+      "wrapper"): it calls the same resolvers the menu uses and returns the
+      standard `SHOW · URL · PRODUCTION · PLATFORM · SEASON` rows — no menu, no
+      prompts. Just call it:
+      ```python
+      from streamscout_query import streamscout_query
+
+      # single title
+      rows = streamscout_query("Cruel Saints", platforms="books")
+
+      # a whole franchise under ONE show, in one loop:
+      rows = []
+      for t in ["Merciless Saints", "Cruel Saints", "Ruthless Saints"]:
+          rows += streamscout_query(t, platforms="books", show="Merciless Saints")
+      ```
+      `platforms` accepts a key, a list, or a group:
+      `video | podcasts | audio | books | games | all`. Pass `show=` to stamp the
+      franchise name on every row (does the step-4 stamp for you).
 - [ ] **Notifications A + B** — the two emails above (Prometheus already has a
       low-confidence signal to hang A off of).
 
