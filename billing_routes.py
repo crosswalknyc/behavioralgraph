@@ -1710,6 +1710,9 @@ def admin_companies_billing():
             # this list at spend time. See
             # wallet.user_can_spend_from_company for full rules.
             "default_spend_scope": c.get("default_spend_scope", "*"),
+            # Company sticker for every full Profile IQ pull. 0 / missing
+            # uses the global $300. Kartel is $275.
+            "profile_pull_usd": float(c.get("profile_pull_usd") or 0.0),
         })
     rows.sort(key=lambda r: (
         not r["paying_customer"],
@@ -1776,6 +1779,15 @@ def admin_company_billing_config(company_name):
         # wallet.user_can_spend_from_company for semantics.
         if _has_scope:
             c["default_spend_scope"] = scope_clean
+        if "profile_pull_usd" in body:
+            try:
+                pp = float(body.get("profile_pull_usd") or 0)
+            except (TypeError, ValueError):
+                pp = 0.0
+            if pp > 0:
+                c["profile_pull_usd"] = round(pp, 2)
+            else:
+                c.pop("profile_pull_usd", None)
         return True
 
     ok, msg = _mutate_target_company(company_name, _apply)

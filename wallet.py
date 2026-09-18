@@ -101,7 +101,7 @@ DEFAULT_PRICING = {
         # falls to $0). 2026-09-09 defence-in-depth add.
         "api_profile_iq_cut": 100.0,
         "api_subscriber_iq_build": 1000.0,
-        "api_chatbot_profile_iq_build": 500.0,
+        "api_chatbot_profile_iq_build": 300.0,
         # Analysis / journey / attribution modules (default 0 = free
         # until the admin sets a value). Every key here MUST have a
         # matching row in MODULE_CATALOG - otherwise it renders as
@@ -520,7 +520,7 @@ MODULE_CATALOG = [
     # bg-webapp/app.py::_v1_price_usd_for and the pull_type dispatcher
     # keep working; the label is UI-only.
     ("api_chatbot_profile_iq_build", "API - Profile IQ Build",
-     "api", 5, 500.0, None),
+     "api", 5, 300.0, None),
     # ---------- Ask-metered (Prometheus) ----------
     # Prometheus is priced by prometheus_markup_multiplier applied to
     # per-session usage, not by a flat per-pull rate. It lives in the
@@ -1127,14 +1127,64 @@ def hidden_builtin_tools() -> list:
     return list(p.get("hidden_tools") or [])
 
 
-def tool_price_usd(tool_key: str) -> float:
+# Full Profile IQ builds (not derived cuts). A company can set
+# `profile_pull_usd` to override the global sticker on these keys
+# only. Kartel is $275; everyone else stays on the $300 default.
+PROFILE_BUILD_TOOL_KEYS = frozenset({
+    "api_chatbot_profile_iq_build",
+    "profile_iq_build",
+    "chatbot_profile_iq_build",
+})
+
+
+def subject_tool_price_usd(subject: dict, tool_key: str,
+                           pricing: Optional[dict] = None) -> float:
+    """USD price for `tool_key` on this billing subject.
+
+    Order:
+      1. Company/user `profile_pull_usd` when the tool is a full
+         Profile IQ build and the field is a positive number.
+      2. Subject `tool_price_overrides[tool_key]` if positive.
+      3. Global pricing.json `per_tool_usd[tool_key]`.
+    """
+    tk = str(tool_key or "").strip()
+    if not tk:
+        return 0.0
+    if isinstance(subject, dict):
+        if tk in PROFILE_BUILD_TOOL_KEYS:
+            try:
+                special = float(subject.get("profile_pull_usd") or 0)
+            except (TypeError, ValueError):
+                special = 0.0
+            if special > 0:
+                return round(special, 2)
+        overrides = subject.get("tool_price_overrides")
+        if isinstance(overrides, dict) and tk in overrides:
+            try:
+                ov = float(overrides.get(tk) or 0)
+            except (TypeError, ValueError):
+                ov = 0.0
+            if ov > 0:
+                return round(ov, 2)
+    pricing = pricing or load_pricing()
+    try:
+        return round(float(
+            (pricing.get("per_tool_usd") or {}).get(tk, 0.0) or 0.0), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def tool_price_usd(tool_key: str, subject: dict = None) -> float:
     """USD price for a single pull of the named tool. 0.0 for unset
     tools (free until admin sets a value).
 
     Reads directly from pricing.json - independent of the
     hidden_tools soft-hide mechanism. A hidden tool still charges
     its configured price when its pull_type fires; hide only
-    affects admin panel visibility."""
+    affects admin panel visibility. Pass `subject` (user or company
+    record) to honor a company profile-pull rate."""
+    if subject is not None:
+        return subject_tool_price_usd(subject, tool_key)
     p = load_pricing()
     return float(p.get("per_tool_usd", {}).get(str(tool_key), 0.0))
 
@@ -1807,7 +1857,7 @@ def should_charge_wallet(user: dict, tool_key: str,
         # rows AND the wallet doesn't debit them.
         return 0.0, "retired"
     pricing = pricing or load_pricing()
-    usd = float(pricing.get("per_tool_usd", {}).get(str(tool_key), 0.0))
+    usd = subject_tool_price_usd(user, tool_key, pricing)
     if usd <= 0:
         return 0.0, "no_charge"
     return round(usd, 2), "wallet"
@@ -2565,7 +2615,9 @@ __all__ = [
     "metered_tool_keys", "mark_metered", "unmark_metered",
     "RETIRED_TOOL_KEYS",
     "load_pricing", "save_pricing",
-    "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
+    "tool_price_usd", "subject_tool_price_usd",
+    "PROFILE_BUILD_TOOL_KEYS",
+    "tool_monthly_usd", "prometheus_markup",
     "metered_answer_usd",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",

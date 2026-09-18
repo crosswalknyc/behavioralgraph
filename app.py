@@ -60456,7 +60456,8 @@ _V1_CREDITS = {
 # USD prices for the partner-facing v1 API (2026-09-09 Jenna directive:
 # the API must speak in dollars, not internal credits). Values default
 # to MODULE_CATALOG rows in bg-webapp/wallet.py:
-#   api_chatbot_profile_iq_build -> $500  (partner API v1 fresh build)
+#   api_chatbot_profile_iq_build -> $300  (partner API v1 fresh build;
+#   Kartel company wallet overrides to $275 via profile_pull_usd)
 #   api_profile_iq_cut           -> $100
 #   api_subscriber_iq_build      -> $1000
 # and can be overridden per-workspace via system/pricing.json (the same
@@ -60473,23 +60474,34 @@ _V1_CREDITS = {
 _V1_USD_FALLBACK = {
     'existing_match':       0.0,
     'derive_cut':           100.0,
-    'time_shifted_refresh': 500.0,
-    'new_build':            500.0,
-    'cut_needs_parent':     600.0,   # parent build + cut
+    'time_shifted_refresh': 300.0,
+    'new_build':            300.0,
+    'cut_needs_parent':     400.0,   # parent build + cut
     'subscriber_iq':        1000.0,
 }
 
 _V1_USD_ADDON_CUT_FALLBACK = 100.0   # api_profile_iq_cut
 
 
-def _v1_tool_price_usd(tool_key: str, default: float) -> float:
+def _v1_tool_price_usd(tool_key: str, default: float,
+                       username: str = None) -> float:
     """Read the current admin-configured USD price for a tool_key from
     wallet.tool_price_usd(). Silently falls back to `default` if the
     wallet layer or pricing.json is unavailable, so the API surface
-    keeps quoting a stable number even during a boot race."""
+    keeps quoting a stable number even during a boot race.
+
+    When `username` is set, a company `profile_pull_usd` (Kartel $275)
+    wins over the global sticker for full Profile IQ builds.
+    """
     try:
         import wallet as _w
-        val = float(_w.tool_price_usd(tool_key))
+        subject = None
+        if username:
+            data = load_users()
+            user = (data.get('users') or {}).get(username) or {}
+            if user:
+                subject, _kind, _key = _w.resolve_billing_subject(user, data)
+        val = float(_w.tool_price_usd(tool_key, subject=subject))
         if val > 0.0:
             return val
     except Exception:
@@ -60497,21 +60509,25 @@ def _v1_tool_price_usd(tool_key: str, default: float) -> float:
     return float(default)
 
 
-def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
+def _v1_price_usd_for(decision: str, cut_count: int = 0,
+                      username: str = None) -> float:
     """USD price a partner would pay for one v1 run at `decision` tier
     with `cut_count` embedded addon cuts. This is the ONLY place the
     API surface converts an internal decision into a dollar amount -
     every /check, /run, /status response reads through it, so a
-    per-workspace pricing.json edit propagates everywhere at once."""
+    per-workspace pricing.json edit propagates everywhere at once.
+    Pass `username` so a company profile-pull rate (Kartel $275)
+    quotes the same number that will be charged."""
     d = (decision or '').strip().lower()
     cut_count = max(int(cut_count or 0), 0)
     cut_each = _v1_tool_price_usd(
-        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK)
+        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username)
     if d == 'existing_match':
         return 0.0
     if d == 'subscriber_iq':
         base = _v1_tool_price_usd(
-            'api_subscriber_iq_build', _V1_USD_FALLBACK['subscriber_iq'])
+            'api_subscriber_iq_build', _V1_USD_FALLBACK['subscriber_iq'],
+            username)
         return round(base + cut_each * cut_count, 2)
     if d == 'derive_cut':
         # Cut-only derive: the addon cut counter and the decision-tier
@@ -60523,7 +60539,7 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
         # on top the same as new_build.
         base = _v1_tool_price_usd(
             'api_chatbot_profile_iq_build',
-            _V1_USD_FALLBACK['new_build'])
+            _V1_USD_FALLBACK['new_build'], username)
         # First cut is baked into the tier; every extra cut is +cut_each.
         extra_cuts = max(cut_count - 1, 0) if cut_count > 0 else 0
         return round(base + cut_each + cut_each * extra_cuts, 2)
@@ -60533,7 +60549,8 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
     # and debit always match.
     base = _v1_tool_price_usd(
         'api_chatbot_profile_iq_build',
-        _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']))
+        _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']),
+        username)
     return round(base + cut_each * cut_count, 2)
 
 
@@ -60835,9 +60852,11 @@ def _partner_credit_preflight(username: str, min_credits: int):
     # bound so a partner is never quoted less than they'll actually
     # need at run time.
     if min_credits <= 3:
-        _price_usd_min = _v1_price_usd_for('derive_cut', 0)
+        _price_usd_min = _v1_price_usd_for('derive_cut', 0,
+                                          username=username)
     else:
-        _price_usd_min = _v1_price_usd_for('new_build', 0)
+        _price_usd_min = _v1_price_usd_for('new_build', 0,
+                                          username=username)
     _bal_usd = _v1_balance_usd(username)
     resp = jsonify({
         'success': False,
@@ -65443,7 +65462,9 @@ def api_v1_profiles_check():
         'existing_match_last_modified': None,
         # USD is the primary framing going forward. `credits_would_charge`
         # is retained so existing integrations keep working.
-        'price_usd': _v1_price_usd_for(decision, len(_v1_cuts or [])),
+        'price_usd': _v1_price_usd_for(
+            decision, len(_v1_cuts or []),
+            username=user.get('username') or ''),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': _scrub_v1_freetext(
@@ -65615,7 +65636,8 @@ def api_v1_profiles_run():
     _v1_pt = f'Chatbot Profile IQ v1 ({decision})'
     if price > 0 and not has_credits_for(username, price, pull_type=_v1_pt):
         _, credits_left = check_user_credits(username)
-        _price_usd_tier = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+        _price_usd_tier = _v1_price_usd_for(
+            decision, len(_v1_run_cuts or []), username=username)
         _bal_usd = _v1_balance_usd(username)
         _bal_str = ('unlimited' if _bal_usd == -1.0
                     else f"${_bal_usd:.2f}")
@@ -65773,7 +65795,7 @@ def api_v1_profiles_run():
         if not charged:
             _, credits_left = check_user_credits(username)
             _price_usd_tier = _v1_price_usd_for(
-                decision, len(_v1_run_cuts or []))
+                decision, len(_v1_run_cuts or []), username=username)
             _bal_usd = _v1_balance_usd(username)
             return jsonify({
                 'success': False,
@@ -65857,7 +65879,8 @@ def api_v1_profiles_run():
     _record_run_owner(run_id, username)
 
     _, credits_left = check_user_credits(username)
-    _charge_usd = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+    _charge_usd = _v1_price_usd_for(
+        decision, len(_v1_run_cuts or []), username=username)
     _bal_usd = _v1_balance_usd(username)
 
     # PRE-BUILD scope summary (2026-08-24): programmatic, plans only,

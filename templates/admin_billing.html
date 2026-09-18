@@ -515,6 +515,19 @@
             </span>
           </label>
         </div>
+        <div id="profile-pull-fields" style="display: none;">
+          <div class="kv-row">
+            <label style="margin: 0;">Profile pull price</label>
+            <div>$<input id="m-profile-pull" type="number" step="1"
+                    min="0" style="width: 100px;" placeholder="300">
+              <span style="color: #6B7280; font-size: 12px;
+                           margin-left: 8px;">
+                Company rate for every Profile IQ pull. Blank uses
+                the standard $300.
+              </span>
+            </div>
+          </div>
+        </div>
         <div class="kv-row">
           <label style="margin: 0;">Billing mode</label>
           <select id="m-mode">
@@ -932,6 +945,15 @@
       $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
       $('m-ar-amount').value = u.auto_reload_amount_usd || 1000;
       $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
+      const ppf = $('profile-pull-fields');
+      if (ppf) {
+        ppf.style.display =
+          currentSubjectKind === 'company' ? '' : 'none';
+      }
+      const ppi = $('m-profile-pull');
+      if (ppi) {
+        ppi.value = (u.profile_pull_usd > 0) ? u.profile_pull_usd : '';
+      }
       updateModeFields();
       onUnlimitedToggle();
       // Company default spend scope: hydrate only for company subjects.
@@ -1176,6 +1198,9 @@
                 .filter(x => x)
             : [];
         }
+        const ppi2 = $('m-profile-pull');
+        const rawPP = ppi2 ? String(ppi2.value || '').trim() : '';
+        body.profile_pull_usd = rawPP === '' ? 0 : Number(rawPP);
       }
       const r = await fetch(
         subjectUrl('config'),
