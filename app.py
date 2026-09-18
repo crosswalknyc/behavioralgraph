@@ -5643,6 +5643,127 @@ def update_user(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/admin/usage-ledger', methods=['GET'])
+@requires_admin
+def api_admin_usage_ledger():
+    """Company / user usage ledger (2026-09-18, Jenna: 'somewhere in
+    the backend I need to be able to download this data and see it by
+    company and user').
+
+    Aggregates every user's credit_usage_history into one ledger,
+    filterable by ?company= and ?user=, newest first. ?format=csv
+    downloads the filtered set. JSON responses also carry the company
+    and user lists so the picker UI populates itself.
+    """
+    def _fix(s):
+        try:
+            return str(s).encode('cp1252').decode('utf-8')
+        except Exception:
+            return str(s)
+
+    company_f = (request.args.get('company') or '').strip().lower()
+    user_f = (request.args.get('user') or '').strip().lower()
+    fmt = (request.args.get('format') or 'json').strip().lower()
+    data = load_users() or {}
+    rows = []
+    companies = set()
+    user_list = []
+    for uname, u in (data.get('users') or {}).items():
+        comp = str(u.get('company') or '').strip()
+        if comp:
+            companies.add(comp)
+        user_list.append({'username': uname, 'company': comp,
+                          'email': u.get('email') or ''})
+        if user_f and uname.lower() != user_f:
+            continue
+        if company_f and comp.lower() != company_f:
+            continue
+        for h in (u.get('credit_usage_history') or []):
+            rows.append({
+                'used_at': str(h.get('used_at') or '')[:19],
+                'company': comp, 'username': uname,
+                'email': u.get('email') or '',
+                'description': _fix(h.get('description') or ''),
+                'pull_type': h.get('pull_type') or '',
+                'credits': h.get('credits_used') or 0,
+            })
+    rows.sort(key=lambda r: r['used_at'], reverse=True)
+    total = sum(int(r['credits'] or 0) for r in rows)
+    if fmt == 'csv':
+        import csv as _csv
+        import io as _io
+        buf = _io.StringIO()
+        w = _csv.writer(buf)
+        w.writerow(['Date (UTC)', 'Company', 'User', 'Email',
+                    'Work Delivered', 'Type', 'Credits'])
+        for r in rows:
+            w.writerow([r['used_at'].replace('T', ' '), r['company'],
+                        r['username'], r['email'], r['description'],
+                        r['pull_type'], r['credits']])
+        w.writerow([])
+        w.writerow(['TOTAL', '', '', '', '', '', total])
+        name = 'Usage_Ledger'
+        if company_f:
+            name += '_' + re.sub(r'[^A-Za-z0-9]+', '_',
+                                 request.args.get('company', ''))
+        if user_f:
+            name += '_' + re.sub(r'[^A-Za-z0-9]+', '_',
+                                 request.args.get('user', ''))
+        return Response(
+            buf.getvalue().encode('utf-8-sig'),
+            headers={
+                'Content-Type': 'text/csv; charset=utf-8',
+                'Content-Disposition':
+                    f'attachment; filename="{name}.csv"',
+            })
+    return jsonify({
+        'success': True, 'rows': rows[:1000], 'total_credits': total,
+        'row_count': len(rows),
+        'companies': sorted(companies),
+        'users': sorted(user_list, key=lambda x: x['username'].lower()),
+    })
+
+
+@app.route('/api/admin/usage-ledger/log', methods=['POST'])
+@requires_admin
+def api_admin_usage_ledger_log():
+    """Log a work entry onto a user's usage ledger WITHOUT charging
+    (the record-only half of 'the ability to log it'). Charging
+    entries go through /api/admin/users/<u>/add-credits with
+    deduct=true, which debits AND logs - the UI branches."""
+    req = request.get_json(force=True) or {}
+    username = (req.get('username') or '').strip()
+    desc = (req.get('description') or '').strip()
+    try:
+        credits = max(0, int(req.get('credits') or 0))
+    except (TypeError, ValueError):
+        credits = 0
+    if not username or not desc:
+        return jsonify({'success': False,
+                        'error': 'username and description required'}), 400
+    added_by = (get_current_user() or {}).get('username') or 'admin'
+
+    def _mut(data):
+        u = (data.get('users') or {}).get(username)
+        if not u:
+            return None
+        hist = u.setdefault('credit_usage_history', [])
+        hist.insert(0, {
+            'used_at': datetime.now().isoformat(),
+            'description': desc, 'job_id': '',
+            'pull_type': 'Logged entry',
+            'credits_used': credits,
+            'logged_by': added_by,
+        })
+        u['credit_usage_history'] = hist[:500]
+        return data
+    try:
+        _users_cas_mutate(_mut)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    return jsonify({'success': True})
+
+
 @app.route('/api/admin/users/<username>/add-credits', methods=['POST'])
 @requires_admin
 def add_user_credits(username):

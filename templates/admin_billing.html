@@ -301,6 +301,7 @@
       <button class="tab active" data-tab="users">Users</button>
       <button class="tab" data-tab="companies">Companies</button>
       <button class="tab" data-tab="pricing">Pricing</button>
+      <button class="tab" data-tab="ledger">Usage Ledger</button>
     </div>
 
     <div id="tab-users" class="tab-panel">
@@ -475,6 +476,64 @@
                     style="width: 100px;">
             <button id="save-packs">Save packs</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Usage Ledger: work delivered + credits, by company and user
+         (2026-09-18). Filter, download as CSV, and log entries. -->
+    <div id="tab-ledger" class="tab-panel" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; flex-wrap: wrap; gap: 10px;
+                    margin-bottom: 12px;">
+          <div>
+            <h2 style="margin: 0;">Usage Ledger</h2>
+            <p style="color: #6B7280; font-size: 13px; margin: 6px 0 0 0;">
+              Every piece of work delivered and the credits it carried,
+              filterable by company and user. Download the current view
+              as a CSV, or log a new entry below.
+            </p>
+          </div>
+          <button id="ledger-download">Download CSV</button>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;
+                    margin-bottom: 12px; align-items: center;">
+          <select id="ledger-company" style="min-width: 200px;">
+            <option value="">All companies</option>
+          </select>
+          <select id="ledger-user" style="min-width: 200px;">
+            <option value="">All users</option>
+          </select>
+          <button id="ledger-refresh">Refresh</button>
+          <span id="ledger-totals" style="color: #6B7280;
+                font-size: 13px;"></span>
+        </div>
+        <div id="ledger-table" style="max-height: 480px;
+             overflow-y: auto;"></div>
+      </div>
+      <div class="card" style="margin-top: 16px;">
+        <h2 style="margin: 0 0 6px 0;">Log an entry</h2>
+        <p style="color: #6B7280; font-size: 13px; margin: 0 0 12px 0;">
+          Record work against a user. Check "Charge the credits" to
+          also debit their balance or company pool; leave it unchecked
+          to log the entry without charging.
+        </p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;
+                    align-items: center;">
+          <select id="ledger-log-user" style="min-width: 200px;"></select>
+          <input id="ledger-log-desc" type="text"
+                 placeholder="Work delivered (description)"
+                 style="flex: 1; min-width: 260px;">
+          <input id="ledger-log-credits" type="number" min="0" step="1"
+                 value="0" style="width: 90px;" title="Credits">
+          <label style="display: flex; align-items: center; gap: 6px;
+                        margin: 0; font-size: 13px;">
+            <input id="ledger-log-charge" type="checkbox">
+            Charge the credits
+          </label>
+          <button id="ledger-log-btn">Log entry</button>
+          <span id="ledger-log-msg" style="font-size: 13px;"></span>
         </div>
       </div>
     </div>
@@ -725,6 +784,7 @@
         $('tab-' + t.dataset.tab).style.display = 'block';
         if (t.dataset.tab === 'companies') loadCompanies();
         if (t.dataset.tab === 'pricing') loadPricing();
+        if (t.dataset.tab === 'ledger') loadLedger();
       });
     });
 
@@ -2041,6 +2101,152 @@
 
     loadUsers();
     loadPricing();
+
+    // ── Usage Ledger (2026-09-18) ───────────────────────────────────
+    function _ledgerEsc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    let _ledgerUsers = [];
+    function _ledgerQuery() {
+      const c = $('ledger-company').value || '';
+      const u = $('ledger-user').value || '';
+      const q = [];
+      if (c) q.push('company=' + encodeURIComponent(c));
+      if (u) q.push('user=' + encodeURIComponent(u));
+      return q.length ? '&' + q.join('&') : '';
+    }
+    async function loadLedger() {
+      const tbl = $('ledger-table');
+      tbl.innerHTML = '<p style="color:#6B7280;">Loading…</p>';
+      try {
+        const r = await fetch('/api/admin/usage-ledger?_=' + Date.now()
+                              + _ledgerQuery(),
+                              { credentials: 'same-origin',
+                                cache: 'no-store' });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'load failed');
+        // populate pickers once (keep selections on refresh)
+        const cSel = $('ledger-company'), uSel = $('ledger-user'),
+              lSel = $('ledger-log-user');
+        if (cSel.options.length <= 1 && (d.companies || []).length) {
+          d.companies.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c; cSel.appendChild(o);
+          });
+        }
+        _ledgerUsers = d.users || _ledgerUsers;
+        const fillUsers = () => {
+          const comp = cSel.value || '';
+          const keepU = uSel.value || '';
+          uSel.innerHTML = '<option value="">All users</option>';
+          lSel.innerHTML = '';
+          _ledgerUsers
+            .filter(x => !comp || (x.company || '') === comp)
+            .forEach(x => {
+              const lab = x.username + (x.company ? ' (' + x.company + ')' : '');
+              const o = document.createElement('option');
+              o.value = x.username; o.textContent = lab;
+              uSel.appendChild(o);
+              lSel.appendChild(o.cloneNode(true));
+            });
+          if ([...uSel.options].some(o => o.value === keepU))
+            uSel.value = keepU;
+        };
+        if (!uSel.dataset.filled || uSel.dataset.comp !== cSel.value) {
+          fillUsers();
+          uSel.dataset.filled = '1';
+          uSel.dataset.comp = cSel.value;
+        }
+        $('ledger-totals').textContent =
+          d.row_count + ' entries · ' +
+          Number(d.total_credits).toLocaleString('en-US') +
+          ' credits total';
+        const rows = d.rows || [];
+        if (!rows.length) {
+          tbl.innerHTML = '<p style="color:#6B7280;">No entries for this filter.</p>';
+          return;
+        }
+        tbl.innerHTML =
+          '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr>' +
+          ['Date', 'Company', 'User', 'Work delivered', 'Type', 'Credits']
+            .map(h => '<th style="text-align:left;padding:6px 8px;' +
+                      'border-bottom:2px solid #E5E7EB;position:sticky;top:0;' +
+                      'background:#fff;">' + h + '</th>').join('') +
+          '</tr></thead><tbody>' +
+          rows.map(x =>
+            '<tr>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;white-space:nowrap;">' +
+              _ledgerEsc(x.used_at.replace('T', ' ')) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;">' +
+              _ledgerEsc(x.company) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;">' +
+              _ledgerEsc(x.username) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;">' +
+              _ledgerEsc(x.description) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;white-space:nowrap;">' +
+              _ledgerEsc(x.pull_type) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;text-align:right;">' +
+              _ledgerEsc(x.credits) + '</td>' +
+            '</tr>').join('') +
+          '</tbody></table>';
+      } catch (e) {
+        tbl.innerHTML = '<p style="color:#DC2626;">Could not load the ledger: '
+          + _ledgerEsc(e.message) + '</p>';
+      }
+    }
+    $('ledger-refresh').addEventListener('click', loadLedger);
+    $('ledger-company').addEventListener('change', () => {
+      $('ledger-user').dataset.filled = '';
+      loadLedger();
+    });
+    $('ledger-user').addEventListener('change', loadLedger);
+    $('ledger-download').addEventListener('click', () => {
+      window.location = '/api/admin/usage-ledger?format=csv'
+        + _ledgerQuery();
+    });
+    $('ledger-log-btn').addEventListener('click', async () => {
+      const msg = $('ledger-log-msg');
+      const username = $('ledger-log-user').value;
+      const description = ($('ledger-log-desc').value || '').trim();
+      const credits = parseInt($('ledger-log-credits').value || '0', 10) || 0;
+      const charge = $('ledger-log-charge').checked;
+      if (!username || !description) {
+        msg.textContent = 'Pick a user and describe the work.';
+        msg.style.color = '#DC2626';
+        return;
+      }
+      msg.textContent = 'Saving…'; msg.style.color = '#6B7280';
+      try {
+        let r;
+        if (charge && credits > 0) {
+          r = await fetch('/api/admin/users/'
+                          + encodeURIComponent(username) + '/add-credits', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credits: credits, deduct: true,
+                                   reason: description }),
+          });
+        } else {
+          r = await fetch('/api/admin/usage-ledger/log', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, description, credits }),
+          });
+        }
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'save failed');
+        msg.textContent = charge && credits > 0
+          ? 'Logged and charged.' : 'Logged.';
+        msg.style.color = '#059669';
+        $('ledger-log-desc').value = '';
+        loadLedger();
+      } catch (e) {
+        msg.textContent = e.message; msg.style.color = '#DC2626';
+      }
+    });
   </script>
 </body>
 </html>
