@@ -2737,6 +2737,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_talent_fit_access',
     'has_sf_conversion_access', 'sf_conversion_journeys',
     'has_flywheel_conversion_access',
+    'has_flywheel_iq_access',
     'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
     'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
@@ -5182,6 +5183,7 @@ def create_user():
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'sf_conversion_journeys': req_data.get('sf_conversion_journeys', cd.get('sf_conversion_journeys', None) if cd else None),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
+            'has_flywheel_iq_access': req_data.get('has_flywheel_iq_access', cd.get('has_flywheel_iq_access', False) if cd else False),
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
             'brand_partnership_iq_journeys': req_data.get('brand_partnership_iq_journeys', cd.get('brand_partnership_iq_journeys', None) if cd else None),
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
@@ -5425,6 +5427,8 @@ def update_user(username):
             user['sf_conversion_journeys'] = _cleaned
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
+        if 'has_flywheel_iq_access' in req_data:
+            user['has_flywheel_iq_access'] = bool(req_data['has_flywheel_iq_access'])
         if 'has_brand_partnership_iq_access' in req_data:
             user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
         if 'brand_partnership_iq_journeys' in req_data:
@@ -7013,6 +7017,7 @@ def api_set_company_defaults(company_name):
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
             'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
+            'has_flywheel_iq_access': req.get('has_flywheel_iq_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
             'brand_partnership_iq_journeys': _validate_journeys_payload(
                 req.get('brand_partnership_iq_journeys'),
@@ -9412,6 +9417,7 @@ def compute_product_access_flags(user, role):
             'has_ticket_sales_tracker_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
+            'has_flywheel_iq_access': True,
             'has_brand_partnership_iq_access': True,
             'brand_partnership_iq_journeys': '*',
             'has_sentiment_iq_access': True,
@@ -9481,6 +9487,7 @@ def compute_product_access_flags(user, role):
         'brand_partnership_iq_journeys': _bp_journeys,
         'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
+        'has_flywheel_iq_access': bool(u.get('has_flywheel_iq_access', False)),
         # has_workspace_access retained ONLY as legacy plumbing for
         # /api/collab/* deck-collab routes (2026-09-03 Workspace product
         # retired from admin UI + dashboard). Hardcoded True: the flag no
@@ -9618,6 +9625,7 @@ def index():
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
+    has_flywheel_iq = _acc.get('has_flywheel_iq_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_journey_iq = _acc.get('has_journey_iq_access', False)
@@ -9678,6 +9686,7 @@ def index():
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
+                           has_flywheel_iq_access=has_flywheel_iq,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
@@ -19015,6 +19024,139 @@ def _brand_tracking_load_json(key: str):
     return None
 
 
+# ---------------------------------------------------------------------
+# Flywheel IQ
+#
+# A flywheel study is one CSV in data/flywheel. The long format is the
+# same every time: a `table` column names the block, `surface_label`
+# names the row, and the measure columns sit beside it. Parsing on the
+# server rather than shipping a payload in the template means a new
+# study is a file drop, and the frontend never learns the shape of any
+# one study.
+# ---------------------------------------------------------------------
+_FLYWHEEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'flywheel')
+
+# Columns that are constant for a whole study rather than per row.
+_FLYWHEEL_STUDY_COLS = ('window', 'unit', 'cohort_accounts', 'panel')
+_FLYWHEEL_NUMERIC_COLS = (
+    'accounts', 'new_signup_accounts', 'reactivated_accounts', 'base_accounts',
+    'share_of_base_pct', 'share_of_cohort_pct', 'new_share_pct',
+    'reactivated_share_pct', 'pre_180d_accounts', 'pre_180d_share_of_cohort_pct',
+    'lift_pp', 'cohort_accounts',
+)
+
+
+def _user_can_flywheel(user):
+    if not user:
+        return False
+    role = (user.get('role') or '').strip()
+    if role in ('super_admin', 'admin'):
+        return True
+    if user.get('has_flywheel_iq_access'):
+        return True
+    mods = user.get('analysis_iq_modules') or []
+    return 'flywheel_iq' in mods
+
+
+def _flywheel_title_from_name(stem):
+    """Turn a file stem into something a person would call the study."""
+    import re as _re
+    s = _re.sub(r'_\d{4}_\d{2}_\d{2}$', '', stem)       # trailing date
+    s = s.replace('_', ' ').strip()
+    return s or stem
+
+
+def _flywheel_list_files():
+    out = []
+    try:
+        for fn in sorted(os.listdir(_FLYWHEEL_DIR)):
+            if not fn.lower().endswith('.csv'):
+                continue
+            out.append({
+                'key': fn,
+                'label': _flywheel_title_from_name(fn[:-4]),
+            })
+    except Exception:
+        pass
+    return out
+
+
+def _flywheel_num(v):
+    if v is None:
+        return None
+    v = str(v).strip()
+    if v == '':
+        return None
+    try:
+        f = float(v)
+    except ValueError:
+        return None
+    return int(f) if f.is_integer() and abs(f) < 1e15 else f
+
+
+def _flywheel_parse(path):
+    import csv as _csv
+    blocks = {}
+    order = []
+    study = {}
+    with open(path, 'r', encoding='utf-8-sig', newline='') as fh:
+        for raw in _csv.DictReader(fh):
+            table = (raw.get('table') or '').strip()
+            if not table:
+                continue
+            if table not in blocks:
+                blocks[table] = []
+                order.append(table)
+            row = {}
+            for k, v in raw.items():
+                if k is None or k == 'table':
+                    continue
+                key = k.strip()
+                if key in _FLYWHEEL_STUDY_COLS:
+                    if key not in study and (v or '').strip():
+                        study[key] = _flywheel_num(v) if key == 'cohort_accounts' else v.strip()
+                    continue
+                if key in _FLYWHEEL_NUMERIC_COLS:
+                    row[key] = _flywheel_num(v)
+                else:
+                    row[key] = (v or '').strip()
+            blocks[table].append(row)
+    return {'blocks': blocks, 'block_order': order, 'study': study}
+
+
+@app.route('/api/flywheel-iq/runs')
+@requires_auth
+def api_flywheel_runs():
+    user = get_current_user()
+    if not _user_can_flywheel(user):
+        return jsonify({'success': False, 'error': 'Flywheel access required'}), 403
+    return jsonify({'success': True, 'runs': _flywheel_list_files()})
+
+
+@app.route('/api/flywheel-iq/run')
+@requires_auth
+def api_flywheel_run():
+    user = get_current_user()
+    if not _user_can_flywheel(user):
+        return jsonify({'success': False, 'error': 'Flywheel access required'}), 403
+    key = (request.args.get('key') or '').strip()
+    # The key is a file name, never a path. Anything with a separator
+    # is refused rather than normalized.
+    if not key or '/' in key or '\\' in key or key.startswith('.') or not key.lower().endswith('.csv'):
+        return jsonify({'success': False, 'error': 'run not found'}), 404
+    path = os.path.join(_FLYWHEEL_DIR, key)
+    if not os.path.isfile(path):
+        return jsonify({'success': False, 'error': 'run not found'}), 404
+    try:
+        payload = _flywheel_parse(path)
+    except Exception as exc:
+        app.logger.warning('Flywheel parse failed for %s: %s', key, exc)
+        return jsonify({'success': False, 'error': 'could not read this study'}), 500
+    payload['key'] = key
+    payload['label'] = _flywheel_title_from_name(key[:-4])
+    return jsonify({'success': True, 'run': payload})
+
+
 @app.route('/api/brand-tracking/index')
 @requires_auth
 def api_brand_tracking_index():
@@ -21926,6 +22068,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'impactIQ': False,          # 2026-07-22 sync-gap fix (was in dropdown/admin, missing here)
     'brandPartnershipIQ': False,
     'flywheelConversion': False,
+    'flywheelIQ': False,        # 2026-09-17 added with <option value="flywheelIQ">
     'shareOfTimeIQ': False,
     'helmIQ': False,
     'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">

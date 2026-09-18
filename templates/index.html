@@ -19708,6 +19708,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
+                            <option value="flywheelIQ" {% if not has_flywheel_iq_access and 'flywheel_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🔁 Flywheel</option>
                             {# Share of Time removed from dropdown 2026-08-20
                                per Jenna. Handler (showShareOfTimeIQ),
                                shareOfTimeIQView, /api/share-of-time/* routes,
@@ -28983,6 +28984,52 @@ https://www.instagram.com/p/..."></textarea>
         </div><!-- End shareOfTimeIQView -->
 
         <!-- FLYWHEEL CONVERSION VIEW -->
+        <!-- FLYWHEEL IQ
+             One study per CSV in data/flywheel. The library, the tabs
+             and the persistence are the same ones Profile IQ, Journey
+             IQ and Subscriber IQ use. -->
+        <div id="flywheelIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;">
+            <div class="fw-topbar">
+                <div class="fw-topbar-label">Flywheel</div>
+                <div id="fwWindowBox" style="display: none;"></div>
+            </div>
+            <div id="fwTabsBar" style="display: none;"></div>
+
+            <button type="button" id="fwLibraryRail" aria-label="Open library" title="Open library">
+                <span class="fw-rail-dot" aria-hidden="true"></span>
+                <span class="fw-rail-label">Library</span>
+                <span class="fw-rail-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+            <div id="fwLibraryScrim"></div>
+            <aside id="fwLibraryDrawer" aria-label="Flywheel library">
+                <div class="fw-lib-top">
+                    <div>
+                        <div class="fw-lib-eyebrow">Library</div>
+                        <h3>Select a study.</h3>
+                    </div>
+                    <button type="button" class="fw-lib-close" id="fwLibraryClose" aria-label="Close library">&times;</button>
+                </div>
+                <div class="fw-lib-search">
+                    <input type="search" id="fwLibrarySearch" placeholder="Search studies" autocomplete="off">
+                    <button type="button" class="fw-lib-refresh" title="Refresh the list" onclick="loadFlywheelIqRuns()">&#8635;</button>
+                </div>
+                <div class="fw-lib-tree" id="fwLibraryTree"></div>
+            </aside>
+
+            <div id="fwScroll">
+                <div id="fwEmpty" class="fw-cover">
+                    <div class="fw-cover-eyebrow">Flywheel</div>
+                    <h2>One play, and everything it turned.</h2>
+                    <p>What a single title does to the rest of a platform: who signed up,
+                       who came back, and which surfaces they opened afterwards.
+                       Open the library to pick a study.</p>
+                    <button type="button" class="fw-cover-cta" onclick="_fwLibraryOpen(true)">Open the library</button>
+                </div>
+                <div id="fwLoading" style="display: none;" class="fw-loading">Loading the study</div>
+                <div id="fwBody" style="display: none;"></div>
+            </div>
+        </div>
+
         <div id="flywheelConversionView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;">
             <div class="dashboard-layout" style="height: 100%; min-height: 0;">
                 <!-- Persistent Sidebar - Left Side -->
@@ -51547,12 +51594,15 @@ https://www.instagram.com/p/..."></textarea>
                         }
                     } catch (_) { /* localStorage disabled - no persist */ }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView', microdramasIQ: 'microdramasIQView', trendsIQ: 'trendsIQView', impactIQ: 'impactIQView', cultureRankerIQ: 'trendsIQView', brandTrackingIQ: 'brandTrackingIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', flywheelIQ: 'flywheelIQView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView', microdramasIQ: 'microdramasIQView', trendsIQ: 'trendsIQView', impactIQ: 'impactIQView', cultureRankerIQ: 'trendsIQView', brandTrackingIQ: 'brandTrackingIQView' };
+                    if (val === 'flywheelIQ' && typeof loadFlywheelIqRuns === 'function') {
+                        try { loadFlywheelIqRuns(); } catch (_e) {}
+                    }
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'flywheelIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView', 'microdramasIQView', 'trendsIQView', 'impactIQView', 'brandTrackingIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -51572,6 +51622,7 @@ https://www.instagram.com/p/..."></textarea>
                 sentimentIQ: 'Sentiment IQ: Track brand sentiment across search engines, social, news, reviews and forums with AI-powered positive / negative / neutral rollups and demographic breakdowns.',
                 shareOfTimeIQ: 'Share of Time: Analyze how audience time is distributed across streaming, music, games, betting, social media, and vMVPD/FAST.',
                 flywheelConversion: 'Flywheel Conversion: Track user journeys through your conversion funnel and measure drop-off at each touchpoint.',
+                flywheelIQ: 'Flywheel: What one title does to the rest of a platform. Who signed up, who came back, and which owned surfaces they opened before and after.',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or congressional district to see issue searches, search engines, social platforms, top politicians and articles.',
                 intentIQ: 'Attribution IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
@@ -51617,6 +51668,7 @@ https://www.instagram.com/p/..."></textarea>
                         ['flywheelConversion', !!d.has_flywheel_conversion_access || hasAnalysisModule('flywheel_conversion')],
                         ['brandPartnershipIQ', !!d.has_brand_partnership_iq_access || hasAnalysisModule('brand_partnership_iq')],
                         ['journeyIQ', !!d.has_journey_iq_access || hasAnalysisModule('journey_iq')],
+                        ['flywheelIQ', !!d.has_flywheel_iq_access || hasAnalysisModule('flywheel_iq')],
                         ['impactIQ', d.has_impact_iq_access !== false],
                         ['talentFitIQ', !!d.has_talent_fit_access],
                         ['cultureRankerIQ', !!d.has_rankers_iq_access],
@@ -81096,6 +81148,438 @@ https://www.instagram.com/p/..."></textarea>
                 }
             }
         });
+
+        // ═══════════════════════════════════════════════════════
+        // FLYWHEEL IQ
+        //
+        // A study is one CSV, parsed server-side into named blocks.
+        // The renderer reads the blocks it knows and skips the rest,
+        // so a study that carries fewer tables still draws.
+        // ═══════════════════════════════════════════════════════
+        var _fwRuns = [];
+        var _fwOpenTabs = [];
+        var _fwActiveTab = null;
+        var _fwCurrent = null;
+
+        function _fwKeySuffix() {
+            try {
+                return (typeof currentUsername !== 'undefined' && currentUsername)
+                    ? '_' + currentUsername : '';
+            } catch (_e) { return ''; }
+        }
+        function _fwSaveTabs() {
+            try {
+                var k = _fwKeySuffix();
+                localStorage.setItem('openFlywheelTabs' + k, JSON.stringify(_fwOpenTabs));
+                localStorage.setItem('activeFlywheelTabId' + k, _fwActiveTab || '');
+            } catch (_e) {}
+        }
+        function _fwLoadTabs() {
+            try {
+                var k = _fwKeySuffix();
+                var t = JSON.parse(localStorage.getItem('openFlywheelTabs' + k) || '[]');
+                _fwOpenTabs = Array.isArray(t) ? t.filter(function (x) { return x && x.key; }) : [];
+                _fwActiveTab = localStorage.getItem('activeFlywheelTabId' + k) || null;
+            } catch (_e) { _fwOpenTabs = []; _fwActiveTab = null; }
+        }
+        function _fwEsc(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function _fwNum(n) {
+            if (n === null || n === undefined || isNaN(n)) return '';
+            return Number(n).toLocaleString('en-US');
+        }
+        function _fwPct(n, dp) {
+            if (n === null || n === undefined || isNaN(n)) return '';
+            return Number(n).toFixed(dp === undefined ? 1 : dp) + '%';
+        }
+
+        // ---- Library ------------------------------------------------
+        function _fwLibraryOpen(on) {
+            var dr = document.getElementById('fwLibraryDrawer');
+            var sc = document.getElementById('fwLibraryScrim');
+            var rail = document.getElementById('fwLibraryRail');
+            if (!dr) return;
+            dr.classList.toggle('is-open', !!on);
+            if (sc) sc.classList.toggle('is-open', !!on);
+            if (rail) rail.classList.toggle('is-hidden', !!on);
+            if (on) {
+                var q = document.getElementById('fwLibrarySearch');
+                if (q) { try { q.focus(); } catch (_e) {} }
+            }
+        }
+        function _fwRenderLibrary() {
+            var tree = document.getElementById('fwLibraryTree');
+            if (!tree) return;
+            var q = ((document.getElementById('fwLibrarySearch') || {}).value || '')
+                .trim().toLowerCase();
+            var rows = _fwRuns.filter(function (r) {
+                return !q || String(r.label || r.key).toLowerCase().indexOf(q) !== -1;
+            });
+            if (!rows.length) {
+                tree.innerHTML = '<div class="fw-lib-empty">'
+                    + (_fwRuns.length ? 'Nothing matches that.' : 'No studies yet.')
+                    + '</div>';
+                return;
+            }
+            tree.innerHTML = '<div class="fw-lib-group"><span class="fw-lib-dot"></span>Studies</div>'
+                + rows.map(function (r) {
+                    return '<div class="fw-lib-item' + (r.key === _fwActiveTab ? ' is-active' : '')
+                        + '" data-fw-key="' + _fwEsc(r.key) + '">' + _fwEsc(r.label || r.key) + '</div>';
+                }).join('');
+        }
+
+        // ---- Tabs ---------------------------------------------------
+        function _fwLabelFor(key) {
+            for (var i = 0; i < _fwRuns.length; i++) {
+                if (_fwRuns[i].key === key) return _fwRuns[i].label || key;
+            }
+            return key;
+        }
+        function _fwRenderTabs() {
+            var bar = document.getElementById('fwTabsBar');
+            if (!bar) return;
+            if (!_fwOpenTabs.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            bar.style.display = 'flex';
+            bar.innerHTML = _fwOpenTabs.map(function (t) {
+                var name = String(t.label || t.key);
+                if (name.length > 24) name = name.slice(0, 22).trim() + '\u2026';
+                return '<span class="fw-tab' + (t.key === _fwActiveTab ? ' is-active' : '')
+                    + '" data-fw-tab="' + _fwEsc(t.key) + '" title="' + _fwEsc(t.label || t.key) + '">'
+                    + '<span class="fw-tab-name">' + _fwEsc(name) + '</span>'
+                    + '<button type="button" class="fw-tab-x" data-fw-close="' + _fwEsc(t.key)
+                    + '" aria-label="Close">\u00d7</button></span>';
+            }).join('');
+        }
+        function _fwAddTab(key) {
+            var found = false;
+            for (var i = 0; i < _fwOpenTabs.length; i++) {
+                if (_fwOpenTabs[i].key === key) {
+                    _fwOpenTabs[i].label = _fwLabelFor(key); found = true; break;
+                }
+            }
+            if (!found) _fwOpenTabs.push({ key: key, label: _fwLabelFor(key) });
+            _fwActiveTab = key;
+            _fwSaveTabs();
+            _fwRenderTabs();
+            _fwRenderLibrary();
+        }
+        function _fwCloseTab(key) {
+            var idx = -1;
+            for (var i = 0; i < _fwOpenTabs.length; i++) {
+                if (_fwOpenTabs[i].key === key) { idx = i; break; }
+            }
+            if (idx === -1) return;
+            _fwOpenTabs.splice(idx, 1);
+            if (_fwActiveTab === key) {
+                var next = _fwOpenTabs[idx] || _fwOpenTabs[idx - 1] || null;
+                _fwActiveTab = next ? next.key : null;
+                if (_fwActiveTab) { openFlywheelRun(_fwActiveTab); }
+                else { _fwShowEmpty(); }
+            }
+            _fwSaveTabs();
+            _fwRenderTabs();
+            _fwRenderLibrary();
+        }
+        function _fwShowEmpty() {
+            var e = document.getElementById('fwEmpty');
+            var b = document.getElementById('fwBody');
+            var l = document.getElementById('fwLoading');
+            var w = document.getElementById('fwWindowBox');
+            if (e) e.style.display = '';
+            if (b) { b.style.display = 'none'; b.innerHTML = ''; }
+            if (l) l.style.display = 'none';
+            if (w) w.style.display = 'none';
+            _fwCurrent = null;
+        }
+
+        document.addEventListener('click', function (ev) {
+            if (!ev.target.closest) return;
+            if (ev.target.closest('#fwLibraryRail')) { _fwLibraryOpen(true); return; }
+            if (ev.target.closest('#fwLibraryClose') || ev.target.closest('#fwLibraryScrim')) {
+                _fwLibraryOpen(false); return;
+            }
+            var x = ev.target.closest('[data-fw-close]');
+            if (x) { ev.stopPropagation(); _fwCloseTab(x.getAttribute('data-fw-close')); return; }
+            var tab = ev.target.closest('[data-fw-tab]');
+            if (tab) {
+                var tk = tab.getAttribute('data-fw-tab');
+                if (tk && tk !== _fwActiveTab) openFlywheelRun(tk);
+                return;
+            }
+            var item = ev.target.closest('[data-fw-key]');
+            if (item) {
+                openFlywheelRun(item.getAttribute('data-fw-key'));
+                setTimeout(function () { _fwLibraryOpen(false); }, 40);
+            }
+        });
+        document.addEventListener('input', function (ev) {
+            if (ev.target && ev.target.id === 'fwLibrarySearch') _fwRenderLibrary();
+        });
+
+        // ---- Load ---------------------------------------------------
+        function loadFlywheelIqRuns(preferredKey) {
+            return fetch('/api/flywheel-iq/runs', { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    _fwRuns = (d && d.success && Array.isArray(d.runs)) ? d.runs : [];
+                    _fwLoadTabs();
+                    // A study that is no longer on the server is dropped
+                    // rather than left to fail on open.
+                    var live = {};
+                    _fwRuns.forEach(function (r) { live[r.key] = 1; });
+                    _fwOpenTabs = _fwOpenTabs.filter(function (t) { return live[t.key]; });
+                    if (!live[_fwActiveTab]) _fwActiveTab = null;
+                    if (!_fwActiveTab && _fwOpenTabs.length) _fwActiveTab = _fwOpenTabs[0].key;
+                    _fwRenderLibrary();
+                    _fwRenderTabs();
+                    var key = preferredKey || _fwActiveTab
+                        || (_fwRuns[0] && _fwRuns[0].key) || null;
+                    if (key) openFlywheelRun(key); else _fwShowEmpty();
+                })
+                .catch(function () { _fwShowEmpty(); });
+        }
+
+        function openFlywheelRun(key) {
+            if (!key) return;
+            var e = document.getElementById('fwEmpty');
+            var b = document.getElementById('fwBody');
+            var l = document.getElementById('fwLoading');
+            if (e) e.style.display = 'none';
+            if (b) b.style.display = 'none';
+            if (l) l.style.display = '';
+            _fwAddTab(key);
+            fetch('/api/flywheel-iq/run?key=' + encodeURIComponent(key),
+                  { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d || !d.success || !d.run) throw new Error('no run');
+                    _fwCurrent = d.run;
+                    renderFlywheelRun(d.run);
+                })
+                .catch(function () {
+                    if (l) l.style.display = 'none';
+                    if (b) {
+                        b.style.display = '';
+                        b.innerHTML = '<div class="fw-cover"><h2>This study could not be opened.</h2>'
+                            + '<p>Pick another from the library.</p></div>';
+                    }
+                });
+        }
+
+        // ---- Render -------------------------------------------------
+        function _fwRow(label, note, value, pct, barPct, tone) {
+            var w = Math.max(0, Math.min(100, Number(barPct) || 0));
+            return '<div class="fw-row">'
+                 + '<div class="fw-row-k">' + _fwEsc(label)
+                 + (note ? '<small>' + _fwEsc(note) + '</small>' : '') + '</div>'
+                 + '<div class="fw-row-bar' + (tone ? ' is-' + tone : '') + '">'
+                 + '<i style="width:' + w + '%"></i></div>'
+                 + '<div class="fw-row-v">' + _fwEsc(value)
+                 + (pct ? '<small>' + _fwEsc(pct) + '</small>' : '') + '</div>'
+                 + '</div>';
+        }
+        function _fwSection(num, title, deck, inner) {
+            return '<section class="fw-sec">'
+                 + '<div class="fw-num">' + _fwEsc(num) + ' ' + _fwEsc(title) + '</div>'
+                 + (deck ? '<h3>' + _fwEsc(deck) + '</h3>' : '')
+                 + inner + '</section>';
+        }
+        function _fwFindRow(rows, surface) {
+            for (var i = 0; i < (rows || []).length; i++) {
+                if (rows[i].surface === surface) return rows[i];
+            }
+            return null;
+        }
+        function _fwPartition(rows, baseKey) {
+            // Rows that split a whole: bar is the row's own share.
+            return (rows || []).map(function (r) {
+                var p = r[baseKey];
+                return _fwRow(r.surface_label, r.note && r.note.length < 90 ? r.note : '',
+                              _fwNum(r.accounts), _fwPct(p, 1), p);
+            }).join('');
+        }
+
+        function renderFlywheelRun(run) {
+            var b = document.getElementById('fwBody');
+            var l = document.getElementById('fwLoading');
+            var wbox = document.getElementById('fwWindowBox');
+            if (!b) return;
+            var B = run.blocks || {};
+            var S = run.study || {};
+            var html = '';
+
+            if (wbox) {
+                wbox.textContent = S.window ? ('Window: ' + S.window) : '';
+                wbox.style.display = S.window ? 'inline-flex' : 'none';
+            }
+
+            // Masthead. The cohort row carries the headline count and
+            // the split that the whole study hangs off.
+            var cohort = B.cohort || [];
+            var head = _fwFindRow(cohort, 'acquired_or_reactivated');
+            var fresh = _fwFindRow(cohort, 'new_signup');
+            var back = _fwFindRow(cohort, 'reactivated_dormant');
+            var done = _fwFindRow(cohort, 'completed_qualifying_watch');
+            var total = (head && head.accounts) || S.cohort_accounts || 0;
+
+            html += '<div class="fw-head">'
+                 + '<div class="fw-eyebrow">Flywheel'
+                 + (S.window ? ' \u00b7 ' + _fwEsc(S.window) : '') + '</div>'
+                 + '<h1>' + _fwEsc(run.label || 'Flywheel study') + '.</h1>';
+            if (head) {
+                var lead = '<b>' + _fwNum(total) + '</b> accounts were acquired or reactivated.';
+                if (fresh && back && total) {
+                    lead += ' <b>' + _fwPct((back.accounts / total) * 100, 1) + '</b> of them'
+                         + ' were dormant memberships coming back, not new ones.';
+                }
+                html += '<p class="fw-deck">' + lead + '</p>';
+            }
+            html += '<div class="fw-kpis">';
+            function kpi(label, value) {
+                html += '<div class="fw-kpi"><div class="fw-kpi-l">' + _fwEsc(label)
+                     + '</div><div class="fw-kpi-v">' + _fwEsc(value) + '</div></div>';
+            }
+            if (head) kpi('Acquired or reactivated', _fwNum(head.accounts));
+            if (fresh) kpi('New Prime signups', _fwNum(fresh.accounts));
+            if (back) kpi('Dormant memberships restored', _fwNum(back.accounts));
+            if (done) kpi('Completed a qualifying watch', _fwPct(done.share_of_cohort_pct, 1));
+            html += '</div>';
+            html += '</div>';
+
+            // 01 The nest. Each step's own share of the step above it
+            // is what makes the funnel readable, so it is computed
+            // rather than read off share_of_base_pct, which is keyed
+            // to different bases per row.
+            var nest = B.nest || [];
+            if (nest.length) {
+                var inner = '';
+                for (var i = 0; i < nest.length; i++) {
+                    var r = nest[i];
+                    var prev = nest[i - 1];
+                    var ofPrev = (prev && prev.accounts) ? (r.accounts / prev.accounts) * 100 : 100;
+                    inner += _fwRow(
+                        r.surface_label,
+                        i === 0 ? 'Everyone in the window' : _fwPct(ofPrev, ofPrev < 1 ? 2 : 1) + ' of the step before',
+                        _fwNum(r.accounts), '', i === 0 ? 100 : Math.max(ofPrev, 0.4));
+                }
+                html += _fwSection('01', 'The nest',
+                    'From the whole country down to the accounts this title moved.', inner);
+            }
+
+            // 02 The flywheel itself. This is the argument: the same
+            // surfaces measured before the play and after it.
+            var comp = (B.flywheel_compare || []).slice();
+            if (comp.length) {
+                comp.sort(function (a, b2) { return (b2.lift_pp || 0) - (a.lift_pp || 0); });
+                var maxAbs = 0;
+                comp.forEach(function (r) {
+                    var v = Math.abs(r.lift_pp || 0);
+                    if (v > maxAbs) maxAbs = v;
+                });
+                var rowsHtml = comp.map(function (r) {
+                    var lift = Number(r.lift_pp || 0);
+                    var w = maxAbs ? (Math.abs(lift) / maxAbs) * 50 : 0;
+                    var side = lift >= 0
+                        ? '<i class="pos" style="left:50%;width:' + w + '%"></i>'
+                        : '<i class="neg" style="right:50%;width:' + w + '%"></i>';
+                    return '<div class="fw-row fw-liftrow">'
+                         + '<div class="fw-row-k">' + _fwEsc(r.surface_label)
+                         + '<small>' + _fwPct(r.pre_180d_share_of_cohort_pct, 1)
+                         + ' before \u00b7 ' + _fwPct(r.share_of_cohort_pct, 1) + ' after</small></div>'
+                         + '<div class="fw-lift"><span class="fw-lift-mid"></span>' + side + '</div>'
+                         + '<div class="fw-row-v' + (lift >= 0 ? ' is-up' : ' is-down') + '">'
+                         + (lift >= 0 ? '+' : '\u2212') + Math.abs(lift).toFixed(1)
+                         + '<small>points</small></div></div>';
+                }).join('');
+                html += _fwSection('02', 'The flywheel',
+                    'The same surfaces, 180 days before the play against 30 days after it.',
+                    '<div class="fw-liftlegend"><span>Used less after</span><span>Used more after</span></div>'
+                    + rowsHtml);
+            }
+
+            // 03 How they arrived.
+            if ((B.first_touch || []).length) {
+                html += _fwSection('03', 'How they arrived',
+                    'The path that ended in a signup or a restore.',
+                    _fwPartition(B.first_touch, 'share_of_cohort_pct'));
+            }
+
+            // 04 What they opened next.
+            var fnext = B.first_next || [];
+            var ttime = B.time_to_second || [];
+            if (fnext.length || ttime.length) {
+                var inner4 = '';
+                if (fnext.length) {
+                    inner4 += '<div class="fw-subhead">First Amazon-owned surface after the play</div>'
+                           + _fwPartition(fnext, 'share_of_base_pct');
+                }
+                if (ttime.length) {
+                    inner4 += '<div class="fw-subhead">How long until they opened it</div>'
+                           + _fwPartition(ttime, 'share_of_base_pct');
+                }
+                html += _fwSection('04', 'What they opened next',
+                    'The second surface, and how quickly they reached it.', inner4);
+            }
+
+            // 05 The checkout.
+            var cwhat = B.checkout_what || [];
+            var cpath = B.checkout_path || [];
+            var ltouch = B.last_touch || [];
+            if (cwhat.length || cpath.length || ltouch.length) {
+                var inner5 = '';
+                if (cwhat.length) {
+                    inner5 += '<div class="fw-subhead">What they bought</div>'
+                           + _fwPartition(cwhat, 'share_of_base_pct');
+                }
+                if (cpath.length) {
+                    inner5 += '<div class="fw-subhead">How the checkout sat next to the play</div>'
+                           + _fwPartition(cpath, 'share_of_base_pct');
+                }
+                if (ltouch.length) {
+                    inner5 += '<div class="fw-subhead">Last surface before the checkout</div>'
+                           + _fwPartition(ltouch, 'share_of_base_pct');
+                }
+                html += _fwSection('05', 'The checkout',
+                    'Where the membership turned into an order.', inner5);
+            }
+
+            // 06 Depth and timing.
+            var depth = B.gg_depth || [];
+            var when = B.when_first_play || [];
+            if (depth.length || when.length) {
+                var inner6 = '';
+                if (depth.length) {
+                    inner6 += '<div class="fw-subhead">How much of the title they watched</div>'
+                           + _fwPartition(depth, 'share_of_cohort_pct');
+                }
+                if (when.length) {
+                    inner6 += '<div class="fw-subhead">When the first play happened</div>'
+                           + _fwPartition(when, 'share_of_cohort_pct');
+                }
+                html += _fwSection('06', 'Depth and timing',
+                    'How far in they got, and when they started.', inner6);
+            }
+
+            // 07 What leaked.
+            if ((B.leak || []).length) {
+                html += _fwSection('07', 'What leaked',
+                    'Where the same accounts went to watch it somewhere else.',
+                    _fwPartition(B.leak, 'share_of_cohort_pct'));
+            }
+
+            if (S.panel || S.unit) {
+                html += '<div class="fw-foot">'
+                     + _fwEsc([S.unit, S.panel].filter(Boolean).join(' \u00b7 ')) + '</div>';
+            }
+
+            b.innerHTML = html;
+            b.style.display = '';
+            if (l) l.style.display = 'none';
+            var sc = document.getElementById('fwScroll');
+            if (sc) sc.scrollTop = 0;
+        }
 
         function loadJourneyIqRunList(preferredKey) {
             var picker = document.getElementById('jiqRunPicker');
@@ -176596,6 +177080,300 @@ https://www.instagram.com/p/..."></textarea>
     .jiq-tab:hover .jiq-tab-x, .jiq-tab.is-active .jiq-tab-x { opacity: 1; }
     .jiq-tab-x:hover { color: #E9E8E1; }
     body[data-theme="light"] .jiq-tab-x:hover { color: #0C1618; }
+
+    /* ================================================================
+       FLYWHEEL IQ
+       Same editorial system as Subscriber IQ and Journey IQ: graphite
+       ground, a Library rail, a tab strip, and figures in rows rather
+       than tiles.
+       ================================================================ */
+    #flywheelIQView {
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    body[data-theme="light"] #flywheelIQView { background: #E9E8E1; color: #0C1618; }
+    .fw-topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 14px 24px 12px; flex: 0 0 auto;
+    }
+    .fw-topbar-label {
+        font-size: 11px; font-weight: 600; letter-spacing: .14em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    #fwWindowBox {
+        align-items: center; padding: 5px 13px; border-radius: 999px;
+        border: 1px solid rgba(199, 242, 62, .4); color: #C7F23E;
+        font-size: 10px; font-weight: 600; letter-spacing: .1em;
+        text-transform: uppercase; white-space: nowrap;
+    }
+    body[data-theme="light"] #fwWindowBox {
+        border-color: rgba(94, 126, 18, .45); color: #5E7E12;
+    }
+
+    /* Tabs */
+    #fwTabsBar {
+        display: flex; flex-wrap: wrap; align-items: baseline; gap: 22px;
+        padding: 0 24px 9px; border-bottom: 1px solid #3B3D38; flex: 0 0 auto;
+    }
+    body[data-theme="light"] #fwTabsBar { border-bottom-color: #C9C6BA; }
+    #fwTabsBar::before {
+        content: 'Open'; flex: 0 0 auto; margin-right: 4px;
+        font-size: 9.5px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .fw-tab {
+        display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+        max-width: 200px; padding: 0 0 6px; margin-bottom: -10px;
+        border-bottom: 2px solid transparent;
+        font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .fw-tab:hover { color: #E9E8E1; }
+    .fw-tab.is-active { color: #E9E8E1; border-bottom-color: #C7F23E; }
+    body[data-theme="light"] .fw-tab:hover,
+    body[data-theme="light"] .fw-tab.is-active { color: #0C1618; }
+    body[data-theme="light"] .fw-tab.is-active { border-bottom-color: #5E7E12; }
+    .fw-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fw-tab-x {
+        background: transparent; border: 0; padding: 0; cursor: pointer;
+        color: #7C878A; font-size: 13px; line-height: 1; opacity: 0;
+        transition: opacity 120ms ease;
+    }
+    .fw-tab:hover .fw-tab-x, .fw-tab.is-active .fw-tab-x { opacity: 1; }
+
+    /* Library */
+    #fwLibraryRail {
+        display: none; position: fixed; left: 0; top: 200px;
+        z-index: 2147481500; width: 36px; min-height: 168px;
+        padding: 16px 0 14px; flex-direction: column; align-items: center;
+        gap: 12px; background: #15252A; border: 1px solid #3B3D38;
+        border-left: 3px solid #C7F23E; border-radius: 0 12px 12px 0;
+        color: #E9E8E1; cursor: pointer; font-family: inherit;
+        box-shadow: 8px 12px 28px rgba(0, 0, 0, .32);
+    }
+    #flywheelIQView #fwLibraryRail { display: flex; }
+    #fwLibraryRail.is-hidden { display: none !important; }
+    .fw-rail-dot { width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px; }
+    .fw-rail-label {
+        writing-mode: vertical-rl; transform: rotate(180deg);
+        font-size: 11px; font-weight: 600; letter-spacing: .14em;
+        text-transform: uppercase;
+    }
+    .fw-rail-chevron { color: #C7F23E; font-size: 18px; line-height: 1; font-weight: 600; }
+    body[data-theme="light"] #fwLibraryRail {
+        background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12; color: #0C1618;
+    }
+    body[data-theme="light"] .fw-rail-dot,
+    body[data-theme="light"] .fw-rail-chevron { background: #5E7E12; color: #5E7E12; }
+    #fwLibraryScrim {
+        display: none; position: fixed; inset: 0; z-index: 2147481900;
+        background: rgba(12, 22, 24, .55);
+    }
+    #fwLibraryScrim.is-open { display: block; }
+    #fwLibraryDrawer {
+        position: fixed; left: 0; top: 121px; bottom: 0; width: 360px;
+        z-index: 2147482000; display: flex; flex-direction: column;
+        background: #15252A; border-right: 1px solid #3B3D38;
+        box-shadow: 16px 0 40px rgba(0, 0, 0, .35);
+        transform: translateX(-110%); transition: transform 180ms ease;
+        visibility: hidden; pointer-events: none;
+    }
+    #fwLibraryDrawer.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+    body[data-theme="light"] #fwLibraryDrawer { background: #FFFFFF; border-right-color: #C9C6BA; }
+    .fw-lib-top {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 14px; padding: 20px 20px 14px;
+    }
+    .fw-lib-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .fw-lib-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+    body[data-theme="light"] .fw-lib-eyebrow::before { background: #5E7E12; }
+    .fw-lib-top h3 {
+        margin: 8px 0 0; font-size: 20px; font-weight: 800;
+        letter-spacing: -.02em; text-transform: none; color: inherit;
+    }
+    .fw-lib-close {
+        background: transparent; border: 0; color: #7C878A;
+        font-size: 22px; line-height: 1; cursor: pointer;
+    }
+    .fw-lib-search { display: flex; gap: 8px; padding: 0 20px 14px; }
+    .fw-lib-search input {
+        flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px;
+        border: 1px solid #3B3D38; background: transparent; color: inherit;
+        font-size: 12.5px; font-family: inherit;
+    }
+    body[data-theme="light"] .fw-lib-search input { border-color: #C9C6BA; }
+    .fw-lib-refresh {
+        border: 1px solid #3B3D38; background: transparent; color: #7C878A;
+        border-radius: 8px; width: 36px; cursor: pointer;
+    }
+    body[data-theme="light"] .fw-lib-refresh { border-color: #C9C6BA; }
+    .fw-lib-tree { flex: 1; overflow-y: auto; padding: 0 12px 20px; }
+    .fw-lib-group {
+        display: flex; align-items: center; gap: 9px; padding: 14px 8px 8px;
+        font-size: 10px; font-weight: 600; letter-spacing: .16em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .fw-lib-dot { width: 6px; height: 6px; border-radius: 50%; background: #B7B3D8; }
+    body[data-theme="light"] .fw-lib-dot { background: #8E3FA8; }
+    .fw-lib-item {
+        padding: 9px 10px; border-radius: 8px; cursor: pointer;
+        font-size: 12.5px; color: #C9CCC6;
+    }
+    .fw-lib-item:hover { background: rgba(233, 232, 225, .06); color: #E9E8E1; }
+    .fw-lib-item.is-active { color: #C7F23E; }
+    body[data-theme="light"] .fw-lib-item { color: #5C6560; }
+    body[data-theme="light"] .fw-lib-item:hover { background: rgba(12, 22, 24, .05); color: #0C1618; }
+    body[data-theme="light"] .fw-lib-item.is-active { color: #5E7E12; }
+    .fw-lib-empty { padding: 14px 10px; font-size: 12px; color: #7C878A; }
+
+    /* Body */
+    #fwScroll { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 0 0 60px 46px; }
+    .fw-loading { padding: 60px 40px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #7C878A; }
+    .fw-cover { padding: 56px 40px; max-width: 70ch; }
+    .fw-cover-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .fw-cover-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+    body[data-theme="light"] .fw-cover-eyebrow::before { background: #5E7E12; }
+    .fw-cover h2 {
+        margin: 16px 0 0; font-size: 44px; font-weight: 800;
+        letter-spacing: -.045em; line-height: 1.02; color: inherit;
+    }
+    .fw-cover p { margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #9AA09B; }
+    body[data-theme="light"] .fw-cover p { color: #5C6560; }
+    .fw-cover-cta {
+        margin-top: 26px; padding: 11px 22px; border-radius: 999px; border: 0;
+        background: #C7F23E; color: #0C1618; font-family: inherit;
+        font-size: 11px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; cursor: pointer;
+    }
+    body[data-theme="light"] .fw-cover-cta { background: #5E7E12; color: #E9E8E1; }
+
+    .fw-head { padding: 34px 40px 30px; border-bottom: 1px solid #3B3D38; max-width: 1180px; }
+    body[data-theme="light"] .fw-head { border-bottom-color: #C9C6BA; }
+    .fw-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .fw-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+    body[data-theme="light"] .fw-eyebrow::before { background: #5E7E12; }
+    .fw-head h1 {
+        margin: 14px 0 0; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: 1.0; color: inherit;
+    }
+    .fw-deck {
+        margin: 16px 0 0; font-size: 17px; font-weight: 300; line-height: 1.5;
+        color: #9AA09B; max-width: 62ch;
+    }
+    .fw-deck b { font-weight: 700; color: #E9E8E1; }
+    body[data-theme="light"] .fw-deck { color: #5C6560; }
+    body[data-theme="light"] .fw-deck b { color: #0C1618; }
+    .fw-kpis {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 26px 40px; margin-top: 28px;
+    }
+    .fw-kpi-l {
+        font-size: 9.5px; font-weight: 500; letter-spacing: .15em;
+        text-transform: uppercase; color: #7C878A; line-height: 1.5;
+    }
+    .fw-kpi-v {
+        margin-top: 9px; font-size: 33px; font-weight: 800;
+        letter-spacing: -.04em; color: inherit;
+    }
+
+    .fw-sec { padding: 30px 40px 6px; max-width: 1180px; }
+    .fw-num {
+        display: flex; align-items: center; gap: 9px;
+        font-size: 10px; font-weight: 600; letter-spacing: .16em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .fw-num::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+    body[data-theme="light"] .fw-num::before { background: #5E7E12; }
+    .fw-sec h3 {
+        margin: 12px 0 18px; font-size: 21px; font-weight: 700;
+        letter-spacing: -.02em; color: inherit; text-transform: none;
+    }
+    .fw-subhead {
+        margin: 24px 0 6px; padding-bottom: 9px; border-bottom: 1px solid #3B3D38;
+        font-size: 10px; font-weight: 600; letter-spacing: .14em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    body[data-theme="light"] .fw-subhead { border-bottom-color: #C9C6BA; }
+
+    .fw-row {
+        display: grid; grid-template-columns: minmax(0, 1fr) 210px 150px;
+        column-gap: 28px; align-items: center;
+        padding: 13px 0; border-bottom: 1px solid #2A2D2A;
+    }
+    body[data-theme="light"] .fw-row { border-bottom-color: #DBD8CD; }
+    .fw-row:last-child { border-bottom: 0; }
+    .fw-row-k { font-size: 14.5px; font-weight: 500; min-width: 0; }
+    .fw-row-k small {
+        display: block; margin-top: 5px; font-size: 11.5px; font-weight: 400;
+        color: #7C878A; line-height: 1.5;
+    }
+    body[data-theme="light"] .fw-row-k small { color: #888C89; }
+    .fw-row-bar { position: relative; height: 5px; border-radius: 99px; background: #2A2D2A; }
+    body[data-theme="light"] .fw-row-bar { background: #DBD8CD; }
+    .fw-row-bar i {
+        position: absolute; left: 0; top: 0; bottom: 0; min-width: 3px;
+        border-radius: 99px; background: #C7F23E;
+    }
+    body[data-theme="light"] .fw-row-bar i { background: #5E7E12; }
+    .fw-row-v {
+        text-align: right; font-size: 22px; font-weight: 800;
+        letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+    }
+    .fw-row-v small {
+        display: block; margin-top: 4px; font-size: 10px; font-weight: 500;
+        letter-spacing: .1em; text-transform: uppercase; color: #7C878A;
+    }
+    .fw-row-v.is-up { color: #C7F23E; }
+    .fw-row-v.is-down { color: #B7B3D8; }
+    body[data-theme="light"] .fw-row-v.is-up { color: #5E7E12; }
+    body[data-theme="light"] .fw-row-v.is-down { color: #8E3FA8; }
+
+    /* The lift track runs both ways from a centre line, so a surface
+       that fell after the play is as legible as one that rose. */
+    .fw-lift { position: relative; height: 7px; }
+    .fw-lift-mid {
+        position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px;
+        background: #3B3D38;
+    }
+    body[data-theme="light"] .fw-lift-mid { background: #C9C6BA; }
+    .fw-lift i {
+        position: absolute; top: 1px; height: 5px; border-radius: 99px; min-width: 2px;
+    }
+    .fw-lift i.pos { background: #C7F23E; }
+    .fw-lift i.neg { background: #B7B3D8; }
+    body[data-theme="light"] .fw-lift i.pos { background: #5E7E12; }
+    body[data-theme="light"] .fw-lift i.neg { background: #8E3FA8; }
+    .fw-liftlegend {
+        display: grid; grid-template-columns: minmax(0, 1fr) 210px 150px;
+        column-gap: 28px; padding-bottom: 8px;
+        font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: #7C878A;
+    }
+    .fw-liftlegend span:first-child { grid-column: 2; text-align: left; }
+    .fw-liftlegend span:last-child { grid-column: 2; text-align: right; }
+    .fw-foot {
+        padding: 34px 40px 10px; max-width: 1180px; margin-top: 20px;
+        border-top: 1px solid #3B3D38;
+        font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #7C878A;
+    }
+    body[data-theme="light"] .fw-foot { border-top-color: #C9C6BA; }
+    @media (max-width: 1100px) {
+        .fw-row, .fw-liftlegend { grid-template-columns: minmax(0, 1fr) 130px; }
+        .fw-row-bar, .fw-lift, .fw-liftlegend span { display: none; }
+        .fw-head h1 { font-size: 38px; }
+    }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome

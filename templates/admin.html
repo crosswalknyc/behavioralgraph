@@ -2526,6 +2526,10 @@
                                 <span>🤝 Brand Partnership</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="flywheelIQ" onchange="updateHiddenProduct('flywheelIQ', this.checked)">
+                                Flywheel
+                            </label>
+                            <label class="checkbox-group">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="flywheelConversion" onchange="updateHiddenProduct('flywheelConversion', this.checked)">
                                 <span>🔄 Flywheel Conversion</span>
                             </label>
@@ -8121,7 +8125,7 @@
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
             cultureRankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
             sfConversion: false, intentIQ: false,
-            brandPartnershipIQ: false, flywheelConversion: false,
+            brandPartnershipIQ: false, flywheelConversion: false, flywheelIQ: false,
             shareOfTimeIQ: false,
             helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false,
             brandTrackingIQ: false
