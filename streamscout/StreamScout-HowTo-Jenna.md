@@ -220,7 +220,7 @@ public US Audible + Amazon pages — **no login, no key**.
 
 ## 📖 Books — buy + listen + borrow, whole franchise → one SHOW
 
-Books is StreamScout's newest resolver (#21). Give it **one title or a whole
+Books is StreamScout resolver **#21**. Give it **one title or a whole
 series**, and it sweeps every place a book lives — to **buy**, to **listen**,
 and to **borrow from the library**:
 
