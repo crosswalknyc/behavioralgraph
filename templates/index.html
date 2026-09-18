@@ -80710,94 +80710,131 @@ https://www.instagram.com/p/..."></textarea>
         // document can break between them instead of slicing through
         // one. The page is put in light mode for the capture and put
         // back afterwards: a dark screenshot is unreadable on paper.
+        // Build a real PDF file and save it. The previous version
+        // opened a print window, which gave the browser's own page
+        // chrome (url, date, page numbers), a blank leading sheet, and
+        // whatever the print dialog decided about colour. This draws
+        // the cards exactly as they sit on screen, in the theme that
+        // is on, and hands back a file.
+        function _jiqLoadScript(src) {
+            return new Promise(function (resolve, reject) {
+                var s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = function () { reject(new Error('load failed: ' + src)); };
+                document.head.appendChild(s);
+            });
+        }
+        function _jiqPdfDeps() {
+            var jobs = [];
+            if (typeof window.html2canvas === 'undefined') {
+                jobs.push(_jiqLoadScript(
+                    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'));
+            }
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                jobs.push(_jiqLoadScript(
+                    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'));
+            }
+            return Promise.all(jobs);
+        }
+        function _jiqPageBg() {
+            // Whatever the journey is actually sitting on, so the PDF
+            // has no bands of the wrong colour behind the cards.
+            var v = document.getElementById('journeyIQView');
+            var el = v;
+            while (el) {
+                var c = getComputedStyle(el).backgroundColor;
+                if (c && c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c;
+                el = el.parentElement;
+            }
+            return '#111F22';
+        }
         function jiqExportPdf() {
             var cards = _jiqVisibleCards();
             if (!cards.length) { alert('Open a journey first.'); return; }
             var btn = document.getElementById('jiqExportPdfBtn');
             if (btn) btn.disabled = true;
-            _jiqExportVeil(true, 'Preparing the PDF');
+            _jiqExportVeil(true, 'Building the PDF');
 
-            var prevTheme = document.body.getAttribute('data-theme');
-            document.body.setAttribute('data-theme', 'light');
+            var bg = _jiqPageBg();
+            var title = _jiqRunTitle();
 
-            function restore() {
-                if (prevTheme) document.body.setAttribute('data-theme', prevTheme);
-                else document.body.removeAttribute('data-theme');
+            _jiqPdfDeps().then(function () {
+                var shots = [];
+                var i = 0;
+                function next() {
+                    if (i >= cards.length) return build(shots);
+                    return window.html2canvas(cards[i], {
+                        backgroundColor: bg, scale: 2, logging: false,
+                        useCORS: true, allowTaint: false,
+                        windowWidth: document.documentElement.clientWidth
+                    }).then(function (c) {
+                        if (c.width && c.height) shots.push(c);
+                        i++; return next();
+                    }).catch(function (err) {
+                        console.warn('Journey PDF: skipped a card', err);
+                        i++; return next();
+                    });
+                }
+                return next();
+            }).then(function () {
                 _jiqExportVeil(false);
                 if (btn) btn.disabled = false;
-            }
-            function run() {
-                setTimeout(function () {
-                    var shots = [];
-                    var i = 0;
-                    function next() {
-                        if (i >= cards.length) { compose(shots); return; }
-                        window.html2canvas(cards[i], {
-                            backgroundColor: '#FFFFFF', scale: 2,
-                            logging: false, useCORS: true, allowTaint: false
-                        }).then(function (c) {
-                            shots.push(c.toDataURL('image/png'));
-                            i++; next();
-                        }).catch(function (err) {
-                            console.warn('Journey PDF: skipped a card', err);
-                            i++; next();
-                        });
-                    }
-                    next();
-                }, 260);
-            }
-            function compose(shots) {
-                restore();
+            }).catch(function (err) {
+                console.error('Journey PDF failed', err);
+                _jiqExportVeil(false);
+                if (btn) btn.disabled = false;
+                alert('The PDF could not be built. Try again in a moment.');
+            });
+
+            function build(shots) {
                 if (!shots.length) { alert('Nothing on the page to export.'); return; }
-                var title = _jiqRunTitle();
-                var win = _jiqRunWindow();
-                var when = new Date().toLocaleDateString('en-US',
-                    { year: 'numeric', month: 'long', day: 'numeric' });
-                var w = window.open('', '_blank');
-                if (!w) { alert('Allow pop-ups for this site to download the PDF.'); return; }
-                var imgs = shots.map(function (s) {
-                    return '<figure><img src="' + s + '"/></figure>';
-                }).join('');
-                w.document.write(
-                    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
-                  + _jiqEsc(title) + '</title><style>'
-                  + '@page{size:letter;margin:0.5in;}'
-                  + 'body{margin:0;background:#FFFFFF;color:#0C1618;'
-                  +   "font-family:'Inter 18pt',-apple-system,BlinkMacSystemFont,sans-serif;}"
-                  + '.mast{display:flex;justify-content:space-between;align-items:flex-end;'
-                  +   'gap:24px;padding-bottom:12px;border-bottom:2px solid #0C1618;margin-bottom:22px;}'
-                  + '.eyebrow{font-size:9px;font-weight:500;letter-spacing:.2em;'
-                  +   'text-transform:uppercase;color:#888C89;}'
-                  + 'h1{margin:8px 0 0;font-size:26px;font-weight:800;letter-spacing:-.035em;}'
-                  + '.meta{text-align:right;font-size:9px;letter-spacing:.1em;'
-                  +   'text-transform:uppercase;color:#888C89;line-height:1.9;}'
-                  + 'figure{margin:0 0 20px;page-break-inside:avoid;break-inside:avoid;}'
-                  + 'img{max-width:100%;height:auto;display:block;}'
-                  + '.foot{margin-top:18px;padding-top:10px;border-top:1px solid #C9C6BA;'
-                  +   'font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#888C89;}'
-                  + '</style></head><body>'
-                  + '<div class="mast"><div><div class="eyebrow">Crosswalk · Digital Journey IQ</div>'
-                  + '<h1>' + _jiqEsc(title) + '</h1></div>'
-                  + '<div class="meta">' + (win ? _jiqEsc(win) + '<br>' : '')
-                  + 'Prepared ' + _jiqEsc(when) + '</div></div>'
-                  + imgs
-                  + '<div class="foot">Crosswalk Technologies · ' + _jiqEsc(title) + '</div>'
-                  + '</body></html>'
-                );
-                w.document.close();
-                // The images are data URLs, so they are decoded by the
-                // time the load event fires; printing before that gives
-                // a blank sheet.
-                w.onload = function () { setTimeout(function () { w.print(); }, 350); };
-                setTimeout(function () { try { w.print(); } catch (_) {} }, 2200);
+                var JsPDF = window.jspdf.jsPDF;
+                var doc = null;
+
+                shots.forEach(function (canvas) {
+                    var w = canvas.width;
+                    // Pages stay close to letter proportions so the file
+                    // is a document rather than one endless strip, but
+                    // a short card keeps its own height instead of
+                    // being padded out to a full sheet.
+                    var maxPage = Math.round(w * 1.294);
+                    var offset = 0;
+                    while (offset < canvas.height) {
+                        var sliceH = Math.min(maxPage, canvas.height - offset);
+                        var part = document.createElement('canvas');
+                        part.width = w;
+                        part.height = sliceH;
+                        var ctx = part.getContext('2d');
+                        ctx.fillStyle = bg;
+                        ctx.fillRect(0, 0, w, sliceH);
+                        ctx.drawImage(canvas, 0, offset, w, sliceH, 0, 0, w, sliceH);
+
+                        var orient = w >= sliceH ? 'landscape' : 'portrait';
+                        if (!doc) {
+                            doc = new JsPDF({ orientation: orient, unit: 'px',
+                                              format: [w, sliceH], compress: true });
+                        } else {
+                            doc.addPage([w, sliceH], orient);
+                        }
+                        // jsPDF keys page size to the orientation it was
+                        // given, so the drawing box is read back rather
+                        // than assumed.
+                        var pw = doc.internal.pageSize.getWidth();
+                        var ph = doc.internal.pageSize.getHeight();
+                        doc.setFillColor(bg);
+                        doc.rect(0, 0, pw, ph, 'F');
+                        doc.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG',
+                                     0, 0, pw, ph, undefined, 'FAST');
+                        offset += sliceH;
+                    }
+                });
+
+                if (doc) {
+                    doc.save(_jiqSlug(title) + '_'
+                             + new Date().toISOString().slice(0, 10) + '.pdf');
+                }
             }
-            if (typeof window.html2canvas === 'undefined') {
-                var s = document.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-                s.onload = run;
-                s.onerror = function () { restore(); alert('Could not load the PDF library.'); };
-                document.head.appendChild(s);
-            } else { run(); }
         }
         function _jiqEsc(s) {
             return String(s == null ? '' : s).replace(/&/g, '&amp;')
