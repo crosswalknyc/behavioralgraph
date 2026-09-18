@@ -8874,6 +8874,9 @@
         /* Behavioral spotlight modal: hide Gen Pop and Index when profile is Gen Pop */
         body.profile-is-genpop .spotlight-genpop,
         body.profile-is-genpop .spotlight-index { display: none !important; }
+        /* Gen Pop is the baseline, so "leans older than the category
+           average" is a tautology. Drop the Insights hero one-liner. */
+        body.profile-is-genpop #dashHeroOneliner { display: none !important; }
         /* Non-US / foreign profiles (e.g. Prizeo Germany, sweepstakes): Gen Pop is a US
            baseline that doesn't apply, so hide every Gen Pop column across Insights,
            Demographics, Behavioral and Interests cards. Profile % and Index are kept.
@@ -129170,6 +129173,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             var line = document.getElementById('dashHeroOneliner');
             if (line) {
+                var gpHay = [
+                    parsed.brandCategory,
+                    parsed.name,
+                    (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name),
+                    (typeof currentS3Key !== 'undefined' && currentS3Key)
+                ].join(' ').toUpperCase();
+                var isGP = (typeof isSelectedProfileGenPop === 'function' && isSelectedProfileGenPop())
+                    || /GEN[\s_]?POP/.test(gpHay);
+                if (isGP) {
+                    line.textContent = '';
+                } else {
                 var ageWord = null;
                 if (under35 != null && under35 >= 50) ageWord = 'younger';
                 else if (under35 != null && under35 <= 30) ageWord = 'older';
@@ -129195,6 +129209,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (bold && rest) line.innerHTML = '<b>' + bold + '</b> ' + rest;
                 else if (bold) line.innerHTML = '<b>' + bold + '</b>';
                 else line.textContent = rest;
+                }
             }
             if (window._piqV4DressPages) window._piqV4DressPages();
             else if (window._piqV4DressInsights) window._piqV4DressInsights();
