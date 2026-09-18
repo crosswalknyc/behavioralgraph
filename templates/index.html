@@ -177218,8 +177218,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .fw-deck { color: #5C6560; }
     body[data-theme="light"] .fw-deck b { color: #0C1618; }
     .fw-kpis {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 26px 40px; margin-top: 28px;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 26px 30px; margin-top: 28px;
     }
     .fw-kpi-l {
         font-size: 9.5px; font-weight: 500; letter-spacing: .15em;
@@ -177292,13 +177292,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     /* Before and after stack on a shared 0-100 axis. A surface that
        fell reads as the lower bar being the longer one. */
     .fw-pair { display: grid; row-gap: 6px; }
-    .fw-pbar { position: relative; height: 15px; }
-    .fw-pbar i {
-        position: absolute; left: 0; top: 5px; height: 5px; min-width: 3px;
-        border-radius: 99px; background: #C7F23E;
+    .fw-pbar {
+        display: grid; grid-template-columns: minmax(0, 1fr) 46px;
+        column-gap: 10px; align-items: center; height: 15px;
     }
+    .fw-pbar::before {
+        content: ''; grid-area: 1 / 1; height: 5px; border-radius: 99px;
+        background: #2A2D2A;
+    }
+    .fw-pbar i {
+        grid-area: 1 / 1; height: 5px; min-width: 3px;
+        border-radius: 99px; background: #C7F23E; justify-self: start;
+    }
+    body[data-theme="light"] .fw-pbar::before { background: #DBD8CD; }
     .fw-pbar span {
-        position: absolute; right: 0; top: 0; font-size: 10.5px;
+        grid-area: 1 / 2; text-align: right; font-size: 10.5px;
         font-variant-numeric: tabular-nums; color: #7C878A;
     }
     .fw-pbar.is-before i { background: #3B3D38; }
