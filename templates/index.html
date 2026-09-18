@@ -104771,19 +104771,31 @@ https://www.instagram.com/p/..."></textarea>
 
         function _jiqFragStep(s, opts) {
             opts = opts || {};
-            // A first step has nothing before it, so it shows the whole
-            // track filled rather than a kept share of nothing.
-            var keep = (opts.base || s.kept === null || s.kept === undefined) ? 100 : Number(s.kept);
+            // The kept bar and drop sit BETWEEN steps so they read as
+            // the move from the last row, not as a fact about this one.
+            var isBase = !!(opts.base || s.kept === null || s.kept === undefined);
+            var keep = isBase ? 100 : Number(s.kept);
             var keepW = Math.max(0.6, Math.min(100, keep));
-            var lost = (opts.base || s.dropped === null || s.dropped === undefined || s.dropped === 0)
+            var lost = (isBase || s.dropped === null || s.dropped === undefined || s.dropped === 0)
                 ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' dropped off</span>';
             var sub = [s.doing, s.where].filter(Boolean).join(' \u00b7 ');
-            var keptLabel = opts.base
-                ? 'Everyone in this journey'
-                : (opts.firstConvert
-                    ? ('Only ' + _jiqFragPct(keep) + ' kept going from the last step')
-                    : ('Only ' + _jiqFragPct(keep) + ' kept going'));
-            return '' +
+            var html = '';
+            if (!isBase) {
+                html += '' +
+                  '<div class="jiq-frag-bridge' + (opts.branch ? ' is-branch' : '') + '">' +
+                    '<div class="jiq-frag-rail"></div>' +
+                    '<div class="jiq-frag-body">' +
+                      '<div class="jiq-frag-track">' +
+                        '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
+                      '</div>' +
+                      '<div class="jiq-frag-foot">' +
+                        '<span class="jiq-frag-kept">Only ' + _jiqFragPct(keep) + ' kept going</span>' +
+                        lost +
+                      '</div>' +
+                    '</div>' +
+                  '</div>';
+            }
+            html += '' +
               '<div class="jiq-frag-step' + (opts.branch ? ' is-branch' : '') +
                    (opts.terminal ? ' is-terminal' : '') + '">' +
                 '<div class="jiq-frag-rail"><i></i></div>' +
@@ -104793,15 +104805,12 @@ https://www.instagram.com/p/..."></textarea>
                     '<span class="jiq-frag-count">' + _jiqFragNum(s.accounts) + '</span>' +
                   '</div>' +
                   (sub ? '<div class="jiq-frag-doing">' + _jiqFragEsc(sub) + '</div>' : '') +
-                  '<div class="jiq-frag-track">' +
-                    '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
-                  '</div>' +
-                  '<div class="jiq-frag-foot">' +
-                    '<span class="jiq-frag-kept">' + keptLabel + '</span>' +
-                    lost +
-                  '</div>' +
+                  (opts.base
+                    ? '<div class="jiq-frag-foot"><span class="jiq-frag-kept">Everyone in this journey</span></div>'
+                    : '') +
                 '</div>' +
               '</div>';
+            return html;
         }
 
         function renderJourneyIqFragrance(p, runMeta) {
@@ -176333,11 +176342,21 @@ https://www.instagram.com/p/..."></textarea>
         border-bottom: 1px solid #2A2D2A !important; padding: 13px 14px !important;
     }
     body[data-theme="light"] #subscriberIQView tbody td { border-bottom-color: #DBD8CD !important; }
-    #subscriberIQView thead th {
+    #subscriberIQView thead th, #subscriberIQView thead, #subscriberIQView thead tr {
         border-bottom: 1px solid #3B3D38 !important; padding: 10px 14px !important;
         background: transparent !important;
     }
-    body[data-theme="light"] #subscriberIQView thead th { border-bottom-color: #C9C6BA !important; }
+    body[data-theme="light"] #subscriberIQView thead th,
+    body[data-theme="light"] #subscriberIQView thead,
+    body[data-theme="light"] #subscriberIQView thead tr { border-bottom-color: #C9C6BA !important; }
+    /* The standfirst above a section sits outside .tab-section, so the
+       body-copy rule above never reached it. */
+    #subscriberIQView .section-description {
+        text-transform: none !important; letter-spacing: 0 !important;
+        color: #9AA09B !important; font-size: 12.5px !important;
+        line-height: 1.6 !important; margin-bottom: 14px !important;
+    }
+    body[data-theme="light"] #subscriberIQView .section-description { color: #5C6560 !important; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
@@ -176622,6 +176641,10 @@ https://www.instagram.com/p/..."></textarea>
        the steps into a single run; the dot marks the step itself. */
     .jiq-frag-step { display: grid; grid-template-columns: 22px 1fr; gap: 14px; }
     .jiq-frag-step.is-branch { margin-left: 26px; }
+    .jiq-frag-bridge { display: grid; grid-template-columns: 22px 1fr; gap: 14px; }
+    .jiq-frag-bridge.is-branch { margin-left: 26px; }
+    .jiq-frag-bridge .jiq-frag-body { padding: 2px 0 10px; }
+    .jiq-frag-bridge .jiq-frag-track { margin-top: 0; }
     .jiq-frag-rail { position: relative; }
     .jiq-frag-rail::before {
         content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
