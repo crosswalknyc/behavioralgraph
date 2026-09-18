@@ -81868,7 +81868,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return '<div class="fw-row fw-liftrow">'
                          + '<div class="fw-row-k">' + _fwEsc(r.surface_label) + '</div>'
                          + '<div class="fw-pair">'
-                         + bar('is-after' + (up ? '' : ' is-down'), post)
+                         + bar('is-after', post)
                          + bar('is-before', pre)
                          + '</div>'
                          + '<div class="fw-row-v' + (up ? ' is-up' : ' is-down') + '">'
@@ -177309,19 +177309,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         grid-area: 1 / 2; text-align: right; font-size: 10.5px;
         font-variant-numeric: tabular-nums; color: #7C878A;
     }
-    .fw-pbar.is-before i { background: #3B3D38; }
-    .fw-pbar.is-after.is-down i { background: #B7B3D8; }
+    .fw-pbar.is-before i { background: #E682FF; }
     body[data-theme="light"] .fw-pbar i { background: #5E7E12; }
-    body[data-theme="light"] .fw-pbar.is-before i { background: #C9C6BA; }
-    body[data-theme="light"] .fw-pbar.is-after.is-down i { background: #8E3FA8; }
+    body[data-theme="light"] .fw-pbar.is-before i { background: #8E3FA8; }
     body[data-theme="light"] .fw-pbar span { color: #888C89; }
     .fw-liftlegend .fw-legend-pair i {
         display: inline-block; width: 14px; height: 4px; border-radius: 99px;
         background: #C7F23E; margin-right: 7px; vertical-align: middle;
     }
-    .fw-liftlegend .fw-legend-pair i.k-before { background: #3B3D38; }
+    .fw-liftlegend .fw-legend-pair i.k-before { background: #E682FF; }
     body[data-theme="light"] .fw-liftlegend .fw-legend-pair i { background: #5E7E12; }
-    body[data-theme="light"] .fw-liftlegend .fw-legend-pair i.k-before { background: #C9C6BA; }
+    body[data-theme="light"] .fw-liftlegend .fw-legend-pair i.k-before { background: #8E3FA8; }
     /* Legacy single-track styles, kept for any study still drawing one. */
     .fw-lift { position: relative; height: 7px; }
     .fw-lift-mid {
