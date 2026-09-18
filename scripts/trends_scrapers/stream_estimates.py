@@ -2404,13 +2404,19 @@ _STREAMING_PLATFORMS_META = [
     # 2026-09-15: Starz as carried on Amazon Prime Video Channels.
     # `derived_from` marks it as a DISTRIBUTION PATH of another entry
     # rather than a service of its own: it is never put in front of
-    # the research model (see `_format_target_platforms`), because
-    # its number is the Starz number apportioned to the Prime-Video-
-    # carried share in `trends_iq._apportion_to_amazon_carried`. The
-    # ceiling is registered so the rail is bounded by the same cap
-    # machinery as every other rail: Starz's own 5.0M weekly top slot
-    # times the top of the researched per-title share band. Research
-    # and sources live in `scripts/trends_scrapers/starz_amazon.py`.
+    # the research model (see `_format_target_platforms`), and it is
+    # never given a stored block of its own, because its number is the
+    # Starz number computed down to the Prime-Video-carried share in
+    # `trends_iq._rederive_derived_rails`. The ceiling below is Starz's
+    # own 5.0M weekly top slot times the top of the researched
+    # per-title share band, which is exactly the most this rail can
+    # ever reach once its parent is inside its own cap; that identity
+    # is what lets the board's cap pass leave derived rails to their
+    # parent, and `derived_rails.registered_ceiling_check` reports if
+    # the two ever stop agreeing. Research and sources live in
+    # `scripts/trends_scrapers/starz_amazon.py`; the registry, the
+    # bands and the ceiling invariant live in
+    # `scripts/trends_scrapers/derived_rails.py`.
     {'key': 'starz_amazon',
      'label': 'Starz on Amazon',
      'ceiling': 2_480_000,

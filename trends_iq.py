@@ -4057,8 +4057,8 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'mgmplus':    'mgmplus',
     'starz':      'starz',
     # The Amazon-carried panel resolves through the Starz key and is
-    # then apportioned to the Prime-Video-carried share of it. See
-    # `_apportion_to_amazon_carried`.
+    # then computed down to the Prime-Video-carried share of it. See
+    # `_rederive_derived_rails`.
     'starz_amazon': 'starz',
     'paramountplus': 'paramountplus',
     'peacock':       'peacock',
@@ -4702,82 +4702,137 @@ def _annotate_podcasts_with_streams(podcast_charts: dict, estimates: dict) -> No
 
 
 # Panels whose number is one distribution path through another
-# panel's service. The row resolves against the parent service's
-# estimate and is then multiplied by that path's researched share of
-# the service, because a row is one path and never the service total.
-# Writing the service total into a distribution-path row is the
+# panel's service. The row resolves against the PARENT service's
+# estimate and is then computed down to that path's researched share
+# of the service, because a row is one path and never the service
+# total. Writing the service total into a distribution-path row is the
 # apportionment defect that put values up to 219x over on the podcast
 # rails in September 2026.
-_APPORTIONED_STREAMING_PANELS = {'starz_amazon'}
+#
+# The child is a SUBSET of the parent, so it is derived from the parent
+# rather than carried alongside it, and it is derived again at the end
+# of the board in `_rederive_derived_rails` so that nothing which moves
+# the parent afterwards can leave the two out of step. The registry,
+# the bands and the ceiling invariant live in
+# `scripts/trends_scrapers/derived_rails.py`.
+_DERIVED_RAIL_KIND_HINT = {'film': 'film', 'tv': 'tv', '': 'title'}
 
 
-def _amazon_carried_share(title: str, category_display: str) -> float:
-    """Prime-Video-carried share of a Starz title's audience. The
-    research behind it lives in
-    `scripts/trends_scrapers/starz_amazon.py`. Falls back to the
-    service-level read if that module cannot be imported, which keeps
-    the panel priced rather than dark."""
+def _derived_rails():
+    """The derived-rail registry, or None when it cannot be imported.
+
+    Every caller treats None as "no rail is derived", which leaves the
+    board exactly as it would have rendered without the mechanism.
+    """
     try:
-        from scripts.trends_scrapers.starz_amazon import (
-            amazon_share_for_title)
-        return amazon_share_for_title(title, category_display)
+        from scripts.trends_scrapers import derived_rails
+        return derived_rails
     except Exception:
-        return 0.44
+        return None
 
 
-def _apportion_to_amazon_carried(row: dict) -> None:
-    """Scale a stamped row from the whole Starz service down to the
-    part of it carried through Prime Video Channels.
+def _is_derived_rail(panel_slug: str) -> bool:
+    dr = _derived_rails()
+    return bool(dr and dr.is_derived_rail(panel_slug))
 
-    Multiplying a share through leaves the movement chip alone on
-    purpose: a constant share means the day-over-day percentage is
-    identical to the parent's, and it means the same scaling holds
-    over any window the accumulator sums, because a share and a sum
-    commute. The previous reading is scaled with the current one so
-    the chip keeps describing the same quantity on both sides."""
-    blk = row.get('us_streams')
-    if not isinstance(blk, dict):
-        return
+
+def _derived_rail_kind_hint(row: dict) -> str:
+    cat = (row.get('category_display') or '').strip().lower()
+    return _DERIVED_RAIL_KIND_HINT.get(cat, 'title')
+
+
+def _stamp_derived_rail_block(row: dict, child_slug: str,
+                               parent_blk: dict) -> str:
+    """Write this row's `us_streams` as the derived share of the same
+    title's number on the parent rail.
+
+    `parent_blk` is the parent rail's block for this title, which is
+    the only input: the child's own previous contents never feed the
+    next value, so the derivation cannot compound and re-running it is
+    a no-op. Returns the disposition from `derive_value`.
+    """
+    dr = _derived_rails()
+    if dr is None or not isinstance(parent_blk, dict):
+        return 'no_parent'
     try:
-        cur = float(blk.get('us_estimate') or 0)
+        parent_cur = int(float(parent_blk.get('us_estimate') or 0))
     except (TypeError, ValueError):
-        return
-    if cur <= 0:
-        return
+        return 'no_parent'
+    if parent_cur <= 0:
+        return 'no_parent'
+
     title = (row.get('title') or '').strip()
-    share = _amazon_carried_share(title, row.get('category_display') or '')
+    cat = row.get('category_display') or ''
+
+    # The previous day on this rail is the previous day on the parent
+    # rail, put through the same share, so the pair the chip describes
+    # is a like-for-like one.
     try:
-        from scripts.trends_scrapers.stream_estimates import (
-            _natural_last_digits)
-    except Exception:
-        def _natural_last_digits(v, _t, _s):  # type: ignore
-            return v
+        parent_prev = int(float(parent_blk.get('prev_estimate') or 0))
+    except (TypeError, ValueError):
+        parent_prev = 0
+    prev_child = None
+    if parent_prev > 0:
+        prev_child = dr.derive_value(parent_prev, child_slug, title, cat)[0]
+        prev_child = prev_child or None
 
-    def _scaled(key: str) -> None:
-        try:
-            v = float(blk.get(key) or 0)
-        except (TypeError, ValueError):
-            return
-        if v <= 0:
-            return
-        blk[key] = _natural_last_digits(max(1, int(round(v * share))),
-                                        title, f'starz_amazon|{key}')
+    lead = 0
+    if parent_prev > 0:
+        lead = 1 if parent_cur >= parent_prev else -1
 
-    for field in ('us_estimate', 'us_estimate_low', 'us_estimate_high',
-                  'prev_estimate'):
-        _scaled(field)
-    blk['platform'] = 'starz_amazon'
-    blk['unit_label'] = _canonical_unit_label(
-        _AMAZON_CARRIED_KIND_HINT.get(
-            (row.get('category_display') or '').strip().lower(), 'title'),
-        'starz_amazon',
-        blk.get('window_days_total') or 1)
-    blk['method'] = ('the part of this title\'s Starz audience that '
-                     'watches inside Prime Video')
-    blk.pop('sources', None)
+    value, _ceiling, disposition = dr.derive_value(
+        parent_cur, child_slug, title, cat,
+        prev_child=prev_child, lead=lead)
+    if value <= 0:
+        return 'no_parent'
+
+    window_days = parent_blk.get('window_days_total') or 1
+    blk = {
+        'us_estimate': value,
+        'unit_label': _canonical_unit_label(
+            _derived_rail_kind_hint(row), child_slug, window_days),
+        'platform': child_slug,
+        'method': dr.method_for(child_slug),
+    }
+    for src, dst in (('us_estimate_low', 'us_estimate_low'),
+                      ('us_estimate_high', 'us_estimate_high')):
+        scaled = dr.scale_companion(parent_blk.get(src), parent_cur, value)
+        if scaled:
+            blk[dst] = scaled
+    if prev_child:
+        blk['prev_estimate'] = prev_child
+        direction, delta = _direction_from_prev(value, prev_child)
+        blk['direction'] = direction
+        blk['delta_pct'] = delta
+    else:
+        blk['direction'] = parent_blk.get('direction') or 'new'
+        blk['delta_pct'] = 0.0
+
+    # Everything that describes WHEN and HOW WELL the parent was read
+    # describes the child identically, because it is the same reading.
+    for field in ('confidence', 'as_of_date', 'prev_date',
+                  'window_days_covered', 'window_days_total',
+                  'prev_days_covered', 'est_basis', 'no_prior_reading'):
+        v = parent_blk.get(field)
+        if v is not None:
+            blk[field] = v
+
+    row['us_streams'] = blk
+    return disposition
 
 
-_AMAZON_CARRIED_KIND_HINT = {'film': 'film', 'tv': 'tv', '': 'title'}
+def _derived_rail_row_from_self(row: dict, child_slug: str) -> None:
+    """First derivation, during the annotate pass.
+
+    At this point the row has just been stamped with its PARENT
+    service's number, because the panel resolves through the parent's
+    key, so the row's own block is the parent block. Deriving here
+    keeps every later pass looking at a sane panel; the authoritative
+    derivation is the board-level one at the end.
+    """
+    blk = row.get('us_streams')
+    if isinstance(blk, dict):
+        _stamp_derived_rail_block(row, child_slug, dict(blk))
 
 
 def _annotate_streaming_with_streams(streaming_trending: dict,
@@ -4830,8 +4885,8 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
-                if panel_slug in _APPORTIONED_STREAMING_PANELS:
-                    _apportion_to_amazon_carried(row)
+                if _is_derived_rail(panel_slug):
+                    _derived_rail_row_from_self(row, panel_slug)
 
 
 def _annotate_fast_with_streams(fast_trending: dict,
@@ -7268,6 +7323,20 @@ def _enforce_platform_caps(cards: dict) -> dict:
             return
         kind = _coverage_kind_for_path(path, it)
         platform = _coverage_platform_for_path(path)
+        # A derived rail is bounded by construction and is corrected by
+        # its parent rather than beside it. Its number is its parent's
+        # times at most the top of the researched band, and its service
+        # ceiling is registered as exactly that product, so once the
+        # parent is inside its cap the child is inside its own. Running
+        # a second, independent correction here is what broke the
+        # subset relationship on 2026-09-17: Southpaw's parent was
+        # pulled back to the Starz cap while the child, already inside
+        # its own smaller cap, kept the number it had been given before
+        # that correction, and read 341,592 against a parent of
+        # 285,714. `_rederive_derived_rails` runs after this pass and
+        # puts every child back on its parent.
+        if _is_derived_rail(platform):
+            return
         cap = _platform_daily_cap(kind, platform)
         if cap is None:
             return
@@ -7345,6 +7414,106 @@ def _enforce_platform_caps(cards: dict) -> dict:
                     stats['corrected'], stats['checked'],
                     ', '.join(f'{k}={v}'
                               for k, v in sorted(stats['by_source'].items())))
+    return stats
+
+
+# ============================================================================
+# A rail that is part of another rail is recomputed from it, last
+# ============================================================================
+# Starz on Amazon is the slice of Starz carried through Prime Video
+# Channels, so its number has to be a part of the Starz number for the
+# same title. Stamping that relationship once during the annotate pass
+# was not enough: the coverage pass and the cap pass each move a rail
+# on its own terms, and on 2026-09-17 the cap pass pulled the Starz
+# reading for Southpaw back to the Starz cap while leaving the Amazon
+# reading, computed before that correction and comfortably inside its
+# own smaller cap, exactly where it was. The child read 341,592 against
+# a parent of 285,714, and the share distribution across the panel
+# reached 1.196 where the research allows at most 0.496.
+#
+# This pass runs after every pass that can move a value and before the
+# rank pass, so a child is always the number its parent is showing,
+# times that title's researched share, and is then ordered on what it
+# ends up rendering. It reads only the parent, never the child's
+# current contents, so it cannot compound and re-running it changes
+# nothing.
+#
+# It is keyed on the registry in `scripts/trends_scrapers/
+# derived_rails.py` rather than on Starz, so a Paramount+, Peacock or
+# AMC+ breakout is one registry entry and one panel, not another pass.
+def _derived_rail_parent_index(panels: dict, parent_slug: str) -> dict:
+    """{normalized title: the parent rail's block} for one parent."""
+    out: dict = {}
+    panel = (panels or {}).get(parent_slug) or {}
+    if not isinstance(panel, dict):
+        return out
+    for bucket in ('items', 'films', 'tv'):
+        for row in panel.get(bucket) or []:
+            if not isinstance(row, dict):
+                continue
+            norm = _cp_normalize((row.get('title') or '').strip())
+            if not norm or norm in out:
+                continue
+            blk = row.get('us_streams')
+            if isinstance(blk, dict) and (blk.get('us_estimate') or 0):
+                out[norm] = blk
+    return out
+
+
+def _rederive_derived_rails(cards: dict) -> dict:
+    """Recompute every derived rail from its parent rail. Best-effort:
+    never raises into compute_view."""
+    stats = {'checked': 0, 'derived': 0, 'stepped': 0, 'clamped': 0,
+             'no_parent': 0}
+    dr = _derived_rails()
+    if dr is None:
+        return stats
+    panels = (cards or {}).get('streaming_trending')
+    if not isinstance(panels, dict):
+        return stats
+
+    for child_slug in dr.child_slugs():
+        panel = panels.get(child_slug)
+        if not isinstance(panel, dict):
+            continue
+        parent = _derived_rail_parent_index(panels, dr.parent_slug(child_slug))
+        if not parent:
+            logger.warning(
+                "derived rail %s: the %s rail carried no values this "
+                "render, so nothing could be recomputed from it",
+                child_slug, dr.parent_slug(child_slug))
+            continue
+        # The same row object appears in `items` and in `films` / `tv`,
+        # so derive once per object and let both views see it.
+        seen: set = set()
+        for bucket in ('items', 'films', 'tv'):
+            for row in panel.get(bucket) or []:
+                if not isinstance(row, dict) or id(row) in seen:
+                    continue
+                seen.add(id(row))
+                norm = _cp_normalize((row.get('title') or '').strip())
+                blk = parent.get(norm) if norm else None
+                stats['checked'] += 1
+                if not blk:
+                    stats['no_parent'] += 1
+                    continue
+                disposition = _stamp_derived_rail_block(row, child_slug, blk)
+                stats[disposition] = stats.get(disposition, 0) + 1
+
+    if stats['checked']:
+        logger.info(
+            "derived rails: %d row(s) recomputed from their parent rail "
+            "(%d plain, %d moved off a repeat, %d clamped, %d with no "
+            "parent value)", stats['checked'], stats['derived'],
+            stats['stepped'], stats['clamped'], stats['no_parent'])
+    if stats['clamped']:
+        logger.error(
+            "derived rails: %d row(s) computed at or above the rail they "
+            "are part of and had to be clamped", stats['clamped'])
+    if stats['no_parent']:
+        logger.warning(
+            "derived rails: %d row(s) had no value on their parent rail "
+            "and were left as they were", stats['no_parent'])
     return stats
 
 
@@ -11531,6 +11700,17 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         _enforce_platform_caps(payload['cards'])
     except Exception as e:
         logger.warning("platform cap pass failed: %s", e)
+
+    # A rail that is one distribution path through another rail's
+    # service is recomputed from that rail here, after everything that
+    # can move a value and before the rank pass. Starz on Amazon is
+    # part of Starz, so it is always the Starz number for that title
+    # times the title's researched share, and can never drift above
+    # the rail it is part of.
+    try:
+        _rederive_derived_rails(payload['cards'])
+    except Exception as e:
+        logger.warning("derived rail pass failed: %s", e)
 
     # Rank last, so every list that shows an audience figure is
     # ordered by the number the reader is looking at rather than by an

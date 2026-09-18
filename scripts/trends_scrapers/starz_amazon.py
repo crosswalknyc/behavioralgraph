@@ -82,19 +82,27 @@ Starz app itself. Films therefore draw from a higher band than
 series, and every title draws its own share deterministically inside
 its band so no two titles share one.
 
+HOW THE NUMBER IS PRODUCED (2026-09-17). This panel is a SUBSET of the
+Starz panel, so its number is computed from that title's Starz number
+at the point the board is produced, never carried alongside it. The
+share bands above and the arithmetic that applies them live in
+`scripts/trends_scrapers/derived_rails.py`, which is the general
+mechanism for any rail that is one distribution path through another
+rail's service; this module stays the evidence for the Starz case.
+
 Standalone:
     python3 -m scripts.trends_scrapers.starz_amazon
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import sys
 from typing import Any
 
 from ._base import run_scraper
+from .derived_rails import band_for, rail_for, share_for
 
 logger = logging.getLogger(__name__)
 
@@ -110,15 +118,16 @@ SOURCE_SLUG  = 'starz'
 # the per-title spread around it, films above and series below, and
 # they blend back to roughly the anchor across a panel that renders
 # twice as many films as series.
-AMAZON_SHARE_ANCHOR = 0.44
-_FILM_SHARE_BAND    = (0.440, 0.496)
-_TV_SHARE_BAND      = (0.372, 0.436)
-
-
-def _h01(text: str) -> float:
-    """Deterministic 0.0-1.0 draw from a string."""
-    h = hashlib.sha256(text.encode('utf-8')).hexdigest()
-    return int(h[:12], 16) / float(16 ** 12)
+#
+# The numbers themselves live in the `derived_rails` registry, which is
+# what the board actually reads, so there is one definition of the band
+# rather than two that can drift. These names are kept because they
+# read as the research this module documents, and because callers
+# outside this file import them.
+_RAIL               = rail_for(SLUG)
+AMAZON_SHARE_ANCHOR = _RAIL.anchor_share if _RAIL else 0.44
+_FILM_SHARE_BAND    = band_for(SLUG, 'Film')
+_TV_SHARE_BAND      = band_for(SLUG, 'TV')
 
 
 def amazon_share_for_title(title: str, category_display: str = '') -> float:
@@ -130,15 +139,11 @@ def amazon_share_for_title(title: str, category_display: str = '') -> float:
     from the higher band and a series from the lower one; anything
     unclassified draws from the span of both, which is the same thing
     as not claiming to know which way it leans.
+
+    Delegates to the shared registry so the Starz bands and any future
+    service's bands are applied by one piece of arithmetic.
     """
-    cat = (category_display or '').strip().lower()
-    if 'film' in cat or 'movie' in cat:
-        lo, hi = _FILM_SHARE_BAND
-    elif 'tv' in cat or 'series' in cat or 'show' in cat:
-        lo, hi = _TV_SHARE_BAND
-    else:
-        lo, hi = _TV_SHARE_BAND[0], _FILM_SHARE_BAND[1]
-    return lo + (hi - lo) * _h01(f'{SLUG}|{(title or "").strip().lower()}')
+    return share_for(SLUG, title, category_display)
 
 
 def _load_starz_snapshot() -> dict:
