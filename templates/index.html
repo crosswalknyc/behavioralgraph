@@ -104814,6 +104814,36 @@ https://www.instagram.com/p/..."></textarea>
             if (opts.next) html += _jiqFragBridge(opts.next, { branch: opts.branch });
             return html;
         }
+        function _jiqFragPaidTotal(byId) {
+            var first = byId && byId.paid_first;
+            var back = byId && byId.paid_return;
+            if (!first || !back) return '';
+            var firstN = Number(first.accounts) || 0;
+            var backN = Number(back.accounts) || 0;
+            var total = firstN + backN;
+            return '' +
+              '<div class="jiq-frag-step is-branch jiq-frag-addin">' +
+                '<div class="jiq-frag-rail"></div>' +
+                '<div class="jiq-frag-body">' +
+                  '<div class="jiq-frag-line">' +
+                    '<span class="jiq-frag-label">+ people who paid on the first visit</span>' +
+                    '<span class="jiq-frag-count">' + _jiqFragNum(firstN) + '</span>' +
+                  '</div>' +
+                  '<div class="jiq-frag-doing">' + _jiqFragNum(backN) + ' + '
+                    + _jiqFragNum(firstN) + ' = ' + _jiqFragNum(total)
+                    + ' who paid</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="jiq-frag-step is-branch is-terminal jiq-frag-total">' +
+                '<div class="jiq-frag-rail"><i></i></div>' +
+                '<div class="jiq-frag-body">' +
+                  '<div class="jiq-frag-line">' +
+                    '<span class="jiq-frag-label">Who paid in all</span>' +
+                    '<span class="jiq-frag-count">' + _jiqFragNum(total) + '</span>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+        }
 
         function renderJourneyIqFragrance(p, runMeta) {
             var d = (p && p.spine) ? p
@@ -105259,11 +105289,12 @@ https://www.instagram.com/p/..."></textarea>
                     } else {
                         html += _jiqFragStep(f, {
                             branch: true,
-                            terminal: id === 'paid_return',
+                            terminal: false,
                             next: next
                         });
                     }
                 });
+                html += _jiqFragPaidTotal(byId);
                 if (copy.forkRead) {
                     html += '<p class="jiq-frag-read">' + _jiqFragEsc(copy.forkRead) + '</p>';
                 }
@@ -105402,11 +105433,12 @@ https://www.instagram.com/p/..."></textarea>
                     } else {
                         html += _jiqFragStep(f, {
                             branch: true,
-                            terminal: id === 'paid_return',
+                            terminal: false,
                             next: next
                         });
                     }
                 });
+                html += _jiqFragPaidTotal(byId);
                 if (copy.forkRead) {
                     html += '<p class="jiq-frag-read">' + _jiqFragEsc(copy.forkRead) + '</p>';
                 }
@@ -176687,6 +176719,8 @@ https://www.instagram.com/p/..."></textarea>
     .jiq-frag-bridge.is-branch { margin-left: 26px; }
     .jiq-frag-bridge .jiq-frag-body { padding: 2px 0 10px; }
     .jiq-frag-bridge .jiq-frag-track { margin-top: 0; }
+    .jiq-frag-total .jiq-frag-count { color: #C7F23E; }
+    body[data-theme="light"] .jiq-frag-total .jiq-frag-count { color: #5E7E12; }
     .jiq-frag-rail { position: relative; }
     .jiq-frag-rail::before {
         content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
