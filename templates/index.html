@@ -81017,8 +81017,11 @@ https://www.instagram.com/p/..."></textarea>
                     if (picker.options[i].value === key) {
                         // Options carry an emoji from their group; the
                         // strip is type only, the way the library is.
-                        return (picker.options[i].text || key)
+                        var full = (picker.options[i].text || key)
                             .replace(/^[^A-Za-z0-9]+/, '').trim();
+                        // Keep the subject, drop the descriptor.
+                        var cut = full.split(' \u00b7 ')[0].trim();
+                        return cut || full;
                     }
                 }
             }
@@ -81064,7 +81067,7 @@ https://www.instagram.com/p/..."></textarea>
             var html = '';
             _jiqOpenTabs.forEach(function (t) {
                 var name = String(t.label || t.key);
-                if (name.length > 26) name = name.slice(0, 24) + '...';
+                if (name.length > 24) name = name.slice(0, 22).trim() + '\u2026';
                 var safe = String(t.key).replace(/"/g, '&quot;');
                 html += '<span class="jiq-tab' + (t.key === _jiqActiveTab ? ' is-active' : '')
                      + '" data-jiq-tab="' + safe + '" title="'
@@ -176576,7 +176579,7 @@ https://www.instagram.com/p/..."></textarea>
     }
     .jiq-tab {
         display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-        max-width: 230px; padding: 0 0 6px; margin-bottom: -10px;
+        max-width: 200px; padding: 0 0 6px; margin-bottom: -10px;
         border-bottom: 2px solid transparent;
         font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
         text-transform: uppercase; color: #7C878A;
