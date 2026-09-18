@@ -1,8 +1,8 @@
 # StreamScout — Platforms We Support
 
-StreamScout takes a **title** (movie, series, podcast, or audiobook) and returns
-the platform's unique **watch / play / listen identifier(s)** for it, written to
-a CSV on your Desktop.
+StreamScout takes a **title** (movie, series, podcast, audiobook, or book) and
+returns the platform's unique **watch / play / listen / read identifier(s)** for
+it, written to a CSV on your Desktop.
 
 Every lookup asks four questions — *Movie or Series? → Title → Season(s) (series
 only) → Platform* — and every platform writes the **same CSV**:
@@ -53,11 +53,24 @@ blank SEASON.
 |---|----------|:---:|:---:|:---:|---|
 | 20 | **Audible** | No login | ✅ | ✅ | **Two rows per title** — the direct `audible.com/pd/<slug>/<ASIN>` listen link **and** the parallel `amazon.com/dp/<ASIN>` Audible Audio Edition (a *different* ASIN), each labeled `Audible` / `Amazon` in PLATFORM (self-driving Chromium) |
 
+## 📖 Books (1)
+
+| # | Platform | Access | Buy | Listen | Library | What the URL column holds |
+|---|----------|:---:|:---:|:---:|:---:|---|
+| 21 | **Books** | No login | ✅ | ✅ | ✅ | One franchise → **one SHOW**, `SEASON = Book N`. Real URLs for **Amazon** (Kindle / Print / Audiobook), **Audible**, **Apple Books**, and **Libby/OverDrive** holds; plus **content-map retail proxies** for the bot-walled stores — `p/<title>` (Target / Books-A-Million), `ip/<title>` (Walmart), `w/<title>` (B&N), `books/<title>` (Bookshop.org), `<title>.product` (Costco). Feeds the **content map**, so slugs keep punctuation (`p/merciless-saints`). |
+
+> **Companion resolver — Games.** `streamscout/gametool_content/` does the same
+> job for **video games**: every buy/play URL across 19 stores (Steam, Epic,
+> GOG, Nintendo, PlayStation, Xbox, Apple, Google Play, Battle.net live; retail
+> & key-markets via paste), emitted as **content-map** terms. Its top-level
+> sibling `gametool_hostmap/` emits the punctuation-stripped **hostmap** form for
+> a different pipeline.
+
 ---
 
 ## Good to know
 
-- **No login for 15 of 20.** Only **5** need anything: **Netflix** & **HBO Max**
+- **No login for 16 of 21.** Only **5** need anything: **Netflix** & **HBO Max**
   (browser login), **Spotify** (a free developer API key), and **Disney+** &
   **SiriusXM** (situational). Those credentials live in a local, gitignored
   `.env.local` file — never in the tool.
@@ -89,8 +102,17 @@ blank SEASON.
   - **One shell per whole show:** Apple TV+ and BritBox.
   - **Flat episode list (no season split):** YouTube, all 6 podcast platforms,
     and Audible — one row per episode/title, SEASON left blank.
+  - **Book franchise:** Books rolls the whole series into **one SHOW** and uses
+    `SEASON = Book N` for each entry.
 - **Podcasts return every episode.** Pick *Series* for the full run, *Movie* for
   a single episode.
+- **Books = buy + listen + borrow, in one sweep.** A single title or a whole
+  franchise resolves to purchase links (Amazon Kindle/Print, Bookshop, Costco…),
+  audiobook links (Audible, Apple, Amazon), and **library holds** (Libby /
+  OverDrive). Bot-walled retailers come back as **content-map proxy terms**
+  (`p/…`, `ip/…`, `w/…`, `books/…`, `…​.product`) rather than being scraped.
+  Because Books feeds the **content map**, its slugs keep real punctuation
+  (`p/merciless-saints`) — the mirror of the hostmap's space-stripped form.
 - **PRODUCTION** (studio) is filled automatically for every title.
 
 *Questions? Ask Cousin — happy scouting. 🛰️*
