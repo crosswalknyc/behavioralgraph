@@ -81553,12 +81553,24 @@ https://www.instagram.com/p/..."></textarea>
             return null;
         }
         function _fwPartition(rows, baseKey) {
-            // Rows that split a whole: bar is the row's own share.
-            return (rows || []).map(function (r) {
+            rows = rows || [];
+            // A note repeated identically on every row is describing
+            // the block, not the row. It reads once, above them,
+            // rather than four times down the column.
+            var shared = '';
+            if (rows.length > 1) {
+                var first = (rows[0].note || '').trim();
+                var same = first && rows.every(function (r) {
+                    return (r.note || '').trim() === first;
+                });
+                if (same) shared = first;
+            }
+            var body = rows.map(function (r) {
                 var p = r[baseKey];
-                return _fwRow(r.surface_label, r.note && r.note.length < 90 ? r.note : '',
-                              _fwNum(r.accounts), _fwPct(p, 1), p);
+                var note = shared ? '' : (r.note && r.note.length < 90 ? r.note : '');
+                return _fwRow(r.surface_label, note, _fwNum(r.accounts), _fwPct(p, 1), p);
             }).join('');
+            return (shared ? '<p class="fw-blocknote">' + _fwEsc(shared) + '</p>' : '') + body;
         }
 
         function renderFlywheelRun(run) {
@@ -177485,6 +177497,11 @@ https://www.instagram.com/p/..."></textarea>
         margin: 12px 0 18px; font-size: 21px; font-weight: 700;
         letter-spacing: -.02em; color: inherit; text-transform: none;
     }
+    .fw-blocknote {
+        margin: 2px 0 10px; font-size: 11.5px; line-height: 1.55; color: #7C878A;
+        max-width: 70ch;
+    }
+    body[data-theme="light"] .fw-blocknote { color: #888C89; }
     .fw-subhead {
         margin: 24px 0 6px; padding-bottom: 9px; border-bottom: 1px solid #3B3D38;
         font-size: 10px; font-weight: 600; letter-spacing: .14em;
