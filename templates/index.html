@@ -124243,14 +124243,12 @@ https://www.instagram.com/p/..."></textarea>
                 episodesTabBtn.style.display = 'none';
             }
             
-            // Timing tab - hide if no signup_timing data AND no episode_signup_timing data
+            // Timing is off the rail (Jenna 2026-09-17). The pane and
+            // its renderer stay in place, so re-showing the button is
+            // all it takes if it is ever wanted back; the data-driven
+            // toggle that used to live here would undo the removal.
             const timingTabBtn = document.getElementById('subscriberTimingTabBtn');
-            if (timingTabBtn) {
-                const signupTiming = data.signup_timing || [];
-                const episodeSignupTiming = data.episode_signup_timing || {};
-                const hasTimingData = signupTiming.length > 0 || Object.keys(episodeSignupTiming).length > 0;
-                timingTabBtn.style.display = hasTimingData ? '' : 'none';
-            }
+            if (timingTabBtn) timingTabBtn.style.display = 'none';
             
             // View Numbers tab - hide if live feature off or no post_signup_touchpoints data
             const viewNumbersTabBtn = document.getElementById('subscriberViewNumbersTabBtn');
