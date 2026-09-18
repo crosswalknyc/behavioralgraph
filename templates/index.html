@@ -81205,6 +81205,7 @@ https://www.instagram.com/p/..."></textarea>
         var _fwOpenTabs = [];
         var _fwActiveTab = null;
         var _fwCurrent = null;
+        var _fwSecNo = 0;
 
         function _fwKeySuffix() {
             try {
@@ -81426,8 +81427,12 @@ https://www.instagram.com/p/..."></textarea>
                  + '</div>';
         }
         function _fwSection(num, title, deck, inner) {
+            // num is ignored; kept so call sites stay readable about
+            // the order they intend. See _fwSecNo.
+            _fwSecNo += 1;
+            var label = (_fwSecNo < 10 ? '0' : '') + _fwSecNo;
             return '<section class="fw-sec">'
-                 + '<div class="fw-num">' + _fwEsc(num) + ' ' + _fwEsc(title) + '</div>'
+                 + '<div class="fw-num">' + label + ' ' + _fwEsc(title) + '</div>'
                  + (deck ? '<h3>' + _fwEsc(deck) + '</h3>' : '')
                  + inner + '</section>';
         }
@@ -81454,6 +81459,7 @@ https://www.instagram.com/p/..."></textarea>
             var B = run.blocks || {};
             var S = run.study || {};
             var html = '';
+            _fwSecNo = 0;
 
             if (wbox) {
                 wbox.textContent = S.window ? ('Window: ' + S.window) : '';
@@ -81510,7 +81516,7 @@ https://www.instagram.com/p/..."></textarea>
                         _fwNum(r.accounts), '', i === 0 ? 100 : Math.max(ofPrev, 0.4));
                 }
                 html += _fwSection('01', 'The nest',
-                    'From the whole country down to the accounts this title moved.', inner);
+                    'Each step against the one above it.', inner);
             }
 
             // 02 The flywheel itself. This is the argument: the same
