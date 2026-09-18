@@ -1,12 +1,19 @@
-# GameTool — How-To
+# GameTool_hostmap — How-To
 
-GameTool is **StreamScout's sibling for video games**. Give it a game title and
-it returns the product / purchase / download URL on every store it can reach,
-then writes ONE hostmap-ready CSV to your Desktop:
+GameTool_hostmap is **StreamScout's sibling for video games**. Give it a game
+title and it returns the product / purchase / download URL on every store it can
+reach, then writes ONE hostmap-ready CSV to your Desktop:
 
 ```
 BRAND · HOSTNAME · CATEGORY · SECTION
 ```
+
+> **Why `_hostmap`?** This tool feeds the **hostmap**, so its terms are
+> **punctuation-stripped** (non-alphanumerics → spaces): `p/mickey mouse big
+> game`. Its sibling, **StreamScout Books**, feeds the **content map**, which
+> **keeps punctuation** as URL-slug hyphens: `p/merciless-saints`. Same idea,
+> different normalization — the `_hostmap` suffix is the reminder of which is
+> which.
 
 - **BRAND** (column A) = the **searched title, identical on every row** — the
   franchise all the terms roll up to.
@@ -50,14 +57,14 @@ BRAND · HOSTNAME · CATEGORY · SECTION
 ## Run it
 
 ```bash
-python3 gametool/gametool.py                       # interactive
-python3 gametool/gametool.py --title "Hades"       # one-shot, all stores
-python3 gametool/gametool.py --title "Diablo IV" --stores steam,gog,battlenet
-python3 gametool/gametool.py --url "https://store.steampowered.com/app/1145360/"
+python3 gametool_hostmap/gametool_hostmap.py                   # interactive
+python3 gametool_hostmap/gametool_hostmap.py --title "Hades"   # one-shot, all stores
+python3 gametool_hostmap/gametool_hostmap.py --title "Diablo IV" --stores steam,gog,battlenet
+python3 gametool_hostmap/gametool_hostmap.py --url "https://store.steampowered.com/app/1145360/"
 ```
 
 It asks one thing — the game title — then sweeps the stores and drops a
-`gametool_<title>_<stamp>.csv` on your Desktop.
+`gametool_hostmap_<title>_<stamp>.csv` on your Desktop.
 
 ## The stores (19)
 
@@ -98,8 +105,10 @@ junk) — an honest empty is correct.
 
 ## Files
 
-`gametool/` is self-contained:
+`gametool_hostmap/` is self-contained:
 
-- `gametool.py` — the runner (search-all, aggregate, CSV, paste-URL fallback)
+- `gametool_hostmap.py` — the runner (search-all, aggregate, CSV, paste-URL fallback)
 - `stores.py` — per-store search + URL parsing + the store registry
 - `common.py` — HTTP + fuzzy-title-matching helpers
+- `playstation_store.py` · `xbox_store.py` · `epic_store.py` — headless
+  first-party search resolvers

@@ -1,29 +1,36 @@
 #!/usr/bin/env python3
 """
-GameTool (gametool.py) — StreamScout's sibling for video games.
-================================================================
+GameTool_hostmap (gametool_hostmap.py) — StreamScout's sibling for video games.
+==============================================================================
 Give it a game title; it fetches the product / purchase / download URL on every
 store it can reach and writes ONE hostmap-ready CSV to your Desktop:
 
     BRAND · HOSTNAME · CATEGORY · SECTION
 
 BRAND = the searched title, identical on every row (the franchise the terms roll
-up to). HOSTNAME = the normalized hostmap term — the operative path segment(s)
+up to). HOSTNAME = the normalized HOSTMAP term — the operative path segment(s)
 only, non-alphanumerics → spaces, one "/" max, region/tracking dropped, anchored
 on the stable id (or prefix/slug at franchise grain). CATEGORY / SECTION are
 constant for the whole file (default "Gaming" / "Games", override with
 --category / --section).
 
-Two ways to run:
-  • Interactive:   python3 gametool.py
-  • One-shot:      python3 gametool.py --title "Hades" [--stores steam,gog,...]
-                   python3 gametool.py --url "https://store.steampowered.com/app/1145360/"
+  ┌─ NOTE ────────────────────────────────────────────────────────────────────┐
+  │ This tool feeds the HOSTMAP, so terms are punctuation-STRIPPED (spaces).   │
+  │ Its sibling, StreamScout Books, feeds the CONTENT map, which KEEPS         │
+  │ punctuation (URL-slug hyphens). Same idea, different normalization —       │
+  │ the folder name (…_hostmap) is the reminder.                              │
+  └───────────────────────────────────────────────────────────────────────────┘
 
-Stores with live anonymous search (no login): Steam, GOG, Apple App Store,
-Google Play, Battle.net. The bot-walled storefronts/retailers (Nintendo,
-PlayStation, Xbox, Epic, Amazon Luna, Eneba, Loaded, Amazon, Best Buy, GameStop,
-Walmart, Target) parse a pasted product URL into a clean id — paste one when
-prompted, or pass --url.
+Two ways to run:
+  • Interactive:   python3 gametool_hostmap.py
+  • One-shot:      python3 gametool_hostmap.py --title "Hades" [--stores steam,gog,...]
+                   python3 gametool_hostmap.py --url "https://store.steampowered.com/app/1145360/"
+
+Live anonymous search (no login) on every query: Steam, GOG, Apple App Store,
+Google Play, Nintendo eShop, PlayStation, Xbox, Epic, plus the Battle.net
+catalog. The bot-walled marketplaces/retailers (Amazon Luna, Green Man Gaming,
+Eneba, Loaded, G2A, Amazon, Best Buy, GameStop, Walmart, Target) parse a pasted
+product URL into a clean id — paste one when prompted, or pass --url.
 """
 import argparse
 import csv
@@ -108,7 +115,7 @@ def write_csv(title, rows, outdir, category="Gaming", section="Games"):
     terms roll up to. HOSTNAME is the normalized hostmap term. CATEGORY/SECTION
     are constant (Gaming/Games) for the whole file."""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(outdir, f"gametool_{slug(title)}_{stamp}.csv")
+    path = os.path.join(outdir, f"gametool_hostmap_{slug(title)}_{stamp}.csv")
     order = {k: i for i, (k, _) in enumerate(STORES)}
     rows = sorted(rows, key=lambda r: (order.get(r.get("_key"), 99),
                                        r.get("title", "")))
@@ -126,8 +133,10 @@ def write_csv(title, rows, outdir, category="Gaming", section="Games"):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="GameTool — game purchase/download "
-                                             "URLs across every store.")
+    ap = argparse.ArgumentParser(
+        prog="gametool_hostmap.py",
+        description="GameTool_hostmap — game purchase/download URLs across every "
+                    "store, as punctuation-stripped hostmap terms.")
     ap.add_argument("--title")
     ap.add_argument("--url", help="parse a single pasted product URL")
     ap.add_argument("--stores", help="comma list to limit stores "
