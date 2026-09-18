@@ -104769,33 +104769,34 @@ https://www.instagram.com/p/..."></textarea>
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        function _jiqFragBridge(s, opts) {
+            opts = opts || {};
+            if (!s || s.kept === null || s.kept === undefined) return '';
+            var keep = Number(s.kept);
+            var keepW = Math.max(0.6, Math.min(100, keep));
+            var lost = (s.dropped === null || s.dropped === undefined || s.dropped === 0)
+                ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' dropped off</span>';
+            return '' +
+              '<div class="jiq-frag-bridge' + (opts.branch ? ' is-branch' : '') + '">' +
+                '<div class="jiq-frag-rail"></div>' +
+                '<div class="jiq-frag-body">' +
+                  '<div class="jiq-frag-track">' +
+                    '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
+                  '</div>' +
+                  '<div class="jiq-frag-foot">' +
+                    '<span class="jiq-frag-kept">Only ' + _jiqFragPct(keep) + ' kept going</span>' +
+                    lost +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+        }
         function _jiqFragStep(s, opts) {
             opts = opts || {};
-            // The kept bar and drop sit BETWEEN steps so they read as
-            // the move from the last row, not as a fact about this one.
-            var isBase = !!(opts.base || s.kept === null || s.kept === undefined);
-            var keep = isBase ? 100 : Number(s.kept);
-            var keepW = Math.max(0.6, Math.min(100, keep));
-            var lost = (isBase || s.dropped === null || s.dropped === undefined || s.dropped === 0)
-                ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' dropped off</span>';
+            // The bar hangs off THIS step, then the next step is named.
+            // So "Paid on that visit" carries the connector, and
+            // "Dropped off the Amazon page" starts clean.
             var sub = [s.doing, s.where].filter(Boolean).join(' \u00b7 ');
-            var html = '';
-            if (!isBase) {
-                html += '' +
-                  '<div class="jiq-frag-bridge' + (opts.branch ? ' is-branch' : '') + '">' +
-                    '<div class="jiq-frag-rail"></div>' +
-                    '<div class="jiq-frag-body">' +
-                      '<div class="jiq-frag-track">' +
-                        '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div>' +
-                      '</div>' +
-                      '<div class="jiq-frag-foot">' +
-                        '<span class="jiq-frag-kept">Only ' + _jiqFragPct(keep) + ' kept going</span>' +
-                        lost +
-                      '</div>' +
-                    '</div>' +
-                  '</div>';
-            }
-            html += '' +
+            var html = '' +
               '<div class="jiq-frag-step' + (opts.branch ? ' is-branch' : '') +
                    (opts.terminal ? ' is-terminal' : '') + '">' +
                 '<div class="jiq-frag-rail"><i></i></div>' +
@@ -104810,6 +104811,7 @@ https://www.instagram.com/p/..."></textarea>
                     : '') +
                 '</div>' +
               '</div>';
+            if (opts.next) html += _jiqFragBridge(opts.next, { branch: opts.branch });
             return html;
         }
 
@@ -104936,8 +104938,8 @@ https://www.instagram.com/p/..."></textarea>
                 spineEl.innerHTML = spine.map(function (s, i) {
                     return _jiqFragStep(s, {
                         base: i === 0,
-                        firstConvert: i === 1,
-                        terminal: i === spine.length - 1
+                        terminal: i === spine.length - 1,
+                        next: spine[i + 1]
                     });
                 }).join('');
             }
@@ -104946,15 +104948,25 @@ https://www.instagram.com/p/..."></textarea>
             if (forkEl) {
                 var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
                 var html = '';
+                var seq = [];
                 order.forEach(function (id) {
-                    var f = byId[id];
-                    if (!f) return;
+                    if (byId[id]) seq.push({ id: id, f: byId[id] });
+                });
+                seq.forEach(function (item, i) {
+                    var f = item.f;
+                    var id = item.id;
+                    var next = seq[i + 1] ? seq[i + 1].f : null;
                     if (id === 'paid_first') {
                         html += '<div class="jiq-frag-branchnote">Paid on the spot</div>';
-                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += _jiqFragStep(f, { branch: true });
+                        html += _jiqFragBridge(f, { branch: true });
                         html += '<div class="jiq-frag-branchnote">Dropped off, and what happened next</div>';
                     } else {
-                        html += _jiqFragStep(f, { branch: true, terminal: id === 'paid_return' });
+                        html += _jiqFragStep(f, {
+                            branch: true,
+                            terminal: id === 'paid_return',
+                            next: next
+                        });
                     }
                 });
                 if (paid && paidBack) {
@@ -105078,8 +105090,8 @@ https://www.instagram.com/p/..."></textarea>
                 spineEl.innerHTML = spine.map(function (s, i) {
                     return _jiqFragStep(s, {
                         base: i === 0,
-                        firstConvert: i === 1,
-                        terminal: i === spine.length - 1
+                        terminal: i === spine.length - 1,
+                        next: spine[i + 1]
                     });
                 }).join('');
             }
@@ -105087,17 +105099,27 @@ https://www.instagram.com/p/..."></textarea>
             if (forkEl) {
                 var order = ['checkout', 'leftover', 'hulu', 'ayitl'];
                 var html = '';
+                var seq = [];
                 order.forEach(function (id) {
-                    var f = byId[id];
-                    if (!f) return;
+                    if (byId[id]) seq.push({ id: id, f: byId[id] });
+                });
+                seq.forEach(function (item, i) {
+                    var f = item.f;
+                    var id = item.id;
+                    var next = seq[i + 1] ? seq[i + 1].f : null;
                     if (id === 'checkout') {
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchA || 'Checked out') + '</div>';
-                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += _jiqFragStep(f, { branch: true });
+                        html += _jiqFragBridge(f, { branch: true });
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchB || 'Did not check out, or left Amazon') + '</div>';
                     } else {
-                        html += _jiqFragStep(f, { branch: true, terminal: id === 'ayitl' });
+                        html += _jiqFragStep(f, {
+                            branch: true,
+                            terminal: id === 'ayitl',
+                            next: next
+                        });
                     }
                 });
                 if (copy.forkRead) {
@@ -105210,8 +105232,8 @@ https://www.instagram.com/p/..."></textarea>
                 spineEl.innerHTML = spine.map(function (s, i) {
                     return _jiqFragStep(s, {
                         base: i === 0,
-                        firstConvert: i === 1,
-                        terminal: i === spine.length - 1
+                        terminal: i === spine.length - 1,
+                        next: spine[i + 1]
                     });
                 }).join('');
             }
@@ -105219,17 +105241,27 @@ https://www.instagram.com/p/..."></textarea>
             if (forkEl) {
                 var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
                 var html = '';
+                var seq = [];
                 order.forEach(function (id) {
-                    var f = byId[id];
-                    if (!f) return;
+                    if (byId[id]) seq.push({ id: id, f: byId[id] });
+                });
+                seq.forEach(function (item, i) {
+                    var f = item.f;
+                    var id = item.id;
+                    var next = seq[i + 1] ? seq[i + 1].f : null;
                     if (id === 'paid_first') {
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchA || 'Paid on that visit') + '</div>';
-                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += _jiqFragStep(f, { branch: true });
+                        html += _jiqFragBridge(f, { branch: true });
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchB || 'Left, and what happened next') + '</div>';
                     } else {
-                        html += _jiqFragStep(f, { branch: true, terminal: id === 'paid_return' });
+                        html += _jiqFragStep(f, {
+                            branch: true,
+                            terminal: id === 'paid_return',
+                            next: next
+                        });
                     }
                 });
                 if (copy.forkRead) {
@@ -105343,8 +105375,8 @@ https://www.instagram.com/p/..."></textarea>
                 spineEl.innerHTML = spine.map(function (s, i) {
                     return _jiqFragStep(s, {
                         base: i === 0,
-                        firstConvert: i === 1,
-                        terminal: i === spine.length - 1
+                        terminal: i === spine.length - 1,
+                        next: spine[i + 1]
                     });
                 }).join('');
             }
@@ -105352,17 +105384,27 @@ https://www.instagram.com/p/..."></textarea>
             if (forkEl) {
                 var order = ['paid_first', 'abandoned', 'retargeted', 'returned', 'paid_return'];
                 var html = '';
+                var seq = [];
                 order.forEach(function (id) {
-                    var f = byId[id];
-                    if (!f) return;
+                    if (byId[id]) seq.push({ id: id, f: byId[id] });
+                });
+                seq.forEach(function (item, i) {
+                    var f = item.f;
+                    var id = item.id;
+                    var next = seq[i + 1] ? seq[i + 1].f : null;
                     if (id === 'paid_first') {
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchA || 'Paid on that visit') + '</div>';
-                        html += _jiqFragStep(f, { branch: true, terminal: true });
+                        html += _jiqFragStep(f, { branch: true });
+                        html += _jiqFragBridge(f, { branch: true });
                         html += '<div class="jiq-frag-branchnote">'
                              + _jiqFragEsc(copy.forkBranchB || 'Left, and what happened next') + '</div>';
                     } else {
-                        html += _jiqFragStep(f, { branch: true, terminal: id === 'paid_return' });
+                        html += _jiqFragStep(f, {
+                            branch: true,
+                            terminal: id === 'paid_return',
+                            next: next
+                        });
                     }
                 });
                 if (copy.forkRead) {
