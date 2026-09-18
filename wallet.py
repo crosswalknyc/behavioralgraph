@@ -1136,6 +1136,30 @@ PROFILE_BUILD_TOOL_KEYS = frozenset({
     "chatbot_profile_iq_build",
 })
 
+# Leftover internal credits -> wallet dollars. One full Profile IQ
+# pull used to cost 5 credits and now costs $300, so each leftover
+# credit is $60. Used when a prepaid company (WME) moves onto the
+# dollar wallet without changing how many profile pulls they have left.
+LEGACY_CREDITS_PER_PROFILE_PULL = 5
+GLOBAL_PROFILE_PULL_USD = 300.0
+LEGACY_CREDIT_USD = (
+    GLOBAL_PROFILE_PULL_USD / LEGACY_CREDITS_PER_PROFILE_PULL)
+
+
+def leftover_credits_to_usd(credits) -> float:
+    """Translate leftover internal credits into wallet dollars.
+
+    5 credits = one Profile IQ pull = $300, so 1 credit = $60.
+    Non-numeric or negative leftover becomes $0. Never raises.
+    """
+    try:
+        n = int(credits or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if n <= 0:
+        return 0.0
+    return round(n * LEGACY_CREDIT_USD, 2)
+
 
 def subject_tool_price_usd(subject: dict, tool_key: str,
                            pricing: Optional[dict] = None) -> float:
@@ -2617,6 +2641,7 @@ __all__ = [
     "load_pricing", "save_pricing",
     "tool_price_usd", "subject_tool_price_usd",
     "PROFILE_BUILD_TOOL_KEYS",
+    "LEGACY_CREDIT_USD", "leftover_credits_to_usd",
     "tool_monthly_usd", "prometheus_markup",
     "metered_answer_usd",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
