@@ -45099,6 +45099,11 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
 
+            <!-- Open journeys, the same strip Subscriber IQ uses. The
+                 set and the active one persist per user, so coming back
+                 to the product reopens what you were reading. -->
+            <div id="jiqTabsBar" style="display: none;"></div>
+
             <!-- The run picker lives in the Library drawer now, the same
                  left-edge rail and slide-out Profile IQ uses. The select
                  itself stays in the DOM, hidden, because every caller
@@ -80978,6 +80983,117 @@ https://www.instagram.com/p/..."></textarea>
             if (ev.target && ev.target.id === 'jiqLibrarySearch') _jiqLibraryFilter();
         });
 
+        // ── Journey IQ open tabs ────────────────────────────────
+        // Same shape Profile IQ uses: the open set and the active one
+        // are kept per user in localStorage, so the product reopens on
+        // whatever was being read rather than on a fixed default.
+        var _jiqOpenTabs = [];
+        var _jiqActiveTab = null;
+        function _jiqTabKeySuffix() {
+            try {
+                return (typeof currentUsername !== 'undefined' && currentUsername)
+                    ? '_' + currentUsername : '';
+            } catch (_e) { return ''; }
+        }
+        function _jiqSaveTabs() {
+            try {
+                var k = _jiqTabKeySuffix();
+                localStorage.setItem('openJourneyTabs' + k, JSON.stringify(_jiqOpenTabs));
+                localStorage.setItem('activeJourneyTabId' + k, _jiqActiveTab || '');
+            } catch (_e) {}
+        }
+        function _jiqLoadTabs() {
+            try {
+                var k = _jiqTabKeySuffix();
+                var t = JSON.parse(localStorage.getItem('openJourneyTabs' + k) || '[]');
+                _jiqOpenTabs = Array.isArray(t) ? t.filter(function (x) { return x && x.key; }) : [];
+                _jiqActiveTab = localStorage.getItem('activeJourneyTabId' + k) || null;
+            } catch (_e) { _jiqOpenTabs = []; _jiqActiveTab = null; }
+        }
+        function _jiqLabelForKey(key) {
+            var picker = document.getElementById('jiqRunPicker');
+            if (picker) {
+                for (var i = 0; i < picker.options.length; i++) {
+                    if (picker.options[i].value === key) {
+                        // Options carry an emoji from their group; the
+                        // strip is type only, the way the library is.
+                        return (picker.options[i].text || key)
+                            .replace(/^[^A-Za-z0-9]+/, '').trim();
+                    }
+                }
+            }
+            return key;
+        }
+        function _jiqAddTab(key) {
+            if (!key) return;
+            var found = false;
+            for (var i = 0; i < _jiqOpenTabs.length; i++) {
+                if (_jiqOpenTabs[i].key === key) {
+                    _jiqOpenTabs[i].label = _jiqLabelForKey(key); found = true; break;
+                }
+            }
+            if (!found) _jiqOpenTabs.push({ key: key, label: _jiqLabelForKey(key) });
+            _jiqActiveTab = key;
+            _jiqSaveTabs();
+            _jiqRenderTabs();
+        }
+        function _jiqCloseTab(key) {
+            var idx = -1;
+            for (var i = 0; i < _jiqOpenTabs.length; i++) {
+                if (_jiqOpenTabs[i].key === key) { idx = i; break; }
+            }
+            if (idx === -1) return;
+            _jiqOpenTabs.splice(idx, 1);
+            if (_jiqActiveTab === key) {
+                var next = _jiqOpenTabs[idx] || _jiqOpenTabs[idx - 1] || null;
+                _jiqActiveTab = next ? next.key : null;
+                if (_jiqActiveTab) {
+                    var picker = document.getElementById('jiqRunPicker');
+                    if (picker) picker.value = _jiqActiveTab;
+                    onJourneyIqRunPicked(_jiqActiveTab);
+                }
+            }
+            _jiqSaveTabs();
+            _jiqRenderTabs();
+        }
+        function _jiqRenderTabs() {
+            var bar = document.getElementById('jiqTabsBar');
+            if (!bar) return;
+            if (!_jiqOpenTabs.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            bar.style.display = 'flex';
+            var html = '';
+            _jiqOpenTabs.forEach(function (t) {
+                var name = String(t.label || t.key);
+                if (name.length > 26) name = name.slice(0, 24) + '...';
+                var safe = String(t.key).replace(/"/g, '&quot;');
+                html += '<span class="jiq-tab' + (t.key === _jiqActiveTab ? ' is-active' : '')
+                     + '" data-jiq-tab="' + safe + '" title="'
+                     + String(t.label || t.key).replace(/"/g, '&quot;') + '">'
+                     + '<span class="jiq-tab-name">' + name.replace(/</g, '&lt;') + '</span>'
+                     + '<button type="button" class="jiq-tab-x" data-jiq-close="' + safe
+                     + '" aria-label="Close">\u00d7</button></span>';
+            });
+            bar.innerHTML = html;
+        }
+        document.addEventListener('click', function (ev) {
+            if (!ev.target.closest) return;
+            var x = ev.target.closest('[data-jiq-close]');
+            if (x) {
+                ev.stopPropagation();
+                _jiqCloseTab(x.getAttribute('data-jiq-close'));
+                return;
+            }
+            var tab = ev.target.closest('[data-jiq-tab]');
+            if (tab) {
+                var key = tab.getAttribute('data-jiq-tab');
+                if (key && key !== _jiqActiveTab) {
+                    var picker = document.getElementById('jiqRunPicker');
+                    if (picker) picker.value = key;
+                    onJourneyIqRunPicked(key);
+                }
+            }
+        });
+
         function loadJourneyIqRunList(preferredKey) {
             var picker = document.getElementById('jiqRunPicker');
             if (!picker) return;
@@ -81157,19 +81273,33 @@ https://www.instagram.com/p/..."></textarea>
                     picker.innerHTML = opts.join('');
 
                     var combined = visibleRuns.concat(visibleArchived);
-                    // Opening view is the fragrance purchase journey. Only
-                    // when the caller did not ask for something specific and
-                    // the option is actually in this user's list, since the
-                    // demo cards only render for allow-all users. Everyone
-                    // else still opens on their first run.
-                    var JIQ_DEFAULT_KEY = '__demo_fragrance_tiktok__';
-                    var hasDefault = false;
-                    for (var _o = 0; _o < picker.options.length; _o++) {
-                        if (picker.options[_o].value === JIQ_DEFAULT_KEY) { hasDefault = true; break; }
+                    // What you were last reading wins. The fragrance
+                    // journey is only the opening view for someone who
+                    // has never opened one, and only when it is in this
+                    // user's list, since the demo cards render for
+                    // allow-all users only. Everyone else opens on their
+                    // first run.
+                    function _jiqInList(k) {
+                        if (!k) return false;
+                        for (var _i = 0; _i < picker.options.length; _i++) {
+                            if (picker.options[_i].value === k) return true;
+                        }
+                        return false;
                     }
+                    _jiqLoadTabs();
+                    // A remembered journey the user can no longer see is
+                    // dropped rather than left to fail on load.
+                    _jiqOpenTabs = _jiqOpenTabs.filter(function (t) { return _jiqInList(t.key); });
+                    if (!_jiqInList(_jiqActiveTab)) _jiqActiveTab = null;
+                    if (!_jiqActiveTab && _jiqOpenTabs.length) _jiqActiveTab = _jiqOpenTabs[0].key;
+
+                    var JIQ_DEFAULT_KEY = '__demo_fragrance_tiktok__';
                     var keyToLoad = preferredKey
-                        || (hasDefault ? JIQ_DEFAULT_KEY : null)
+                        || _jiqActiveTab
+                        || (_jiqInList(JIQ_DEFAULT_KEY) ? JIQ_DEFAULT_KEY : null)
                         || (combined[0] && combined[0].key);
+                    _jiqSaveTabs();
+                    _jiqRenderTabs();
                     if (keyToLoad) picker.value = keyToLoad;
                     _jiqLibrarySync();
                     if (keyToLoad) {
@@ -81770,6 +81900,7 @@ https://www.instagram.com/p/..."></textarea>
 
         function onJourneyIqRunPicked(key) {
             if (!key) return;
+            try { _jiqAddTab(key); } catch (_e) {}
             var empty = document.getElementById('jiqDashEmpty');
             var content = document.getElementById('jiqDashContent');
             var loading = document.getElementById('jiqDashLoading');
@@ -176431,6 +176562,41 @@ https://www.instagram.com/p/..."></textarea>
         line-height: 1.6 !important; margin-bottom: 14px !important;
     }
     body[data-theme="light"] #subscriberIQView .section-description { color: #5C6560 !important; }
+
+    /* ---- Journey IQ: open-journey tabs -------------------------- */
+    #jiqTabsBar {
+        display: flex; flex-wrap: wrap; align-items: baseline; gap: 22px;
+        padding: 0 1.25rem 9px; margin: 0;
+        border-bottom: 1px solid #3B3D38;
+        font-family: 'Inter 18pt', -apple-system, sans-serif;
+    }
+    body[data-theme="light"] #jiqTabsBar { border-bottom-color: #C9C6BA; }
+    #jiqTabsBar::before {
+        content: 'Open'; flex: 0 0 auto; margin-right: 4px;
+        font-size: 9.5px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .jiq-tab {
+        display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+        max-width: 230px; padding: 0 0 6px; margin-bottom: -10px;
+        border-bottom: 2px solid transparent;
+        font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .jiq-tab:hover { color: #E9E8E1; }
+    .jiq-tab.is-active { color: #E9E8E1; border-bottom-color: #C7F23E; }
+    body[data-theme="light"] .jiq-tab:hover,
+    body[data-theme="light"] .jiq-tab.is-active { color: #0C1618; }
+    body[data-theme="light"] .jiq-tab.is-active { border-bottom-color: #5E7E12; }
+    .jiq-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .jiq-tab-x {
+        background: transparent; border: 0; padding: 0; cursor: pointer;
+        color: #7C878A; font-size: 13px; line-height: 1; opacity: 0;
+        transition: opacity 120ms ease;
+    }
+    .jiq-tab:hover .jiq-tab-x, .jiq-tab.is-active .jiq-tab-x { opacity: 1; }
+    .jiq-tab-x:hover { color: #E9E8E1; }
+    body[data-theme="light"] .jiq-tab-x:hover { color: #0C1618; }
 
     /* ================================================================
        DIGITAL JOURNEY IQ - chrome
