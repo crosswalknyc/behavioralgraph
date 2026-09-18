@@ -95,10 +95,6 @@ identical rates. Return STRICT JSON only:
      "note": str},               // pre by definition. Perk-style
     ...                          // surfaces lift post; research-style
   ],                             // surfaces may fall.
-  "first_next": [                // partitions the second-surface
-    {"label": str, "pct": float}, ...],  // count: first owned surface
-  "depth": [                     // partitions the cohort: how deep
-    {"label": str, "pct": float}, ...],  // they went on the entry
   "checkout_what": [             // overlap of the conversion count
     {"label": str, "pct": float}, ...],
   "copy": {
@@ -131,6 +127,11 @@ Rules that do not move:
   title), keep this cut's shares ABOVE the parent on conversion-side
   behavior and BELOW on open-ended behaviors; never let the cut read
   like the parent with a smaller N.
+- THE LEAN SHAPE (control 2026-09-17): the page is three tables -
+  the cohort (spine + the two-way split), the before/after surface
+  compare, and what the conversion was. Do NOT emit depth,
+  first-next, time-to-next, same-session, leak, signup-path,
+  qualifying-watch, or second-screen tables. Less is the design.
 - Rates are messy (never .0 / .5 endings), no two rates identical."""
 
 
@@ -302,17 +303,6 @@ def build_flywheel(inputs: dict, prim: dict, *,
         detours.append({
             'title': f'{eco} surfaces in the {post_days} days after',
             'note': 'overlap', 'rows': post_rows})
-    fn = _rows_from_pcts((seedbase, 'first_next'),
-                         prim.get('first_next'), second,
-                         'Partitions second surface', partition=True)
-    if fn:
-        detours.append({'title': 'First owned surface after the event',
-                        'note': '', 'rows': fn})
-    dp = _rows_from_pcts((seedbase, 'depth'), prim.get('depth'),
-                         cohort, 'Partitions this file', partition=True)
-    if dp:
-        detours.append({'title': 'How deep they went on the entry',
-                        'note': '', 'rows': dp})
     cw = _rows_from_pcts((seedbase, 'checkout_what'),
                          prim.get('checkout_what'), checkout,
                          'Overlap of the conversion', partition=False)
