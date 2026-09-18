@@ -19125,6 +19125,21 @@ def _flywheel_title_from_name(stem):
     return s or stem
 
 
+# A study may carry artwork. It is found by name rather than declared
+# anywhere: drop Foo.png next to static/flywheel and the study called
+# Foo.csv picks it up. Served from static, so no extra route.
+_FLYWHEEL_IMG_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'static', 'flywheel')
+_FLYWHEEL_IMG_EXTS = ('.png', '.jpg', '.jpeg', '.webp')
+
+
+def _flywheel_hero_for(stem):
+    for ext in _FLYWHEEL_IMG_EXTS:
+        if os.path.isfile(os.path.join(_FLYWHEEL_IMG_DIR, stem + ext)):
+            return '/static/flywheel/' + stem + ext
+    return None
+
+
 def _flywheel_list_files():
     out = []
     try:
@@ -19213,6 +19228,7 @@ def api_flywheel_run():
         return jsonify({'success': False, 'error': 'could not read this study'}), 500
     payload['key'] = key
     payload['label'] = _flywheel_title_from_name(key[:-4])
+    payload['hero_image'] = _flywheel_hero_for(key[:-4])
     return jsonify({'success': True, 'run': payload})
 
 

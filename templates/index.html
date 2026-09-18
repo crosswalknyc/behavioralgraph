@@ -81597,7 +81597,21 @@ https://www.instagram.com/p/..."></textarea>
             var done = _fwFindRow(cohort, 'completed_qualifying_watch');
             var total = (head && head.accounts) || S.cohort_accounts || 0;
 
+            // Artwork rides on the right of the masthead. A study
+            // with no image of its own gets a gradient carrying its
+            // initials rather than a gap where a picture should be.
+            var art;
+            if (run.hero_image) {
+                art = '<div class="fw-art"><img src="' + _fwEsc(run.hero_image)
+                    + '" alt=""></div>';
+            } else {
+                var ini = String(run.label || 'Flywheel').trim()
+                    .split(/\s+/).slice(0, 2)
+                    .map(function (x) { return x.charAt(0); }).join('').toUpperCase();
+                art = '<div class="fw-art is-ini"><span>' + _fwEsc(ini) + '</span></div>';
+            }
             html += '<div class="fw-head">'
+                 + '<div class="fw-head-copy">'
                  + '<div class="fw-eyebrow">Flywheel'
                  + (S.window ? ' \u00b7 ' + _fwEsc(S.window) : '') + '</div>'
                  + '<h1>' + _fwEsc(run.label || 'Flywheel study') + '.</h1>';
@@ -81619,7 +81633,7 @@ https://www.instagram.com/p/..."></textarea>
             if (back) kpi('Dormant memberships restored', _fwNum(back.accounts));
             if (done) kpi('Completed a qualifying watch', _fwPct(done.share_of_cohort_pct, 1));
             html += '</div>';
-            html += '</div>';
+            html += '</div>' + art + '</div>';
 
             // 01 The nest. Each step's own share of the step above it
             // is what makes the funnel readable, so it is computed
@@ -177487,7 +177501,29 @@ https://www.instagram.com/p/..."></textarea>
     }
     body[data-theme="light"] .fw-cover-cta { background: #5E7E12; color: #E9E8E1; }
 
-    .fw-head { padding: 34px 40px 30px; border-bottom: 1px solid #3B3D38; max-width: 1180px; }
+    .fw-head {
+        padding: 34px 40px 30px; border-bottom: 1px solid #3B3D38; max-width: 1180px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 300px;
+        column-gap: 40px; align-items: stretch;
+    }
+    .fw-head-copy { min-width: 0; }
+    .fw-art {
+        border-radius: 10px; overflow: hidden; min-height: 210px;
+        background: linear-gradient(200deg, #2C4148, #15252A 70%);
+    }
+    .fw-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fw-art.is-ini { display: flex; align-items: flex-end; padding: 20px; }
+    .fw-art.is-ini span {
+        font-size: 44px; font-weight: 900; letter-spacing: -.04em; color: #E9E8E1;
+    }
+    body[data-theme="light"] .fw-art {
+        background: linear-gradient(200deg, #D8D5C8, #E9E8E1 70%);
+    }
+    body[data-theme="light"] .fw-art.is-ini span { color: #0C1618; }
+    @media (max-width: 1000px) {
+        .fw-head { grid-template-columns: minmax(0, 1fr); }
+        .fw-art { display: none; }
+    }
     body[data-theme="light"] .fw-head { border-bottom-color: #C9C6BA; }
     .fw-eyebrow {
         font-size: 10px; font-weight: 500; letter-spacing: .18em;
