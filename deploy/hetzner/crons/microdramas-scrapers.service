@@ -12,20 +12,27 @@
 # Each per-source fetch() has a curated baseline fallback so the catalog
 # date always advances even when datacenter egress is challenged.
 
-Description=Daily Microdramas IQ scrape (Peacock, ReelShort, DramaBox, GoodShort, NetShort)
+Description=Daily Microdramas IQ scrape (Peacock, ReelShort, DramaBox, GoodShort, NetShort, DramaShorts, aTwist)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/opt/bg-webapp
-# Load AWS creds + region from bg-webapp env (SES + S3 dashboard-inputs).
-EnvironmentFile=/etc/bg-webapp/env
+# Live checkout on this box - kept in sync via `rsync` and manual
+# pushes, mirrors the paths already used by the trends_scrapers cron
+# in root's crontab. The stale /opt/bg-webapp copy from an earlier
+# migration attempt is not used and never should be.
+WorkingDirectory=/root/finished_codes/bg-webapp
+# AWS creds + region from the same env file every Hetzner-side script
+# reads (SES + S3 dashboard-inputs). Falls back to /root/.aws for
+# boto3 credential discovery when the file is absent.
+EnvironmentFile=-/etc/bg-webapp/env
+EnvironmentFile=-/root/finished_codes/.env.trends_scrapers
 # 30-minute timeout; the scrapers themselves finish in ~5-10 min but
 # individual fetch retries can extend the window.
 TimeoutStartSec=1800
-ExecStart=/opt/bg-webapp/.venv/bin/python -m scripts.microdramas_scrapers.run_all
+ExecStart=/usr/bin/python3 -m scripts.microdramas_scrapers.run_all
 StandardOutput=append:/var/log/microdramas-scrapers.log
 StandardError=append:/var/log/microdramas-scrapers.log
 

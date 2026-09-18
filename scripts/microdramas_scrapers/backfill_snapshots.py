@@ -67,11 +67,13 @@ from typing import Optional
 BUCKET = os.environ.get('MICRODRAMAS_IQ_BUCKET', 'dashboard-inputs')
 
 ALL_SOURCES = [
-    {'source': 'peacock',   'label': 'Peacock',   'kind': 'microdramas'},
-    {'source': 'reelshort', 'label': 'ReelShort', 'kind': 'microdramas_competitor'},
-    {'source': 'dramabox',  'label': 'DramaBox',  'kind': 'microdramas_competitor'},
-    {'source': 'goodshort', 'label': 'GoodShort', 'kind': 'microdramas_competitor'},
-    {'source': 'netshort',  'label': 'NetShort',  'kind': 'microdramas_competitor'},
+    {'source': 'peacock',     'label': 'Peacock',     'kind': 'microdramas'},
+    {'source': 'reelshort',   'label': 'ReelShort',   'kind': 'microdramas_competitor'},
+    {'source': 'dramabox',    'label': 'DramaBox',    'kind': 'microdramas_competitor'},
+    {'source': 'goodshort',   'label': 'GoodShort',   'kind': 'microdramas_competitor'},
+    {'source': 'netshort',    'label': 'NetShort',    'kind': 'microdramas_competitor'},
+    {'source': 'dramashorts', 'label': 'DramaShorts', 'kind': 'microdramas_competitor'},
+    {'source': 'atwist',      'label': 'aTwist',      'kind': 'microdramas_competitor'},
 ]
 
 DEFAULT_START = date(2026, 1, 1)
