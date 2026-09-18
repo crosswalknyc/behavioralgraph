@@ -120,6 +120,9 @@ DEFAULT_PRICING = {
         # Journey pulls through Prometheus are $1,000 per pull.
         "brand_partnership_iq": 1000.0,
         "journey_iq": 1000.0,
+        # 2026-09-17 (Jenna): Build a Flywheel through Prometheus is
+        # $1,000 per pull, same tier as the journey.
+        "flywheel_iq": 1000.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,
@@ -449,6 +452,8 @@ MODULE_CATALOG = [
      "modules", 15, 0.0, "has_brand_partnership_iq_access"),
     ("journey_iq",                 "Digital Journey IQ",
      "modules", 10, 0.0, "has_journey_iq_access"),
+    ("flywheel_iq",                "Flywheel IQ",
+     "modules", 15, 0.0, "has_flywheel_iq_access"),
     ("share_of_time",              "Share of Time - View",
      "modules", 0, 0.0, "has_share_of_time_access"),
     ("share_of_time_run",          "Share of Time - Run",
@@ -1304,6 +1309,8 @@ _PULL_TYPE_TO_TOOL_KEY = {
     # ---- Digital Journey / Intent / Sentiment ----
     "digital journey iq":            "journey_iq",
     "journey iq":                    "journey_iq",
+    "flywheel iq":                   "flywheel_iq",
+    "build a flywheel":              "flywheel_iq",
     "attribution iq ingest":         "intent_iq",
     "intent iq":                     "intent_iq",
     "intent ingest":                 "intent_iq",

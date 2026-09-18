@@ -22493,6 +22493,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Value a brand partnership')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Value a brand partnership</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Pull Subscriber IQ for [streaming platform]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull a Subscriber IQ</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Create a digital journey')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Create a digital journey</button>
+                                    <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Build a Flywheel')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a Flywheel</button>
                                 </div>
                                 <textarea id="synthChatInput" placeholder="Ask something else about this audience..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
@@ -73576,6 +73577,7 @@ https://www.instagram.com/p/..."></textarea>
                 chips += '<button type="button" onclick="synthChatChipSend(\'Value a brand partnership\')" style="' + pill + '">Value a brand partnership</button>';
                 chips += '<button type="button" onclick="synthChatChipFill(\'Pull Subscriber IQ for [streaming platform]\')" style="' + pill + '">Pull a Subscriber IQ</button>';
                 chips += '<button type="button" onclick="synthChatChipSend(\'Create a digital journey\')" style="' + pill + '">Create a digital journey</button>';
+                chips += '<button type="button" onclick="synthChatChipSend(\'Build a Flywheel\')" style="' + pill + '">Build a Flywheel</button>';
                 var el = document.createElement('div');
                 el.id = 'synthChatWelcomeBubble';
                 el.className = 'pm-msg pm-msg-agent';
@@ -73734,6 +73736,47 @@ https://www.instagram.com/p/..."></textarea>
                 return j && j.id !== id;
             }));
         }
+        function _pmFwIntent(text) {
+            var low = String(text || '').toLowerCase();
+            if (low.replace(/\s+/g, ' ').trim() ===
+                'build a flywheel') return true;
+            return low.indexOf('flywheel') !== -1 &&
+                /pull|build|run|create|new|make/.test(low);
+        }
+
+        async function _pmPollFwJob(jobId) {
+            var waited = 0;
+            while (waited < 1200000) {
+                await new Promise(function(res) { setTimeout(res, 9000); });
+                waited += 9000;
+                var st = null;
+                try {
+                    var r = await fetch('/api/brief-chat/fw-status/' + jobId,
+                        { credentials: 'same-origin' });
+                    st = r.ok ? await r.json() : null;
+                } catch (_) { st = null; }
+                if (!st) continue;
+                if (st.status === 'done') {
+                    synthChatPushTurn('agent',
+                        'Your Flywheel is ready: ' +
+                        (st.subject || 'the flywheel') +
+                        ' is live in the Digital Journey tab now.' +
+                        (st.conversions ?
+                            ' Conversions in window: ' +
+                            Number(st.conversions).toLocaleString('en-US') +
+                            ' accounts.' : ''));
+                    return;
+                }
+                if (st.status === 'error') {
+                    synthChatPushTurn('agent',
+                        'The flywheel hit a snag and the team has been ' +
+                        'notified. Nothing further is needed from you; ' +
+                        'we will follow up when it lands.');
+                    return;
+                }
+            }
+        }
+
         function _pmJiqIntent(text) {
             var low = String(text || '').toLowerCase();
             if (low.replace(/\s+/g, ' ').trim() ===
@@ -75762,6 +75805,8 @@ https://www.instagram.com/p/..."></textarea>
             _pmBpiqConfirm = null;
             _pmJiqCollect = false;
             _pmJiqConfirm = null;
+            _pmFwCollect = false;
+            _pmFwConfirm = null;
             _synthChatClearDateState();
         }
 
@@ -75813,6 +75858,10 @@ https://www.instagram.com/p/..."></textarea>
         // Digital Journey pull flow (2026-09-16): same shape.
         var _pmJiqCollect = false;
         var _pmJiqConfirm = null;
+        // Build a Flywheel flow (2026-09-17): same machine. Starts
+        // at the captured users, never US gen pop.
+        var _pmFwCollect = false;
+        var _pmFwConfirm = null;
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -76216,8 +76265,10 @@ https://www.instagram.com/p/..."></textarea>
             if (!ctx && mode !== 'search_demand' &&
                 !(extra && (extra.bind_subject || extra.panel_confirm ||
                             extra.bpiq_inputs || extra.bpiq_confirm ||
-                            extra.jiq_inputs || extra.jiq_confirm)) &&
-                !_pmBpiqIntent(text) && !_pmJiqIntent(text)) {
+                            extra.jiq_inputs || extra.jiq_confirm ||
+                            extra.fw_inputs || extra.fw_confirm)) &&
+                !_pmBpiqIntent(text) && !_pmJiqIntent(text) &&
+                !_pmFwIntent(text)) {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
@@ -76256,6 +76307,12 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 if (extra && extra.jiq_confirm) {
                     _abody.jiq_confirm = extra.jiq_confirm;
+                }
+                if (extra && extra.fw_inputs) {
+                    _abody.fw_inputs = true;
+                }
+                if (extra && extra.fw_confirm) {
+                    _abody.fw_confirm = extra.fw_confirm;
                 }
                 var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody,
                     synthChatInflightController ? synthChatInflightController.signal : undefined);
@@ -76346,6 +76403,19 @@ https://www.instagram.com/p/..."></textarea>
                     _pmJiqCollect = false;
                     _pmJiqConfirm = null;
                     try { _pmPollJiqJob(data.jiq_job_id); } catch (_) {}
+                }
+                if (data.fw_collect) {
+                    _pmFwCollect = true;
+                    _pmFwConfirm = null;
+                }
+                if (data.fw_confirm_payload) {
+                    _pmFwConfirm = data.fw_confirm_payload;
+                    _pmFwCollect = false;
+                }
+                if (data.fw_job_id) {
+                    _pmFwCollect = false;
+                    _pmFwConfirm = null;
+                    try { _pmPollFwJob(data.fw_job_id); } catch (_) {}
                 }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
@@ -76710,6 +76780,46 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 _pmMemoryConfirm = null;
+            }
+
+            // Build a Flywheel follow-through (2026-09-17): same
+            // machine. Starts at the captured users, never gen pop.
+            if (_pmFwConfirm) {
+                var _fwLow = text.trim().toLowerCase();
+                if (_fwLow.indexOf('run the flywheel') === 0 ||
+                    /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it)[.! ]*$/i.test(_fwLow)) {
+                    var _fw = _pmFwConfirm;
+                    _pmFwConfirm = null;
+                    await _pmAnalyze(text, _pmCollectPageContext(), '',
+                        { fw_confirm: _fw });
+                    return;
+                }
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_fwLow)) {
+                    _pmFwConfirm = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was charged. Ask me ' +
+                        'anything else when ready.');
+                    return;
+                }
+                _pmFwConfirm = null;
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { fw_inputs: true });
+                return;
+            }
+            if (_pmFwCollect) {
+                _pmFwCollect = false;
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    synthChatPushTurn('agent',
+                        'No problem. Ask me anything else when ready.');
+                    return;
+                }
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { fw_inputs: true });
+                return;
+            }
+            if (_pmFwIntent(text)) {
+                await _pmAnalyze(text, _pmCollectPageContext(), '', {});
+                return;
             }
 
             // Digital Journey follow-through (2026-09-16): same
@@ -84187,7 +84297,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isSongStory             = (_storyMode === 'song_to_title');
             var _isYsPvodStory           = (_storyMode === 'young_sheldon_pvod');
             var _isDexterPvodStory       = (_storyMode === 'dexters_lab_pvod');
-            var _isGgLapsedStory         = (_storyMode === 'gg_lapsed_flywheel');
+            var _isGgLapsedStory         = (_storyMode === 'gg_lapsed_flywheel' || _storyMode === 'flywheel');
             var _isGgRegularStory        = (_storyMode === 'gg_regular_flywheel');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
@@ -84448,7 +84558,7 @@ https://www.instagram.com/p/..."></textarea>
 
             if (_isGgLapsedStory) {
                 if (typeof renderJourneyIqGgFlywheel === 'function') {
-                    renderJourneyIqGgFlywheel(_pickClickstreamBlock('gg_lapsed_flywheel'),
+                    renderJourneyIqGgFlywheel(_pickClickstreamBlock(_storyMode === 'flywheel' ? 'flywheel' : 'gg_lapsed_flywheel'),
                                               (fullRun && fullRun.meta) || meta);
                 }
             }

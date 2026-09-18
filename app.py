@@ -58312,6 +58312,70 @@ def api_synth_chat_analyze():
             'followups': ['Cancel'],
             'offer_deck': False, 'deck_angle': None})
     # ---- Digital Journey flow (Jenna 2026-09-16) ----
+    _fw_confirm = body.get('fw_confirm')
+    if isinstance(_fw_confirm, dict) and _fw_confirm.get('subject'):
+        _fsubj = (f"{_fw_confirm.get('subject')} "
+                  f"{_fw_confirm.get('ecosystem')} flywheel")
+        if not consume_credit(
+                _bpiq_user,
+                description=f'Flywheel: {_fsubj}',
+                pull_type='Flywheel IQ',
+                credits_used=_PM_FW_CREDITS):
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('That flywheel prices at $1,000 and your '
+                          'account cannot cover it right now. Add '
+                          'funds or ask your admin, and I will run '
+                          'it the moment you are set.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        _fw_job = uuid.uuid4().hex[:12]
+        _fw_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _pm_fw_status_write(_fw_job, {
+            'job_id': _fw_job, 'user': _bpiq_user,
+            'status': 'queued', 'started_at': time.time()})
+        threading.Thread(
+            target=_pm_run_fw_job,
+            args=(_fw_job, _bpiq_user, _fw_confirm, _fw_extras),
+            daemon=True).start()
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': (f'On it. Building the {_fsubj} now - it starts '
+                      'at your captured users and maps their '
+                      'ecosystem life before and after the event. '
+                      'It lands in the Digital Journey tab, and I '
+                      'will confirm here when it is ready.'),
+            'fw_job_id': _fw_job,
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    if body.get('fw_inputs'):
+        _fparsed = _pm_fw_parse(text, usage_extras=_pm_ppu)
+        if _pm_fw_inputs_complete(_fparsed):
+            _fparsed.pop('missing', None)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pm_fw_confirm_reply(_fparsed),
+                'fw_confirm_payload': _fparsed,
+                'followups': ['Run the flywheel', 'Cancel'],
+                'offer_deck': False, 'deck_angle': None})
+        _fmissing = _fparsed.get('missing') or [
+            'the title', 'the captured action', 'the ecosystem',
+            'the conversion']
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Almost there - I still need '
+                      + ', '.join(str(m) for m in _fmissing)
+                      + '. Send the missing piece(s) and I will '
+                        'line it up.'),
+            'fw_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
+    if _pm_fw_intent(text):
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _PM_FW_ASK_COPY,
+            'fw_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
     _jiq_confirm = body.get('jiq_confirm')
     if isinstance(_jiq_confirm, dict) and _jiq_confirm.get('subject'):
         _jsubj = (f"{_jiq_confirm.get('subject')} on "
@@ -59111,6 +59175,148 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
         _chatbot_error_email('brief-chat/jiq-job', e)
 
 
+# --- Build a Flywheel through Prometheus (2026-09-17, Jenna) ----------------
+# Method: the revised acquired/reactivated playbook. The nest starts
+# at the captured users (the people who did the thing the ask wants
+# to capture) - never at US gen pop.
+_PM_FW_JOB_PREFIX = 'system/pm_fw_jobs/'
+_PM_FW_CHIP = 'Build a Flywheel'
+_PM_FW_CREDITS = 15
+
+_PM_FW_ASK_COPY = (
+    "Happy to build a Flywheel. Give me, in one message:\n"
+    "1. The title or brand the event is about (e.g. Gilmore Girls)\n"
+    "2. The captured action that STARTS the file - the thing the "
+    "users did, in one sentence (e.g. acquired or reactivated Prime "
+    "after a first Gilmore Girls play following 180 days off). The "
+    "flywheel always starts at those users, never the whole "
+    "country. If you already have the count, give it and I lock it.\n"
+    "3. The owned ecosystem the flywheel lives on (e.g. Amazon-owned "
+    "surfaces, the TikTok Shop ecosystem)\n"
+    "4. The conversion inside that ecosystem (e.g. an Amazon-owned "
+    "checkout inside 30 days of the play)\n"
+    "Optional: a two-way split (new vs reactivated), the before / "
+    "after windows (default 180 days before, 30 after), and the "
+    "overall window (default: trailing 12 months).\n\n"
+    "Example: \"Gilmore Girls, start from the 22,764 who acquired or "
+    "reactivated Prime after their first play, Amazon-owned "
+    "ecosystem, conversion is an Amazon-owned checkout inside 30 "
+    "days, split new vs reactivated\"")
+
+
+def _pm_fw_intent(text):
+    low = ' '.join(str(text or '').lower().split())
+    if low == _PM_FW_CHIP.lower():
+        return True
+    return ('flywheel' in low
+            and any(k in low for k in ('pull', 'build', 'run', 'create',
+                                       'new', 'make')))
+
+
+def _pm_fw_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_FW_JOB_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_fw_parse(text, usage_extras=None):
+    from migration.flywheel_synthesis import PARSE_SYSTEM_PROMPT
+    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+                             max_tokens=1200, temperature=0.0,
+                             surface='fw_parse',
+                             usage_extras=usage_extras)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _pm_fw_inputs_complete(parsed):
+    return bool(parsed.get('subject') and parsed.get('captured_action')
+                and parsed.get('ecosystem')
+                and parsed.get('conversion_event'))
+
+
+def _pm_fw_confirm_reply(parsed):
+    win = (f"{parsed['start_date']} to {parsed['end_date']}"
+           if parsed.get('start_date') and parsed.get('end_date')
+           else 'trailing 12 months')
+    lock = (f" (locked at {int(parsed['cohort_count']):,} accounts)"
+            if parsed.get('cohort_count') else '')
+    split = (f"\n- Split: {parsed['splits_hint']}"
+             if parsed.get('splits_hint') else '')
+    pre = int(parsed.get('pre_days') or 180)
+    post = int(parsed.get('post_days') or 30)
+    return (
+        f"Here's the Flywheel I'll build:\n"
+        f"- {parsed['subject']} on {parsed['ecosystem']} surfaces\n"
+        f"- Starting point: {parsed['captured_action']}{lock}\n"
+        f"- Conversion: {parsed['conversion_event']}\n"
+        f"- Windows: {pre} days before, {post} days after, "
+        f"inside {win}{split}\n\n"
+        f"It starts at those captured users (never the whole "
+        f"country), shows their owned-ecosystem life before and "
+        f"after the event, the second surface, and the conversion - "
+        f"and it lands in the Digital Journey tab next to the "
+        f"flywheel cards when finished. It prices at $1,000. Run it?")
+
+
+def _pm_run_fw_job(job_id, username, inputs, extras):
+    try:
+        from migration.flywheel_synthesis import synthesize, persist
+        subj = f"{inputs['subject']} {inputs['ecosystem']} flywheel"
+        _pm_fw_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'running',
+            'subject': subj, 'started_at': time.time()})
+        tools = None
+        try:
+            import prometheus_analysis as _pma_f
+            tools = [_pma_f.WEB_SEARCH_TOOL]
+        except Exception:
+            pass
+
+        def _cf(system, user_prompt, **kw):
+            kw.setdefault('usage_extras', extras)
+            return _pm_claude_json(system, user_prompt, **kw)
+
+        payload = synthesize(inputs, _cf, tools=tools,
+                             created_by=username or 'prometheus')
+        out_key = persist(s3_client, payload, username or 'prometheus',
+                          job_id)
+        try:
+            def _grant(data):
+                u = (data.get('users') or {}).get(username)
+                if not u:
+                    return None
+                cur = u.get('allowed_journey_iq_runs')
+                changed = False
+                if isinstance(cur, list) and '*' not in cur \
+                        and out_key not in cur:
+                    u['allowed_journey_iq_runs'] = cur + [out_key]
+                    changed = True
+                if not u.get('has_journey_iq_access'):
+                    u['has_journey_iq_access'] = True
+                    changed = True
+                return data if changed else None
+            _users_cas_mutate(_grant)
+        except Exception as acc_err:
+            print(f"[fw-job {job_id}] access grant skipped: {acc_err}")
+        _pm_fw_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'done',
+            'subject': payload['meta']['project_name'],
+            's3_key': out_key,
+            'conversions': (payload.get('kpis') or {}).get('total_users'),
+            'finished_at': time.time()})
+        print(f"[fw-job {job_id}] done -> {out_key}")
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            _pm_fw_status_write(job_id, {
+                'job_id': job_id, 'user': username, 'status': 'error',
+                'finished_at': time.time()})
+        except Exception:
+            pass
+        _chatbot_error_email('brief-chat/fw-job', e)
+
+
 
 def _pm_deck_fuzzy_suggestions(query):
     """Closest-catalog deck suggestions for a subject / ask that did not
@@ -59615,6 +59821,28 @@ def api_synth_chat_jiq_status(job_id):
     try:
         resp = s3_client.get_object(
             Bucket=S3_BUCKET, Key=f"{_PM_JIQ_JOB_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/fw-status/<job_id>', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/fw-status')
+def api_synth_chat_fw_status(job_id):
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_FW_JOB_PREFIX}{job_id}.json")
         payload = json.loads(resp['Body'].read().decode('utf-8'))
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
