@@ -100677,19 +100677,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }))}
                 ])
                 + '</div>'
-                + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">UFC-first value</div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
-                + '<div class="jiq-ufc-stat-hero-l">' + _jiqUfcMoney(jb.blended_monthly_arpu || 10.07) + ' blended monthly across 4.8 months.</div>'
-                + '<div class="jiq-ufc-stat-hero-s">78.4% Essential at $8.99 and 21.6% Premium at $13.99. This is the figure used on both ends of every dollar range in the read.</div></div>'
-                + _jiqUfcNestSec('First UFC card they signed up on', _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' UFC-first signups. One first card each.', 'Unique US viewers. Five rows add to ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + '.')
+                + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">What one new UFC sub is worth</div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
+                + '<div class="jiq-ufc-stat-hero-l">Per person. $10.07 a month for the 4.8 months they stay.</div>'
+                + '<div class="jiq-ufc-stat-hero-s">78.4% pay $8.99. 21.6% pay $13.99.</div></div>'
+                + _jiqUfcNestSec('Which fight they signed up on', _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' people signed up because of UFC. Each person has one first fight.', 'The five rows on the left add to ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + '.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
-                    { title: 'First card', rows: first.map(function(r) {
-                        return { label: r.event.replace(' (White House, Jun 14)', ' (White House)').replace(' (McGregor vs Holloway 2, Jul 11)', ' (McGregor vs Holloway 2)').replace(' (Gaethje-Pimblett, Jan 24)', ' (Gaethje vs Pimblett)').replace('Other numbered events (325, 326, 327, 328)', 'Other numbered cards (325 to 328)').replace('UFC Fight Nights (19 events combined)', 'UFC Fight Nights (19 cards)'), accounts: _jiqUfcPeople(r.signups_m), show: _jiqFragNum(_jiqUfcPeople(r.signups_m)) + ' \u00b7 ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
+                    { title: 'The fight that converted them', rows: first.map(function(r) {
+                        var ev = r.event || '';
+                        var lab = /Freedom 250/i.test(ev) ? 'Freedom 250 at the White House'
+                            : /UFC 329/i.test(ev) ? 'UFC 329, McGregor vs Holloway'
+                            : /UFC 324/i.test(ev) ? 'UFC 324, Gaethje vs Pimblett'
+                            : /Other numbered/i.test(ev) ? 'Other numbered cards'
+                            : /Fight Night/i.test(ev) ? 'Fight Nights'
+                            : ev.split(' (')[0];
+                        return { label: lab, accounts: _jiqUfcPeople(r.signups_m), show: _jiqFragNum(_jiqUfcPeople(r.signups_m)) + ' \u00b7 ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
                     })},
-                    { title: 'Off this nest', rows: [
-                        { label: 'Searched UFC on Paramount+ after the clip', accounts: _jiqUfcPeople((funnel[1] || {}).count_m || 6.24) },
-                        { label: 'Joined for something else, then watched UFC', accounts: _jiqUfcPeople(3.06) },
-                        { label: 'Already subscribed, then watched UFC', accounts: _jiqUfcPeople(8.42) }
+                    { title: 'Not a new UFC signup', rows: [
+                        { label: 'Searched after the clip', accounts: _jiqUfcPeople((funnel[1] || {}).count_m || 6.24) },
+                        { label: 'Signed up for something else, then watched', accounts: _jiqUfcPeople(3.06) },
+                        { label: 'Already had Paramount+, then watched', accounts: _jiqUfcPeople(8.42) }
                     ]}
                 ])
                 + '</div>';
@@ -178502,7 +178509,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqUfcNestCard .jiq-frag-read, #jiqUfcNestCard .jiq-frag-detlab,
     #jiqUfcNestCard .jiq-frag-kpi-v, #jiqUfcNestCard .jiq-frag-count,
     #jiqUfcNestCard .jiq-frag-lost, #jiqUfcNestCard .jiq-frag-sec h3,
-    #jiqUfcNestCard .jiq-frag-read-lead { text-transform: none !important; }
+    #jiqUfcNestCard .jiq-frag-read-lead,
+    #jiqUfcNestCard .jiq-ufc-stat-hero-l,
+    #jiqUfcNestCard .jiq-ufc-stat-hero-s,
+    #jiqUfcNestCard .jiq-ufc-wall-hero-l,
+    #jiqUfcNestCard .jiq-ufc-wall-hero-s { text-transform: none !important; }
     body[data-theme="light"] #jiqUfcNestDeck { color: #5C6560; }
     #jiqUfcCaseCard, #jiqUfcDiscoveryCard, #jiqUfcJourneyACard, #jiqUfcJourneyBCard,
     #jiqUfcJourneyCCard, #jiqUfcChurnCard, #jiqUfcSegmentsCard, #jiqUfcReadCard,
@@ -178556,8 +178567,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .jiq-ufc-wall-hero,
     body[data-theme="light"] .jiq-ufc-stat-hero { background: #FFFFFF; }
     .jiq-ufc-wall-hero-k, .jiq-ufc-stat-hero-k {
-        font-size: 10px; font-weight: 700; letter-spacing: .16em;
+        font-size: 10px; font-weight: 700; letter-spacing: .08em;
         text-transform: uppercase; color: #7C878A;
+        word-spacing: 0.35em;
     }
     .jiq-ufc-wall-hero-v {
         margin-top: 8px; font-size: 56px; font-weight: 800;
