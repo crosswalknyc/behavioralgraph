@@ -25651,6 +25651,39 @@ https://www.instagram.com/p/..."></textarea>
             cursor: pointer;
         }
         #dashboardView.piq-v4 .piq-empty-cta:hover { filter: brightness(1.04); }
+        #dashboardView.piq-v4 .piq-empty-back,
+        #dashboardView.piq-v4 .piq-lib-back {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin: 0 0 18px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: #C7F23E;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            cursor: pointer;
+        }
+        #dashboardView.piq-v4 .piq-lib-back {
+            margin: 0 0 10px;
+        }
+        #dashboardView.piq-v4 .piq-empty-back:hover,
+        #dashboardView.piq-v4 .piq-lib-back:hover { color: #E9E8E1; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-back,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-back { color: #5E7E12; }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-back:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-back:hover { color: #0C1618; }
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqEmptyBackBtn,
+        #dashboardView.piq-v4:not(.piq-has-profile) #piqLibBackBtn {
+            display: inline-flex !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile #piqEmptyBackBtn,
+        #dashboardView.piq-v4.piq-has-profile #piqLibBackBtn {
+            display: none !important;
+        }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-empty-cta {
             background: #0C1618;
             color: #E9E8E1;
@@ -25730,9 +25763,10 @@ https://www.instagram.com/p/..."></textarea>
             width: 360px !important;
             min-width: 360px !important;
             max-width: 360px !important;
-            height: auto !important;
-            min-height: calc(100vh - 140px);
-            max-height: none !important;
+            height: calc(100vh - 140px) !important;
+            min-height: 0 !important;
+            max-height: calc(100vh - 140px) !important;
+            overflow: hidden !important;
             box-shadow: none !important;
             border-radius: 0 !important;
             z-index: 2;
@@ -25759,6 +25793,7 @@ https://www.instagram.com/p/..."></textarea>
             border-right: 1px solid #3B3D38 !important;
             color: #E9E8E1 !important;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            overflow: hidden !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 #piqProfileSidebar {
             background: #FFFFFF !important;
@@ -25794,6 +25829,7 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-eyebrow::before { background: #5E7E12; }
         #dashboardView.piq-v4 .sidebar-header-section {
             margin-bottom: 0 !important;
+            flex: 0 0 auto;
         }
         #dashboardView.piq-v4 .sidebar-header-section h3 {
             margin: 0 !important;
@@ -25881,7 +25917,38 @@ https://www.instagram.com/p/..."></textarea>
         #dashboardView.piq-v4 .profile-select-tree {
             background: transparent !important;
             border-radius: 0 !important;
-            padding: 4px 0 8px !important;
+            padding: 4px 4px 8px 0 !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            scrollbar-width: auto;
+            scrollbar-color: #8A938F #1B2F35;
+        }
+        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar {
+            width: 10px;
+        }
+        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-track {
+            background: #1B2F35;
+            border-radius: 999px;
+        }
+        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb {
+            background: #8A938F;
+            border-radius: 999px;
+            border: 2px solid #1B2F35;
+        }
+        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb:hover {
+            background: #C5CDC8;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree {
+            scrollbar-color: #8A938F #EFEEE8;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-track {
+            background: #EFEEE8;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb {
+            background: #8A938F;
+            border-color: #EFEEE8;
         }
         #dashboardView.piq-v4 .profile-cat-item {
             background: transparent !important;
@@ -27061,6 +27128,7 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
                             <button type="button" class="piq-picker-close" id="piqPickerCloseBtn" aria-label="Close library">×</button>
                         </div>
+                        <button type="button" class="piq-lib-back" id="piqLibBackBtn">← Back</button>
                         <div class="piq-picker-search">
                             <input type="search" id="dashProfileSearchInput" placeholder="Search profiles" class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="piq-picker-refresh has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()">↻</button>
@@ -27076,6 +27144,7 @@ https://www.instagram.com/p/..."></textarea>
                     <!-- Empty State - Show when no profile selected -->
                     <div id="dashboardEmptyState" class="dashboard-empty-state">
                         <div class="piq-empty">
+                            <button type="button" class="piq-empty-back" id="piqEmptyBackBtn">← Back</button>
                             <div class="piq-empty-eyebrow">Profile IQ</div>
                             <h2>Open a profile.</h2>
                             <p>Search the library or browse by category.</p>
@@ -51872,6 +51941,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // surprising).
                     try {
                         if (val && val !== 'admin') {
+                            var _was = localStorage.getItem('bg_last_product');
+                            if (_was && _was !== val) localStorage.setItem('bg_prev_product', _was);
                             localStorage.setItem('bg_last_product', val);
                         }
                     } catch (_) { /* localStorage disabled - no persist */ }
@@ -131542,6 +131613,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (window._piqV4ToggleSidebar) window._piqV4ToggleSidebar(true);
                 });
             }
+            window._piqV4LeaveEmpty = function() {
+                var prev = null;
+                try { prev = localStorage.getItem('bg_prev_product'); } catch (_e) {}
+                var dd = document.getElementById('viewNavDropdown');
+                if (prev && prev !== 'profileIQ' && dd) {
+                    var opt = dd.querySelector('option[value="' + prev + '"]');
+                    if (opt && !opt.disabled) {
+                        dd.value = prev;
+                        dd.dispatchEvent(new Event('change', { bubbles: true }));
+                        return;
+                    }
+                }
+                var trigger = document.getElementById('viewNavTrigger');
+                if (trigger) {
+                    try { trigger.focus(); trigger.click(); } catch (_e2) {}
+                }
+            };
+            function _bindEmptyBack(id) {
+                var b = document.getElementById(id);
+                if (!b || b._piqBound) return;
+                b._piqBound = true;
+                b.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (window._piqV4LeaveEmpty) window._piqV4LeaveEmpty();
+                });
+            }
+            _bindEmptyBack('piqEmptyBackBtn');
+            _bindEmptyBack('piqLibBackBtn');
             var closeBtn = document.getElementById('piqPickerCloseBtn');
             if (closeBtn && !closeBtn._piqBound) {
                 closeBtn._piqBound = true;
