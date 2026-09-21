@@ -100327,21 +100327,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         function _jiqUfcPanelChip() {
-            var pb = (_JIQ_UFC_DATA && _JIQ_UFC_DATA.panel_basis) || null;
-            if (!pb) return '';
-            return '<span title="' + _jiqEsc(pb.detail || '') + '" '
-                 +   'style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.14rem 0.5rem; '
-                 +          'border-radius:999px; background:rgba(244,114,50,0.12); '
-                 +          'border:1px solid rgba(244,114,50,0.32); font-size:0.66rem; '
-                 +          'color:#fdba74; font-weight:700;">'
-                 +   '\ud83e\udd4a UFC \u00d7 Paramount+ \u00b7 ' + _jiqEsc(pb.short)
-                 + '</span>'
-                 + ' <button type="button" onclick="_jiqUfcDownloadCsv()" '
-                 +   'style="margin-left:0.5rem; padding:0.16rem 0.55rem; border-radius:999px; '
+            return '<button type="button" onclick="_jiqUfcDownloadCsv()" '
+                 +   'style="padding:0.16rem 0.55rem; border-radius:999px; '
                  +          'background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.4); '
                  +          'font-size:0.66rem; color:#6ee7b7; font-weight:800; cursor:pointer; '
                  +          'letter-spacing:0.02em;" '
-                 +   'title="Download every number in this deck as a single CSV file. One row per (section, subsection, metric, value, unit, notes).">'
+                 +   'title="Download every number in this file.">'
                  +   '\u2b07 Download CSV'
                  + '</button>';
         }
