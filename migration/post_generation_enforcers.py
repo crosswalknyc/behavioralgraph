@@ -4754,11 +4754,56 @@ def spec_pin_disposition(subject, cat_u, value, carriage_doc=None):
     return "demote"
 
 
+def _owner_pin_index(owner_pins):
+    """Normalized lookup for universe-defining platform pins decided by
+    the engine backstops (exclusive audio, content seed, transaction
+    platform, customers-of-brand). Keyed by normalized name; carries the
+    normalized category for a twin-tolerant category check ('APP/
+    PLATFORM' matches 'APP/PLATFORM USAGE')."""
+    idx = {}
+    for entry in (owner_pins or []):
+        try:
+            cat, name = str(entry[0]).strip(), str(entry[1]).strip()
+        except Exception:
+            continue
+        nname = _norm_ident(name)
+        if not nname:
+            continue
+        idx.setdefault(nname, set()).add(
+            _re.sub(r"[^A-Z0-9]", "", cat.upper()))
+    return idx
+
+
+def _owner_pin_hit(idx, cat_u, *values):
+    """True when any value matches an owner pin by name AND the
+    categories agree up to the variant-twin prefix ('APPPLATFORM' is a
+    prefix of 'APPPLATFORMUSAGE')."""
+    if not idx:
+        return False
+    cn = _re.sub(r"[^A-Z0-9]", "", str(cat_u or "").upper())
+    for v in values:
+        cats = idx.get(_norm_ident(str(v or "")))
+        if not cats:
+            continue
+        for pc in cats:
+            if pc and cn and (cn.startswith(pc) or pc.startswith(cn)):
+                return True
+    return False
+
+
 def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
-                          carriage_doc=None):
+                          carriage_doc=None, owner_pins=None):
     """Re-assert the approved spec's subject_rows pins late in the write
     path: every (category, name) pin must land at exactly BP=100 on the
     row it aliases to.
+
+    2026-09-21 (Lady Miss Jacqueline, Audible at 96.176): owner_pins
+    carries the universe-defining platform pins the engine backstops
+    decided (spec['universe_platform_pins']). Those are owner-class -
+    exact 100, same convention as Paramount+ on a Paw Patrol universe -
+    and are exempt from the affinity-pin demotion below. Without this,
+    the backstop's in-frame 100 drifted through polish and the late
+    re-assert refused to restore it ("non-subject affinity pin").
 
     2026-08-24 (Furious audit D3): the viewers-scope platform pin
     ('STREAMING/PLATFORM', 'Hulu') matched nothing because the profile
@@ -4781,7 +4826,7 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
 
     Returns (df, n_changed, unmatched_pins).
     """
-    if (not pin_rows or df is None or len(df) == 0
+    if ((not pin_rows and not owner_pins) or df is None or len(df) == 0
             or 'Column' not in df.columns or 'Value' not in df.columns):
         return df, 0, []
 
@@ -4810,7 +4855,9 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
 
     n = 0
     unmatched = []
-    for entry in pin_rows:
+    _owner_idx = _owner_pin_index(owner_pins)
+    for entry in list(pin_rows) + [p for p in (owner_pins or [])
+                                   if p not in pin_rows]:
         try:
             cat, name = str(entry[0]).strip(), str(entry[1]).strip()
         except Exception:
@@ -4821,6 +4868,18 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
         if cu in DEPIN_DEMO_CATS or cu in METADATA_COLS or cu == 'INPUT_METADATA':
             continue
         cat_mask = col_u == cu
+        if not cat_mask.any() and _owner_pin_hit(_owner_idx, cu, name):
+            # Owner pin stamped with a variant-twin category name
+            # (hostmap home 'APP/PLATFORM' vs the profile's
+            # 'APP/PLATFORM USAGE'): retarget to the twin actually on
+            # the file so the pin lands instead of logging absent.
+            cn = _re.sub(r"[^A-Z0-9]", "", cu)
+            for actual in col_u.unique():
+                an = _re.sub(r"[^A-Z0-9]", "", str(actual))
+                if an and cn and (an.startswith(cn) or cn.startswith(an)):
+                    cu = str(actual)
+                    cat_mask = col_u == cu
+                    break
         if not cat_mask.any():
             unmatched.append((cat, name))
             print(f"   ⚠️⚠️ SPEC PIN CATEGORY ABSENT FROM PROFILE: {cu} | "
@@ -4843,14 +4902,18 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
             # (2026-08-27 Chobani Buyers hold: WHERE THEY SHOP /
             # Walmart+Target spec pins at 100 held the file at ship
             # gate I1 three times); the reasoned value stands.
+            # Owner-class pins (engine backstop ledger) always pin_100.
             _rank = {"pin_100": 2, "pin_soft": 1, "demote": 0}
-            disp = max(
-                spec_pin_disposition(subject, cu, name,
-                                     carriage_doc=carriage_doc),
-                spec_pin_disposition(subject, cu, row_val,
-                                     carriage_doc=carriage_doc),
-                key=lambda d: _rank[d],
-            )
+            if _owner_pin_hit(_owner_idx, cu, name, row_val):
+                disp = "pin_100"
+            else:
+                disp = max(
+                    spec_pin_disposition(subject, cu, name,
+                                         carriage_doc=carriage_doc),
+                    spec_pin_disposition(subject, cu, row_val,
+                                         carriage_doc=carriage_doc),
+                    key=lambda d: _rank[d],
+                )
             if disp == "demote":
                 if not skip_logged:
                     skip_logged = True
@@ -11869,73 +11932,6 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
     return df, n
 
 
-# AUTOMOBILE card spelling (Jessie 2026-09-17). Misspellings show up
-# in existing corpus files and in new LLM drafts. Canonical labels:
-#   KELLY BLUE BOOK → KELLEY BLUE BOOK
-#   VOLKSWAGON      → VOLKSWAGEN
-_AUTOMOBILE_SPELLING = {
-    'KELLYBLUEBOOK': 'KELLEY BLUE BOOK',
-    'VOLKSWAGON': 'VOLKSWAGEN',
-}
-
-
-def correct_automobile_spellings(df, subject, verbose=True):
-    """Rewrite misspelled AUTOMOBILE values to the canonical labels.
-
-    Idempotent. If both the misspelling and the canonical row exist in
-    the same card, keep the higher-BP row. Wired into run_all_enforcers
-    (before same-column dedupe) and run_write_safety_net so full gens
-    and derived cuts both land on the correct spelling.
-    """
-    if df is None or len(df) == 0:
-        return df, 0
-    if 'Column' not in df.columns or 'Value' not in df.columns:
-        return df, 0
-    bp_col, _, _, _ = _detect_cols(df)
-    col_u = df['Column'].astype(str).str.upper().str.strip()
-    auto_idx = list(df.index[col_u == 'AUTOMOBILE'])
-    if not auto_idx:
-        return df, 0
-
-    changes = 0
-    for i in auto_idx:
-        raw = df.at[i, 'Value']
-        canon = _AUTOMOBILE_SPELLING.get(_norm_brand(raw))
-        if canon and str(raw).strip() != canon:
-            df.at[i, 'Value'] = canon
-            changes += 1
-            if verbose:
-                print(f"   🚗 AUTOMOBILE spelling [{subject or ''}]: "
-                      f"{raw!r} → {canon!r}")
-
-    if not bp_col:
-        return df, changes
-
-    col_u = df['Column'].astype(str).str.upper().str.strip()
-    auto_idx = list(df.index[col_u == 'AUTOMOBILE'])
-    by_key: dict = {}
-    for i in auto_idx:
-        by_key.setdefault(_norm_brand(df.at[i, 'Value']), []).append(i)
-    drop = []
-    for idxs in by_key.values():
-        if len(idxs) < 2:
-            continue
-
-        def _bp_or_0(i, _bp_col=bp_col):
-            v = _bp(df.at[i, _bp_col])
-            return float(v) if v is not None and not pd.isna(v) else 0.0
-
-        keep = max(idxs, key=_bp_or_0)
-        drop.extend(i for i in idxs if i != keep)
-    if drop:
-        df = df.drop(index=drop).reset_index(drop=True)
-        changes += len(drop)
-        if verbose:
-            print(f"   🚗 AUTOMOBILE spelling [{subject or ''}]: "
-                  f"dropped {len(drop)} duplicate row(s) after rename")
-    return df, changes
-
-
 def enforce_qc_standing_anchors(df, subject, verbose=True):
     """Liz's QC standing checks, enforced in place on every file
     (Crosswalk Digital Profile IQ QC Standards, 2026-09-16; wired
@@ -12170,14 +12166,6 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_disney_hulu_rollup failed: {e}")
-    # 2026-09-17 (Jessie): AUTOMOBILE KELLY BLUE BOOK / VOLKSWAGON
-    # spelling. Runs before same-column dedupe so a file that carries
-    # both the misspelling and the canonical name collapses to one row.
-    try:
-        df, n = correct_automobile_spellings(df, subject, verbose=verbose)
-        total += n
-    except Exception as e:
-        print(f"   ⚠️ enforcer correct_automobile_spellings failed: {e}")
     # 2026-08-19 (Gilmore Girls incident): general dedupe within
     # (Column, normalized(Value)). Catches the case where the row-by-row
     # engine or hybrid sanity check produced TWO 'Disney+/Hulu' rows in
@@ -17411,9 +17399,6 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # consolidated shape (single Disney+/Hulu row instead of two
         # sibling rows that could look like a duplicate).
         ("apply_disney_hulu_rollup", apply_disney_hulu_rollup),
-        # 2026-09-17 (Jessie): AUTOMOBILE spelling on cut paths that
-        # skip run_all_enforcers.
-        ("correct_automobile_spellings", correct_automobile_spellings),
         # BP hard ceiling (wired 2026-08-25, partner HEINZ 100.965
         # finding): the derived-cut paths (audience_cut_synthesis,
         # addon_cut_synthesis) run ONLY this safety net, never

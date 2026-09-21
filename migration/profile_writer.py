@@ -885,6 +885,7 @@ def write_profile_csv(
     s3_client=None,
     follower_ceiling: Optional[int] = None,
     pin_rows: Optional[list] = None,
+    owner_pins: Optional[list] = None,
     keep_avid_row: Optional[bool] = None,
     ship_gate: bool = True,
     s3_metadata: Optional[dict] = None,
@@ -1348,7 +1349,7 @@ def write_profile_csv(
     # so no late pass (persona noise, sanity fixes, gate patches) can
     # leave a viewers-scope platform pin drifted off 100. Alias-aware
     # ('Hulu' lands on 'Disney+/Hulu'); logs LOUDLY on zero matches.
-    if pin_rows:
+    if pin_rows or owner_pins:
         try:
             try:
                 from migration.post_generation_enforcers import (
@@ -1362,8 +1363,12 @@ def write_profile_csv(
                     run_write_safety_net as _rwsn_pins,
                 )
             df, _n_pins, _unmatched_pins = enforce_spec_pin_rows(
-                df, subject, pin_rows, verbose=verbose,
+                df, subject, pin_rows or [], verbose=verbose,
                 carriage_doc=carriage_doc,
+                # Universe-defining platform pins decided by the engine
+                # backstops (2026-09-21): owner-class, exact 100, exempt
+                # from affinity-pin demotion.
+                owner_pins=owner_pins,
             )
             if _n_pins:
                 df, _ = _rwsn_pins(df, subject, verbose=False)
