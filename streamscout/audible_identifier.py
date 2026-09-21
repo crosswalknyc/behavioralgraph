@@ -124,8 +124,17 @@ _AUD_JS = """() => {
 }"""
 
 
+def _aud_stay_us(url):
+    """Pin the session to audible.com (2026-09-21): Audible geo-
+    redirects datacenter IPs to their local marketplace - a German
+    Hetzner IP lands on audible.de and the search returns the German
+    catalog (the Empyrean run got one Bodenstein-Kirchhoff Krimi and
+    zero Fourth Wing rows). ipRedirectOverride keeps the US store."""
+    return url + ("&" if "?" in url else "?") + "ipRedirectOverride=true"
+
+
 def audible_search(page, query):
-    page.goto("%s/search?keywords=%s" % (AUDIBLE, _q(query)),
+    page.goto(_aud_stay_us("%s/search?keywords=%s" % (AUDIBLE, _q(query))),
               wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
     hits = page.evaluate(_AUD_JS) or []
@@ -136,7 +145,7 @@ def audible_search(page, query):
 
 
 def audible_series_books(page, series_url):
-    page.goto(series_url, wait_until="domcontentloaded")
+    page.goto(_aud_stay_us(series_url), wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
     hits = page.evaluate(_AUD_JS) or []
     for h in hits:
@@ -147,7 +156,7 @@ def audible_series_books(page, series_url):
 
 def audible_title_for_asin(page, asin, slug):
     """Confirm a pasted /pd link and return its clean title."""
-    page.goto("%s/pd/%s/%s" % (AUDIBLE, slug or "x", asin),
+    page.goto(_aud_stay_us("%s/pd/%s/%s" % (AUDIBLE, slug or "x", asin)),
               wait_until="domcontentloaded")
     page.wait_for_timeout(2000)
     t = page.evaluate("() => { const h = document.querySelector('h1'); "
