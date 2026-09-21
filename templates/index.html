@@ -100481,11 +100481,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqUfcNestSpine(rows) {
             return rows.map(function(s, i) {
-                return _jiqUfcNestStep(s, {
+                var html = _jiqUfcNestStep(s, {
                     base: i === 0,
-                    terminal: i === rows.length - 1,
-                    next: rows[i + 1]
+                    terminal: i === rows.length - 1
                 });
+                if (s && s.kept != null) html += _jiqUfcNestBridge(s);
+                return html;
             }).join('');
         }
         function _jiqUfcNestBridge(s, opts) {
