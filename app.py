@@ -46003,6 +46003,9 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"identity_versions\": [{\"title\": \"The Office\", \"version_label\": \"US, NBC\", \"medium\": \"series\", \"platform\": \"Peacock\", \"qualifier\": \"US\"}, ...] or null // ONLY when multiple same-name versions (or ambiguous-alias candidates) exist AND the request does not disambiguate - see SAME-NAME VERSIONS and NICKNAMES AND ALIASES,\n"
         "  \"ip_scope\": \"broad|consumers\" or null (null = ask the user; see IP AUDIENCE SCOPE),\n"
         "  \"consumer_verb\": \"viewers|readers|listeners|players\" or null,\n"
+        "  \"seed_source\": \"content_map\" or null // AUDIENCE-OF-A-PROPERTY pulls (viewers/readers/players/listeners of a title, franchise, podcast, book, or game) seed from the content map: set \"content_map\" once the STREAMSCOUT ROUTING INTERVIEW below is answered. Entity pulls (a person, a brand): null.,\n"
+        "  \"content_show\": \"the single title, OR the franchise name (the SHOW every seed row keys on)\" or null,\n"
+        "  \"franchise_titles\": [\"Title A\", \"Title B\", ...] or null // franchise only: EVERY title the user listed - never guess titles on the user's behalf,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
         "  \"kids_product\": <true|false - see KIDS' PRODUCTS: true ONLY when the subject is a product/app/game/toy/franchise whose end users are predominantly children under 13>,\n"
         "  \"home_platform_rows\": [[\"STREAMING/PLATFORM\",\"Starz\"], ...] or [],\n"
@@ -46558,6 +46561,25 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "behavior ('like ...', 'such as ...', 'things like ...', a "
         "trailing 'etc.'), they are qualifiers for one persona, never a "
         "batch.\n"
+        "  7c-STREAMSCOUT-ROUTING-INTERVIEW (HARD RULE - 2026-09-21): a "
+        "profile pull routes its seeds by an INTERVIEW, never by "
+        "inference. When the message does not make it explicit "
+        "whether the subject is an ENTITY (a person, a brand) or an "
+        "AUDIENCE of a property (viewers / readers / players / "
+        "listeners of a title, franchise, podcast, book, or game), "
+        "ASK: 'Is this profile for an entity (a person or brand), or "
+        "for an audience of a property?' - and wait. ENTITY: "
+        "seed_source stays null and everything proceeds as today. "
+        "AUDIENCE: if not explicit, ASK 'Single title, or a "
+        "franchise?'. Single title: content_show = that title. "
+        "Franchise: ASK for (1) the franchise name and (2) EVERY "
+        "title in it - the franchise name becomes content_show and "
+        "the titles go in franchise_titles verbatim; NEVER fill in a "
+        "franchise's titles yourself. Once answered, set seed_source "
+        "= 'content_map'. Explicit phrasing counts as an answer "
+        "('viewers of The Bear' = audience + single title; 'the "
+        "Merciless Saints books: A, B, C' = franchise + titles) - do "
+        "not re-ask what the user already said.\n"
         "  7b-CUSTOMERS-OF-A-BRAND (HARD RULE - 2026-09-17): an ask for "
         "the CUSTOMERS of a specific brand ('current customers of The "
         "Joint', 'Chime banking customers', 'lapsed Costco members', "
@@ -55200,6 +55222,47 @@ def _spec_from_draft(draft):
                                             field='identity_qualifier',
                                             subject=subject, max_len=60,
                                             single_line=True)
+    # StreamScout routing (2026-09-21): audience-of-a-property pulls
+    # seed from reference.content_mapping. Interview-answered drafts
+    # carry seed_source='content_map' (unresolvable = specialized
+    # hold, per the signed-off spec). The backstop below stamps
+    # 'content_map_soft' on consumption-scoped IP subjects the
+    # interview never asked about - the worker upgrades their seeds
+    # when the content map or StreamScout has them but never converts
+    # a working build into a hold. The Keke Palmer class (host-map
+    # brand seed while episode URLs sat in the content map) cannot
+    # recur on either strength.
+    if str(draft.get('seed_source') or '').strip() == 'content_map':
+        spec['seed_source'] = 'content_map'
+        spec['content_show'] = _scrub(
+            str(draft.get('content_show') or subject),
+            field='content_show', subject=subject, max_len=200,
+            single_line=True)
+        _fts = draft.get('franchise_titles')
+        if isinstance(_fts, list):
+            spec['franchise_titles'] = [
+                _scrub(str(t), field='franchise_titles',
+                       subject=subject, max_len=200, single_line=True)
+                for t in _fts if str(t).strip()][:40]
+    else:
+        try:
+            if (draft.get('is_ip_content')
+                    and (draft.get('consumer_verb')
+                         or str(draft.get('ip_scope') or '')
+                         .strip().lower() == 'consumers')):
+                from migration.viewer_carriage import (
+                    detect_consumption_scoped)
+                _det = detect_consumption_scoped(subject)
+                if _det and _det.get('title_hint'):
+                    spec['seed_source'] = 'content_map_soft'
+                    spec['content_show'] = _scrub(
+                        str(draft.get('resolved_title')
+                            or _det['title_hint']),
+                        field='content_show', subject=subject,
+                        max_len=200, single_line=True)
+        except Exception as _ss_err:
+            print(f"[spec] content-seed backstop skipped "
+                  f"(non-fatal): {_ss_err}")
     # Viewer season/film scope (2026-08-27): the bound scope rides the
     # spec so the engine host resolves the scoped content URLs, folds
     # them into BRAND INPUT, and inserts the verified rows into the
