@@ -47953,7 +47953,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <div class="jiq-frag-copy">
                             <div class="jiq-frag-eyebrow" id="jiqUfcNestMeta">Signup journey · Jan 1 to Aug 14, 2026</div>
                             <h2 id="jiqUfcNestTitle">UFC<br>on Paramount+.</h2>
-                            <div class="jiq-frag-read-lead" id="jiqUfcNestLead">Most people who watched already had Paramount+. New UFC subs were more likely to cancel.</div>
+                            <div class="jiq-frag-read-lead" id="jiqUfcNestLead">UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate.</div>
                             <p id="jiqUfcNestDeck">14.62M people watched a fight. 8.42M already had Paramount+. 3.06M signed up for something else, then watched. 3.14M signed up because of UFC. 5,330,000 left at the signup page and never produced a UFC playback session.</p>
                             <div class="jiq-frag-kpis" id="jiqUfcNestKpis"></div>
                         </div>
@@ -100561,6 +100561,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var d30 = ((jb.engagement_30d || [])[0] || {}).pct_of_cohort;
             var d90 = ((d.ufc_churn || {}).benchmarks || [])[0] || {};
             var rec14 = ((jc.longer_tail_14d || [])[0] || {}).pct;
+            var cancelA = postPct('Cancelled P+');
             var adTier = (jb.plan_mix || {}).essential_ad_pct;
             var zeroNon = 100 - ((((jb.engagement_30d || [])[1] || {}).pct_of_cohort) || 43.3);
             var neverBack = ((jc.longer_tail_14d || []).filter(function(r) { return /Never returned/i.test(r.outcome || ''); })[0] || {}).pct;
@@ -100586,6 +100587,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     { title: 'What holds', rows: [
                         { label: 'Already paid, still watching other shows 30 days later', accounts: Math.round(aN * keepNon / 100), show: _jiqUfcPct1(keepNon) },
                         { label: 'Already paid, watched South Park within a week of UFC', accounts: Math.round(aN * south / 100), show: _jiqUfcPct1(south) },
+                        { label: 'Already paid, cancel sits with the rest of the service', accounts: Math.round(aN * (cancelA || 4.1) / 100), show: _jiqUfcPct1(cancelA || 4.1) },
                         { label: 'New UFC subs still paying at day 30', accounts: d30 || 76.2, v: d30 || 76.2, show: _jiqUfcPct1(d30 || 76.2) },
                         { label: 'New UFC subs still paying at day 90', accounts: d90.observed_pct || 62.4, v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
                         { label: 'Came back and paid within 14 days', accounts: rec14 || 20.5, v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
@@ -100598,7 +100600,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         { label: 'New UFC subs trail the best sports signups at day 90', accounts: d90.gap_pp || 8.9, v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
                     ]}
                 ])
-                + '</div>';
+                + '</div>'
+                + _jiqUfcNestRead('South Park indexes 2.4x the pre-UFC Paramount+ base for that title. Landman indexes 1.17x. Cancel among people who were already subscribed sits near the rest of the service. UFC did not speed up their cancellation. People who signed up for UFC cancel at a higher rate.');
         }
         function _jiqUfcNestDiscovery() {
             var dis = (_JIQ_UFC_DATA || {}).ufc_discovery || {};
@@ -100720,7 +100723,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             ]);
             var aN = _jiqUfcPeople(ja.cohort_size_m || 8.42);
             var post = ja.post_watch_behavior || [];
-            return _jiqUfcNestSec('04 Already on Paramount+', 'UFC is additive for people already subscribed. It is not a substitute.', 'This nest starts at people already on Paramount+. It does not start at US gen pop.')
+            return _jiqUfcNestSec('04 Already on Paramount+', 'UFC did not speed up cancellation among people who were already subscribed.', '91.6% kept watching other shows. Cancel sits near the rest of the service.')
                 + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
                 + _jiqUfcNestSec('After the first card', '91.6% kept watching non-UFC titles.', 'Shares of the ' + _jiqFragNum(aN) + ' already-subscribed UFC watchers. Rows overlap.')
                 + '<div class="jiq-frag-detours cols-2">'
@@ -100736,7 +100739,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return { label: lab, accounts: Math.round(aN * r.pct / 100), show: _jiqFragNum(Math.round(aN * r.pct / 100)) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
                 })}])
                 + '</div>'
-                + _jiqUfcNestRead('South Park indexes 2.4x the pre-UFC Paramount+ base for that title. Landman indexes 1.17x. Cancel sits near the rest of the service. UFC did not speed up cancellation among people who were already subscribed.');
+                + _jiqUfcNestRead('South Park indexes 2.4x the pre-UFC Paramount+ base for that title. Landman indexes 1.17x. Cancel sits near the rest of the service. UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate.');
         }
         function _jiqUfcNestWall() {
             var jc = (_JIQ_UFC_DATA || {}).ufc_journey_c || {};
@@ -100814,10 +100817,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }).join('');
             var dest = ch.where_they_go_next_30d || [];
             var sig = ch.top_churn_indicators_day30 || [];
-            return _jiqUfcNestSec('06 Retention', 'UFC-first retention trails the strongest sports-led signups by 8.9 points at day 90.', 'Every checkpoint prints the people it was observed on.')
+            return _jiqUfcNestSec('06 Retention', 'People who signed up for UFC cancel at a higher rate. People who were already subscribed do not.', 'Already-subscribed cancel is 4.1% within 90 days, near the rest of the service. UFC-first trails the strongest sports-led signups by 8.9 points at day 90.')
                 + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3,140,000</th><th class="r">Strongest sports-led</th></tr></thead><tbody>'
                 + rows + '</tbody></table>'
-                + _jiqUfcNestRead('Day 90 is the gap to act on: 8.9 points, observed on more than half the cohort. Day 180 is 18.0 points, but only the 40.8% who signed up before mid-February can have that reading. Mean tenure is 4.8 months.')
+                + _jiqUfcNestRead('UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate. Day 90 is the gap to act on for those new UFC signups: 8.9 points, observed on more than half of them. Day 180 is 18.0 points, but only the 40.8% who signed up before mid-February can have that reading. Mean tenure is 4.8 months.')
                 + _jiqUfcNestSec('What predicts cancel', 'Churn concentrates in people who watched nothing but UFC.', 'Index against the UFC-first cancel rate. Above 1 means more cancel.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
