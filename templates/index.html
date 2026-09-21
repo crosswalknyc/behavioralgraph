@@ -100580,22 +100580,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + _jiqUfcNestSec('The cards that aired', 'Freedom 250 was the largest single UFC audience on Paramount+ in the window.', 'Six numbered cards, 19 Fight Nights, and the one-off White House card.')
                 + '<table class="jiq-ufc-tbl"><thead><tr><th>Event</th><th>Date</th><th>Headline</th><th class="r">Avg viewers</th><th class="r">Peak</th><th class="r">Reached</th></tr></thead><tbody>'
                 + eventRows + '</tbody></table>'
-                + _jiqUfcNestRead('43.8% of US UFC fans already had Paramount+ activity before the deal. The UFC-first cohort is 9.9 years younger than the pre-UFC Paramount+ base.')
+                + _jiqUfcNestRead('43.8% of US UFC fans already had Paramount+ activity before the deal.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
                     { title: 'What holds', rows: [
-                        { label: 'Already-subscribed kept watching non-UFC within 30 days', accounts: Math.round(aN * keepNon / 100), show: _jiqUfcPct1(keepNon) },
-                        { label: 'South Park within 7 days of first UFC, already-subscribed', accounts: Math.round(aN * south / 100), show: _jiqUfcPct1(south) },
-                        { label: 'UFC-first still subscribed at day 30', accounts: d30 || 76.2, v: d30 || 76.2, show: _jiqUfcPct1(d30 || 76.2) },
-                        { label: 'UFC-first still subscribed at day 90', accounts: d90.observed_pct || 62.4, v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
-                        { label: 'Signed up within 14 days after leaving the paywall', accounts: rec14 || 20.5, v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
+                        { label: 'Already paid, still watching other shows 30 days later', accounts: Math.round(aN * keepNon / 100), show: _jiqUfcPct1(keepNon) },
+                        { label: 'Already paid, watched South Park within a week of UFC', accounts: Math.round(aN * south / 100), show: _jiqUfcPct1(south) },
+                        { label: 'New UFC subs still paying at day 30', accounts: d30 || 76.2, v: d30 || 76.2, show: _jiqUfcPct1(d30 || 76.2) },
+                        { label: 'New UFC subs still paying at day 90', accounts: d90.observed_pct || 62.4, v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
+                        { label: 'Came back and paid within 14 days', accounts: rec14 || 20.5, v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
                     ]},
-                    { title: 'What is leaking', rows: [
-                        { label: 'UFC-first watched zero non-UFC in the first 30 days', accounts: zeroNon, v: zeroNon, show: _jiqUfcPct1(zeroNon) },
-                        { label: 'Left the paywall and never came back to Paramount+', accounts: neverBack || 69.3, v: neverBack || 69.3, show: _jiqUfcPct1(neverBack || 69.3) },
-                        { label: 'Went to UFC official social after leaving the paywall', accounts: _jiqUfcPeople(social24.count_m || 4.42), show: _jiqFragNum(_jiqUfcPeople(social24.count_m || 4.42)) },
-                        { label: 'UFC-first picked the $8.99 ad tier', accounts: adTier || 78.4, v: adTier || 78.4, show: _jiqUfcPct1(adTier || 78.4) },
-                        { label: 'Day-90 gap to the strongest sports-led signups', accounts: d90.gap_pp || 8.9, v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
+                    { title: "What's leaking", rows: [
+                        { label: 'New UFC subs watched only UFC for 30 days', accounts: zeroNon, v: zeroNon, show: _jiqUfcPct1(zeroNon) },
+                        { label: 'Hit signup and never came back', accounts: neverBack || 69.3, v: neverBack || 69.3, show: _jiqUfcPct1(neverBack || 69.3) },
+                        { label: 'Left signup and went to UFC social', accounts: _jiqUfcPeople(social24.count_m || 4.42), show: _jiqFragNum(_jiqUfcPeople(social24.count_m || 4.42)) },
+                        { label: 'New UFC subs picked the $8.99 ad plan', accounts: adTier || 78.4, v: adTier || 78.4, show: _jiqUfcPct1(adTier || 78.4) },
+                        { label: 'New UFC subs trail the best sports signups at day 90', accounts: d90.gap_pp || 8.9, v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
                     ]}
                 ])
                 + '</div>';
@@ -178502,10 +178502,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] .jiq-ufc-pills button.is-on { border-color: #5E7E12; color: #5E7E12; background: rgba(94,126,18,.08); }
     .jiq-ufc-tabmeta { display: flex; align-items: center; }
 
-    #jiqUfcNestCard .jiq-frag-detours.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #jiqUfcNestCard .jiq-frag-detours.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px 80px; margin-top: 22px;
+    }
     #jiqUfcNestCard .jiq-frag-detours.cols-1 { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
     #jiqUfcNestCard .jiq-frag-detrow.is-wide { grid-template-columns: minmax(0, 1fr) 90px 110px; }
+    #jiqUfcNestCard .jiq-frag-detlab {
+        white-space: normal; overflow: visible; line-height: 1.35; word-spacing: 0.12em;
+    }
     #jiqUfcNestCard .jiq-frag-detlab.is-wrap { white-space: normal; overflow: visible; }
+    #jiqUfcNestCard .jiq-frag-det h5 { word-spacing: 0.35em; letter-spacing: .08em; }
+    #jiqUfcNestCard .jiq-frag-read { margin-bottom: 8px; }
     #jiqUfcNestHost { padding-bottom: 28px; }
     #jiqUfcNestCard .jiq-ufc-spine { margin: 0 34px; }
     #jiqUfcNestCard .jiq-ufc-pad { margin: 0 34px; }
