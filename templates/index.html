@@ -100644,6 +100644,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var kpis = document.getElementById('jiqUfcNestKpis');
             if (kpis) {
                 kpis.innerHTML = [
+                    { l: 'Total UFC views', v: _jiqUfcMill(uni.total_m || 14.62) },
                     { l: 'Already subscribed, then watched UFC', v: _jiqUfcMill(already) },
                     { l: 'Signed up, first watch was UFC', v: _jiqUfcMill(first) },
                     { l: 'Hit the wall and never converted', v: _jiqUfcMill(never), hot: true }
