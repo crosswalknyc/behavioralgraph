@@ -100350,7 +100350,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         var _JIQ_UFC_TABS = [
-            { id: 'case',        label: 'The case' },
+            { id: 'case',        label: 'Overview' },
             { id: 'discovery',   label: 'Discovery' },
             { id: 'journey_b',   label: 'Clip path' },
             { id: 'journey_a',   label: 'Already on Paramount+' },
@@ -100577,7 +100577,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var zeroNon = 100 - ((((jb.engagement_30d || [])[1] || {}).pct_of_cohort) || 43.3);
             var neverBack = ((jc.longer_tail_14d || []).filter(function(r) { return /Never returned/i.test(r.outcome || ''); })[0] || {}).pct;
             var social24 = ((jc.immediate_reactions_24h || []).filter(function(r) { return /official social/i.test(r.action || ''); })[0] || {});
-            return _jiqUfcNestSec('01 The case', 'Three cohorts watched. A fourth opened UFC, hit signup, and left.', _jiqFragNum(_jiqUfcPeople(uni.total_m || 14.62)) + ' splits three ways with nothing left over. People who never signed up sit outside that total.')
+            return _jiqUfcNestSec('01 Overview', 'Three cohorts watched. A fourth opened UFC, hit signup, and left.', _jiqFragNum(_jiqUfcPeople(uni.total_m || 14.62)) + ' splits three ways with nothing left over. People who never signed up sit outside that total.')
                 + '<div class="jiq-ufc-uni">'
                 + '<div class="jiq-ufc-uni-seg is-a" style="flex:' + a.pct + '">A \u00b7 ' + a.pct + '%</div>'
                 + '<div class="jiq-ufc-uni-seg is-a2" style="flex:' + a2.pct + '">A2 \u00b7 ' + a2.pct + '%</div>'
