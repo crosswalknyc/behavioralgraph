@@ -47,6 +47,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -502,13 +503,38 @@ def _get_json(url: str, *, params: dict | None = None) -> Optional[dict | list]:
 # ============================================================================
 # S3 cache helpers
 # ============================================================================
+_S3_CLIENT_LOCK = threading.Lock()
+_S3_CLIENT = None
+
+
 def _s3_client():
-    try:
-        import boto3  # type: ignore
-        return boto3.client('s3', region_name='us-east-2')
-    except Exception as e:
-        logger.debug("trends_iq: boto3 unavailable (%s)", e)
-        return None
+    """One client for the life of the process.
+
+    This used to build a new client per call, so every snapshot read
+    opened its own connection and paid a TLS handshake before it could
+    ask for anything. The fourteen small objects the streaming section
+    reads cost 7.0s that way and 2.5s over a single reused connection;
+    building the client is not the expense, reconnecting is.
+
+    The pool is sized for the prefetch fan-outs below, which ask for
+    more objects at once than botocore's default ten. A client is safe
+    to call from several threads at once, which is what those pools do.
+    """
+    global _S3_CLIENT
+    if _S3_CLIENT is not None:
+        return _S3_CLIENT
+    with _S3_CLIENT_LOCK:
+        if _S3_CLIENT is None:
+            try:
+                import boto3  # type: ignore
+                from botocore.config import Config  # type: ignore
+                _S3_CLIENT = boto3.client(
+                    's3', region_name='us-east-2',
+                    config=Config(max_pool_connections=64))
+            except Exception as e:
+                logger.debug("trends_iq: boto3 unavailable (%s)", e)
+                return None
+    return _S3_CLIENT
 
 
 def _today_iso() -> str:
@@ -784,6 +810,9 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
 
 _DATED_INDEX_TTL_S = 600
 _dated_index_cache: dict = {'ts': 0.0, 'by_source': {}}
+# Historic reads now run in one pool, so without this the first
+# request of a historic day would start one listing per platform.
+_dated_index_lock = threading.Lock()
 
 
 def _dated_snapshot_index() -> dict[str, list[str]]:
@@ -797,6 +826,18 @@ def _dated_snapshot_index() -> dict[str, list[str]]:
     cached = _dated_index_cache['by_source']
     if cached and now_ts - _dated_index_cache['ts'] < _DATED_INDEX_TTL_S:
         return cached
+    with _dated_index_lock:
+        # Another thread may have finished the listing while we waited.
+        cached = _dated_index_cache['by_source']
+        if cached and time.time() - _dated_index_cache['ts'] < _DATED_INDEX_TTL_S:
+            return cached
+        return _build_dated_snapshot_index()
+
+
+def _build_dated_snapshot_index() -> dict[str, list[str]]:
+    """The listing itself. Callers hold `_dated_index_lock`."""
+    now_ts = time.time()
+    cached = _dated_index_cache['by_source']
     s3 = _s3_client()
     if s3 is None:
         return cached or {}
@@ -9469,6 +9510,98 @@ _STREAMING_HISTORY_TTL_S = 15 * 60  # in-process cache
 # Cache: {slug: (fetched_at_epoch, {title_norm: set[(iso_year, iso_week)]})}
 _STREAMING_WEEKS_CACHE: dict[str, tuple[float, dict[str, set[tuple[int, int]]]]] = {}
 
+# ---------------------------------------------------------------------------
+# Published reads for the streaming section.
+#
+# The section's cold cost was 42.0s, and almost none of it was the
+# section thinking. It was the same three things re-fetched on every
+# fresh process: the weeks-on-chart history (1,008 small S3 reads,
+# 23.6s), poster art (279 lookups against three outside services,
+# 11.9s), and fourteen platform snapshots read one after another
+# (7.4s). None of the three change between one request and the next.
+#
+# So the first two are resolved by the nightly run and published for
+# the read side to load (`scripts/trends_scrapers/streaming_weeks_index
+# .py`, `streaming_poster_cache.py`), and the third is read in one
+# pass instead of fourteen.
+#
+# The flag exists so both paths can run in one process and be compared
+# value by value; see `scripts/trends_scrapers/
+# verify_streaming_read_path.py`. Turning it off restores the original
+# behaviour exactly, which is also what happens on its own whenever a
+# published read is missing, stale, or does not cover the days asked
+# for.
+# ---------------------------------------------------------------------------
+
+_STREAMING_FAST_READ_ENABLED = (
+    os.environ.get('TRENDS_IQ_STREAMING_FAST_READ', '1') != '0')
+
+_STREAM_WEEKS_INDEX_TTL_S = 15 * 60
+_STREAM_WEEKS_INDEX_CACHE: dict = {'ts': 0.0, 'loaded': False, 'index': None}
+
+_POSTER_CACHE_SEEDED = False
+_POSTER_CACHE_SEED_LOCK = threading.Lock()
+
+
+def _streaming_weeks_index() -> Optional[dict]:
+    """The published weeks-on-chart index, read once per process.
+
+    Returns None when it is absent or written by a version this code
+    does not understand, in which case every caller scans S3 as before.
+    """
+    if not _STREAMING_FAST_READ_ENABLED:
+        return None
+    now = time.time()
+    c = _STREAM_WEEKS_INDEX_CACHE
+    if c['loaded'] and (now - c['ts']) < _STREAM_WEEKS_INDEX_TTL_S:
+        return c['index']
+    idx = None
+    try:
+        from scripts.trends_scrapers import streaming_weeks_index as swi
+        idx = swi.read(s3=_s3_client())
+    except Exception as e:
+        logger.debug("trends_iq: weeks index unavailable (%s)", e)
+    c['index'] = idx
+    c['loaded'] = True
+    c['ts'] = now
+    return idx
+
+
+def _seed_poster_cache_once() -> None:
+    """Fill the poster cache from the nightly run's answers.
+
+    Only fills keys the process has not already resolved for itself, so
+    a live lookup always wins over a stored one. A title that is not in
+    the published set still resolves live on first sight.
+    """
+    global _POSTER_CACHE_SEEDED
+    if _POSTER_CACHE_SEEDED or not _STREAMING_FAST_READ_ENABLED:
+        return
+    with _POSTER_CACHE_SEED_LOCK:
+        if _POSTER_CACHE_SEEDED:
+            return
+        try:
+            from scripts.trends_scrapers import streaming_poster_cache as spc
+            n = spc.seed(_WIKI_POSTER_CACHE, spc.read(s3=_s3_client()))
+            logger.info("trends_iq: loaded %d poster answer(s)", n)
+        except Exception as e:
+            logger.debug("trends_iq: poster answers unavailable (%s)", e)
+        _POSTER_CACHE_SEEDED = True
+
+
+def _reset_streaming_read_caches() -> None:
+    """Put the process back to how it starts.
+
+    Used by the equivalence check so a run on one path cannot warm the
+    other, and by anything that needs a genuinely cold measurement.
+    """
+    global _POSTER_CACHE_SEEDED
+    _STREAMING_WEEKS_CACHE.clear()
+    _WIKI_POSTER_CACHE.clear()
+    _STREAM_WEEKS_INDEX_CACHE.update({'ts': 0.0, 'loaded': False,
+                                      'index': None})
+    _POSTER_CACHE_SEEDED = False
+
 
 def _title_norm(t: str) -> str:
     """Case-insensitive, whitespace/punct-collapsed title key so
@@ -9500,13 +9633,34 @@ def _load_streaming_history_weeks(slug: str) -> dict[str, set[tuple[int, int]]]:
     if cached and (now - cached[0]) < _STREAMING_HISTORY_TTL_S:
         return cached[1]
 
+    today = datetime.now(timezone.utc).date()
+    dates = [today - timedelta(days=i) for i in range(1, _STREAMING_HISTORY_WEEKS * 7 + 1)]
+
+    # The nightly run already read these days and recorded which days
+    # each title appeared on, so read that instead of fetching the
+    # eighty-four dated snapshots again. `weeks_for` returns None
+    # rather than a short answer when the published index does not
+    # reach every day asked for, which is what sends us back to the
+    # scan below with the tally intact.
+    idx = _streaming_weeks_index()
+    if idx is not None:
+        try:
+            from scripts.trends_scrapers import streaming_weeks_index as swi
+            from_index = swi.weeks_for(idx, slug, dates)
+        except Exception as e:
+            logger.debug("_load_streaming_history_weeks(%s) index read "
+                         "failed: %s", slug, e)
+            from_index = None
+        if from_index is not None:
+            _STREAMING_WEEKS_CACHE[slug] = (now, from_index)
+            return from_index
+        logger.info("trends_iq: weeks history for %s is not covered by "
+                    "the published index; reading the archive", slug)
+
     s3 = _s3_client()
     if s3 is None:
         _STREAMING_WEEKS_CACHE[slug] = (now, {})
         return {}
-
-    today = datetime.now(timezone.utc).date()
-    dates = [today - timedelta(days=i) for i in range(1, _STREAMING_HISTORY_WEEKS * 7 + 1)]
 
     weeks_by_title: dict[str, set[tuple[int, int]]] = {}
 
@@ -10123,6 +10277,64 @@ _STREAM_DEPTH_ALIAS = {
 }
 
 
+def _prefetch_streaming_snapshots(asof: Optional[str] = None
+                                  ) -> tuple[dict, dict]:
+    """Read every platform snapshot and the depth extension at once.
+
+    Returns `({slug: (snapshot, snapshot_day)}, depth_snapshot)`, which
+    is exactly what reading them one at a time produced. The objects
+    are small and independent, so the whole cost is the round trips:
+    fourteen of them in sequence is 7.4s against 1.2s together.
+
+    Falls back to reading in sequence when the fast read is off, and a
+    platform whose read fails lands as `(None, ...)` and renders
+    unavailable, same as before.
+    """
+    slugs = [slug for slug, _, _ in STREAMING_PLATFORMS]
+
+    def _one(slug: str) -> tuple[str, tuple]:
+        try:
+            if asof:
+                return slug, _read_snapshot_nearest(slug, asof)
+            return slug, (_read_snapshot(slug), '')
+        except Exception as e:
+            logger.debug("streaming snapshot read failed for %s: %s",
+                         slug, e)
+            return slug, (None, asof or '')
+
+    if not _STREAMING_FAST_READ_ENABLED:
+        depth = _read_snapshot('streaming_depth', asof) or {}
+        return dict(_one(slug) for slug in slugs), depth
+
+    # A historic read may consult the dated listing, which is one
+    # paginated call shared by every platform. Prime it here so the
+    # pool does not start thirteen of them at once.
+    if asof:
+        _dated_snapshot_index()
+
+    out: dict[str, tuple] = {}
+    depth: dict = {}
+    try:
+        with ThreadPoolExecutor(max_workers=len(slugs) + 1,
+                                thread_name_prefix='stream-snap') as ex:
+            depth_fut = ex.submit(_read_snapshot, 'streaming_depth', asof)
+            for slug, pair in ex.map(_one, slugs):
+                out[slug] = pair
+            try:
+                depth = depth_fut.result() or {}
+            except Exception as e:
+                logger.debug("streaming depth read failed: %s", e)
+                depth = {}
+    except Exception as e:
+        # Never let the prefetch itself be the reason a panel goes
+        # dark; fall back to reading them in sequence.
+        logger.info("streaming snapshot prefetch fell back to sequential "
+                    "reads: %s", e)
+        out = dict(_one(slug) for slug in slugs)
+        depth = _read_snapshot('streaming_depth', asof) or {}
+    return out, depth
+
+
 def _merge_streaming_depth(primary: list[dict], extension: list[dict],
                             limit: int = 100) -> list[dict]:
     """Extend a platform's own ranked list with depth-extension rows.
@@ -10179,12 +10391,24 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                        'available': avail}
               for slug, label, avail in STREAMING_PLATFORMS}
 
+    # Poster art the nightly run already resolved. Loading it turns the
+    # enrichment below into dictionary reads on a fresh process instead
+    # of 279 lookups against three outside services.
+    _seed_poster_cache_once()
+
+    # Every snapshot at once. The thirteen platform snapshots and the
+    # depth extension come to 1.35 MB between them, so the cost is
+    # fourteen round trips rather than the bytes: 7.4s read one after
+    # another, 1.2s read together. Nothing in the loop depends on the
+    # order they arrive in.
+    #
     # Depth extension: JustWatch top-100 films + top-100 shows per
     # platform, written daily by scripts/trends_scrapers/
     # streaming_depth.py. Missing snapshot (first day, or a platform
     # JustWatch doesn't carry, like ESPN+) -> that platform simply
     # keeps its own snapshot depth.
-    depth_sources = (_read_snapshot('streaming_depth', asof) or {}).get('sources') or {}
+    platform_snaps, depth_snap = _prefetch_streaming_snapshots(asof)
+    depth_sources = (depth_snap or {}).get('sources') or {}
 
     # Fallback-day estimate snapshots, read at most once per distinct
     # day per call. Used to stamp US-audience values onto rows served
@@ -10193,14 +10417,10 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
     est_by_day: dict[str, dict] = {}
 
     for slug, label, _static_avail in STREAMING_PLATFORMS:
-        snap_day = asof or ''
-        if asof:
-            # Historic read: exact day first, nearest archived day
-            # with usable rows otherwise (stale-but-populated beats a
-            # dark panel; the historic payload caches permanently).
-            snap, snap_day = _read_snapshot_nearest(slug, asof)
-        else:
-            snap = _read_snapshot(slug)
+        # Historic reads take the exact day first and the nearest
+        # archived day with usable rows otherwise (stale-but-populated
+        # beats a dark panel; the historic payload caches permanently).
+        snap, snap_day = platform_snaps.get(slug) or (None, asof or '')
         depth_block = (depth_sources.get(slug)
                        or depth_sources.get(_STREAM_DEPTH_ALIAS.get(slug, ''))
                        or {})

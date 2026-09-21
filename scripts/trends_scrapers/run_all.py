@@ -689,6 +689,52 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: last-digit check crashed "
                                "(non-fatal)")
 
+    # ------------------------------------------------------------------
+    # Publish what the streaming section used to work out per request.
+    #
+    # Its cold cost was 42.0s, and the two largest pieces of it were
+    # answers that only change when this run lands: the weeks-on-chart
+    # history (1,008 small archive reads) and poster art (279 lookups
+    # against three outside services). Both are resolved once here and
+    # read as a single object on the request path.
+    #
+    # Both run after the platform scrapers and the depth extension, so
+    # they describe the board this run just published, and both sit
+    # outside the coverage-gate block because neither depends on it.
+    # Non-fatal either way: a failure costs the old latency on the
+    # read side, never a wrong value, because the read side falls back
+    # to working it out itself whenever a published answer is missing
+    # or does not cover what it needs.
+    if 'streaming_reads' not in skip:
+        try:
+            from scripts.trends_scrapers import streaming_weeks_index
+            import trends_iq as _tiq
+            _swx_t0 = time.time()
+            _swx = streaming_weeks_index.rebuild(
+                [s for s, _, _ in _tiq.STREAMING_PLATFORMS])
+            logging.info(
+                "run_all: streaming weeks index in %.1fs "
+                "(%d platforms, %d titles, anchored %s, %d days covered)",
+                time.time() - _swx_t0, _swx['platforms'], _swx['titles'],
+                _swx['anchor_date'], _swx['cover_days'])
+        except Exception:
+            logging.exception("run_all: streaming weeks index crashed "
+                               "(non-fatal)")
+
+        try:
+            from scripts.trends_scrapers import streaming_poster_cache
+            _spc_t0 = time.time()
+            _spc = streaming_poster_cache.build()
+            logging.info(
+                "run_all: streaming poster art in %.1fs "
+                "(%d entries, %d with art, %d carried, %d resolved now, "
+                "%d refreshed)",
+                time.time() - _spc_t0, _spc['entries'], _spc['with_art'],
+                _spc['carried'], _spc['resolved_now'], _spc['refreshed'])
+        except Exception:
+            logging.exception("run_all: streaming poster art crashed "
+                               "(non-fatal)")
+
     _write_index(results)
 
     # ------------------------------------------------------------------
