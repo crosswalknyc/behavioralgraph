@@ -143,6 +143,8 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "UFC x Paramount+ story-mode tab bar (Journey IQ)"),
     ('id="jiqUfcCaseCard"',
      "UFC x Paramount+ story-mode case card (Journey IQ)"),
+    ('id="jiqUfcNestCard"',
+     "UFC x Paramount+ nest walk card (Journey IQ)"),
     ('id="jiqSpeTabBar"',
      "SPE Cross-Window story-mode tab bar (Journey IQ)"),
     ('id="jiqSpeCaseCard"',

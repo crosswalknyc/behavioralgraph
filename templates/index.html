@@ -47946,12 +47946,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      Scope: US only. LatAm and Australia deal legs excluded.
                      ================================================================ -->
 
-                <div id="jiqUfcTabBar"
-                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
-                            background: linear-gradient(135deg, rgba(244,114,50,0.10) 0%, rgba(15,23,42,0.55) 100%);
-                            border: 1px solid rgba(244,114,50,0.32); border-radius: 8px;
-                            position: sticky; top: 0; z-index: 30;
-                            backdrop-filter: blur(6px);"></div>
+                <div id="jiqUfcTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
+
+                <div class="jiq-frag" id="jiqUfcNestCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqUfcNestMeta">Signup journey · Jan 1 to Aug 14, 2026</div>
+                            <h2 id="jiqUfcNestTitle">UFC<br>on Paramount+.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqUfcNestLead">Four kinds of fan. Only one of them is churning.</div>
+                            <p id="jiqUfcNestDeck">14,620,000 people watched UFC on Paramount+. They split three ways with nothing left over. A fourth group hit the paywall and never signed up.</p>
+                            <div class="jiq-frag-kpis" id="jiqUfcNestKpis"></div>
+                        </div>
+                        <div class="jiq-frag-art is-ini" id="jiqUfcNestArt"><span class="jiq-frag-art-ini">UFC</span></div>
+                    </div>
+                    <div id="jiqUfcNestHost"></div>
+                </div>
 
                 <div class="card" id="jiqUfcCaseCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
@@ -84114,6 +84123,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _jiqHideCard('jiqUfcSegmentsCard');
             _jiqHideCard('jiqUfcReadCard');
             _jiqHideCard('jiqUfcMethodologyCard');
+            _jiqHideCard('jiqUfcNestCard');
             _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
@@ -84295,21 +84305,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // journeys (A: existing subs, B: UFC-first sign-ups, C: paywall
             // bouncers) under the 7-year $7.7B UFC-Paramount+ deal.
             if (_isUfcStory) {
-                if (typeof renderJourneyIqUfcCase      === 'function') renderJourneyIqUfcCase(_pickClickstreamBlock('ufc_case'));
-                if (typeof renderJourneyIqUfcDiscovery === 'function') renderJourneyIqUfcDiscovery(_pickClickstreamBlock('ufc_discovery'));
-                if (typeof renderJourneyIqUfcJourneyA  === 'function') renderJourneyIqUfcJourneyA(_pickClickstreamBlock('ufc_journey_a'));
-                if (typeof renderJourneyIqUfcJourneyB  === 'function') renderJourneyIqUfcJourneyB(_pickClickstreamBlock('ufc_journey_b'));
-                if (typeof renderJourneyIqUfcJourneyC  === 'function') renderJourneyIqUfcJourneyC(_pickClickstreamBlock('ufc_journey_c'));
-                if (typeof renderJourneyIqUfcChurn     === 'function') renderJourneyIqUfcChurn(_pickClickstreamBlock('ufc_churn'));
-                if (typeof renderJourneyIqUfcSegments  === 'function') renderJourneyIqUfcSegments(_pickClickstreamBlock('ufc_segments'));
-                if (typeof renderJourneyIqUfcRead      === 'function') renderJourneyIqUfcRead(_pickClickstreamBlock('ufc_read'));
-                if (typeof renderJourneyIqUfcMethodology === 'function') renderJourneyIqUfcMethodology(_pickClickstreamBlock('ufc_methodology'));
+                if (typeof _jiqUfcHideOldCards === 'function') _jiqUfcHideOldCards();
+                if (typeof _jiqUfcPaintNestCover === 'function') _jiqUfcPaintNestCover();
                 if (typeof _jiqUfcActivateTab === 'function') {
                     var _ufcInitTab = (typeof _jiqUfcActiveTab !== 'undefined' && _jiqUfcActiveTab) || 'case';
                     _jiqUfcActivateTab(_ufcInitTab);
                 }
             } else {
                 if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+                _jiqHideCard('jiqUfcNestCard');
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -100319,7 +100323,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         function _jiqUfcShowCard(id) {
             var el = document.getElementById(id);
-            if (el) el.style.display = '';
+            if (el) el.style.display = 'none';
         }
 
         function _jiqUfcPanelChip() {
@@ -100343,15 +100347,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         var _JIQ_UFC_TABS = [
-            { id: 'case',       label: 'Case',           emoji: '\ud83e\udd4a' },
-            { id: 'discovery',  label: 'Discovery',      emoji: '\ud83d\udd0e' },
-            { id: 'journey_a',  label: 'Journey A: Subs', emoji: '\ud83c\udfa5' },
-            { id: 'journey_b',  label: 'Journey B: New sign-ups', emoji: '\ud83d\udd11' },
-            { id: 'journey_c',  label: 'Journey C: Paywall', emoji: '\ud83d\udeab' },
-            { id: 'churn',      label: 'Churn',          emoji: '\ud83d\udcc9' },
-            { id: 'segments',   label: 'Segments',       emoji: '\ud83d\udc65' },
-            { id: 'read',        label: 'The read',       emoji: '\ud83e\uddd5' },
-            { id: 'methodology', label: 'Methodology',    emoji: '\ud83d\udd2c' }
+            { id: 'case',        label: 'The case' },
+            { id: 'discovery',   label: 'Discovery' },
+            { id: 'journey_b',   label: 'Clip path' },
+            { id: 'journey_a',   label: 'Already on Paramount+' },
+            { id: 'journey_c',   label: 'Hit paywall, left' },
+            { id: 'churn',       label: 'Retention' },
+            { id: 'segments',    label: 'Who they are' },
+            { id: 'read',        label: 'The read' },
+            { id: 'methodology', label: 'How we counted' }
         ];
         var _jiqUfcActiveTab = 'case';
 
@@ -100359,20 +100363,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var bar = document.getElementById('jiqUfcTabBar');
             if (!bar) return;
             var active = (typeof _jiqUfcActiveTab !== 'undefined' && _jiqUfcActiveTab) || _JIQ_UFC_TABS[0].id;
-            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">'
-                + _JIQ_UFC_TABS.map(function(t, i) {
-                    var isActive = (t.id === active);
-                    return '<button type="button" data-ufc-tab="' + t.id + '" '
-                        + 'onclick="_jiqUfcActivateTab(\'' + t.id + '\')" '
-                        + 'style="padding:0.3rem 0.68rem; border-radius:999px; cursor:pointer; '
-                        +        'font-size:0.72rem; font-weight:700; '
-                        +        'border:1px solid ' + (isActive ? 'rgba(244,114,50,0.68)' : 'rgba(148,163,184,0.25)') + '; '
-                        +        'background:' + (isActive ? 'linear-gradient(135deg, rgba(244,114,50,0.28), rgba(244,114,50,0.14))' : 'rgba(15,23,42,0.35)') + '; '
-                        +        'color:' + (isActive ? '#fed7aa' : '#cbd5e1') + ';">'
-                        + t.emoji + ' ' + _jiqEsc(t.label)
-                        + '</button>';
+            bar.className = 'jiq-ufc-tabbar';
+            bar.innerHTML = '<div class="jiq-ufc-pills">'
+                + _JIQ_UFC_TABS.map(function(t) {
+                    var on = (t.id === active) ? ' is-on' : '';
+                    return '<button type="button" class="' + on + '" data-ufc-tab="' + t.id + '" '
+                        + 'onclick="_jiqUfcActivateTab(\'' + t.id + '\')">'
+                        + _jiqEsc(t.label) + '</button>';
                 }).join('')
-                + '</div>';
+                + '</div><div class="jiq-ufc-tabmeta">' + _jiqUfcPanelChip() + '</div>';
             bar.style.display = '';
         }
 
@@ -100380,20 +100379,552 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var match = _JIQ_UFC_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_UFC_TABS[0];
             _jiqUfcActiveTab = match.id;
-            _JIQ_UFC_TABS.forEach(function(t) {
-                var cardId = 'jiqUfc' + t.id.split('_').map(function(p) { return p.charAt(0).toUpperCase() + p.slice(1); }).join('') + 'Card';
-                var el = document.getElementById(cardId);
-                if (el) el.style.display = (t.id === match.id) ? '' : 'none';
-            });
+            _jiqUfcHideOldCards();
+            _jiqUfcPaintNestCover();
+            var host = document.getElementById('jiqUfcNestHost');
+            var paint = _JIQ_UFC_NEST_RENDER && _JIQ_UFC_NEST_RENDER[match.id];
+            if (host && paint) host.innerHTML = paint();
             _jiqUfcRenderTabBar();
         }
 
         function _jiqUfcHideTabBar() {
             var bar = document.getElementById('jiqUfcTabBar');
             if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+            _jiqHideCard('jiqUfcNestCard');
         }
 
-        // ---- CSV builder ------------------------------------------------
+        function _jiqUfcPeople(m) {
+            return Math.round(Number(m) * 1e6 + 1e-6);
+        }
+        function _jiqUfcMoney(n) {
+            var v = Number(n);
+            var s = v.toFixed(2);
+            return '$' + s;
+        }
+        function _jiqUfcPct1(n) {
+            return (Math.round(Number(n) * 10) / 10) + '%';
+        }
+        function _jiqUfcNestSpine(rows) {
+            return rows.map(function(s, i) {
+                return _jiqUfcNestStep(s, {
+                    base: i === 0,
+                    terminal: i === rows.length - 1,
+                    next: rows[i + 1]
+                });
+            }).join('');
+        }
+        function _jiqUfcNestBridge(s, opts) {
+            opts = opts || {};
+            if (!s || s.kept == null) return '';
+            var keepW = Math.max(0.6, Math.min(100, Number(s.kept)));
+            var barColor = opts.orchid ? '#E682FF' : '';
+            var lost = (!s.dropped) ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragNum(s.dropped) + ' dropped off</span>';
+            var label = opts.keepLabel || ('Only ' + _jiqUfcPct1(s.kept) + ' kept going');
+            return '<div class="jiq-frag-bridge' + (opts.branch ? ' is-branch' : '') + (opts.orchid ? ' jiq-ufc-wall-share' : '') + '">'
+                + '<div class="jiq-frag-rail"></div><div class="jiq-frag-body">'
+                + '<div class="jiq-frag-track"><div class="jiq-frag-keep" style="width:' + keepW + '%;'
+                + (barColor ? 'background:' + barColor + ';' : '') + '"></div></div>'
+                + '<div class="jiq-frag-foot"><span class="jiq-frag-kept">' + _jiqFragEsc(label) + '</span>'
+                + lost + '</div></div></div>';
+        }
+        function _jiqUfcNestStep(s, opts) {
+            opts = opts || {};
+            var sub = [s.doing, s.where].filter(Boolean).join(' \u00b7 ');
+            var html = '<div class="jiq-frag-step' + (opts.branch ? ' is-branch' : '')
+                + (opts.terminal ? ' is-terminal' : '') + (opts.total ? ' jiq-frag-total' : '') + '">'
+                + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
+                + '<div class="jiq-frag-line"><span class="jiq-frag-label">' + _jiqFragEsc(s.label) + '</span>'
+                + '<span class="jiq-frag-count">' + _jiqFragNum(s.accounts) + '</span></div>'
+                + (sub ? '<div class="jiq-frag-doing">' + _jiqFragEsc(sub) + '</div>' : '')
+                + (opts.base ? '<div class="jiq-frag-foot"><span class="jiq-frag-kept">Everyone in this journey</span></div>' : '')
+                + '</div></div>';
+            if (opts.next) html += _jiqUfcNestBridge(opts.next, { branch: opts.branch, keepLabel: opts.keepLabel });
+            return html;
+        }
+        function _jiqUfcNestSec(numLab, head, em) {
+            return '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + _jiqFragEsc(numLab) + '</div>'
+                + '<h3>' + _jiqFragEsc(head) + '</h3>'
+                + (em ? '<em>' + _jiqFragEsc(em) + '</em>' : '') + '</div>';
+        }
+        function _jiqUfcNestRead(s) {
+            return '<p class="jiq-frag-read">' + _jiqFragEsc(s) + '</p>';
+        }
+        function _jiqUfcNestDetours(tables, wide) {
+            return tables.map(function(t) {
+                var top = t.rows.reduce(function(m, r) {
+                    return Math.max(m, r.v != null ? r.v : r.accounts);
+                }, 1);
+                return '<div class="jiq-frag-det"><h5>' + _jiqFragEsc(t.title) + '</h5>'
+                    + t.rows.map(function(r) {
+                        var val = r.v != null ? r.v : r.accounts;
+                        var w = Math.max(1, Math.round(100 * val / top));
+                        var shown = r.show != null ? r.show : _jiqFragNum(r.accounts);
+                        return '<div class="jiq-frag-detrow' + (wide ? ' is-wide' : '') + '">'
+                            + '<span class="jiq-frag-detlab' + (wide ? ' is-wrap' : '') + '">' + _jiqFragEsc(r.label) + '</span>'
+                            + '<span class="jiq-frag-detbar"><i style="width:' + w + '%;"></i></span>'
+                            + '<span class="jiq-frag-detval">' + shown + '</span></div>';
+                    }).join('')
+                    + '</div>';
+            }).join('');
+        }
+        function _jiqUfcFunnelRows(funnel, labels, doings) {
+            return (funnel || []).map(function(step, i) {
+                var next = funnel[i + 1];
+                var accounts = _jiqUfcPeople(step.count_m);
+                var row = {
+                    label: (labels && labels[i]) || step.label,
+                    doing: (doings && doings[i]) || '',
+                    accounts: accounts
+                };
+                if (next) {
+                    var nextA = _jiqUfcPeople(next.count_m);
+                    row.kept = Math.round((nextA / accounts) * 1000) / 10;
+                    row.dropped = Math.max(0, accounts - nextA);
+                }
+                return row;
+            });
+        }
+        function _jiqUfcHideOldCards() {
+            [
+                'jiqUfcCaseCard', 'jiqUfcDiscoveryCard', 'jiqUfcJourneyACard',
+                'jiqUfcJourneyBCard', 'jiqUfcJourneyCCard', 'jiqUfcChurnCard',
+                'jiqUfcSegmentsCard', 'jiqUfcReadCard', 'jiqUfcMethodologyCard'
+            ].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+        function _jiqUfcPaintNestCover() {
+            var d = _JIQ_UFC_DATA || {};
+            var uni = (d.ufc_case && d.ufc_case.universe_decomposition) || {};
+            var parts = uni.parts || [];
+            var a = parts.filter(function(p) { return p.id === 'A'; })[0];
+            var b = parts.filter(function(p) { return p.id === 'B'; })[0];
+            var c = d.ufc_journey_c || {};
+            var watched = _jiqUfcPeople(uni.total_m || 14.62);
+            var first = _jiqUfcPeople((b && b.count_m) || 3.14);
+            var already = _jiqUfcPeople((a && a.count_m) || 8.42);
+            var never = _jiqUfcPeople(c.terminal_pool_m || 5.33);
+            var kpis = document.getElementById('jiqUfcNestKpis');
+            if (kpis) {
+                kpis.innerHTML = [
+                    { l: 'Watched UFC on Paramount+', v: watched },
+                    { l: 'Signed up, first watch was UFC', v: first },
+                    { l: 'Already subscribed, then watched', v: already },
+                    { l: 'Opened UFC, left at signup, never came back', v: never, hot: true }
+                ].map(function(k) {
+                    return '<div class="jiq-frag-kpi' + (k.hot ? ' is-hot' : '') + '">'
+                        + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(k.l) + '</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqFragNum(k.v) + '</div></div>';
+                }).join('');
+            }
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
+            var nest = document.getElementById('jiqUfcNestCard');
+            if (nest) nest.style.display = '';
+        }
+        function _jiqUfcNestCase() {
+            var d = _JIQ_UFC_DATA || {};
+            var uni = (d.ufc_case && d.ufc_case.universe_decomposition) || {};
+            var parts = uni.parts || [];
+            var a = parts.filter(function(p) { return p.id === 'A'; })[0] || { count_m: 8.42, pct: 57.6 };
+            var a2 = parts.filter(function(p) { return p.id === 'A2'; })[0] || { count_m: 3.06, pct: 20.9 };
+            var b = parts.filter(function(p) { return p.id === 'B'; })[0] || { count_m: 3.14, pct: 21.5 };
+            var ja = d.ufc_journey_a || {};
+            var jb = d.ufc_journey_b || {};
+            var jc = d.ufc_journey_c || {};
+            var events = ((d.panel_basis || {}).events_covered_ytd) || [];
+            var eventRows = events.map(function(ev) {
+                var hot = /Freedom 250/i.test(ev.code || '');
+                return '<tr' + (hot ? ' class="is-hot"' : '') + '>'
+                    + '<td>' + _jiqFragEsc(ev.code) + '</td>'
+                    + '<td>' + _jiqFragEsc((ev.date || '').replace(', 2026', '')) + '</td>'
+                    + '<td class="m">' + _jiqFragEsc(ev.headline) + '</td>'
+                    + '<td class="r">' + _jiqFragNum(_jiqUfcPeople(ev.us_avg_viewers_m)) + '</td>'
+                    + '<td class="r">' + _jiqFragNum(_jiqUfcPeople(ev.us_peak_concurrent_m)) + '</td>'
+                    + '<td class="r">' + _jiqFragNum(_jiqUfcPeople(ev.us_viewers_reached_m)) + '</td>'
+                    + '</tr>';
+            }).join('');
+            var post = ja.post_watch_behavior || [];
+            function postPct(prefix) {
+                var row = post.filter(function(r) { return (r.behavior || '').indexOf(prefix) === 0; })[0];
+                return row ? row.pct : 0;
+            }
+            var aN = _jiqUfcPeople(a.count_m);
+            var south = postPct('Watched South Park');
+            var keepNon = postPct('Continued P+ engagement');
+            var d30 = ((jb.engagement_30d || [])[0] || {}).pct_of_cohort;
+            var d90 = ((d.ufc_churn || {}).benchmarks || [])[0] || {};
+            var rec14 = ((jc.longer_tail_14d || [])[0] || {}).pct;
+            var adTier = (jb.plan_mix || {}).essential_ad_pct;
+            var zeroNon = 100 - ((((jb.engagement_30d || [])[1] || {}).pct_of_cohort) || 43.3);
+            var neverBack = ((jc.longer_tail_14d || []).filter(function(r) { return /Never returned/i.test(r.outcome || ''); })[0] || {}).pct;
+            var social24 = ((jc.immediate_reactions_24h || []).filter(function(r) { return /official social/i.test(r.action || ''); })[0] || {});
+            return _jiqUfcNestSec('01 The case', 'Three cohorts watched. A fourth opened UFC, hit signup, and left.', _jiqFragNum(_jiqUfcPeople(uni.total_m || 14.62)) + ' splits three ways with nothing left over. People who never signed up sit outside that total.')
+                + '<div class="jiq-ufc-uni">'
+                + '<div class="jiq-ufc-uni-seg is-a" style="flex:' + a.pct + '">A \u00b7 ' + a.pct + '%</div>'
+                + '<div class="jiq-ufc-uni-seg is-a2" style="flex:' + a2.pct + '">A2 \u00b7 ' + a2.pct + '%</div>'
+                + '<div class="jiq-ufc-uni-seg is-b" style="flex:' + b.pct + '">B \u00b7 ' + b.pct + '%</div>'
+                + '</div>'
+                + '<div class="jiq-ufc-uni-cap">'
+                + '<div><b>' + _jiqFragNum(_jiqUfcPeople(a.count_m)) + '</b><span>Already subscribed before Jan 1, then watched UFC.</span></div>'
+                + '<div><b>' + _jiqFragNum(_jiqUfcPeople(a2.count_m)) + '</b><span>Joined in-window for something else, then watched UFC.</span></div>'
+                + '<div><b>' + _jiqFragNum(_jiqUfcPeople(b.count_m)) + '</b><span>Joined in-window and the first watch was UFC.</span></div>'
+                + '</div>'
+                + _jiqUfcNestRead('Do not add people who never signed up into ' + _jiqFragNum(_jiqUfcPeople(uni.total_m || 14.62)) + '. A person who left at the signup page never produced a UFC playback session.')
+                + _jiqUfcNestSec('The cards that aired', 'Freedom 250 was the largest single UFC audience on Paramount+ in the window.', 'Six numbered cards, 19 Fight Nights, and the one-off White House card.')
+                + '<table class="jiq-ufc-tbl"><thead><tr><th>Event</th><th>Date</th><th>Headline</th><th class="r">Avg viewers</th><th class="r">Peak</th><th class="r">Reached</th></tr></thead><tbody>'
+                + eventRows + '</tbody></table>'
+                + _jiqUfcNestRead('43.8% of US UFC fans already had Paramount+ activity before the deal. The UFC-first cohort is 9.9 years younger than the pre-UFC Paramount+ base.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'What holds', rows: [
+                        { label: 'Already-subscribed kept watching non-UFC within 30 days', accounts: Math.round(aN * keepNon / 100), show: _jiqUfcPct1(keepNon) },
+                        { label: 'South Park within 7 days of first UFC, already-subscribed', accounts: Math.round(aN * south / 100), show: _jiqUfcPct1(south) },
+                        { label: 'UFC-first still subscribed at day 30', accounts: d30 || 76.2, v: d30 || 76.2, show: _jiqUfcPct1(d30 || 76.2) },
+                        { label: 'UFC-first still subscribed at day 90', accounts: d90.observed_pct || 62.4, v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
+                        { label: 'Signed up within 14 days after leaving the paywall', accounts: rec14 || 20.5, v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
+                    ]},
+                    { title: 'What is leaking', rows: [
+                        { label: 'UFC-first watched zero non-UFC in the first 30 days', accounts: zeroNon, v: zeroNon, show: _jiqUfcPct1(zeroNon) },
+                        { label: 'Left the paywall and never came back to Paramount+', accounts: neverBack || 69.3, v: neverBack || 69.3, show: _jiqUfcPct1(neverBack || 69.3) },
+                        { label: 'Went to UFC official social after leaving the paywall', accounts: _jiqUfcPeople(social24.count_m || 4.42), show: _jiqFragNum(_jiqUfcPeople(social24.count_m || 4.42)) },
+                        { label: 'UFC-first picked the $8.99 ad tier', accounts: adTier || 78.4, v: adTier || 78.4, show: _jiqUfcPct1(adTier || 78.4) },
+                        { label: 'Day-90 gap to the strongest sports-led signups', accounts: d90.gap_pp || 8.9, v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
+                    ]}
+                ])
+                + '</div>';
+        }
+        function _jiqUfcNestDiscovery() {
+            var dis = (_JIQ_UFC_DATA || {}).ufc_discovery || {};
+            var rows = (dis.channels || []).map(function(ch) {
+                var short = (ch.channel || '').split(' (')[0];
+                return {
+                    label: short,
+                    accounts: _jiqUfcPeople(ch.reach_m),
+                    show: _jiqUfcPct1(ch.share_pct) + ' \u00b7 ' + _jiqFragNum(_jiqUfcPeople(ch.reach_m))
+                };
+            });
+            return _jiqUfcNestSec('02 Discovery', 'One channel accounts for a third of first exposure.', _jiqFragNum(_jiqUfcPeople(dis.total_first_exposure_m || 34.57)) + ' people. First UFC-on-Paramount+ touch, nine channels, ranked.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First-exposure channel', rows: rows }], true)
+                + '</div>'
+                + _jiqUfcNestRead('Official UFC clips drive 41.2% of UFC-first first exposures. People already on Paramount+ split between UFC social (26.4%) and in-app surfaces (22.1%). The two audiences do not share one discovery funnel. CBS promo only counts through Super Bowl Sunday.');
+        }
+        function _jiqUfcNestClip() {
+            var jb = (_JIQ_UFC_DATA || {}).ufc_journey_b || {};
+            var funnel = jb.funnel || [];
+            var nest = [funnel[0], funnel[2], funnel[3]].filter(Boolean);
+            var rows = _jiqUfcFunnelRows(nest, [
+                'Saw a UFC-on-Paramount+ clip',
+                'Opened the Paramount+ UFC page',
+                'Subscribed, first watch was UFC'
+            ], [
+                'First UFC-on-Paramount+ clip on the person',
+                'Unauth UFC event page or paywall',
+                'Paramount+ checkout, first play was UFC'
+            ]);
+            var eng = jb.engagement_30d || [];
+            var pay = jb.payment_mix || [];
+            var first = jb.first_event || [];
+            var plan = jb.plan_mix || {};
+            return _jiqUfcNestSec('03 From the clip to the signup', 'Most people who saw a clip did not open the Paramount+ UFC page.', 'Each bar is how many people from the last step kept going.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
+                + _jiqUfcNestRead(_jiqFragNum(_jiqUfcPeople((funnel[1] || {}).count_m || 6.24)) + ' searched UFC on Paramount+ after the clip. That sits beside this nest, not inside the kept-going bars. Checkout and first UFC watch are the same ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' people.')
+                + _jiqUfcNestSec('After they signed up', 'Cross-content is the retention problem.', 'Both rows are of the ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' UFC-first signups.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'First 30 days', rows: eng.map(function(r) {
+                        return { label: r.label.replace('\u22651 ', 'a ').replace(' P+ title', ' title'), accounts: _jiqUfcPeople(r.count_m), show: _jiqFragNum(_jiqUfcPeople(r.count_m)) + ' \u00b7 ' + _jiqUfcPct1(r.pct_of_cohort) };
+                    })},
+                    { title: 'Plan and payment', rows: [
+                        { label: 'Essential $8.99 ad tier', accounts: plan.essential_ad_pct || 78.4, v: plan.essential_ad_pct || 78.4, show: _jiqUfcPct1(plan.essential_ad_pct || 78.4) },
+                        { label: 'Premium $13.99', accounts: plan.premium_no_ad_pct || 21.6, v: plan.premium_no_ad_pct || 21.6, show: _jiqUfcPct1(plan.premium_no_ad_pct || 21.6) },
+                        { label: 'Used a promo code at checkout', accounts: jb.promo_code_usage_pct || 22.8, v: jb.promo_code_usage_pct || 22.8, show: _jiqUfcPct1(jb.promo_code_usage_pct || 22.8) }
+                    ].concat(pay.map(function(p) {
+                        return { label: p.method, accounts: p.pct, v: p.pct, show: _jiqUfcPct1(p.pct) };
+                    }))}
+                ])
+                + '</div>'
+                + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">UFC-first value</div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
+                + '<div class="jiq-ufc-stat-hero-l">' + _jiqUfcMoney(jb.blended_monthly_arpu || 10.07) + ' blended monthly across 4.8 months.</div>'
+                + '<div class="jiq-ufc-stat-hero-s">78.4% Essential at $8.99 and 21.6% Premium at $13.99. This is the figure used on both ends of every dollar range in the read.</div></div>'
+                + _jiqUfcNestSec('First UFC card they signed up on', _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' UFC-first signups. One first card each.', 'Unique US viewers. Five rows add to ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + '.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'First card', rows: first.map(function(r) {
+                        return { label: r.event.replace(' (White House, Jun 14)', ' (White House)').replace(' (McGregor vs Holloway 2, Jul 11)', ' (McGregor vs Holloway 2)').replace(' (Gaethje-Pimblett, Jan 24)', ' (Gaethje vs Pimblett)').replace('Other numbered events (325, 326, 327, 328)', 'Other numbered cards (325 to 328)').replace('UFC Fight Nights (19 events combined)', 'UFC Fight Nights (19 cards)'), accounts: _jiqUfcPeople(r.signups_m), show: _jiqFragNum(_jiqUfcPeople(r.signups_m)) + ' \u00b7 ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
+                    })},
+                    { title: 'Off this nest', rows: [
+                        { label: 'Searched UFC on Paramount+ after the clip', accounts: _jiqUfcPeople((funnel[1] || {}).count_m || 6.24) },
+                        { label: 'Joined for something else, then watched UFC', accounts: _jiqUfcPeople(3.06) },
+                        { label: 'Already subscribed, then watched UFC', accounts: _jiqUfcPeople(8.42) }
+                    ]}
+                ])
+                + '</div>';
+        }
+        function _jiqUfcNestInside() {
+            var ja = (_JIQ_UFC_DATA || {}).ufc_journey_a || {};
+            var rows = _jiqUfcFunnelRows(ja.funnel || [], [
+                'Active on Paramount+ before Jan 1',
+                'Saw a UFC surface in the app',
+                'Clicked a UFC page',
+                'Watched a first UFC card',
+                'Watched a second card within 30 days',
+                'Watched 3 or more cards by Aug 14'
+            ], [
+                'Authenticated activity before the deal',
+                'Home row, email, or push',
+                'UFC preview or event page',
+                'Live or same-day',
+                'Came back for another event',
+                'Regular UFC watcher'
+            ]);
+            var aN = _jiqUfcPeople(ja.cohort_size_m || 8.42);
+            var post = ja.post_watch_behavior || [];
+            return _jiqUfcNestSec('04 Already on Paramount+', 'UFC is additive for people already subscribed. It is not a substitute.', 'This nest starts at people already on Paramount+. It does not start at US gen pop.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
+                + _jiqUfcNestSec('After the first card', '91.6% kept watching non-UFC titles.', 'Shares of the ' + _jiqFragNum(aN) + ' already-subscribed UFC watchers. Rows overlap.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([{ title: 'Within 30 days of first UFC', rows: post.map(function(r) {
+                    var lab = r.behavior
+                        .replace('Continued P+ engagement on non-UFC content within 30d', 'Kept watching non-UFC titles')
+                        .replace('Watched South Park within 7d of first UFC watch', 'Watched South Park within 7 days')
+                        .replace('Watched Landman within 30d', 'Watched Landman within 30 days')
+                        .replace('Streamed live CBS-via-P+ (Premium tier only)', 'Streamed live CBS through Paramount+')
+                        .replace('Explored the UFC library (past cards, Contender Series, TUF)', 'Opened the UFC library')
+                        .replace('Signed up for UFC Fight Pass separately (leakage)', 'Bought UFC Fight Pass as well')
+                        .replace('Cancelled P+ within 90d', 'Cancelled within 90 days');
+                    return { label: lab, accounts: Math.round(aN * r.pct / 100), show: _jiqFragNum(Math.round(aN * r.pct / 100)) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
+                })}])
+                + '</div>'
+                + _jiqUfcNestRead('South Park indexes 2.4x the pre-UFC Paramount+ base for that title. Landman indexes 1.17x. Cancel sits near the rest of the service. UFC did not speed up cancellation among people who were already subscribed.');
+        }
+        function _jiqUfcNestWall() {
+            var jc = (_JIQ_UFC_DATA || {}).ufc_journey_c || {};
+            var bounce = _jiqUfcPeople(jc.cohort_size_m || 6.71);
+            var never = _jiqUfcPeople(jc.terminal_pool_m || 5.33);
+            var outcomes = jc.longer_tail_14d || [];
+            var html = _jiqUfcNestSec('05 Hit the paywall and left', _jiqFragNum(bounce) + ' opened a UFC page, saw they had to pay, and left.', 'This is not the drop-off from the clip path. ' + _jiqFragNum(_jiqUfcPeople(3.78)) + ' opened the page in that nest. This group is its own count.')
+                + '<div class="jiq-ufc-wall-hero"><div class="jiq-ufc-wall-hero-k">Opened UFC on Paramount+ with no subscription</div>'
+                + '<div class="jiq-ufc-wall-hero-v">' + _jiqFragNum(bounce) + '</div>'
+                + '<div class="jiq-ufc-wall-hero-l">Hit the signup page and left without paying in that visit.</div>'
+                + '<div class="jiq-ufc-wall-hero-s">' + _jiqFragNum(_jiqUfcPeople((outcomes[0] || {}).count_m || 1.38)) + ' of them signed up within 14 days. ' + _jiqFragNum(never) + ' never did. Every recover read uses the ' + _jiqFragNum(never) + ' who never signed up.</div></div>'
+                + '<div class="jiq-ufc-pad"><div class="jiq-frag-branchnote">14-day outcome, one person each</div>';
+            outcomes.forEach(function(o, i) {
+                var lab = (o.outcome || '')
+                    .replace('Converted to a Paramount+ signup within 14d', 'Signed up within 14 days')
+                    .replace('Returned to P+ but did not convert within 14d', 'Came back, still no signup')
+                    .replace('Bought a UFC Fight Pass subscription instead', 'Bought UFC Fight Pass instead')
+                    .replace('Never returned to Paramount+ within 14d', 'Never returned to Paramount+');
+                var doing = i === 0 ? 'Later sit in the UFC-first nest or joined for something else'
+                    : i === 1 ? 'Returned to a Paramount+ UFC page and left again'
+                    : i === 2 ? "Left Paramount+ for UFC's own product"
+                    : 'No second Paramount+ visit within 14 days';
+                html += _jiqUfcNestStep({ label: lab, doing: doing, accounts: _jiqUfcPeople(o.count_m) }, { branch: true, terminal: i === outcomes.length - 1 });
+                html += _jiqUfcNestBridge({ kept: o.pct, dropped: 0 }, { branch: true, orchid: true, keepLabel: _jiqUfcPct1(o.pct) + ' who left at the paywall' });
+            });
+            html += _jiqUfcNestStep({ label: 'Never converted', doing: 'Came back with no signup + Fight Pass + never returned', accounts: never }, { branch: true, terminal: true, total: true })
+                + '</div>'
+                + _jiqUfcNestRead('Four 14-day outcomes, one person each, adding to ' + _jiqFragNum(bounce) + '. The bottom three are the ' + _jiqFragNum(never) + ' who never signed up.')
+                + _jiqUfcNestSec('What they did in the first 24 hours', 'They settled for the clip more than they signed up that day.', 'One person can sit on more than one row. These do not add to ' + _jiqFragNum(bounce) + '.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First 24 hours after they left the signup page', rows: (jc.immediate_reactions_24h || []).slice(1).map(function(r) {
+                    var lab = (r.action || '')
+                        .replace('Visited UFC official social account (YouTube / TikTok / Instagram)', 'Went to UFC official social')
+                        .replace(/Watched \u22651 official UFC clip on social \(as substitute for the live event\)/, 'Watched an official UFC clip as the event')
+                        .replace('Searched "UFC free stream" / "watch UFC 324 reddit" / free-stream terms', 'Searched a free stream')
+                        .replace('Searched "Paramount+ promo code" / "P+ discount" / coupon terms', 'Hunted a Paramount+ promo code')
+                        .replace('Attempted mirror / pirate site (buffstream, mmastreams.click, methstreams)', 'Tried a pirate domain')
+                        .replace('Checked P+ password sharing (existing family / friend sub)', 'Checked a family or friend login')
+                        .replace('Signed up for Paramount+ within 24h anyway', 'Signed up within 24 hours');
+                    return { label: lab, accounts: _jiqUfcPeople(r.count_m), show: _jiqFragNum(_jiqUfcPeople(r.count_m)) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
+                }) }], true)
+                + '</div>'
+                + _jiqUfcNestSec('Where they hunted a cheaper door', 'Promo-code and free-trial searches after they left the signup page.', 'Overlap. Unique US viewers.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Promo-code destinations', rows: (jc.promo_hunt_destinations || []).map(function(r) {
+                        var lab = (r.destination || '')
+                            .replace('Reddit r/frugalstreaming, r/streaming', 'Reddit streaming deal threads')
+                            .replace('Direct search "saveannual50"', 'Searched the annual discount code')
+                            .replace('Student discount (SheerID) landing', 'Student discount landing');
+                        return { label: lab, accounts: _jiqUfcPeople(r.count_m) };
+                    })},
+                    { title: 'Free-trial hunt', rows: [
+                        { label: 'Searched Paramount+ free trial', accounts: _jiqUfcPeople(jc.free_trial_hunt_m || 0.87) }
+                    ]}
+                ])
+                + '</div>'
+                + _jiqUfcNestRead(_jiqFragNum(never) + ' never signed up. ' + _jiqFragNum(_jiqUfcPeople(4.42)) + ' of the people who left the paywall went to a UFC official social surface within 24 hours. They already showed UFC intent. There is no signup ask on that surface.');
+            return html;
+        }
+        function _jiqUfcNestRetention() {
+            var ch = (_JIQ_UFC_DATA || {}).ufc_churn || {};
+            var curve = ch.retention_curve || [];
+            var bench = ch.benchmark_curve || [];
+            var benchBy = {};
+            bench.forEach(function(b) { benchBy[b.day] = b.retention_pct; });
+            var rows = curve.map(function(r) {
+                var hot = r.day === 90;
+                return '<tr' + (hot ? ' class="is-hot"' : '') + '>'
+                    + '<td>Day ' + r.day + '</td>'
+                    + '<td class="r">' + _jiqUfcPct1(r.retention_pct) + '</td>'
+                    + '<td class="r">' + _jiqFragNum(_jiqUfcPeople(r.observed_base_m)) + '</td>'
+                    + '<td class="r">' + _jiqUfcPct1(r.base_pct_of_cohort) + '</td>'
+                    + '<td class="r">' + _jiqUfcPct1(benchBy[r.day] || '') + '</td></tr>';
+            }).join('');
+            var dest = ch.where_they_go_next_30d || [];
+            var sig = ch.top_churn_indicators_day30 || [];
+            return _jiqUfcNestSec('06 Retention', 'UFC-first retention trails the strongest sports-led signups by 8.9 points at day 90.', 'Every checkpoint prints the people it was observed on.')
+                + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3,140,000</th><th class="r">Strongest sports-led</th></tr></thead><tbody>'
+                + rows + '</tbody></table>'
+                + _jiqUfcNestRead('Day 90 is the gap to act on: 8.9 points, observed on more than half the cohort. Day 180 is 18.0 points, but only the 40.8% who signed up before mid-February can have that reading. Mean tenure is 4.8 months.')
+                + _jiqUfcNestSec('What predicts cancel', 'Churn concentrates in people who watched nothing but UFC.', 'Index against the UFC-first cancel rate. Above 1 means more cancel.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Day-30 signals', rows: sig.map(function(s) {
+                        return { label: (s.indicator || '').replace('Zero non-UFC content watched in first 30d', 'Zero non-UFC content in the first 30 days').replace('Only 1 UFC event watched (not 2+) in first 30d', 'Only one UFC card in the first 30 days').replace('Signed up via mobile carrier billing (T-Mobile / Verizon)', 'Signed up on carrier billing').replace('Age 18-24 at signup', 'Age 18-24 at signup').replace('No 4+ hour continuous session in first 7 days', 'No 4-hour session in the first 7 days').replace('Chose Essential ad-tier ($8.99) vs Premium', 'Chose the $8.99 ad tier').replace('No CBS-live-via-Paramount+ session (Premium tier)', 'No CBS-live session on Premium').replace('Signed up on Wed-Fri of fight-week (vs Sat event-day)', 'Signed up Wed-Fri of fight week').replace('Paid via promo code (saveannual50 or similar)', 'Paid with a promo code'), accounts: Math.round(s.churn_index * 100), v: s.churn_index, show: s.churn_index.toFixed(2) + 'x' };
+                    })},
+                    { title: 'Where ' + _jiqFragNum(_jiqUfcPeople(ch.churner_base_m || 1.42)) + ' cancellers went', rows: dest.map(function(r) {
+                        var lab = (r.destination || '')
+                            .replace('No new streaming sub added (unsubscribed universe)', 'No new streaming sub')
+                            .replace('Return to P+ within 90 days (churn-and-return)', 'Back to Paramount+ within 90 days')
+                            .replace('Netflix (already had it, deepened usage)', 'Netflix, already had it')
+                            .replace('YouTube Premium (free UFC clips + more storage)', 'YouTube Premium')
+                            .replace('DAZN (boxing, combat sports adjacent)', 'DAZN')
+                            .replace('ESPN Unlimited / ESPN+', 'ESPN Unlimited');
+                        return { label: lab, accounts: _jiqUfcPeople(r.count_m), show: _jiqFragNum(_jiqUfcPeople(r.count_m)) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
+                    })}
+                ])
+                + '</div>'
+                + _jiqUfcNestRead(((ch.return_pattern && ch.return_pattern.return_within_60d_pct) || 52.6) + '% of UFC-first cancellers came back for the next major card within 60 days. The largest destination is no new sub at all.');
+        }
+        function _jiqUfcNestSegments() {
+            var segs = ((_JIQ_UFC_DATA || {}).ufc_segments || {}).journeys || [];
+            var A = segs.filter(function(j) { return j.id === 'A'; })[0] || {};
+            var B = segs.filter(function(j) { return j.id === 'B'; })[0] || {};
+            var C = segs.filter(function(j) { return j.id === 'C'; })[0] || {};
+            function age18_34(j) {
+                var b = j.age_buckets || [];
+                return (b.filter(function(x) { return x.bucket === '18-24'; })[0] || {}).pct + (b.filter(function(x) { return x.bucket === '25-34'; })[0] || {}).pct;
+            }
+            function ageRows(j) {
+                return (j.age_buckets || []).map(function(b) {
+                    return { label: b.bucket, accounts: b.pct, v: b.pct, show: _jiqUfcPct1(b.pct) };
+                });
+            }
+            return _jiqUfcNestSec('07 Who they are', 'UFC-first is 9.9 years younger than the Paramount+ base before UFC.', 'Pre-UFC Paramount+ base: 45.2% male, mean age 44.6.')
+                + '<table class="jiq-ufc-tbl"><thead><tr><th></th><th class="r">Already subscribed</th><th class="r">UFC-first signup</th><th class="r">Never converted</th></tr></thead><tbody>'
+                + '<tr><td>People</td><td class="r">' + _jiqFragNum(_jiqUfcPeople(A.size_m)) + '</td><td class="r">' + _jiqFragNum(_jiqUfcPeople(B.size_m)) + '</td><td class="r">' + _jiqFragNum(_jiqUfcPeople(C.size_m)) + '</td></tr>'
+                + '<tr><td>Mean age</td><td class="r">' + A.avg_age + '</td><td class="r">' + B.avg_age + '</td><td class="r">' + C.avg_age + '</td></tr>'
+                + '<tr class="is-hot"><td>Age vs pre-UFC base</td><td class="r">' + A.vs_platform_age_delta + ' yrs</td><td class="r">' + B.vs_platform_age_delta + ' yrs</td><td class="r">' + C.vs_platform_age_delta + ' yrs</td></tr>'
+                + '<tr><td>Male</td><td class="r">' + _jiqUfcPct1(A.gender_male_pct) + '</td><td class="r">' + _jiqUfcPct1(B.gender_male_pct) + '</td><td class="r">' + _jiqUfcPct1(C.gender_male_pct) + '</td></tr>'
+                + '<tr><td>Income $100K+</td><td class="r">' + _jiqUfcPct1(A.income_100k_plus_pct) + '</td><td class="r">' + _jiqUfcPct1(B.income_100k_plus_pct) + '</td><td class="r">' + _jiqUfcPct1(C.income_100k_plus_pct) + '</td></tr>'
+                + '<tr><td>Ages 18-34</td><td class="r">' + _jiqUfcPct1(age18_34(A)) + '</td><td class="r">' + _jiqUfcPct1(age18_34(B)) + '</td><td class="r">' + _jiqUfcPct1(age18_34(C)) + '</td></tr>'
+                + '</tbody></table>'
+                + '<div class="jiq-frag-detours">'
+                + _jiqUfcNestDetours([
+                    { title: 'Already subscribed, age', rows: ageRows(A) },
+                    { title: 'UFC-first signup, age', rows: ageRows(B) },
+                    { title: 'Never converted, age', rows: ageRows(C) }
+                ])
+                + '</div>'
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Title index vs pre-UFC Paramount+', rows: [
+                        { label: 'South Park, already subscribed', accounts: 240, v: 240, show: '2.40x' },
+                        { label: 'South Park, UFC-first', accounts: 260, v: 260, show: '2.60x' },
+                        { label: 'Landman, already subscribed', accounts: 117, v: 117, show: '1.17x' },
+                        { label: 'Landman, UFC-first', accounts: 106, v: 106, show: '1.06x' },
+                        { label: 'NFL on CBS, already subscribed', accounts: 124, v: 124, show: '1.24x' },
+                        { label: 'NFL on CBS, UFC-first', accounts: 94, v: 94, show: '0.94x' },
+                        { label: 'Yellowstone / 1923, already subscribed', accounts: 108, v: 108, show: '1.08x' },
+                        { label: 'Star Trek, already subscribed', accounts: 96, v: 96, show: '0.96x' },
+                        { label: 'Star Trek, UFC-first', accounts: 68, v: 68, show: '0.68x' }
+                    ]},
+                    { title: 'Top states', rows: [
+                        { label: 'California, already subscribed', accounts: 148, v: 148, show: '14.8%' },
+                        { label: 'California, UFC-first', accounts: 154, v: 154, show: '15.4%' },
+                        { label: 'California, never converted', accounts: 162, v: 162, show: '16.2%' },
+                        { label: 'Texas, already subscribed', accounts: 114, v: 114, show: '11.4%' },
+                        { label: 'Texas, UFC-first', accounts: 128, v: 128, show: '12.8%' },
+                        { label: 'Texas, never converted', accounts: 134, v: 134, show: '13.4%' },
+                        { label: 'Florida, already subscribed', accounts: 82, v: 82, show: '8.2%' },
+                        { label: 'Florida, UFC-first', accounts: 86, v: 86, show: '8.6%' },
+                        { label: 'Florida, never converted', accounts: 91, v: 91, show: '9.1%' }
+                    ]}
+                ])
+                + '</div>'
+                + _jiqUfcNestRead('Already-subscribed is older and higher income, and they mix UFC into a broader Paramount+ diet. UFC-first is the youth buy: more male, more mobile, 24.3% arrived by peer share against 4.1% for already-subscribed. Never-converted is the same fan with less income and a free-first habit. No paid-title index for that group.');
+        }
+        function _jiqUfcNestReadTab() {
+            var rd = (_JIQ_UFC_DATA || {}).ufc_read || {};
+            var sizing = rd.sizing || [];
+            var ret = sizing[0] || {};
+            var acq = sizing[1] || {};
+            var imps = rd.implications || [];
+            function imp(kind, fallback) {
+                var row = imps.filter(function(i) { return (i.kind || '').indexOf(kind) >= 0; })[0];
+                return row ? row.body : fallback;
+            }
+            function shortImp(kind, fallback) {
+                var body = imp(kind, fallback);
+                var cut = body.split('. ').slice(0, 3).join('. ');
+                if (cut && cut.charAt(cut.length - 1) !== '.') cut += '.';
+                return cut;
+            }
+            return _jiqUfcNestSec('08 The read', 'Two levers are worth $21.06M to $28.79M inside the window.', 'Both are sized from the pages behind this one.')
+                + '<div class="jiq-ufc-levers">'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Retention</div><div class="jiq-ufc-lever-v">$' + (ret.value_usd_m || 10.75) + 'M</div>'
+                + '<div class="jiq-ufc-lever-l">Close half the day-90 gap.</div>'
+                + '<div class="jiq-ufc-lever-s">62.4% to 66.85%. Tenure 4.8 to 5.14 months. 0.34 months \u00d7 $10.07 \u00d7 3,140,000.</div></div>'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Acquisition</div><div class="jiq-ufc-lever-v">$' + (acq.value_usd_m_low || 10.31) + 'M to $' + (acq.value_usd_m_high || 18.04) + 'M</div>'
+                + '<div class="jiq-ufc-lever-l">Recover 4 to 7 points of people who left at the paywall and never signed up.</div>'
+                + '<div class="jiq-ufc-lever-s">4% to 7% of 5,330,000 is 213,000 to 373,000 people, each at the $48.34 UFC-first value.</div></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-imp">'
+                + '<div><h5>For content</h5><p>' + _jiqFragEsc(shortImp('CONTENT', '91.6% of already-subscribed UFC watchers kept watching non-UFC titles. South Park is the strongest bridge.')) + '</p></div>'
+                + '<div><h5>For acquisition</h5><p>' + _jiqFragEsc(shortImp('ACQUISITION', '812,000 signed up within 24 hours of leaving the paywall.')) + '</p></div>'
+                + '<div><h5>For retention</h5><p>' + _jiqFragEsc(shortImp('RETENTION', 'Zero non-UFC in the first 30 days is a 2.63x cancel index.')) + '</p></div>'
+                + '<div><h5>For the next card</h5><p>The age shift is not one number. UFC-first is 9.9 years younger. People who left at the paywall are 13.2. Already-subscribed is only 4.4. The buy lives in the first two. 4,420,000 who left the paywall are already on UFC social the same day. 430,000 came back to the signup page a second time and still did not convert.</p></div>'
+                + '</div>'
+                + _jiqUfcNestRead('14,620,000 watched. 8,420,000 were already in. 3,060,000 joined for something else. 3,140,000 joined for UFC. 5,330,000 showed intent and never converted. That is the whole file.');
+        }
+        function _jiqUfcNestMethod() {
+            return _jiqUfcNestSec('09 How we counted', 'Every number is unique US people in this window.', 'Jan 1 to Aug 14, 2026. One person, one ID.')
+                + _jiqUfcNestRead('14,620,000 watched UFC on Paramount+. They split three ways with nothing left over: already subscribed, joined for something else, or joined and the first watch was UFC. People who opened a UFC page, hit signup, and never converted sit outside that total.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'The four groups', rows: [
+                        { label: 'Already subscribed, then watched', accounts: 8420000 },
+                        { label: 'Joined for something else, then watched', accounts: 3060000 },
+                        { label: 'Joined, first watch was UFC', accounts: 3140000 },
+                        { label: 'Opened UFC, left at signup, never came back', accounts: 5330000 }
+                    ]},
+                    { title: 'What a row is', rows: [
+                        { label: 'A playback or a signup page visit', accounts: 100, v: 100, show: 'one person' },
+                        { label: 'A 14-day outcome after they left signup', accounts: 80, v: 80, show: 'one person' },
+                        { label: 'A first-24-hour action after they left', accounts: 60, v: 60, show: 'can overlap' },
+                        { label: 'A retention checkpoint', accounts: 40, v: 40, show: 'still subscribed' }
+                    ]}
+                ])
+                + '</div>'
+                + _jiqUfcNestRead('Download CSV keeps every number from this read in one file.');
+        }
+        var _JIQ_UFC_NEST_RENDER = {
+            case: _jiqUfcNestCase,
+            discovery: _jiqUfcNestDiscovery,
+            journey_b: _jiqUfcNestClip,
+            journey_a: _jiqUfcNestInside,
+            journey_c: _jiqUfcNestWall,
+            churn: _jiqUfcNestRetention,
+            segments: _jiqUfcNestSegments,
+            read: _jiqUfcNestReadTab,
+            methodology: _jiqUfcNestMethod
+        };
+
+                // ---- CSV builder ------------------------------------------------
         // Walks _JIQ_UFC_DATA and emits a long-form CSV. Columns:
         //   section, subsection, metric, value, unit, notes
         // Client-side generation via Blob + anchor click.
@@ -177918,6 +178449,136 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-frag-detval {
         font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
         text-align: right; white-space: nowrap;
+    }
+
+
+    /* UFC nest walk sits on the same card system as Young Sheldon. */
+    #jiqUfcNestCard {
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        border-radius: 14px;
+        flex: 0 0 auto;
+    }
+    body[data-theme="light"] #jiqUfcNestCard { background: #E9E8E1; color: #0C1618; }
+    #jiqUfcNestTitle {
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95; text-transform: none !important;
+    }
+    @media (max-width: 1080px) { #jiqUfcNestTitle { font-size: 38px; } }
+    #jiqUfcNestDeck, #jiqUfcNestCard .jiq-frag-label, #jiqUfcNestCard .jiq-frag-doing,
+    #jiqUfcNestCard .jiq-frag-read, #jiqUfcNestCard .jiq-frag-detlab,
+    #jiqUfcNestCard .jiq-frag-kpi-v, #jiqUfcNestCard .jiq-frag-count,
+    #jiqUfcNestCard .jiq-frag-lost, #jiqUfcNestCard .jiq-frag-sec h3,
+    #jiqUfcNestCard .jiq-frag-read-lead { text-transform: none !important; }
+    body[data-theme="light"] #jiqUfcNestDeck { color: #5C6560; }
+    #jiqUfcCaseCard, #jiqUfcDiscoveryCard, #jiqUfcJourneyACard, #jiqUfcJourneyBCard,
+    #jiqUfcJourneyCCard, #jiqUfcChurnCard, #jiqUfcSegmentsCard, #jiqUfcReadCard,
+    #jiqUfcMethodologyCard { display: none !important; }
+
+    .jiq-ufc-tabbar {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+        gap: 10px; margin: 8px 0 0; padding: 10px 4px 4px;
+        position: sticky; top: 0; z-index: 30;
+        background: var(--cw-page, #111F22);
+    }
+    body[data-theme="light"] .jiq-ufc-tabbar { background: #E9E8E1; }
+    .jiq-ufc-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .jiq-ufc-pills button {
+        border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03);
+        color: #9AA09B; border-radius: 6px; padding: 7px 12px;
+        font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    body[data-theme="light"] .jiq-ufc-pills button {
+        border-color: #C9C6BA; background: #FFFFFF; color: #5C6560;
+    }
+    .jiq-ufc-pills button.is-on { border-color: #C7F23E; color: #C7F23E; background: rgba(199,242,62,.12); }
+    body[data-theme="light"] .jiq-ufc-pills button.is-on { border-color: #5E7E12; color: #5E7E12; background: rgba(94,126,18,.08); }
+    .jiq-ufc-tabmeta { display: flex; align-items: center; }
+
+    #jiqUfcNestCard .jiq-frag-detours.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #jiqUfcNestCard .jiq-frag-detours.cols-1 { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
+    #jiqUfcNestCard .jiq-frag-detrow.is-wide { grid-template-columns: minmax(0, 1fr) 90px 110px; }
+    #jiqUfcNestCard .jiq-frag-detlab.is-wrap { white-space: normal; overflow: visible; }
+    #jiqUfcNestHost { padding-bottom: 28px; }
+    #jiqUfcNestCard .jiq-ufc-spine { margin: 0 34px; }
+    #jiqUfcNestCard .jiq-ufc-pad { margin: 0 34px; }
+
+    .jiq-ufc-wall-hero, .jiq-ufc-stat-hero {
+        margin: 0 34px 8px; padding: 22px 24px 18px;
+        border-radius: 12px; background: #15252A;
+    }
+    body[data-theme="light"] .jiq-ufc-wall-hero,
+    body[data-theme="light"] .jiq-ufc-stat-hero { background: #FFFFFF; }
+    .jiq-ufc-wall-hero-k, .jiq-ufc-stat-hero-k {
+        font-size: 10px; font-weight: 700; letter-spacing: .16em;
+        text-transform: uppercase; color: #7C878A;
+    }
+    .jiq-ufc-wall-hero-v {
+        margin-top: 8px; font-size: 56px; font-weight: 800;
+        letter-spacing: -.04em; line-height: 1; color: #E682FF;
+    }
+    body[data-theme="light"] .jiq-ufc-wall-hero-v { color: #8E3FA8; }
+    .jiq-ufc-stat-hero-v {
+        margin-top: 8px; font-size: 40px; font-weight: 800;
+        letter-spacing: -.04em; line-height: 1; color: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-ufc-stat-hero-v { color: #5E7E12; }
+    .jiq-ufc-wall-hero-l, .jiq-ufc-stat-hero-l { margin-top: 10px; font-size: 15px; font-weight: 700; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-ufc-wall-hero-l,
+    body[data-theme="light"] .jiq-ufc-stat-hero-l { color: #0C1618; }
+    .jiq-ufc-wall-hero-s, .jiq-ufc-stat-hero-s {
+        margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: #9AA09B; max-width: 76ch;
+    }
+    .jiq-ufc-wall-share .jiq-frag-kept { color: #E682FF; }
+    body[data-theme="light"] .jiq-ufc-wall-share .jiq-frag-kept { color: #8E3FA8; }
+
+    .jiq-ufc-uni { display: flex; gap: 6px; margin: 0 34px 8px; height: 44px; }
+    .jiq-ufc-uni-seg {
+        border-radius: 8px; display: flex; align-items: center; padding: 0 12px;
+        font-size: 12px; font-weight: 800; letter-spacing: -.01em; min-width: 0;
+    }
+    .jiq-ufc-uni-seg.is-a { background: #1B2E34; color: #E9E8E1; }
+    .jiq-ufc-uni-seg.is-a2 { background: #24506B; color: #E9E8E1; }
+    .jiq-ufc-uni-seg.is-b { background: #C7F23E; color: #0C1618; }
+    body[data-theme="light"] .jiq-ufc-uni-seg.is-a { background: #0C1618; }
+    body[data-theme="light"] .jiq-ufc-uni-seg.is-b { background: #5E7E12; color: #E9E8E1; }
+    .jiq-ufc-uni-cap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 12px 34px 8px; }
+    .jiq-ufc-uni-cap b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+    .jiq-ufc-uni-cap span { display: block; margin-top: 4px; font-size: 12px; line-height: 1.45; color: #9AA09B; }
+
+    .jiq-ufc-tbl { width: calc(100% - 68px); margin: 0 34px 20px; border-collapse: collapse; }
+    .jiq-ufc-tbl th {
+        text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; color: #7C878A; padding: 8px 10px 8px 0;
+        border-bottom: 1px solid var(--cw-border, #2C4148);
+    }
+    .jiq-ufc-tbl td {
+        padding: 9px 10px 9px 0; font-size: 12.5px; color: #E9E8E1;
+        border-bottom: 1px solid rgba(44,65,72,.6); vertical-align: top;
+    }
+    body[data-theme="light"] .jiq-ufc-tbl td { color: #0C1618; }
+    .jiq-ufc-tbl td.r, .jiq-ufc-tbl th.r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+    .jiq-ufc-tbl td.m { color: #9AA09B; font-weight: 400; }
+    .jiq-ufc-tbl tr.is-hot td { color: #C7F23E; }
+    body[data-theme="light"] .jiq-ufc-tbl tr.is-hot td { color: #5E7E12; }
+
+    .jiq-ufc-levers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 34px 20px; }
+    .jiq-ufc-lever { background: #15252A; border-radius: 12px; padding: 20px 22px; }
+    body[data-theme="light"] .jiq-ufc-lever { background: #FFFFFF; }
+    .jiq-ufc-lever-k { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #7C878A; }
+    .jiq-ufc-lever-v { margin-top: 8px; font-size: 28px; font-weight: 800; letter-spacing: -.03em; color: #C7F23E; }
+    body[data-theme="light"] .jiq-ufc-lever-v { color: #5E7E12; }
+    .jiq-ufc-lever-l { margin-top: 8px; font-size: 14px; font-weight: 700; }
+    .jiq-ufc-lever-s { margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: #9AA09B; }
+    .jiq-ufc-imp { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin: 0 34px 32px; }
+    .jiq-ufc-imp h5 {
+        margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; color: #9AA09B;
+    }
+    .jiq-ufc-imp p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #9AA09B; }
+    @media (max-width: 1080px) {
+        .jiq-ufc-levers, .jiq-ufc-imp, .jiq-ufc-uni-cap { grid-template-columns: 1fr; }
     }
 
     #trendsIQView[data-tiq-product="trends"] [data-tiq-panel="books"] .tiq-row-meta > *,
