@@ -47957,7 +47957,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             <p id="jiqUfcNestDeck">14,620,000 people watched UFC on Paramount+. They split three ways with nothing left over. A fourth group hit the paywall and never signed up.</p>
                             <div class="jiq-frag-kpis" id="jiqUfcNestKpis"></div>
                         </div>
-                        <div class="jiq-frag-art is-ini" id="jiqUfcNestArt"><span class="jiq-frag-art-ini">UFC</span></div>
+                        <div class="jiq-frag-art" id="jiqUfcNestArt"
+                             data-hero="{{ url_for('static', filename='ufc-paramount-hero.jpg') }}"></div>
                     </div>
                     <div id="jiqUfcNestHost"></div>
                 </div>
@@ -100508,6 +100509,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(k.l) + '</div>'
                         + '<div class="jiq-frag-kpi-v">' + _jiqFragNum(k.v) + '</div></div>';
                 }).join('');
+            }
+            var art = document.getElementById('jiqUfcNestArt');
+            if (art) {
+                var hero = art.getAttribute('data-hero') || '';
+                if (hero) {
+                    art.innerHTML = '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">';
+                    art.classList.remove('is-ini');
+                    art.classList.add('is-ufc');
+                } else {
+                    art.innerHTML = '<span class="jiq-frag-art-ini">UFC</span>';
+                    art.classList.add('is-ini');
+                    art.classList.remove('is-ufc');
+                }
             }
             var stripTitle = document.getElementById('jiqDashTitle');
             if (stripTitle) stripTitle.style.display = 'none';
@@ -178247,6 +178261,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         border-radius: 12px 0 0 12px;
     }
     .jiq-frag-art.is-ys img { object-position: center 18%; }
+    .jiq-frag-art.is-ufc img { object-position: 68% 18%; }
     .jiq-frag-art.is-dexter img { object-position: center 48%; }
     .jiq-frag-art.is-gg-lapsed img { object-position: center 32%; }
     .jiq-frag-art.is-gg-regular img { object-position: center 22%; }
