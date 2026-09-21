@@ -100764,6 +100764,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 'Paramount+ checkout, first play was UFC'
             ]);
             var eng = jb.engagement_30d || [];
+            var d30stay = (((((_JIQ_UFC_DATA || {}).ufc_churn || {}).retention_curve || []).filter(function(r) { return r.day === 30; })[0] || {}).retention_pct) || 76.2;
+            var d30cancel = Math.round((100 - d30stay) * 10) / 10;
             var pay = jb.payment_mix || [];
             var first = jb.first_event || [];
             var plan = jb.plan_mix || {};
@@ -100783,12 +100785,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '<div class="jiq-ufc-fig is-hot"><b>5.33M</b><span>Hit any UFC paywall and never converted</span></div>'
                 + '</div>'
                 + _jiqUfcNestRead('5.33M is not 3.78 minus 3.14. That is the recover pool.')
-                + _jiqUfcNestSec('After they signed up', 'Cross-content is the retention problem.', 'Both rows are of the ' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' UFC-first signups.')
+                + _jiqUfcNestSec('After they signed up', 'Cross-content is the retention problem.', 'These rows are of the ' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' UFC-first signups.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
                     { title: 'First 30 days', scale: 100, rows: eng.map(function(r) {
                         return { label: r.label.replace('\u22651 ', 'a ').replace(' P+ title', ' title'), v: r.pct_of_cohort, show: _jiqUfcPct1(r.pct_of_cohort) };
-                    })},
+                    }).concat([{ label: 'Cancelled within 30d', v: d30cancel, show: _jiqUfcPct1(d30cancel) }])},
                     { title: 'Plan and payment', scale: 100, rows: [
                         { label: 'Essential $8.99 ad tier', accounts: plan.essential_ad_pct || 78.4, v: plan.essential_ad_pct || 78.4, show: _jiqUfcPct1(plan.essential_ad_pct || 78.4) },
                         { label: 'Premium $13.99', accounts: plan.premium_no_ad_pct || 21.6, v: plan.premium_no_ad_pct || 21.6, show: _jiqUfcPct1(plan.premium_no_ad_pct || 21.6) },
