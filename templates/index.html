@@ -100508,7 +100508,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + (sub ? '<div class="jiq-frag-doing">' + _jiqFragEsc(sub) + '</div>' : '')
                 + (opts.base ? '<div class="jiq-frag-foot"><span class="jiq-frag-kept">Everyone in this journey</span></div>' : '')
                 + '</div></div>';
-            if (opts.next) html += _jiqUfcNestBridge(opts.next, { branch: opts.branch, keepLabel: opts.keepLabel });
+            if (opts.next) html += _jiqUfcNestBridge(s, { branch: opts.branch, keepLabel: opts.keepLabel });
             return html;
         }
         function _jiqUfcNestSec(numLab, head, em) {
