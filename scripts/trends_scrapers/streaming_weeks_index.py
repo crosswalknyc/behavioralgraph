@@ -36,14 +36,21 @@ give the same set, so the tally cannot move.
 
 Coverage
 --------
-`cover_days` is 91 against a reader that asks for 84, and the extra
-week is what makes a missed nightly run harmless. A read on the day
-the index was built wants offsets 1 to 84; a read six days later wants
-7 to 90, still inside the index. The seventh day without a rebuild
-falls off the end, and the reader detects that and goes back to
-scanning S3 for the days it is missing rather than quietly tallying
-fewer weeks. Coverage is checked per platform and per day, so a
-platform absent from the index falls back on its own.
+The limit is the recent end, not the old one. An index built on a
+given day cannot contain the day after it, so a reader running two
+days later is asking about a day that had not happened at build time.
+`cover_days` is 91 against a reader that asks for 84, which is
+headroom at the old end and costs nothing, but it buys no slack at
+the new end at all.
+
+So coverage is reported per day rather than as a yes or no, and the
+reader fills what the index predates by reading only those days off
+S3. A day behind on the nightly run costs twelve small reads rather
+than the 1,008 the full scan would take, and the tally is the same
+either way because the weeks for a title are a union over days.
+A platform the index does not carry at all falls back on its own.
+Nothing here ever answers with a short tally: the reader either has
+every day it asked for or it goes and gets the rest.
 
 Netflix is deliberately not indexed. Its tally ships with the
 published TSV and goes back further than our archive, so the read side
@@ -277,26 +284,44 @@ def uncovered_days(index: Optional[dict], slug: str, dates) -> Optional[list]:
     return missing
 
 
-def weeks_for(index: Optional[dict], slug: str, dates) -> Optional[dict]:
-    """`{title_norm: {(iso_year, iso_week), ...}}` over `dates`.
+def weeks_covered(index: Optional[dict], slug: str, dates):
+    """`(weeks, uncovered)` for `slug` over `dates`.
 
-    Returns None when the index cannot cover the request, so the caller
-    can fall back rather than tally a short answer. Only days the index
-    actually covers are consulted, so the result is the same set the
-    per-day scan produced.
+    `weeks` is `{title_norm: {(iso_year, iso_week), ...}}` built from
+    the days the index does cover, and `uncovered` lists the days it
+    does not, for the caller to read off S3 and union in. Because a
+    title's weeks are a union over days, filling the gap that way
+    gives exactly what scanning every day would have given.
+
+    `(None, None)` means the index cannot serve this platform at all.
     """
     missing = uncovered_days(index, slug, dates)
-    if missing is None or missing:
-        return None
+    if missing is None:
+        return None, None
     anchor = date.fromisoformat(index['anchor_date'])
-    by_offset = {(anchor - d).days: iso_week_key(d) for d in dates}
+    missing_set = {d for d in missing}
+    by_offset = {(anchor - d).days: iso_week_key(d)
+                 for d in dates if d not in missing_set}
     titles = (index['platforms'][slug].get('titles') or {})
     out: dict[str, set] = {}
     for tn, offsets in titles.items():
         weeks = {by_offset[o] for o in offsets if o in by_offset}
         if weeks:
             out[tn] = weeks
-    return out
+    return out, missing
+
+
+def weeks_for(index: Optional[dict], slug: str, dates) -> Optional[dict]:
+    """`{title_norm: {(iso_year, iso_week), ...}}` over `dates`, or None
+    unless the index covers every day asked for.
+
+    The strict form. Callers that can fill a gap themselves should use
+    `weeks_covered`.
+    """
+    weeks, missing = weeks_covered(index, slug, dates)
+    if weeks is None or missing:
+        return None
+    return weeks
 
 
 def main() -> int:

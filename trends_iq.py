@@ -9637,32 +9637,55 @@ def _load_streaming_history_weeks(slug: str) -> dict[str, set[tuple[int, int]]]:
     dates = [today - timedelta(days=i) for i in range(1, _STREAMING_HISTORY_WEEKS * 7 + 1)]
 
     # The nightly run already read these days and recorded which days
-    # each title appeared on, so read that instead of fetching the
-    # eighty-four dated snapshots again. `weeks_for` returns None
-    # rather than a short answer when the published index does not
-    # reach every day asked for, which is what sends us back to the
-    # scan below with the tally intact.
+    # each title appeared on, so read that rather than fetching the
+    # eighty-four dated snapshots again.
+    #
+    # An index cannot contain a day that had not happened when it was
+    # built, so a run that is a day behind leaves the most recent day
+    # or two out. Those are scanned here and unioned in, which is the
+    # same answer because a title's weeks are a union over days: a day
+    # behind costs twelve small reads rather than the 1,008 a full
+    # scan takes. Only a platform the index cannot serve at all falls
+    # all the way back.
     idx = _streaming_weeks_index()
     if idx is not None:
         try:
             from scripts.trends_scrapers import streaming_weeks_index as swi
-            from_index = swi.weeks_for(idx, slug, dates)
+            from_index, missing = swi.weeks_covered(idx, slug, dates)
         except Exception as e:
             logger.debug("_load_streaming_history_weeks(%s) index read "
                          "failed: %s", slug, e)
-            from_index = None
+            from_index, missing = None, None
         if from_index is not None:
+            if missing:
+                logger.info("trends_iq: weeks history for %s is %d day(s) "
+                            "ahead of the published index; reading those "
+                            "day(s)", slug, len(missing))
+                for tn, wks in _scan_streaming_weeks(slug, missing).items():
+                    from_index.setdefault(tn, set()).update(wks)
             _STREAMING_WEEKS_CACHE[slug] = (now, from_index)
             return from_index
-        logger.info("trends_iq: weeks history for %s is not covered by "
-                    "the published index; reading the archive", slug)
+        logger.info("trends_iq: no published weeks history for %s; "
+                    "reading the archive", slug)
 
+    weeks_by_title = _scan_streaming_weeks(slug, dates)
+    _STREAMING_WEEKS_CACHE[slug] = (now, weeks_by_title)
+    return weeks_by_title
+
+
+def _scan_streaming_weeks(slug: str, dates) -> dict:
+    """Read `dates` out of the dated archive for `slug`.
+
+    `{title_norm: {(iso_year, iso_week), ...}}`, one `get_object` per
+    day in parallel. A day that is missing or unreadable contributes
+    nothing, which is what it always did.
+    """
+    weeks_by_title: dict[str, set[tuple[int, int]]] = {}
+    if not dates:
+        return weeks_by_title
     s3 = _s3_client()
     if s3 is None:
-        _STREAMING_WEEKS_CACHE[slug] = (now, {})
-        return {}
-
-    weeks_by_title: dict[str, set[tuple[int, int]]] = {}
+        return weeks_by_title
 
     def _fetch_one(d):
         key = f'trends_iq_snapshots/{d.isoformat()}/{slug}.json'
@@ -9673,7 +9696,6 @@ def _load_streaming_history_weeks(slug: str) -> dict[str, set[tuple[int, int]]]:
         except Exception:
             return d, []
 
-    from concurrent.futures import ThreadPoolExecutor
     try:
         with ThreadPoolExecutor(max_workers=8) as ex:
             for d, items in ex.map(_fetch_one, dates):
@@ -9684,9 +9706,7 @@ def _load_streaming_history_weeks(slug: str) -> dict[str, set[tuple[int, int]]]:
                         continue
                     weeks_by_title.setdefault(tn, set()).add(wkey)
     except Exception as e:
-        logger.info("_load_streaming_history_weeks(%s) failed: %s", slug, e)
-
-    _STREAMING_WEEKS_CACHE[slug] = (now, weeks_by_title)
+        logger.info("_scan_streaming_weeks(%s) failed: %s", slug, e)
     return weeks_by_title
 
 
