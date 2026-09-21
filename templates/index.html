@@ -34859,6 +34859,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     btn.textContent = btn.getAttribute('data-show-all-label') || 'Show all touchpoints';
                 }
             }
+            // Publish to window so the inline onclick="_iiqMTACoefToggle(...)"
+            // on the "Show all N touchpoints" button can reach it. The
+            // whole MTA module sits inside an IIFE (32736-44242), which
+            // hides bare fn declarations from inline handlers.
+            window._iiqMTACoefToggle = _iiqMTACoefToggle;
 
             function _iiqMTARenderCoefficientCard(d) {
                 var tps = (d.touchpoints || []).slice();
