@@ -544,3 +544,4 @@ if __name__ == "__main__":
 # (prometheus-routing-docs 2026-09-18 - Prometheus content_map-first routing spec + Jenna how-to)
 # (streamscout-query-wrapper 2026-09-18 - streamscout_query() non-interactive entry point for Prometheus)
 # (youtube-shorts-innertube 2026-09-21 - YouTube: reliable Shorts via InnerTube browse (paginated) for --include-shorts)
+# (ss-match-gate-overmatch 2026-09-21 - shared relevance floor stops podcast/audio/YouTube over-match catalog dumps)

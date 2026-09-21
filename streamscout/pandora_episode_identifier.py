@@ -64,6 +64,15 @@ _EPISODES_QUERY = (
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -152,6 +161,8 @@ class Pandora:
         if not cands:
             return None, None
         best = max(cands, key=lambda p: similarity(title, (ann.get(p) or {}).get("name", "")))
+        if not is_relevant(title, (ann.get(best) or {}).get("name", "")):  # floor
+            return None, None
         return best, (ann.get(best) or {}).get("name")
 
     def podcast_name(self, pc_id):

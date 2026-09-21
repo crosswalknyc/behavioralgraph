@@ -61,6 +61,15 @@ PLATFORM = "YouTube"
 WATCH = "https://www.youtube.com/watch?v=%s"
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -344,6 +353,8 @@ def discover_channel(title):
     if not cand:
         return None, None
     best = max(cand, key=lambda c: similarity(title, c[1]))
+    if not is_relevant(title, best[1]):       # relevance floor (no wrong-channel dump)
+        return None, None
     return best
 
 
