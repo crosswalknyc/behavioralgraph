@@ -100828,9 +100828,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }).join('');
             var dest = ch.where_they_go_next_30d || [];
             var sig = ch.top_churn_indicators_day30 || [];
-            return _jiqUfcNestSec('06 Retention', 'People who signed up for UFC cancel at a higher rate.', 'Already-subscribed cancel is 4.1% within 90 days, near the rest of the service. UFC-first trails the strongest sports-led signups by 8.9 points at day 90.')
-                + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3,140,000</th><th class="r">Strongest sports-led</th></tr></thead><tbody>'
+            return _jiqUfcNestSec('06 Retention', 'People who signed up for UFC cancel at a higher rate.', 'Already-subscribed cancel is 4.1% within 90 days, near the rest of the service. UFC signups sit 8.9 points behind the best sports stay at day 90.')
+                + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3,140,000</th><th class="r">Best sports stay</th></tr></thead><tbody>'
                 + rows + '</tbody></table>'
+                + _jiqUfcNestRead('Best sports stay is people who signed up for a streamer because a sport was the first thing they watched. Same Jan 1 to Aug 14 window. Same still-subscribed rule. This column is the sports signup group that stayed the most.')
                 + _jiqUfcNestRead('UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate. Day 90 is the gap to act on for those new UFC signups: 8.9 points, observed on more than half of them. Day 180 is 18.0 points, but only the 40.8% who signed up before mid-February can have that reading. Mean tenure is 4.8 months.')
                 + _jiqUfcNestSec('What predicts cancel', 'Churn concentrates in people who watched nothing but UFC.', 'Index against the UFC-first cancel rate. Above 1 means more cancel.')
                 + '<div class="jiq-frag-detours cols-2">'
@@ -178515,6 +178516,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqUfcNestCard .jiq-frag-read, #jiqUfcNestCard .jiq-frag-detlab,
     #jiqUfcNestCard .jiq-frag-kpi-v, #jiqUfcNestCard .jiq-frag-count,
     #jiqUfcNestCard .jiq-frag-lost, #jiqUfcNestCard .jiq-frag-sec h3,
+    #jiqUfcNestCard .jiq-frag-sec em,
     #jiqUfcNestCard .jiq-frag-read-lead,
     #jiqUfcNestCard .jiq-ufc-stat-hero-l,
     #jiqUfcNestCard .jiq-ufc-stat-hero-s,
@@ -178644,8 +178646,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
     .jiq-ufc-tbl { width: calc(100% - 68px); margin: 0 34px 20px; border-collapse: collapse; }
     .jiq-ufc-tbl th {
-        text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .12em;
-        text-transform: uppercase; color: #7C878A; padding: 8px 10px 8px 0;
+        text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        word-spacing: 0.35em; text-transform: uppercase; color: #7C878A; padding: 8px 10px 8px 0;
         border-bottom: 1px solid var(--cw-border, #2C4148);
     }
     .jiq-ufc-tbl td {
