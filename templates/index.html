@@ -100519,16 +100519,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqUfcNestClipSpine(rows, searchM) {
             if (!rows || !rows.length) return '';
-            var same = (rows[2] && rows[2].show) || _jiqUfcMill(3.14);
+            var searchN = Number(searchM) || 6.24;
+            var pageM = (rows[1] && rows[1].accounts) ? (rows[1].accounts / 1e6) : 3.78;
+            var dropM = Math.round((searchN - pageM) * 1000) / 1000;
+            var kept = searchN > 0 ? Math.round((pageM / searchN) * 1000) / 10 : 0;
             var html = _jiqUfcNestStep(rows[0], { base: true });
             html += '<div class="jiq-frag-step is-branch jiq-ufc-search-off">'
                 + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
                 + '<div class="jiq-frag-line"><span class="jiq-frag-label">Searched after the clip</span>'
-                + '<span class="jiq-frag-count">' + _jiqUfcMill(searchM) + '</span></div>'
-                + '<div class="jiq-frag-doing">Not one of the drop-off bars. The '
-                + _jiqFragEsc(same) + ' who signed up below are the same people.</div>'
+                + '<span class="jiq-frag-count">' + _jiqUfcMill(searchN) + '</span></div>'
+                + '<div class="jiq-frag-doing">That search is not one of the bars above. The '
+                + _jiqFragNum(_jiqUfcPeople(3.14)) + ' who signed up and watched UFC first are the same people.</div>'
                 + '</div></div>';
-            if (rows[1]) html += _jiqUfcNestBridge(rows[0]);
+            html += _jiqUfcNestBridge({ kept: kept, dropped: dropM, droppedShow: _jiqUfcMill(dropM) });
             if (rows[1]) html += _jiqUfcNestStep(rows[1], { next: rows[2] });
             if (rows[2]) html += _jiqUfcNestStep(rows[2], { terminal: true });
             return html;
