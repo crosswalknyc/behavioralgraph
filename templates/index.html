@@ -32592,7 +32592,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label title="Content platform (TikTok, Instagram, YouTube, X, etc.). Client-side filter -- drills combine with Phase / Type / Paid instantly.">Platform</label><select id="iiqAssetFilterPlatform" onchange="window._iiqRenderAssetsGrid()"><option value="">All</option></select></div>
-                    <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
+                    <div><label>Source</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="earned">Earned</option><option value="unknown">Unknown</option></select></div>
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
@@ -39318,7 +39318,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
                 q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Each category compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a category is high reach / low conversion, low reach / high conversion, or both.' },
-                q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                q2: { short: 'Paid / Organic / Earned', title: 'Paid vs Organic vs Earned Performance', intro: 'Cumulative view growth by day, split three ways: paid activations, organic first-party posts, and earned media pickups. Top-performing in-flight assets at the bottom.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-talent view + engagement totals across the campaign (cast, creators, athletes, influencers, hosts). Identifies which talent are doing disproportionate lift.' },
@@ -39329,12 +39329,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 paid:    '#22d3ee',
                 organic: '#22c55e',
                 natural: '#22c55e',
+                earned:  '#3358FF',
                 unknown: '#94a3b8',
                 weekly:     '#22c55e',
                 monthly:    '#3b82f6',
                 bimonthly:  '#a855f7',
                 occasional: '#f59e0b',
             };
+            // iiqHasEarned() -- true when any loaded asset carries
+            // paid_or_organic === 'earned'. Every 'Earned' UI surface
+            // (filter dropdowns, Performance tab bucket, Assets tab
+            // pill) is gated on this so campaigns without earned data
+            // fall through to the original two-way UI cleanly.
+            function iiqHasEarned(assets) {
+                if (!assets || !assets.length) return false;
+                for (var i = 0; i < assets.length; i++) {
+                    var po = (assets[i] && assets[i].paid_or_organic || '').toLowerCase();
+                    if (po === 'earned') return true;
+                }
+                return false;
+            }
 
             function iiqBarRow(label, value, maxValue, color, subLabel, subValue) {
                 var pct = (maxValue > 0) ? Math.min(100, (value / maxValue) * 100) : 0;
@@ -40082,12 +40096,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function iiqQ2PaidOrganicFunnel(assets) {
                 var agg = {
                     paid:    { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 },
-                    organic: { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 }
+                    organic: { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 },
+                    earned:  { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 }
                 };
                 (assets || []).forEach(function(c) {
                     var po = (c.paid_or_organic || '').toLowerCase();
                     var bucket = po === 'paid' ? 'paid'
                                 : (po === 'organic' || po === 'natural') ? 'organic'
+                                : po === 'earned' ? 'earned'
                                 : null;
                     if (!bucket) return;
                     var v = Number(c.ext_view_count) || 0;
@@ -43214,10 +43230,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html +=   '</div>';
                 html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
                 html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
+                var _iiqQ6HasEarned = iiqHasEarned(assetsAll);
                 html +=     '<select onchange="window.iiqQ6SetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
-                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>Paid + Organic</option>';
+                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>' + (_iiqQ6HasEarned ? 'Paid + Organic + Earned' : 'Paid + Organic') + '</option>';
                 html +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
                 html +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
+                if (_iiqQ6HasEarned) {
+                    html +=   '<option value="earned"' + (paidSel === 'earned' ? ' selected' : '') + '>Earned</option>';
+                }
                 html +=       '<option value="unknown"' + (paidSel === 'unknown' ? ' selected' : '') + '>Unknown</option>';
                 html +=     '</select>';
                 html +=   '</div>';
@@ -43581,10 +43601,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html +=   '</div>';
                 html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
                 html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
+                var _iiqJrnHasEarned = iiqHasEarned(assetsAll);
                 html +=     '<select onchange="window.iiqJrnSetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
-                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>Paid + Organic</option>';
+                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>' + (_iiqJrnHasEarned ? 'Paid + Organic + Earned' : 'Paid + Organic') + '</option>';
                 html +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
                 html +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
+                if (_iiqJrnHasEarned) {
+                    html +=   '<option value="earned"' + (paidSel === 'earned' ? ' selected' : '') + '>Earned</option>';
+                }
                 html +=     '</select>';
                 html +=   '</div>';
                 html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); margin-left:auto;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
