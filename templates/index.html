@@ -21793,7 +21793,7 @@ https://www.instagram.com/p/..."></textarea>
             color: #E9E8E1;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: 13px; font-weight: 600; letter-spacing: -0.005em;
-            cursor: grab; z-index: 99000;
+            cursor: grab; z-index: 2147482200;
             box-shadow: 0 12px 32px rgba(51, 88, 255, 0.28),
                         0 0 0 1px rgba(233,232,225,0.10);
             touch-action: none; user-select: none; -webkit-user-select: none;
@@ -21869,7 +21869,7 @@ https://www.instagram.com/p/..."></textarea>
             background: #15252A; border: 1px solid #3B3D38; border-radius: 20px;
             box-shadow: 0 30px 60px rgba(0, 0, 0, 0.36);
             display: none; flex-direction: column; overflow: hidden;
-            z-index: 99000;
+            z-index: 2147482200;
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             color: #E9E8E1;
             pointer-events: auto;
@@ -73214,6 +73214,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _initPrometheus() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!l || !w) return;
+                // Park on body so the Profile IQ sticky title bar cannot
+                // stack above the chat (chrome is also body-level).
+                if (l.parentNode !== document.body) document.body.appendChild(l);
+                if (w.parentNode !== document.body) document.body.appendChild(w);
                 // One-time reset to the bottom-right default: drop any
                 // v1 position saves (absolute-pixel era).
                 try {
