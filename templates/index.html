@@ -25920,41 +25920,73 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-refresh:hover,
         body[data-theme="light"] #dashboardView.piq-v4 .piq-picker-close:hover { color: #0C1618 !important; }
+        #dashboardView.piq-v4 .piq-lib-list-wrap {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
         #dashboardView.piq-v4 .profile-select-tree {
             background: transparent !important;
             border-radius: 0 !important;
-            padding: 4px 4px 8px 0 !important;
+            padding: 4px 18px 8px 0 !important;
             flex: 1 1 auto !important;
             min-height: 0 !important;
             overflow-x: hidden !important;
-            overflow-y: auto !important;
-            scrollbar-width: auto;
-            scrollbar-color: #8A938F #1B2F35;
+            overflow-y: scroll !important;
+            scrollbar-width: none !important;
         }
         #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar {
-            width: 10px;
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
         }
-        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-track {
+        #dashboardView.piq-v4 .piq-lib-scroll {
+            position: absolute;
+            top: 4px;
+            right: 2px;
+            bottom: 8px;
+            width: 12px;
+            pointer-events: none;
+            z-index: 6;
+        }
+        #dashboardView.piq-v4 .piq-lib-scroll-track {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 1px;
+            right: 1px;
+            border-radius: 999px;
             background: #1B2F35;
-            border-radius: 999px;
+            box-shadow: inset 0 0 0 1px #3B3D38;
+            pointer-events: auto;
         }
-        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb {
-            background: #8A938F;
+        #dashboardView.piq-v4 .piq-lib-scroll-nugget {
+            position: absolute;
+            left: 1px;
+            right: 1px;
+            min-height: 48px;
             border-radius: 999px;
-            border: 2px solid #1B2F35;
-        }
-        #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb:hover {
             background: #C5CDC8;
+            cursor: grab;
+            pointer-events: auto;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree {
-            scrollbar-color: #8A938F #EFEEE8;
+        #dashboardView.piq-v4 .piq-lib-scroll-nugget:hover,
+        #dashboardView.piq-v4 .piq-lib-scroll-nugget:active {
+            background: #E9E8E1;
+            cursor: grabbing;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-track {
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-scroll-track {
             background: #EFEEE8;
+            box-shadow: inset 0 0 0 1px #C9C6BA;
         }
-        body[data-theme="light"] #dashboardView.piq-v4 .profile-select-tree::-webkit-scrollbar-thumb {
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-scroll-nugget {
             background: #8A938F;
-            border-color: #EFEEE8;
+        }
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-scroll-nugget:hover,
+        body[data-theme="light"] #dashboardView.piq-v4 .piq-lib-scroll-nugget:active {
+            background: #0C1618;
         }
         #dashboardView.piq-v4 .profile-cat-item {
             background: transparent !important;
@@ -27140,8 +27172,13 @@ https://www.instagram.com/p/..."></textarea>
                             <button type="button" class="piq-picker-refresh has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()">↻</button>
                         </div>
                     </div>
+                    <div class="piq-lib-list-wrap">
                     <div class="profile-select-tree" id="dashProfileTree">
                         <!-- Profiles will be loaded here -->
+                    </div>
+                    <div id="piqLibScroll" class="piq-lib-scroll" aria-hidden="true">
+                        <div class="piq-lib-scroll-track"><div class="piq-lib-scroll-nugget"></div></div>
+                    </div>
                     </div>
                 </div>
                 
@@ -129853,6 +129890,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var inp = document.getElementById('dashProfileSearchInput');
                 if (inp) setTimeout(function() { try { inp.focus(); } catch (_e) {} }, 40);
             }
+            if (window._piqBindLibraryScrollbar) {
+                setTimeout(function() { try { window._piqBindLibraryScrollbar(); } catch (_e2) {} }, 50);
+            }
         };
         window._piqV4FolderDot = function(raw) {
             var key = String(raw == null ? '' : raw).toUpperCase().replace(/\s+/g, ' ').trim();
@@ -131550,6 +131590,66 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 window._piqPageScrollBusy = false;
             }
         };
+        window._piqBindLibraryScrollbar = function() {
+            var tree = document.getElementById('dashProfileTree');
+            var rail = document.getElementById('piqLibScroll');
+            if (!tree || !rail) return;
+            var track = rail.querySelector('.piq-lib-scroll-track');
+            var nugget = rail.querySelector('.piq-lib-scroll-nugget');
+            if (!track || !nugget) return;
+            function sync() {
+                var sh = tree.scrollHeight;
+                var ch = tree.clientHeight;
+                var tr = track.getBoundingClientRect();
+                var max = Math.max(0, sh - ch);
+                var nugH = (sh <= 0 || ch <= 0) ? tr.height : Math.max(48, Math.round((ch / Math.max(sh, ch)) * tr.height));
+                if (nugH > tr.height) nugH = tr.height;
+                var y = (max <= 0 || tr.height <= nugH) ? 0 : (tree.scrollTop / max) * (tr.height - nugH);
+                nugget.style.height = Math.max(8, nugH) + 'px';
+                nugget.style.top = y + 'px';
+            }
+            if (!rail._piqBound) {
+                rail._piqBound = true;
+                tree.addEventListener('scroll', sync, { passive: true });
+                track.addEventListener('pointerdown', function(e) {
+                    if (e.target === nugget) return;
+                    var tr = track.getBoundingClientRect();
+                    var nugH = nugget.offsetHeight || 48;
+                    var y = e.clientY - tr.top - nugH / 2;
+                    var max = tree.scrollHeight - tree.clientHeight;
+                    var span = Math.max(8, tr.height - nugH);
+                    tree.scrollTop = (y / span) * max;
+                });
+                nugget.addEventListener('pointerdown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try { nugget.setPointerCapture(e.pointerId); } catch (_e) {}
+                    var startY = e.clientY;
+                    var startScroll = tree.scrollTop;
+                    var tr = track.getBoundingClientRect();
+                    var nugH = nugget.offsetHeight || 48;
+                    var max = tree.scrollHeight - tree.clientHeight;
+                    var span = Math.max(8, tr.height - nugH);
+                    function move(ev) {
+                        tree.scrollTop = startScroll + (ev.clientY - startY) * (max / span);
+                    }
+                    function up(ev) {
+                        try { nugget.releasePointerCapture(ev.pointerId); } catch (_e2) {}
+                        nugget.removeEventListener('pointermove', move);
+                        nugget.removeEventListener('pointerup', up);
+                    }
+                    nugget.addEventListener('pointermove', move);
+                    nugget.addEventListener('pointerup', up);
+                });
+                window.addEventListener('resize', sync);
+                if (typeof MutationObserver !== 'undefined') {
+                    new MutationObserver(function() {
+                        requestAnimationFrame(sync);
+                    }).observe(tree, { childList: true, subtree: true });
+                }
+            }
+            sync();
+        };
         window._piqBindScrollNuggets = function(root) {
             root = root || document.getElementById('dashboardView') || document;
             var nodes = root.querySelectorAll(
@@ -131642,6 +131742,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (window._piqV4DressTabs) window._piqV4DressTabs();
                 try { if (window._piqBindScrollNuggets) window._piqBindScrollNuggets(view); } catch (_e) {}
                 try { if (window._piqBindPageScrollbar) window._piqBindPageScrollbar(); } catch (_e2) {}
+                try { if (window._piqBindLibraryScrollbar) window._piqBindLibraryScrollbar(); } catch (_e3) {}
             } finally {
                 window._piqV4Dressing = false;
             }
@@ -131692,6 +131793,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             _bindEmptyBack('piqEmptyBackBtn');
             _bindEmptyBack('piqLibBackBtn');
+            if (window._piqBindLibraryScrollbar) {
+                try { window._piqBindLibraryScrollbar(); } catch (_eB) {}
+            }
             var closeBtn = document.getElementById('piqPickerCloseBtn');
             if (closeBtn && !closeBtn._piqBound) {
                 closeBtn._piqBound = true;
@@ -138461,6 +138565,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         function filterDashboardProfiles() {
             renderDashboardProfileTree(dashboardProfiles);
+            if (window._piqBindLibraryScrollbar) {
+                setTimeout(function() { try { window._piqBindLibraryScrollbar(); } catch (_e) {} }, 0);
+            }
         }
 
         // Profile-ready notifications (when an analysis finishes and its
