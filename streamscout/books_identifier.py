@@ -144,6 +144,26 @@ def hit(title, url, ident, platform, fmt, author=""):
 
 
 # ── Apple Books (iTunes Search API — audiobook + ebook) ───────────────────────
+# The US Apple Books store still lists foreign-language and non-base editions
+# (German "flammengeküsst", French "version française", "edizione italiana",
+# "tome 01", dramatized-adaptation splits, graphic novels …) — all of which pass
+# title_match because they lead with the real title. For a US-English Readers
+# seed those are noise, so keep only English *base* editions.
+_APPLE_NON_ASCII = re.compile(r"[^\x00-\x7f]")            # ü, ç, ó, ł, å, ñ …
+_APPLE_FOREIGN_KW = re.compile(
+    r"(?i)(?<![a-z])(?:"
+    r"edizione|italiana|edici[oó]n|deutsche?|ausgabe|reihe|fran[cç]aise|"
+    r"castellano|espa[nñ]ol|portugu[eê]s|nederlandse|polsk[ia]|tome\s*\d+|"
+    r"dramatized|graphic\s+novel"
+    r")(?![a-z])")
+
+
+def _english_base_edition(name):
+    """False for foreign-language or non-base (dramatized/graphic-novel) titles."""
+    n = name or ""
+    return not (_APPLE_NON_ASCII.search(n) or _APPLE_FOREIGN_KW.search(n))
+
+
 def _apple_search(title, entity, author=None, limit=8):
     d = _http_json("https://itunes.apple.com/search?term=%s&entity=%s"
                    "&country=us&limit=%d" % (_q(title), entity, limit)) or {}
@@ -155,6 +175,8 @@ def _apple_search(title, entity, author=None, limit=8):
         if not (name and url):
             continue
         if not title_match(title, name):
+            continue
+        if not _english_base_edition(name):      # drop foreign / non-base editions
             continue
         if author and not author_match(author, who):
             continue

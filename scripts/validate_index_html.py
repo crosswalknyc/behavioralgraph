@@ -545,3 +545,4 @@ if __name__ == "__main__":
 # (streamscout-query-wrapper 2026-09-18 - streamscout_query() non-interactive entry point for Prometheus)
 # (youtube-shorts-innertube 2026-09-21 - YouTube: reliable Shorts via InnerTube browse (paginated) for --include-shorts)
 # (ss-match-gate-overmatch 2026-09-21 - shared relevance floor stops podcast/audio/YouTube over-match catalog dumps)
+# (books-apple-english-base 2026-09-21 - Books/Apple: keep only US-English base editions (drop foreign-lang + dramatized/graphic-novel noise))
