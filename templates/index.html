@@ -100489,7 +100489,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var keepW = Math.max(0.6, Math.min(100, Number(s.kept)));
             var barColor = opts.orchid ? '#E682FF' : '';
             var lost = (!s.dropped) ? '' : '<span class="jiq-frag-lost">\u2212' + _jiqFragEsc(s.droppedShow || (typeof s.dropped === 'number' && s.dropped < 1000 ? _jiqUfcMill(s.dropped) : _jiqFragNum(s.dropped))) + ' dropped off</span>';
-            var label = opts.keepLabel || ('Only ' + _jiqUfcPct1(s.kept) + ' kept going');
+            var label = opts.keepLabel || (_jiqUfcPct1(s.kept) + ' kept going');
             return '<div class="jiq-frag-bridge' + (opts.branch ? ' is-branch' : '') + (opts.orchid ? ' jiq-ufc-wall-share' : '') + '">'
                 + '<div class="jiq-frag-rail"></div><div class="jiq-frag-body">'
                 + '<div class="jiq-frag-track"><div class="jiq-frag-keep" style="width:' + keepW + '%;'
