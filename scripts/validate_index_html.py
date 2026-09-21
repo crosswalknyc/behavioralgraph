@@ -543,3 +543,4 @@ if __name__ == "__main__":
 # (jenna-md-tidy 2026-09-18 - how-to: Books is resolver #21 wording (Games #22 is newest))
 # (prometheus-routing-docs 2026-09-18 - Prometheus content_map-first routing spec + Jenna how-to)
 # (streamscout-query-wrapper 2026-09-18 - streamscout_query() non-interactive entry point for Prometheus)
+# (youtube-shorts-innertube 2026-09-21 - YouTube: reliable Shorts via InnerTube browse (paginated) for --include-shorts)

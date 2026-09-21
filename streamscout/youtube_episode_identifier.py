@@ -16,7 +16,9 @@ A channel's raw uploads mix three things: long-form **videos** (the episodes),
 **Shorts** (vertical clips/teasers), and **live** streams — each on its own
 tab.  "All episodes" means the long-form Videos tab; Shorts are promo clips,
 not episodes, so they're excluded by default.  Pass --include-shorts (or
-include_shorts=True) to also fold in every Short via the uploads playlist.
+include_shorts=True) to also fold in every Short from the channel's dedicated
+Shorts tab (read via YouTube's InnerTube browse API — the uploads playlist and
+plain HTML do NOT expose Shorts, so those never worked).
 
 How (all anonymous HTTP, no login, no API key)
 ----------------------------------------------
@@ -355,6 +357,99 @@ def _rows_from_videos(videos):
     return rows
 
 
+# Channel "Shorts" tab params (constant across channels). YouTube only honors it
+# when the channel actually HAS a Shorts tab; otherwise the browse call falls
+# back to another tab (Home/Videos) — which is our reliable "no Shorts" signal.
+_SHORTS_PARAMS = "EgZzaG9ydHPyBgUKA5oBAA%3D%3D"
+# markers that prove the browse response is really the Shorts grid (YouTube
+# A/B's the renderer between shortsLockupViewModel and reelItemRenderer)
+_SHORTS_MARKERS = ("shortsLockupViewModel", "reelItemRenderer")
+# Where a Short's id can live, depending on the renderer variant served: the
+# newer shortsLockupViewModel carries NO "videoId" field, so we read it from the
+# /shorts/<id> nav path, the reelWatchEndpoint, or the thumbnail path.
+_SHORTS_ID_PATS = (
+    re.compile(r'/shorts/([0-9A-Za-z_-]{11})'),
+    re.compile(r'"reelWatchEndpoint":\{"videoId":"([0-9A-Za-z_-]{11})"'),
+    re.compile(r'i\.ytimg\.com/vi(?:_webp)?/([0-9A-Za-z_-]{11})/'),
+)
+
+
+def _grid_token(obj):
+    """Next-page token for a Shorts grid, read structurally.
+
+    The token lives at continuationItemRenderer → continuationEndpoint →
+    continuationCommand → token. We read it by walking the parsed object (key
+    order in the serialized JSON isn't stable, so a flat regex misses it), and
+    we ignore the chip/description continuations that share the same command
+    shape by only accepting the one under a continuationItemRenderer."""
+    if isinstance(obj, dict):
+        cir = obj.get("continuationItemRenderer")
+        if isinstance(cir, dict):
+            tok = (cir.get("continuationEndpoint", {})
+                      .get("continuationCommand", {}).get("token"))
+            if tok:
+                return tok
+        for v in obj.values():
+            t = _grid_token(v)
+            if t:
+                return t
+    elif isinstance(obj, list):
+        for v in obj:
+            t = _grid_token(v)
+            if t:
+                return t
+    return None
+
+
+def _shorts_ids(cid, max_pages=60):
+    """Every Short's videoId for a channel, via the InnerTube browse API.
+
+    Returns [] when the channel has no Shorts tab (the browse response comes
+    back on a different tab, so we bail rather than mis-scrape long-form). The
+    long-form Videos tab and the uploads playlist do not contain Shorts, which
+    is why the old include_shorts path silently found none."""
+    _, _, h = fetch("%s/channel/%s?hl=en&gl=US" % (BASE, cid))
+    km = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', h or "")
+    vm = re.search(r'"INNERTUBE_CONTEXT_CLIENT_VERSION":"([^"]+)"', h or "")
+    if not (km and vm):
+        return []
+    api = "%s/youtubei/v1/browse?key=%s&prettyPrint=false" % (BASE, km.group(1))
+    ctx = {"client": {"clientName": "WEB", "clientVersion": vm.group(1),
+                      "hl": "en", "gl": "US"}}
+    first = post_json(api, {"context": ctx, "browseId": cid,
+                            "params": _SHORTS_PARAMS})
+    raw = json.dumps(first)
+    if not any(m in raw for m in _SHORTS_MARKERS):      # not the Shorts grid
+        return []                                       # (channel has no Shorts)
+    ids, seen = [], set()
+
+    def _grab(text):
+        # Only trust ids from pages that actually carry the Shorts grid, so a
+        # stray recommendation/header id can't leak in.
+        if not any(m in text for m in _SHORTS_MARKERS):
+            return
+        for pat in _SHORTS_ID_PATS:
+            for vid in pat.findall(text):
+                if vid not in seen:
+                    seen.add(vid)
+                    ids.append(vid)
+
+    _grab(raw)
+    tok = _grid_token(first)
+    pages = 0
+    while tok and pages < max_pages:
+        nxt = post_json(api, {"context": ctx, "continuation": tok})
+        if not nxt:
+            break
+        before = len(ids)
+        _grab(json.dumps(nxt))
+        tok = _grid_token(nxt)
+        pages += 1
+        if len(ids) == before and not tok:
+            break
+    return ids
+
+
 def resolve(title=None, url=None, kind="series", seasons=None,
             include_shorts=False):
     """Resolve a YouTube show to every episode's watch URL.
@@ -415,11 +510,12 @@ def resolve(title=None, url=None, kind="series", seasons=None,
 
     # long-form episodes (Videos tab)
     videos = _enumerate("%s/channel/%s/videos?hl=en&gl=US" % (BASE, cid))
-    if include_shorts:                          # fold in every upload (Shorts too)
-        uploads = "UU" + cid[2:]
-        extra = _enumerate("%s/playlist?list=%s&hl=en&gl=US" % (BASE, uploads))
+    if include_shorts:                          # fold in the channel's Shorts tab
         have = {v for v, _ in videos}
-        videos += [(v, t) for v, t in extra if v not in have]
+        for vid in _shorts_ids(cid):
+            if vid not in have:
+                have.add(vid)
+                videos.append((vid, ""))        # a Short (its own watch URL)
 
     return (show or title or "", _rows_from_videos(videos))
 
