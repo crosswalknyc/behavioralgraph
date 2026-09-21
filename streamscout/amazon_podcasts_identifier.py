@@ -61,6 +61,15 @@ _SHOW_IN_URL = re.compile(r"/podcasts/(" + _UUID + r")")
 
 
 # ── fuzzy title matching (case-insensitive) ───────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return set(re.findall(r"[a-z0-9]+", (s or "").lower()))
 
@@ -123,7 +132,7 @@ def discover_show(page, title):
             best = max(uniq.items(), key=lambda kv: similarity(title, kv[1]))
             if similarity(title, best[1]) >= 0.45:
                 break
-    if not best:
+    if not best or not is_relevant(title, best[1]):   # relevance floor (no dump)
         return None, None
     return best[0], best[1]
 

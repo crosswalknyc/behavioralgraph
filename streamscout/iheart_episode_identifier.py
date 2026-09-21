@@ -67,6 +67,15 @@ _TRAIL_ID = re.compile(r"-(\d+)$")
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -132,6 +141,8 @@ def search_podcast(title):
     if not pods:
         return None, None, None
     best = max(pods, key=lambda p: similarity(title, p.get("title", "")))
+    if not is_relevant(title, best.get("title", "")):   # relevance floor (no dump)
+        return None, None, None
     return best.get("id"), best.get("slug"), best.get("title")
 
 

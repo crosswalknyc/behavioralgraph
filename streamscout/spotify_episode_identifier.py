@@ -76,6 +76,15 @@ _URL_ID = re.compile(
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -181,6 +190,8 @@ def find_show(name, token, _tries=5):
         items = [it for it in (shows.get("items") or []) if it and it.get("id")]
         if items:
             best = max(items, key=lambda it: similarity(name, it.get("name", "")))
+            if not is_relevant(name, best.get("name", "")):   # relevance floor
+                return None, None
             return best.get("id"), best.get("name")
         if not shows.get("total"):            # genuinely no results
             return None, None

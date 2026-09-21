@@ -58,6 +58,15 @@ _EPI = re.compile(r"[?&]i=(\d+)")          # ?i=1000788416415
 
 
 # ── tiny helpers ──────────────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -115,6 +124,8 @@ def find_show(title):
     if not results:
         return None, None
     best = max(results, key=lambda r: similarity(title, r.get("collectionName", "")))
+    if not is_relevant(title, best.get("collectionName", "")):   # relevance floor
+        return None, None
     return best.get("collectionId"), best.get("collectionName")
 
 

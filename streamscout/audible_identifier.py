@@ -45,6 +45,15 @@ _SERIES_IN_URL = re.compile(r"/series/([^?/]*?)/(" + _ASIN + r")", re.I)
 
 
 # ── fuzzy title matching ──────────────────────────────────────────────────────
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
@@ -298,12 +307,12 @@ def _best_audible(page, query, want_one=True):
     if not scored:
         return []
     if want_one:
-        return [scored[0][2]]
-    # series: keep hits sharing most of the query's tokens (drops "Lady of
-    # Darkness"-style incidental single-word overlaps) or a strong overall score
-    need = max(2, (len(qtok) + 1) // 2) if len(qtok) >= 2 else 1
-    keep = [h for sc, shared, h in scored if shared >= need or sc >= 0.6]
-    return keep or [scored[0][2]]
+        top = scored[0][2]
+        return [top] if is_relevant(query, top["title"]) else []
+    # series: keep only hits that are genuinely the same title. The shared
+    # relevance floor drops incidental single-word overlaps and unrelated hits
+    # (no more "least-bad" fallback that let unrelated audiobooks through).
+    return [h for sc, shared, h in scored if is_relevant(query, h["title"])]
 
 
 # ── standalone CLI ────────────────────────────────────────────────────────────
