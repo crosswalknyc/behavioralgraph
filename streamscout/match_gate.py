@@ -36,6 +36,26 @@ _STOP = {
 }
 _WORD = re.compile(r"[a-z0-9]+")
 
+# Non-base FORMAT variants (dramatized adaptations, graphic novels) and
+# third-party DERIVATIVES (study guides, summaries, fan fiction, companions).
+# These pass is_relevant() because they carry the real title, yet they are NOT
+# the actual work a Reader/Listener consumes — so resolvers drop them. NOTE: a
+# legitimate foreign-language EDITION of the real title is *not* flagged here
+# (a German or French reader of the book is still a reader of it).
+_VARIANT_DROP = re.compile(
+    r"(?i)(?<![a-z])(?:"
+    r"dramatized|graphic\s+novel|study\s+guide|summary|analysis|workbook|"
+    r"companion|trivia|quiz|unofficial|fan\s?fic(?:tion)?|cliffs?notes|"
+    r"sparknotes|conversation\s+starters"
+    r")(?![a-z])")
+
+
+def is_variant_or_derivative(name):
+    """True if `name` is a non-base format variant (dramatized, graphic novel)
+    or a third-party derivative (study guide, summary, fan fiction, companion).
+    Legitimate foreign-language editions of the real title are NOT flagged."""
+    return bool(_VARIANT_DROP.search(name or ""))
+
 
 def distinctive(s):
     """Lower-cased, de-structured token set for a title."""

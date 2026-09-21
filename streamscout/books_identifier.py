@@ -155,18 +155,18 @@ def hit(title, url, ident, platform, fmt, author=""):
 # adaptations, graphic novels) and third-party DERIVATIVES (study guides,
 # summaries, fan fiction, companions) — but KEEP legitimate foreign-language
 # editions of the actual title (a German or French reader of the real book is
-# still a reader of it).
-_APPLE_DROP = re.compile(
-    r"(?i)(?<![a-z])(?:"
-    r"dramatized|graphic\s+novel|study\s+guide|summary|analysis|workbook|"
-    r"companion|trivia|quiz|unofficial|fan\s?fic(?:tion)?|cliffs?notes|"
-    r"sparknotes|conversation\s+starters"
-    r")(?![a-z])")
+# still a reader of it). The drop-list is shared with the other book resolvers
+# (Audible et al.) via match_gate so every store filters variants identically.
+try:
+    from match_gate import is_variant_or_derivative
+except ImportError:                              # keep the sibling importable
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from match_gate import is_variant_or_derivative
 
 
 def _apple_keep(name):
     """Keep real editions (any language); drop format variants & derivatives."""
-    return not _APPLE_DROP.search(name or "")
+    return not is_variant_or_derivative(name)
 
 
 def _apple_search(title, entity, author=None, limit=8):
