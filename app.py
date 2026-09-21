@@ -55223,15 +55223,14 @@ def _spec_from_draft(draft):
                                             subject=subject, max_len=60,
                                             single_line=True)
     # StreamScout routing (2026-09-21): audience-of-a-property pulls
-    # seed from reference.content_mapping. Interview-answered drafts
-    # carry seed_source='content_map' (unresolvable = specialized
-    # hold, per the signed-off spec). The backstop below stamps
+    # seed BRAND INPUT from reference.content_mapping when seeds
+    # exist. Seed-sourcing only, never pipeline control (Jenna, same
+    # day): the build always runs normally either way - no holds, no
+    # refunds, no needs-help email. The backstop below stamps
     # 'content_map_soft' on consumption-scoped IP subjects the
-    # interview never asked about - the worker upgrades their seeds
-    # when the content map or StreamScout has them but never converts
-    # a working build into a hold. The Keke Palmer class (host-map
-    # brand seed while episode URLs sat in the content map) cannot
-    # recur on either strength.
+    # interview never asked about so their seeds upgrade when
+    # available. The Keke Palmer class (host-map brand seed while
+    # episode URLs sat in the content map) cannot recur.
     if str(draft.get('seed_source') or '').strip() == 'content_map':
         spec['seed_source'] = 'content_map'
         spec['content_show'] = _scrub(
