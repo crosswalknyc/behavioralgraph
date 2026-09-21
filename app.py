@@ -45888,7 +45888,15 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Generic audience nouns ('consumers', 'shoppers', 'fans', "
         "'eaters', 'audience of') are implicit in a brand TU - drop "
         "them from `subject` ('Go-GURT Consumers' -> 'Go-GURT', "
-        "'Chipotle eaters' -> 'Chipotle').\n"
+        "'Chipotle eaters' -> 'Chipotle'). EXCEPTION (2026-09-21): "
+        "consumption nouns - viewers, listeners, readers, players - "
+        "attached to a PROPERTY (a title, channel, podcast, series, "
+        "book, game) are NOT generic. They define a consumption "
+        "universe and STAY in `subject` along with the property words "
+        "verbatim: 'Rene Vaca YouTube Channel Viewers' stays exactly "
+        "that (NEVER bare 'Rene Vaca'), 'Lady Miss Jacqueline Series "
+        "Listeners' stays. Silently renaming the user's property to "
+        "the bare creator name is a defect.\n"
         "  * KEEP universe-defining behavioral qualifiers that change "
         "WHO is in the panel: 'Vizio TV Owners', 'EST Buyers', 'TVOD "
         "Renters', 'Spectrum Churners', 'Amazon Prime Members', 'ISP "
@@ -46579,7 +46587,23 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "= 'content_map'. Explicit phrasing counts as an answer "
         "('viewers of The Bear' = audience + single title; 'the "
         "Merciless Saints books: A, B, C' = franchise + titles) - do "
-        "not re-ask what the user already said.\n"
+        "not re-ask what the user already said. CREATOR-ATTACHED "
+        "PROPERTIES (2026-09-21, Jenna): a platform property named "
+        "after a person or brand ('Rene Vaca YouTube Channel', 'the "
+        "SmartLess podcast', 'MrBeast's channel') is NOT automatically "
+        "the person. Without an audience noun, ASK and wait: 'Viewers "
+        "of <the property> (a viewers universe with the platform "
+        "pinned at 100), or <the creator>'s total universe (their "
+        "full fan base)?'. WITH the audience noun ('...viewers'), it "
+        "is the audience of the property: subject keeps the property "
+        "words + the noun ('Rene Vaca YouTube Channel Viewers'), "
+        "seed_source = 'content_map', the platform pins at 100 - and "
+        "the confirmation still ECHOES the scope so the user sees "
+        "which read they are getting. CONFIRMATION WORDING for any "
+        "consumption universe (viewers / listeners / readers / "
+        "players): say 'the national total <viewers> universe + "
+        "avid' with the matching noun - plain 'total universe' is "
+        "reserved for entity builds.\n"
         "  7b-CUSTOMERS-OF-A-BRAND (HARD RULE - 2026-09-17): an ask for "
         "the CUSTOMERS of a specific brand ('current customers of The "
         "Joint', 'Chime banking customers', 'lapsed Costco members', "
@@ -50602,7 +50626,9 @@ def _decompose_embedded_subject_cuts(draft, user_text=None):
             cut_names = ', '.join(
                 c.get('name_label') or c.get('label') or c['cut_id']
                 for c in all_cuts)
-            note = (f"Total Universe + Avid build on the full {base} "
+            _up = _pm_universe_phrase(draft).replace(
+                'total', 'Total').replace('universe', 'Universe')
+            note = (f"{_up} + Avid build on the full {base} "
                     f"universe; {cut_names} ride as derived cut(s) "
                     f"named '{base} - <cut>' at {ADDON_CUT_CREDITS} "
                     "credits each.")
@@ -51656,6 +51682,30 @@ def api_chatbot_client_error():
     return jsonify({'success': True})
 
 
+def _pm_universe_phrase(draft):
+    """'total universe' or 'total <viewers|listeners|readers|players>
+    universe', from the draft's consumption scope (2026-09-21, Jessie:
+    a viewers build confirmed as 'the national total universe' reads
+    like the wrong pull). The noun comes from the subject's own
+    audience word, falling back to consumer_verb on seeded builds."""
+    try:
+        d = draft or {}
+        subj = str(d.get('subject') or d.get('name') or '')
+        import re as _re_up
+        m = _re_up.search(r'\b(viewers|listeners|readers|players)\b',
+                          subj, _re_up.I)
+        if m:
+            return f'total {m.group(1).lower()} universe'
+        verb = str(d.get('consumer_verb') or '').strip().lower()
+        if verb in ('viewers', 'listeners', 'readers', 'players'):
+            return f'total {verb} universe'
+        if str(d.get('seed_source') or '').startswith('content_map'):
+            return 'total viewers universe'
+    except Exception:
+        pass
+    return 'total universe'
+
+
 @app.route('/api/brief-chat/clarify', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/clarify')
@@ -51724,15 +51774,16 @@ def api_synth_chat_clarify():
             msg = (f"Locked in {len(cuts)} cut"
                    f"{'s' if len(cuts) != 1 else ''}:\n{cut_lines}\n\n"
                    f"Total: {total} credits (base {base_credits} "
-                   f"covers the national total universe + avid; "
+                   f"covers the national {_pm_universe_phrase(draft)} "
+                   f"+ avid; "
                    f"{len(cuts)} x {ADDON_CUT_CREDITS} for the cuts, "
                    "each derived from that national parent so the "
                    "numbers ladder up). Review the brief below and "
                    "approve to queue.")
         else:
-            msg = ("No add-on cuts - just the national total universe "
-                   "+ avid. Review the brief below and approve to "
-                   "queue.")
+            msg = (f"No add-on cuts - just the national "
+                   f"{_pm_universe_phrase(draft)} + avid. Review the "
+                   "brief below and approve to queue.")
         if notes:
             real = [n for n in notes if n not in
                     ('parse_partial', 'parse_failed')][:4]
