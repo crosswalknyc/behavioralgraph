@@ -178533,7 +178533,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         gap: 28px 80px; margin-top: 22px;
     }
     #jiqUfcNestCard .jiq-frag-detours.cols-1 { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
-    #jiqUfcNestCard .jiq-frag-detrow.is-wide { grid-template-columns: minmax(0, 1fr) 90px 110px; }
+    #jiqUfcNestCard .jiq-frag-detrow,
+    #jiqUfcNestCard .jiq-frag-detrow.is-wide {
+        grid-template-columns: minmax(0, 1fr) 140px 7.5rem;
+    }
+    #jiqUfcNestCard .jiq-frag-detbar { width: 140px; }
+    #jiqUfcNestCard .jiq-frag-detval { width: 7.5rem; text-align: right; }
     #jiqUfcNestCard .jiq-frag-detlab {
         white-space: normal; overflow: visible; line-height: 1.35; word-spacing: 0.12em;
     }
