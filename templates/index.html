@@ -4209,7 +4209,7 @@
             border-radius: 6px;
             min-width: 220px;
             width: max-content;
-            z-index: 100080;
+            z-index: 2147482100;
             box-shadow: 0 6px 20px rgba(0,0,0,0.45);
             white-space: nowrap;
         }
@@ -131223,6 +131223,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (hit.closest('#toolbarRow .dash-dropdown') && !hit.closest('#tabExportDropdown')) {
                 return fire(function() {
+                    if (typeof window._closeCompareDateRangesPopover === 'function') window._closeCompareDateRangesPopover();
                     if (typeof window.toggleExportMenu === 'function') window.toggleExportMenu();
                 });
             }
@@ -131249,7 +131250,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!view || !view.classList.contains('piq-v4')) return;
                     var t = e.target;
                     if (!t || !t.closest) return;
-                    if (t.closest('#piqProfileSidebar, #compareDateRangesPopover, #howToVideoOverlay, .modal-overlay')) return;
+                    if (t.closest('#piqProfileSidebar, #howToVideoOverlay, .modal-overlay')) return;
+                    // Cuts popover stacks above sticky chrome, so a press on
+                    // Export can hit the panel instead of the button. Treat
+                    // that overlap as an Export click so the panel dismisses.
+                    if (t.closest('#compareDateRangesPopover')) {
+                        var expWrap = document.querySelector('#toolbarRow .dash-dropdown');
+                        if (expWrap) {
+                            var er = expWrap.getBoundingClientRect();
+                            if (e.clientX >= er.left && e.clientX <= er.right && e.clientY >= er.top && e.clientY <= er.bottom) {
+                                var expHit = expWrap.querySelector('.dash-action-btn') || expWrap;
+                                if (window._piqV4NavAct(expHit, e)) {
+                                    document._piqV4NavSwallow = Date.now();
+                                }
+                            }
+                        }
+                        return;
+                    }
                     if (window._piqV4NavAct(t, e)) {
                         document._piqV4NavSwallow = Date.now();
                     }
@@ -136846,7 +136863,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             const pop = document.getElementById('compareDateRangesPopover');
             if (pop) pop.remove();
             document.removeEventListener('mousedown', _compareDateRangesDocHandler, true);
+            document.removeEventListener('pointerdown', _compareDateRangesDocHandler, true);
         }
+        window._closeCompareDateRangesPopover = _closeCompareDateRangesPopover;
 
         function _compareDateRangesDocHandler(e) {
             const pop = document.getElementById('compareDateRangesPopover');
@@ -136860,6 +136879,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         window._openCompareDateRangesPopover = function _openCompareDateRangesPopover() {
             const existing = document.getElementById('compareDateRangesPopover');
             if (existing) { _closeCompareDateRangesPopover(); return; }
+
+            // Mutually exclusive with Export: the cuts panel would otherwise
+            // paint over the export menu (export lives in sticky chrome).
+            try {
+                const exp = document.getElementById('tabExportDropdown');
+                if (exp && exp.style.display === 'block') {
+                    exp.style.display = 'none';
+                    if (typeof _positionTabExportDropdown === 'function') {
+                        window.removeEventListener('scroll', _positionTabExportDropdown, true);
+                        window.removeEventListener('resize', _positionTabExportDropdown);
+                    }
+                }
+            } catch (_) {}
 
             const btn = document.getElementById('dashViewDeltasBtn');
             if (!btn) return;
@@ -137177,7 +137209,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             pop.style.left = left + 'px';
             pop.style.top = top + 'px';
 
-            setTimeout(() => { document.addEventListener('mousedown', _compareDateRangesDocHandler, true); }, 0);
+            setTimeout(() => {
+                document.addEventListener('mousedown', _compareDateRangesDocHandler, true);
+                document.addEventListener('pointerdown', _compareDateRangesDocHandler, true);
+            }, 0);
 
             // Populate the index-source picker now that the <select>s
             // are in the DOM and the current selectedKeys are known.
@@ -160251,9 +160286,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _positionTabExportDropdown() {
             const dropdown = document.getElementById('tabExportDropdown');
             if (!dropdown) return;
-            // Find the button that triggers this dropdown (the sibling before the menu).
-            const wrapper = dropdown.closest('.dash-dropdown');
-            const btn = wrapper ? wrapper.querySelector('.dash-action-btn') : null;
+            // Menu is parked on document.body so it can stack above the
+            // Data Cuts popover (also on body). Do not rely on closest()
+            // after reparenting.
+            const wrapper = dropdown.closest('.dash-dropdown') || document.querySelector('#toolbarRow .dash-dropdown, .action-buttons-row .dash-dropdown');
+            const btn = wrapper ? wrapper.querySelector('.dash-action-btn') : document.querySelector('#toolbarRow .dash-dropdown .dash-action-btn');
             const rect = (btn || dropdown).getBoundingClientRect();
             // Position immediately below the button, aligned to its left edge.
             const gap = 4;
@@ -160280,6 +160317,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 window.removeEventListener('resize', _positionTabExportDropdown);
             } else {
                 if (typeof window.hideGlobalTooltip === 'function') window.hideGlobalTooltip();
+                // pointerdown on Export preventDefault()s, which can swallow
+                // the mousedown the cuts closer listens for — dismiss cuts
+                // here so Export never opens behind that panel.
+                if (typeof window._closeCompareDateRangesPopover === 'function') {
+                    window._closeCompareDateRangesPopover();
+                }
+                if (dropdown.parentNode !== document.body) {
+                    document.body.appendChild(dropdown);
+                }
+                dropdown.style.zIndex = '2147482100';
                 dropdown.style.display = 'block';
                 _positionTabExportDropdown();
                 // Reposition on scroll (capture so we catch scrolls inside
@@ -160289,6 +160336,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 window.addEventListener('resize', _positionTabExportDropdown);
             }
         }
+        window.toggleExportMenu = toggleExportMenu;
         
         // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
