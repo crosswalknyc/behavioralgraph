@@ -71,7 +71,8 @@ only on the user's answer.)*
      profile the way Prometheus does today, from the **host_map**. *(End of the
      content_map path — everything below is audience-only.)*
    - **Audience** (viewers, readers, players, listeners of a property) →
-     continue.
+     continue. **Remember which audience they picked** — it selects the
+     StreamScout **platform group** in step 5 (see the mapping there).
 
 2. **ASK THE USER — "Is this a single title or a franchise?"**
    - **Single title** → **ask the user to enter the one title.** The `SHOW`
@@ -90,9 +91,21 @@ only on the user's answer.)*
    matching rows. Done.
 
 5. **If no match is found:**
-   1. **Query StreamScout** — for a **single title**, search that title; for a
-      **franchise**, run **one StreamScout search per entered title** and pool
-      the results. StreamScout returns the standard rows
+   1. **Query StreamScout — scoped to the audience's platform group.** For a
+      **single title**, search that title; for a **franchise**, run **one
+      StreamScout search per entered title** and pool the results. **Always pass
+      `platforms=`** — the group that matches the audience from step 1. **Never
+      call it bare** (it defaults to `all`, which is what pulled a *Listeners*
+      ask across video/books/games and dumped 2,142 junk rows):
+
+      | Audience (step 1) | `platforms=` |
+      |---|---|
+      | **Viewers** | `"video"` |
+      | **Readers** | `"books"` |
+      | **Players** | `"games"` |
+      | **Listeners** | `["podcasts", "audio"]` |
+
+      StreamScout returns the standard rows
       (`SHOW · URL · PRODUCTION · PLATFORM · SEASON`).
    2. **Stamp the `SHOW` column** = the step-2 `SHOW` value on **every** pooled
       row (so a whole franchise lands under the **one** franchise `SHOW`,
@@ -124,6 +137,12 @@ only on the user's answer.)*
 - **Fail-open:** if ClickHouse is unreachable, rows **queue to S3** and retry;
   the build continues rather than blocking. (`migration/viewer_content_scope.py`
   already implements exactly this insert path — reuse it.)
+- **Server-side relevance floor (live in StreamScout):** the resolvers now reject
+  weak/incidental matches instead of enumerating an unrelated show's whole
+  catalog (the fix for *"Lady" → the entire "The Lady Vanishes" podcast*). So
+  **an empty result from a platform is expected and correct** when the title
+  isn't there — that's the Notification A / "specialized" path, not a bug to
+  retry. `low_confidence()` becomes a *second* backstop, not the only one.
 
 ---
 
@@ -148,12 +167,22 @@ content_mapping**, it emails `Jenna@crosswalknyc.com` **and**
 ## Reference pseudocode
 
 ```python
+# Audience (step 1)  ->  StreamScout platform group (step 5). NEVER "all".
+AUDIENCE_PLATFORMS = {
+    "viewers":   "video",
+    "readers":   "books",
+    "players":   "games",
+    "listeners": ["podcasts", "audio"],
+}
+
+
 def run_a_profile():
     # ── Step 1 — ASK the user (never inferred) ────────────────────────────────
     subject = ask_user("Is this profile for an ENTITY (person, brand, etc.) "
                        "or for an AUDIENCE (viewers/readers/players/listeners)?")
     if subject == "entity":
         return build_profile_from_hostmap()          # unchanged, current path
+    audience = subject                                # remember: viewers/readers/…
 
     # ── Step 2 — ASK the user ─────────────────────────────────────────────────
     kind = ask_user("Is this a SINGLE TITLE or a FRANCHISE?")
@@ -166,29 +195,34 @@ def run_a_profile():
 
     # ── Step 3 — content_map FIRST ────────────────────────────────────────────
     rows = content_mapping_lookup(show=show)         # normalized SHOW match
+    if rows:                                         # already seeded -> use it,
+        return build_profile(seed_urls=[r["URL"] for r in rows])   # no live call
 
-    # ── Step 5 — only if content_map doesn't already have it ──────────────────
-    if not rows:
-        try:
-            fetched = []
-            for t in titles:                         # ONE StreamScout search per
-                fetched += streamscout_query(title=t)  # entered title; pool them
-            if not fetched or low_confidence(fetched):
-                raise NotConfident(show)
-            for r in fetched:
-                r["SHOW"] = show                     # stamp the franchise SHOW
-            added = content_mapping_insert(fetched)  # insert-only, idempotent
-            if added:
-                email_team_added_csv(added)          # Notification B → Jenna+Jessie
-            rows = fetched
-        except (NotFound, NotConfident) as e:
-            notify_user("Your request is specialized, we are working on it!")
-            email_team_needs_help(property=str(e))   # Notification A → Jenna+Jessie
-            return SPECIALIZED_HOLD                   # NO host_map fallback
+    # ── Step 5 — only if content_map truly has nothing ────────────────────────
+    plats = AUDIENCE_PLATFORMS[audience]             # SCOPED — never "all"
+    try:
+        fetched = []
+        for t in titles:                             # ONE search per entered
+            fetched += streamscout_query(title=t,    # title; pool them
+                                         platforms=plats, show=show)
+        if not fetched or low_confidence(fetched):
+            raise NotConfident(show)
+        added = content_mapping_insert(fetched)      # insert-only, idempotent
+        if added:
+            email_team_added_csv(added)              # Notification B → Jenna+Jessie
+        rows = fetched
+    except (NotFound, NotConfident) as e:
+        notify_user("Your request is specialized, we are working on it!")
+        email_team_needs_help(property=str(e))       # Notification A → Jenna+Jessie
+        return SPECIALIZED_HOLD                       # NO host_map fallback
 
     # ── Step 4 — build the profile from the URL column ────────────────────────
     return build_profile(seed_urls=[r["URL"] for r in rows])
 ```
+
+> `show=` stamps the franchise `SHOW` on every returned row inside
+> `streamscout_query`, so a whole franchise lands under the one `SHOW` in a
+> single call — no separate stamping loop needed.
 
 ---
 
@@ -200,7 +234,8 @@ def run_a_profile():
    `SHOW · URL · PRODUCTION · PLATFORM · SEASON` rows. `platforms` takes a key, a
    list, or a group (`video|podcasts|audio|books|games|all`); pass `show=` to
    stamp the franchise name on every row. The caller loops it over the
-   franchise's title list.
+   franchise's title list. **You must pass the audience-scoped `platforms=`
+   (see the `AUDIENCE_PLATFORMS` map / step 5) — never let it default to `all`.**
 2. **`content_mapping_lookup(show)`** — normalized `SHOW` match against
    `reference.content_mapping` (reuse the ingest's `norm_token`).
 3. **`content_mapping_insert(rows)` + `email_team_added_csv`** — reuse the
