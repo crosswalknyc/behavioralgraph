@@ -73890,13 +73890,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // cooldown and the near-bottom scroll check never block an
         // explicit click. Pending draft / clarify cards keep priority.
         function synthChatSuggestionsShow() {
-            // 2026-09-16 (Jenna): the button reads "Pull Custom Data"
-            // and always reveals the standing pull chips - build,
-            // refresh, cut, brand partnership, subscriber iq, digital
-            // journey - regardless of thread state.
+            // 2026-09-21 (Jenna): Pull Custom Data shows ONLY the seven
+            // standing pull chips - build, refresh, cut, brand
+            // partnership, subscriber iq, digital journey, flywheel.
+            // Never the view-context chips; those belong to the
+            // automatic chip row, not this button.
             try {
                 _synthChatBumpActivity();
-                try { _pmRefreshStarterChips(); } catch (_) {}
+                try {
+                    if (_pmDefaultStarterChipsHtml === null) {
+                        // establish the pristine snapshot first
+                        try { _pmRefreshStarterChips(); } catch (_) {}
+                    }
+                    var hostEl = document.getElementById('synthChatStarterChips');
+                    if (hostEl && _pmDefaultStarterChipsHtml !== null) {
+                        hostEl.innerHTML = _pmDefaultStarterChipsHtml;
+                        try { _pmApplyModeToStarterChips(); } catch (_) {}
+                    }
+                } catch (_) {}
                 var chips = document.getElementById('synthChatStarterChips');
                 if (chips) {
                     chips.style.display = 'flex';
