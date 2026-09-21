@@ -100602,6 +100602,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqUfcNestDiscovery() {
             var dis = (_JIQ_UFC_DATA || {}).ufc_discovery || {};
+            var clips = 41.2;
+            var social = 26.4;
+            var inapp = 22.1;
             var rows = (dis.channels || []).map(function(ch) {
                 var short = (ch.channel || '').split(' (')[0];
                 return {
@@ -100610,11 +100613,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     show: _jiqUfcPct1(ch.share_pct) + ' \u00b7 ' + _jiqFragNum(_jiqUfcPeople(ch.reach_m))
                 };
             });
-            return _jiqUfcNestSec('02 Discovery', 'One channel accounts for a third of first exposure.', _jiqFragNum(_jiqUfcPeople(dis.total_first_exposure_m || 34.57)) + ' people. First UFC-on-Paramount+ touch, nine channels, ranked.')
+            return _jiqUfcNestSec('02 Discovery', 'The two audiences do not share one discovery funnel.', 'New UFC subs come in on official clips. People already paying split between UFC social and the app.')
+                + '<div class="jiq-ufc-mix">'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">New UFC subs</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-hot" style="flex:' + clips + '">' + _jiqUfcPct1(clips) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - clips) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap"><b>Official UFC clips</b><span>First touch for ' + _jiqUfcPct1(clips) + ' of new UFC subs.</span></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">Already on Paramount+</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-soc" style="flex:' + social + '">' + _jiqUfcPct1(social) + '</div>'
+                + '<div class="is-app" style="flex:' + inapp + '">' + _jiqUfcPct1(inapp) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - social - inapp) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap is-2">'
+                + '<div><b>UFC social</b><span>' + _jiqUfcPct1(social) + '</span></div>'
+                + '<div><b>In the app</b><span>' + _jiqUfcPct1(inapp) + '</span></div>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
+                + _jiqUfcNestRead('CBS promo only counts through Super Bowl Sunday.')
+                + _jiqUfcNestSec('All first touches', 'One channel accounts for a third of first exposure.', _jiqFragNum(_jiqUfcPeople(dis.total_first_exposure_m || 34.57)) + ' people. First UFC-on-Paramount+ touch, nine channels, ranked.')
                 + '<div class="jiq-frag-detours cols-1">'
                 + _jiqUfcNestDetours([{ title: 'First-exposure channel', rows: rows }], true)
-                + '</div>'
-                + _jiqUfcNestRead('Official UFC clips drive 41.2% of UFC-first first exposures. People already on Paramount+ split between UFC social (26.4%) and in-app surfaces (22.1%). The two audiences do not share one discovery funnel. CBS promo only counts through Super Bowl Sunday.');
+                + '</div>';
         }
         function _jiqUfcNestClip() {
             var jb = (_JIQ_UFC_DATA || {}).ufc_journey_b || {};
@@ -178546,6 +178572,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     }
     .jiq-ufc-wall-share .jiq-frag-kept { color: #E682FF; }
     body[data-theme="light"] .jiq-ufc-wall-share .jiq-frag-kept { color: #8E3FA8; }
+
+    .jiq-ufc-mix {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 28px 80px;
+        margin: 0 34px 8px;
+    }
+    @media (max-width: 1080px) { .jiq-ufc-mix { grid-template-columns: 1fr; gap: 22px; } }
+    .jiq-ufc-mix-k {
+        font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: #7C878A; margin-bottom: 10px;
+        word-spacing: 0.35em;
+    }
+    .jiq-ufc-mix-bar { display: flex; gap: 4px; height: 44px; }
+    .jiq-ufc-mix-bar > div {
+        border-radius: 8px; display: flex; align-items: center; padding: 0 12px;
+        font-size: 13px; font-weight: 800; min-width: 0;
+    }
+    .jiq-ufc-mix-bar .is-hot { background: #C7F23E; color: #0C1618; }
+    .jiq-ufc-mix-bar .is-soc { background: #24506B; color: #E9E8E1; }
+    .jiq-ufc-mix-bar .is-app { background: #1B2E34; color: #E9E8E1; }
+    .jiq-ufc-mix-bar .is-rest { background: #3B3D38; }
+    body[data-theme="light"] .jiq-ufc-mix-bar .is-hot { background: #5E7E12; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-ufc-mix-bar .is-soc { background: #8E3FA8; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-ufc-mix-bar .is-app { background: #0C1618; color: #E9E8E1; }
+    body[data-theme="light"] .jiq-ufc-mix-bar .is-rest { background: #C9C6BA; }
+    .jiq-ufc-mix-cap { margin-top: 12px; }
+    .jiq-ufc-mix-cap.is-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .jiq-ufc-mix-cap b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+    .jiq-ufc-mix-cap span { display: block; margin-top: 4px; font-size: 12px; line-height: 1.45; color: #9AA09B; }
 
     .jiq-ufc-uni { display: flex; gap: 6px; margin: 0 34px 8px; height: 44px; }
     .jiq-ufc-uni-seg {
