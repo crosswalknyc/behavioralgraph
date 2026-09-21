@@ -5985,8 +5985,19 @@ def fetch_for_date(target_date_iso: str,
     s3 = _s3()
     dated_prefix = _S3_DATED.format(date=target_date_iso)
     key_dated = f'{dated_prefix}stream_estimates.json'
-    s3.put_object(Bucket=_S3_BUCKET, Key=key_dated, Body=body,
-                   ContentType='application/json')
+    _put = s3.put_object(Bucket=_S3_BUCKET, Key=key_dated, Body=body,
+                          ContentType='application/json')
+    # Lean sibling index for the window sum (see stream_window_index.py).
+    # Written here as well as in _base.write_snapshot so a backfilled day
+    # is as cheap to read as a day the nightly cron wrote.
+    try:
+        from . import stream_window_index as _swi
+        _swi.write_index(target_date_iso, payload,
+                         source_etag=_put.get('ETag'),
+                         source_bytes=len(body), s3=s3)
+    except Exception:
+        logger.exception("stream window index: write skipped for %s "
+                          "(non-fatal)", target_date_iso)
     logger.info("stream_estimates: wrote dated snapshot s3://%s/%s "
                  "(%d items, target=%s)",
                  _S3_BUCKET, key_dated, payload.get('count') or 0,

@@ -256,10 +256,25 @@ def write_snapshot(source: str, payload: dict, *,
                  len(payload.get('national') or []))
 
     if also_dated:
-        dated_prefix = S3_DATED_PREFIX.format(date=now.strftime('%Y-%m-%d'))
+        day_iso = now.strftime('%Y-%m-%d')
+        dated_prefix = S3_DATED_PREFIX.format(date=day_iso)
         key_dated = f'{dated_prefix}{source}.json'
-        s3.put_object(Bucket=S3_BUCKET, Key=key_dated, Body=body,
-                       ContentType='application/json')
+        put = s3.put_object(Bucket=S3_BUCKET, Key=key_dated, Body=body,
+                             ContentType='application/json')
+
+        # Lean sibling index for the window sum. The dashboard reads
+        # up to 60 dated days per request and only needs three fields
+        # out of this payload, so it reads them from a copy about
+        # twenty times smaller. See stream_window_index.py.
+        if source == 'stream_estimates':
+            try:
+                from . import stream_window_index as _swi
+                _swi.write_index(day_iso, payload,
+                                 source_etag=put.get('ETag'),
+                                 source_bytes=len(body), s3=s3)
+            except Exception:
+                logger.exception('stream window index: write skipped '
+                                 'for %s (non-fatal)', day_iso)
 
 
 # ────────────────────────────────────────────────────────────────────────────

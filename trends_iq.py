@@ -929,6 +929,124 @@ _WINDOW_ACCUMULATOR_TIMEOUT_S   = int(
 
 
 # ---------------------------------------------------------------------------
+# Lean per-day read (2026-09-21)
+#
+# The window sum opens three things out of each dated snapshot:
+# `target_date`, `items[key].us_estimate`, and
+# `items[key].by_platform[slug].us_estimate`. The snapshot itself had
+# grown to 48.6 MB across 20,455 items, more than half of it per-item
+# reasoning prose (`method`, `day_specificity`, `sources`) that the sum
+# never opens. A 7 day view reads 14 of those days and a 30 day view
+# reads 60, which is how `streaming_trending` came to miss the section
+# budget and how the 30 day window came to sum only the days that beat
+# the accumulator's own timeout.
+#
+# The nightly run now writes those three fields to a sibling key under
+# the same dated prefix, about twenty times smaller. See
+# `scripts/trends_scrapers/stream_window_index.py` for the shape and
+# for how a rewritten snapshot invalidates its own index.
+#
+# Entries in the index hold the same shape they hold in the snapshot, so
+# a lean day and a full day go through the accumulation loop by the same
+# code path and produce the same arithmetic. The fallback is per day: a
+# day with no index, or an index that no longer matches the snapshot it
+# describes, is read in full exactly as before.
+# ---------------------------------------------------------------------------
+
+_STREAM_WINDOW_INDEX_ENABLED = (
+    os.environ.get('TRENDS_IQ_STREAM_WINDOW_INDEX', '1') != '0')
+
+
+def _read_stream_window_index(day_iso: str) -> Optional[dict]:
+    """The lean index for one archive day, or None when it is absent,
+    stale, or unreadable.
+
+    Trusted only when it matches the snapshot it describes: the version
+    is the current one and the recorded ETag and byte count agree with
+    what S3 reports for the dated snapshot right now. That check is what
+    keeps a snapshot rewritten by a repair or backfill script from
+    serving numbers that no longer exist. It costs one HEAD, against a
+    download it saves.
+
+    Never raises.
+    """
+    if not _STREAM_WINDOW_INDEX_ENABLED:
+        return None
+    s3 = _s3_client()
+    if s3 is None:
+        return None
+    try:
+        from scripts.trends_scrapers import stream_window_index as swi
+    except Exception:
+        return None
+    try:
+        resp = s3.get_object(Bucket=S3_CACHE_BUCKET,
+                             Key=swi.index_key(day_iso))
+        index = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+    try:
+        head = s3.head_object(Bucket=S3_CACHE_BUCKET,
+                              Key=swi.source_key(day_iso))
+    except Exception:
+        # No snapshot behind the index. The full read would have found
+        # nothing either, so this day stays out of the window.
+        return None
+    if not swi.index_is_current(index, head):
+        logger.info('trends_iq stream window index: %s no longer matches '
+                    'its snapshot; reading that day in full', day_iso)
+        return None
+    return index
+
+
+def _read_stream_day(day_iso: str) -> Optional[dict]:
+    """One dated day of stream estimates, in the cheapest form that
+    carries what the window sum reads: the lean index when it is
+    current, the full snapshot otherwise."""
+    index = _read_stream_window_index(day_iso)
+    if index is not None:
+        return index
+    return _read_snapshot('stream_estimates', asof=day_iso)
+
+
+def _is_lean_stream_day(record: Optional[dict]) -> bool:
+    """True for a lean index record. A full snapshot never carries
+    `index_version`."""
+    return isinstance(record, dict) and bool(record.get('index_version'))
+
+
+def _dated_stream_day_is_latest(day_iso: str) -> bool:
+    """True when the dated snapshot for `day_iso` is byte for byte the
+    `latest/` copy the caller already holds.
+
+    The nightly run writes one body to both keys, so on a live view the
+    reference day and `latest/` are usually the same object and there is
+    no reason to download 48 MB of it twice in one request. Same ETag
+    and same byte count is same bytes, so the two parse to the same
+    snapshot. Anything short of that returns False and the dated copy is
+    read normally.
+    """
+    s3 = _s3_client()
+    if s3 is None:
+        return False
+    try:
+        latest = s3.head_object(
+            Bucket=S3_CACHE_BUCKET,
+            Key=f'{_SNAPSHOT_PREFIX}stream_estimates.json')
+        dated = s3.head_object(
+            Bucket=S3_CACHE_BUCKET,
+            Key=(f'{_SNAPSHOT_DATED_PREFIX.format(date=day_iso)}'
+                 'stream_estimates.json'))
+    except Exception:
+        return False
+    a = (latest.get('ETag') or '').strip('"')
+    b = (dated.get('ETag') or '').strip('"')
+    if not a or a != b:
+        return False
+    return latest.get('ContentLength') == dated.get('ContentLength')
+
+
+# ---------------------------------------------------------------------------
 # Fold-tolerant key matching for window deltas (2026-09-09).
 #
 # The same show drifts between key spellings across days: rails flip
@@ -1243,7 +1361,26 @@ def _accumulate_stream_estimates_over_window(
     cur_set  = set(dated_isos)
     prev_set = set(prev_isos)
 
+    # The reference day is read in FULL: besides its numbers it is the
+    # shape template the merged snapshot is built from, so it has to
+    # carry the fields the renderers read (method, sources, unit vocab,
+    # posters). Every other day contributes nothing but its numbers and
+    # is read from the lean index. `dated_isos[0]` is the only day that
+    # can ever equal today, so the latest/ fallback below still covers
+    # every case it covered before.
+    ref_day = dated_isos[0]
+
     def _fetch_one(d_iso: str) -> tuple[str, Optional[dict]]:
+        if d_iso != ref_day:
+            return d_iso, _read_stream_day(d_iso)
+        # On a live view the caller has already read `latest/`, and the
+        # nightly run wrote today's dated copy from the same bytes. When
+        # S3 confirms they are the same object, reuse what is already in
+        # memory rather than downloading it a second time.
+        if (d_iso == _today_iso()
+                and isinstance((today_snap or {}).get('items'), dict)
+                and _dated_stream_day_is_latest(d_iso)):
+            return d_iso, today_snap
         # Live view: for today's date the dated snapshot may not exist
         # until the nightly cron runs, so fall back to the already-
         # fetched `latest/` copy (or a fresh `latest/` read) so we
@@ -1332,6 +1469,26 @@ def _accumulate_stream_estimates_over_window(
     # Prior window newest-first too, so the baseline day reported on
     # each item is the most recent prior day that actually carried it.
     prev_fetched.sort(key=lambda t: t[0], reverse=True)
+
+    # The newest day that landed is the shape template, so it has to be
+    # the full snapshot. It normally already is (the reference day is
+    # always read in full), but the reference day can drop out: its
+    # dated file may not exist yet, or the overnight guard may have
+    # re-dated it onto the day before. In that case pull the full copy
+    # for whichever day ended up newest, and use it for that day's
+    # numbers too so the template and the sum cannot disagree.
+    if _is_lean_stream_day(fetched[0][1]):
+        base_day = fetched[0][0]
+        full = _read_snapshot('stream_estimates', asof=base_day)
+        if full is None and base_day == _today_iso():
+            full = today_snap
+        if full is None or not isinstance(full.get('items'), dict):
+            logger.warning(
+                'trends_iq accumulator: no full snapshot for the newest '
+                'day in the window (%s); falling back to the single-day '
+                'read', base_day)
+            return None
+        fetched[0] = (base_day, full)
 
     # Deep-copy the latest snapshot as the shape template. Method /
     # sources / unit vocab survive verbatim; us_estimate becomes the
@@ -6159,7 +6316,9 @@ def _annotate_fast_channels_with_view_change(fast_trending: dict,
             if back > _FAST_CHANNEL_BASELINE_MAX_BACK:
                 return None
             d_iso = (ref_date - timedelta(days=back)).isoformat()
-            snap = _read_snapshot('stream_estimates', asof=d_iso)
+            # Same three fields the window sum reads, so the lean
+            # per-day index serves this baseline too.
+            snap = _read_stream_day(d_iso)
             if snap:
                 measured = str(snap.get('target_date') or '')[:10] or d_iso
                 loaded.append((d_iso, measured, snap.get('items') or {}))

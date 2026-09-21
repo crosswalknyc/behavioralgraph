@@ -611,6 +611,35 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: platform rank alignment crashed "
                                "(non-fatal)")
 
+        # The dashboard reads up to 60 dated days of estimates per
+        # request and only needs three fields out of each, so it reads
+        # them from a lean sibling index roughly twenty times smaller
+        # than the snapshot. The index is written beside every snapshot
+        # as it lands, but the gate re-prices and the rank alignment
+        # above rewrites the day in place, so today's index is stale by
+        # the time we get here and some earlier day may have been
+        # touched by a repair script since. This pass puts the trailing
+        # window back in agreement.
+        #
+        # Cheap in the healthy case: a day whose index already matches
+        # its snapshot costs a HEAD and a small read, and only a day
+        # that actually drifted pays for the full download. An index
+        # that does not match is ignored at read time anyway, so a
+        # failure here costs latency, never correctness. Non-fatal.
+        try:
+            from scripts.trends_scrapers import stream_window_index
+            _swi_t0 = time.time()
+            _swi = stream_window_index.reconcile()
+            logging.info(
+                "run_all: stream window index reconcile in %.1fs "
+                "(%d checked, %d current, %d rebuilt, %d without a "
+                "snapshot, %d failed)",
+                time.time() - _swi_t0, _swi['checked'], _swi['current'],
+                _swi['rebuilt'], _swi['missing_source'], _swi['failed'])
+        except Exception:
+            logging.exception("run_all: stream window index reconcile "
+                               "crashed (non-fatal)")
+
         # The re-seated ranks are in the snapshots but the payload the
         # gate warmed was built before them, so drop it and let the
         # warm step below rebuild.
