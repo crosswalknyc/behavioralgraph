@@ -100026,6 +100026,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 },
                 blended_monthly_arpu: 10.07,
                 cohort_ltv: 48.34,
+                cohort_revenue_usd_m: 151.79,
                 ltv_note: 'Journey B LTV is $48.34: the 78.4/21.6 plan mix at $8.99 and $13.99 gives $10.07 blended monthly revenue, multiplied by the observed 4.8-month mean tenure. This single figure is used at both ends of every revenue range in this deck.',
                 payment_mix: [
                     { method: 'Credit card',           pct: 61.8 },
@@ -100813,9 +100814,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return { label: r.door, v: r.pct, show: _jiqUfcPct1(r.pct) };
                 }) }])
                 + '</div>'
-                + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">What one new UFC sub is worth</div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
-                + '<div class="jiq-ufc-stat-hero-l">Per person. $10.07 a month for the 4.8 months they stay.</div>'
-                + '<div class="jiq-ufc-stat-hero-s">78.4% pay $8.99. 21.6% pay $13.99.</div></div>'
+                + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">What the new UFC-first subs brought in</div>'
+                + '<div class="jiq-ufc-stat-hero-split">'
+                + '<div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_revenue_usd_m || 151.79) + 'M</div>'
+                + '<div class="jiq-ufc-stat-hero-l">' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' people \u00d7 $10.07 a month \u00d7 4.8 months they stay.</div></div>'
+                + '<div><div class="jiq-ufc-stat-hero-v is-sm">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
+                + '<div class="jiq-ufc-stat-hero-l">Per person.</div></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-stat-hero-s">3.14M \u00d7 $48.34. 78.4% pay $8.99. 21.6% pay $13.99.</div></div>'
                 + _jiqUfcNestSec('Which fight they signed up on', 'Freedom 250 is the largest UFC-first door. McGregor is a close second.', _jiqUfcMill(jb.cohort_size_m || 3.14) + ' UFC-first signups. One first card each. Adds to 3.14M.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
@@ -178782,10 +178788,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         letter-spacing: -.04em; line-height: 1; color: #E682FF;
     }
     body[data-theme="light"] .jiq-ufc-wall-hero-v { color: #8E3FA8; }
+    .jiq-ufc-stat-hero-split {
+        display: grid; grid-template-columns: 1.35fr 0.85fr; gap: 28px 48px;
+        align-items: end; margin-top: 2px;
+    }
+    @media (max-width: 720px) { .jiq-ufc-stat-hero-split { grid-template-columns: 1fr; } }
     .jiq-ufc-stat-hero-v {
         margin-top: 8px; font-size: 40px; font-weight: 800;
         letter-spacing: -.04em; line-height: 1; color: #C7F23E;
     }
+    .jiq-ufc-stat-hero-v.is-sm { font-size: 32px; }
     body[data-theme="light"] .jiq-ufc-stat-hero-v { color: #5E7E12; }
     .jiq-ufc-wall-hero-l, .jiq-ufc-stat-hero-l { margin-top: 10px; font-size: 15px; font-weight: 700; color: #E9E8E1; }
     body[data-theme="light"] .jiq-ufc-wall-hero-l,
