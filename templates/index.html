@@ -100882,7 +100882,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             : /Other numbered/i.test(ev) ? 'Other numbered cards (325 to 328)'
                             : /Fight Night/i.test(ev) ? 'UFC Fight Nights (19 cards)'
                             : ev.split(' (')[0];
-                        return { label: lab, accounts: r.signups_m, v: r.signups_m, show: _jiqUfcMill(r.signups_m) + '  ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
+                        return { label: lab, accounts: r.signups_m, v: r.signups_m, show: _jiqUfcMill(r.signups_m) + ' \u00b7 ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
                     })},
                     { title: 'Not in this nest', rows: [
                         { label: 'Joined for something else, then watched', accounts: 3.06, v: 3.06, show: _jiqUfcMill(3.06) },
@@ -100949,7 +100949,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         .replace('Returned to P+ but did not convert within 14d', 'Came back, still no signup')
                         .replace('Bought a UFC Fight Pass subscription instead', 'Bought UFC Fight Pass instead')
                         .replace('Never returned to Paramount+ within 14d', 'Never returned to Paramount+');
-                    return { label: lab, accounts: o.count_m, v: o.count_m, show: _jiqUfcMill(o.count_m) + '  ' + _jiqUfcPct1(o.pct) };
+                    return { label: lab, accounts: o.count_m, v: o.count_m, show: _jiqUfcMill(o.count_m) + ' \u00b7 ' + _jiqUfcPct1(o.pct) };
                 }) }], true)
                 + '</div>'
                 + _jiqUfcNestRead('Four 14-day outcomes, one person each, adding to 6.71M. 5.33M never signed up.')
@@ -100964,7 +100964,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         .replace('Attempted mirror / pirate site (buffstream, mmastreams.click, methstreams)', 'Tried a pirate domain')
                         .replace('Checked P+ password sharing (existing family / friend sub)', 'Checked a family or friend login')
                         .replace('Signed up for Paramount+ within 24h anyway', 'Signed up within 24 hours');
-                    return { label: lab, accounts: r.count_m, v: r.count_m, show: _jiqUfcMill(r.count_m) + '  ' + _jiqUfcPct1(r.pct) };
+                    return { label: lab, accounts: r.count_m, v: r.count_m, show: _jiqUfcMill(r.count_m) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
                 }) }], true)
                 + '</div>'
                 + _jiqUfcNestSec('Where they hunted a cheaper door', 'Promo-code and free-trial searches after they left the signup page.', 'Overlap. Unique US viewers.')
@@ -101026,7 +101026,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             .replace('YouTube Premium (free UFC clips + more storage)', 'YouTube Premium')
                             .replace('DAZN (boxing, combat sports adjacent)', 'DAZN')
                             .replace('ESPN Unlimited / ESPN+', 'ESPN Unlimited');
-                        return { label: lab, accounts: r.count_m, v: r.count_m, show: _jiqUfcMill(r.count_m) + '  ' + _jiqUfcPct1(r.pct) };
+                        return { label: lab, accounts: r.count_m, v: r.count_m, show: _jiqUfcMill(r.count_m) + ' \u00b7 ' + _jiqUfcPct1(r.pct) };
                     })}
                 ])
                 + '</div>'
@@ -178911,15 +178911,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
     #jiqUfcNestCard .jiq-frag-detours.cols-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 28px 80px; margin-top: 22px;
+        gap: 28px 0; margin-top: 22px;
+    }
+    #jiqUfcNestCard .jiq-frag-detours.cols-2 .jiq-frag-det + .jiq-frag-det {
+        margin-left: 36px; padding-left: 36px;
+        border-left: 1px solid rgba(233,232,225,.16);
+    }
+    body[data-theme="light"] #jiqUfcNestCard .jiq-frag-detours.cols-2 .jiq-frag-det + .jiq-frag-det {
+        border-left-color: #C9C6BA;
     }
     #jiqUfcNestCard .jiq-frag-detours.cols-1 { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
     #jiqUfcNestCard .jiq-frag-detrow,
     #jiqUfcNestCard .jiq-frag-detrow.is-wide {
-        grid-template-columns: minmax(0, 1fr) 140px 7.5rem;
+        grid-template-columns: minmax(0, 1fr) 140px 9.5rem;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(233,232,225,.08);
+    }
+    #jiqUfcNestCard .jiq-frag-det .jiq-frag-detrow:last-child { border-bottom: 0; }
+    body[data-theme="light"] #jiqUfcNestCard .jiq-frag-detrow,
+    body[data-theme="light"] #jiqUfcNestCard .jiq-frag-detrow.is-wide {
+        border-bottom-color: #DDDACE;
     }
     #jiqUfcNestCard .jiq-frag-detbar { width: 140px; }
-    #jiqUfcNestCard .jiq-frag-detval { width: 7.5rem; text-align: right; }
+    #jiqUfcNestCard .jiq-frag-detval { width: 9.5rem; text-align: right; }
     #jiqUfcNestCard .jiq-frag-detlab {
         white-space: normal; overflow: visible; line-height: 1.35; word-spacing: 0.12em;
     }
