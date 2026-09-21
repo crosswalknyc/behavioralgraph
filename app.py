@@ -58746,6 +58746,118 @@ def api_synth_chat_notify_when_done():
     return jsonify({'success': True, 'queued': True})
 
 
+# Rankers board families: card key -> (family label, text keywords that
+# imply the family when no service is named). Row shapes per family are
+# rank/title (+artist, us_streams, weeks_in_top10 where the scraper
+# carries them).
+_PM_RANKER_FAMILIES = (
+    ('streaming_trending', 'Streaming',
+     ('series', 'show', 'season', 'stream', 'svod', 'episode')),
+    ('music_trending', 'Music',
+     ('song', 'artist', 'album', 'track', 'music')),
+    ('podcasts_trending', 'Podcasts', ('podcast',)),
+    ('fast_trending', 'FAST', ('fast channel', 'fast platform')),
+    ('gaming_trending', 'Gaming', ('game', 'gaming')),
+)
+
+
+def _pm_rankers_board_block(text, view_id=''):
+    """Compact Rankers board rows for a board-view ask (2026-09-21,
+    Jenna: 'top 10 Starz series last 30 days' asked on the Rankers view
+    must answer from the board, which never rode the prompt). Reads the
+    same cached Trends IQ view the dashboard renders. Service named in
+    the ask -> that service's boards (top 10 TV + films / items).
+    Family keyword only -> top 5 per service across the family. Neither
+    (but the view IS the Rankers board) -> streaming family top 5s.
+    Returns '' on any miss; never raises."""
+    if _trends_iq is None or view_id not in ('cultureRankerIQ',
+                                             'trendsIQ'):
+        return ''
+    try:
+        p = _trends_iq._cache_get({
+            'geo_type': 'National', 'geo_value': '',
+            'lookback_days': _trends_iq.DEFAULT_LOOKBACK_DAYS})
+        cards = (p or {}).get('cards') or {}
+        tl = str(text or '').lower()
+
+        def _fmt_rows(rows, n):
+            out = []
+            for r in (rows or [])[:n]:
+                if not isinstance(r, dict):
+                    continue
+                bits = [f"{r.get('rank', '?')}. "
+                        f"{r.get('title') or r.get('name') or '?'}"]
+                if r.get('artist'):
+                    bits.append(f"- {r['artist']}")
+                # us_streams is an int on some scrapers and an estimate
+                # object on others - take the point estimate only,
+                # never the method/source internals.
+                us = r.get('us_streams')
+                if isinstance(us, dict):
+                    us = us.get('us_estimate')
+                if isinstance(us, (int, float)) and us > 0:
+                    bits.append(f"({int(us):,} US streams)")
+                if r.get('weeks_in_top10'):
+                    bits.append(f"[{r['weeks_in_top10']} wks in top 10]")
+                out.append(' '.join(str(b) for b in bits))
+            return out
+
+        def _service_lines(svc, label, top_n):
+            lines = []
+            tv, films = svc.get('tv') or [], svc.get('films') or []
+            items = svc.get('items') or []
+            if tv or films:
+                if tv:
+                    lines.append(f"{label} - TV (yesterday's US ranks):")
+                    lines += ['  ' + x for x in _fmt_rows(tv, top_n)]
+                if films:
+                    lines.append(f"{label} - Films:")
+                    lines += ['  ' + x for x in _fmt_rows(films, top_n)]
+            elif items:
+                lines.append(f"{label}:")
+                lines += ['  ' + x for x in _fmt_rows(items, top_n)]
+            return lines
+
+        named, family_hit = [], None
+        for card_key, fam_label, kws in _PM_RANKER_FAMILIES:
+            fam = cards.get(card_key)
+            if not isinstance(fam, dict):
+                continue
+            for skey, svc in fam.items():
+                if not isinstance(svc, dict):
+                    continue
+                label = str(svc.get('label') or skey)
+                if re.search(r'\b' + re.escape(label.lower()) + r'\b',
+                             tl):
+                    named.append((fam_label, label, svc))
+            if family_hit is None and any(k in tl for k in kws):
+                family_hit = (card_key, fam_label)
+
+        lines = []
+        if named:
+            for fam_label, label, svc in named[:3]:
+                lines += _service_lines(svc, f"{fam_label} / {label}",
+                                        12)
+        else:
+            card_key, fam_label = (family_hit or
+                                   ('streaming_trending', 'Streaming'))
+            fam = cards.get(card_key) or {}
+            for skey, svc in list(fam.items())[:14]:
+                if isinstance(svc, dict):
+                    lines += _service_lines(
+                        svc, str(svc.get('label') or skey), 5)
+        if not lines:
+            return ''
+        block = ("RANKERS BOARD (the view the user is looking at; "
+                 "yesterday's US ranks from the panel)\n"
+                 "==========================================\n"
+                 + "\n".join(lines))
+        return block[:7000]
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
@@ -59233,6 +59345,30 @@ def api_synth_chat_analyze():
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': _replay_subj})
+    # Board-view scoping (2026-09-21 Jenna: the Starz Rankers ask "had
+    # nothing to do with that profile"): an ask made from the Rankers /
+    # Trends board is about the BOARD unless the text itself names the
+    # selected profile. Drop the profile from the context so the answer
+    # derives from the board data instead of anchoring to whatever
+    # profile happened to be selected in another tab.
+    try:
+        _bv_view = str(((ctx.get('view_context') or {}).get('view_id'))
+                       or '')
+        if _bv_view in ('cultureRankerIQ', 'trendsIQ') \
+                and ctx.get('primary'):
+            _bv_name = str((ctx.get('primary') or {}).get('name') or '')
+            _bv_toks = [t for t in re.findall(
+                r'[a-zA-Z0-9]+', _bv_name.lower()) if len(t) >= 3]
+            _bv_tl = str(text or '').lower()
+            if not (_bv_toks and any(t in _bv_tl for t in _bv_toks)):
+                ctx = dict(ctx)
+                ctx['primary'] = None
+                ctx['cuts'] = []
+                print(f"[analyze] board-view ask ({_bv_view}): selected "
+                      f"profile {_bv_name!r} not referenced - answering "
+                      f"about the board")
+    except Exception:
+        pass
     try:
         digest, p_meta = None, {}
         if ctx.get('primary'):
@@ -59286,6 +59422,17 @@ def api_synth_chat_analyze():
     except Exception:
         traceback.print_exc()
         xmod_block, xmod_modules = '', []
+    # Rankers board data (2026-09-21 Jenna): a board-view ask answers
+    # from the actual board rows, not from headings + free knowledge.
+    try:
+        _board_view = str(((ctx.get('view_context') or {})
+                           .get('view_id')) or '')
+        _board_block = _pm_rankers_board_block(text, _board_view)
+        if _board_block:
+            xmod_block = (f"{xmod_block}\n\n{_board_block}"
+                          if xmod_block else _board_block)
+    except Exception:
+        traceback.print_exc()
     _pm_ask_stage('anchors', t0=_t_anchors)
     # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
     # already delivered for this subject ride the prompt as binding
