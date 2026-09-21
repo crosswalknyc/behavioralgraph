@@ -48050,7 +48050,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             <div class="jiq-frag-eyebrow" id="jiqUfcNestMeta">Signup journey · Jan 1 to Aug 14, 2026</div>
                             <h2 id="jiqUfcNestTitle">UFC<br>on Paramount+.</h2>
                             <div class="jiq-frag-read-lead" id="jiqUfcNestLead">UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate.</div>
-                            <p id="jiqUfcNestDeck">14.62M people watched a fight. 8.42M already had Paramount+. 3.06M signed up for something else, then watched. 3.14M signed up because of UFC. 5.33M hit the wall and never converted.</p>
+                            <p id="jiqUfcNestDeck">14.62M people watched a fight. 8.42M already had Paramount+. 3.06M signed up for something else, then watched. 3.14M signed up because of UFC. 5.33M hit the paywall and never converted.</p>
                             <div class="jiq-frag-kpis" id="jiqUfcNestKpis"></div>
                         </div>
                         <div class="jiq-frag-art" id="jiqUfcNestArt"
@@ -100647,7 +100647,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     { l: 'Total UFC views', v: _jiqUfcMill(uni.total_m || 14.62) },
                     { l: 'Already subscribed, then watched UFC', v: _jiqUfcMill(already) },
                     { l: 'Signed up, first watch was UFC', v: _jiqUfcMill(first) },
-                    { l: 'Hit the wall and never converted', v: _jiqUfcMill(never), hot: true }
+                    { l: 'Hit the paywall and never converted', v: _jiqUfcMill(never), hot: true }
                 ].map(function(k) {
                     return '<div class="jiq-frag-kpi' + (k.hot ? ' is-hot' : '') + '">'
                         + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(k.l) + '</div>'
@@ -100912,10 +100912,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var bounce = _jiqUfcPeople(jc.cohort_size_m || 6.71);
             var never = _jiqUfcPeople(jc.terminal_pool_m || 5.33);
             var outcomes = jc.longer_tail_14d || [];
-            var html = _jiqUfcNestSec('05 Hit the paywall and left', '6.71M hit a UFC paywall. 5.33M never converted.', 'Four outcomes, one person each. 1.38M of the wall later sit in the 3.14M nest.')
+            var html = _jiqUfcNestSec('05 Hit the paywall and left', '6.71M hit a UFC paywall. 5.33M never converted.', 'Four outcomes, one person each. 1.38M of the paywall later sit in the 3.14M nest.')
                 + '<div class="jiq-ufc-wall-hero"><div class="jiq-ufc-wall-hero-k">Hit a UFC paywall</div>'
                 + '<div class="jiq-ufc-wall-hero-v">' + _jiqUfcMill(jc.cohort_size_m || 6.71) + '</div>'
-                + '<div class="jiq-ufc-wall-hero-l">The wall is wider than the nest page. Do not hang these rows off 3.78M.</div>'
+                + '<div class="jiq-ufc-wall-hero-l">The paywall is wider than the nest page. Do not hang these rows off 3.78M.</div>'
                 + '<div class="jiq-ufc-wall-hero-s">1.38M converted within 14 days and sit in the 3.14M nest. 5.33M never converted. Every recover read uses 5.33M.</div></div>'
                 + '<div class="jiq-ufc-pad"><div class="jiq-frag-branchnote">14-day outcome, one person each</div>';
             outcomes.forEach(function(o, i) {
@@ -100929,12 +100929,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     : i === 2 ? "Left Paramount+ for UFC's own product"
                     : 'No second Paramount+ visit within 14 days';
                 html += _jiqUfcNestStep({ label: lab, doing: doing, accounts: _jiqUfcPeople(o.count_m), show: _jiqUfcMill(o.count_m) + '  ' + _jiqUfcPct1(o.pct) }, { branch: true, terminal: i === outcomes.length - 1 });
-                html += _jiqUfcNestBridge({ kept: o.pct, dropped: 0 }, { branch: true, orchid: true, keepLabel: _jiqUfcPct1(o.pct) + ' of the wall' });
+                html += _jiqUfcNestBridge({ kept: o.pct, dropped: 0 }, { branch: true, orchid: true, keepLabel: _jiqUfcPct1(o.pct) + ' of the paywall' });
             });
             html += _jiqUfcNestStep({ label: 'Never converted', doing: 'Came back with no signup + Fight Pass + never returned', accounts: never, show: _jiqUfcMill(jc.terminal_pool_m || 5.33) }, { branch: true, terminal: true, total: true })
                 + '</div>'
                 + _jiqUfcNestRead('Four 14-day outcomes, one person each, adding to 6.71M. The bottom three are the 5.33M who never signed up.')
-                + _jiqUfcNestSec('What they did in the first 24 hours', 'More people settled for a UFC clip than signed up in the first 24 hours.', 'Same person, first day after the wall. Rows overlap. They do not add to 6.71M.')
+                + _jiqUfcNestSec('What they did in the first 24 hours', 'More people settled for a UFC clip than signed up in the first 24 hours.', 'Same person, first day after the paywall. Rows overlap. They do not add to 6.71M.')
                 + '<div class="jiq-frag-detours cols-1">'
                 + _jiqUfcNestDetours([{ title: 'First 24 hours after they left the signup page', rows: (jc.immediate_reactions_24h || []).slice(1).map(function(r) {
                     var lab = (r.action || '')
@@ -101077,7 +101077,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var ret = sizing[0] || {};
             var acq = sizing[1] || {};
             var knows = [
-                '14.62M watched. 8.42M already had Paramount+. 3.14M signed up because of UFC. 5.33M hit the wall and never converted.',
+                '14.62M watched. 8.42M already had Paramount+. 3.14M signed up because of UFC. 5.33M hit the paywall and never converted.',
                 'After the clip, 36.9% open the Paramount+ UFC page.',
                 '5.33M hit a UFC wall and never converted. 4.42M are already on UFC social the same day.',
                 '3.14M signed up with UFC first. The hold is the next non-UFC title in the first 30 days.',
@@ -101098,14 +101098,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqUfcNestMethod() {
             return _jiqUfcNestSec('09 How we counted', 'Every number is unique US people in this window.', 'Jan 1 to Aug 14, 2026. One person, one ID.')
-                + _jiqUfcNestRead('14.62M watched UFC on Paramount+. They split three ways with nothing left over: already subscribed, joined for something else, or joined and the first watch was UFC. 5.33M hit the wall and never converted. That count sits outside 14.62M.')
+                + _jiqUfcNestRead('14.62M watched UFC on Paramount+. They split three ways with nothing left over: already subscribed, joined for something else, or joined and the first watch was UFC. 5.33M hit the paywall and never converted. That count sits outside 14.62M.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
                     { title: 'The four groups', rows: [
                         { label: 'Already subscribed, then watched', accounts: 8.42, v: 8.42, show: '8.42M' },
                         { label: 'Joined for something else, then watched', accounts: 3.06, v: 3.06, show: '3.06M' },
                         { label: 'Joined, first watch was UFC', accounts: 3.14, v: 3.14, show: '3.14M' },
-                        { label: 'Hit the wall and never converted', accounts: 5.33, v: 5.33, show: '5.33M' }
+                        { label: 'Hit the paywall and never converted', accounts: 5.33, v: 5.33, show: '5.33M' }
                     ]},
                     { title: 'What a row is', rows: [
                         { label: 'A playback or a signup page visit', accounts: 100, v: 100, show: 'one person' },
