@@ -100668,30 +100668,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var zeroNon = 100 - ((((jb.engagement_30d || [])[1] || {}).pct_of_cohort) || 43.3);
             var neverBack = ((jc.longer_tail_14d || []).filter(function(r) { return /Never returned/i.test(r.outcome || ''); })[0] || {}).pct;
             var social24 = ((jc.immediate_reactions_24h || []).filter(function(r) { return /official social/i.test(r.action || ''); })[0] || {});
-            return _jiqUfcNestSec('01 Overview', 'One path starts on a clip. The other starts inside Paramount+.', 'Do not add the two conversion rows. ' + _jiqUfcMill(a2.count_m) + ' joined for something else, then watched UFC. Side number. Not in either nest.')
-                + '<div class="jiq-ufc-nests">'
-                + '<div class="jiq-ufc-nestcol"><h5>Sign Up Journey</h5>'
-                + '<div class="jiq-ufc-nestrow is-end"><b>' + _jiqUfcMill(10.24) + '</b><span>Saw a UFC clip</span></div>'
-                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(3.78) + '</b><span>Opened the UFC page</span></div>'
-                + '<div class="jiq-ufc-nestrow is-hot"><b>' + _jiqUfcMill(3.14) + '</b><span>UFC-first signup</span></div></div>'
-                + '<div class="jiq-ufc-nestcol"><h5>Already subscribed</h5>'
-                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(32.68) + '</b><span>Already on Paramount+</span></div>'
-                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(13.92) + '</b><span>Clicked a UFC page</span></div>'
-                + '<div class="jiq-ufc-nestrow is-hot"><b>' + _jiqUfcMill(8.42) + '</b><span>Watched a first UFC card</span></div>'
-                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(5.87) + '</b><span>Watched a second card</span></div>'
-                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(3.94) + '</b><span>Watched 3 or more</span></div></div>'
+            return _jiqUfcNestSec('01 Overview', _jiqUfcMill(uni.total_m || 14.62) + ' people watched a UFC fight on Paramount+.', 'Three groups. They add to ' + _jiqUfcMill(uni.total_m || 14.62) + '.')
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqUfcMill(a.count_m) + '</b><span>Already subscribed, then watched UFC</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqUfcMill(a2.count_m) + '</b><span>Joined for something else, then watched UFC</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqUfcMill(b.count_m) + '</b><span>Signed up, first watch was UFC</span></div>'
                 + '</div>'
                 + '<div class="jiq-ufc-uni">'
-                + '<div class="jiq-ufc-uni-seg is-a" style="flex:' + a.pct + '">A \u00b7 ' + a.pct + '%</div>'
-                + '<div class="jiq-ufc-uni-seg is-a2" style="flex:' + a2.pct + '">A2 \u00b7 ' + a2.pct + '%</div>'
-                + '<div class="jiq-ufc-uni-seg is-b" style="flex:' + b.pct + '">B \u00b7 ' + b.pct + '%</div>'
+                + '<div class="jiq-ufc-uni-seg is-a" style="flex:' + a.pct + '">' + a.pct + '%</div>'
+                + '<div class="jiq-ufc-uni-seg is-a2" style="flex:' + a2.pct + '">' + a2.pct + '%</div>'
+                + '<div class="jiq-ufc-uni-seg is-b" style="flex:' + b.pct + '">' + b.pct + '%</div>'
                 + '</div>'
-                + '<div class="jiq-ufc-uni-cap">'
-                + '<div><b>' + _jiqUfcMill(a.count_m) + '</b><span>Already subscribed, then watched UFC.</span></div>'
-                + '<div><b>' + _jiqUfcMill(a2.count_m) + '</b><span>Joined for something else, then watched UFC.</span></div>'
-                + '<div><b>' + _jiqUfcMill(b.count_m) + '</b><span>Signed up, first watch was UFC.</span></div>'
+                + _jiqUfcNestRead(_jiqUfcMill(jc.terminal_pool_m || 5.33) + ' hit the signup page and never converted. They are not in the ' + _jiqUfcMill(uni.total_m || 14.62) + '.')
+                + '<div class="jiq-ufc-nests">'
+                + '<div class="jiq-ufc-nestcol"><h5>How the 3.14M signed up</h5>'
+                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(10.24) + '</b><span>Saw a UFC clip</span></div>'
+                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(3.78) + '</b><span>Opened the UFC page</span></div>'
+                + '<div class="jiq-ufc-nestrow is-hot"><b>' + _jiqUfcMill(3.14) + '</b><span>Signed up</span></div></div>'
+                + '<div class="jiq-ufc-nestcol"><h5>How the 8.42M already on Paramount+ found UFC</h5>'
+                + '<div class="jiq-ufc-nestrow"><b>' + _jiqUfcMill(32.68) + '</b><span>Already on Paramount+</span></div>'
+                + '<div class="jiq-ufc-nestrow is-hot"><b>' + _jiqUfcMill(8.42) + '</b><span>Watched a first UFC card</span></div></div>'
                 + '</div>'
-                + _jiqUfcNestRead(_jiqUfcMill(uni.total_m || 14.62) + ' watched a fight. ' + _jiqUfcMill(jc.terminal_pool_m || 5.33) + ' hit the wall and never converted.')
                 + _jiqUfcNestSec('The cards that aired', 'Freedom 250 was the largest single UFC audience on Paramount+ in the window.', 'Six numbered cards, 19 Fight Nights, and the one-off White House card.')
                 + '<table class="jiq-ufc-tbl"><thead><tr><th>Event</th><th>Date</th><th>Headline</th><th class="r">Avg viewers</th><th class="r">Peak</th><th class="r">Reached</th></tr></thead><tbody>'
                 + eventRows + '</tbody></table>'
@@ -100724,13 +100721,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var inapp = 22.1;
             var rows = (dis.channels || []).map(function(ch) {
                 var short = (ch.channel || '').split(' (')[0];
+                if (/social media short-form/i.test(short) || /^UFC social$/i.test(short)) short = 'UFC social short-form';
                 return {
                     label: short,
                     accounts: _jiqUfcPeople(ch.reach_m),
                     show: _jiqUfcPct1(ch.share_pct) + '  ' + _jiqUfcMill(ch.reach_m)
                 };
             });
-            return _jiqUfcNestSec('02 Discovery', 'The two audiences do not share one discovery funnel.', 'New UFC subs come in on official clips. People already paying split between UFC social and the app.')
+            return _jiqUfcNestSec('02 Discovery', 'The two audiences do not share one discovery funnel.', 'New UFC subs come in on UFC social short-form. People already paying split between UFC social short-form and the app.')
                 + '<div class="jiq-ufc-mix">'
                 + '<div class="jiq-ufc-mix-col">'
                 + '<div class="jiq-ufc-mix-k">New UFC subs</div>'
@@ -100738,7 +100736,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '<div class="is-hot" style="flex:' + clips + '">' + _jiqUfcPct1(clips) + '</div>'
                 + '<div class="is-rest" style="flex:' + (100 - clips) + '"></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-mix-cap"><b>Official UFC clips</b><span>First touch for ' + _jiqUfcPct1(clips) + ' of new UFC subs.</span></div>'
+                + '<div class="jiq-ufc-mix-cap"><b>UFC social short-form</b><span>First touch for ' + _jiqUfcPct1(clips) + ' of new UFC subs.</span></div>'
                 + '</div>'
                 + '<div class="jiq-ufc-mix-col">'
                 + '<div class="jiq-ufc-mix-k">Already on Paramount+</div>'
@@ -100748,7 +100746,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '<div class="is-rest" style="flex:' + (100 - social - inapp) + '"></div>'
                 + '</div>'
                 + '<div class="jiq-ufc-mix-cap is-2">'
-                + '<div><b>UFC social</b><span>' + _jiqUfcPct1(social) + '</span></div>'
+                + '<div><b>UFC social short-form</b><span>' + _jiqUfcPct1(social) + '</span></div>'
                 + '<div><b>In the app</b><span>' + _jiqUfcPct1(inapp) + '</span></div>'
                 + '</div>'
                 + '</div>'
