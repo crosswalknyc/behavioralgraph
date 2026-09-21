@@ -100951,21 +100951,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var ch = (_JIQ_UFC_DATA || {}).ufc_churn || {};
             var curve = ch.retention_curve || [];
             var bench = ch.benchmark_curve || [];
+            var arpu = ((_JIQ_UFC_DATA || {}).ufc_journey_b || {}).blended_monthly_arpu || 10.07;
             var benchBy = {};
             bench.forEach(function(b) { benchBy[b.day] = b.retention_pct; });
             var rows = curve.map(function(r) {
                 var hot = r.day === 90;
+                var paid = Math.round(arpu * (Number(r.day) / 30) * 100) / 100;
+                var stillM = Number(r.observed_base_m) * Number(r.retention_pct) / 100;
+                var monthVal = Math.round(stillM * arpu * 100) / 100;
                 return '<tr' + (hot ? ' class="is-hot"' : '') + '>'
                     + '<td>Day ' + r.day + '</td>'
                     + '<td class="r">' + _jiqUfcPct1(r.retention_pct) + '</td>'
                     + '<td class="r">' + _jiqUfcMill(r.observed_base_m) + '</td>'
                     + '<td class="r">' + _jiqUfcPct1(r.base_pct_of_cohort) + '</td>'
+                    + '<td class="r">' + _jiqUfcMoney(paid) + '</td>'
+                    + '<td class="r">' + _jiqUfcMoney(monthVal) + 'M / mo</td>'
                     + '<td class="r">' + _jiqUfcPct1(benchBy[r.day] || '') + '</td></tr>';
             }).join('');
             var dest = ch.where_they_go_next_30d || [];
             var sig = ch.top_churn_indicators_day30 || [];
             return _jiqUfcNestSec('06 Retention', 'People who signed up for UFC cancel at a higher rate.', 'Already-subscribed cancel is 4.1% within 90 days, near the rest of the service. UFC signups sit 8.9 points behind the best sports stay at day 90.')
-                + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3,140,000</th><th class="r has-tooltip" data-tooltip="Best sports stay is the stay rate of people who signed up for a streamer because a sport was the first thing they watched. Same Jan 1 to Aug 14 window. Same still-subscribed rule. This column is the sports signup group that stayed the most.">Best sports stay</th></tr></thead><tbody>'
+                + '<table class="jiq-ufc-tbl"><thead><tr><th>Checkpoint</th><th class="r">Still subscribed</th><th class="r">Observed on</th><th class="r">Share of 3.14M</th><th class="r has-tooltip" data-tooltip="$10.07 a month. 78.4% pay $8.99. 21.6% pay $13.99. This is what one remaining person has paid through this day.">Paid so far</th><th class="r has-tooltip" data-tooltip="People still subscribed at this checkpoint times $10.07 a month.">Still paying</th><th class="r has-tooltip" data-tooltip="Best sports stay is the stay rate of people who signed up for a streamer because a sport was the first thing they watched. Same Jan 1 to Aug 14 window. Same still-subscribed rule. This column is the sports signup group that stayed the most.">Best sports stay</th></tr></thead><tbody>'
                 + rows + '</tbody></table>'
                 + _jiqUfcNestRead('UFC did not speed up cancellation among people who were already subscribed. People who signed up for UFC cancel at a higher rate. Day 90 is the gap to act on for those new UFC signups: 8.9 points, observed on more than half of them. Day 180 is 18.0 points, but only the 40.8% who signed up before mid-February can have that reading. Mean tenure is 4.8 months.')
                 + _jiqUfcNestSec('What predicts cancel', 'Churn concentrates in people who watched nothing but UFC.', 'Index against the UFC-first cancel rate. Above 1 means more cancel.')
