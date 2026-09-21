@@ -100454,7 +100454,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqUfcNestDetours(tables, wide) {
             return tables.map(function(t) {
-                var top = t.rows.reduce(function(m, r) {
+                var top = t.scale != null ? t.scale : t.rows.reduce(function(m, r) {
                     return Math.max(m, r.v != null ? r.v : r.accounts);
                 }, 1);
                 return '<div class="jiq-frag-det"><h5>' + _jiqFragEsc(t.title) + '</h5>'
@@ -100569,7 +100569,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var aN = _jiqUfcPeople(a.count_m);
             var south = postPct('Watched South Park');
             var keepNon = postPct('Continued P+ engagement');
-            var d30 = ((jb.engagement_30d || [])[0] || {}).pct_of_cohort;
+            var d30 = ((((d.ufc_churn || {}).retention_curve || []).filter(function(r) { return r.day === 30; })[0] || {}).retention_pct) || 76.2;
             var d90 = ((d.ufc_churn || {}).benchmarks || [])[0] || {};
             var rec14 = ((jc.longer_tail_14d || [])[0] || {}).pct;
             var cancelA = postPct('Cancelled P+');
@@ -100595,20 +100595,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + _jiqUfcNestRead('43.8% of US UFC fans already used Paramount+ before UFC started there.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
-                    { title: 'What holds', rows: [
-                        { label: 'Already paid, still watching other shows 30 days later', accounts: Math.round(aN * keepNon / 100), show: _jiqUfcPct1(keepNon) },
-                        { label: 'Already paid, watched South Park within a week of UFC', accounts: Math.round(aN * south / 100), show: _jiqUfcPct1(south) },
-                        { label: 'Already paid, cancel sits with the rest of the service', accounts: Math.round(aN * (cancelA || 4.1) / 100), show: _jiqUfcPct1(cancelA || 4.1) },
-                        { label: 'New UFC subs still paying at day 30', accounts: d30 || 76.2, v: d30 || 76.2, show: _jiqUfcPct1(d30 || 76.2) },
-                        { label: 'New UFC subs still paying at day 90', accounts: d90.observed_pct || 62.4, v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
-                        { label: 'Came back and paid within 14 days', accounts: rec14 || 20.5, v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
+                    { title: 'What holds', scale: 100, rows: [
+                        { label: 'Already paid, still watching other shows 30 days later', v: keepNon, show: _jiqUfcPct1(keepNon) },
+                        { label: 'Already paid, watched South Park within a week of UFC', v: south, show: _jiqUfcPct1(south) },
+                        { label: 'Already paid, cancel sits with the rest of the service', v: cancelA || 4.1, show: _jiqUfcPct1(cancelA || 4.1) },
+                        { label: 'New UFC subs still paying at day 30', v: d30, show: _jiqUfcPct1(d30) },
+                        { label: 'New UFC subs still paying at day 90', v: d90.observed_pct || 62.4, show: _jiqUfcPct1(d90.observed_pct || 62.4) },
+                        { label: 'Came back and paid within 14 days', v: rec14 || 20.5, show: _jiqUfcPct1(rec14 || 20.5) }
                     ]},
-                    { title: "What's leaking", rows: [
-                        { label: 'New UFC subs watched only UFC for 30 days', accounts: zeroNon, v: zeroNon, show: _jiqUfcPct1(zeroNon) },
-                        { label: 'Hit signup and never came back', accounts: neverBack || 69.3, v: neverBack || 69.3, show: _jiqUfcPct1(neverBack || 69.3) },
-                        { label: 'Left signup and went to UFC social', accounts: _jiqUfcPeople(social24.count_m || 4.42), show: _jiqFragNum(_jiqUfcPeople(social24.count_m || 4.42)) },
-                        { label: 'New UFC subs picked the $8.99 ad plan', accounts: adTier || 78.4, v: adTier || 78.4, show: _jiqUfcPct1(adTier || 78.4) },
-                        { label: 'New UFC subs trail the best sports signups at day 90', accounts: d90.gap_pp || 8.9, v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
+                    { title: "What's leaking", scale: 100, rows: [
+                        { label: 'New UFC subs watched only UFC for 30 days', v: zeroNon, show: _jiqUfcPct1(zeroNon) },
+                        { label: 'Hit signup and never came back', v: neverBack || 69.3, show: _jiqUfcPct1(neverBack || 69.3) },
+                        { label: 'Left signup and went to UFC social', v: social24.pct || 65.9, show: _jiqUfcPct1(social24.pct || 65.9) },
+                        { label: 'New UFC subs picked the $8.99 ad plan', v: adTier || 78.4, show: _jiqUfcPct1(adTier || 78.4) },
+                        { label: 'New UFC subs trail the best sports signups at day 90', v: d90.gap_pp || 8.9, show: (d90.gap_pp || 8.9) + ' pts' }
                     ]}
                 ])
                 + '</div>'
@@ -100679,10 +100679,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + _jiqUfcNestSec('After they signed up', 'Cross-content is the retention problem.', 'Both rows are of the ' + _jiqFragNum(_jiqUfcPeople(jb.cohort_size_m || 3.14)) + ' UFC-first signups.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
-                    { title: 'First 30 days', rows: eng.map(function(r) {
-                        return { label: r.label.replace('\u22651 ', 'a ').replace(' P+ title', ' title'), accounts: _jiqUfcPeople(r.count_m), show: _jiqFragNum(_jiqUfcPeople(r.count_m)) + ' \u00b7 ' + _jiqUfcPct1(r.pct_of_cohort) };
+                    { title: 'First 30 days', scale: 100, rows: eng.map(function(r) {
+                        return { label: r.label.replace('\u22651 ', 'a ').replace(' P+ title', ' title'), v: r.pct_of_cohort, show: _jiqUfcPct1(r.pct_of_cohort) };
                     })},
-                    { title: 'Plan and payment', rows: [
+                    { title: 'Plan and payment', scale: 100, rows: [
                         { label: 'Essential $8.99 ad tier', accounts: plan.essential_ad_pct || 78.4, v: plan.essential_ad_pct || 78.4, show: _jiqUfcPct1(plan.essential_ad_pct || 78.4) },
                         { label: 'Premium $13.99', accounts: plan.premium_no_ad_pct || 21.6, v: plan.premium_no_ad_pct || 21.6, show: _jiqUfcPct1(plan.premium_no_ad_pct || 21.6) },
                         { label: 'Used a promo code at checkout', accounts: jb.promo_code_usage_pct || 22.8, v: jb.promo_code_usage_pct || 22.8, show: _jiqUfcPct1(jb.promo_code_usage_pct || 22.8) }
