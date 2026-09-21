@@ -19726,11 +19726,13 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                   remove impact iq wording from everywhere in dashboard.
                                   sunset it'
                                  The two folded journeys (coachella-bieber-2026,
-                                 latin-loyalty-2026) now appear as data entries under
-                                 Digital Journey IQ; the internal renderer
-                                 (#impactIQView + IMPACT_IQ_JOURNEYS) is retained as
-                                 a rendering helper and reached via showImpactIQ(slug)
-                                 from those DJ IQ entries. Ticket Sales Tracker
+                                 latin-loyalty-2026) were surfaced as cards on the
+                                 Digital Journey IQ empty state. Those cards were
+                                 removed 2026-09-21 (Jenna: they read as leftover
+                                 data from another product), so nothing now links to
+                                 showImpactIQ. The renderer (#impactIQView +
+                                 IMPACT_IQ_JOURNEYS) is still in the file and still
+                                 works if called; it just has no entry point. Ticket Sales Tracker
                                  (talent_theater / ticket_sales) is a separate product
                                  kept intact; its Impact IQ branding was renamed to
                                  Ticket Sales IQ in the same sweep. -->
@@ -45467,33 +45469,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div id="jiqDashLoadingMsg" style="font-size: 0.8rem;"></div>
             </div>
 
-            <div id="jiqDashEmpty" style="padding: 3rem 1.5rem; text-align: center; color: var(--text-secondary);">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">🗺️</div>
-                <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.4rem;">No journey loaded</div>
-                <div style="font-size: 0.85rem; max-width: 520px; margin: 0 auto 2rem;">Pick a run from the dropdown above, or kick off a new one under <strong>Digital Journey IQ</strong>.</div>
-
-                <!-- Featured story-mode journeys folded in from the retired
-                     Impact IQ product (Jenna 2026-09-09). Clicking either
-                     card opens the pre-baked audience-flow view rendered by
-                     the existing showImpactIQ(slug) helper. The Impact IQ
-                     product tab was removed from the SELECT PRODUCT
-                     dropdown in the same sweep; these two journeys are the
-                     only user-facing surface into that renderer. -->
-                <div id="jiqFeaturedJourneysBlock" style="max-width: 780px; margin: 0 auto;">
-                    <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.6rem;">Featured story-mode journeys</div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.8rem;">
-                        <div class="jiq-featured-card" onclick="if (typeof showImpactIQ === 'function') showImpactIQ('coachella-bieber-2026');" style="cursor: pointer; padding: 1rem 1.1rem; background: linear-gradient(135deg, rgba(56, 189, 248, 0.10), rgba(167, 139, 250, 0.06)); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 10px; text-align: left; transition: transform 0.12s ease, border-color 0.12s ease;" onmouseenter="this.style.transform='translateY(-1px)'; this.style.borderColor='rgba(56, 189, 248, 0.55)';" onmouseleave="this.style.transform=''; this.style.borderColor='rgba(56, 189, 248, 0.22)';">
-                            <div style="font-size: 1.35rem; margin-bottom: 0.3rem;">🎪</div>
-                            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Coachella 2026 &rarr; Justin Bieber</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">Ticket-buyer, livestream-watcher, and control-cohort flow through SWAG LIVE and the catalog re-listen curve.</div>
-                        </div>
-                        <div class="jiq-featured-card" onclick="if (typeof showImpactIQ === 'function') showImpactIQ('latin-loyalty-2026');" style="cursor: pointer; padding: 1rem 1.1rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.10), rgba(74, 222, 128, 0.06)); border: 1px solid rgba(236, 72, 153, 0.22); border-radius: 10px; text-align: left; transition: transform 0.12s ease, border-color 0.12s ease;" onmouseenter="this.style.transform='translateY(-1px)'; this.style.borderColor='rgba(236, 72, 153, 0.55)';" onmouseleave="this.style.transform=''; this.style.borderColor='rgba(236, 72, 153, 0.22)';">
-                            <div style="font-size: 1.35rem; margin-bottom: 0.3rem;">🔥</div>
-                            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Latin fan loyalty vs Pop / R&amp;B / Rap</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">Cross-genre loyalty and cross-listen matrix for Latin fans versus Pop, R&amp;B, and Rap cohorts.</div>
-                        </div>
-                    </div>
-                </div>
+            <!-- The two Coachella / Latin-loyalty cards that used to
+                 live here were the last surface into the retired Impact
+                 IQ renderer. They read as leftover data from another
+                 product on a page that has its own library, so they are
+                 gone; the cover points at the library instead. -->
+            <div id="jiqDashEmpty" class="jiq-cover">
+                <div class="jiq-cover-eyebrow">Digital Journey IQ</div>
+                <h2>Every step between the first touch and the last.</h2>
+                <p>Where a person came from, what they opened next, and where the journey
+                   ended. Open the library to pick one.</p>
+                <button type="button" class="jiq-cover-cta" onclick="_jiqLibraryOpen(true)">Open the library</button>
             </div>
                 <details id="jiqKpiStripHowto" style="margin: 0 0 0.6rem;">
                     <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
@@ -177710,6 +177696,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         line-height: 1.6 !important; margin-bottom: 14px !important;
     }
     body[data-theme="light"] #subscriberIQView .section-description { color: #5C6560 !important; }
+
+    /* ---- Journey IQ: the empty cover ---------------------------- */
+    #journeyIQView .jiq-cover { padding: 56px 40px; max-width: 70ch; }
+    .jiq-cover-eyebrow {
+        font-size: 10px; font-weight: 500; letter-spacing: .18em;
+        text-transform: uppercase; color: #7C878A;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .jiq-cover-eyebrow::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E;
+    }
+    body[data-theme="light"] .jiq-cover-eyebrow::before { background: #5E7E12; }
+    #journeyIQView .jiq-cover h2 {
+        margin: 16px 0 0; font-size: 44px; font-weight: 800;
+        letter-spacing: -.045em; line-height: 1.02; text-transform: none;
+        color: #E9E8E1;
+    }
+    body[data-theme="light"] #journeyIQView .jiq-cover h2 { color: #0C1618; }
+    #journeyIQView .jiq-cover p {
+        margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #9AA09B;
+        text-transform: none;
+    }
+    body[data-theme="light"] #journeyIQView .jiq-cover p { color: #5C6560; }
+    .jiq-cover-cta {
+        margin-top: 26px; padding: 11px 22px; border-radius: 999px; border: 0;
+        background: #C7F23E; color: #0C1618; font-family: inherit;
+        font-size: 11px; font-weight: 700; letter-spacing: .12em;
+        text-transform: uppercase; cursor: pointer;
+    }
+    body[data-theme="light"] .jiq-cover-cta { background: #5E7E12; color: #E9E8E1; }
 
     /* ---- Journey IQ: open-journey tabs -------------------------- */
     #jiqTabsBar {
