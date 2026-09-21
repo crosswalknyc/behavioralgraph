@@ -100511,6 +100511,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (opts.next) html += _jiqUfcNestBridge(s, { branch: opts.branch, keepLabel: opts.keepLabel });
             return html;
         }
+        function _jiqUfcNestClipSpine(rows, searchM) {
+            if (!rows || !rows.length) return '';
+            var same = (rows[2] && rows[2].show) || _jiqUfcMill(3.14);
+            var html = _jiqUfcNestStep(rows[0], { base: true });
+            html += '<div class="jiq-frag-step is-branch jiq-ufc-search-off">'
+                + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
+                + '<div class="jiq-frag-line"><span class="jiq-frag-label">Searched after the clip</span>'
+                + '<span class="jiq-frag-count">' + _jiqUfcMill(searchM) + '</span></div>'
+                + '<div class="jiq-frag-doing">Not one of the drop-off bars. The '
+                + _jiqFragEsc(same) + ' who signed up below are the same people.</div>'
+                + '</div></div>';
+            if (rows[1]) html += _jiqUfcNestBridge(rows[0]);
+            if (rows[1]) html += _jiqUfcNestStep(rows[1], { next: rows[2] });
+            if (rows[2]) html += _jiqUfcNestStep(rows[2], { terminal: true });
+            return html;
+        }
         function _jiqUfcNestSec(numLab, head, em) {
             return '<div class="jiq-frag-sec"><div class="jiq-frag-num">' + _jiqFragEsc(numLab) + '</div>'
                 + '<h3>' + _jiqFragEsc(head) + '</h3>'
@@ -100752,8 +100768,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var first = jb.first_event || [];
             var plan = jb.plan_mix || {};
             return _jiqUfcNestSec('03 From the clip to the signup', 'A clip, a Paramount+ UFC page, then a signup. The wall is not a step after signup.', 'Nested rows drop. The 6.71M wall is a wider leftover, not 3.78 minus 3.14.')
-                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
-                + _jiqUfcNestRead(_jiqUfcMill((funnel[1] || {}).count_m || 6.24) + ' searched UFC on Paramount+ after the clip. Search is off the nest. Ads sit on the clip, the page, and the leftover wall.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestClipSpine(rows, (funnel[1] || {}).count_m || 6.24) + '</div>'
+                + _jiqUfcNestRead('Ads sit on the clip, the page, and the leftover wall.')
                 + '<table class="jiq-ufc-tbl"><thead><tr><th>Step</th><th class="r">Viewers</th><th class="r">Of prior</th><th class="r">Drop</th><th class="r">Of US</th></tr></thead><tbody>'
                 + '<tr><td>US gen pop</td><td class="r">329.9M</td><td class="r">TAM</td><td class="r">-</td><td class="r">100.0%</td></tr>'
                 + '<tr><td>Saw a UFC-on-Paramount+ clip</td><td class="r">10.24M</td><td class="r">3.1%</td><td class="r">319.66M</td><td class="r">3.1%</td></tr>'
@@ -100799,7 +100815,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         return { label: lab, accounts: r.signups_m, v: r.signups_m, show: _jiqUfcMill(r.signups_m) + '  ' + _jiqUfcPct1(r.share_of_journey_b_pct) };
                     })},
                     { title: 'Not in this nest', rows: [
-                        { label: 'Searched after the clip', accounts: 6.24, v: 6.24, show: _jiqUfcMill(6.24) },
                         { label: 'Joined for something else, then watched', accounts: 3.06, v: 3.06, show: _jiqUfcMill(3.06) },
                         { label: 'Already subscribed, then watched', accounts: 8.42, v: 8.42, show: _jiqUfcMill(8.42) }
                     ]}
@@ -178726,6 +178741,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqUfcNestCard .jiq-frag-read { margin-bottom: 8px; }
     #jiqUfcNestHost { padding-bottom: 28px; }
     #jiqUfcNestCard .jiq-ufc-spine { margin: 0 34px; }
+    .jiq-ufc-search-off .jiq-frag-count { color: #E682FF; }
+    body[data-theme="light"] .jiq-ufc-search-off .jiq-frag-count { color: #8E3FA8; }
+    .jiq-ufc-search-off .jiq-frag-doing { max-width: 62ch; }
+    .jiq-ufc-search-off .jiq-frag-rail i { border-color: #E682FF; }
+    body[data-theme="light"] .jiq-ufc-search-off .jiq-frag-rail i { border-color: #8E3FA8; }
     #jiqUfcNestCard .jiq-ufc-pad { margin: 0 34px; }
 
     .jiq-ufc-wall-hero, .jiq-ufc-stat-hero {
