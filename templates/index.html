@@ -100784,20 +100784,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var plan = jb.plan_mix || {};
             return _jiqUfcNestSec('03 From the clip to the signup', 'A clip, a Paramount+ UFC page, then a signup. The wall is not a step after signup.', 'Nested rows drop. The 6.71M wall is a wider leftover, not 3.78 minus 3.14.')
                 + '<div class="jiq-ufc-spine">' + _jiqUfcNestClipSpine(rows, (funnel[1] || {}).count_m || 6.24) + '</div>'
-                + _jiqUfcNestRead('Ads sit on the clip, the page, and the leftover wall.')
-                + '<table class="jiq-ufc-tbl"><thead><tr><th>Step</th><th class="r">Viewers</th><th class="r">Of prior</th><th class="r">Drop</th><th class="r">Of US</th></tr></thead><tbody>'
-                + '<tr><td>US gen pop</td><td class="r">329.9M</td><td class="r">TAM</td><td class="r">-</td><td class="r">100.0%</td></tr>'
-                + '<tr><td>Saw a UFC-on-Paramount+ clip</td><td class="r">10.24M</td><td class="r">3.1%</td><td class="r">319.66M</td><td class="r">3.1%</td></tr>'
-                + '<tr><td>Opened the Paramount+ UFC page</td><td class="r">3.78M</td><td class="r">36.9%</td><td class="r">6.46M</td><td class="r">1.1%</td></tr>'
-                + '<tr class="is-hot"><td>Subscribed, first watch was UFC</td><td class="r">3.14M</td><td class="r">83.1%</td><td class="r">0.64M</td><td class="r">1.0%</td></tr>'
-                + '</tbody></table>'
-                + _jiqUfcNestRead(_jiqUfcMill(3.06) + ' more viewers watched UFC after joining for something else. They are not in this nest. All UFC watchers are 14.62M.')
-                + '<div class="jiq-ufc-figs">'
-                + '<div class="jiq-ufc-fig"><b>6.46M</b><span>Saw a clip and never opened the page</span></div>'
-                + '<div class="jiq-ufc-fig"><b>0.64M</b><span>Opened the page and did not subscribe in that nest</span></div>'
-                + '<div class="jiq-ufc-fig is-hot"><b>5.33M</b><span>Hit any UFC paywall and never converted</span></div>'
-                + '</div>'
-                + _jiqUfcNestRead('5.33M is not 3.78 minus 3.14. That is the recover pool.')
                 + _jiqUfcNestSec('After they signed up', 'Cross-content is the retention problem.', 'These rows are of the ' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' UFC-first signups.')
                 + '<div class="jiq-frag-detours cols-2">'
                 + _jiqUfcNestDetours([
@@ -100819,12 +100805,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }) }])
                 + '</div>'
                 + '<div class="jiq-ufc-stat-hero"><div class="jiq-ufc-stat-hero-k">What the new UFC-first subs brought in</div>'
-                + '<div class="jiq-ufc-stat-hero-split">'
-                + '<div><div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_revenue_usd_m || 151.79) + 'M</div>'
-                + '<div class="jiq-ufc-stat-hero-l">' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' people \u00d7 $10.07 a month \u00d7 4.8 months they stay.</div></div>'
-                + '<div><div class="jiq-ufc-stat-hero-v is-sm">' + _jiqUfcMoney(jb.cohort_ltv || 48.34) + '</div>'
-                + '<div class="jiq-ufc-stat-hero-l">Per person.</div></div>'
-                + '</div>'
+                + '<div class="jiq-ufc-stat-hero-v">' + _jiqUfcMoney(jb.cohort_revenue_usd_m || 151.79) + 'M</div>'
+                + '<div class="jiq-ufc-stat-hero-l">' + _jiqUfcMill(jb.cohort_size_m || 3.14) + ' people \u00d7 $10.07 a month \u00d7 4.8 months they stay.</div>'
                 + '<div class="jiq-ufc-stat-hero-s">3.14M \u00d7 $48.34. 78.4% pay $8.99. 21.6% pay $13.99.</div></div>'
                 + _jiqUfcNestSec('Which fight they signed up on', 'Freedom 250 is the largest UFC-first door. McGregor is a close second.', _jiqUfcMill(jb.cohort_size_m || 3.14) + ' UFC-first signups. One first card each. Adds to 3.14M.')
                 + '<div class="jiq-frag-detours cols-2">'
