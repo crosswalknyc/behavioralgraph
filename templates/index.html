@@ -100904,33 +100904,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var sizing = rd.sizing || [];
             var ret = sizing[0] || {};
             var acq = sizing[1] || {};
-            var imps = rd.implications || [];
-            function imp(kind, fallback) {
-                var row = imps.filter(function(i) { return (i.kind || '').indexOf(kind) >= 0; })[0];
-                return row ? row.body : fallback;
-            }
-            function shortImp(kind, fallback) {
-                var body = imp(kind, fallback);
-                var cut = body.split('. ').slice(0, 3).join('. ');
-                if (cut && cut.charAt(cut.length - 1) !== '.') cut += '.';
-                return cut;
-            }
-            return _jiqUfcNestSec('08 The read', 'Two levers are worth $21.06M to $28.79M inside the window.', 'Both are sized from the pages behind this one.')
+            var knows = [
+                '14.62M watched. 8.42M already had Paramount+. 3.14M signed up because of UFC. 5.33M left at signup and never watched.',
+                'UFC did not speed up cancellation among people who were already subscribed.',
+                'People who signed up for UFC cancel at a higher rate. The ones who watch only UFC cancel the most.',
+                'South Park is the show they go to next. Landman is second.',
+                '4,420,000 who left signup went to UFC social the same day. There is no signup ask on that page.'
+            ];
+            return _jiqUfcNestSec('08 The read', 'Keep more of the people who signed up for UFC. Get some of the people who left signup to come back.', 'Two numbers. Five facts.')
                 + '<div class="jiq-ufc-levers">'
-                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Retention</div><div class="jiq-ufc-lever-v">$' + (ret.value_usd_m || 10.75) + 'M</div>'
-                + '<div class="jiq-ufc-lever-l">Close half the day-90 gap.</div>'
-                + '<div class="jiq-ufc-lever-s">62.4% to 66.85%. Tenure 4.8 to 5.14 months. 0.34 months \u00d7 $10.07 \u00d7 3,140,000.</div></div>'
-                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Acquisition</div><div class="jiq-ufc-lever-v">$' + (acq.value_usd_m_low || 10.31) + 'M to $' + (acq.value_usd_m_high || 18.04) + 'M</div>'
-                + '<div class="jiq-ufc-lever-l">Recover 4 to 7 points of people who left at the paywall and never signed up.</div>'
-                + '<div class="jiq-ufc-lever-s">4% to 7% of 5,330,000 is 213,000 to 373,000 people, each at the $48.34 UFC-first value.</div></div>'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Keep more UFC signups</div><div class="jiq-ufc-lever-v">$' + (ret.value_usd_m || 10.75) + 'M</div>'
+                + '<div class="jiq-ufc-lever-l">Move day-90 stay from 62.4% to 66.85%.</div>'
+                + '<div class="jiq-ufc-lever-s">That is half the gap to the strongest sports signups.</div></div>'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Get people who left signup</div><div class="jiq-ufc-lever-v">$' + (acq.value_usd_m_low || 10.31) + 'M to $' + (acq.value_usd_m_high || 18.04) + 'M</div>'
+                + '<div class="jiq-ufc-lever-l">213,000 to 373,000 of the 5,330,000 who never signed up.</div>'
+                + '<div class="jiq-ufc-lever-s">Each one is worth $48.34, the same as a new UFC sub.</div></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-imp">'
-                + '<div><h5>For content</h5><p>' + _jiqFragEsc(shortImp('CONTENT', '91.6% of already-subscribed UFC watchers kept watching non-UFC titles. South Park is the strongest bridge.')) + '</p></div>'
-                + '<div><h5>For acquisition</h5><p>' + _jiqFragEsc(shortImp('ACQUISITION', '812,000 signed up within 24 hours of leaving the paywall.')) + '</p></div>'
-                + '<div><h5>For retention</h5><p>' + _jiqFragEsc(shortImp('RETENTION', 'Zero non-UFC in the first 30 days is a 2.63x cancel index.')) + '</p></div>'
-                + '<div><h5>For the next card</h5><p>The age shift is not one number. UFC-first is 9.9 years younger. People who left at the paywall are 13.2. Already-subscribed is only 4.4. The buy lives in the first two. 4,420,000 who left the paywall are already on UFC social the same day. 430,000 came back to the signup page a second time and still did not convert.</p></div>'
-                + '</div>'
-                + _jiqUfcNestRead('14,620,000 watched. 8,420,000 were already in. 3,060,000 joined for something else. 3,140,000 joined for UFC. 5,330,000 showed intent and never converted. That is the whole file.');
+                + '<div class="jiq-ufc-tldr">' + knows.map(function(s) {
+                    return '<div>' + _jiqFragEsc(s) + '</div>';
+                }).join('') + '</div>';
         }
         function _jiqUfcNestMethod() {
             return _jiqUfcNestSec('09 How we counted', 'Every number is unique US people in this window.', 'Jan 1 to Aug 14, 2026. One person, one ID.')
@@ -178516,7 +178508,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqUfcNestCard .jiq-ufc-stat-hero-l,
     #jiqUfcNestCard .jiq-ufc-stat-hero-s,
     #jiqUfcNestCard .jiq-ufc-wall-hero-l,
-    #jiqUfcNestCard .jiq-ufc-wall-hero-s { text-transform: none !important; }
+    #jiqUfcNestCard .jiq-ufc-wall-hero-s,
+    #jiqUfcNestCard .jiq-ufc-lever-k,
+    #jiqUfcNestCard .jiq-ufc-lever-l,
+    #jiqUfcNestCard .jiq-ufc-lever-s,
+    #jiqUfcNestCard .jiq-ufc-tldr { text-transform: none !important; }
     body[data-theme="light"] #jiqUfcNestDeck { color: #5C6560; }
     #jiqUfcCaseCard, #jiqUfcDiscoveryCard, #jiqUfcJourneyACard, #jiqUfcJourneyBCard,
     #jiqUfcJourneyCCard, #jiqUfcChurnCard, #jiqUfcSegmentsCard, #jiqUfcReadCard,
@@ -178657,8 +178653,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     .jiq-ufc-lever-k { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #7C878A; }
     .jiq-ufc-lever-v { margin-top: 8px; font-size: 28px; font-weight: 800; letter-spacing: -.03em; color: #C7F23E; }
     body[data-theme="light"] .jiq-ufc-lever-v { color: #5E7E12; }
+    .jiq-ufc-lever-k { word-spacing: 0.35em; letter-spacing: .08em; }
     .jiq-ufc-lever-l { margin-top: 8px; font-size: 14px; font-weight: 700; }
     .jiq-ufc-lever-s { margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: #9AA09B; }
+    .jiq-ufc-tldr { margin: 8px 34px 32px; display: flex; flex-direction: column; gap: 14px; }
+    .jiq-ufc-tldr div { font-size: 16px; font-weight: 700; line-height: 1.4; color: #E9E8E1; max-width: 72ch; }
+    body[data-theme="light"] .jiq-ufc-tldr div { color: #0C1618; }
     .jiq-ufc-imp { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin: 0 34px 32px; }
     .jiq-ufc-imp h5 {
         margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
