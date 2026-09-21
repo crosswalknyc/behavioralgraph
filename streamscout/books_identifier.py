@@ -118,10 +118,16 @@ def title_match(query, cand):
     if _seq(query, cand) >= 0.5:
         return True
     # Long-subtitle case (common on Amazon/retail): the whole query phrase
-    # appears verbatim in the candidate, e.g. "Cruel Saints" inside
-    # "Cruel Saints: An Arranged Marriage Mafia Romance (The Saints Series)".
+    # appears verbatim NEAR THE START of the candidate, e.g. "Cruel Saints" in
+    # "Cruel Saints: An Arranged Marriage Mafia Romance (The Saints Series)" or
+    # the English title early in a foreign edition, "Alas de ónix (Onyx Storm)".
+    # Bounding the position rejects a buried mention — e.g. a *different* book
+    # promoted as "…by the author of Fourth Wing" — which is not the actual title.
     nq = _norm(query)
-    return bool(nq) and nq in _norm(cand)
+    if not nq:
+        return False
+    idx = _norm(cand).find(nq)
+    return idx != -1 and idx <= 45
 
 
 def author_match(anchor, cand_author):
@@ -144,24 +150,23 @@ def hit(title, url, ident, platform, fmt, author=""):
 
 
 # ── Apple Books (iTunes Search API — audiobook + ebook) ───────────────────────
-# The US Apple Books store still lists foreign-language and non-base editions
-# (German "flammengeküsst", French "version française", "edizione italiana",
-# "tome 01", dramatized-adaptation splits, graphic novels …) — all of which pass
-# title_match because they lead with the real title. For a US-English Readers
-# seed those are noise, so keep only English *base* editions.
-_APPLE_NON_ASCII = re.compile(r"[^\x00-\x7f]")            # ü, ç, ó, ł, å, ñ …
-_APPLE_FOREIGN_KW = re.compile(
+# The US Apple Books store lists lots of entries that pass title_match because
+# they lead with the real title. Drop the non-base FORMAT variants (dramatized
+# adaptations, graphic novels) and third-party DERIVATIVES (study guides,
+# summaries, fan fiction, companions) — but KEEP legitimate foreign-language
+# editions of the actual title (a German or French reader of the real book is
+# still a reader of it).
+_APPLE_DROP = re.compile(
     r"(?i)(?<![a-z])(?:"
-    r"edizione|italiana|edici[oó]n|deutsche?|ausgabe|reihe|fran[cç]aise|"
-    r"castellano|espa[nñ]ol|portugu[eê]s|nederlandse|polsk[ia]|tome\s*\d+|"
-    r"dramatized|graphic\s+novel"
+    r"dramatized|graphic\s+novel|study\s+guide|summary|analysis|workbook|"
+    r"companion|trivia|quiz|unofficial|fan\s?fic(?:tion)?|cliffs?notes|"
+    r"sparknotes|conversation\s+starters"
     r")(?![a-z])")
 
 
-def _english_base_edition(name):
-    """False for foreign-language or non-base (dramatized/graphic-novel) titles."""
-    n = name or ""
-    return not (_APPLE_NON_ASCII.search(n) or _APPLE_FOREIGN_KW.search(n))
+def _apple_keep(name):
+    """Keep real editions (any language); drop format variants & derivatives."""
+    return not _APPLE_DROP.search(name or "")
 
 
 def _apple_search(title, entity, author=None, limit=8):
@@ -176,7 +181,7 @@ def _apple_search(title, entity, author=None, limit=8):
             continue
         if not title_match(title, name):
             continue
-        if not _english_base_edition(name):      # drop foreign / non-base editions
+        if not _apple_keep(name):                # drop variants & derivatives
             continue
         if author and not author_match(author, who):
             continue

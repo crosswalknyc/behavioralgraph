@@ -546,3 +546,4 @@ if __name__ == "__main__":
 # (youtube-shorts-innertube 2026-09-21 - YouTube: reliable Shorts via InnerTube browse (paginated) for --include-shorts)
 # (ss-match-gate-overmatch 2026-09-21 - shared relevance floor stops podcast/audio/YouTube over-match catalog dumps)
 # (books-apple-english-base 2026-09-21 - Books/Apple: keep only US-English base editions (drop foreign-lang + dramatized/graphic-novel noise))
+# (books-apple-keep-foreign-drop-variants 2026-09-21 - Books/Apple: keep foreign-language real editions, drop variants/fan-fic + buried-mention title matches)
