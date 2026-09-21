@@ -59186,8 +59186,25 @@ def api_synth_chat_analyze():
         digest, p_meta = None, {}
         if ctx.get('primary'):
             _t_digest = time.monotonic()
-            digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET,
-                                                   ctx)
+            try:
+                digest, p_meta = pma.get_digest_bundle(
+                    s3_client, S3_BUCKET, ctx)
+            except Exception as _dg_err:
+                if not pma.is_missing_key_error(_dg_err):
+                    raise
+                # Stale page context (2026-09-21 Starz-ask defect): the
+                # browser's selected profile was deleted or retitled on
+                # S3 after the page loaded. The profile is auxiliary
+                # context, not the question - drop it and answer from
+                # the view context instead of failing the whole ask.
+                print(f"[analyze] stale page-context profile "
+                      f"{(ctx.get('primary') or {}).get('s3_key')!r} "
+                      f"no longer exists; proceeding without profile "
+                      f"digest")
+                ctx = dict(ctx)
+                ctx['primary'] = None
+                ctx['cuts'] = []
+                digest, p_meta = None, {}
             _pm_ask_stage('digest', t0=_t_digest)
     except Exception as e:
         traceback.print_exc()

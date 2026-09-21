@@ -687,6 +687,23 @@ def _profile_digest_cached(s3_client, bucket, s3_key, want_name, genpop,
     return digest, meta, etag, df
 
 
+def is_missing_key_error(err) -> bool:
+    """True when an exception is S3 telling us the object is gone
+    (NoSuchKey / 404). Stale page contexts carry profile keys that
+    were deleted or retitled after the browser cached them (2026-09-21:
+    a Rankers-view ask died on a deleted profile the question never
+    needed); callers use this to drop the stale profile and proceed
+    instead of failing the whole ask."""
+    try:
+        code = str(((getattr(err, "response", None) or {})
+                    .get("Error") or {}).get("Code") or "")
+        if code in ("NoSuchKey", "404", "NotFound"):
+            return True
+    except Exception:
+        pass
+    return "NoSuchKey" in str(err)
+
+
 def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
     """Assemble the full digest bundle for a page context:
     {primary: {s3_key, name}, cuts: [{s3_key, name}, ...]}.
