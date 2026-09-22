@@ -55,6 +55,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 from datetime import datetime, timezone
 
 BUCKET = "dashboard-inputs"
@@ -1649,21 +1650,103 @@ def _sql_quote(v):
     return "'" + str(v or "").replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-def insert_content_mapping_rows(rows, run_id="", connect_fn=None,
-                                s3_client=None, queue_on_failure=True):
-    """Insert new rows into reference.content_mapping. Insert-only:
-    existing rows are never modified or deleted. Dedupe is case +
-    punctuation insensitive on (PLATFORM, URL) plus (SHOW, PLATFORM,
-    SEASON, URL). On connection failure the rows queue to S3 for
-    retry and the caller proceeds (never blocks a build).
+# ---------------------------------------------------------------------------
+# Content-mapping approval buffer (Jenna 2026-09-21)
+# ---------------------------------------------------------------------------
+# The tri-state hostmap-gap email now carries a CONTENT MAPPING section:
+# researched content URLs the build surfaced for its BRAND INPUT get
+# buffered here, per run_id, and drained by
+# ``synth_queue_worker._flush_hostmap_gap_report`` at end-of-run. On
+# Approve (Content or All) the endpoint's ingest handler INSERTs them
+# into ``reference.content_mapping`` and appends to the CONTENT_MAPPING
+# tab of the mapping sheet. On Reject, they're discarded.
+#
+# The approval gate is the DEFAULT going forward. Callers that need
+# the legacy direct-insert path (e.g. the approval endpoint itself,
+# retry sweeps for CH-unreachable queues) pass
+# ``buffer_for_approval=False`` explicitly.
+_CONTENT_MAPPING_BUFFER: dict[str, list] = {}
+_CONTENT_MAPPING_BUFFER_LOCK = threading.Lock()
 
-    Returns {'inserted': n, 'duplicates': n, 'queued': bool,
-             'error': str|None}."""
-    out = {"inserted": 0, "duplicates": 0, "queued": False, "error": None}
+
+def _buffer_content_mapping_rows(run_id: str, rows) -> int:
+    """Append rows to the per-run content mapping buffer. Deduplicates
+    within the buffer using the same fold semantics
+    ``ingest_content_mapping_rows`` applies at ingest time - so a
+    build that re-reasons the same (PLATFORM, URL) pair does not
+    balloon the buffer. Returns the number of rows actually queued
+    (may be less than input length when internal dupes are folded)."""
+    key = str(run_id or "default")
+    added = 0
+    with _CONTENT_MAPPING_BUFFER_LOCK:
+        existing = _CONTENT_MAPPING_BUFFER.setdefault(key, [])
+        seen = set()
+        for r in existing:
+            seen.add((norm_token(r.get("PLATFORM")),
+                      norm_token(r.get("URL"))))
+        for r in rows:
+            k = (norm_token(r.get("PLATFORM")),
+                 norm_token(r.get("URL")))
+            if k in seen:
+                continue
+            seen.add(k)
+            existing.append(dict(r))
+            added += 1
+    return added
+
+
+def drain_content_mapping_buffer(run_id: str) -> list:
+    """Pop the buffer for one run_id and return its rows. Safe to call
+    even when nothing was ever buffered (returns [])."""
+    key = str(run_id or "default")
+    with _CONTENT_MAPPING_BUFFER_LOCK:
+        return _CONTENT_MAPPING_BUFFER.pop(key, [])
+
+
+def get_content_mapping_buffer_size(run_id: str) -> int:
+    """Diagnostic: how many rows are currently buffered for one run."""
+    key = str(run_id or "default")
+    with _CONTENT_MAPPING_BUFFER_LOCK:
+        return len(_CONTENT_MAPPING_BUFFER.get(key, []))
+
+
+def insert_content_mapping_rows(rows, run_id="", connect_fn=None,
+                                s3_client=None, queue_on_failure=True,
+                                buffer_for_approval=True):
+    """Route new rows destined for reference.content_mapping.
+
+    Two modes (Jenna 2026-09-21, tri-state approval extension):
+
+    - ``buffer_for_approval=True`` (default): rows are appended to a
+      per-run buffer keyed by ``run_id``. The worker drains the buffer
+      at end-of-run and includes the rows as the CONTENT MAPPING
+      section of the consolidated hostmap-gap email; the endpoint's
+      approval handler inserts them into ClickHouse on Approve. No
+      direct CH write happens on this path.
+    - ``buffer_for_approval=False``: legacy direct-insert path.
+      Insert-only (existing rows are never modified or deleted; dedupe
+      is case + punctuation insensitive on (PLATFORM, URL) plus (SHOW,
+      PLATFORM, SEASON, URL)). On connection failure the rows queue to
+      S3 for retry and the caller proceeds (never blocks a build).
+      Used by the approval endpoint itself and by
+      ``flush_pending_content_mapping`` when draining the retry queue.
+
+    Returns {'inserted': int, 'duplicates': int, 'buffered': int,
+             'queued': bool, 'error': str|None}. ``buffered`` is the
+    row count moved into the approval buffer; ``inserted`` is the row
+    count that landed directly in the CH table."""
+    out = {"inserted": 0, "duplicates": 0, "buffered": 0,
+           "queued": False, "error": None}
     rows = [r for r in (rows or [])
             if isinstance(r, dict) and r.get("SHOW") and r.get("URL")
             and r.get("PLATFORM")]
     if not rows:
+        return out
+    if buffer_for_approval:
+        out["buffered"] = _buffer_content_mapping_rows(run_id, rows)
+        print(f"[{run_id}] content_mapping: {out['buffered']} row(s) "
+              f"buffered for approval "
+              f"({len(rows) - out['buffered']} dupes within run)")
         return out
     connect = connect_fn or _default_connect
     try:
@@ -1776,9 +1859,13 @@ def flush_pending_content_mapping(connect_fn=None, s3_client=None,
                 rows = payload.get("rows") or []
             except Exception:
                 continue
+            # Retry drain: direct-insert path (skip the approval buffer;
+            # these rows are here because they missed CH on a prior run
+            # and are being replayed opportunistically).
             res = insert_content_mapping_rows(
                 rows, run_id=run_id, connect_fn=connect_fn,
-                s3_client=s3_client, queue_on_failure=False)
+                s3_client=s3_client, queue_on_failure=False,
+                buffer_for_approval=False)
             if res.get("error"):
                 # ClickHouse still unreachable; leave the sidecar.
                 break

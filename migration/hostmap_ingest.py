@@ -684,7 +684,18 @@ def _state_key(approval_id) -> str:
 
 
 def _csv_key(approval_id) -> str:
+    """Hostmap CSV S3 key. Kept as-is for backward compat: legacy
+    approvals (single-section, from before the tri-state extension)
+    stored the hostmap CSV at ``<id>.csv``; new persists still write
+    the hostmap CSV here so the reader sees an unchanged shape."""
     return f"{APPROVAL_PREFIX}/{approval_id}.csv"
+
+
+def _content_csv_key(approval_id) -> str:
+    """Content-map CSV S3 key (Jenna 2026-09-21). New persists write
+    the secondary content-map CSV here alongside the hostmap CSV;
+    legacy approvals have no such file."""
+    return f"{APPROVAL_PREFIX}/{approval_id}.content.csv"
 
 
 def _update_json(bucket, key, mutate_fn):
@@ -695,8 +706,98 @@ def _update_json(bucket, key, mutate_fn):
     return update_json(bucket, key, mutate_fn, s3=_s3_client())
 
 
+# ---------------------------------------------------------------------------
+# State shape (Jenna 2026-09-21, tri-state extension)
+# ---------------------------------------------------------------------------
+# A single approval package holds up to TWO independently-decidable
+# sides: ``hostmap`` (the mapping-table proposals) and ``content`` (the
+# content_mapping proposals). Each side has its own per-side status
+# (pending / approved / rejected / not_included) and its own ingest
+# result block; ``status`` at the top of the document is a computed
+# rollup. Four action verbs sign one HMAC token each:
+#
+#     approve_all       -> approve every side that's still pending
+#     approve_hostmap   -> flip only the hostmap side, if pending
+#     approve_content   -> flip only the content side, if pending
+#     reject            -> flip every pending side to rejected
+#
+# Backward compat: legacy states (from before this extension) carry
+# only top-level ``csv_key``, ``row_count``, ``brand_count``, ``status``
+# and no sub-blocks. ``load_approval`` lifts them into the new shape on
+# read (never writes back; the S3 object stays byte-equal until a real
+# transition rewrites it). The legacy ``approve`` action is treated as
+# ``approve_all`` in the new code, so links printed by earlier email
+# builds continue to work.
+_PER_SIDE_INITIAL = {
+    "status": "pending",
+    "csv_key": "",
+    "csv_name": "",
+    "row_count": 0,
+    "ingest_status": "not_run",
+    "ingest": None,
+    "sheet": None,
+}
+
+
+def _side_not_included(side_key: str) -> dict:
+    """Placeholder block for a side that isn't part of this approval."""
+    return {**_PER_SIDE_INITIAL, "status": "not_included",
+            "ingest_status": "not_run"}
+
+
+def _rollup_status(state: dict) -> str:
+    """Compute the top-level status from the two side blocks.
+    - all pending (or one pending + one not_included) -> "pending"
+    - all decided approved -> "approved"
+    - all decided rejected -> "rejected"
+    - mix of decided (one approved, one rejected) -> "closed"
+    - any pending + any decided -> "partial"
+    """
+    sides = [state.get("hostmap") or {}, state.get("content") or {}]
+    live = [s for s in sides if s.get("status") != "not_included"]
+    if not live:
+        return "pending"
+    statuses = {s.get("status", "pending") for s in live}
+    if statuses == {"pending"}:
+        return "pending"
+    if statuses == {"approved"}:
+        return "approved"
+    if statuses == {"rejected"}:
+        return "rejected"
+    if statuses == {"approved", "rejected"}:
+        return "closed"
+    return "partial"
+
+
+def _upgrade_legacy_state(raw: dict) -> dict:
+    """Return a new-shape copy of a legacy state document. Does NOT
+    mutate the input and does NOT rewrite the S3 object. The upgraded
+    document is safe to feed to every new handler, since a legacy
+    state has no content side by definition."""
+    if not isinstance(raw, dict):
+        return raw
+    if "hostmap" in raw or "content" in raw:
+        return raw  # already new-shape
+    up = dict(raw)
+    up["hostmap"] = {
+        "status": raw.get("status", "pending"),
+        "csv_key": raw.get("csv_key", ""),
+        "csv_name": raw.get("csv_name", ""),
+        "row_count": int(raw.get("row_count") or 0),
+        "brand_count": int(raw.get("brand_count") or 0),
+        "decided_at": (raw.get("approved_at") or raw.get("rejected_at")
+                       or None),
+        "ingest_status": raw.get("ingest_status", "not_run"),
+        "ingest": raw.get("ingest"),
+        "sheet": raw.get("sheet"),
+    }
+    up["content"] = _side_not_included("content")
+    return up
+
+
 def load_approval(approval_id):
-    """(state dict or None) for an approval id."""
+    """(state dict or None) for an approval id, normalized to
+    new-shape (per-side blocks). Never rewrites the S3 object."""
     aid = str(approval_id or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_\-]{8,80}", aid):
         return None
@@ -704,15 +805,21 @@ def load_approval(approval_id):
         body = _s3_client().get_object(
             Bucket=APPROVAL_BUCKET, Key=_state_key(aid),
         )["Body"].read().decode("utf-8")
-        return json.loads(body)
+        raw = json.loads(body)
     except Exception:
         return None
+    return _upgrade_legacy_state(raw)
 
 
-def load_approval_csv(approval_id) -> str:
+def load_approval_csv(approval_id, side: str = "hostmap") -> str:
+    """Load a per-side CSV from S3. ``side`` is ``hostmap`` (default)
+    or ``content``. Returns '' on any failure (missing file, bad ACL,
+    S3 hiccup) - callers record a retryable state and never raise."""
+    key = (_content_csv_key(str(approval_id)) if side == "content"
+           else _csv_key(str(approval_id)))
     try:
         return _s3_client().get_object(
-            Bucket=APPROVAL_BUCKET, Key=_csv_key(str(approval_id)),
+            Bucket=APPROVAL_BUCKET, Key=key,
         )["Body"].read().decode("utf-8")
     except Exception:
         return ""
@@ -720,59 +827,144 @@ def load_approval_csv(approval_id) -> str:
 
 def persist_approval(csv_text, csv_name, subject, requested_by="",
                      dry_run: bool = False, base_url=None,
-                     recipients=None) -> dict:
-    """Stage a mapping CSV for one-click approval. Writes the CSV and a
-    pending state JSON to S3 and returns
-    {"id", "approve_url", "reject_url", "row_count"}.
+                     recipients=None,
+                     content_csv_text=None, content_csv_name=None) -> dict:
+    """Stage an approval package for one-click ingest. Supports two
+    sides (Jenna 2026-09-21):
+
+    - Hostmap section (``csv_text`` / ``csv_name``): the standard
+      Mapping_Table_V1 CSV (BRAND, HOSTNAME, CATEGORY, SECTION).
+      Backward-compatible; every existing caller passes just this.
+    - Content section (``content_csv_text`` / ``content_csv_name``,
+      optional): five-column content-mapping CSV (SHOW, URL,
+      PRODUCTION, PLATFORM, SEASON) when the build's BRAND INPUT
+      resolved researched content URLs.
+
+    Writes both CSVs to S3 alongside a state JSON that carries per-side
+    blocks. Returns:
+
+        {"id", "row_count", "content_row_count",
+         "approve_url",           # legacy alias for approve_all
+         "approve_all_url",
+         "approve_hostmap_url",
+         "approve_content_url",   # None when content_csv_text is None
+         "reject_url"}
+
+    ``dry_run=True`` stages a state whose approve actions only REPORT
+    what would be inserted (used by format-test emails).
 
     Raises when the secret is unresolvable or S3 is unreachable; the
     email builder catches and sends without buttons (fail-safe).
-    ``dry_run=True`` stages a state whose Approve click only REPORTS
-    what would be inserted (used by format-test emails).
-
-    ``recipients`` is the full To+Cc list the proposal email went to. It
-    is stored on the state so a later Approve/Reject click can reply-all:
-    notify everyone that a decision was made so nobody else has to act
-    (Jenna 2026-08-31).
     """
     secret = approval_secret()
     if not secret:
         raise RuntimeError("no approval secret configured "
                            "(HOSTMAP_APPROVAL_SECRET or the S3 fallback)")
-    rows = parse_mapping_csv(csv_text)
-    if not rows:
-        raise ValueError("mapping CSV has no rows")
+    rows = parse_mapping_csv(csv_text) if csv_text else []
+    content_rows = []
+    if content_csv_text:
+        # Parse the content CSV via the sibling module so schema
+        # validation matches the ingest path exactly.
+        try:
+            from migration.content_mapping_ingest import (
+                parse_content_mapping_csv)
+        except ImportError:
+            from content_mapping_ingest import (  # type: ignore
+                parse_content_mapping_csv)
+        content_rows = parse_content_mapping_csv(content_csv_text)
+    if not rows and not content_rows:
+        raise ValueError("approval package has no hostmap or content rows")
+
     stamp = datetime.now(timezone.utc)
     aid = f"hm_{stamp.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:10]}"
     s3 = _s3_client()
-    s3.put_object(Bucket=APPROVAL_BUCKET, Key=_csv_key(aid),
-                  Body=str(csv_text).encode("utf-8"),
-                  ContentType="text/csv")
+
+    # Write the CSVs first, then the state (so a state that references
+    # a CSV is guaranteed to find it on the S3 GET).
+    if rows:
+        s3.put_object(Bucket=APPROVAL_BUCKET, Key=_csv_key(aid),
+                      Body=str(csv_text).encode("utf-8"),
+                      ContentType="text/csv")
+    if content_rows:
+        s3.put_object(Bucket=APPROVAL_BUCKET,
+                      Key=_content_csv_key(aid),
+                      Body=str(content_csv_text).encode("utf-8"),
+                      ContentType="text/csv")
+
+    hostmap_block = _side_not_included("hostmap")
+    content_block = _side_not_included("content")
+    if rows:
+        hostmap_block = {
+            "status": "pending",
+            "csv_key": _csv_key(aid),
+            "csv_name": str(csv_name or f"{aid}.csv"),
+            "row_count": len(rows),
+            "brand_count": len({fold_brand(r["BRAND"]) for r in rows}),
+            "decided_at": None,
+            "ingest_status": "not_run",
+            "ingest": None,
+            "sheet": None,
+        }
+    if content_rows:
+        show_count = len({str(r.get("SHOW") or "").strip()
+                          for r in content_rows if r.get("SHOW")})
+        content_block = {
+            "status": "pending",
+            "csv_key": _content_csv_key(aid),
+            "csv_name": str(content_csv_name or f"{aid}.content.csv"),
+            "row_count": len(content_rows),
+            "show_count": show_count,
+            "decided_at": None,
+            "ingest_status": "not_run",
+            "ingest": None,
+            "sheet": None,
+        }
+
     state = {
         "id": aid,
         "status": "pending",
         "created_at": stamp.isoformat(),
         "requested_by": str(requested_by or ""),
         "subject": str(subject or ""),
-        "csv_name": str(csv_name or f"{aid}.csv"),
-        "csv_key": _csv_key(aid),
-        "row_count": len(rows),
-        "brand_count": len({fold_brand(r["BRAND"]) for r in rows}),
         "dry_run": bool(dry_run),
         "recipients": _dedupe_emails(recipients),
+        # Per-side blocks (source of truth for the new flow):
+        "hostmap": hostmap_block,
+        "content": content_block,
+        # Legacy top-level mirrors of the hostmap block, so an older
+        # reader (or an existing external cache) still sees the shape
+        # it expects. Never used by the new handler.
+        "csv_name": hostmap_block.get("csv_name", ""),
+        "csv_key": hostmap_block.get("csv_key", ""),
+        "row_count": hostmap_block.get("row_count", 0),
+        "brand_count": hostmap_block.get("brand_count", 0),
     }
     s3.put_object(Bucket=APPROVAL_BUCKET, Key=_state_key(aid),
                   Body=json.dumps(state, indent=2).encode("utf-8"),
                   ContentType="application/json")
+
     base = (base_url or os.environ.get("HOSTMAP_APPROVAL_BASE_URL")
             or DEFAULT_BASE_URL).rstrip("/")
+
+    def _url(action):
+        return (f"{base}/api/hostmap-mapping/{action}?id={aid}"
+                f"&token={sign_token(aid, action, secret)}")
+
     return {
         "id": aid,
         "row_count": len(rows),
-        "approve_url": (f"{base}/api/hostmap-mapping/approve?id={aid}"
-                        f"&token={sign_token(aid, 'approve', secret)}"),
-        "reject_url": (f"{base}/api/hostmap-mapping/reject?id={aid}"
-                       f"&token={sign_token(aid, 'reject', secret)}"),
+        "content_row_count": len(content_rows),
+        "brand_count": hostmap_block.get("brand_count", 0),
+        "show_count": content_block.get("show_count", 0),
+        # Legacy alias (older email builders call it approve_url).
+        # Points at the same handler as approve_all so an email sent
+        # BEFORE the tri-state extension still works after this ships.
+        "approve_url": _url("approve"),
+        "approve_all_url": _url("approve_all"),
+        "approve_hostmap_url": (_url("approve_hostmap") if rows else None),
+        "approve_content_url": (_url("approve_content") if content_rows
+                                else None),
+        "reject_url": _url("reject"),
     }
 
 
@@ -820,112 +1012,279 @@ def _send_group_email(recipients, subject_line, text_body, html_body) -> None:
           f"{len(recips)} recipient(s)")
 
 
-def _notify_decision(state, action) -> None:
+def _side_label(side: str) -> str:
+    if side == "content":
+        return "content mapping"
+    return "hostmap mapping"
+
+
+def _notify_decision(state, action, sides_touched=None) -> None:
     """Reply-all on a decision: tell every original recipient that the
     proposal was approved or rejected, so the rest of the group knows
-    they do not need to act (Jenna 2026-08-31). Fires exactly once (on
-    the CAS-claimed transition). Strictly fail-safe: a send failure never
-    blocks or breaks the approval flow."""
+    they do not need to act (Jenna 2026-08-31). Fires exactly once per
+    CAS-claimed transition. Strictly fail-safe: a send failure never
+    blocks or breaks the approval flow.
+
+    ``sides_touched`` is a list of "hostmap" / "content" describing
+    which sides this action actually flipped. When omitted, defaults to
+    every side that's in the "not_included" position (legacy single
+    section)."""
     try:
         recips = _dedupe_emails((state or {}).get("recipients"))
         if not recips:
             return
         subject_name = (str((state or {}).get("subject") or "").strip()
                         or "this profile")
-        n_rows = int((state or {}).get("row_count") or 0)
-        n_brands = int((state or {}).get("brand_count") or 0)
-        if action == "approve":
-            decided = "approved"
-            lead = (f"The mapping additions for {subject_name} were approved "
-                    f"and added to the mapping table "
-                    f"({n_rows} row(s) across {n_brands} brand(s)).")
-        else:
-            decided = "declined"
-            lead = (f"The mapping additions for {subject_name} were declined. "
-                    f"No changes were made to the mapping table.")
+
+        # Build the per-side summary from the (already-transitioned)
+        # state document. Sides not touched by this action are skipped
+        # so the notification only speaks to what THIS click did.
+        touched = list(sides_touched or [])
+        if not touched:
+            for side in ("hostmap", "content"):
+                if (state or {}).get(side, {}).get("status") \
+                        in ("approved", "rejected"):
+                    touched.append(side)
+
+        approved_bits = []
+        rejected_bits = []
+        for side in touched:
+            block = (state or {}).get(side) or {}
+            n_rows = int(block.get("row_count") or 0)
+            side_name = _side_label(side)
+            if block.get("status") == "approved":
+                if side == "hostmap":
+                    n_brands = int(block.get("brand_count") or 0)
+                    approved_bits.append(
+                        f"{side_name} ({n_rows} row(s) across "
+                        f"{n_brands} brand(s))")
+                else:
+                    n_shows = int(block.get("show_count") or 0)
+                    approved_bits.append(
+                        f"{side_name} ({n_rows} row(s) across "
+                        f"{n_shows} show(s))")
+            elif block.get("status") == "rejected":
+                rejected_bits.append(f"{side_name} ({n_rows} row(s))")
+
+        lead_lines = []
+        if approved_bits:
+            lead_lines.append(
+                f"Approved and added to the mapping tables: "
+                f"{', '.join(approved_bits)}.")
+        if rejected_bits:
+            lead_lines.append(
+                f"Declined (no changes made): "
+                f"{', '.join(rejected_bits)}.")
+        # Note if one side is still pending (partial approve).
+        for side in ("hostmap", "content"):
+            block = (state or {}).get(side) or {}
+            if block.get("status") == "pending":
+                lead_lines.append(
+                    f"The {_side_label(side)} section of this proposal "
+                    f"is still open. Anyone on this thread can approve "
+                    f"or reject it independently.")
+
+        if not lead_lines:
+            return  # nothing meaningful happened; skip the notice
+
+        lead = " ".join(lead_lines)
         text_body = (
+            f"Mapping additions for {subject_name}:\n\n"
             f"{lead}\n\n"
-            "No further action is needed from anyone on this thread.\n"
+            "No further action is needed on the parts that have been "
+            "decided.\n"
         )
         html_body = (
             '<html><body style="font-family:-apple-system,Helvetica,Arial,'
             'sans-serif;color:#333;">'
+            f'<p><b>Mapping additions for {_esc(subject_name)}</b></p>'
             f'<p>{_esc(lead)}</p>'
-            '<p style="color:#555;">No further action is needed from anyone '
-            'on this thread.</p>'
+            '<p style="color:#555;">No further action is needed on the '
+            'parts that have been decided.</p>'
             '<p style="color:#999;font-size:12px;margin-top:24px;">'
             'Behavioral Graph by Crosswalk</p></body></html>'
         )
-        subject_line = f"Mapping additions for {subject_name}: {decided}"
+        rollup = _rollup_status(state)
+        if rollup == "approved":
+            tail = "approved"
+        elif rollup == "rejected":
+            tail = "declined"
+        elif rollup == "partial":
+            tail = "partial decision"
+        else:
+            tail = "decision recorded"
+        subject_line = f"Mapping additions for {subject_name}: {tail}"
         _send_group_email(recips, subject_line, text_body, html_body)
     except Exception as e:
         print(f"  [hostmap-ingest] decision notify failed (non-fatal): {e}")
 
 
-def _claim_transition(approval_id, action) -> tuple:
-    """CAS transition pending -> approved/rejected (the single-use
-    ledger). Returns (claimed: bool, state: dict or None). When not
-    claimed, ``state`` is the current state for rendering."""
-    target = "approved" if action == "approve" else "rejected"
+def _claim_side_transition(approval_id, side, target) -> tuple:
+    """CAS: flip ONE side (hostmap or content) from pending to
+    approved/rejected. Returns (claimed, state). When not claimed,
+    ``state`` is the current (upgraded, new-shape) state for
+    rendering."""
     result = {"claimed": False}
 
     def mutate(obj):
         if not isinstance(obj, dict) or not obj.get("id"):
             return None
-        if obj.get("status") != "pending":
+        upgraded = _upgrade_legacy_state(obj)
+        block = upgraded.get(side) or {}
+        if block.get("status") != "pending":
             return None
-        obj["status"] = target
-        obj[f"{target}_at"] = datetime.now(timezone.utc).isoformat()
-        if action == "approve":
-            obj["ingest_status"] = "running"
+        block["status"] = target
+        block["decided_at"] = datetime.now(timezone.utc).isoformat()
+        if target == "approved":
+            block["ingest_status"] = "running"
+        upgraded[side] = block
+        upgraded["status"] = _rollup_status(upgraded)
+        # Keep legacy top-level mirror in sync if this is the hostmap
+        # side of a legacy state.
+        if side == "hostmap":
+            upgraded["csv_name"] = block.get("csv_name", "")
+            upgraded["csv_key"] = block.get("csv_key", "")
+            upgraded["row_count"] = int(block.get("row_count") or 0)
+            upgraded["brand_count"] = int(block.get("brand_count") or 0)
+            if target == "approved":
+                upgraded["approved_at"] = block["decided_at"]
+                upgraded["ingest_status"] = "running"
+            else:
+                upgraded["rejected_at"] = block["decided_at"]
         result["claimed"] = True
-        result["state"] = obj
-        return obj
+        result["state"] = upgraded
+        return upgraded
 
     try:
         _update_json(APPROVAL_BUCKET, _state_key(approval_id), mutate)
     except Exception as e:
-        print(f"  [hostmap-ingest] state transition failed: {e}")
+        print(f"  [hostmap-ingest] state transition failed "
+              f"({side}={target}): {e}")
         return False, load_approval(approval_id)
     if result["claimed"]:
         return True, result.get("state")
     return False, load_approval(approval_id)
 
 
-def _record_ingest_result(approval_id, ingest, sheet, status) -> None:
+def _claim_multi_transition(approval_id, sides, target) -> tuple:
+    """Same as _claim_side_transition but for MULTIPLE sides in one
+    atomic S3 write. Only sides that are ``pending`` get flipped; sides
+    already decided are left untouched. Returns (sides_flipped, state).
+    ``sides_flipped`` is a list of the side keys that actually
+    transitioned (may be empty when every side is already decided)."""
+    result = {"flipped": []}
+
     def mutate(obj):
         if not isinstance(obj, dict) or not obj.get("id"):
             return None
-        obj["ingest_status"] = status
-        obj["ingest"] = ingest
-        obj["sheet"] = sheet
-        return obj
+        upgraded = _upgrade_legacy_state(obj)
+        flipped = []
+        now = datetime.now(timezone.utc).isoformat()
+        for side in sides:
+            block = upgraded.get(side) or {}
+            if block.get("status") != "pending":
+                continue
+            block["status"] = target
+            block["decided_at"] = now
+            if target == "approved":
+                block["ingest_status"] = "running"
+            upgraded[side] = block
+            flipped.append(side)
+            if side == "hostmap":
+                upgraded["csv_name"] = block.get("csv_name", "")
+                upgraded["csv_key"] = block.get("csv_key", "")
+                upgraded["row_count"] = int(block.get("row_count") or 0)
+                upgraded["brand_count"] = int(block.get("brand_count") or 0)
+                if target == "approved":
+                    upgraded["approved_at"] = now
+                    upgraded["ingest_status"] = "running"
+                else:
+                    upgraded["rejected_at"] = now
+        if not flipped:
+            return None  # nothing to do; keep the object as-is
+        upgraded["status"] = _rollup_status(upgraded)
+        result["flipped"] = flipped
+        result["state"] = upgraded
+        return upgraded
 
     try:
         _update_json(APPROVAL_BUCKET, _state_key(approval_id), mutate)
     except Exception as e:
-        print(f"  [hostmap-ingest] result record failed: {e}")
+        print(f"  [hostmap-ingest] multi transition failed "
+              f"({sides}={target}): {e}")
+        return [], load_approval(approval_id)
+    if result["flipped"]:
+        return result["flipped"], result.get("state")
+    return [], load_approval(approval_id)
+
+
+def _record_side_result(approval_id, side, ingest, sheet, status) -> None:
+    """Persist the ingest result for one side. Mirrors the top-level
+    fields when the side is hostmap so a legacy reader still sees the
+    old shape."""
+    def mutate(obj):
+        if not isinstance(obj, dict) or not obj.get("id"):
+            return None
+        upgraded = _upgrade_legacy_state(obj)
+        block = upgraded.get(side) or {}
+        block["ingest_status"] = status
+        block["ingest"] = ingest
+        block["sheet"] = sheet
+        upgraded[side] = block
+        if side == "hostmap":
+            upgraded["ingest_status"] = status
+            upgraded["ingest"] = ingest
+            upgraded["sheet"] = sheet
+        return upgraded
+
+    try:
+        _update_json(APPROVAL_BUCKET, _state_key(approval_id), mutate)
+    except Exception as e:
+        print(f"  [hostmap-ingest] result record failed ({side}): {e}")
 
 
 # ---------------------------------------------------------------------------
 # Endpoint flow + confirmation pages
 # ---------------------------------------------------------------------------
+_ACTION_VERBS = (
+    "approve", "approve_all", "approve_hostmap", "approve_content",
+    "reject",
+)
+
+
+def _sides_pending(state, sides) -> list:
+    """Return the subset of sides currently in the 'pending' state on
+    the (upgraded) state dict."""
+    out = []
+    for side in sides:
+        block = (state or {}).get(side) or {}
+        if block.get("status") == "pending":
+            out.append(side)
+    return out
+
+
 def handle_approval_action(approval_id, action, token) -> tuple:
     """Full endpoint flow. Returns (html, http_status).
 
-    approve on pending  -> claim, ingest (or dry-run report), sheet
-                           append, record, confirmation page
+    Supports the tri-state action set (Jenna 2026-09-21):
+
+    approve             -> alias for approve_all (backward compat with
+                           links from emails sent before the extension)
+    approve_all         -> flip every pending side to approved, ingest
+                           each; already-decided sides are untouched
+    approve_hostmap     -> flip only the hostmap side, if pending
+    approve_content     -> flip only the content side, if pending
+    reject              -> flip every pending side to rejected
+
     approve on approved -> already-processed page (retries the ingest
                            only when the recorded ingest FAILED; the
                            dedupe makes the retry safe)
     approve on rejected -> nothing happens page
-    reject on pending   -> claim, no changes page
-    reject on consumed  -> already-processed page
     bad token / id      -> refusal page
     """
     action = str(action or "").strip().lower()
     aid = str(approval_id or "").strip()
-    if action not in ("approve", "reject"):
+    if action not in _ACTION_VERBS:
         return _page("Not available", "<p>This link is not valid.</p>"), 404
     if not verify_token(aid, action, token):
         return _page(
@@ -939,64 +1298,152 @@ def handle_approval_action(approval_id, action, token) -> tuple:
             "<p>This mapping proposal could not be found. No changes "
             "were made.</p>"), 404
 
+    # Which sides does this action touch? approve_hostmap/reject touch
+    # one specific side; approve/approve_all/reject touch both.
+    if action == "approve_hostmap":
+        target_sides = ["hostmap"]
+    elif action == "approve_content":
+        target_sides = ["content"]
+    else:  # approve, approve_all, reject
+        target_sides = ["hostmap", "content"]
+
+    # Filter target_sides to sides that actually exist on this
+    # approval (skip "not_included" sides).
+    target_sides = [s for s in target_sides
+                    if (state or {}).get(s, {}).get("status") != "not_included"]
+    if not target_sides:
+        return _page(
+            "Section not available",
+            "<p>This approval package does not include the section "
+            "targeted by this link. No changes were made.</p>"), 200
+
+    # -------------------------------------------------------------------
+    # REJECT
+    # -------------------------------------------------------------------
     if action == "reject":
-        claimed, state = _claim_transition(aid, "reject")
-        if claimed:
-            _notify_decision(state, "reject")
+        pending = _sides_pending(state, target_sides)
+        if not pending:
+            return _already_processed_page(state), 200
+        flipped, state = _claim_multi_transition(aid, pending, "rejected")
+        if not flipped:
+            return _already_processed_page(state), 200
+        _notify_decision(state, "reject", sides_touched=flipped)
+        return _rejection_confirmation_page(state, flipped), 200
+
+    # -------------------------------------------------------------------
+    # APPROVE (any variant)
+    # -------------------------------------------------------------------
+    # Retry path: side-specific action + already approved but ingest
+    # failed = re-run the ingest (dedupe keeps it safe).
+    if len(target_sides) == 1:
+        side = target_sides[0]
+        block = (state or {}).get(side) or {}
+        if block.get("status") == "rejected":
             return _page(
-                "Proposal rejected",
-                f"<p>The mapping proposal <b>{_esc(state.get('csv_name') or aid)}</b> "
-                f"was rejected. No changes were made to the mapping "
-                f"table.</p>{_state_meta_html(state)}"), 200
-        return _already_processed_page(state), 200
+                "Section was rejected",
+                f"<p>The {_side_label(side)} section of this proposal "
+                f"was rejected earlier. No changes were made.</p>"), 200
+        if block.get("status") == "approved":
+            if block.get("ingest_status") == "failed":
+                return _run_side_ingest(aid, side, state)
+            return _already_processed_page(state), 200
+        # Fresh pending -> claim + ingest
+        claimed, state = _claim_side_transition(aid, side, "approved")
+        if not claimed:
+            return _already_processed_page(state), 200
+        _notify_decision(state, "approve", sides_touched=[side])
+        return _run_side_ingest(aid, side, state)
 
-    # approve
-    if (state or {}).get("status") == "rejected":
-        return _page(
-            "Proposal was rejected",
-            "<p>This mapping proposal was rejected earlier, so this "
-            "approval link is void. No changes were made.</p>"), 200
-    if (state or {}).get("status") == "approved":
-        if (state or {}).get("ingest_status") == "failed":
-            return _run_approved_ingest(aid, state)
+    # approve / approve_all: flip every pending side, then ingest each
+    pending = _sides_pending(state, target_sides)
+    if not pending:
+        # Nothing pending; retry any failed ingests, else already-processed
+        for side in target_sides:
+            block = (state or {}).get(side) or {}
+            if block.get("status") == "approved" \
+                    and block.get("ingest_status") == "failed":
+                _run_side_ingest(aid, side, state)  # side-effect retry
+                state = load_approval(aid) or state
         return _already_processed_page(state), 200
-    claimed, state = _claim_transition(aid, "approve")
-    if not claimed:
+    flipped, state = _claim_multi_transition(aid, pending, "approved")
+    if not flipped:
+        # Race: another click grabbed the transitions first. Fall
+        # through to the already-processed page - the winning click
+        # is running the ingest.
         return _already_processed_page(state), 200
-    _notify_decision(state, "approve")
-    return _run_approved_ingest(aid, state)
+    _notify_decision(state, "approve", sides_touched=flipped)
+    return _run_multi_ingest(aid, flipped, state)
 
 
-def _run_approved_ingest(approval_id, state) -> tuple:
+def _run_side_ingest(approval_id, side, state) -> tuple:
+    """Run the ingest for one side and render its confirmation page."""
+    ingest, sheet, status = _do_ingest(approval_id, side, state)
+    _record_side_result(approval_id, side, ingest, sheet, status)
+    state = load_approval(approval_id) or state
+    return _confirmation_page(state,
+                              side_results={side: (ingest, sheet)},
+                              dry_run=bool((state or {}).get("dry_run"))), 200
+
+
+def _run_multi_ingest(approval_id, sides, state) -> tuple:
+    """Run ingests for MULTIPLE sides sequentially. Each side records
+    its own result; a failure on one side does not block the other.
+    Returns a combined confirmation page."""
+    side_results = {}
+    for side in sides:
+        ingest, sheet, status = _do_ingest(approval_id, side, state)
+        _record_side_result(approval_id, side, ingest, sheet, status)
+        side_results[side] = (ingest, sheet)
+    state = load_approval(approval_id) or state
+    return _confirmation_page(state, side_results=side_results,
+                              dry_run=bool((state or {}).get("dry_run"))), 200
+
+
+def _do_ingest(approval_id, side, state) -> tuple:
+    """Load one side's CSV, parse, and ingest. Returns
+    (ingest_dict, sheet_dict, status_str). Never raises."""
     dry_run = bool((state or {}).get("dry_run"))
-    csv_text = load_approval_csv(approval_id)
+    csv_text = load_approval_csv(approval_id, side=side)
     if not csv_text:
-        _record_ingest_result(approval_id, {"error": "csv missing"},
-                              {"skipped": "csv missing"}, "failed")
-        return _page(
-            "Approval recorded",
-            "<p>The approval was recorded but the proposal file could "
-            "not be loaded. The ingest will be retried; click the "
-            "Approve link again in a few minutes.</p>"), 200
+        return ({"error": "csv missing", "inserted": 0, "skipped": [],
+                 "inserted_rows": []},
+                {"skipped": "csv missing"},
+                "failed")
     try:
-        rows = parse_mapping_csv(csv_text)
-        ingest = ingest_mapping_rows(rows, dry_run=dry_run)
+        if side == "content":
+            try:
+                from migration.content_mapping_ingest import (
+                    parse_content_mapping_csv,
+                    ingest_content_mapping_rows,
+                    append_content_rows_to_sheet)
+            except ImportError:
+                from content_mapping_ingest import (  # type: ignore
+                    parse_content_mapping_csv,
+                    ingest_content_mapping_rows,
+                    append_content_rows_to_sheet)
+            rows = parse_content_mapping_csv(csv_text)
+            ingest = ingest_content_mapping_rows(rows, dry_run=dry_run)
+        else:
+            rows = parse_mapping_csv(csv_text)
+            ingest = ingest_mapping_rows(rows, dry_run=dry_run)
     except Exception as e:
-        _record_ingest_result(approval_id, {"error": str(e)[:300]},
-                              {"skipped": "ingest failed"}, "failed")
-        return _page(
-            "Approval recorded",
-            "<p>The approval was recorded but the mapping table could "
-            "not be updated just now. Click the Approve link again in a "
-            "few minutes to retry; rows already added are never "
-            "duplicated.</p>"), 200
+        return ({"error": str(e)[:300], "inserted": 0, "skipped": [],
+                 "inserted_rows": []},
+                {"skipped": "ingest failed"},
+                "failed")
+    if ingest.get("error"):
+        return (ingest, {"skipped": "ingest error"}, "failed")
     if dry_run:
-        sheet = {"skipped": "dry run"}
-        _record_ingest_result(approval_id, ingest, sheet, "dry_run")
-        return _confirmation_page(state, ingest, sheet, dry_run=True), 200
-    sheet = append_rows_to_sheet(ingest.get("inserted_rows") or [])
-    _record_ingest_result(approval_id, ingest, sheet, "done")
-    return _confirmation_page(state, ingest, sheet, dry_run=False), 200
+        return (ingest, {"skipped": "dry run"}, "dry_run")
+    try:
+        if side == "content":
+            sheet = append_content_rows_to_sheet(
+                ingest.get("inserted_rows") or [])
+        else:
+            sheet = append_rows_to_sheet(ingest.get("inserted_rows") or [])
+    except Exception as e:
+        sheet = {"error": str(e)[:200], "skipped": "sheet append failed"}
+    return (ingest, sheet, "done")
 
 
 # ---------------------------------------------------------------------------
@@ -1035,13 +1482,25 @@ def _page(title, body_html) -> str:
 
 
 def _state_meta_html(state) -> str:
+    """One-line summary of both sides. Content side only listed when
+    it exists on this approval."""
     state = state or {}
-    return (f"<div class='card'><p><b>{int(state.get('row_count') or 0)}</b> "
-            f"proposed row(s) across "
-            f"<b>{int(state.get('brand_count') or 0)}</b> brand(s).</p></div>")
+    bits = []
+    hm = state.get("hostmap") or {}
+    if hm.get("status") != "not_included":
+        bits.append(
+            f"<b>{int(hm.get('row_count') or 0)}</b> hostmap row(s) "
+            f"across <b>{int(hm.get('brand_count') or 0)}</b> brand(s)")
+    cm = state.get("content") or {}
+    if cm.get("status") != "not_included":
+        bits.append(
+            f"<b>{int(cm.get('row_count') or 0)}</b> content row(s) "
+            f"across <b>{int(cm.get('show_count') or 0)}</b> show(s)")
+    inner = " and ".join(bits) or "no rows"
+    return f"<div class='card'><p>{inner}.</p></div>"
 
 
-def _rows_table_html(rows, cap=45) -> str:
+def _rows_table_html_hostmap(rows, cap=45) -> str:
     rows = rows or []
     body = "".join(
         f"<tr><td>{_esc(r.get('brand', ''))}</td>"
@@ -1056,68 +1515,199 @@ def _rows_table_html(rows, cap=45) -> str:
             f"<th>Section</th></tr>{body}</table>{more}</div>")
 
 
-def _sheet_note_html(sheet) -> str:
+def _rows_table_html_content(rows, cap=45) -> str:
+    rows = rows or []
+    body = "".join(
+        f"<tr><td>{_esc(r.get('show', ''))}</td>"
+        f"<td>{_esc(r.get('platform', ''))}</td>"
+        f"<td>{_esc(r.get('season', ''))}</td>"
+        f"<td>{_esc(r.get('url', ''))}</td></tr>"
+        for r in rows[:cap])
+    more = (f"<p class='muted'>and {len(rows) - cap} more row(s).</p>"
+            if len(rows) > cap else "")
+    if not body:
+        return ""
+    return (f"<div class='card'><table><tr><th>Show</th><th>Platform</th>"
+            f"<th>Season</th><th>URL</th></tr>{body}</table>{more}</div>")
+
+
+def _rows_table_html_for(side, rows, cap=45) -> str:
+    if side == "content":
+        return _rows_table_html_content(rows, cap=cap)
+    return _rows_table_html_hostmap(rows, cap=cap)
+
+
+def _sheet_note_html(sheet, side="hostmap") -> str:
     sheet = sheet or {}
     if sheet.get("appended"):
-        return (f"<p>The same {int(sheet['appended'])} row(s) were also "
-                f"added to the mapping sheet.</p>")
+        n = int(sheet["appended"])
+        tab = sheet.get("tab") or ""
+        tab_bit = f" (tab: <b>{_esc(tab)}</b>)" if tab else ""
+        return (f"<p>The same {n} row(s) were also added to the "
+                f"mapping sheet{tab_bit}.</p>")
     if sheet.get("skipped") == "dry run":
         return ""
+    if sheet.get("error"):
+        return ("<p>The mapping table was updated, but the mapping sheet "
+                "append failed. Please paste the rows into the sheet "
+                "manually.</p>")
     return ("<p>The mapping sheet was not updated automatically (sheet "
             "access is not configured yet), so please paste the CSV rows "
             "into the sheet as usual.</p>")
 
 
-def _confirmation_page(state, ingest, sheet, dry_run: bool) -> str:
-    inserted = int(ingest.get("inserted") or 0)
-    skipped = ingest.get("skipped") or []
-    skip_html = ""
-    if skipped:
-        items = "".join(
-            f"<tr><td>{_esc(s.get('brand', ''))}</td>"
-            f"<td>{_esc(s.get('hostname', ''))}</td>"
-            f"<td>{_esc(s.get('reason', ''))}</td></tr>"
-            for s in skipped[:30])
-        skip_html = (f"<div class='card'><p><b>{len(skipped)}</b> row(s) "
-                     f"skipped:</p><table><tr><th>Brand</th><th>Hostname"
-                     f"</th><th>Reason</th></tr>{items}</table></div>")
+def _confirmation_page(state, side_results, dry_run: bool) -> str:
+    """Confirmation page after one or more sides were approved.
+    ``side_results`` = {"hostmap": (ingest, sheet), "content": (ingest,
+    sheet)}. Renders one section per side that was touched."""
+    state = state or {}
+    side_results = side_results or {}
+    subject_name = str(state.get("subject") or "").strip()
+
+    sections = []
+    total_inserted = 0
+    for side in ("hostmap", "content"):
+        if side not in side_results:
+            continue
+        ingest, sheet = side_results[side]
+        n = int((ingest or {}).get("inserted") or 0)
+        total_inserted += n
+        skipped = (ingest or {}).get("skipped") or []
+        block = (state or {}).get(side) or {}
+        csv_name = block.get("csv_name") or ""
+
+        if dry_run:
+            head = (f"<p><b>{_esc(_side_label(side).title())} - {_esc(csv_name)}</b>: "
+                    f"dry run. On a real approval, "
+                    f"<span class='kpi'>{n}</span> row(s) would be added "
+                    f"to the mapping table.</p>")
+        else:
+            head = (f"<p><b>{_esc(_side_label(side).title())} - {_esc(csv_name)}</b>: "
+                    f"<span class='kpi'>{n}</span> row(s) added to the "
+                    f"mapping table.</p>")
+
+        skip_html = ""
+        if skipped:
+            if side == "content":
+                items = "".join(
+                    f"<tr><td>{_esc(s.get('show', ''))}</td>"
+                    f"<td>{_esc(s.get('platform', ''))}</td>"
+                    f"<td>{_esc(s.get('url', ''))}</td>"
+                    f"<td>{_esc(s.get('reason', ''))}</td></tr>"
+                    for s in skipped[:30])
+                skip_html = (f"<div class='card'><p><b>{len(skipped)}</b> row(s) "
+                             f"skipped on the content side:</p><table>"
+                             f"<tr><th>Show</th><th>Platform</th>"
+                             f"<th>URL</th><th>Reason</th></tr>{items}"
+                             f"</table></div>")
+            else:
+                items = "".join(
+                    f"<tr><td>{_esc(s.get('brand', ''))}</td>"
+                    f"<td>{_esc(s.get('hostname', ''))}</td>"
+                    f"<td>{_esc(s.get('reason', ''))}</td></tr>"
+                    for s in skipped[:30])
+                skip_html = (f"<div class='card'><p><b>{len(skipped)}</b> row(s) "
+                             f"skipped on the hostmap side:</p><table>"
+                             f"<tr><th>Brand</th><th>Hostname</th>"
+                             f"<th>Reason</th></tr>{items}</table></div>")
+
+        rows_html = _rows_table_html_for(
+            side, (ingest or {}).get("inserted_rows"))
+        sheet_html = ("" if dry_run else _sheet_note_html(sheet, side=side))
+        sections.append(head + rows_html + skip_html + sheet_html)
+
+    # Pending-side reminder (e.g. approved hostmap but content still open)
+    still_pending = []
+    for side in ("hostmap", "content"):
+        block = (state or {}).get(side) or {}
+        if block.get("status") == "pending":
+            still_pending.append(_side_label(side))
+    pending_html = ""
+    if still_pending:
+        pending_html = (
+            f"<p><em>The {' and '.join(still_pending)} section(s) of this "
+            f"proposal are still open. Anyone on the thread can approve "
+            f"or reject them independently.</em></p>")
+
     if dry_run:
         title = "Dry run complete"
-        lead = (f"<p>This proposal is a format test. On a real approval, "
-                f"<span class='kpi'>{inserted}</span> row(s) would be added "
-                f"to the mapping table. <b>No changes were made.</b></p>")
+    elif total_inserted:
+        title = ("Mapping approved" if len(side_results) == 1
+                 else "Mapping approved (both sections)")
     else:
-        title = "Mapping approved"
-        lead = (f"<p><b>{_esc((state or {}).get('csv_name') or '')}</b> is "
-                f"approved. <span class='kpi'>{inserted}</span> row(s) were "
-                f"added to the mapping table.</p>")
-    return _page(
-        title,
-        lead + _rows_table_html(ingest.get("inserted_rows"))
-        + skip_html + ("" if dry_run else _sheet_note_html(sheet)))
+        title = "Approval recorded"
+
+    lead = ""
+    if subject_name:
+        lead = (f"<p>Approval recorded for <b>{_esc(subject_name)}</b>."
+                f"</p>")
+    return _page(title, lead + "".join(sections) + pending_html)
+
+
+def _rejection_confirmation_page(state, sides) -> str:
+    """Confirmation page after one or more sides were rejected."""
+    state = state or {}
+    subject_name = str(state.get("subject") or "").strip()
+    parts = []
+    for side in sides:
+        block = state.get(side) or {}
+        n = int(block.get("row_count") or 0)
+        parts.append(
+            f"<p>The <b>{_esc(_side_label(side).title())}</b> section "
+            f"(<b>{_esc(block.get('csv_name') or '')}</b>, {n} row(s)) "
+            f"was rejected. No changes were made.</p>")
+    still_pending = []
+    for side in ("hostmap", "content"):
+        block = state.get(side) or {}
+        if block.get("status") == "pending":
+            still_pending.append(_side_label(side))
+    if still_pending:
+        parts.append(
+            f"<p><em>The {' and '.join(still_pending)} section(s) of this "
+            f"proposal are still open. Anyone on the thread can approve "
+            f"or reject them independently.</em></p>")
+    lead = ""
+    if subject_name:
+        lead = f"<p>Decision recorded for <b>{_esc(subject_name)}</b>.</p>"
+    return _page("Section rejected", lead + "".join(parts))
 
 
 def _already_processed_page(state) -> str:
+    """Rendered when a click hits a link whose target sides are already
+    decided. Summarizes both sides."""
     state = state or {}
-    status = state.get("status", "unknown")
-    if status == "rejected":
-        body = ("<p>This mapping proposal was already <b>rejected</b>. "
-                "No changes were made.</p>")
-    elif status == "approved":
-        ingest = state.get("ingest") or {}
-        n = int(ingest.get("inserted") or 0)
-        k = len(ingest.get("skipped") or [])
-        if state.get("dry_run"):
-            body = ("<p>This format-test proposal was already processed "
-                    "as a dry run. No changes were made.</p>")
-        elif state.get("ingest_status") == "done":
-            body = (f"<p>This mapping proposal was already <b>approved"
-                    f"</b>: <span class='kpi'>{n}</span> row(s) added, "
-                    f"{k} skipped. Nothing was ingested twice.</p>")
-        else:
-            body = ("<p>This mapping proposal was already approved and "
-                    "its ingest is in progress. Nothing was ingested "
-                    "twice.</p>")
-    else:
-        body = "<p>This mapping proposal was already processed.</p>"
-    return _page("Already processed", body)
+    lines = []
+    for side in ("hostmap", "content"):
+        block = state.get(side) or {}
+        status = block.get("status", "not_included")
+        if status == "not_included":
+            continue
+        label = _side_label(side).title()
+        if status == "pending":
+            lines.append(f"<p><b>{_esc(label)}</b>: still pending.</p>")
+        elif status == "rejected":
+            lines.append(f"<p><b>{_esc(label)}</b>: rejected. No changes "
+                         f"were made.</p>")
+        elif status == "approved":
+            ingest = block.get("ingest") or {}
+            n = int(ingest.get("inserted") or 0)
+            k = len(ingest.get("skipped") or [])
+            if state.get("dry_run"):
+                lines.append(f"<p><b>{_esc(label)}</b>: dry run "
+                             f"processed. No changes were made.</p>")
+            elif block.get("ingest_status") == "done":
+                lines.append(f"<p><b>{_esc(label)}</b>: approved. "
+                             f"<span class='kpi'>{n}</span> row(s) "
+                             f"added, {k} skipped. Nothing was "
+                             f"ingested twice.</p>")
+            elif block.get("ingest_status") == "failed":
+                lines.append(f"<p><b>{_esc(label)}</b>: approved but "
+                             f"the ingest failed. Click the section's "
+                             f"Approve link again to retry; dedupe "
+                             f"prevents duplicates.</p>")
+            else:
+                lines.append(f"<p><b>{_esc(label)}</b>: approved. "
+                             f"Ingest in progress.</p>")
+    if not lines:
+        lines.append("<p>This mapping proposal was already processed.</p>")
+    return _page("Already processed", "".join(lines))

@@ -173,9 +173,17 @@ def readiness_check():
 # single-use state ledger (ETag CAS): a consumed link only ever re-renders
 # the recorded outcome and can never ingest twice. All logic lives in
 # migration/hostmap_ingest.py (twin-synced copy in bg-webapp/migration/).
-@app.route('/api/hostmap-mapping/<any(approve, reject):action>')
+@app.route('/api/hostmap-mapping/'
+           '<any(approve, approve_all, approve_hostmap, '
+           'approve_content, reject):action>')
 def hostmap_mapping_action(action):
-    """One-click Approve / Reject for a staged mapping-table proposal."""
+    """One-click approve/reject for a staged mapping-table proposal.
+
+    Supports the tri-state action set (Jenna 2026-09-21):
+    ``approve`` (legacy alias for approve_all), ``approve_all``,
+    ``approve_hostmap``, ``approve_content``, ``reject``. See
+    ``migration/hostmap_ingest.handle_approval_action`` for the
+    behavior contract."""
     try:
         try:
             from migration.hostmap_ingest import handle_approval_action
