@@ -149,6 +149,79 @@ def ask(prompt):
         return ""
 
 
+_BROWSER = {"p": None, "b": None, "ctx": None}
+
+_WALL_MARKERS = ("continue shopping", "robot check", "captcha",
+                 "automated access", "api-services-support@amazon")
+
+
+def _looks_walled(html):
+    t = (html or "").lower()
+    return len(t) < 8000 or any(m in t for m in _WALL_MARKERS)
+
+
+def _browser_fetch(url, timeout=25):
+    """Bot-wall fallback (2026-09-22, Amandaland): amazon.com answers
+    plain-HTTP requests from datacenter IPs with 503, and a cookieless
+    browser page gets the 'Continue shopping' interstitial. One shared
+    CONTEXT keeps session cookies across fetches, and the interstitial
+    is clicked through once - after that the session rides. Same
+    return shape as fetch(); (None, url, '') on any failure."""
+    try:
+        from playwright.sync_api import sync_playwright
+        if _BROWSER["ctx"] is None:
+            _BROWSER["p"] = sync_playwright().start()
+            _BROWSER["b"] = _BROWSER["p"].chromium.launch(headless=True)
+            _BROWSER["ctx"] = _BROWSER["b"].new_context(
+                user_agent=UA, locale="en-US",
+                viewport={"width": 1366, "height": 900})
+            # Prime the session once: the soft wall clears after a
+            # cookie-setting visit, which is why the books lane (whose
+            # context navigates around first) passes from this box.
+            try:
+                warm = _BROWSER["ctx"].new_page()
+                warm.goto("https://www.amazon.com/",
+                          wait_until="domcontentloaded", timeout=25000)
+                warm.wait_for_timeout(2500)
+                warm.close()
+            except Exception:
+                pass
+        pg = _BROWSER["ctx"].new_page()
+        try:
+            resp, html = None, ""
+            for attempt in range(3):
+                try:
+                    resp = pg.goto(url, wait_until="domcontentloaded",
+                                   timeout=max(timeout, 15) * 1000)
+                except Exception:
+                    continue
+                # Growing waits like the books lane: the JS challenge
+                # auto-resolves given time, and a reload with a session
+                # cookie usually lands clean.
+                pg.wait_for_timeout(2200 + attempt * 1500)
+                html = pg.content()
+                if not _looks_walled(html):
+                    break
+                try:
+                    btn = pg.locator(
+                        "button:has-text('Continue'), "
+                        "input[type=submit]").first
+                    if btn and btn.count() > 0:
+                        btn.click(timeout=4000)
+                        pg.wait_for_timeout(1800)
+                        html = pg.content()
+                        if not _looks_walled(html):
+                            break
+                except Exception:
+                    pass
+            code = resp.status if resp else None
+            return code, pg.url, html
+        finally:
+            pg.close()
+    except Exception:
+        return None, url, ""
+
+
 def fetch(url, timeout=25):
     req = urllib.request.Request(url, headers={
         "User-Agent": UA,
@@ -163,6 +236,11 @@ def fetch(url, timeout=25):
                 raw = gzip.decompress(raw)
             return r.getcode(), r.geturl(), raw.decode("utf-8", "replace")
     except Exception:
+        # 503 bot-wall / network failure: retry through the shared
+        # headless browser before giving up.
+        code, final, html = _browser_fetch(url, timeout=timeout)
+        if html:
+            return code, final, html
         return None, url, ""
 
 
@@ -321,7 +399,10 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
         if code == 200 and html and len(html) > 20000:
             for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
                 ctx = html[max(0, m.start() - 500):m.start() + 200].lower()
-                if vwant and len(vwant & set(tokens(ctx))) >= max(2, len(vwant) - 1):
+                # min() so a single-token title ('Amandaland') needs its
+                # one token, not an impossible two (2026-09-22 fix).
+                if vwant and len(vwant & set(tokens(ctx))) >= \
+                        min(len(vwant), max(2, len(vwant) - 1)):
                     cands.append(m.group(1))
                     if _enough():
                         return list(dict.fromkeys(cands))[:limit]
@@ -338,6 +419,12 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
         if not blob:
             continue
         cands += re.findall(r'amazon\.com/gp/video/detail/(' + ASIN_RE + r')', blob)
+        # SERPs mostly carry the /<Title>/dp/<ASIN> form for Prime
+        # Video seasons (2026-09-22 Amandaland fix). Candidates are
+        # verified against their detail page in discover_asin, so a
+        # non-video /dp/ hit gets filtered there.
+        cands += re.findall(
+            r'amazon\.com/(?:[^"\'\s]*?/)?dp/(' + ASIN_RE + r')', blob)
         if _enough():
             break
         for gti in re.findall(
