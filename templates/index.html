@@ -37351,7 +37351,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                 }
 
+                // Theme mirrors the on-screen dashboard so the downloaded
+                // PDF reads as a continuation of the surface the user is
+                // looking at. Dashboard defaults to dark; if the user has
+                // flipped light mode via the theme toggle,
+                // document.body.dataset.theme reads 'light' and the
+                // backend routes to the Off-White portrait variant.
+                var _iiqPdfTheme = 'dark';
+                try {
+                    var _iiqBodyTheme = (document && document.body
+                        && document.body.dataset && document.body.dataset.theme) || '';
+                    if (String(_iiqBodyTheme).toLowerCase() === 'light') {
+                        _iiqPdfTheme = 'light';
+                    }
+                } catch (e) { /* keep dark */ }
+
                 return {
+                    theme: _iiqPdfTheme,
                     title: {
                         display_name: displayName,
                         distributor: distributor,
@@ -48794,7 +48810,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             <p id="jiqSongDeck"></p>
                             <div class="jiq-frag-kpis" id="jiqSongKpis"></div>
                         </div>
-                        <div class="jiq-frag-art is-ini" id="jiqSongArt"><span class="jiq-frag-art-ini" id="jiqSongArtIni">HR</span></div>
+                        <div class="jiq-frag-art is-ini" id="jiqSongArt"
+                             data-hr-hero="{{ url_for('static', filename='heated-rivalry-song-hero.jpg') }}"
+                             data-barbie-hero="{{ url_for('static', filename='barbie-song-hero.jpg') }}"><span class="jiq-frag-art-ini" id="jiqSongArtIni">HR</span></div>
                     </div>
                     <div id="jiqSongHost"></div>
                 </div>
@@ -106564,8 +106582,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ].map(_jiqSongKpi).join('');
             }
             if (artEl) {
-                artEl.classList.add('is-ini');
-                artEl.classList.toggle('is-barbie', key === 'barbie');
+                var attr = (key === 'barbie') ? 'data-barbie-hero' : 'data-hr-hero';
+                var hero = artEl.getAttribute(attr) || '';
+                artEl.classList.remove('is-ini', 'is-barbie', 'is-hr');
+                if (hero) {
+                    artEl.innerHTML = '<img src="' + _jiqSongEsc(hero) + '" alt="" onerror="this.remove()">';
+                    artEl.classList.add(key === 'barbie' ? 'is-barbie' : 'is-hr');
+                } else {
+                    artEl.innerHTML = '<span class="jiq-frag-art-ini" id="jiqSongArtIni">'
+                        + (key === 'barbie' ? 'BB' : 'HR') + '</span>';
+                    artEl.classList.add('is-ini');
+                    if (key === 'barbie') artEl.classList.add('is-barbie');
+                }
             }
         }
         function _jiqSongKpi(k) {
@@ -179221,6 +179249,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqSongCard .jiq-frag-read-lead { text-transform: none !important; }
     #jiqSongArt.is-barbie {
         background: linear-gradient(140deg, #5B3E86, #8E3FA8 55%, #3358FF);
+    }
+    .jiq-frag-art.is-hr img { object-position: center 32%; }
+    .jiq-frag-art.is-barbie img { object-position: center 22%; }
+    #jiqSongArt::after {
+        background: linear-gradient(90deg, var(--cw-page, #111F22) 0%, rgba(17,31,34,0) 18%);
+    }
+    body[data-theme="light"] #jiqSongArt::after {
+        background: linear-gradient(90deg, #E9E8E1 0%, rgba(233,232,225,0) 18%);
     }
     .jiq-song-pad { margin: 0 34px 28px; }
     .jiq-song-spine { margin: 0 34px 28px; }
