@@ -34,6 +34,12 @@ Enforcers, in pipeline order:
      scoring agents that escaped the upstream jitter passes.
 """
 import csv
+
+# A profile CSV cell can legitimately exceed Python's default 131,072-
+# char field limit (a content-seeded BRAND INPUT carrying a large
+# curated URL set, 2026-09-22 Keke Palmer run). Never let the reader
+# itself be the failure.
+csv.field_size_limit(16_000_000)
 import hashlib as _hl
 import os
 import re as _re
@@ -1056,10 +1062,10 @@ def depin_round_brand_bps(df, subject, verbose=True):
         if strict_round:
             # ±0.0099pp drift (existing logic)
             u = ((h % 1801) - 900) / 100000.0
-            new_v = max(0.0001, old_bp + u)
-            new_v = round(new_v, 4)
-            if abs(new_v * 100 - round(new_v * 100)) < 1e-4:
-                new_v = round(new_v + 0.0017, 4)
+        new_v = max(0.0001, old_bp + u)
+        new_v = round(new_v, 4)
+        if abs(new_v * 100 - round(new_v * 100)) < 1e-4:
+            new_v = round(new_v + 0.0017, 4)
             fixed_strict += 1
         else:
             # look-round: shift by 0.15-0.45 pp (deterministic sign) so the
@@ -2663,7 +2669,7 @@ _ANNOTATION_RX = _re.compile(
     r'| \bN\s*/\s*A\b'                                  # N/A
     r'| =>'                                             # remap arrow
     r')'
-)
+    )
 
 
 def _is_polluted_brand_value(v):

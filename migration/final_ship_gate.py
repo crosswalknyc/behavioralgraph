@@ -133,6 +133,12 @@ engines) runs with enforce=True.
 from __future__ import annotations
 
 import csv
+
+# A profile CSV cell can legitimately exceed Python's default 131,072-
+# char field limit (a content-seeded BRAND INPUT carrying a large
+# curated URL set, 2026-09-22 Keke Palmer run). Never let the reader
+# itself be the failure.
+csv.field_size_limit(16_000_000)
 import io
 import os
 import re
