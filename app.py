@@ -58585,12 +58585,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                          'subject': res.get('subject'),
                          'base': base.get('s3_key')})
             _pm_ask_hint(outcome='held')
+            # Clarify + suggest instead of a dead end (Jenna
+            # 2026-09-22): the ops email above keeps the signal; the
+            # user gets the two honest paths (derive the missing
+            # cohort cut, or read what the file measures today).
+            _h_reply, _h_chips = _pm_held_read_clarify(
+                text, res.get('subject') or base.get('subject'))
             return {
                 'success': True, 'action': 'answer',
-                'reply': ('The numbers need another pass before I '
-                          'hand them over. I am holding this one for '
-                          'a closer look and will follow up.'),
-                'followups': [], 'offer_deck': False,
+                'reply': _h_reply,
+                'followups': _h_chips, 'offer_deck': False,
                 'deck_angle': None, '_held': True, '_family': fam0,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
@@ -59077,6 +59081,59 @@ def api_synth_chat_notify_when_done():
         return jsonify({'success': False,
                         'error': 'could not save your request'}), 500
     return jsonify({'success': True, 'queued': True})
+
+
+_PM_COHORT_WORDS_RE = re.compile(
+    r'\b(millennials?|gen\s*z|gen\s*x|gen\s*alpha|boomers?|'
+    r'women|men|females?|males?|moms?|dads?|parents|teens?|seniors?|'
+    r'hispanic|black|latino|asian|lgbtq\+?|'
+    r'\d{2}\s*(?:-|to)\s*\d{2})\b', re.I)
+
+
+def _pm_held_read_clarify(text, subject):
+    """Clarify + suggestions when a generated read cannot ship (Jenna
+    2026-09-22, Scott's 'Compare Millennials against the Will And
+    Grace audience': the read fabricated a cohort that exists as no
+    file, was held, and the user got a dead end - 'it should ask him
+    to clarify and suggest instead of just killing it').
+
+    Comparison-of-cohort asks get the two honest paths: derive the
+    cohort cut off the existing file and compare real files, or read
+    what the current file measures about that cohort today. Everything
+    else gets a plain re-aim ask. Returns (reply, chips)."""
+    subj = str(subject or 'this audience').strip() or 'this audience'
+    t = str(text or '')
+    m = _PM_COHORT_WORDS_RE.search(t)
+    if m and re.search(r'\bcompare|\bvs\.?\b|\bversus\b|\bagainst\b',
+                       t, re.I):
+        cohort = ' '.join(m.group(1).split()).title()
+        reply = (
+            f"I want to get this comparison right rather than hand "
+            f"you numbers I am not sure of. When you say "
+            f"\"{t.strip()}\", I read two possible asks:\n\n"
+            f"1. The {subj} audience's own {cohort} cut against the "
+            f"full {subj} audience - that cut is not on the shelf "
+            f"yet, but it derives straight off the existing file "
+            f"(3 credits) and then the comparison runs on two real "
+            f"files.\n"
+            f"2. What the current {subj} file already measures "
+            f"about {cohort} inside the audience today - no build "
+            f"needed.\n\n"
+            f"Which one do you want?")
+        chips = [
+            f"Cut {subj} by {cohort}, then compare to the full "
+            f"audience",
+            f"What does the {subj} file show about {cohort} today?",
+        ]
+        return reply, chips
+    reply = (
+        f"I could not lock the numbers on that one down cleanly, and "
+        f"I would rather re-aim than guess. Tell me the specific "
+        f"read you want on {subj} - name the cohort, the category, "
+        f"or the two things to compare - and I will run it clean.")
+    chips = [f"Top categories for {subj}",
+             f"Who is the {subj} audience?"]
+    return reply, chips
 
 
 # Rankers board families: card key -> (family label, text keywords that
