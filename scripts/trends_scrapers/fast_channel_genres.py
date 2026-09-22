@@ -172,6 +172,81 @@ _OVERRIDES: dict[str, str] = {
 }
 
 
+# Lineups that come from a platform's own guide rather than a MediaBiz
+# workbook. Each owns a snapshot; the workbook platforms share
+# `fast_channel_lineups`. Kept in step with
+# `trends_iq.API_LINEUP_SOURCES`.
+_API_LINEUP_SOURCES = ('vizio_watchfree', 'lg_channels', 'myfree_directv')
+
+
+# Vizio and LG file every channel under their own category, and
+# DIRECTV under one of three headings. Those labels are real editorial
+# signal and mapping them is cheaper and steadier than asking a model
+# to re-derive what the platform already said. This maps the ones that
+# land unambiguously on our 15; anything genuinely ambiguous is left
+# out deliberately and falls through to the model, which sees the
+# publisher's label as context.
+#
+# Deliberately absent, and why:
+#   Vizio  FOOD + TRAVEL  - splits across Food and Home / Lifestyle
+#          CREATORS       - a creator channel takes its subject's type
+#   LG     Latin          - Latin-language vs Latin-music is the
+#                           Espanol / Music call, and it matters
+#          TV & Movies    - two of our types in one label
+#   DIRECTV Entertainment - 127 of their 161 channels, says nothing
+_SOURCE_GENRE_MAP: dict[str, str] = {
+    # Vizio WatchFree+
+    'sports':               'Sports',
+    'movies':               'Movies',
+    'crime':                'Crime',
+    'en espanol':           'Espanol',
+    'en español':           'Espanol',
+    'news + opinion':       'News',
+    # Vizio files its 88 single-market broadcast feeds here and every
+    # one of them is a local news station.
+    'local channels':       'News',
+    'reality':              'Reality',
+    'music':                'Music',
+    'kids + family':        'Kids and Family',
+    'westerns + classics':  'Classic TV',
+    'nature + science':     'Documentary',
+    'history + docs':       'Documentary',
+    'home':                 'Food and Home',
+    'game shows':           'Reality',
+    'comedy':               'Comedy',
+    'entertainment':        'Entertainment',
+    'tv':                   'Entertainment',
+    'mood + ambiance':      'Lifestyle',
+    'inspiration + faith':  'Lifestyle',
+    'shopping':             'Lifestyle',
+    # LG Channels
+    'news':                 'News',
+    'sport':                'Sports',
+    'drama':                'Entertainment',
+    'talk show & entertainment': 'Entertainment',
+    'reality tv':           'Reality',
+    'westerns':             'Classic TV',
+    'spanish language':     'Espanol',
+    'nature':               'Documentary',
+    'documentary':          'Documentary',
+    'kids':                 'Kids and Family',
+    'food':                 'Food and Home',
+    'ambiance':             'Lifestyle',
+    'lifestyle':            'Lifestyle',
+    'hobby/leisure':        'Lifestyle',
+    # MyFree DIRECTV
+    'national sports':      'Sports',
+    'news & information':   'News',
+}
+
+
+def source_genre_label(source_genre: str) -> Optional[str]:
+    """Our taxonomy label for a platform's own category, when that
+    mapping is unambiguous. None means "ask", not "Other"."""
+    return _SOURCE_GENRE_MAP.get(
+        str(source_genre or '').strip().lower()) or None
+
+
 def _rx(*patterns: str) -> list[re.Pattern]:
     return [re.compile(p, re.I) for p in patterns]
 
@@ -377,6 +452,7 @@ Rules:
 - A Spanish-language channel is Espanol even when it is also news, sport or movies. A Latin-music channel that is not itself in Spanish is Music.
 - Judge a channel by what a viewer browsing for that type would expect to find.
 - A channel named after a single show takes the show's type.
+- Some channels carry the category their own platform files them under. Treat it as strong evidence, but it is the platform's shelf and not always our list: a channel filed under "FOOD + TRAVEL" is Food and Home if it is about cooking or homes and Lifestyle if it is about travel, and one filed under "Latin" is Espanol if it is Spanish-language and Music if it is a Latin-music channel in English.
 - Use Other only when the name gives you nothing to work with.
 - Reply with a JSON object only. Keys are the line numbers as strings, values are the label. No prose, no code fence.
 
@@ -429,6 +505,7 @@ def _parse_reply(text: str, size: int) -> dict[int, str]:
 
 
 def _model_labels(names: list[str],
+                  hints: Optional[dict[str, str]] = None,
                   monitor: Optional[SpendMonitor] = None) -> dict[str, str]:
     """Label `names` in one Message Batches submission. Returns
     display-name -> label for whatever came back; anything missing is
@@ -453,7 +530,15 @@ def _model_labels(names: list[str],
     requests: list[Any] = []
     for ci, chunk in enumerate(chunks):
         cid = f'genre_{ci:03d}'
-        listing = '\n'.join(f'{i}. {n}' for i, n in enumerate(chunk, 1))
+        # Where the platform files a channel is evidence even when it
+        # does not map onto our list on its own ("FOOD + TRAVEL",
+        # "Latin", "TV & Movies"). Hand it over rather than throwing
+        # it away and asking from the name alone.
+        listing = '\n'.join(
+            f'{i}. {n}' + (f'   [platform files this under: '
+                            f'{(hints or {}).get(n, "")}]'
+                            if (hints or {}).get(n) else '')
+            for i, n in enumerate(chunk, 1))
         by_cid[cid] = chunk
         requests.append(Request(
             custom_id=cid,
@@ -581,19 +666,56 @@ def load_artifact() -> dict[str, Any]:
     return art
 
 
-def lineup_channel_names() -> list[str]:
-    """Distinct display names across every platform in the current
-    lineup, first spelling seen wins."""
+def _all_lineup_blocks() -> list[dict]:
+    """Every per-platform lineup block in play: the four workbook
+    platforms out of the shared artifact, plus one block per platform
+    that publishes its own guide."""
+    blocks: list[dict] = []
     try:
         snap = _base.read_snapshot(LINEUPS_SOURCE)
     except Exception:  # noqa: BLE001
         snap = None
-    return names_from_lineups(snap or {})
+    blocks.extend((b or {}) for b in
+                   ((snap or {}).get('sources') or {}).values())
+    for source in _API_LINEUP_SOURCES:
+        try:
+            s = _base.read_snapshot(source)
+        except Exception:  # noqa: BLE001
+            s = None
+        if (s or {}).get('channels'):
+            blocks.append({'channels': s['channels']})
+    return blocks
+
+
+def lineup_channel_names() -> list[str]:
+    """Distinct display names across every platform in the current
+    lineup, first spelling seen wins."""
+    return _names_from_blocks(_all_lineup_blocks())
+
+
+def lineup_source_genres() -> dict[str, str]:
+    """Normalized channel name -> the platform's own category label,
+    for the platforms that publish one. First label seen wins, so a
+    channel carried on two platforms keeps one classification input
+    rather than flapping between them."""
+    out: dict[str, str] = {}
+    for block in _all_lineup_blocks():
+        for ch in (block or {}).get('channels') or []:
+            norm = _cp_normalize(str((ch or {}).get('name') or ''))
+            label = str((ch or {}).get('source_genre') or '').strip()
+            if norm and label and norm not in out:
+                out[norm] = label
+    return out
 
 
 def names_from_lineups(lineups: dict) -> list[str]:
+    return _names_from_blocks(
+        [(b or {}) for b in ((lineups or {}).get('sources') or {}).values()])
+
+
+def _names_from_blocks(blocks: list[dict]) -> list[str]:
     seen: dict[str, str] = {}
-    for _slug, block in ((lineups or {}).get('sources') or {}).items():
+    for block in blocks:
         for ch in (block or {}).get('channels') or []:
             name = str((ch or {}).get('name') or '').strip()
             norm = _cp_normalize(name)
@@ -605,14 +727,25 @@ def names_from_lineups(lineups: dict) -> list[str]:
 def classify(names: Iterable[str], *,
              existing: Optional[dict[str, Any]] = None,
              allow_model: bool = True,
+             source_genres: Optional[dict[str, str]] = None,
              monitor: Optional[SpendMonitor] = None) -> dict[str, Any]:
     """Return an artifact covering `existing` plus every name in
-    `names`. Names already carrying a label are left untouched."""
+    `names`. Names already carrying a label are left untouched.
+
+    `source_genres` maps a normalized name to the platform's OWN
+    category label. It is consulted after the name rules and before
+    the model: the rules are tuned and tested and stay authoritative,
+    but a platform that has already told us a channel is Sports
+    should not cost a model call to find that out. Labels that do not
+    map cleanly onto our 15 still reach the model, which sees them as
+    context."""
     art = dict(existing or _empty_artifact())
     genres: dict[str, str] = dict(art.get('genres') or {})
     display: dict[str, str] = dict(art.get('names') or {})
+    hints = dict(source_genres or {})
 
     pending: list[str] = []
+    n_from_source = 0
     for name in names:
         raw = str(name or '').strip()
         norm = _cp_normalize(raw)
@@ -628,15 +761,24 @@ def classify(names: Iterable[str], *,
         hit = rule_label(raw)
         if hit:
             genres[norm] = hit
-        else:
-            pending.append(raw)
+            continue
+        from_source = source_genre_label(hints.get(norm, ''))
+        if from_source:
+            genres[norm] = from_source
+            n_from_source += 1
+            continue
+        pending.append(raw)
 
-    n_rules = len(genres) - len(art.get('genres') or {})
-    logger.info("fast_channel_genres: %d resolved by name rules, "
-                "%d need a closer read", n_rules, len(pending))
+    n_rules = len(genres) - len(art.get('genres') or {}) - n_from_source
+    logger.info("fast_channel_genres: %d resolved by name rules, %d by the "
+                "platform's own category, %d need a closer read",
+                n_rules, n_from_source, len(pending))
 
     if pending and allow_model:
-        for raw, label in _model_labels(pending, monitor=monitor).items():
+        prompt_hints = {raw: hints.get(_cp_normalize(raw), '')
+                         for raw in pending}
+        for raw, label in _model_labels(pending, hints=prompt_hints,
+                                          monitor=monitor).items():
             genres[_cp_normalize(raw)] = label
     for raw in pending:
         genres.setdefault(_cp_normalize(raw), FALLBACK)
@@ -666,6 +808,7 @@ def refresh(names: Optional[Iterable[str]] = None, *,
         before = len(existing.get('genres') or {})
         monitor = SpendMonitor(cap_usd=_SPEND_CAP_USD, prefix='fast_genres')
         art = classify(pool, existing=existing, allow_model=allow_model,
+                       source_genres=lineup_source_genres(),
                        monitor=monitor)
         added = len(art.get('genres') or {}) - before
         logger.info("fast_channel_genres: %d labels total (+%d this run), "

@@ -497,6 +497,24 @@ _FAST_SLUGS = (
     # 2026-09-14: Xumo (Comcast/Charter's free service). JustWatch
     # packages xum + xpl unioned in fast_channels.FAST_PLATFORMS.
     ('xumo',   'Xumo'),
+    # 2026-09-22: Channel-Ranker-only platforms. No JustWatch package
+    # means no titles catalogue, so there is no platform-top-title
+    # anchor floor for these three and `_collect_fast_channels`
+    # prices each channel from the channel and the platform instead.
+    ('vizio',          'Vizio WatchFree+'),
+    ('lg',             'LG Channels'),
+    ('directv_myfree', 'MyFree DIRECTV'),
+)
+
+# FAST platforms whose lineup lives in its own snapshot rather than in
+# the shared `fast_channel_lineups` workbook artifact. Kept in step
+# with `trends_iq.API_LINEUP_SOURCES`; duplicated for the same reason
+# `_cp_normalize` is, namely that this module runs standalone on the
+# build box with no Flask app on the path.
+_API_LINEUP_SOURCES = (
+    ('vizio',          'vizio_watchfree'),
+    ('lg',             'lg_channels'),
+    ('directv_myfree', 'myfree_directv'),
 )
 
 
@@ -793,9 +811,19 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
     daily audience must sit above the biggest single title on the
     same platform) to a defensible daily-viewers number."""
     snap = _read_snapshot('fast_channel_lineups')
-    if not snap:
+    sources = dict((snap or {}).get('sources') or {})
+
+    # Platforms that publish their own guide keep their lineup in their
+    # own snapshot. Fold them in under the same shape the workbook
+    # artifact uses so everything below treats all eight identically.
+    for _slug, _source in _API_LINEUP_SOURCES:
+        _snap = _read_snapshot(_source)
+        _channels = (_snap or {}).get('channels') or []
+        if _channels:
+            sources[_slug] = {'channels': _channels}
+
+    if not sources:
         return []
-    sources = (snap.get('sources') or {})
 
     # Anchor context (2026-09-03): top FAST film + TV titles per
     # platform, used to ground channel-level daily viewer estimates.
@@ -840,9 +868,35 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
             # on the item so the prompt can call it out and the
             # sanitizer knows which platform's ceiling applies.
             key_hint = f'{slug}:{_cp_normalize(name)}'
+            # The airings clause is only true when the platform
+            # publishes a schedule. DIRECTV publishes a lineup and no
+            # guide, and a handful of channels elsewhere are live
+            # passthrough feeds, so those rows say nothing about
+            # airings rather than telling the model a channel airs
+            # nothing, which would read as the emptiest channel on the
+            # platform and price it accordingly.
+            if airings > 0:
+                chart_label = (f'{label} channel rank #{rank} '
+                                f'({airings:,} airings/wk)')
+            else:
+                chart_label = (f'{label} channel rank #{rank} '
+                                f'(no published schedule for this channel)')
+            # Local broadcast feeds reach their own markets, not the
+            # country. Carrying the size of that carriage stops the
+            # research step pricing a single-market feed against the
+            # national platform.
+            scope = (ch.get('scope') or 'national')
+            if scope == 'local':
+                zips = int(ch.get('dma_zip_count') or 0)
+                carriage = (f' carried in {zips:,} ZIP codes'
+                             if zips else ' carried in selected markets only')
+                chart_label += (f'; LOCAL channel, not national -'
+                                 f'{carriage}')
             out.append({
                 'kind':           'fast_channel',
                 'display_title':  name,
+                'scope':          scope,
+                'dma_zip_count':  int(ch.get('dma_zip_count') or 0),
                 # `artist` carries the platform slug so
                 # `_lookup_key('fast_channel', name, slug)` produces
                 # a platform-scoped key that both this collector AND
@@ -854,8 +908,7 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
                 'airings':        airings,
                 'content_type':   content_type,
                 'best_rank':      rank,
-                'chart_labels':   [f'{label} channel rank #{rank} '
-                                    f'({airings:,} airings/wk)'],
+                'chart_labels':   [chart_label],
                 'image':          '',
                 'url':            '',
                 # Platform-wide top FAST titles as anchor floor
@@ -2579,6 +2632,75 @@ _FAST_CHANNEL_PLATFORMS_META = [
          'Anchor: Amazon Q2 2026 shareholder letter + TVREV '
          'monthly rankings. Do NOT reason from Prime paid-catalog '
          'numbers.'
+     )},
+    {'key': 'vizio',
+     'label': 'Vizio WatchFree+',
+     'ceiling': 2_000_000,
+     'anchors': (
+         "Vizio WatchFree+ channel-level weekly viewership. Vizio "
+         'disclosed 19.1M SmartCast active accounts (30-day, Q3 2024, '
+         'the last quarter reported before Walmart closed its '
+         'acquisition), and the figure is still cited around 19M into '
+         '2026. WatchFree+ is ONE surface inside SmartCast, not all of '
+         'it, so the FAST audience is a fraction of that account base; '
+         'convert accounts to viewers before comparing to a people '
+         'count. Per-channel reach sits below Roku / Tubi / Pluto '
+         'because the lineup is wide (442 channels) against a smaller '
+         'base. Top channels (Breaking News, major creator channels, '
+         'flagship movie and reality rails) 300K-900K US weekly '
+         'viewers. Mid-tier IP channels 80K-250K. Long-tail 15-60K. '
+         'LOCAL channels are a special case: 88 of the 442 are single-'
+         'market broadcast feeds carried in a few hundred ZIP codes, '
+         'so price them against that market and not the country - a '
+         'local feed reading like a national rail is the defining '
+         'error on this platform. Anchor: Vizio Q3 2024 10-Q + Walmart '
+         'connected-TV disclosures + Nielsen FAST Gauge.'
+     )},
+    {'key': 'lg',
+     'label': 'LG Channels',
+     'ceiling': 1_500_000,
+     'anchors': (
+         "LG Channels channel-level weekly viewership. LG's own FAST "
+         'service on webOS sets; LG reports global MAU up 30% YoY in '
+         '2025 and 5,000+ channels across 37 countries but discloses '
+         'no US MAU, so reason from the US webOS installed base (LG '
+         'is a top-3 US TV brand) and the share of those sets using '
+         'the built-in guide. IMPORTANT: this is NOT Xumo Play, which '
+         'is priced separately on this board. Xumo powered the service '
+         'until the enterprise deal ended, and Xumo Enterprise still '
+         'supplies a handful of individual channels into it, but the '
+         'platform audience is LG\'s own. The rail covers the 191 '
+         'web-accessible channels rather than the full on-TV lineup, '
+         'so it is a narrower, more-trafficked set than a 400-channel '
+         'platform: each channel carries proportionally more. Top '
+         'channels (news simulcasts, flagship comedy and reality '
+         'rails) 250K-700K US weekly viewers. Mid-tier 70K-200K. '
+         'Long-tail 15-50K. Anchor: LG Electronics 2026 newsroom '
+         'disclosures + Nielsen FAST Gauge + Statista US smart-TV '
+         'share.'
+     )},
+    {'key': 'directv_myfree',
+     'label': 'MyFree DIRECTV',
+     'ceiling': 600_000,
+     'anchors': (
+         "MyFree DIRECTV channel-level weekly viewership. DIRECTV's "
+         'free ad-supported tier: launched November 2024 with ~70 '
+         'channels, 161 today, no subscription or card but it does '
+         'require a free DIRECTV account, which is a real signup '
+         'gate the open FAST platforms do not have. This is the '
+         'SMALLEST platform on this board by some distance: it has no '
+         'device install base of its own the way Roku, Vizio and LG '
+         'do, and DIRECTV discloses no viewer figure for it. Reason '
+         'from DIRECTV\'s streaming footprint and the share of it '
+         'reaching the free tier, NOT from DIRECTV satellite '
+         'subscriber counts, which are a paid pay-TV product and a '
+         'different service. Top channels (ABC News Live, Fox Sports '
+         'rails, marquee library channels) 80K-220K US weekly '
+         'viewers. Mid-tier 25K-70K. Long-tail 5K-20K. DIRECTV '
+         'publishes a lineup and no schedule, so no channel here '
+         'carries an airings signal; that is missing data, not a '
+         'quiet channel. Anchor: DIRECTV press releases + Nielsen '
+         'FAST Gauge + eMarketer FAST platform reach.'
      )},
 ]
 

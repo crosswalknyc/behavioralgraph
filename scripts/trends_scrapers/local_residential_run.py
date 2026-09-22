@@ -89,6 +89,18 @@ RESIDENTIAL_SCRAPERS = [
     # residentially because xbox.com's Akamai / Adobe stack is the
     # same family that WAF-blocks Hetzner for BritBox / MGM+ / Starz.
     ('xbox_gamepass', 'Xbox Game Pass Ultimate'),
+    # LG Channels (2026-09-22): the FAST Channel Ranker rail for LG's
+    # own free service. `api.lgchannels.com` is GEO-GATED, and it fails
+    # in the worst possible way from Hetzner: HTTP 200 carrying all 19
+    # category headings with an empty channel list inside every one of
+    # them. That reads as a healthy fetch, so moving this to the
+    # nightly batch would quietly empty the rail rather than break it.
+    # From the Mac's residential address the same request returns the
+    # full lineup. The scraper raises on a channel-less payload so a
+    # misplaced run fails loudly, but the right fix is to leave it
+    # here. Vizio WatchFree+ and MyFree DIRECTV, added the same day,
+    # are NOT geo-gated and run on Hetzner.
+    ('lg_channels',   'LG Channels'),
     # Social content scrapers (TikTok, Instagram, X, Reddit) were
     # removed 2026-08-20 (Jenna: "kill the scrape too"). Social panel
     # was dropped from the Trends IQ user surface because signal

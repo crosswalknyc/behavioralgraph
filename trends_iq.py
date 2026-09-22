@@ -10598,7 +10598,41 @@ FAST_PLATFORMS = [
     # lineup while measuring almost nothing, so the strip stays off
     # for Xumo until a workbook lands.
     ('xumo',    'Xumo',             False),
+    # 2026-09-22 (Jenna: "for FAST Vizio, DirecTV, and LG be
+    # included"). These three are the mirror image of Xumo: each has
+    # a full channel lineup and no titles catalogue, because none of
+    # them has a JustWatch package (confirmed against all 353 US
+    # packages). They render the Channel Ranker and nothing else.
+    #
+    # Their lineups do not come from a Stream Metric Schedules
+    # workbook. Each platform publishes its own guide, and each
+    # scraper converts it to the same airings-per-week column the
+    # workbooks carry. See API_LINEUP_SOURCES below.
+    #
+    # The rail is "MyFree DIRECTV", never "DIRECTV". MyFree is the
+    # free ad-supported service and belongs on this tab; DIRECTV
+    # satellite and DIRECTV Stream are paid pay-TV and do not.
+    ('vizio',          'Vizio WatchFree+', False),
+    ('lg',             'LG Channels',      False),
+    ('directv_myfree', 'MyFree DIRECTV',   False),
 ]
+
+# FAST platforms whose Channel Ranker lineup comes from the platform's
+# own public guide rather than from a MediaBiz workbook, mapped to the
+# snapshot each scraper writes. The workbook platforms (roku / tubi /
+# pluto / amazon) all share the single `fast_channel_lineups` snapshot;
+# these three each own theirs, so a slow or geo-blocked platform can
+# never blank out another one's rail.
+#
+# Kept in step with `stream_estimates._API_LINEUP_SOURCES`, which
+# duplicates this list for the same reason `_cp_normalize` is
+# duplicated: the scrapers run standalone on the build box without the
+# Flask app on the path.
+API_LINEUP_SOURCES = (
+    ('vizio',          'vizio_watchfree'),
+    ('lg',             'lg_channels'),
+    ('directv_myfree', 'myfree_directv'),
+)
 
 # Defensive ceiling on how many channels one platform contributes to
 # the Channel Ranker. Every channel in the lineup is measured and
@@ -10636,7 +10670,25 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
     # works unchanged.
     lineups_snap = _read_snapshot('fast_channel_lineups', asof) if asof \
         else _read_snapshot('fast_channel_lineups')
-    channel_sources = (lineups_snap or {}).get('sources') or {}
+    channel_sources = dict((lineups_snap or {}).get('sources') or {})
+
+    # Platforms that publish their own guide keep their lineup in their
+    # own snapshot (see API_LINEUP_SOURCES). Fold each one in under the
+    # same `sources` shape the workbook builder writes, so everything
+    # below this point treats all eight platforms identically. A
+    # missing or empty snapshot just leaves that platform without a
+    # ranker, exactly as a missing workbook does.
+    api_lineup_fetched: dict[str, str] = {}
+    for _slug, _source in API_LINEUP_SOURCES:
+        _snap = _read_snapshot(_source, asof) if asof else _read_snapshot(_source)
+        _channels = (_snap or {}).get('channels') or []
+        if _channels:
+            channel_sources[_slug] = {
+                'service':       (_snap or {}).get('service') or '',
+                'total_airings': (_snap or {}).get('total_airings') or 0,
+                'channels':      _channels,
+            }
+            api_lineup_fetched[_slug] = (_snap or {}).get('fetched_at') or ''
 
     # Channel type per channel, keyed by the same `_cp_normalize` name
     # the lineup keys use, so one label serves every platform a
@@ -10702,8 +10754,16 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             'tv':             tv,
             'channels':       channels_out,
             'channels_total': len(raw_channels),
-            'available':      bool(block.get('available') and items),
-            'fetched_at':     (snap or {}).get('fetched_at'),
+            # A platform is available once it has something to show.
+            # For the four workbook platforms that is titles; for
+            # Vizio, LG and MyFree DIRECTV, which have no titles
+            # catalogue at all, it is the channel lineup. Without the
+            # second clause those three would sit behind the loading
+            # placeholder forever.
+            'available':      bool((block.get('available') and items)
+                                    or channels_out),
+            'fetched_at':     (api_lineup_fetched.get(slug)
+                                or (snap or {}).get('fetched_at')),
         }
         if (snap or {}).get('error'):
             result[slug]['note'] = f"latest snapshot: {(snap or {}).get('error')}"

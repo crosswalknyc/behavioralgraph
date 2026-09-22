@@ -91,6 +91,16 @@ SCRAPERS = [
     # comes from JustWatch's public GraphQL - no cookies, no
     # datacenter-IP blocking.
     ('fast_channels',      'scripts.trends_scrapers.fast_channels',      'FAST channels',        'fast'),
+    # Vizio WatchFree+ and MyFree DIRECTV (2026-09-22, Jenna: "for FAST
+    # Vizio, DirecTV, and LG be included"). Neither has a JustWatch
+    # package, so neither has a titles catalogue; both ship the Channel
+    # Ranker only, off the platform's own public guide. Vizio's answers
+    # the build box identically to a residential address; DIRECTV's
+    # needs Chrome's TLS fingerprint but no residential hop. LG Channels
+    # is the third of the set and is NOT here: its API is geo-gated, so
+    # it runs from `local_residential_run.py`.
+    ('vizio_watchfree',    'scripts.trends_scrapers.vizio_watchfree',    'Vizio WatchFree+',     'fast'),
+    ('myfree_directv',     'scripts.trends_scrapers.myfree_directv',     'MyFree DIRECTV',       'fast'),
     # Lens scoring depends on every OTHER latest snapshot being in
     # place first (it reads them all to build the item universe).
     # Kept AFTER all content scrapers so a same-day run picks up
