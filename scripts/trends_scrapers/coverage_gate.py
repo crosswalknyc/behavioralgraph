@@ -495,7 +495,12 @@ def _merge_cap_platform_blocks(results: dict[str, dict],
 
     stats: dict[str, Any] = {'entries': 0, 'blocks': 0, 'no_result': [],
                               'no_block': [], 'trail': []}
-    if not results or not cap_targets:
+    if not cap_targets:
+        return stats
+    if not results:
+        # Every title held. Name them all so the run log says which
+        # rows kept their correction rather than going quiet.
+        stats['no_result'] = [t['entry_key'] for t in cap_targets]
         return stats
 
     snap = se._read_snapshot('stream_estimates') or {}

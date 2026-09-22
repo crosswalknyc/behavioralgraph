@@ -255,6 +255,8 @@ def test_merge_holds(monkey):
     stats = cg._merge_cap_platform_blocks({}, targets, '2026-09-21')
     check(stats['blocks'] == 0 and not calls,
           'a title the research skipped entirely holds too')
+    check(stats['no_result'] == ['film:southpaw'],
+          'and a pass where every title held still names them')
 
 
 def main():
