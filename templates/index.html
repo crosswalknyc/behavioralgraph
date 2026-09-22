@@ -65182,7 +65182,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                            '</div>';
                 } else if (!(s.items || []).length &&
                              !(s.films || []).length &&
-                             !(s.tv    || []).length) {
+                             !(s.tv    || []).length &&
+                             !(s.channels || []).length) {
                     body = '<div class="tiq-empty">No trending titles right now.</div>';
                 } else {
                     // Every platform now ships Film/TV splits + a
@@ -65582,7 +65583,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     //                 platform, ranked by weekly US
                     //                 viewers (backend-annotated via
                     //                 stream_estimates.fast_channel).
+                    // A platform can carry channels without titles (Vizio,
+                    // LG, MyFree DIRECTV have no titles catalogue). Those
+                    // open on the ranker, and the Titles pill is withheld
+                    // rather than offered and then found empty.
+                    var hasTitles = !!((s.items || []).length ||
+                                        (s.films || []).length ||
+                                        (s.tv    || []).length);
                     var mode = window.__trendsIQ.activeFastMode || 'titles';
+                    if (!hasTitles) mode = 'channels';
 
                     // ---- Titles view -------------------------------------------
                     var filmRows = s.films || [];
@@ -65901,7 +65910,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     };
                     var modeStrip =
                         '<div class="tiq-mode-strip">' +
-                          mkPill('titles',   'Titles') +
+                          (hasTitles ? mkPill('titles', 'Titles') : '') +
                           mkPill('channels', 'Channel Ranker') +
                         '</div>';
 
