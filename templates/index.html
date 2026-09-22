@@ -133108,10 +133108,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Listeners: Spotify 99.04% on STREAMING MUSIC vs 32.22% on
         // STREAMING/MUSIC; Netflix 5.17% on STREAMING VIDEO vs 73.26% on
         // STREAMING/PLATFORM. Never merge those leak rows — delete the cards.
+        // CASUAL DINING is the same kind of leak. It never carries more than
+        // one or two brands, and every one of them already sits on QSR or
+        // WHERE THEY DINE with a different Brand Penetration off a different
+        // panelist count (Lady Miss Jacqueline Series Listeners: Panera Bread
+        // 5.08% / 577 UIDs on CASUAL DINING vs 32.88% / 3,729 UIDs on QSR).
+        // Gen Pop carries no CASUAL DINING column at all, so the card can only
+        // ever show N/A Gen Pop and N/A index. Delete it, never merge it.
         function isLeakBehavioralCategory(cat) {
             var u = String(cat || '').replace(/\s+/g, ' ').trim().toUpperCase();
             return u === 'PRIMARY_LANGUAGE' || u === 'PRIMARY LANGUAGE'
-                || u === 'STREAMING MUSIC' || u === 'STREAMING VIDEO';
+                || u === 'STREAMING MUSIC' || u === 'STREAMING VIDEO'
+                || u === 'CASUAL DINING' || u === 'CASUAL_DINING';
         }
         function dropLeakBehavioralCategories(obj) {
             if (!obj || typeof obj !== 'object') return obj;
