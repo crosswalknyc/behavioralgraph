@@ -548,3 +548,4 @@ if __name__ == "__main__":
 # (books-apple-english-base 2026-09-21 - Books/Apple: keep only US-English base editions (drop foreign-lang + dramatized/graphic-novel noise))
 # (books-apple-keep-foreign-drop-variants 2026-09-21 - Books/Apple: keep foreign-language real editions, drop variants/fan-fic + buried-mention title matches)
 # (audible-drop-variant-editions 2026-09-21 - shared variant/derivative drop in match_gate; applied on Audible + Apple)
+# (appletv-relevance-gate 2026-09-22 - Apple TV resolver: match_gate floor, no least-bad fallback)
