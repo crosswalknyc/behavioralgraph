@@ -61871,7 +61871,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // users don't land on a ghost panel.
             if (window.__trendsIQ.activeTab === 'philanthropy') {
                 window.__trendsIQ.activeTab = 'headlines';
-                window.__trendsIQ.headlinesView = 'philanthropy';
+                window.__trendsIQ.headlinesView = 'top';
             }
             // Libby used to be a top-level tab. Now it's part of the
             // Books tab (as three sibling cards). Redirect returning
@@ -63530,6 +63530,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             business     = business     || [];
             wallStreet   = wallStreet   || [];
             var view = window.__trendsIQ.headlinesView || 'top';
+            if (view === 'philanthropy') {
+                view = 'top';
+                window.__trendsIQ.headlinesView = 'top';
+            }
             // If the user landed on a sub-tab whose data came back empty,
             // fall back to the top view so they don't see an empty panel.
             if ((view === 'sources'      && !sources.length) ||
@@ -63546,7 +63550,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 { key: 'sources',      label: '🏛️ By news source', count: sources.length      },
                 { key: 'business',     label: '💼 Business',       count: business.length     },
                 { key: 'wall_street',  label: '💹 Wall Street',    count: wallStreet.length   },
-                { key: 'philanthropy', label: '❤️ Philanthropy',   count: philanthropy.length },
             ];
             var tabsHtml = tabs.map(function(t) {
                 var active = (t.key === view) ? ' active' : '';
