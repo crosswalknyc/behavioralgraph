@@ -234,7 +234,17 @@ def fetch(url, timeout=25):
             raw = r.read()
             if r.headers.get("Content-Encoding") == "gzip":
                 raw = gzip.decompress(raw)
-            return r.getcode(), r.geturl(), raw.decode("utf-8", "replace")
+            text = raw.decode("utf-8", "replace")
+            # Amazon also soft-walls with a 200 stub (~3.7KB, no
+            # og:title) that would sail through an exception-only
+            # fallback (2026-09-22): route walled-looking successes
+            # through the browser too, keeping whichever is healthier.
+            if _looks_walled(text):
+                bcode, bfinal, bhtml = _browser_fetch(url,
+                                                      timeout=timeout)
+                if bhtml and len(bhtml) > len(text):
+                    return bcode, bfinal, bhtml
+            return r.getcode(), r.geturl(), text
     except Exception:
         # 503 bot-wall / network failure: retry through the shared
         # headless browser before giving up.
@@ -398,7 +408,7 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
             timeout=DISCOVERY_TIMEOUT)
         if code == 200 and html and len(html) > 20000:
             for m in re.finditer(r'/gp/video/detail/(' + ASIN_RE + r')', html):
-                ctx = html[max(0, m.start() - 500):m.start() + 200].lower()
+                ctx = html[max(0, m.start() - 800):m.start() + 400].lower()
                 # min() so a single-token title ('Amandaland') needs its
                 # one token, not an impossible two (2026-09-22 fix).
                 if vwant and len(vwant & set(tokens(ctx))) >= \
@@ -406,6 +416,21 @@ def _candidate_asins(title, limit=8, max_pv_fetch=4):
                     cands.append(m.group(1))
                     if _enough():
                         return list(dict.fromkeys(cands))[:limit]
+            # Modern SERP markup separates title text from hrefs by
+            # more than any raw-HTML window (2026-09-22 Amandaland: 26
+            # mentions, 6 detail links, zero proximity hits). When the
+            # page clearly carries the title but proximity matched
+            # nothing, take the page's video ASINs as UNVERIFIED
+            # candidates - discover_asin fetches each detail page and
+            # keeps only a genuine title match, so a wrong candidate
+            # costs one fetch, never a wrong row.
+            if not cands and vwant and \
+                    vwant & set(tokens(html.lower())) == vwant:
+                page_asins = re.findall(
+                    r'/gp/video/detail/(' + ASIN_RE + r')', html)
+                page_asins += re.findall(
+                    r'/dp/(' + ASIN_RE + r')', html)
+                cands += list(dict.fromkeys(page_asins))[:6]
         if cands:
             break
 
@@ -469,6 +494,24 @@ def discover_asin(title, kind="series"):
             return asin
         if score > best_score:
             best, best_score = asin, score
+    # Relevance floor on the fallback (2026-09-22, mirroring the Apple
+    # TV #213 fix): the least-bad candidate is only returned when it
+    # genuinely reads as the requested title. Without this, an
+    # 'Amandaland' ask that surfaced unrelated SERP candidates resolved
+    # confidently to 'Scandal' (1,048 wrong rows). No genuine match =
+    # no Amazon row, by design.
+    if best is not None:
+        try:
+            from match_gate import is_relevant
+            _, _, bpage = fetch(
+                "https://www.amazon.com/gp/video/detail/%s/" % best)
+            bname = show_name(bpage, "")
+            if not bname or not is_relevant(title, bname):
+                return None
+        except Exception:
+            # Fail-closed here: an unverifiable fallback candidate is
+            # exactly the class that produced the wrong-show rows.
+            return None
     return best
 
 
