@@ -161,6 +161,8 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Heated Rivalry x Barbie song nest host"),
     ('function _jiqSongClip',
      "Song journey clickable clip chip"),
+    ('function _jiqSongHydrateRun',
+     "Heated Rivalry and Barbie song journey hydrate"),
     ('id="jiqFragCard"',
      "Purchase-journey caterpillar card (fragrance + Young Sheldon + Dexter)"),
     ('function renderJourneyIqFragrance',
