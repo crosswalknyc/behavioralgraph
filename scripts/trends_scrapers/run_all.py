@@ -101,6 +101,13 @@ SCRAPERS = [
     # it runs from `local_residential_run.py`.
     ('vizio_watchfree',    'scripts.trends_scrapers.vizio_watchfree',    'Vizio WatchFree+',     'fast'),
     ('myfree_directv',     'scripts.trends_scrapers.myfree_directv',     'MyFree DIRECTV',       'fast'),
+    # Philo Free (2026-09-22). The free ad-supported tier only; the
+    # paid Essential and Bundle+ plans stay off the FAST tab. Both
+    # Philo pages answer from this box with the same content a US
+    # address gets, so it belongs on the nightly batch. Its two
+    # siblings from the same day, Plex Live TV and Sling Freestream,
+    # are geo-gated and live in `local_residential_run.py` instead.
+    ('philo_free',         'scripts.trends_scrapers.philo_free',         'Philo Free',           'fast'),
     # Lens scoring depends on every OTHER latest snapshot being in
     # place first (it reads them all to build the item universe).
     # Kept AFTER all content scrapers so a same-day run picks up

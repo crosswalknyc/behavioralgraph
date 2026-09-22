@@ -10948,7 +10948,8 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
 
 # ============================================================================
-# Card 5b: FAST channels (Roku, Tubi, Pluto, Amazon, Xumo)
+# Card 5b: FAST channels (Roku, Tubi, Pluto, Amazon, Xumo, plus the
+# Channel-Ranker-only platforms below)
 # ============================================================================
 # The four platforms in dashboard sub-tab order. Slug matches
 # `fast_channels.FAST_PLATFORMS`; `available_default` is what the panel
@@ -10988,14 +10989,36 @@ FAST_PLATFORMS = [
     ('vizio',          'Vizio WatchFree+', False),
     ('lg',             'LG Channels',      False),
     ('directv_myfree', 'MyFree DIRECTV',   False),
+    # 2026-09-22 (Jenna: "do Philo, Sling, and Plex also"). Same shape
+    # as the three above: each has a full channel lineup and no titles
+    # catalogue, so each renders the Channel Ranker and nothing else.
+    #
+    # Philo and Sling both ALSO sell paid vMVPD subscriptions, and
+    # only their free ad-supported lineups are on this tab. Each
+    # scraper takes the free/paid split from the platform's own
+    # published tagging (Philo's `free-channels` plan group, Sling's
+    # `premium` guide filter), so a channel moving tier follows
+    # automatically. The rails are "Philo Free" and "Sling
+    # Freestream", never "Philo" or "Sling", for the same reason the
+    # row above is "MyFree DIRECTV". Plex has no paid channel tier at
+    # all: Plex Pass buys server features, not a different lineup.
+    #
+    # Plex Live TV and Sling Freestream are GEO-GATED and run from the
+    # residential launchd job on the Mac, not the Hetzner nightly
+    # batch. Philo runs on Hetzner. See `local_residential_run.py`.
+    ('philo',            'Philo Free',       False),
+    ('plex',             'Plex Live TV',     False),
+    ('sling_freestream', 'Sling Freestream', False),
 ]
 
 # FAST platforms whose Channel Ranker lineup comes from the platform's
 # own public guide rather than from a MediaBiz workbook, mapped to the
 # snapshot each scraper writes. The workbook platforms (roku / tubi /
 # pluto / amazon) all share the single `fast_channel_lineups` snapshot;
-# these three each own theirs, so a slow or geo-blocked platform can
-# never blank out another one's rail.
+# each of these owns theirs, so a slow or geo-blocked platform can
+# never blank out another one's rail. That isolation matters more
+# now than it did with three: Plex Live TV and Sling Freestream are
+# geo-gated and refresh on a different schedule from the rest.
 #
 # Kept in step with `stream_estimates._API_LINEUP_SOURCES`, which
 # duplicates this list for the same reason `_cp_normalize` is
@@ -11005,6 +11028,9 @@ API_LINEUP_SOURCES = (
     ('vizio',          'vizio_watchfree'),
     ('lg',             'lg_channels'),
     ('directv_myfree', 'myfree_directv'),
+    ('philo',            'philo_free'),
+    ('plex',             'plex_live'),
+    ('sling_freestream', 'sling_freestream'),
 )
 
 # Defensive ceiling on how many channels one platform contributes to
@@ -11048,7 +11074,7 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
     # Platforms that publish their own guide keep their lineup in their
     # own snapshot (see API_LINEUP_SOURCES). Fold each one in under the
     # same `sources` shape the workbook builder writes, so everything
-    # below this point treats all eight platforms identically. A
+    # below this point treats every platform identically. A
     # missing or empty snapshot just leaves that platform without a
     # ranker, exactly as a missing workbook does.
     api_lineup_fetched: dict[str, str] = {}
@@ -11129,7 +11155,7 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             'channels_total': len(raw_channels),
             # A platform is available once it has something to show.
             # For the four workbook platforms that is titles; for
-            # Vizio, LG and MyFree DIRECTV, which have no titles
+            # the Channel-Ranker-only platforms, which have no titles
             # catalogue at all, it is the channel lineup. Without the
             # second clause those three would sit behind the loading
             # placeholder forever.

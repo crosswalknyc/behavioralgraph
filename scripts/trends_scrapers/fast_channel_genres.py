@@ -176,16 +176,27 @@ _OVERRIDES: dict[str, str] = {
 # workbook. Each owns a snapshot; the workbook platforms share
 # `fast_channel_lineups`. Kept in step with
 # `trends_iq.API_LINEUP_SOURCES`.
-_API_LINEUP_SOURCES = ('vizio_watchfree', 'lg_channels', 'myfree_directv')
+_API_LINEUP_SOURCES = ('vizio_watchfree', 'lg_channels', 'myfree_directv',
+                        'philo_free', 'plex_live', 'sling_freestream')
 
 
-# Vizio and LG file every channel under their own category, and
-# DIRECTV under one of three headings. Those labels are real editorial
-# signal and mapping them is cheaper and steadier than asking a model
-# to re-derive what the platform already said. This maps the ones that
+# Vizio and LG file every channel under their own category, DIRECTV
+# under one of three headings, Philo under a genre shelf and Sling
+# under a guide filter. Those labels are real editorial signal and
+# mapping them is cheaper and steadier than asking a model to
+# re-derive what the platform already said. This maps the ones that
 # land unambiguously on our 15; anything genuinely ambiguous is left
 # out deliberately and falls through to the model, which sees the
-# publisher's label as context.
+# publisher's label as context. So an absent label costs a shortcut,
+# never the channel's type.
+#
+# Plex is absent from this map on purpose rather than by omission. Its
+# rows carry `genreRatingKeys`, but they are opaque hashes and Plex
+# resolves no names for them, so naming those clusters here would be
+# inventing a publisher label rather than carrying one. The one Plex
+# signal that is unambiguous is `language`, and the scraper ships
+# Spanish-language rows under Vizio's existing wording so they land on
+# 'en espanol' below instead of needing a new key.
 #
 # Deliberately absent, and why:
 #   Vizio  FOOD + TRAVEL  - splits across Food and Home / Lifestyle
@@ -194,6 +205,17 @@ _API_LINEUP_SOURCES = ('vizio_watchfree', 'lg_channels', 'myfree_directv')
 #                           Espanol / Music call, and it matters
 #          TV & Movies    - two of our types in one label
 #   DIRECTV Entertainment - 127 of their 161 channels, says nothing
+#   Sling  GAMES & ANIME  - Anime is one of our 15 and Games is not,
+#                           so the label spans a type we carry and one
+#                           we do not
+#          ACTION & THRILLERS  - splits across Movies / Entertainment
+#          BLACK ENTERTAINMENT - an audience, not one of the 15
+#   Philo  Home & Lifestyle    - splits across Food and Home /
+#                                Lifestyle, the LG TV & Movies case
+#          Crime & Drama       - Crime and Entertainment in one label
+#          Outdoors & Sports   - Sports and Lifestyle in one label
+#          Action, Sci-Fi & Fantasy - both split Movies /
+#                                Entertainment
 _SOURCE_GENRE_MAP: dict[str, str] = {
     # Vizio WatchFree+
     'sports':               'Sports',
@@ -237,6 +259,16 @@ _SOURCE_GENRE_MAP: dict[str, str] = {
     # MyFree DIRECTV
     'national sports':      'Sports',
     'news & information':   'News',
+    # Sling Freestream. Every one of these has a Vizio or LG
+    # precedent carrying the same words with different punctuation.
+    'news & opinion':       'News',            # 80 channels, the biggest
+    'true crime':           'Crime',
+    'classics & re-runs':   'Classic TV',
+    'science & nature':     'Documentary',
+    'docs & history':       'Documentary',
+    'kids & family':        'Kids and Family',
+    # Philo Free
+    'family':               'Kids and Family',
 }
 
 

@@ -560,6 +560,16 @@ _FAST_SLUGS = (
     ('vizio',          'Vizio WatchFree+'),
     ('lg',             'LG Channels'),
     ('directv_myfree', 'MyFree DIRECTV'),
+    # 2026-09-22: three more Channel-Ranker-only platforms. Philo Free
+    # and Sling Freestream are the FREE tiers of services that also
+    # sell paid vMVPD subscriptions, and only the free lineups are
+    # here; Plex Live TV is free throughout. No titles catalogue on
+    # any of the three, so there is no platform-top-title anchor floor
+    # and `_collect_fast_channels` prices each channel from the
+    # channel and the platform.
+    ('philo',            'Philo Free'),
+    ('plex',             'Plex Live TV'),
+    ('sling_freestream', 'Sling Freestream'),
 )
 
 # FAST platforms whose lineup lives in its own snapshot rather than in
@@ -571,6 +581,9 @@ _API_LINEUP_SOURCES = (
     ('vizio',          'vizio_watchfree'),
     ('lg',             'lg_channels'),
     ('directv_myfree', 'myfree_directv'),
+    ('philo',            'philo_free'),
+    ('plex',             'plex_live'),
+    ('sling_freestream', 'sling_freestream'),
 )
 
 
@@ -2977,6 +2990,102 @@ _FAST_CHANNEL_PLATFORMS_META = [
          'carries an airings signal; that is missing data, not a '
          'quiet channel. Anchor: DIRECTV press releases + Nielsen '
          'FAST Gauge + eMarketer FAST platform reach.'
+     )},
+    {'key': 'philo',
+     'label': 'Philo Free',
+     'ceiling': 500_000,
+     'anchors': (
+         "Philo Free channel-level weekly viewership. Philo's "
+         'standalone free ad-supported tier: no subscription, no card, '
+         'and no account needed to start watching. 166 channels today '
+         "against Philo's own 150+ claim. This is the best-anchored "
+         'platform on this rail because Philo is a US-only service, so '
+         'every figure below is already US and needs no apportionment. '
+         'Philo confirmed 3.4M monthly active users in March 2025 '
+         'covering free AND paid together, against 1.3M paid '
+         'subscribers on $450M revenue at the end of 2024, so the free '
+         'tier sits near the difference, roughly 2M monthly actives, '
+         'and Philo has said it has grown meaningfully since. Those '
+         '3.4M actives deliver 900M monthly ad impressions across 79M '
+         'streamed hours, so engagement per active runs high for a '
+         'FAST service. DO NOT price this rail off the 1.3M paid '
+         'subscriber count, which is the $25 Essential and $33 Bundle+ '
+         'vMVPD product, and DO NOT price it off the 3.4M combined '
+         'figure, which contains that paid base. Top channels (CBS '
+         'News 24/7, 48 Hours, Judge Judy, The Conners, the BET x '
+         'Tyler Perry rails) 90K-240K US weekly viewers. Mid-tier '
+         '30K-80K. Long-tail 6K-25K. Philo publishes a lineup and no '
+         'schedule, so no channel here carries an airings signal; '
+         'that is missing data, not a quiet channel. Anchor: Philo '
+         'company disclosures + Nielsen FAST Gauge + eMarketer FAST '
+         'platform reach.'
+     )},
+    {'key': 'plex',
+     'label': 'Plex Live TV',
+     'ceiling': 1_200_000,
+     'anchors': (
+         'Plex Live TV channel-level weekly viewership. The free '
+         'ad-supported linear side of Plex, running since 2019. Plex '
+         'Pass is a paid tier but it buys server features (DVR, '
+         'hardware transcoding, downloads) rather than a different '
+         'channel lineup, so every channel here is free. APPORTION '
+         'TWICE BEFORE USING THE HEADLINE FIGURE. Plex reported over '
+         '42M monthly active users in June 2026, and that number is '
+         '(a) GLOBAL across 180+ countries and 81 languages and (b) '
+         'ALL of Plex, which is also a personal media server, an '
+         'ad-supported on-demand catalog, a rental store and a social '
+         'product. Take the US share of a US-headquartered but '
+         'heavily international service first, then the Live TV share '
+         'of a multi-surface app, before reaching any per-channel '
+         'number. Writing the 42M global whole-app figure into one US '
+         'linear channel row is the single defining error available '
+         'on this platform. The US lineup is 691 channels, wide '
+         'against that twice-apportioned base, so per-channel reach '
+         'is thin. Top channels (CW Forever, Stories by AMC, ION, '
+         'Miramax Movie Channel, NFL Channel, Hallmark Movies & More) '
+         '200K-550K US weekly viewers. Mid-tier 50K-160K. Long-tail '
+         '8K-40K. 92 of the 691 are Spanish-language and price '
+         'against that audience rather than the whole platform. Plex '
+         'publishes no schedule on the lineup endpoint, so no channel '
+         'here carries an airings signal. Anchor: Plex June 2026 '
+         'company disclosures + Nielsen FAST Gauge + eMarketer FAST '
+         'platform reach.'
+     )},
+    {'key': 'sling_freestream',
+     'label': 'Sling Freestream',
+     'ceiling': 800_000,
+     'anchors': (
+         "Sling Freestream channel-level weekly viewership. Sling's "
+         'always-free ad-supported service: no subscription, no card, '
+         'no account. 566 free channels today against Sling\'s own '
+         '600+ marketing, plus free DVR and a watch-to-earn rewards '
+         'programme that lifts engagement above a pure lean-back FAST '
+         'lineup. DO NOT price this rail off Sling TV subscribers. '
+         'EchoStar reported 1.707M Sling TV subscribers at 30 June '
+         '2026 and that is the PAID vMVPD (Sling Orange at about 30 '
+         'channels, Sling Blue at about 40, both around $46 a month); '
+         'it is a different product serving a different audience. '
+         'EchoStar discloses no Freestream audience figure at all, so '
+         'reason from its streaming footprint and the share of that '
+         'footprint reaching the free tier, exactly the way MyFree '
+         'DIRECTV is reasoned from DIRECTV\'s streaming footprint and '
+         'never from satellite subscribers. Freestream sits ABOVE '
+         'MyFree DIRECTV on this board and below Roku, Tubi and '
+         'Pluto: it has no device install base of its own the way '
+         'Roku, Vizio and LG do, but unlike MyFree DIRECTV it has no '
+         'signup gate whatsoever and has had paid media behind it. '
+         'Top channels (ABC News Live, CBS News 24/7, NBC News Now, '
+         'Cheddar News, Scripps News, the FilmRise rails) 110K-320K '
+         'US weekly viewers. Mid-tier 35K-100K. Long-tail 6K-30K. 17 '
+         'of the 566 are single-market broadcast feeds that Sling '
+         'itself marks LOCAL in the channel name; price those against '
+         'the market they actually reach and not the country, which '
+         'is the same error Vizio\'s local feeds invite. Sling '
+         'publishes a guide but one page spans about two and a half '
+         'hours, too thin to read as a weekly rate, so no channel '
+         'here carries an airings signal. Anchor: EchoStar Q2 2026 '
+         'results + Sling press disclosures + Nielsen FAST Gauge + '
+         'eMarketer FAST platform reach.'
      )},
 ]
 

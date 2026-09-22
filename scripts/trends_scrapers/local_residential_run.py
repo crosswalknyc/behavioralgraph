@@ -101,6 +101,36 @@ RESIDENTIAL_SCRAPERS = [
     # here. Vizio WatchFree+ and MyFree DIRECTV, added the same day,
     # are NOT geo-gated and run on Hetzner.
     ('lg_channels',   'LG Channels'),
+    # Plex Live TV (2026-09-22): the FAST Channel Ranker rail for
+    # Plex's free linear service. GEO-GATED, and it fails worse than
+    # LG does. LG at least returns empty category lists from Hetzner;
+    # `epg.provider.plex.tv` resolves country off the request IP and
+    # returns HTTP 200 carrying a COMPLETE AND PLAUSIBLE lineup for
+    # the wrong country. From Hetzner that is 254 channels titled
+    # "Plex Channels in DE"; from the Mac it is 691 titled "Plex
+    # Channels in US". Nothing in the response shape tells the two
+    # apart, so a misplaced run would publish a German rail onto a US
+    # board rather than break. Neither `?country=us` nor an en-US
+    # Accept-Language overrides it; only the address does. The scraper
+    # asserts the lineup names the US and raises otherwise, which is a
+    # backstop and not a licence to move this to the nightly batch.
+    ('plex_live',        'Plex Live TV'),
+    # Sling Freestream (2026-09-22): the FAST Channel Ranker rail for
+    # Sling's always-free tier. GEO-GATED in two places at once:
+    # `www.sling.com` answers 403 off an F5 edge in Frankfurt, and
+    # `p-geo.movetv.com/geo` returns playback_disallowed code 5 there
+    # against country usa from here. That 403 is NOT a TLS
+    # fingerprint, which is worth stating because the house reflex is
+    # to reach for curl_cffi first and that reflex was right on an
+    # Amazon block we once misread as geography. Here stock requests
+    # and curl_cffi impersonating Chrome both get 403 from Hetzner and
+    # both get 200 from a US address, so impersonation changes
+    # nothing. Uses Playwright because Sling signs its session token
+    # with OAuth 1.0a using a secret compiled into its web bundle, so
+    # the browser is left to do the auth it was built for rather than
+    # copying a signing key into this repo. Unlike Plex this one fails
+    # loudly from the wrong address, but it still has to run here.
+    ('sling_freestream', 'Sling Freestream'),
     # Social content scrapers (TikTok, Instagram, X, Reddit) were
     # removed 2026-08-20 (Jenna: "kill the scrape too"). Social panel
     # was dropped from the Trends IQ user surface because signal
