@@ -46645,6 +46645,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "CANDIDATE PROFILES fall back to `new_build` with the full "
         "combined subject. Never pick an 'Avid Fan' or other cut/skin "
         "file as the parent - only base (Total Universe) profiles.\n"
+        "  7a-YEAR-SERIES (2026-09-22, Jenna): a build ask naming "
+        "MULTIPLE years ('Build Will And Grace year profiles for "
+        "2022, 2023, 2024, 2025 and 2026') is an ARRAY of year-scoped "
+        "builds - one element per named year, subject '<Subject> - "
+        "<YYYY> Total Universe', date_range = that calendar year "
+        "(YYYY-01-01 to YYYY-12-31, date_range_explicit true), each "
+        "priced as its own build. Never collapse the years into one "
+        "profile, never stretch one window across the series. These "
+        "exist so multi-year trend reads compare real per-year "
+        "files.\n"
         "  7a-COLLECTIVE-CUTS (2026-09-21, Jenna): 'cut X by all "
         "generations' / 'by gender' / 'by age bands' is a PACKAGE of "
         "individual cuts, never one cut. Emit decision `derive_cut` "
@@ -58894,6 +58904,113 @@ def _pm_rankers_board_block(text, view_id=''):
         return ''
 
 
+# Multi-year trend detection (2026-09-22, Scott's Will & Grace ask): a
+# '4-5 year analysis' needs one profile per year. The read path had
+# only the single-window base, invented the per-year numbers, and the
+# verifier held the reply - the user paid attention and got nothing.
+# These asks now route to a paid year-build package up front.
+_PM_MY_RANGE_RE = re.compile(
+    r'\b(\d)\s*(?:-|to|or)\s*(\d)\s*[- ]?year', re.I)
+_PM_MY_LAST_RE = re.compile(
+    r'\b(?:past|last|previous|over the (?:past|last))\s+(\d+)\s+years?',
+    re.I)
+_PM_MY_NYEAR_RE = re.compile(r'\b(\d+)[- ]year\b', re.I)
+_PM_MY_SINCE_RE = re.compile(r'\bsince\s+(20\d\d)\b', re.I)
+_PM_MY_SPAN_RE = re.compile(
+    r'\b(20\d\d)\s*(?:-|to|through)\s*(20\d\d)\b', re.I)
+_PM_MY_YOY_RE = re.compile(
+    r'\byear[- ]over[- ]year\b|\byoy\b|\bannual trend\b', re.I)
+
+
+def _pm_detect_multi_year_ask(text):
+    """Calendar years a multi-year trend ask spans (2+ years), newest
+    ending this year, capped at 6. None when the ask is not a
+    multi-year read ('4-5 year analysis', 'past 3 years', 'since
+    2022', '2021-2025', 'year over year')."""
+    t = str(text or '')
+    this_year = datetime.now().year
+    n = None
+    m = _PM_MY_SPAN_RE.search(t)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        if a > b:
+            a, b = b, a
+        years = list(range(a, min(b, this_year) + 1))
+        return years if len(years) >= 2 else None
+    m = _PM_MY_SINCE_RE.search(t)
+    if m:
+        a = int(m.group(1))
+        years = list(range(a, this_year + 1))
+        return years[-6:] if len(years) >= 2 else None
+    m = _PM_MY_RANGE_RE.search(t)
+    if m:
+        n = max(int(m.group(1)), int(m.group(2)))
+    if n is None:
+        m = _PM_MY_LAST_RE.search(t) or _PM_MY_NYEAR_RE.search(t)
+        if m:
+            n = int(m.group(1))
+    if n is None and _PM_MY_YOY_RE.search(t):
+        n = 3
+    if not n or n < 2:
+        return None
+    n = min(n, 6)
+    return list(range(this_year - n + 1, this_year + 1))
+
+
+def _pm_year_files_for_subject(subject, years):
+    """(have, missing) year lists based on the catalog: a year is
+    covered when a profile's display name carries the subject's
+    distinctive tokens AND that year."""
+    toks = [w for w in re.findall(r'[a-z0-9]+', str(subject).lower())
+            if len(w) >= 3]
+    have = set()
+    try:
+        for ent in (_profile_catalog_for_chat() or []):
+            name = str(ent.get('display_name') or ent.get('s3_key')
+                       or '').lower()
+            if toks and all(t in name for t in toks):
+                for y in years:
+                    if str(y) in name:
+                        have.add(y)
+    except Exception:
+        traceback.print_exc()
+    return sorted(have), [y for y in years if y not in have]
+
+
+def _pm_year_package_reply(subject, years, have, missing):
+    """Proposal copy + chips for the year-build package. Live pricing
+    from the billing panel."""
+    try:
+        each_usd = f"${_v1_price_usd_for('new_build', 0):,.0f}"
+    except Exception:
+        each_usd = '$500'
+    n = len(missing)
+    year_list = ', '.join(str(y) for y in missing[:-1]) + \
+        (f' and {missing[-1]}' if n > 1 else str(missing[0]))
+    lines = [
+        f"A {len(years)}-year read of {subject} needs one profile per "
+        f"year - each year's audience is measured in its own window, "
+        f"and the file on hand covers a single window only. I will "
+        f"not stretch one window across {len(years)} years.",
+        '',
+        f"The package: {n} year profile{'s' if n != 1 else ''} "
+        f"({year_list}) at {each_usd} each.",
+    ]
+    if have:
+        lines.append(f"Already on the shelf: "
+                     f"{', '.join(str(y) for y in have)} - those "
+                     f"years ride free.")
+    lines.append('')
+    lines.append("Once the year files land, the year-over-year "
+                 "comparison (composition, platform mix, performance) "
+                 "runs across all of them.")
+    build_chip = (f"Build {subject} year profiles for "
+                  f"{', '.join(str(y) for y in missing)}")
+    chips = [build_chip,
+             f"What does the current {subject} profile show?"]
+    return '\n'.join(lines), chips
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
@@ -58940,6 +59057,39 @@ def api_synth_chat_analyze():
     # every model call this request makes, and switches billing from
     # credits to per-session dollar usage.
     _pm_ppu = _pm_usage_extras(user)
+    # ---- Multi-year trend asks (2026-09-22, Jenna: "it should have
+    # forced him to pay for profiles to be run on Will and Grace for
+    # the past 4-5 years so it could then compare") ----
+    # A '4-5 year analysis' has no honest answer from one single-window
+    # file: the reply routes to a paid year-build package instead of a
+    # generated read that fabricates the missing years. Fires only on
+    # plain text asks - guided-flow confirms pass through untouched.
+    if not any(body.get(k) for k in (
+            'bpiq_confirm', 'bpiq_inputs', 'jiq_confirm', 'jiq_inputs',
+            'fw_confirm', 'fw_inputs', 'panel_confirm')):
+        try:
+            _my_years = _pm_detect_multi_year_ask(text)
+            if _my_years:
+                _my_ctx = body.get('page_context') or {}
+                _my_subj = str(((_my_ctx.get('primary') or {})
+                                .get('name')) or '').strip() \
+                    or (pma.guess_subject_from_text(text) or '').strip()
+                if _my_subj:
+                    _have_y, _miss_y = _pm_year_files_for_subject(
+                        _my_subj, _my_years)
+                    if _miss_y:
+                        _my_reply, _my_chips = _pm_year_package_reply(
+                            _my_subj, _my_years, _have_y, _miss_y)
+                        _pm_ask_hint(outcome='year_package_offer',
+                                     subject=_my_subj)
+                        return jsonify({
+                            'success': True, 'action': 'answer',
+                            'reply': _my_reply,
+                            'followups': _my_chips,
+                            'offer_deck': False, 'deck_angle': None,
+                            'build_required': True})
+        except Exception:
+            traceback.print_exc()
     # ---- Brand Partnership Valuation flow (Jenna 2026-09-16) ----
     # Chip -> guided inputs -> confirm -> charge -> background build.
     _bpiq_user = (session.get('username') or user.get('username')
