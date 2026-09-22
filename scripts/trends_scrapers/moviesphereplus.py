@@ -2,8 +2,11 @@
 MovieSphere+ trending scraper.
 
 Jenna 2026-09-22: "for streaming let's add streaming services such as
-MovieSphere+, and Lionsgate+". Lionsgate+ has no US service, so this
-module covers MovieSphere+ only.
+MovieSphere+, and Lionsgate+". Both shipped; Lionsgate+ lives in
+`lionsgateplus.py`. An earlier note here said Lionsgate+ had no US
+service, which was wrong: it sells in the US at $6.99 through Prime
+Video Channels. The catalog source carries no package for it, which
+is what that claim was really describing.
 
 MovieSphere+ is Lionsgate's ad-free on-demand subscription drawn from
 the studio's roughly 20,000-title library. It launched in the US on
