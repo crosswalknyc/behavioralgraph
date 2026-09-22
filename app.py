@@ -49018,9 +49018,12 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
         )
+        # 32000 matches the single-path interpret ceiling (2026-09-22,
+        # Will & Grace year batch: a slice truncated at 16000 and the
+        # five-year package shipped short).
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
-            max_tokens=16000, temperature=0.4,
+            max_tokens=32000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             usage_tag=('interpret', 'chatbot', _attrib),
         )
@@ -49539,6 +49542,27 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                     'subject_input': subjects[idx],
                     'error': f'{type(e).__name__}: {e}',
                 }
+
+    # One retry per failed slice (2026-09-22, Will & Grace year batch:
+    # one of five slices truncated and the package shipped short even
+    # though four drafts were healthy). Sequential and single-shot -
+    # temperature variance clears transient truncations, and a slice
+    # that fails twice stays a failure for the partial-batch path.
+    for i, r in list(results_by_index.items()):
+        if r.get('success'):
+            continue
+        try:
+            print(f"[synth-chat interpret batch] retrying failed "
+                  f"slice {subjects[i]!r}: "
+                  f"{str(r.get('error'))[:120]}")
+            results_by_index[i] = _synth_chat_interpret_one_subject(
+                subjects[i], shared_context, history, _batch_attrib)
+        except Exception as e:
+            results_by_index[i] = {
+                'success': False,
+                'subject_input': subjects[i],
+                'error': f'{type(e).__name__}: {e}',
+            }
 
     ordered = [results_by_index[i] for i in range(len(subjects))]
     ok_drafts = [r for r in ordered if r.get('success')]
