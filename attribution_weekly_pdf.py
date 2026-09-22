@@ -307,6 +307,169 @@ def _draw_wrapped(c: canvas.Canvas, text: str, x: float, y: float,
     return cy
 
 
+def _split_label_body(text: str) -> tuple[str, str]:
+    """Split "Label: body copy" on the first colon. Returns ``(label,
+    body)`` with the trailing colon stripped from the label and the
+    leading space stripped from the body. If there's no colon (or the
+    colon is deep inside the body), the whole string comes back as
+    ``("", text)`` so the caller can render it as a plain paragraph.
+
+    The dashboard only ever uses label-prefixed bullets so the colon
+    is guaranteed to be shallow. We cap the label at 60 chars to avoid
+    accidentally treating a body-colon (rare, e.g. "at 12:45 PM") as
+    a label."""
+    if not text:
+        return ("", "")
+    idx = text.find(":")
+    if idx < 0 or idx > 60:
+        return ("", text)
+    label = text[:idx].strip()
+    body  = text[idx + 1:].lstrip()
+    if not label:
+        return ("", text)
+    return (label, body)
+
+
+def _draw_label_body_wrapped(c: canvas.Canvas, label: str, body: str,
+                             x: float, y: float, max_width: float,
+                             font_family: str, size: float,
+                             label_color: HexColor, body_color: HexColor,
+                             leading: float | None = None) -> float:
+    """Render "<bold-label> <body-copy>" as one wrapped paragraph. The
+    label sits inline in ``label_color`` at bold weight, the body in
+    ``body_color`` at regular weight. Overflow wraps to the next line
+    starting at ``x`` with the full ``max_width``, exactly like the
+    dashboard's ``.iiq-hero-bullets li`` renders. Returns the y coord
+    of the last baseline drawn."""
+    if leading is None:
+        leading = size * 1.45  # tracks the dashboard's line-height: 1.55
+
+    lbl_font  = _font(font_family, "-Bold")
+    body_font = _font(font_family)
+
+    # Draw label first, tracked by pen_x. If the label alone exceeds
+    # max_width (shouldn't ever happen for our 4 dashboard labels but
+    # be defensive), it wraps like the body.
+    pen_x = x
+    cy    = y
+    if label:
+        label_text = _sanitize(label) + ":"
+        c.setFillColor(label_color)
+        c.setFont(lbl_font, size)
+        # A dashboard label is short (~24-45 chars) so treat it as one
+        # atom. If it wouldn't fit, drop to a new line first.
+        lbl_w = pdfmetrics.stringWidth(label_text, lbl_font, size)
+        if lbl_w > max_width:
+            # Extreme fallback: wrap the label like normal body copy.
+            cy = _draw_wrapped(c, label_text, x, cy, max_width,
+                               lbl_font, size, label_color, leading)
+            pen_x = x
+            cy -= leading
+        else:
+            c.drawString(pen_x, cy, label_text)
+            pen_x += lbl_w + pdfmetrics.stringWidth(" ", lbl_font, size)
+
+    # Now the body, continuing from pen_x on the same line.
+    if not body:
+        return cy
+    body = _sanitize(body)
+    c.setFillColor(body_color)
+    c.setFont(body_font, size)
+    words = body.split()
+    if not words:
+        return cy
+    space_w = pdfmetrics.stringWidth(" ", body_font, size)
+    line_words: list[str] = []
+    line_start_x = pen_x
+    line_width_left = max_width - (pen_x - x)
+
+    def _flush(cy_local: float) -> float:
+        if not line_words:
+            return cy_local
+        text = " ".join(line_words)
+        c.drawString(line_start_x, cy_local, text)
+        return cy_local
+
+    for w in words:
+        w_width = pdfmetrics.stringWidth(w, body_font, size)
+        extra = (space_w if line_words else 0) + w_width
+        if extra <= line_width_left:
+            line_words.append(w)
+            line_width_left -= extra
+        else:
+            _flush(cy)
+            cy -= leading
+            line_words = [w]
+            line_start_x = x
+            line_width_left = max_width - w_width
+    if line_words:
+        _flush(cy)
+    return cy
+
+
+def _wow_chip_style(tone: str, theme: str) -> tuple[HexColor, HexColor, HexColor]:
+    """Return ``(text_color, fill_color, border_color)`` for a WoW
+    exposure chip, matching the on-screen chip's dark palette exactly
+    for the dark PDF variant, and a Signal-Olive / Amethyst / Dusk
+    twin palette for the light variant (per the twin rule in
+    ``crosswalk-brand-standards``: Signal Green -> Signal Olive on
+    Off-White, Orchid -> Amethyst)."""
+    tone = (tone or "").lower()
+    if theme == "light":
+        if tone == "up":
+            text, fill, border = SIGNAL_OLIVE, HexColor("#EEF3D8"), HexColor("#BDC98C")
+        elif tone == "down":
+            text, fill, border = AMETHYST, HexColor("#F4E1F9"), HexColor("#D5B5E0")
+        elif tone == "launch":
+            text, fill, border = HexColor("#6C6A80"), HexColor("#E8E7F1"), HexColor("#C0BED0")
+        else:  # flat / unknown
+            text, fill, border = LIGHT_TEXT_BODY, HexColor("#EDECE4"), LIGHT_CARD_STROKE
+    else:  # dark (dashboard-exact)
+        if tone == "up":
+            text, fill, border = SIGNAL_GREEN, HexColor("#1F2E10"), HexColor("#4E6D1E")
+        elif tone == "down":
+            text, fill, border = HexColor("#f87171"), HexColor("#2A1414"), HexColor("#6E2626")
+        elif tone == "launch":
+            text, fill, border = DUSK, HexColor("#1A1826"), HexColor("#3D3757")
+        else:  # flat / unknown
+            text, fill, border = DARK_TEXT_BODY, HexColor("#1A2426"), SLATE_BORDER
+    return text, fill, border
+
+
+def _draw_wow_chip(c: canvas.Canvas, chip: dict | None, right_x: float,
+                   top_y: float, font_family: str, theme: str,
+                   size: float = 8.5) -> tuple[float, float]:
+    """Right-anchor a rounded-pill WoW chip and return its ``(width,
+    height)`` so callers can stack elements below it. A missing / empty
+    chip silently returns ``(0, 0)`` so the header collapses cleanly."""
+    if not chip or not chip.get("text"):
+        return (0.0, 0.0)
+    text = _sanitize(chip.get("text") or "")
+    if not text:
+        return (0.0, 0.0)
+    tone = str(chip.get("tone") or "").lower()
+    txt_col, fill_col, border_col = _wow_chip_style(tone, theme)
+    fnt = _font(font_family, "-Bold")
+    text_w = pdfmetrics.stringWidth(text, fnt, size)
+    pad_x  = 0.11 * inch
+    pad_y  = 0.055 * inch
+    chip_w = text_w + 2 * pad_x
+    chip_h = size * 1.55 / 72.0 * inch + 2 * pad_y - 0.02 * inch
+    # Position: top-right anchored. Baseline offsets are tuned so the
+    # cap-line sits vertically centered in the pill.
+    x = right_x - chip_w
+    y = top_y - chip_h
+    c.setFillColor(fill_col)
+    c.setStrokeColor(border_col)
+    c.setLineWidth(0.5)
+    c.roundRect(x, y, chip_w, chip_h, chip_h / 2.0, stroke=1, fill=1)
+    c.setFillColor(txt_col)
+    c.setFont(fnt, size)
+    baseline_y = y + (chip_h - size * 0.72) / 2.0
+    c.drawString(x + pad_x, baseline_y, text)
+    return (chip_w, chip_h)
+
+
 # ---------------------------------------------------------------------------
 # Layout constants (US Letter portrait, per documents.md)
 # ---------------------------------------------------------------------------
@@ -368,8 +531,8 @@ def build_weekly_pdf(payload: dict) -> bytes:
     Payload shape (all optional; a missing block collapses)::
 
         {
-          "theme": "dark" | "light",                    # NEW: default 'dark'
-          "hero_image_bytes": b"...",                   # NEW: server-injected
+          "theme": "dark" | "light",                    # default 'dark'
+          "hero_image_bytes": b"...",                   # server-injected
           "title": {"display_name": "Goat",
                     "distributor":  "Sony Pictures Animation",
                     "opening_date": "2026-02-13"},
@@ -378,13 +541,16 @@ def build_weekly_pdf(payload: dict) -> bytes:
           "week_end":    "2026-01-30",
           "days_to_open": 14,
           "phase_label": "Bridge Campaign (T-14)",
+          "subtitle":    "Sep 22, 2026 \u00b7 T+221 days",   # NEW: dashboard-exact
+          "wow_chip":    {"text": "-0.6% WoW exposure",      # NEW: dashboard-exact
+                          "tone": "down"},                   #   up | down | flat | launch
           "snapshot": {"exposed_viewers": 1234567,
                        "exposed_delta_pct": 0.51,
                        "response_rate_pct": 4.32,
                        "response_delta_pct": 0.14,
                        "response_metric_label": "Info-seek rate",
                        "sample_size": 47},
-          "bullets":       [str, ...],
+          "bullets":       [str, ...],   # each is "Label: body copy"
           "top_assets":    [{...}, ...],
           "top_audiences": [{...}, ...],
         }
@@ -405,6 +571,11 @@ def build_weekly_pdf(payload: dict) -> bytes:
 def _extract(payload: dict) -> dict:
     title = payload.get("title") or {}
     snapshot = payload.get("snapshot") or {}
+    # ``subtitle`` (single-line "Sep 22, 2026 · T+221 days") and
+    # ``wow_chip`` are new payload keys sent by the frontend so the
+    # PDF hero mirrors the on-screen Weekly Summary card exactly. Both
+    # are optional: a missing subtitle falls back to a computed week
+    # range + phase line, and a missing wow_chip collapses the pill.
     return {
         "display_name":   _sanitize(title.get("display_name") or "Untitled"),
         "distributor":    _sanitize(title.get("distributor") or ""),
@@ -413,6 +584,8 @@ def _extract(payload: dict) -> dict:
         "week_end":       payload.get("week_end") or payload.get("as_of") or "",
         "days_to_open":   payload.get("days_to_open"),
         "phase_label":    _sanitize(payload.get("phase_label") or ""),
+        "subtitle":       _sanitize(payload.get("subtitle") or ""),
+        "wow_chip":       payload.get("wow_chip") or {},
         "snapshot":       snapshot,
         "bullets":        [_sanitize(b) for b in (payload.get("bullets") or []) if b],
         "top_assets":     payload.get("top_assets") or [],
@@ -467,46 +640,70 @@ def _build_dark_pdf(payload: dict) -> bytes:
     # page laid out identically regardless of hero shape (a 2:3
     # poster would otherwise push the audience table past the
     # footer).
+    # Header zone mirrors the dashboard's ``.iiq-hero-card`` header:
+    # small Signal Green eyebrow, big title, one Dusk sub-meta line
+    # ("Sep 22, 2026 · T+221 days"). No distributor line, no separate
+    # phase line, no week-range block. The right column carries the
+    # hero image tile plus the WoW chip stacked underneath it, exactly
+    # like the on-screen chip position.
     top = PAGE_H - MARGIN
     right_x = PAGE_W - MARGIN
-    HEADER_ZONE_H = 0.95 * inch
+    HEADER_ZONE_H = 0.92 * inch
 
     hero_w, hero_h = _draw_hero_tile(
         c, d["hero_bytes"],
         right_x=right_x, top_y=top - 0.02 * inch,
-        max_w=1.15 * inch, max_h=0.85 * inch,
+        max_w=1.05 * inch, max_h=0.68 * inch,
         border_color=SLATE_BORDER,
     )
     text_right_x = (right_x - hero_w - 0.20 * inch) if hero_w > 0 else right_x
 
-    # Eyebrow: dot + tracked caps
+    # Eyebrow: dot + "WEEKLY SUMMARY" (dashboard-exact, no product prefix)
     c.setFillColor(SIGNAL_GREEN)
     c.circle(MARGIN + 0.06 * inch, top - 0.05 * inch, 0.055 * inch,
              stroke=0, fill=1)
-    c.setFillColor(DARK_TEXT_BODY)
+    c.setFillColor(SIGNAL_GREEN)
     c.setFont(_font(ff, "-Bold"), 8.5)
     c.drawString(MARGIN + 0.20 * inch, top - 0.09 * inch,
-                 "ATTRIBUTION IQ  \u00b7  WEEKLY SUMMARY")
+                 "WEEKLY SUMMARY")
 
     # Title
     c.setFillColor(DARK_TEXT_PRIMARY)
     c.setFont(_font(ff, "-Bold"), 26)
-    c.drawString(MARGIN, top - 0.55 * inch, d["display_name"])
+    c.drawString(MARGIN, top - 0.50 * inch, d["display_name"])
 
-    # Right-side meta (right-aligned to text_right_x)
-    c.setFillColor(DUSK)
-    c.setFont(_font(ff), 9)
-    c.drawRightString(text_right_x, top - 0.05 * inch,
-                      d["distributor"] or "Client")
-    c.setFillColor(DARK_TEXT_PRIMARY)
-    c.setFont(_font(ff, "-Medium"), 11)
-    c.drawRightString(text_right_x, top - 0.28 * inch,
-                      _week_line(d["week_start"], d["week_end"]))
-    sub = _phase_sub_line(d["phase_label"], d["days_to_open"])
-    if sub:
+    # Single-line sub-meta under the title. Prefer the frontend's
+    # pre-formatted ``subtitle`` ("Sep 22, 2026 · T+221 days") because
+    # it uses the same _iiqFmtAsOfDate / _iiqTMinusLabel helpers as
+    # the on-screen ``.iiq-hero-meta`` string, so the two are
+    # byte-identical. Fall back to computed pieces if the frontend
+    # is on an older payload version.
+    sub_line = d["subtitle"]
+    if not sub_line:
+        parts: list[str] = []
+        pretty = _fmt_iso_date(d["as_of"]) if d["as_of"] else ""
+        if pretty:
+            parts.append(pretty)
+        if isinstance(d["days_to_open"], (int, float)):
+            n = int(d["days_to_open"])
+            if n == 0:
+                parts.append("opening day")
+            elif n > 0:
+                parts.append(f"T-{n} days")
+            else:
+                parts.append(f"T+{abs(n)} days")
+        sub_line = "  \u00b7  ".join(parts)
+    if sub_line:
         c.setFillColor(DUSK)
-        c.setFont(_font(ff), 9)
-        c.drawRightString(text_right_x, top - 0.48 * inch, sub)
+        c.setFont(_font(ff), 9.5)
+        c.drawString(MARGIN, top - 0.72 * inch, sub_line)
+
+    # WoW chip: dashboard-exact rounded pill under the hero image,
+    # right-aligned to the page. If the hero is missing, the chip
+    # sits at the same top-right anchor and the header text takes
+    # back the width naturally.
+    chip_y_top = top - hero_h - 0.10 * inch if hero_h > 0 else top - 0.06 * inch
+    _draw_wow_chip(c, d["wow_chip"], right_x, chip_y_top, ff, "dark")
 
     cursor = top - HEADER_ZONE_H - 0.15 * inch
 
@@ -543,63 +740,92 @@ def _build_dark_pdf(payload: dict) -> bytes:
 
     cursor -= stat_h + 0.20 * inch
 
-    # -- Bullets card --------------------------------------------------
+    # -- Bullets card (dashboard's ".iiq-hero-card") -------------------
+    # This card gets the 3px Signal Green left-stripe treatment because
+    # it's the direct PDF analog of the on-screen hero card that holds
+    # the eyebrow + title + WoW chip + "What changed this week" + the
+    # four bullets. Each bullet mirrors the on-screen shape: small
+    # Signal Olive dot + bold Off-White label + Body-grey body copy,
+    # with the "Where signals are soft" bullet's label sitting in Dusk
+    # so a soft finding never masquerades as an accent moment.
     if d["bullets"]:
         rows = d["bullets"][:4]
-        b_title_h = 0.34 * inch
-        b_row_h   = 0.44 * inch
+        b_title_h = 0.30 * inch
+        b_row_h   = 0.46 * inch  # room for a two-line wrap on the body
         b_card_h  = b_title_h + b_row_h * len(rows) + 0.10 * inch
-        _dashboard_card(c, MARGIN, cursor - b_card_h, CONTENT_W, b_card_h)
+        card_x = MARGIN
+        card_y = cursor - b_card_h
+        _dashboard_card(c, card_x, card_y, CONTENT_W, b_card_h)
+        # Signal Green left stripe (dashboard-exact 3pt, rounded ends
+        # to match the card's 0.14in corner radius).
         c.setFillColor(SIGNAL_GREEN)
+        stripe_w = 3.0 / 72.0 * inch  # 3pt
+        stripe_r = 0.05 * inch
+        c.roundRect(card_x, card_y, stripe_w, b_card_h, stripe_r,
+                    stroke=0, fill=1)
+        # Intro: "WHAT CHANGED THIS WEEK." tracked caps, muted body
+        # color (matches the on-screen .iiq-hero-intro tone; the label
+        # was previously "THIS WEEK." which was too terse to signal
+        # what the reader is about to see.)
+        c.setFillColor(DARK_TEXT_BODY)
         c.setFont(_font(ff, "-Bold"), 8.5)
-        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch, "THIS WEEK.")
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.20 * inch,
+                     "WHAT CHANGED THIS WEEK.")
         y = cursor - 0.44 * inch
         for b in rows:
-            c.setFillColor(SIGNAL_GREEN)
-            c.circle(MARGIN + 0.28 * inch, y + 0.04 * inch, 0.045 * inch,
+            label, body = _split_label_body(b)
+            is_soft = label.lower().startswith("where signals are soft")
+            # Olive dot before each bullet, per dashboard convention
+            # (Signal Olive is the safe stand-in for Signal Green on
+            # anything smaller than ~4pt on a dark ground).
+            c.setFillColor(SIGNAL_OLIVE if not is_soft else DUSK)
+            c.circle(MARGIN + 0.28 * inch, y + 0.04 * inch, 0.040 * inch,
                      stroke=0, fill=1)
-            end_y = _draw_wrapped(
-                c, b, x=MARGIN + 0.44 * inch, y=y,
+            lbl_color = DUSK if is_soft else DARK_TEXT_PRIMARY
+            end_y = _draw_label_body_wrapped(
+                c, label, body,
+                x=MARGIN + 0.44 * inch, y=y,
                 max_width=CONTENT_W - 0.60 * inch,
-                font=_font(ff), size=10.0, color=DARK_TEXT_PRIMARY,
-                leading=13.5,
+                font_family=ff, size=9.5,
+                label_color=lbl_color, body_color=DARK_TEXT_BODY,
+                leading=12.5,
             )
             y = end_y - 0.15 * inch
-        cursor -= b_card_h + 0.20 * inch
+        cursor -= b_card_h + 0.18 * inch
 
     # -- Asset table ---------------------------------------------------
     if d["top_assets"]:
         rows_a = min(len(d["top_assets"]), 5)
-        row_h  = 0.32 * inch
-        head_h = 0.34 * inch
-        title_h = 0.32 * inch
-        a_card_h = title_h + head_h + row_h * rows_a + 0.12 * inch
+        row_h  = 0.28 * inch
+        head_h = 0.30 * inch
+        title_h = 0.30 * inch
+        a_card_h = title_h + head_h + row_h * rows_a + 0.10 * inch
         _dashboard_card(c, MARGIN, cursor - a_card_h, CONTENT_W, a_card_h)
         c.setFillColor(DARK_TEXT_PRIMARY)
         c.setFont(_font(ff, "-Bold"), 12)
-        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch,
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.20 * inch,
                      "Strongest asset signals.")
         cursor -= title_h
         _asset_table_dark(c, ff, cursor, d["top_assets"][:rows_a],
                           row_h, head_h)
-        cursor -= head_h + row_h * rows_a + 0.32 * inch
+        cursor -= head_h + row_h * rows_a + 0.22 * inch
 
     # -- Audience table ------------------------------------------------
     if d["top_audiences"]:
         rows_u = min(len(d["top_audiences"]), 5)
-        row_h  = 0.32 * inch
-        head_h = 0.34 * inch
-        title_h = 0.32 * inch
-        u_card_h = title_h + head_h + row_h * rows_u + 0.12 * inch
+        row_h  = 0.28 * inch
+        head_h = 0.30 * inch
+        title_h = 0.30 * inch
+        u_card_h = title_h + head_h + row_h * rows_u + 0.10 * inch
         _dashboard_card(c, MARGIN, cursor - u_card_h, CONTENT_W, u_card_h)
         c.setFillColor(DARK_TEXT_PRIMARY)
         c.setFont(_font(ff, "-Bold"), 12)
-        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch,
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.20 * inch,
                      "Audiences responding, and audiences responding but under-served.")
         cursor -= title_h
         _aud_table_dark(c, ff, cursor, d["top_audiences"][:rows_u],
                         row_h, head_h)
-        cursor -= head_h + row_h * rows_u + 0.30 * inch
+        cursor -= head_h + row_h * rows_u + 0.22 * inch
 
     # -- Footer --------------------------------------------------------
     _footer_dark(c, ff, d["week_end"])
@@ -811,44 +1037,61 @@ def _build_light_pdf(payload: dict) -> bytes:
     top     = PAGE_H - 0.32 * inch
     right_x = PAGE_W - MARGIN
 
-    # Hero tile top-right, fits inside the header band (max 0.95" tall).
-    # Movie posters (portrait) end up ~0.63" wide; YT thumbs (16:9) fill.
+    # Hero tile top-right, fits inside the header band (max 0.90" tall
+    # to leave room for the WoW chip below it). Movie posters (portrait)
+    # end up ~0.60" wide; YT thumbs (16:9) fill.
     hero_w, hero_h = _draw_hero_tile(
         c, d["hero_bytes"],
         right_x=right_x, top_y=top - 0.02 * inch,
-        max_w=1.20 * inch, max_h=0.95 * inch,
+        max_w=1.20 * inch, max_h=0.72 * inch,
         border_color=SLATE_BORDER,
     )
     text_right_x = (right_x - hero_w - 0.20 * inch) if hero_w > 0 else right_x
 
-    # Eyebrow on the band (Signal Green on Graphite, allowed on dark)
+    # Eyebrow on the band (Signal Green on Graphite, allowed on dark).
+    # Dashboard label is "WEEKLY SUMMARY" (no product prefix) so we
+    # match exactly.
     c.setFillColor(SIGNAL_GREEN)
     c.circle(MARGIN + 0.06 * inch, top - 0.05 * inch,
              0.055 * inch, stroke=0, fill=1)
-    c.setFillColor(DARK_TEXT_BODY)
+    c.setFillColor(SIGNAL_GREEN)
     c.setFont(_font(ff, "-Bold"), 8.5)
     c.drawString(MARGIN + 0.20 * inch, top - 0.09 * inch,
-                 "ATTRIBUTION IQ  \u00b7  WEEKLY SUMMARY")
+                 "WEEKLY SUMMARY")
 
     # Title on the band
     c.setFillColor(OFF_WHITE)
     c.setFont(_font(ff, "-Bold"), 22)
-    c.drawString(MARGIN, top - 0.45 * inch, d["display_name"])
+    c.drawString(MARGIN, top - 0.42 * inch, d["display_name"])
 
-    # Right-side meta (right-aligned to hero-left)
-    c.setFillColor(DUSK)
-    c.setFont(_font(ff), 9)
-    c.drawRightString(text_right_x, top - 0.05 * inch,
-                      d["distributor"] or "Client")
-    c.setFillColor(OFF_WHITE)
-    c.setFont(_font(ff, "-Medium"), 11)
-    c.drawRightString(text_right_x, top - 0.25 * inch,
-                      _week_line(d["week_start"], d["week_end"]))
-    sub = _phase_sub_line(d["phase_label"], d["days_to_open"])
-    if sub:
+    # Single-line sub-meta ("Sep 22, 2026 · T+221 days") under the
+    # title. Same dashboard-mirror rule as the dark variant.
+    sub_line = d["subtitle"]
+    if not sub_line:
+        parts: list[str] = []
+        pretty = _fmt_iso_date(d["as_of"]) if d["as_of"] else ""
+        if pretty:
+            parts.append(pretty)
+        if isinstance(d["days_to_open"], (int, float)):
+            n = int(d["days_to_open"])
+            if n == 0:
+                parts.append("opening day")
+            elif n > 0:
+                parts.append(f"T-{n} days")
+            else:
+                parts.append(f"T+{abs(n)} days")
+        sub_line = "  \u00b7  ".join(parts)
+    if sub_line:
         c.setFillColor(DUSK)
-        c.setFont(_font(ff), 9)
-        c.drawRightString(text_right_x, top - 0.45 * inch, sub)
+        c.setFont(_font(ff), 9.5)
+        c.drawString(MARGIN, top - 0.62 * inch, sub_line)
+
+    # WoW chip: rounded pill anchored under the hero image,
+    # right-aligned. Sits inside the Graphite header band so we use
+    # the "dark" tone palette here (light-page portrait document,
+    # but the header band is dark ground per documents.md).
+    chip_y_top = top - hero_h - 0.10 * inch if hero_h > 0 else top - 0.06 * inch
+    _draw_wow_chip(c, d["wow_chip"], right_x, chip_y_top, ff, "dark")
 
     cursor = PAGE_H - HEADER_H - 0.35 * inch
 
@@ -890,24 +1133,36 @@ def _build_light_pdf(payload: dict) -> bytes:
     cursor = stat_bottom - 0.28 * inch
 
     # -- Bullets -------------------------------------------------------
+    # Signal Olive intro + olive dot per bullet, mirroring the
+    # dashboard's light-mode ".iiq-hero-bullets" scoped colors
+    # (Signal Green -> Signal Olive twin per the brand twin rule).
+    # Each bullet is a "Label: body" pair with the label rendered
+    # bold Signal Olive and the body in LIGHT_TEXT_BODY. The soft-
+    # signal bullet uses Amethyst for the label (Orchid twin).
     if d["bullets"]:
         c.setFillColor(SIGNAL_OLIVE)
         c.setFont(_font(ff, "-Bold"), 8.5)
-        c.drawString(MARGIN, cursor, "THIS WEEK.")
-        cursor -= 0.14 * inch
+        c.drawString(MARGIN, cursor, "WHAT CHANGED THIS WEEK.")
+        cursor -= 0.16 * inch
         for b in d["bullets"][:5]:
             dy = cursor
-            c.setFillColor(SIGNAL_OLIVE)
+            label, body = _split_label_body(b)
+            is_soft = label.lower().startswith("where signals are soft")
+            dot_color = AMETHYST if is_soft else SIGNAL_OLIVE
+            lbl_color = AMETHYST if is_soft else SIGNAL_OLIVE
+            c.setFillColor(dot_color)
             c.circle(MARGIN + 0.05 * inch, dy + 0.04 * inch,
-                     0.045 * inch, stroke=0, fill=1)
-            end_y = _draw_wrapped(
-                c, b, x=MARGIN + 0.20 * inch, y=dy,
+                     0.040 * inch, stroke=0, fill=1)
+            end_y = _draw_label_body_wrapped(
+                c, label, body,
+                x=MARGIN + 0.20 * inch, y=dy,
                 max_width=CONTENT_W - 0.20 * inch,
-                font=_font(ff), size=10.5, color=LIGHT_TEXT_PRIMARY,
-                leading=13.5,
+                font_family=ff, size=10.5,
+                label_color=lbl_color, body_color=LIGHT_TEXT_BODY,
+                leading=14.0,
             )
-            cursor = end_y - 0.12 * inch
-        cursor -= 0.12 * inch
+            cursor = end_y - 0.16 * inch
+        cursor -= 0.10 * inch
 
     # -- Asset card ----------------------------------------------------
     if d["top_assets"]:
