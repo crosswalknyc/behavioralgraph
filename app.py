@@ -35,6 +35,12 @@ except Exception as _mta_iq_err:
     print(f"⚠️ Multi-Touch Attribution module unavailable at import time: {_mta_iq_err}")
 
 try:
+    import attribution_weekly_pdf as _attribution_weekly_pdf  # type: ignore
+except Exception as _weekly_pdf_err:
+    _attribution_weekly_pdf = None
+    print(f"⚠️ Attribution IQ weekly PDF module unavailable at import time: {_weekly_pdf_err}")
+
+try:
     import trends_iq as _trends_iq  # type: ignore
 except Exception as _trends_iq_err:
     _trends_iq = None
@@ -18170,6 +18176,68 @@ def api_intent_mta(title_slug):
     try:
         return jsonify(_mta_iq.compute_mta_coefficients(
             title_slug, as_of=request.args.get('as_of')))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/weekly-pdf', methods=['POST'])
+@requires_auth
+def api_intent_weekly_pdf(title_slug):
+    """Render the on-screen Weekly Summary as a 1-page PDF.
+
+    The frontend Weekly Summary card collects what it just rendered
+    (snapshot stats, WoW deltas, this-week bullets, top 5 assets, top
+    5 audiences) and POSTs the structured payload here. This route
+    formats it into a Crosswalk-branded, US-Letter one-pager (see
+    ``attribution_weekly_pdf.build_weekly_pdf``) and streams the PDF
+    back with a downloadable filename.
+
+    Why we accept the payload from the client instead of recomputing:
+    the frontend's ``_iiqRenderWeeklySummary`` + ``_iiqPitFactor`` +
+    ``iiqAssetFunnelProjection`` do a lot of point-in-time synthesis
+    that shifts with the as-of picker. Serializing the visible read
+    guarantees the PDF matches on-screen numbers exactly. No parity
+    bugs, no drift, no duplicated synthesis logic.
+
+    The endpoint still cross-checks the title slug against the
+    campaign registry so a random ID can't produce a Crosswalk-
+    branded PDF. It also patches in the display_name / distributor /
+    opening_date from the server-side overview so those cannot be
+    spoofed by the client.
+    """
+    ok, err = _require_intent_iq(title_slug)
+    if not ok:
+        return err
+    if _attribution_weekly_pdf is None:
+        return jsonify({'success': False,
+                        'error': 'Weekly summary PDF module not loaded'}), 500
+    try:
+        payload = request.get_json(silent=True) or {}
+        # Server-side overview overrides client-supplied title metadata
+        # to prevent brand-spoofing via a crafted POST body.
+        try:
+            ov = _intent_iq.get_overview(title_slug)
+        except Exception:
+            ov = None
+        if ov and ov.get('success'):
+            payload.setdefault('title', {})
+            payload['title'].update({
+                'display_name': ov.get('display_name') or payload['title'].get('display_name'),
+                'distributor':  ov.get('distributor')  or payload['title'].get('distributor'),
+                'opening_date': ov.get('opening_date') or payload['title'].get('opening_date'),
+            })
+        pdf_bytes = _attribution_weekly_pdf.build_weekly_pdf(payload)
+        # Filename: `<Slug>_Weekly_Summary_<week_end>.pdf`
+        wk = (payload.get('week_end') or payload.get('as_of') or '').replace('-', '_')
+        # Slug cleanup so the filename is safe in Windows / Slack / Gmail
+        safe_slug = ''.join(ch for ch in (title_slug or 'campaign')
+                            if ch.isalnum() or ch in ('-', '_'))
+        fname = f"{safe_slug}_Weekly_Summary_{wk}.pdf" if wk else f"{safe_slug}_Weekly_Summary.pdf"
+        resp = Response(pdf_bytes, mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
