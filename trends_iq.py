@@ -395,6 +395,23 @@ STREAMING_PLATFORMS = [
     # of it that watches inside Prime Video, so the two are never
     # added together.
     ('starz_amazon', 'Starz on Amazon', False),
+    # 2026-09-22 (Jenna, the carriage model): Paramount+ as it is
+    # carried on Amazon Prime Video Channels. Same catalog as the
+    # Paramount+ panel, because it is the same entitlement; what
+    # differs is the audience, which is the Prime-Video-carried share
+    # of it. The Paramount+ panel stays the whole service across
+    # every distribution path and this one is the slice inside Prime
+    # Video, so the two are never added together.
+    #
+    # Paramount+ is the second service to earn a breakout and the
+    # bar it had to clear was a PUBLISHED per-service split, which
+    # Antenna reports at 30% of its subscriptions through Amazon
+    # against 39% direct. Max, Peacock, AMC+, MGM+ and BritBox are
+    # all carried on Amazon too and deliberately have no breakout,
+    # because no per-service split is published for them. Evidence
+    # for every service is in
+    # `scripts/trends_scrapers/carriage_mix.py`.
+    ('paramountplus_amazon', 'Paramount+ on Amazon', False),
 ]
 
 # 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
@@ -4073,6 +4090,24 @@ _AUDIENCE_NOUN_BY_KIND_PLATFORM = {
     ('film', 'starz_amazon'):      'US views on Starz through Prime Video Channels',
     ('tv', 'starz_amazon'):        'US views on Starz through Prime Video Channels',
     ('title', 'starz_amazon'):     'US views on Starz through Prime Video Channels',
+    # 2026-09-22: the same pair for Paramount+, under the same rule.
+    # The main rail is every path into the service and the Amazon
+    # rail is the slice of it watched inside Prime Video.
+    ('film', 'paramountplus'):     'US views on Paramount+, every distribution path',
+    ('tv', 'paramountplus'):       'US views on Paramount+, every distribution path',
+    ('title', 'paramountplus'):    'US views on Paramount+, every distribution path',
+    ('film', 'paramountplus_amazon'):  'US views on Paramount+ through Prime Video Channels',
+    ('tv', 'paramountplus_amazon'):    'US views on Paramount+ through Prime Video Channels',
+    ('title', 'paramountplus_amazon'): 'US views on Paramount+ through Prime Video Channels',
+    # Prime Video's own rail is the storefront's OWN licensed catalog.
+    # The hundred-plus subscriptions sold inside the Prime Video app
+    # belong to the service that was subscribed to, and saying so on
+    # the label is what stops a reader treating this rail as all
+    # viewing that happens in that app. See
+    # `scripts/trends_scrapers/carriage_mix.py`.
+    ('film', 'primevideo'):        'US views in the Prime Video catalog',
+    ('tv', 'primevideo'):          'US views in the Prime Video catalog',
+    ('title', 'primevideo'):       'US views in the Prime Video catalog',
     # MovieSphere+ is sold through Amazon and is not sold as an app of
     # its own, so this panel already is the whole service AND the
     # Amazon-carried one. Saying so inline is what stops a reader
@@ -4323,6 +4358,10 @@ _STREAMING_PANEL_TO_PLATFORM = {
     # `_rederive_derived_rails`.
     'starz_amazon': 'starz',
     'paramountplus': 'paramountplus',
+    # Same arrangement as starz_amazon: the panel resolves through
+    # the Paramount+ key and is computed down to the
+    # Prime-Video-carried share of it in `_rederive_derived_rails`.
+    'paramountplus_amazon': 'paramountplus',
     'peacock':       'peacock',
     'amcplus':       'amcplus',
     'moviesphereplus': 'moviesphereplus',
@@ -5035,9 +5074,18 @@ def _stamp_derived_rail_block(row: dict, child_slug: str,
         parent_prev = int(float(parent_blk.get('prev_estimate') or 0))
     except (TypeError, ValueError):
         parent_prev = 0
+    # The share moves inside its band from one day to the next, so
+    # each end of the pair is derived on its OWN day. Deriving both on
+    # today's share would make the chip describe the parent's movement
+    # alone; deriving each on its own day is what makes the chip
+    # describe this rail.
+    day_iso = str(parent_blk.get('as_of_date') or '')
+    prev_day_iso = str(parent_blk.get('prev_date') or '')
+
     prev_child = None
     if parent_prev > 0:
-        prev_child = dr.derive_value(parent_prev, child_slug, title, cat)[0]
+        prev_child = dr.derive_value(parent_prev, child_slug, title, cat,
+                                     day_iso=prev_day_iso)[0]
         prev_child = prev_child or None
 
     lead = 0
@@ -5046,7 +5094,7 @@ def _stamp_derived_rail_block(row: dict, child_slug: str,
 
     value, _ceiling, disposition = dr.derive_value(
         parent_cur, child_slug, title, cat,
-        prev_child=prev_child, lead=lead)
+        prev_child=prev_child, lead=lead, day_iso=day_iso)
     if value <= 0:
         return 'no_parent'
 

@@ -52,7 +52,19 @@ _PRICES_PER_MTOK: dict[str, dict[str, float]] = {
     'claude-sonnet-4-5-20250929':   {'in': 3.00, 'out': 15.00},
     'claude-haiku-4-5':             {'in': 1.00, 'out': 5.00},
     'claude-haiku-4-5-20251001':    {'in': 1.00, 'out': 5.00},
+    # Opus, added 2026-09-22 when the held-title disambiguation pass
+    # started using it. Without an entry the fallback below charged
+    # Opus at the Sonnet rate, which UNDER-reports a run and lets it
+    # walk through its own cap.
+    'claude-opus-4-5':              {'in': 5.00, 'out': 25.00},
+    'claude-opus-4-5-20251101':     {'in': 5.00, 'out': 25.00},
 }
+
+# Any other Opus snapshot bills at the highest rate Opus has ever
+# carried. A newer Opus we have not priced must over-report rather
+# than under-report: the cap is a safety rail and a rail that
+# undercounts is not one.
+_OPUS_UNKNOWN_PRICE = {'in': 15.00, 'out': 75.00}
 
 # Web search: flat $10 per 1000 tool calls (Anthropic docs, native
 # web_search_20250305 tool). NOT discounted in batch mode.
@@ -73,6 +85,11 @@ def _price_for(model: str) -> dict[str, float]:
     for alias, price in _PRICES_PER_MTOK.items():
         if m.startswith(alias):
             return price
+    if m.startswith('claude-opus'):
+        logger.warning("SpendMonitor: unpriced Opus model %r; charging "
+                        "at the highest rate Opus has carried so the "
+                        "cap cannot be walked through.", m)
+        return dict(_OPUS_UNKNOWN_PRICE)
     logger.warning("SpendMonitor: unknown model %r; charging at "
                     "Sonnet 4.5 rate (safer).", m)
     return _PRICES_PER_MTOK['claude-sonnet-4-5']

@@ -96,12 +96,12 @@ Standalone:
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from typing import Any
 
 from ._base import run_scraper
+from .derived_rail_mirror import mirror
 from .derived_rails import band_for, rail_for, share_for
 
 logger = logging.getLogger(__name__)
@@ -130,86 +130,31 @@ _FILM_SHARE_BAND    = band_for(SLUG, 'Film')
 _TV_SHARE_BAND      = band_for(SLUG, 'TV')
 
 
-def amazon_share_for_title(title: str, category_display: str = '') -> float:
+def amazon_share_for_title(title: str, category_display: str = '',
+                           day_iso: str = '') -> float:
     """The share of this title's Starz audience that is carried
-    through Prime Video Channels.
+    through Prime Video Channels on `day_iso`.
 
-    Deterministic per title, so the same title reads the same share
-    every render and two titles never land on one share. A film draws
-    from the higher band and a series from the lower one; anything
-    unclassified draws from the span of both, which is the same thing
-    as not claiming to know which way it leans.
+    Deterministic per title and per day, so two titles never land on
+    one share and one title does not sit on a constant across days. A
+    film draws from the higher band and a series from the lower one;
+    anything unclassified draws from the span of both, which is the
+    same thing as not claiming to know which way it leans.
 
     Delegates to the shared registry so the Starz bands and any future
     service's bands are applied by one piece of arithmetic.
     """
-    return share_for(SLUG, title, category_display)
-
-
-def _load_starz_snapshot() -> dict:
-    """Read `latest/starz.json`. Empty dict on any failure."""
-    try:
-        import boto3
-        s3 = boto3.client('s3', region_name='us-east-2')
-        o = s3.get_object(Bucket='dashboard-inputs',
-                          Key=f'trends_iq_snapshots/latest/{SOURCE_SLUG}.json')
-        d = json.loads(o['Body'].read().decode('utf-8'))
-        return d if isinstance(d, dict) else {}
-    except Exception as e:
-        logger.warning("starz_amazon: could not read the %s snapshot: %s",
-                       SOURCE_SLUG, e)
-        return {}
-
-
-def _load_previous_snapshot() -> list[dict]:
-    try:
-        import boto3
-        s3 = boto3.client('s3', region_name='us-east-2')
-        o = s3.get_object(Bucket='dashboard-inputs',
-                          Key=f'trends_iq_snapshots/latest/{SLUG}.json')
-        d = json.loads(o['Body'].read().decode('utf-8'))
-        items = d.get('national') or []
-        return items if isinstance(items, list) else []
-    except Exception as e:
-        logger.info("starz_amazon: no previous snapshot: %s", e)
-        return []
+    return share_for(SLUG, title, category_display, day_iso)
 
 
 def fetch() -> dict[str, Any]:
-    src = _load_starz_snapshot()
-    items = src.get('national') or []
-    if not isinstance(items, list):
-        items = []
-
-    out: list[dict] = []
-    for it in items:
-        if not isinstance(it, dict) or not (it.get('title') or '').strip():
-            continue
-        row = dict(it)
-        row['rank'] = len(out) + 1
-        out.append(row)
-
-    if out:
-        payload: dict[str, Any] = {
-            'national':      out,
-            'mirrors':       SOURCE_SLUG,
-            'source_fetched_at': src.get('fetched_at'),
-        }
-        # A mirror of a stale catalog is itself stale, and the panel
-        # should say so the same way the Starz panel does.
-        if src.get('stale_from_previous'):
-            payload['stale_from_previous'] = True
-        logger.info("starz_amazon: mirrored %d titles from the %s catalog",
-                    len(out), SOURCE_SLUG)
-        return payload
-
-    prev = _load_previous_snapshot()
-    if prev:
-        logger.warning("starz_amazon: the %s catalog read empty; keeping "
-                       "the previous %d-title mirror", SOURCE_SLUG, len(prev))
-        return {'national': prev, 'stale_from_previous': True,
-                'mirrors': SOURCE_SLUG}
-    return {'national': []}
+    # Mirroring a parent catalog is now shared with every other
+    # derived rail (`derived_rail_mirror`), so there is one
+    # implementation of it rather than one per rail. Behaviour is
+    # unchanged: republish the parent's title list under this slug,
+    # keep the previous mirror and mark it stale if the parent reads
+    # empty. What stays here is the evidence in the docstring above.
+    return mirror(SLUG, SOURCE_SLUG)
 
 
 if __name__ == '__main__':

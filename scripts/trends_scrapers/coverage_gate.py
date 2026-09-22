@@ -448,12 +448,36 @@ def _collect_cap_target(se, stored_keys, cap_by_key: dict,
             'platforms':     set(),
             'rows':          [],
             'states':        set(),
+            'identity':      {},
         }
     tgt['platforms'].add(platform_key)
     tgt['rows'].append(path)
     tgt['states'].add(state)
     if rank < tgt['best_rank']:
         tgt['best_rank'] = rank
+
+    # What the rendered row knows about WHICH WORK this is on THIS
+    # service. The panels carry a release year, a film-or-series
+    # classification, the catalog's own path and a one-line synopsis,
+    # and none of it used to travel with the target, so a re-pricing
+    # pass saw nothing but a bare title string. That is why a Fargo
+    # or an Alone or a Naked Gun could not be resolved and was held.
+    # Collected for every target; only the disambiguation pass renders
+    # it into the prompt (`_cap_research_items(with_identity=True)`),
+    # so the nightly gate's prompts are byte-identical to before.
+    #
+    # Lowest rank wins per service, which is the row on the service's
+    # full list rather than a short filtered view of it.
+    ident = tgt['identity'].get(platform_key)
+    if ident is None or rank < ident.get('rank', 10 ** 9):
+        tgt['identity'][platform_key] = {
+            'service':  platform_key,
+            'rank':     rank,
+            'category': (it.get('category_display') or '').strip(),
+            'year':     it.get('year') or '',
+            'path':     (it.get('url') or '').strip(),
+            'synopsis': (it.get('description') or '').strip(),
+        }
 
 
 def _merge_stream_results(results: dict[str, dict],
@@ -491,22 +515,50 @@ def _merge_stream_results(results: dict[str, dict],
     return len(results)
 
 
-def _cap_research_items(se, cap_targets: list[dict]) -> list[dict]:
+def _cap_research_items(se, cap_targets: list[dict],
+                         with_identity: bool = False,
+                         force_tier: str = '',
+                         force_search: Optional[bool] = None) -> list[dict]:
     """Estimator items for the capped population, one per stored
     entry, naming every service that needs a reading of its own so the
-    research returns a block for each."""
+    research returns a block for each.
+
+    `with_identity` attaches the per-service WHICH WORK detail the
+    rendered rows carry (year, film or series, catalog path,
+    synopsis). Off by default so the nightly gate's prompts do not
+    move; the disambiguation pass turns it on, because a bare title
+    string is exactly what leaves an ambiguous title unresolvable.
+    `force_tier` and `force_search` ride onto the item for the same
+    pass, which wants the deeper model and a live search on rows the
+    rank rule would otherwise send to the light tier with no search.
+    """
     items = []
     for t in cap_targets:
         labels = [f'{_platform_chart_label(se, t["kind"], p)} '
                   f'#{t["best_rank"]}'
                   for p in sorted(t['platforms'])]
-        items.append({
+        item = {
             'kind':          t['kind'],
             'display_title': t['display_title'],
             'artist':        t['artist'],
             'best_rank':     t['best_rank'],
             'chart_labels':  labels,
-        })
+        }
+        if force_tier:
+            item['force_tier'] = force_tier
+        if force_search is not None:
+            item['force_search'] = bool(force_search)
+        if with_identity:
+            ident = t.get('identity') or {}
+            rows = []
+            for p in sorted(t['platforms']):
+                rec = dict(ident.get(p) or {'service': p})
+                rec['service'] = p
+                rec['service_label'] = _platform_chart_label(se, t['kind'], p)
+                rows.append(rec)
+            if rows:
+                item['service_identity'] = rows
+        items.append(item)
     return items
 
 

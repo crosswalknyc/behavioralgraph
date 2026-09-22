@@ -65310,9 +65310,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Peacock (2026-09-04) sit with the major general-entertainment
         // platforms, ahead of ESPN+ and the premium-niche tail.
         // starz_amazon sits directly after starz so the two Starz reads
-        // read together. Anything not listed here falls through in
-        // payload order, which is how both of these ended up after AMC+.
-        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz', 'starz_amazon', 'amcplus'];
+        // read together, and paramountplus_amazon sits directly after
+        // paramountplus for the same reason: one is the whole service
+        // across every distribution path, the other the slice of it
+        // carried through Prime Video Channels, and they only make
+        // sense read as a pair. Anything not listed here falls through
+        // in payload order, which is how both of these ended up after
+        // AMC+.
+        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'paramountplus_amazon', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz', 'starz_amazon', 'amcplus'];
 
         function renderTIQStreaming(streaming) {
             var allKeys = Object.keys(streaming || {});

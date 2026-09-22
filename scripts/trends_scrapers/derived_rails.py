@@ -6,11 +6,19 @@ just the amazon portion please. so it will likely be big part of the
 regular starz numbers but the numbers there can never be bigger than
 the starz since it is to be incluasive of that one"*
 
-Starz on Amazon is the first user of this. It is not the only intended
-one: the same question is open for Paramount+, Peacock and AMC+ sold
-through Prime Video Channels, so the mechanism is keyed on a PARENT
-RAIL and a registry entry rather than written as a Starz special case.
+Starz on Amazon was the first user of this, which is why the mechanism
+is keyed on a PARENT RAIL and a registry entry rather than written as
+a Starz special case. Paramount+ on Amazon joined it on 2026-09-22.
 Adding a service is one entry in `_RAILS` plus the panel wiring.
+
+WHICH SERVICES GET A RAIL IS A RESEARCH QUESTION, NOT A CODE ONE.
+`scripts/trends_scrapers/carriage_mix.py` holds the US distribution
+mix of every service on the Streaming tab, with the evidence behind
+each, and marks the ones whose Amazon split is published. Only those
+get an entry here. Several services are certainly sold through Prime
+Video Channels and still have no rail, because nobody publishes their
+split and a share we invented would not be the product. Read that
+file before adding anything to `_RAILS`.
 
 WHAT A DERIVED RAIL IS
 ----------------------
@@ -137,17 +145,102 @@ _RAILS: dict[str, DerivedRail] = {
         method=("the part of this title's Starz audience that watches "
                 'inside Prime Video'),
     ),
+    # 2026-09-22. The second rail to earn an entry, and the test it
+    # had to pass was the one stated under the registry: a published
+    # PER-SERVICE split, not a category average.
+    #
+    # Antenna, Q1 2025, reported service by service: Paramount+ takes
+    # 30% of its subscriptions through Amazon Prime Video and 39%
+    # direct, the balance across the app stores, the other channels
+    # storefronts and operator deals. Two corrections bring that
+    # subscription share down to an audience share. Antenna measures
+    # a base that excludes MVPD and telco distribution and some
+    # bundles, and Paramount+ carries a large bundled base outside
+    # that frame, chiefly Paramount+ Essential inside Walmart+, so
+    # widening the denominator to the whole US base lowers Amazon's
+    # share of it. Amazon-sold subscriptions also churn faster than
+    # direct ones, so a viewing share reads under a subscription
+    # share again. That puts the service-level read near 27%.
+    #
+    # The per-title spread is the same shape as the Starz one and for
+    # the same reason. The Paramount pay-one film window (Mission:
+    # Impossible, A Quiet Place, Sonic) lands in front of Prime Video
+    # subscribers who are already in that app, so the film library
+    # over-indexes to the Amazon-carried audience. What drives
+    # somebody to install the Paramount+ app itself is the flagship
+    # series and the live NFL and Star Trek windows, so series
+    # under-index.
+    #
+    # Evidence and the full working live in
+    # `scripts/trends_scrapers/carriage_mix.py`.
+    'paramountplus_amazon': DerivedRail(
+        child='paramountplus_amazon',
+        parent='paramountplus',
+        label='Paramount+ on Amazon',
+        anchor_share=0.27,
+        bands={
+            'film': (0.270, 0.318),
+            'tv':   (0.228, 0.268),
+            '':     (0.228, 0.318),
+        },
+        method=("the part of this title's Paramount+ audience that "
+                'watches inside Prime Video'),
+    ),
 }
+
+# How far a title's share may move from one day to the next, as a
+# fraction of the width of its band.
+#
+# Jenna 2026-09-22: a breakout rail shows "a share that varies day to
+# day rather than sitting on a constant". Before this the share was
+# drawn once per title and held for every render, so the child moved
+# only because the parent moved and the RELATIONSHIP between them was
+# a fixed number a reader could recover by dividing one rail by the
+# other. A distribution path does not behave that way: which surface
+# a title is watched on shifts with what else is in front of those
+# viewers that day.
+#
+# The draw stays deterministic per (title, day) and the title's own
+# base share stays the centre of it, so a title keeps its identity
+# across days and two titles still never land on one share. The
+# wobble is clamped inside the researched band, so no day can push a
+# title outside the evidence, and the band top is still what sets the
+# ceiling. At 0.30 the day's share sits within 15% of the band width
+# either side of the title's base, which on the Starz film band is
+# under two percent of the share in relative terms: visible movement,
+# well inside the research.
+_DAY_WOBBLE = 0.30
 
 # NOT EVERY AMAZON-CARRIED SERVICE BELONGS HERE, and the test is not
 # "is it sold on Amazon Channels".
 #
-# A rail earns an entry only when the parent rail is the WHOLE service
-# across every distribution path and the child is one path through it,
-# because that is the only arrangement in which the child can sit
-# strictly below the parent. Starz qualifies: it has its own app, its
-# own storefront sales, MVPD-sold OTT, and Prime Video Channels, so
-# the Amazon path is a real proper subset.
+# A rail earns an entry only when BOTH of these hold:
+#
+#   1. The parent rail is the WHOLE service across every distribution
+#      path and the child is one path through it, because that is the
+#      only arrangement in which the child can sit strictly below the
+#      parent. Starz qualifies: it has its own app, its own storefront
+#      sales, MVPD-sold OTT, and Prime Video Channels, so the Amazon
+#      path is a real proper subset. Paramount+ qualifies the same
+#      way.
+#   2. The split is PUBLISHED per service. A category average is not
+#      a per-service share and is never used as one.
+#
+# Five services carried on Amazon fail the second test today and
+# deliberately have no rail. The reasons are in
+# `carriage_mix._HELD_BREAKOUTS` in one line each and in the matching
+# `basis` in full: HBO Max (carried since December 2022, the only
+# published quantities are event deltas against an undisclosed US
+# base), Peacock (ad-free tier only, on the storefront since August
+# 2025), AMC+ (four storefronts plus a large operator path, and the
+# specialty category figure Antenna itself flags as overstated would
+# overstate Amazon badly), MGM+ (Amazon-owned and never broken out,
+# majority arrives through cable carriage), BritBox (no split
+# published since the 2024 change of ownership). Each of those is
+# still stated in its own main rail's scope line, so the whole-service
+# number is explicit about including the Amazon path. What is missing
+# is a defensible number for the slice, not the knowledge that the
+# slice exists.
 #
 # MovieSphere+ (added to the Streaming tab 2026-09-22) deliberately
 # has no entry. It is not sold as an app of its own; its US carriage
@@ -238,22 +331,66 @@ def _h01(text: str) -> float:
     return int(h[:12], 16) / float(16 ** 12)
 
 
-def share_for(child_slug: str, title: str,
-              category_display: str = '') -> float:
-    """The share of this title's parent-rail audience that this
-    distribution path carries.
+def base_share_for(child_slug: str, title: str,
+                   category_display: str = '') -> float:
+    """The title's own place inside its band, with no day in it.
 
-    Deterministic per title, so the same title reads the same share on
-    every render and on every window, and two titles never land on one
-    share. The seed is the child slug and the title, which is what the
-    Starz panel has used since it shipped, so moving the function here
-    does not move a single share.
+    Deterministic per title, so a title keeps one recognisable level
+    across days and two titles never land on one share. The seed is
+    the child slug and the title, which is what the Starz panel has
+    used since it shipped, so no share moved when this was split out
+    of `share_for`.
     """
     rail = rail_for(child_slug)
     if not rail:
         return 1.0
     lo, hi = band_for(child_slug, category_display)
     return lo + (hi - lo) * _h01(f'{rail.child}|{(title or "").strip().lower()}')
+
+
+def share_for(child_slug: str, title: str,
+              category_display: str = '',
+              day_iso: str = '') -> float:
+    """The share of this title's parent-rail audience that this
+    distribution path carries on `day_iso`.
+
+    With no day given this is exactly `base_share_for`, which is what
+    every caller outside the board gets and what the Starz panel has
+    always used. With a day it is that base moved by a deterministic
+    draw of at most `_DAY_WOBBLE` of the band width, clamped inside
+    the band, so the share itself moves from one day to the next
+    instead of the child being a fixed multiple of its parent.
+    """
+    rail = rail_for(child_slug)
+    if not rail:
+        return 1.0
+    lo, hi = band_for(child_slug, category_display)
+    base = base_share_for(child_slug, title, category_display)
+    day = (day_iso or '').strip()
+    if not day or hi <= lo:
+        return base
+    key = f'{rail.child}|{(title or "").strip().lower()}|{day}|carriage'
+    moved = base + (_h01(key) - 0.5) * (hi - lo) * _DAY_WOBBLE
+
+    # REFLECT off the band edges, never clamp to them. Clamping was
+    # the first version and it pins: two titles whose base share sits
+    # near the top of the band both get pushed onto exactly `hi` on a
+    # day the draw runs high, and identical values across titles are
+    # the one thing the pipeline rules forbid outright. Reflection
+    # keeps the whole draw inside the researched band and keeps
+    # distinct inputs distinct, because it is piecewise linear with
+    # slope one rather than flat.
+    #
+    # The wobble is at most 15% of the band width either side, so a
+    # single reflection always lands back inside; the loop is a
+    # formality that also covers a future wobble wide enough to need
+    # two.
+    while moved < lo or moved > hi:
+        if moved > hi:
+            moved = 2 * hi - moved
+        if moved < lo:
+            moved = 2 * lo - moved
+    return moved
 
 
 # ---------------------------------------------------------------------------
@@ -359,13 +496,16 @@ def _step_off(value: int, avoid: int, ceiling: int, lead: int,
 def derive_value(parent_value: int, child_slug: str, title: str,
                  category_display: str = '',
                  prev_child: Optional[int] = None,
-                 lead: int = 0) -> tuple:
+                 lead: int = 0,
+                 day_iso: str = '') -> tuple:
     """`(value, ceiling, disposition)` for one title on one derived rail.
 
     `prev_child` is the previous day's value on the SAME rail, already
     derived. `lead` is the sign of the parent's own day-over-day move,
     used only to pick a direction when a rounding collision has to be
-    stepped off.
+    stepped off. `day_iso` is the day the parent's number is about, and
+    moves the share inside its band so the relationship between child
+    and parent is not a constant a reader could divide out.
 
     Dispositions: `'derived'` (the map, untouched), `'stepped'` (moved
     off an adjacent-day collision), `'clamped'` (the map landed at or
@@ -384,7 +524,7 @@ def derive_value(parent_value: int, child_slug: str, title: str,
     if ceiling <= 0:
         return (0, 0, 'no_parent')
 
-    share = share_for(child_slug, title, category_display)
+    share = share_for(child_slug, title, category_display, day_iso)
     raw = int(round(pv * share))
     disposition = 'derived'
     if raw > ceiling:

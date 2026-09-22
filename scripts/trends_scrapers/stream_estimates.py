@@ -228,7 +228,17 @@ _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
 # burning the tokens AND the retry. 2000 lets those complete; steady-
 # state responses are unaffected (max_tokens is a cap, only generated
 # tokens bill).
-_WEBSEARCH_MAX_TOKENS = 2000
+#
+# 2026-09-22: made overridable rather than raised. A pass that asks a
+# harder question of a deeper model draws a longer answer, and the
+# failure is silent in the sense that matters: the request bills, the
+# JSON arrives half-written, and the item comes back as an error. The
+# disambiguation pass hit exactly that on three of sixteen items at
+# 2000, all of them stopping just past 2100 tokens. The nightly
+# default stays where it is, because raising it for tens of thousands
+# of steady-state items to suit sixteen would be the wrong trade.
+_WEBSEARCH_MAX_TOKENS = int(
+    os.environ.get('STREAM_ESTIMATES_MAX_TOKENS') or 2000)
 _WEBSEARCH_MAX_USES   = 1        # per-item web_search calls. Capped at 1
                                   # so a single search call is the max any
                                   # long-tail item ever spends (rule set
@@ -293,7 +303,19 @@ _USE_WEB_SEARCH_DEFAULT = False
 def _tier_for_item(item: dict) -> str:
     """Return 'hi' (Sonnet 4.5) or 'lo' (Haiku 4.5) based on the
     item's best_rank within its kind. Rank <= 20 in any kind is
-    considered a top-signal row and gets the Sonnet tier."""
+    considered a top-signal row and gets the Sonnet tier.
+
+    `force_tier` on the item overrides the rank rule. It exists for
+    the small hand-picked passes where rank is the wrong signal: a
+    rank-154 title that has been HELD because nobody could tell which
+    work it is needs the deeper model precisely because it is hard,
+    and its rank says the opposite. Setting `best_rank` low to get
+    the same effect would corrupt the chart context the prompt
+    reasons from, which is why this is a separate field.
+    """
+    forced = (item.get('force_tier') or '').strip().lower()
+    if forced in ('hi', 'lo'):
+        return forced
     try:
         rank = int(item.get('best_rank') or 0)
     except (TypeError, ValueError):
@@ -311,7 +333,17 @@ def _search_needed_for_item(item: dict) -> bool:
     search_term / trending_person / wiki_topic long-tail) actually
     benefit from a single fresh web_search call to find a defensible
     anchor. Rank <= 20 rows on any kind get 0 searches - their chart
-    labels ARE tier-1 signal per the prompt."""
+    labels ARE tier-1 signal per the prompt.
+
+    `force_search` on the item overrides the rule in both directions.
+    A disambiguation pass needs the search whatever the rank says,
+    because the question it is answering is which work this is and
+    whether the named service carries it, and neither is answerable
+    from a chart position.
+    """
+    forced = item.get('force_search')
+    if forced is not None:
+        return bool(forced)
     try:
         rank = int(item.get('best_rank') or 0)
     except (TypeError, ValueError):
@@ -2699,6 +2731,32 @@ _STREAMING_PLATFORMS_META = [
          'watches inside Prime Video rather than in the Starz app or '
          'another storefront.'
      )},
+    # 2026-09-22: Paramount+ as carried on Amazon Prime Video
+    # Channels, the second derived rail. Same arrangement as the
+    # Starz one directly above: `derived_from` keeps it out of the
+    # research prompt entirely and out of the stored blocks, because
+    # its number is the Paramount+ number apportioned to the
+    # Prime-Video-carried share in
+    # `trends_iq._rederive_derived_rails`. The ceiling below is
+    # Paramount+'s own 12.0M weekly top slot times the top of the
+    # researched per-title band (0.318), which is the most this rail
+    # can reach once its parent is inside its own cap;
+    # `derived_rails.registered_ceiling_check` reports if the two ever
+    # stop agreeing. Evidence lives in
+    # `scripts/trends_scrapers/carriage_mix.py`; the bands and the
+    # ceiling invariant live in
+    # `scripts/trends_scrapers/derived_rails.py`.
+    {'key': 'paramountplus_amazon',
+     'label': 'Paramount+ on Amazon',
+     'ceiling': 3_816_000,
+     'derived_from': 'paramountplus',
+     'anchors': (
+         'Paramount+ sold through Amazon Prime Video Channels. Same '
+         'catalog and same entitlement as Paramount+; what differs is '
+         'the audience, which is the share of Paramount+ US streaming '
+         'that watches inside Prime Video rather than in the '
+         'Paramount+ app or another storefront.'
+     )},
 ]
 
 
@@ -3195,13 +3253,44 @@ def _platforms_for_kind(kind: str) -> list[dict]:
     return []
 
 
+def _carriage_scope_line(platform_key: str) -> str:
+    """The distribution-scope sentence for one service, or ''.
+
+    Sourced from `carriage_mix`, which holds each service's US
+    distribution mix and the evidence behind it. Stating the mix in
+    the prompt is what makes it explicit rather than something the
+    model arrives at per title: the main rail is the whole service
+    across every path it is sold through, and Prime Video's rail is
+    Prime Video's own catalog and not the channels sold inside it.
+
+    Import failure degrades to no line, which leaves the prompt as
+    it read before the mix existed.
+    """
+    try:
+        from .carriage_mix import scope_line
+    except Exception:                                     # pragma: no cover
+        try:
+            from scripts.trends_scrapers.carriage_mix import \
+                scope_line                                # type: ignore
+        except Exception:
+            return ''
+    try:
+        return scope_line(platform_key) or ''
+    except Exception:
+        return ''
+
+
 def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str:
     """Format the TARGET_PLATFORMS section of the prompt. `focus_keys`
     is the subset of platform keys the item actually charts on (based
     on chart_labels); those platforms get marked *[on chart]* so
     Claude prioritises returning numbers for them. Non-chart
     platforms still appear so the aggregate makes sense - Claude
-    returns 0 for them if it can't defend a number."""
+    returns 0 for them if it can't defend a number.
+
+    A service that has a carriage-mix entry also carries its scope
+    sentence, so the model is told what the number covers before it
+    reasons about how big it is."""
     lines = []
     for p in platforms:
         # A derived rail is one distribution path of another rail on
@@ -3216,7 +3305,30 @@ def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str
             f'  - "{p["key"]}"{marker}: {p["label"]} - '
             f'ceiling {p["ceiling"]:,} US weekly. {p["anchors"]}'
         )
+        scope = _carriage_scope_line(p['key'])
+        if scope:
+            lines.append(f'      {scope}')
     return '\n'.join(lines)
+
+
+def _distribution_scope_preface(platforms: list[dict]) -> str:
+    """The block that sits above TARGET_PLATFORMS on the streaming
+    kinds. Empty for every other kind and whenever the mix cannot be
+    loaded."""
+    if not any(_carriage_scope_line(p.get('key') or '') for p in platforms):
+        return ''
+    try:
+        from .carriage_mix import prime_video_exclusion_note
+    except Exception:                                     # pragma: no cover
+        try:
+            from scripts.trends_scrapers.carriage_mix import \
+                prime_video_exclusion_note                # type: ignore
+        except Exception:
+            return ''
+    try:
+        return '\n' + prime_video_exclusion_note()
+    except Exception:
+        return ''
 
 
 # Map chart-label prefix -> platform key. Used to convert
@@ -3390,6 +3502,87 @@ _LIBBY_PROJECTION_NOTE = (
     "  Always state the projection method used in `note` for the "
     "libby_* platforms. Do NOT return the raw LA County number.\n"
 )
+
+
+def _work_identity_block(item: dict) -> str:
+    """The WHICH WORK block, rendered when the caller supplies one.
+
+    A title string on its own does not identify a work. Fargo is a
+    1996 film and an FX anthology series. Alone is a History
+    survival series and several unrelated films. The Curse is a 2022
+    British comedy caper and a 2023 Nathan Fielder series. The Naked
+    Gun is a 1988 original and a 2025 remake. A single cheap lookup
+    on the bare string cannot tell them apart, so the estimator was
+    right to hold those rows rather than guess.
+
+    What breaks the tie is already sitting in the rendered row and
+    was simply never passed along: the service the row is on, the
+    release year, whether the catalog calls it a film or a series,
+    the catalog's own path for it, and its one-line synopsis. Handed
+    those, the question stops being "how big is Fargo" and becomes
+    "how big is the 2014 FX series on Hulu", which is answerable.
+
+    The block also asks the model to say whether the named service
+    actually carries the work in the US. A service that does not
+    carry a title has no audience for it, and the honest answer
+    there is no number at all: the caller HOLDS the block and names
+    the row rather than writing something in.
+
+    `service_identity` is a list of dicts, one per service needing a
+    reading: `service`, `service_label`, `rank`, `category`, `year`,
+    `path`, `synopsis`.
+    """
+    rows = item.get('service_identity') or []
+    if not rows:
+        return ''
+    out = [
+        '\nWHICH WORK (read this before anything else):',
+        '  This title is ambiguous by name alone, which is why it has '
+        'no reading yet. Each line below is ONE service that needs a '
+        'number, with the identifying detail for the exact work that '
+        "sits in THAT service's catalog. Two lines with the same "
+        'title and different years are two DIFFERENT works and must '
+        'get different numbers.',
+    ]
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        bits = []
+        if r.get('year'):
+            bits.append(f'released {r["year"]}')
+        if r.get('category'):
+            bits.append(str(r['category']).lower())
+        if r.get('rank'):
+            bits.append(f'ranked #{r["rank"]} on that service today')
+        detail = ', '.join(bits)
+        label = r.get('service_label') or r.get('service') or ''
+        out.append(f'  - "{r.get("service")}" ({label}): {detail}')
+        if r.get('path'):
+            out.append(f'      catalog path: {r["path"]}')
+        if r.get('synopsis'):
+            out.append(f'      synopsis: {str(r["synopsis"])[:260]}')
+    out += [
+        '  RULES FOR THIS ITEM:',
+        '    1. Return a block for each service key listed above and '
+        'for no others. Reason about the work identified on that '
+        "line, in that service's own audience terms.",
+        '    2. Never carry one service\'s number across to another. '
+        'Two services carrying the same work still have two different '
+        'audiences, and two services carrying two different works of '
+        'the same name have nothing in common at all.',
+        '    3. CARRIAGE CHECK. If your research shows the named '
+        'service does NOT offer this work to US viewers, return 0 for '
+        'that service and say so plainly in `note`, beginning the note '
+        'with NOT CARRIED. Do not produce a number for a service that '
+        'does not have the title. Remember that a service can carry a '
+        'title through a licensing deal without having made it, so a '
+        'title being another network\'s original is not by itself '
+        'evidence that the named service lacks it.',
+        '    4. If after searching you still cannot tell which work is '
+        'meant, return 0 for that service and begin `note` with '
+        'CANNOT IDENTIFY. Holding is correct and a guess is not.',
+    ]
+    return '\n'.join(out) + '\n'
 
 
 def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
@@ -3943,7 +4136,8 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         target_section = ''
     else:
         target_section = (
-            '\nTARGET_PLATFORMS (return one entry in by_platform for '
+            _distribution_scope_preface(platforms)
+            + '\nTARGET_PLATFORMS (return one entry in by_platform for '
             'each; platforms marked *[on chart]* are where this item '
             'actually appears - those numbers matter MOST):\n'
             + _format_target_platforms(platforms, focus_keys)
@@ -3992,6 +4186,7 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         + f'{unit}\n'
         + target_section
         + libby_note
+        + _work_identity_block(item)
         + '\n' + item_line
         + f'\nCHART CONTEXT (rails observed for {target_date_iso}): '
         + f'{chart_str}\n'
@@ -4709,11 +4904,11 @@ def _research_all(items: list[dict],
     n_lo = len(items) - n_hi
     n_search = sum(1 for it in items if _search_needed_for_item(it))
     logger.info("stream_estimates: researching %d items for "
-                 "target_date=%s (hi=%d Sonnet, lo=%d Haiku, "
+                 "target_date=%s (hi=%d %s, lo=%d %s, "
                  "search_needed=%d @ max_uses=%d, concurrency=%d)",
                  len(items), target_date_iso or 'yesterday-UTC',
-                 n_hi, n_lo, n_search, _WEBSEARCH_MAX_USES,
-                 _CONCURRENCY)
+                 n_hi, _MODEL_HI, n_lo, _MODEL_LO, n_search,
+                 _WEBSEARCH_MAX_USES, _CONCURRENCY)
     with concurrent.futures.ThreadPoolExecutor(max_workers=_CONCURRENCY) as ex:
         futs = {
             ex.submit(_research_one, it, client, target_date_iso,
@@ -4944,11 +5139,17 @@ def _research_all_batch(items: list[dict],
         est_search = n_search * WEB_SEARCH_USD_PER_CALL
         est_total  = est_hi + est_lo + est_search
         remaining  = spend_monitor.remaining()
+        # Name the models rather than the tiers. The line used to read
+        # "Sonnet" and "Haiku" whatever the tier constants actually
+        # held, which is wrong the moment a pass pins a different
+        # model: the 2026-09-22 disambiguation pass runs the hi tier
+        # on Opus and the log claimed Sonnet while the estimate beside
+        # it was priced at the Opus rate.
         logger.info("stream_estimates BATCH preflight: items=%d "
-                     "(hi=%d Sonnet, lo=%d Haiku, search=%d) "
-                     "est=$%.4f (Sonnet=$%.4f + Haiku=$%.4f + "
+                     "(hi=%d %s, lo=%d %s, search=%d) "
+                     "est=$%.4f (hi=$%.4f + lo=$%.4f + "
                      "web_search=$%.4f) remaining=$%.4f",
-                     len(items), n_hi, n_lo, n_search,
+                     len(items), n_hi, _MODEL_HI, n_lo, _MODEL_LO, n_search,
                      est_total, est_hi, est_lo, est_search, remaining)
         if est_total >= remaining:
             logger.error("stream_estimates BATCH preflight OVER CAP: "
@@ -4998,9 +5199,9 @@ def _research_all_batch(items: list[dict],
     n_search = sum(1 for k, (_kk, it) in key_by_cid.items()
                     if _search_needed_for_item(it))
     logger.info("stream_estimates BATCH: submitting %d requests "
-                 "(hi=%d Sonnet, lo=%d Haiku, search=%d @ max_uses=%d) "
+                 "(hi=%d %s, lo=%d %s, search=%d @ max_uses=%d) "
                  "for target_date=%s",
-                 len(requests), n_hi, n_lo, n_search,
+                 len(requests), n_hi, _MODEL_HI, n_lo, _MODEL_LO, n_search,
                  _WEBSEARCH_MAX_USES, target_date_iso or 'yesterday-UTC')
     try:
         batch = client.messages.batches.create(requests=requests)

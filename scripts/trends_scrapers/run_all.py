@@ -162,6 +162,14 @@ SCRAPERS = [
     # S3. Sits after the other streaming scrapers and before the depth
     # extender, which serves both panels off the one Starz block.
     ('starz_amazon',  'scripts.trends_scrapers.starz_amazon',  'Starz on Amazon', 'streaming'),
+    # Paramount+ on Amazon (2026-09-22). Same arrangement as Starz on
+    # Amazon and the same shared mirror: Paramount+ sold through
+    # Prime Video Channels is the same entitlement and the same title
+    # list, so this republishes `latest/paramountplus.json` under its
+    # own slug. Must run AFTER `paramountplus` so it mirrors today's
+    # catalog rather than yesterday's.
+    ('paramountplus_amazon', 'scripts.trends_scrapers.paramountplus_amazon',
+     'Paramount+ on Amazon', 'streaming'),
     # Streaming depth extender (2026-09-09, Jenna: every list carries
     # 100+ items where the source has them). JustWatch top-100 films +
     # top-100 shows per platform for the residential-scraped streamers
