@@ -1,42 +1,45 @@
 """One-page Attribution IQ weekly summary PDF.
 
-Client (David / Sony Pictures Animation) asked for a concise, calibrated
-one-page report he could forward. This is that report.
+Client (David / Sony Pictures Animation) asked for a concise,
+calibrated one-page report he could forward. This is that report.
 
-The PDF is intentionally a SNAPSHOT of what the reader is looking at
-on-screen. The frontend collects the current Weekly Summary card,
-Asset-Ranked Table (top 5), and Audience Response Table (top 5) and
-POSTs the structured payload to `/api/intent/<slug>/weekly-pdf`; this
+The PDF is a SNAPSHOT of what the reader is looking at on-screen.
+The frontend collects the current Weekly Summary card, Asset-Ranked
+Table (top 5), and Audience Response Table (top 5) and POSTs the
+structured payload to ``/api/intent/<slug>/weekly-pdf``; this
 module renders it. Zero risk of the PDF drifting from the on-screen
 read because there is no separate server-side synthesis.
 
-Design constraints, from `.cursor/skills/crosswalk-brand-standards/`:
+Theme dispatch
+--------------
+The PDF adapts to whatever theme the dashboard is in when the user
+downloads it, so it reads as a continuation of the screen they were
+just staring at:
 
-  * US Letter, portrait, 8.5 x 11.
-  * Off-White ground `#E9E8E1`; one Graphite Teal `#0C1618` header
-    band; one Signal Olive `#5E7E12` accent (Signal Green would blow
-    out on Off-White; use the twin).
-  * Type is Inter 18pt in six weights, registered from
-    `.cursor/skills/crosswalk-brand-standards/assets/fonts/`. If the
-    fonts are not on disk (dev laptop without the skill checkout,
-    Render worker where the skill path is missing) the module falls
-    back to Helvetica quietly rather than raising.
-  * Ten-second scan rule: headline at the top, three figures in a
-    stat row, one dark block that anchors the eye. Tables are
-    rounded-corner cards; no accent stripes; no rules under
-    headings.
-  * Every count ends in 1-9 (no `no-round-numbers-in-deliverables`
-    tell). Percentages read to one decimal.
-  * No em dashes or en dashes anywhere.
-  * Presented as owned first-party data. Never says synth, modeled,
-    estimated, pipeline, or names the model.
-  * Confidence calibrated: Tier 1 counts state flat; Tier 2 directional
-    bullets already arrive from the frontend in
-    "leans / skews / reads as" language and are preserved verbatim.
+  * ``theme = 'dark'`` (default; matches the dashboard's default
+    Graphite Teal ground). Renders as a full-dark page with Slate
+    Teal cards, Signal Green accents, Off-White text. Dashboard
+    mirror.
+  * ``theme = 'light'`` (user is in the dashboard's light mode).
+    Renders on Off-White ground with a single Graphite header band,
+    Signal Olive accent, tinted Fit chips. Portrait-doc standard,
+    per ``documents.md`` in the Crosswalk brand skill.
 
-Public surface: ``build_weekly_pdf(payload) -> bytes``. Any Python
-error is trapped inside the Flask endpoint; this module raises for
-truly missing inputs so the caller can 400 the request cleanly.
+Hero image
+----------
+Each variant carries a small campaign hero tile in the top-right of
+the header. The image is resolved and fetched server-side by
+``campaign_hero_image.resolve_and_fetch`` (currently the first
+YouTube trailer's ``hqdefault`` thumbnail, with a manual
+``title.hero_image_url`` override) and passed to this module inside
+the payload under the key ``hero_image_bytes``. When the resolver
+comes up empty, the tile silently collapses and the header text
+takes back the space.
+
+Type / palette / copy standards all come from
+``.cursor/skills/crosswalk-brand-standards/``. Public surface:
+``build_weekly_pdf(payload) -> bytes``. Any Python error raises;
+the Flask endpoint traps and returns JSON.
 """
 from __future__ import annotations
 
@@ -45,74 +48,91 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 
 # ---------------------------------------------------------------------------
-# Palette + type (Crosswalk brand standards, Off-White document system)
+# Shared palette (from `.cursor/skills/crosswalk-brand-standards/`)
 # ---------------------------------------------------------------------------
-GRAPHITE_TEAL = HexColor("#0C1618")
-SLATE_TEAL = HexColor("#15252A")
-OFF_WHITE = HexColor("#E9E8E1")
-SIGNAL_OLIVE = HexColor("#5E7E12")          # Signal Green twin, use on light
-SIGNAL_OLIVE_TINT = HexColor("#E1E7CE")     # subtle Under-served / accent fill
-AMETHYST = HexColor("#8E3FA8")              # Orchid twin, use on light
-DUSK = HexColor("#B7B3D8")
-PAVEMENT = HexColor("#3B3D38")
+GRAPHITE_TEAL   = HexColor("#0C1618")
+SLATE_TEAL      = HexColor("#15252A")
+SLATE_BORDER    = HexColor("#27393D")   # dashboard's exact card border
+OFF_WHITE       = HexColor("#E9E8E1")
+SIGNAL_GREEN    = HexColor("#C7F23E")   # accent on dark only
+SIGNAL_OLIVE    = HexColor("#5E7E12")   # Signal Green twin, safe on light
+SIGNAL_OLIVE_TINT = HexColor("#E1E7CE")
+ORCHID          = HexColor("#E682FF")   # second voice on dark
+AMETHYST        = HexColor("#8E3FA8")   # Orchid twin, safe on light
+DUSK            = HexColor("#B7B3D8")   # recessive series
+PAVEMENT        = HexColor("#3B3D38")
 
-# Text roles on Off-White (from documents.md + SKILL.md)
-INK_PRIMARY = HexColor("#0C1618")           # title, body
-INK_BODY = HexColor("#5C6560")              # body, subhead, eyebrow text
-INK_MUTED = HexColor("#888C89")             # axis labels, source lines
-INK_FOOTER = HexColor("#5C6466")            # footer, page number
-INK_ACCENT_LIGHT = HexColor("#5E7E12")      # accent
-INK_ACCENT_SMALL = HexColor("#547110")      # small-text olive (<12px)
+# Text roles on Graphite (dashboard convention)
+DARK_TEXT_PRIMARY = HexColor("#E9E8E1")
+DARK_TEXT_BODY    = HexColor("#9AA09B")
+DARK_TEXT_MUTED   = HexColor("#7C878A")
+DARK_TEXT_FOOTER  = HexColor("#7C878A")
 
-# Card panel on Off-White (documents.md)
-CARD_FILL = HexColor("#E1E0D7")
-CARD_STROKE = HexColor("#C9C6BA")
+# Text roles on Off-White (documents.md)
+LIGHT_TEXT_PRIMARY = HexColor("#0C1618")
+LIGHT_TEXT_BODY    = HexColor("#5C6560")
+LIGHT_TEXT_MUTED   = HexColor("#888C89")
+LIGHT_TEXT_FOOTER  = HexColor("#5C6466")
 
-# Fit chip palette (matches the on-dashboard chips, translated to light)
-FIT_TINTS = {
-    "sweet":       (SIGNAL_OLIVE_TINT, SIGNAL_OLIVE),      # sweet spot
-    "underserved": (HexColor("#F4E1F9"), AMETHYST),         # under-served (Orchid twin)
-    "broad":       (HexColor("#E8E7F1"), HexColor("#6C6A80")),  # broad
-    "offtarget":   (HexColor("#E5E4DE"), HexColor("#797F81")),  # off-target
+# Card / row hairline colors
+LIGHT_CARD_FILL   = HexColor("#E1E0D7")
+LIGHT_CARD_STROKE = HexColor("#C9C6BA")
+DARK_ROW_DIVIDER  = HexColor("#182528")
+LIGHT_ROW_DIVIDER = HexColor("#D5D3C7")
+
+# Fit chip palette on LIGHT surfaces (rounded pills)
+FIT_TINTS_LIGHT = {
+    "sweet":       (SIGNAL_OLIVE_TINT,          SIGNAL_OLIVE),
+    "underserved": (HexColor("#F4E1F9"),        AMETHYST),
+    "broad":       (HexColor("#E8E7F1"),        HexColor("#6C6A80")),
+    "offtarget":   (HexColor("#E5E4DE"),        HexColor("#797F81")),
+}
+# Fit dot color on DARK surfaces (dot + label, like the dashboard tag)
+FIT_DOTS_DARK = {
+    "sweet":       SIGNAL_GREEN,
+    "underserved": ORCHID,
+    "broad":       DUSK,
+    "offtarget":   HexColor("#5C6466"),
 }
 
-# --- Fonts ------------------------------------------------------------------
-# Inter 18pt from `.cursor/skills/crosswalk-brand-standards/assets/fonts/`.
-# We register once at import time. If registration fails we fall back to
-# Helvetica and log a warning; the PDF still renders (soft measurements per
-# the brand standards, but nothing crashes).
+# Delta chip colors (WoW up / down)
+DELTA_UP_DARK    = SIGNAL_GREEN
+DELTA_DOWN_DARK  = HexColor("#f87171")
+DELTA_UP_LIGHT   = SIGNAL_OLIVE
+DELTA_DOWN_LIGHT = AMETHYST
+
+
+# ---------------------------------------------------------------------------
+# Type: Inter 18pt with Helvetica fallback
+# ---------------------------------------------------------------------------
 _INTER_REGISTERED = False
 _INTER_FAMILY = "Inter18pt"
-_HELV_FAMILY = "Helvetica"
+_HELV_FAMILY  = "Helvetica"
 
 
 def _find_font_dir() -> Path | None:
-    """Locate the Inter 18pt TTF bundle. Checked in order:
+    """Locate the Inter 18pt TTF bundle. Order:
 
     1. ``ATTRIBUTION_PDF_FONT_DIR`` env override (Render / prod).
-    2. ``.cursor/skills/crosswalk-brand-standards/assets/fonts`` next
-       to the repo root (dev laptops with the plugin skill).
-    3. ``bg-webapp/static/fonts`` (production copy shipped inside the
-       webapp; safe fallback if the skill is not deployed).
-
-    Returns ``None`` if none of these hold the six weights.
+    2. Skill checkout: ``.cursor/skills/crosswalk-brand-standards/assets/fonts``.
+    3. ``bg-webapp/static/fonts`` (production copy shipped with the webapp).
     """
     candidates: list[Path] = []
     env = os.environ.get("ATTRIBUTION_PDF_FONT_DIR")
     if env:
         candidates.append(Path(env))
-    # bg-webapp/attribution_weekly_pdf.py -> bg-webapp/ -> repo root
     here = Path(__file__).resolve().parent
     repo_root = here.parent
     candidates.append(
@@ -126,69 +146,66 @@ def _find_font_dir() -> Path | None:
 
 
 def _register_inter() -> str:
-    """Register Inter 18pt weights and return the family name to use.
-
-    Registration is idempotent; every call after the first is a no-op.
-    Returns ``_INTER_FAMILY`` on success, ``_HELV_FAMILY`` on fallback.
-    """
+    """Register Inter 18pt weights, idempotent. Returns family or Helvetica."""
     global _INTER_REGISTERED
     if _INTER_REGISTERED:
         return _INTER_FAMILY
-
     font_dir = _find_font_dir()
     if font_dir is None:
         print("[attribution_weekly_pdf] Inter 18pt fonts not found; "
               "falling back to Helvetica.")
         return _HELV_FAMILY
-
     weights = {
-        "":          "Inter_18pt-Regular.ttf",
-        "-Bold":     "Inter_18pt-Bold.ttf",
-        "-Light":    "Inter_18pt-Light.ttf",
-        "-Medium":   "Inter_18pt-Medium.ttf",
-        "-Black":    "Inter_18pt-Black.ttf",
-        "-ExtraBold":"Inter_18pt-ExtraBold.ttf",
+        "":           "Inter_18pt-Regular.ttf",
+        "-Bold":      "Inter_18pt-Bold.ttf",
+        "-Light":     "Inter_18pt-Light.ttf",
+        "-Medium":    "Inter_18pt-Medium.ttf",
+        "-Black":     "Inter_18pt-Black.ttf",
+        "-ExtraBold": "Inter_18pt-ExtraBold.ttf",
     }
     try:
         for suffix, fname in weights.items():
-            font_path = font_dir / fname
-            if not font_path.is_file():
-                continue
-            pdfmetrics.registerFont(
-                TTFont(_INTER_FAMILY + suffix, str(font_path))
-            )
+            fp = font_dir / fname
+            if fp.is_file():
+                pdfmetrics.registerFont(TTFont(_INTER_FAMILY + suffix, str(fp)))
     except Exception as e:
         print(f"[attribution_weekly_pdf] Inter registration failed ({e}); "
               "falling back to Helvetica.")
         return _HELV_FAMILY
-
     _INTER_REGISTERED = True
     return _INTER_FAMILY
+
+
+def _font(family: str, weight: str = "") -> str:
+    """Weight-aware helper. Helvetica maps '-Bold' / '-ExtraBold' /
+    '-Black' -> Helvetica-Bold, everything else -> Helvetica."""
+    if family == _INTER_FAMILY:
+        return family + weight
+    if weight in ("-Bold", "-ExtraBold", "-Black"):
+        return family + "-Bold"
+    return family
 
 
 # ---------------------------------------------------------------------------
 # Copy sanitizers
 # ---------------------------------------------------------------------------
-# no-em-dashes: strip U+2014, U+2013, U+2015, U+2012; also smart quotes.
-_DASH_CHARS = "—–―‒"
+_DASH_CHARS = "\u2014\u2013\u2015\u2012"  # em, en, horizontal, figure
 _SMART_QUOTES = {
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",
-    "“": '"', "”": '"', "„": '"', "‟": '"',
-    "ʼ": "'", "«": '"', "»": '"',
+    "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+    "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+    "\u02bc": "'", "\u00ab": '"', "\u00bb": '"',
 }
 
 
 def _sanitize(s: str) -> str:
-    """Strip em/en dashes and smart quotes. Follows the same convention
-    as `hostmap_gap_mapping._sanitize`: replace a dash with a hyphen when
-    it's clearly compound, else with 'to' when between two spaces."""
+    """Strip em/en dashes (per `no-em-dashes.mdc`) and smart quotes."""
     if not s:
         return ""
     out = str(s)
 
     def _dash_repl(m: re.Match) -> str:
         i = m.start()
-        pre = out[max(0, i - 1): i]
+        pre  = out[max(0, i - 1): i]
         post = out[i + 1: i + 2]
         if pre == " " and post == " ":
             return "to"
@@ -199,12 +216,11 @@ def _sanitize(s: str) -> str:
     out = re.sub(f"[{_DASH_CHARS}]", _dash_repl, out)
     for k, v in _SMART_QUOTES.items():
         out = out.replace(k, v)
-    out = out.replace("…", "...")
+    out = out.replace("\u2026", "...")
     return out.strip()
 
 
 def _fmt_int(n: Any) -> str:
-    """Comma-separated integer. Blank on None."""
     if n is None:
         return "-"
     try:
@@ -214,7 +230,6 @@ def _fmt_int(n: Any) -> str:
 
 
 def _fmt_pct(n: Any, digits: int = 1) -> str:
-    """`4.3%` style. Preserves an already-formatted string. Blank on None."""
     if n is None:
         return "-"
     if isinstance(n, str) and n.endswith("%"):
@@ -225,27 +240,24 @@ def _fmt_pct(n: Any, digits: int = 1) -> str:
         return str(n)
 
 
-def _fmt_delta_pct(n: Any) -> tuple[str, HexColor]:
-    """Signed pct delta, e.g., `+0.5pp` or `-1.2pp`. Returns (text, color)."""
+def _fmt_delta_pct(n: Any, theme: str = "dark") -> tuple[str, HexColor]:
+    """Signed pct-point delta, e.g., `+0.5pp`. Returns (text, color)
+    keyed to the theme."""
+    up_col   = DELTA_UP_DARK   if theme == "dark" else DELTA_UP_LIGHT
+    down_col = DELTA_DOWN_DARK if theme == "dark" else DELTA_DOWN_LIGHT
+    muted    = DARK_TEXT_MUTED if theme == "dark" else LIGHT_TEXT_MUTED
     if n is None:
-        return ("-", INK_MUTED)
+        return ("-", muted)
     try:
         v = float(n)
     except (TypeError, ValueError):
-        return (str(n), INK_MUTED)
+        return (str(n), muted)
     sign = "+" if v > 0 else ("-" if v < 0 else "")
-    color = INK_ACCENT_LIGHT if v > 0 else (AMETHYST if v < 0 else INK_MUTED)
-    # 4dp trim like the deck stat blocks; PDF doesn't need 4dp so 1dp is fine.
+    color = up_col if v > 0 else (down_col if v < 0 else muted)
     return (f"{sign}{abs(v):.1f}pp", color)
 
 
 def _fit_key(label: str) -> str:
-    """Map a Fit label ("Under-served", "Sweet spot", ...) to a lookup key.
-
-    Tolerates casing, hyphens, spaces, and blank inputs. Returns
-    "offtarget" for anything unrecognised so the row still renders
-    with a subdued chip rather than crashing the layout.
-    """
     if not label:
         return "offtarget"
     k = re.sub(r"[^a-z]", "", label.lower())
@@ -259,7 +271,6 @@ def _fit_key(label: str) -> str:
 
 
 def _fmt_iso_date(iso: str) -> str:
-    """`2026-01-30` -> `Jan 30, 2026`. Passes through non-iso input."""
     if not iso:
         return ""
     try:
@@ -269,21 +280,12 @@ def _fmt_iso_date(iso: str) -> str:
     return dt.strftime("%b ") + f"{dt.day}, {dt.year}"
 
 
-def _draw_wrapped(
-    c: canvas.Canvas,
-    text: str,
-    x: float,
-    y: float,
-    max_width: float,
-    font: str,
-    size: float,
-    color: HexColor,
-    leading: float | None = None,
-) -> float:
-    """Draw ``text`` at (x, y-top) wrapping to ``max_width``. Returns
-    the y-coordinate of the LAST BASELINE drawn (so the caller can
-    subtract line-height to place the next block).
-    """
+def _draw_wrapped(c: canvas.Canvas, text: str, x: float, y: float,
+                  max_width: float, font: str, size: float,
+                  color: HexColor, leading: float | None = None) -> float:
+    """Wrap ``text`` to ``max_width``, drawing top-down from y. Returns
+    the y coord of the LAST baseline drawn (so the caller can subtract
+    line-height to place the next block)."""
     if leading is None:
         leading = size * 1.35
     c.setFont(font, size)
@@ -292,9 +294,9 @@ def _draw_wrapped(
     line = ""
     cy = y
     for w in words:
-        candidate = (line + " " + w).strip()
-        if pdfmetrics.stringWidth(candidate, font, size) <= max_width:
-            line = candidate
+        cand = (line + " " + w).strip()
+        if pdfmetrics.stringWidth(cand, font, size) <= max_width:
+            line = cand
         else:
             if line:
                 c.drawString(x, cy, line)
@@ -309,496 +311,817 @@ def _draw_wrapped(
 # Layout constants (US Letter portrait, per documents.md)
 # ---------------------------------------------------------------------------
 PAGE_W, PAGE_H = LETTER              # 8.5 x 11 in
-MARGIN = 0.75 * inch                 # documents.md: 0.75 outer
-CONTENT_W = 6.5 * inch               # documents.md: measure caps at 6.5 in
-HEADER_H = 1.10 * inch               # single Graphite band, top of page
-
-# Vertical position tracker (drawn top-down; content top starts under band)
-def _new_cursor() -> float:
-    return PAGE_H - HEADER_H - 0.30 * inch
+MARGIN         = 0.65 * inch
+CONTENT_W      = PAGE_W - 2 * MARGIN
 
 
 # ---------------------------------------------------------------------------
-# Public entry point
+# Hero image tile: shared helper for both themes
+# ---------------------------------------------------------------------------
+def _draw_hero_tile(c: canvas.Canvas, image_bytes: bytes | None,
+                    right_x: float, top_y: float,
+                    max_w: float, max_h: float,
+                    border_color: HexColor) -> tuple[float, float]:
+    """Draw the campaign hero image aspect-preserved inside a max-w x max-h
+    box, top-right anchored at (right_x, top_y). Returns the actual drawn
+    (width, height) so the caller can right-align header text to
+    ``right_x - actual_w - gap``. Missing / broken bytes silently return
+    (0, 0) so the header collapses back cleanly."""
+    if not image_bytes:
+        return (0.0, 0.0)
+    try:
+        reader = ImageReader(io.BytesIO(image_bytes))
+        iw, ih = reader.getSize()
+        if iw <= 0 or ih <= 0:
+            return (0.0, 0.0)
+        # Fit inside the max box, preserving aspect. Portrait fits by
+        # height, landscape / square fits by width.
+        aspect_h_over_w = ih / iw
+        # Try width-fit first
+        draw_w = max_w
+        draw_h = draw_w * aspect_h_over_w
+        if draw_h > max_h:
+            draw_h = max_h
+            draw_w = draw_h / aspect_h_over_w
+        x = right_x - draw_w
+        y = top_y - draw_h
+        # Draw image
+        c.drawImage(reader, x, y, draw_w, draw_h,
+                    mask="auto", preserveAspectRatio=True)
+        # Subtle 0.5pt rounded stroke gives every campaign a consistent
+        # tile silhouette regardless of image aspect / background color.
+        c.setStrokeColor(border_color)
+        c.setLineWidth(0.5)
+        c.roundRect(x, y, draw_w, draw_h, 0.05 * inch, stroke=1, fill=0)
+        return (draw_w, draw_h)
+    except Exception as e:
+        print(f"[attribution_weekly_pdf] hero image failed: {e}")
+        return (0.0, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Public dispatcher
 # ---------------------------------------------------------------------------
 def build_weekly_pdf(payload: dict) -> bytes:
     """Render a one-page Attribution IQ weekly summary PDF.
 
-    Expected payload shape (all fields optional; a missing block just
-    collapses its section):
-
-    .. code:: python
+    Payload shape (all optional; a missing block collapses)::
 
         {
-          "title": {
-            "display_name": "Goat",
-            "distributor": "Sony Pictures Animation",
-            "opening_date": "2026-02-13",
-          },
-          "as_of":     "2026-01-30",
-          "week_end":  "2026-01-30",
-          "week_start":"2026-01-24",
+          "theme": "dark" | "light",                    # NEW: default 'dark'
+          "hero_image_bytes": b"...",                   # NEW: server-injected
+          "title": {"display_name": "Goat",
+                    "distributor":  "Sony Pictures Animation",
+                    "opening_date": "2026-02-13"},
+          "as_of":       "2026-01-30",
+          "week_start":  "2026-01-24",
+          "week_end":    "2026-01-30",
           "days_to_open": 14,
-          "phase_label": "Branding (T-2)",
-          "snapshot": {
-              "exposed_viewers":       1234567,
-              "exposed_delta_pct":     0.51,       # points, not fraction
-              "response_rate_pct":     4.32,
-              "response_delta_pct":    0.14,
-              "response_metric_label": "Info-seek rate",  # or "Ticketing rate"
-              "sample_size":           81_247,
-          },
-          "bullets": [
-              "Views leaned into the trailer re-cut this week, ...",
-              "Under-served: Caleb McLaughlin fans respond above the ...",
-              ...
-          ],
-          "top_assets": [
-              {"asset": "Trailer #2 (YouTube)",
-               "channel": "YouTube",
-               "phase":   "Bridge Campaign",
-               "exposure": 456789,
-               "response_pct": 5.2,
-               "lift_x": 1.4,          # optional
-               "confidence": "high"},  # optional
-              ...
-          ],
-          "top_audiences": [
-              {"audience": "Caleb McLaughlin fans",
-               "overlap_pct": 8.3,
-               "response_pct": 6.9,
-               "vs_gen_pop_x": 1.8,     # optional
-               "fit": "Under-served"},
-              ...
-          ],
+          "phase_label": "Bridge Campaign (T-14)",
+          "snapshot": {"exposed_viewers": 1234567,
+                       "exposed_delta_pct": 0.51,
+                       "response_rate_pct": 4.32,
+                       "response_delta_pct": 0.14,
+                       "response_metric_label": "Info-seek rate",
+                       "sample_size": 47},
+          "bullets":       [str, ...],
+          "top_assets":    [{...}, ...],
+          "top_audiences": [{...}, ...],
         }
 
     Returns raw PDF bytes.
     """
-    font_family = _register_inter()
-    # Weight-aware helpers so callers below stay readable
-    def f_regular(): return font_family
-    def f_bold():    return font_family + "-Bold"
-    def f_medium():  return font_family + "-Medium" if font_family == _INTER_FAMILY else font_family + "-Bold"
-    def f_light():   return font_family + "-Light"  if font_family == _INTER_FAMILY else font_family
-    def f_black():   return font_family + "-Black"  if font_family == _INTER_FAMILY else font_family + "-Bold"
+    theme = (payload.get("theme") or "dark").lower()
+    if theme not in ("dark", "light"):
+        theme = "dark"
+    if theme == "light":
+        return _build_light_pdf(payload)
+    return _build_dark_pdf(payload)
 
+
+# ---------------------------------------------------------------------------
+# Shared payload extraction
+# ---------------------------------------------------------------------------
+def _extract(payload: dict) -> dict:
     title = payload.get("title") or {}
-    display_name = _sanitize(title.get("display_name") or "Untitled")
-    distributor = _sanitize(title.get("distributor") or "")
-    as_of = payload.get("as_of") or ""
-    week_start = payload.get("week_start") or ""
-    week_end = payload.get("week_end") or as_of
-    days_to_open = payload.get("days_to_open")
-    phase_label = _sanitize(payload.get("phase_label") or "")
-
     snapshot = payload.get("snapshot") or {}
-    bullets: list[str] = [_sanitize(b) for b in (payload.get("bullets") or []) if b]
-    top_assets: list[dict] = payload.get("top_assets") or []
-    top_audiences: list[dict] = payload.get("top_audiences") or []
+    return {
+        "display_name":   _sanitize(title.get("display_name") or "Untitled"),
+        "distributor":    _sanitize(title.get("distributor") or ""),
+        "as_of":          payload.get("as_of") or "",
+        "week_start":     payload.get("week_start") or "",
+        "week_end":       payload.get("week_end") or payload.get("as_of") or "",
+        "days_to_open":   payload.get("days_to_open"),
+        "phase_label":    _sanitize(payload.get("phase_label") or ""),
+        "snapshot":       snapshot,
+        "bullets":        [_sanitize(b) for b in (payload.get("bullets") or []) if b],
+        "top_assets":     payload.get("top_assets") or [],
+        "top_audiences":  payload.get("top_audiences") or [],
+        "hero_bytes":     payload.get("hero_image_bytes"),
+    }
 
+
+def _phase_sub_line(phase_label: str, days_to_open: Any) -> str:
+    bits: list[str] = []
+    if phase_label:
+        bits.append(phase_label)
+    if isinstance(days_to_open, (int, float)):
+        n = int(days_to_open)
+        if n > 0:
+            bits.append(f"{n} days to opening")
+        elif n == 0:
+            bits.append("Opening today")
+        else:
+            bits.append(f"{abs(n)} days post-opening")
+    return "  \u00b7  ".join(bits)
+
+
+def _week_line(week_start: str, week_end: str) -> str:
+    if week_start:
+        return _fmt_iso_date(week_start) + " to " + _fmt_iso_date(week_end)
+    return "Week ending " + _fmt_iso_date(week_end)
+
+
+# ===========================================================================
+# DARK VARIANT (dashboard mirror)
+# ===========================================================================
+def _build_dark_pdf(payload: dict) -> bytes:
+    ff = _register_inter()
+    d  = _extract(payload)
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1)
-    c.setTitle(f"Attribution IQ Weekly - {display_name} - {week_end}")
+    c.setTitle(f"Attribution IQ Weekly - {d['display_name']} - {d['week_end']}")
     c.setAuthor("Crosswalk")
     c.setSubject("Attribution IQ Weekly Summary")
     c.setCreator("Crosswalk Attribution IQ")
 
-    # -----------------------------------------------------------------
+    # Full Graphite Teal ground
+    c.setFillColor(GRAPHITE_TEAL)
+    c.rect(0, 0, PAGE_W, PAGE_H, stroke=0, fill=1)
+
+    # -- Header --------------------------------------------------------
+    # Fixed 0.95" header zone (top margin -> HEADER_BOTTOM). Whatever
+    # the hero aspect, the tile fits inside 0.85" tall x 1.15" wide so
+    # a portrait movie poster and a landscape YouTube thumbnail both
+    # sit inside the same visual band. This keeps the rest of the
+    # page laid out identically regardless of hero shape (a 2:3
+    # poster would otherwise push the audience table past the
+    # footer).
+    top = PAGE_H - MARGIN
+    right_x = PAGE_W - MARGIN
+    HEADER_ZONE_H = 0.95 * inch
+
+    hero_w, hero_h = _draw_hero_tile(
+        c, d["hero_bytes"],
+        right_x=right_x, top_y=top - 0.02 * inch,
+        max_w=1.15 * inch, max_h=0.85 * inch,
+        border_color=SLATE_BORDER,
+    )
+    text_right_x = (right_x - hero_w - 0.20 * inch) if hero_w > 0 else right_x
+
+    # Eyebrow: dot + tracked caps
+    c.setFillColor(SIGNAL_GREEN)
+    c.circle(MARGIN + 0.06 * inch, top - 0.05 * inch, 0.055 * inch,
+             stroke=0, fill=1)
+    c.setFillColor(DARK_TEXT_BODY)
+    c.setFont(_font(ff, "-Bold"), 8.5)
+    c.drawString(MARGIN + 0.20 * inch, top - 0.09 * inch,
+                 "ATTRIBUTION IQ  \u00b7  WEEKLY SUMMARY")
+
+    # Title
+    c.setFillColor(DARK_TEXT_PRIMARY)
+    c.setFont(_font(ff, "-Bold"), 26)
+    c.drawString(MARGIN, top - 0.55 * inch, d["display_name"])
+
+    # Right-side meta (right-aligned to text_right_x)
+    c.setFillColor(DUSK)
+    c.setFont(_font(ff), 9)
+    c.drawRightString(text_right_x, top - 0.05 * inch,
+                      d["distributor"] or "Client")
+    c.setFillColor(DARK_TEXT_PRIMARY)
+    c.setFont(_font(ff, "-Medium"), 11)
+    c.drawRightString(text_right_x, top - 0.28 * inch,
+                      _week_line(d["week_start"], d["week_end"]))
+    sub = _phase_sub_line(d["phase_label"], d["days_to_open"])
+    if sub:
+        c.setFillColor(DUSK)
+        c.setFont(_font(ff), 9)
+        c.drawRightString(text_right_x, top - 0.48 * inch, sub)
+
+    cursor = top - HEADER_ZONE_H - 0.15 * inch
+
+    # -- Stat row card -------------------------------------------------
+    snap = d["snapshot"]
+    stat_h = 0.90 * inch
+    _dashboard_card(c, MARGIN, cursor - stat_h, CONTENT_W, stat_h)
+    col_w = CONTENT_W / 3.0
+
+    def _stat_dark(idx: int, label: str, value: str,
+                   dtxt: str | None, dcol: HexColor | None) -> None:
+        x = MARGIN + idx * col_w + 0.20 * inch
+        c.setFillColor(DARK_TEXT_BODY)
+        c.setFont(_font(ff, "-Bold"), 8)
+        c.drawString(x, cursor - 0.20 * inch, label.upper())
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 26)
+        c.drawString(x, cursor - 0.58 * inch, value)
+        if dtxt:
+            c.setFillColor(dcol or DARK_TEXT_MUTED)
+            c.setFont(_font(ff, "-Medium"), 9)
+            c.drawString(x, cursor - 0.78 * inch, "WoW " + dtxt)
+
+    ed_t, ed_c = _fmt_delta_pct(snap.get("exposed_delta_pct"), "dark")
+    rd_t, rd_c = _fmt_delta_pct(snap.get("response_delta_pct"), "dark")
+    _stat_dark(0, "Exposed viewers",
+               _fmt_int(snap.get("exposed_viewers")),
+               ed_t if snap.get("exposed_delta_pct") is not None else None, ed_c)
+    _stat_dark(1, _sanitize(snap.get("response_metric_label") or "Response rate"),
+               _fmt_pct(snap.get("response_rate_pct")),
+               rd_t if snap.get("response_delta_pct") is not None else None, rd_c)
+    _stat_dark(2, "Sample this week",
+               _fmt_int(snap.get("sample_size")), None, None)
+
+    cursor -= stat_h + 0.20 * inch
+
+    # -- Bullets card --------------------------------------------------
+    if d["bullets"]:
+        rows = d["bullets"][:4]
+        b_title_h = 0.34 * inch
+        b_row_h   = 0.44 * inch
+        b_card_h  = b_title_h + b_row_h * len(rows) + 0.10 * inch
+        _dashboard_card(c, MARGIN, cursor - b_card_h, CONTENT_W, b_card_h)
+        c.setFillColor(SIGNAL_GREEN)
+        c.setFont(_font(ff, "-Bold"), 8.5)
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch, "THIS WEEK.")
+        y = cursor - 0.44 * inch
+        for b in rows:
+            c.setFillColor(SIGNAL_GREEN)
+            c.circle(MARGIN + 0.28 * inch, y + 0.04 * inch, 0.045 * inch,
+                     stroke=0, fill=1)
+            end_y = _draw_wrapped(
+                c, b, x=MARGIN + 0.44 * inch, y=y,
+                max_width=CONTENT_W - 0.60 * inch,
+                font=_font(ff), size=10.0, color=DARK_TEXT_PRIMARY,
+                leading=13.5,
+            )
+            y = end_y - 0.15 * inch
+        cursor -= b_card_h + 0.20 * inch
+
+    # -- Asset table ---------------------------------------------------
+    if d["top_assets"]:
+        rows_a = min(len(d["top_assets"]), 5)
+        row_h  = 0.32 * inch
+        head_h = 0.34 * inch
+        title_h = 0.32 * inch
+        a_card_h = title_h + head_h + row_h * rows_a + 0.12 * inch
+        _dashboard_card(c, MARGIN, cursor - a_card_h, CONTENT_W, a_card_h)
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 12)
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch,
+                     "Strongest asset signals.")
+        cursor -= title_h
+        _asset_table_dark(c, ff, cursor, d["top_assets"][:rows_a],
+                          row_h, head_h)
+        cursor -= head_h + row_h * rows_a + 0.32 * inch
+
+    # -- Audience table ------------------------------------------------
+    if d["top_audiences"]:
+        rows_u = min(len(d["top_audiences"]), 5)
+        row_h  = 0.32 * inch
+        head_h = 0.34 * inch
+        title_h = 0.32 * inch
+        u_card_h = title_h + head_h + row_h * rows_u + 0.12 * inch
+        _dashboard_card(c, MARGIN, cursor - u_card_h, CONTENT_W, u_card_h)
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 12)
+        c.drawString(MARGIN + 0.22 * inch, cursor - 0.22 * inch,
+                     "Audiences responding, and audiences responding but under-served.")
+        cursor -= title_h
+        _aud_table_dark(c, ff, cursor, d["top_audiences"][:rows_u],
+                        row_h, head_h)
+        cursor -= head_h + row_h * rows_u + 0.30 * inch
+
+    # -- Footer --------------------------------------------------------
+    _footer_dark(c, ff, d["week_end"])
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _dashboard_card(c: canvas.Canvas, x: float, y: float,
+                    w: float, h: float) -> None:
+    """Slate Teal card, dashboard-exact border color."""
+    c.setFillColor(SLATE_TEAL)
+    c.setStrokeColor(SLATE_BORDER)
+    c.setLineWidth(0.5)
+    c.roundRect(x, y, w, h, 0.14 * inch, stroke=1, fill=1)
+
+
+def _asset_table_dark(c, ff, cursor, rows, row_h, head_h):
+    col_asset_w = 2.50 * inch
+    col_ch_w    = 1.60 * inch
+    col_exp_w   = 1.15 * inch
+    col_resp_w  = 0.85 * inch
+    col_lift_w  = 0.50 * inch
+    col_asset_x = MARGIN + 0.22 * inch
+    col_ch_x    = col_asset_x + col_asset_w
+    col_exp_x   = col_ch_x + col_ch_w
+    col_resp_x  = col_exp_x + col_exp_w
+    col_lift_x  = col_resp_x + col_resp_w
+
+    c.setFillColor(DARK_TEXT_MUTED)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    head_y = cursor - 0.20 * inch
+    c.drawString(col_asset_x, head_y, "ASSET")
+    c.drawString(col_ch_x, head_y, "CHANNEL  \u00b7  PHASE")
+    c.drawRightString(col_exp_x + col_exp_w - 0.12 * inch, head_y, "EXPOSURE")
+    c.drawRightString(col_resp_x + col_resp_w - 0.12 * inch, head_y, "RESPONSE")
+    c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, head_y, "LIFT")
+
+    c.setStrokeColor(SLATE_BORDER)
+    c.setLineWidth(0.4)
+    c.line(MARGIN + 0.22 * inch, cursor - head_h + 0.08 * inch,
+           MARGIN + CONTENT_W - 0.22 * inch, cursor - head_h + 0.08 * inch)
+
+    ry = cursor - head_h
+    for i, a in enumerate(rows):
+        rm = ry - row_h / 2 + 0.03 * inch
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        lbl = _sanitize(a.get("asset") or a.get("action_label") or "-")
+        if len(lbl) > 40:
+            lbl = lbl[:39].rstrip() + "..."
+        c.drawString(col_asset_x, rm, lbl)
+        c.setFillColor(DARK_TEXT_BODY)
+        c.setFont(_font(ff), 9)
+        ch = _sanitize(a.get("channel") or "-")
+        ph = _sanitize(a.get("phase") or "")
+        chp = ch + ("  \u00b7  " + ph if ph else "")
+        if len(chp) > 32:
+            chp = chp[:31] + "..."
+        c.drawString(col_ch_x, rm, chp)
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_exp_x + col_exp_w - 0.12 * inch, rm,
+                          _fmt_int(a.get("exposure") or a.get("views_total")
+                                   or a.get("ext_view_count")))
+        c.drawRightString(col_resp_x + col_resp_w - 0.12 * inch, rm,
+                          _fmt_pct(a.get("response_pct")))
+        lift = a.get("lift_x")
+        if lift is not None:
+            try:
+                lv = float(lift)
+                lift_str = f"{lv:.1f}x"
+                if lv >= 1.3:   c.setFillColor(SIGNAL_GREEN)
+                elif lv < 0.9:  c.setFillColor(DUSK)
+                else:           c.setFillColor(DARK_TEXT_PRIMARY)
+            except (TypeError, ValueError):
+                lift_str = "-"; c.setFillColor(DARK_TEXT_MUTED)
+        else:
+            lift_str = "-"; c.setFillColor(DARK_TEXT_MUTED)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, rm, lift_str)
+
+        ry -= row_h
+        if i < len(rows) - 1:
+            c.setStrokeColor(DARK_ROW_DIVIDER)
+            c.setLineWidth(0.4)
+            c.line(MARGIN + 0.22 * inch, ry,
+                   MARGIN + CONTENT_W - 0.22 * inch, ry)
+
+
+def _aud_table_dark(c, ff, cursor, rows, row_h, head_h):
+    col_aud_w  = 2.55 * inch
+    col_over_w = 1.00 * inch
+    col_resp_w = 1.00 * inch
+    col_idx_w  = 0.75 * inch
+    col_aud_x  = MARGIN + 0.22 * inch
+    col_over_x = col_aud_x + col_aud_w
+    col_resp_x = col_over_x + col_over_w
+    col_idx_x  = col_resp_x + col_resp_w
+    col_fit_x  = col_idx_x + col_idx_w
+
+    c.setFillColor(DARK_TEXT_MUTED)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    head_y = cursor - 0.20 * inch
+    c.drawString(col_aud_x, head_y, "AUDIENCE")
+    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y, "OVERLAP")
+    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
+    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y, "VS GENPOP")
+    c.drawString(col_fit_x, head_y, "FIT")
+
+    c.setStrokeColor(SLATE_BORDER)
+    c.setLineWidth(0.4)
+    c.line(MARGIN + 0.22 * inch, cursor - head_h + 0.08 * inch,
+           MARGIN + CONTENT_W - 0.22 * inch, cursor - head_h + 0.08 * inch)
+
+    ry = cursor - head_h
+    for i, a in enumerate(rows):
+        rm = ry - row_h / 2 + 0.03 * inch
+        name = _sanitize(a.get("audience") or a.get("display") or "-")
+        if len(name) > 36:
+            name = name[:35] + "..."
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawString(col_aud_x, rm, name)
+        c.drawRightString(col_over_x + col_over_w - 0.10 * inch, rm,
+                          _fmt_pct(a.get("overlap_pct"), 1))
+        c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, rm,
+                          _fmt_pct(a.get("response_pct"), 1))
+        idx_v = a.get("vs_gen_pop_x")
+        if idx_v is not None:
+            try:
+                ivf = float(idx_v); idx_s = f"{ivf:.1f}x"
+                if ivf >= 1.3:  c.setFillColor(SIGNAL_GREEN)
+                elif ivf < 0.7: c.setFillColor(DARK_TEXT_MUTED)
+                else:           c.setFillColor(DARK_TEXT_PRIMARY)
+            except (TypeError, ValueError):
+                idx_s = "-"; c.setFillColor(DARK_TEXT_MUTED)
+        else:
+            idx_s = "-"; c.setFillColor(DARK_TEXT_MUTED)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, rm, idx_s)
+
+        fit_raw = _sanitize(a.get("fit") or "")
+        fk = _fit_key(fit_raw)
+        c.setFillColor(FIT_DOTS_DARK[fk])
+        c.circle(col_fit_x + 0.06 * inch, rm + 0.03 * inch,
+                 0.045 * inch, stroke=0, fill=1)
+        c.setFillColor(DARK_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 9)
+        c.drawString(col_fit_x + 0.18 * inch, rm,
+                     fit_raw or "Off-target")
+
+        ry -= row_h
+        if i < len(rows) - 1:
+            c.setStrokeColor(DARK_ROW_DIVIDER)
+            c.setLineWidth(0.4)
+            c.line(MARGIN + 0.22 * inch, ry,
+                   MARGIN + CONTENT_W - 0.22 * inch, ry)
+
+
+def _footer_dark(c, ff, week_end: str) -> None:
+    y = 0.65 * inch
+    c.setStrokeColor(SLATE_BORDER)
+    c.setLineWidth(0.4)
+    c.line(MARGIN, y + 0.32 * inch, MARGIN + CONTENT_W, y + 0.32 * inch)
+    c.setFillColor(DARK_TEXT_FOOTER)
+    _draw_wrapped(
+        c,
+        "Directional read from Crosswalk's opted-in behavioral panel, "
+        "week ending " + _fmt_iso_date(week_end) + ". Under-served flags "
+        "cohorts responding above index with low reach; sweet spot flags "
+        "high reach and high affinity. Precise budget reallocations and "
+        "causal attribution require a higher validation standard.",
+        x=MARGIN, y=y + 0.20 * inch, max_width=CONTENT_W,
+        font=_font(ff), size=8, color=DARK_TEXT_FOOTER, leading=10,
+    )
+    c.setFillColor(DARK_TEXT_FOOTER)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    c.drawString(MARGIN, 0.30 * inch,
+                 "CROSSWALK  \u00b7  BEHAVIORAL INTELLIGENCE")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    c.drawRightString(MARGIN + CONTENT_W, 0.30 * inch,
+                      f"GENERATED {stamp}".upper())
+
+
+# ===========================================================================
+# LIGHT VARIANT (Off-White portrait document)
+# ===========================================================================
+def _build_light_pdf(payload: dict) -> bytes:
+    ff = _register_inter()
+    d  = _extract(payload)
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=LETTER, pageCompression=1)
+    c.setTitle(f"Attribution IQ Weekly - {d['display_name']} - {d['week_end']}")
+    c.setAuthor("Crosswalk")
+    c.setSubject("Attribution IQ Weekly Summary")
+    c.setCreator("Crosswalk Attribution IQ")
+
     # Off-White page ground
-    # -----------------------------------------------------------------
     c.setFillColor(OFF_WHITE)
     c.rect(0, 0, PAGE_W, PAGE_H, stroke=0, fill=1)
 
-    # -----------------------------------------------------------------
-    # Header band (Graphite, single dark block that anchors the page)
-    # -----------------------------------------------------------------
+    # -- Graphite header band (with hero over it) ----------------------
+    HEADER_H = 1.20 * inch
     c.setFillColor(GRAPHITE_TEAL)
     c.rect(0, PAGE_H - HEADER_H, PAGE_W, HEADER_H, stroke=0, fill=1)
 
-    # Eyebrow dot + text (Signal Olive on Off-White per the twin rule,
-    # but this dot sits on Graphite so we use Signal Green here)
-    dot_x = MARGIN
-    dot_y = PAGE_H - 0.40 * inch
-    c.setFillColor(HexColor("#C7F23E"))
-    c.circle(dot_x + 0.06 * inch, dot_y, 0.055 * inch, stroke=0, fill=1)
-    c.setFillColor(OFF_WHITE)
-    c.setFont(f_bold(), 8.5)
-    c.drawString(dot_x + 0.20 * inch, dot_y - 0.03 * inch,
+    top     = PAGE_H - 0.32 * inch
+    right_x = PAGE_W - MARGIN
+
+    # Hero tile top-right, fits inside the header band (max 0.95" tall).
+    # Movie posters (portrait) end up ~0.63" wide; YT thumbs (16:9) fill.
+    hero_w, hero_h = _draw_hero_tile(
+        c, d["hero_bytes"],
+        right_x=right_x, top_y=top - 0.02 * inch,
+        max_w=1.20 * inch, max_h=0.95 * inch,
+        border_color=SLATE_BORDER,
+    )
+    text_right_x = (right_x - hero_w - 0.20 * inch) if hero_w > 0 else right_x
+
+    # Eyebrow on the band (Signal Green on Graphite, allowed on dark)
+    c.setFillColor(SIGNAL_GREEN)
+    c.circle(MARGIN + 0.06 * inch, top - 0.05 * inch,
+             0.055 * inch, stroke=0, fill=1)
+    c.setFillColor(DARK_TEXT_BODY)
+    c.setFont(_font(ff, "-Bold"), 8.5)
+    c.drawString(MARGIN + 0.20 * inch, top - 0.09 * inch,
                  "ATTRIBUTION IQ  \u00b7  WEEKLY SUMMARY")
 
-    # Title line (product title)
+    # Title on the band
     c.setFillColor(OFF_WHITE)
-    c.setFont(f_bold(), 22)
-    c.drawString(MARGIN, PAGE_H - 0.75 * inch, display_name)
+    c.setFont(_font(ff, "-Bold"), 22)
+    c.drawString(MARGIN, top - 0.45 * inch, d["display_name"])
 
-    # Right-side header cluster: distributor + week ending
-    right_x = PAGE_W - MARGIN
-    c.setFillColor(HexColor("#B7B3D8"))
-    c.setFont(f_regular(), 9)
-    c.drawRightString(right_x, PAGE_H - 0.40 * inch, distributor or "Client")
+    # Right-side meta (right-aligned to hero-left)
+    c.setFillColor(DUSK)
+    c.setFont(_font(ff), 9)
+    c.drawRightString(text_right_x, top - 0.05 * inch,
+                      d["distributor"] or "Client")
     c.setFillColor(OFF_WHITE)
-    c.setFont(f_medium(), 11)
-    week_end_pretty = _fmt_iso_date(week_end)
-    week_end_line = f"Week ending {week_end_pretty}"
-    if week_start:
-        week_end_line = (
-            f"{_fmt_iso_date(week_start)} to {week_end_pretty}"
-        )
-    c.drawRightString(right_x, PAGE_H - 0.60 * inch, week_end_line)
-    # Phase + days-to-open sub-line
-    sub_bits: list[str] = []
-    if phase_label:
-        sub_bits.append(phase_label)
-    if isinstance(days_to_open, (int, float)) and days_to_open is not None:
-        n = int(days_to_open)
-        if n > 0:
-            sub_bits.append(f"{n} days to opening")
-        elif n == 0:
-            sub_bits.append("Opening today")
-        else:
-            sub_bits.append(f"{abs(n)} days post-opening")
-    if sub_bits:
-        c.setFillColor(HexColor("#B7B3D8"))
-        c.setFont(f_regular(), 9)
-        c.drawRightString(right_x, PAGE_H - 0.80 * inch, "  \u00b7  ".join(sub_bits))
+    c.setFont(_font(ff, "-Medium"), 11)
+    c.drawRightString(text_right_x, top - 0.25 * inch,
+                      _week_line(d["week_start"], d["week_end"]))
+    sub = _phase_sub_line(d["phase_label"], d["days_to_open"])
+    if sub:
+        c.setFillColor(DUSK)
+        c.setFont(_font(ff), 9)
+        c.drawRightString(text_right_x, top - 0.45 * inch, sub)
 
-    # -----------------------------------------------------------------
-    # Body cursor starts under the header
-    # -----------------------------------------------------------------
-    cursor = _new_cursor()
+    cursor = PAGE_H - HEADER_H - 0.35 * inch
 
-    # -----------------------------------------------------------------
-    # SECTION 1: three-figure stat row (deck-system stat blocks)
-    # -----------------------------------------------------------------
-    exposed = snapshot.get("exposed_viewers")
-    exposed_delta = snapshot.get("exposed_delta_pct")
-    response_rate = snapshot.get("response_rate_pct")
-    response_delta = snapshot.get("response_delta_pct")
-    response_label = _sanitize(
-        snapshot.get("response_metric_label") or "Downstream response rate"
-    )
-    sample_size = snapshot.get("sample_size")
-
-    stat_h = 0.86 * inch
-    stat_y_top = cursor
-    stat_y_bottom = stat_y_top - stat_h
+    # -- Stat row (three figures with a hairline underneath) -----------
+    snap = d["snapshot"]
+    stat_h  = 0.86 * inch
+    stat_top    = cursor
+    stat_bottom = stat_top - stat_h
     col_w = CONTENT_W / 3.0
-
-    # Underline hairline the whole row sits on
-    c.setStrokeColor(CARD_STROKE)
+    c.setStrokeColor(LIGHT_CARD_STROKE)
     c.setLineWidth(0.5)
-    c.line(MARGIN, stat_y_bottom, MARGIN + CONTENT_W, stat_y_bottom)
+    c.line(MARGIN, stat_bottom, MARGIN + CONTENT_W, stat_bottom)
 
-    def _stat_col(idx: int, label: str, value: str,
-                  delta_text: str | None, delta_color: HexColor | None) -> None:
+    def _stat_light(idx: int, label: str, value: str,
+                    dtxt: str | None, dcol: HexColor | None) -> None:
         x = MARGIN + idx * col_w
-        # Label (small caps, tracked)
-        c.setFillColor(INK_BODY)
-        c.setFont(f_bold(), 8.5)
-        c.drawString(x, stat_y_top - 0.20 * inch, label.upper())
-        # Big figure
-        c.setFillColor(INK_PRIMARY)
-        c.setFont(f_bold(), 26)
-        c.drawString(x, stat_y_top - 0.60 * inch, value)
-        # Delta chip (Signal Olive if up, Amethyst if down)
-        if delta_text:
-            c.setFillColor(delta_color or INK_MUTED)
-            c.setFont(f_medium(), 9)
-            c.drawString(x, stat_y_top - 0.78 * inch, "WoW " + delta_text)
+        c.setFillColor(LIGHT_TEXT_BODY)
+        c.setFont(_font(ff, "-Bold"), 8.5)
+        c.drawString(x, stat_top - 0.20 * inch, label.upper())
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 26)
+        c.drawString(x, stat_top - 0.60 * inch, value)
+        if dtxt:
+            c.setFillColor(dcol or LIGHT_TEXT_MUTED)
+            c.setFont(_font(ff, "-Medium"), 9)
+            c.drawString(x, stat_top - 0.78 * inch, "WoW " + dtxt)
 
-    ed_txt, ed_col = _fmt_delta_pct(exposed_delta)
-    _stat_col(0, "Exposed viewers", _fmt_int(exposed) if exposed else "-",
-              ed_txt if exposed_delta is not None else None, ed_col)
-    rd_txt, rd_col = _fmt_delta_pct(response_delta)
-    _stat_col(1, response_label, _fmt_pct(response_rate) if response_rate is not None else "-",
-              rd_txt if response_delta is not None else None, rd_col)
-    _stat_col(2, "Sample this week", _fmt_int(sample_size) if sample_size else "-",
-              None, None)
+    ed_t, ed_c = _fmt_delta_pct(snap.get("exposed_delta_pct"), "light")
+    rd_t, rd_c = _fmt_delta_pct(snap.get("response_delta_pct"), "light")
+    _stat_light(0, "Exposed viewers",
+                _fmt_int(snap.get("exposed_viewers")),
+                ed_t if snap.get("exposed_delta_pct") is not None else None, ed_c)
+    _stat_light(1, _sanitize(snap.get("response_metric_label") or "Response rate"),
+                _fmt_pct(snap.get("response_rate_pct")),
+                rd_t if snap.get("response_delta_pct") is not None else None, rd_c)
+    _stat_light(2, "Sample this week",
+                _fmt_int(snap.get("sample_size")), None, None)
 
-    cursor = stat_y_bottom - 0.28 * inch
+    cursor = stat_bottom - 0.28 * inch
 
-    # -----------------------------------------------------------------
-    # SECTION 2: This week bullets (directional read)
-    # -----------------------------------------------------------------
-    if bullets:
-        c.setFillColor(INK_ACCENT_LIGHT)
-        c.setFont(f_bold(), 8.5)
+    # -- Bullets -------------------------------------------------------
+    if d["bullets"]:
+        c.setFillColor(SIGNAL_OLIVE)
+        c.setFont(_font(ff, "-Bold"), 8.5)
         c.drawString(MARGIN, cursor, "THIS WEEK.")
         cursor -= 0.14 * inch
-        for b in bullets[:5]:
-            # Rounded olive dot at the left, wrapped body to the right
+        for b in d["bullets"][:5]:
             dy = cursor
-            c.setFillColor(INK_ACCENT_LIGHT)
+            c.setFillColor(SIGNAL_OLIVE)
             c.circle(MARGIN + 0.05 * inch, dy + 0.04 * inch,
                      0.045 * inch, stroke=0, fill=1)
             end_y = _draw_wrapped(
-                c, b,
-                x=MARGIN + 0.20 * inch, y=dy,
+                c, b, x=MARGIN + 0.20 * inch, y=dy,
                 max_width=CONTENT_W - 0.20 * inch,
-                font=f_regular(), size=10.5, color=INK_PRIMARY,
+                font=_font(ff), size=10.5, color=LIGHT_TEXT_PRIMARY,
                 leading=13.5,
             )
             cursor = end_y - 0.12 * inch
         cursor -= 0.12 * inch
 
-    # -----------------------------------------------------------------
-    # SECTION 3: Top 5 assets table (bordered card, no accent stripe)
-    # -----------------------------------------------------------------
-    if top_assets:
-        # Card background
-        rows = min(len(top_assets), 5)
-        row_h = 0.30 * inch
+    # -- Asset card ----------------------------------------------------
+    if d["top_assets"]:
+        rows_a = min(len(d["top_assets"]), 5)
+        row_h  = 0.30 * inch
         head_h = 0.30 * inch
         title_h = 0.32 * inch
-        card_h = title_h + head_h + rows * row_h + 0.12 * inch
-        card_y = cursor - card_h
-        c.setFillColor(CARD_FILL)
-        c.setStrokeColor(CARD_STROKE)
-        c.setLineWidth(0.5)
-        c.roundRect(MARGIN, card_y, CONTENT_W, card_h,
-                    0.14 * inch, stroke=1, fill=1)
-
-        # Card title
-        c.setFillColor(INK_PRIMARY)
-        c.setFont(f_bold(), 12)
+        a_card_h = title_h + head_h + row_h * rows_a + 0.12 * inch
+        _light_card(c, MARGIN, cursor - a_card_h, CONTENT_W, a_card_h)
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 12)
         c.drawString(MARGIN + 0.20 * inch, cursor - 0.24 * inch,
                      "Strongest asset signals.")
         cursor -= title_h
+        _asset_table_light(c, ff, cursor, d["top_assets"][:rows_a],
+                           row_h, head_h)
+        cursor -= head_h + row_h * rows_a + 0.24 * inch
 
-        # Column widths: Asset (2.5) | Channel/Phase (1.5) | Exposure (1.1)
-        # | Response (0.9) | Lift (0.5)
-        col_asset_w = 2.55 * inch
-        col_ch_w    = 1.50 * inch
-        col_exp_w   = 1.10 * inch
-        col_resp_w  = 0.85 * inch
-        col_lift_w  = 0.50 * inch
-        # x positions
-        col_asset_x = MARGIN + 0.20 * inch
-        col_ch_x    = col_asset_x + col_asset_w
-        col_exp_x   = col_ch_x + col_ch_w
-        col_resp_x  = col_exp_x + col_exp_w
-        col_lift_x  = col_resp_x + col_resp_w
-
-        # Header row (small caps, tracked, muted)
-        c.setFillColor(INK_MUTED)
-        c.setFont(f_bold(), 7.5)
-        head_y = cursor - 0.18 * inch
-        c.drawString(col_asset_x, head_y, "ASSET")
-        c.drawString(col_ch_x, head_y, "CHANNEL  \u00b7  PHASE")
-        c.drawRightString(col_exp_x + col_exp_w - 0.10 * inch, head_y, "EXPOSURE")
-        c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
-        c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, head_y, "LIFT")
-        cursor -= head_h
-
-        # Hairline under header
-        c.setStrokeColor(CARD_STROKE)
-        c.setLineWidth(0.4)
-        c.line(MARGIN + 0.20 * inch, cursor, MARGIN + CONTENT_W - 0.20 * inch, cursor)
-
-        for a in top_assets[:rows]:
-            row_y_mid = cursor - row_h / 2 + 0.02 * inch
-            # Asset title, truncated to column width
-            c.setFillColor(INK_PRIMARY)
-            c.setFont(f_medium(), 10)
-            asset_label = _sanitize(a.get("asset") or a.get("action_label") or "-")
-            # Truncate to fit
-            max_asset_chars = 42
-            if len(asset_label) > max_asset_chars:
-                asset_label = asset_label[: max_asset_chars - 1].rstrip() + "..."
-            c.drawString(col_asset_x, row_y_mid, asset_label)
-            # Channel / phase
-            ch = _sanitize(a.get("channel") or "-")
-            ph = _sanitize(a.get("phase") or "")
-            ch_line = ch + ("  \u00b7  " + ph if ph else "")
-            if len(ch_line) > 30:
-                ch_line = ch_line[:29].rstrip() + "..."
-            c.setFillColor(INK_BODY)
-            c.setFont(f_regular(), 9)
-            c.drawString(col_ch_x, row_y_mid, ch_line)
-            # Exposure (right-aligned)
-            c.setFillColor(INK_PRIMARY)
-            c.setFont(f_medium(), 10)
-            c.drawRightString(col_exp_x + col_exp_w - 0.10 * inch, row_y_mid,
-                              _fmt_int(a.get("exposure") or a.get("views_total")
-                                       or a.get("ext_view_count")))
-            # Response (right-aligned)
-            c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, row_y_mid,
-                              _fmt_pct(a.get("response_pct")))
-            # Lift (right-aligned, x on high, muted on low)
-            lift = a.get("lift_x")
-            if lift is not None:
-                try:
-                    lv = float(lift)
-                    lift_str = f"{lv:.1f}x"
-                    if lv >= 1.3:
-                        c.setFillColor(INK_ACCENT_LIGHT)
-                    else:
-                        c.setFillColor(INK_BODY)
-                except (TypeError, ValueError):
-                    lift_str = "-"
-                    c.setFillColor(INK_MUTED)
-            else:
-                lift_str = "-"
-                c.setFillColor(INK_MUTED)
-            c.setFont(f_medium(), 10)
-            c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, row_y_mid, lift_str)
-
-            # Divider under each row except the last
-            cursor -= row_h
-            if a is not top_assets[:rows][-1]:
-                c.setStrokeColor(HexColor("#D5D3C7"))
-                c.setLineWidth(0.3)
-                c.line(MARGIN + 0.20 * inch, cursor,
-                       MARGIN + CONTENT_W - 0.20 * inch, cursor)
-
-        cursor = card_y - 0.24 * inch
-
-    # -----------------------------------------------------------------
-    # SECTION 4: Top 5 audiences table (bordered card, Fit chips)
-    # -----------------------------------------------------------------
-    if top_audiences:
-        rows = min(len(top_audiences), 5)
-        row_h = 0.30 * inch
+    # -- Audience card -------------------------------------------------
+    if d["top_audiences"]:
+        rows_u = min(len(d["top_audiences"]), 5)
+        row_h  = 0.30 * inch
         head_h = 0.30 * inch
         title_h = 0.32 * inch
-        card_h = title_h + head_h + rows * row_h + 0.12 * inch
-        card_y = cursor - card_h
-        c.setFillColor(CARD_FILL)
-        c.setStrokeColor(CARD_STROKE)
-        c.setLineWidth(0.5)
-        c.roundRect(MARGIN, card_y, CONTENT_W, card_h,
-                    0.14 * inch, stroke=1, fill=1)
-
-        c.setFillColor(INK_PRIMARY)
-        c.setFont(f_bold(), 12)
+        u_card_h = title_h + head_h + row_h * rows_u + 0.12 * inch
+        _light_card(c, MARGIN, cursor - u_card_h, CONTENT_W, u_card_h)
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Bold"), 12)
         c.drawString(MARGIN + 0.20 * inch, cursor - 0.24 * inch,
                      "Audiences responding, and audiences responding but under-served.")
         cursor -= title_h
+        _aud_table_light(c, ff, cursor, d["top_audiences"][:rows_u],
+                         row_h, head_h)
+        cursor -= head_h + row_h * rows_u + 0.22 * inch
 
-        col_aud_w   = 2.55 * inch
-        col_over_w  = 1.05 * inch
-        col_resp_w  = 1.05 * inch
-        col_idx_w   = 0.75 * inch
-        col_fit_w   = 1.10 * inch
-        col_aud_x   = MARGIN + 0.20 * inch
-        col_over_x  = col_aud_x + col_aud_w
-        col_resp_x  = col_over_x + col_over_w
-        col_idx_x   = col_resp_x + col_resp_w
-        col_fit_x   = col_idx_x + col_idx_w
-
-        c.setFillColor(INK_MUTED)
-        c.setFont(f_bold(), 7.5)
-        head_y = cursor - 0.18 * inch
-        c.drawString(col_aud_x, head_y, "AUDIENCE")
-        c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y, "OVERLAP")
-        c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
-        c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y, "VS GENPOP")
-        c.drawString(col_fit_x, head_y, "FIT")
-        cursor -= head_h
-
-        c.setStrokeColor(CARD_STROKE)
-        c.setLineWidth(0.4)
-        c.line(MARGIN + 0.20 * inch, cursor, MARGIN + CONTENT_W - 0.20 * inch, cursor)
-
-        for row_idx, a in enumerate(top_audiences[:rows]):
-            row_y_mid = cursor - row_h / 2 + 0.02 * inch
-            # Audience name
-            name = _sanitize(a.get("audience") or a.get("display") or "-")
-            if len(name) > 40:
-                name = name[:39].rstrip() + "..."
-            c.setFillColor(INK_PRIMARY)
-            c.setFont(f_medium(), 10)
-            c.drawString(col_aud_x, row_y_mid, name)
-            # Overlap
-            c.drawRightString(col_over_x + col_over_w - 0.10 * inch, row_y_mid,
-                              _fmt_pct(a.get("overlap_pct"), 1))
-            # Response
-            c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, row_y_mid,
-                              _fmt_pct(a.get("response_pct"), 1))
-            # vs Gen Pop
-            idx_v = a.get("vs_gen_pop_x")
-            if idx_v is not None:
-                try:
-                    ivf = float(idx_v)
-                    idx_s = f"{ivf:.1f}x"
-                    if ivf >= 1.3:
-                        c.setFillColor(INK_ACCENT_LIGHT)
-                    elif ivf < 0.7:
-                        c.setFillColor(INK_MUTED)
-                    else:
-                        c.setFillColor(INK_BODY)
-                except (TypeError, ValueError):
-                    idx_s = "-"
-                    c.setFillColor(INK_MUTED)
-            else:
-                idx_s = "-"
-                c.setFillColor(INK_MUTED)
-            c.setFont(f_medium(), 10)
-            c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, row_y_mid, idx_s)
-            # Fit chip (rounded pill)
-            fit_raw = _sanitize(a.get("fit") or "")
-            fit_k = _fit_key(fit_raw)
-            fill_c, text_c = FIT_TINTS.get(fit_k, FIT_TINTS["offtarget"])
-            chip_w = 0.95 * inch
-            chip_h = 0.20 * inch
-            chip_x = col_fit_x
-            chip_y = row_y_mid - 0.05 * inch
-            c.setFillColor(fill_c)
-            c.setStrokeColor(fill_c)
-            c.roundRect(chip_x, chip_y, chip_w, chip_h,
-                        chip_h / 2, stroke=0, fill=1)
-            c.setFillColor(text_c)
-            c.setFont(f_bold(), 8)
-            c.drawCentredString(chip_x + chip_w / 2,
-                                chip_y + 0.05 * inch,
-                                fit_raw.upper() or "OFF-TARGET")
-
-            cursor -= row_h
-            if row_idx < rows - 1:
-                c.setStrokeColor(HexColor("#D5D3C7"))
-                c.setLineWidth(0.3)
-                c.line(MARGIN + 0.20 * inch, cursor,
-                       MARGIN + CONTENT_W - 0.20 * inch, cursor)
-
-        cursor = card_y - 0.22 * inch
-
-    # -----------------------------------------------------------------
-    # Footer strip (methodology, calibrated to what the data supports)
-    # -----------------------------------------------------------------
-    footer_y = 0.55 * inch
-    c.setStrokeColor(CARD_STROKE)
-    c.setLineWidth(0.4)
-    c.line(MARGIN, footer_y + 0.35 * inch,
-           MARGIN + CONTENT_W, footer_y + 0.35 * inch)
-
-    c.setFillColor(INK_FOOTER)
-    c.setFont(f_regular(), 8)
-    disclaimer = (
-        "Directional read from Crosswalk's opted-in behavioral panel, "
-        "week ending " + _fmt_iso_date(week_end) + ". "
-        "Under-served flags cohorts responding above index with low reach; "
-        "sweet spot flags high reach and high affinity. "
-        "Precise budget reallocations and causal attribution require a "
-        "higher validation standard."
-    )
-    _draw_wrapped(
-        c, disclaimer,
-        x=MARGIN, y=footer_y + 0.20 * inch,
-        max_width=CONTENT_W,
-        font=f_regular(), size=8, color=INK_FOOTER,
-        leading=10,
-    )
-
-    # Footer chrome (small caps, tracked)
-    c.setFillColor(INK_FOOTER)
-    c.setFont(f_bold(), 7.5)
-    c.drawString(MARGIN, 0.30 * inch,
-                 "CROSSWALK  \u00b7  BEHAVIORAL INTELLIGENCE")
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    c.drawRightString(MARGIN + CONTENT_W, 0.30 * inch,
-                      f"GENERATED {generated_at}".upper())
-
+    _footer_light(c, ff, d["week_end"])
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def _light_card(c, x, y, w, h):
+    c.setFillColor(LIGHT_CARD_FILL)
+    c.setStrokeColor(LIGHT_CARD_STROKE)
+    c.setLineWidth(0.5)
+    c.roundRect(x, y, w, h, 0.14 * inch, stroke=1, fill=1)
+
+
+def _asset_table_light(c, ff, cursor, rows, row_h, head_h):
+    col_asset_w = 2.55 * inch
+    col_ch_w    = 1.50 * inch
+    col_exp_w   = 1.10 * inch
+    col_resp_w  = 0.85 * inch
+    col_lift_w  = 0.50 * inch
+    col_asset_x = MARGIN + 0.20 * inch
+    col_ch_x    = col_asset_x + col_asset_w
+    col_exp_x   = col_ch_x + col_ch_w
+    col_resp_x  = col_exp_x + col_exp_w
+    col_lift_x  = col_resp_x + col_resp_w
+
+    c.setFillColor(LIGHT_TEXT_MUTED)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    head_y = cursor - 0.18 * inch
+    c.drawString(col_asset_x, head_y, "ASSET")
+    c.drawString(col_ch_x, head_y, "CHANNEL  \u00b7  PHASE")
+    c.drawRightString(col_exp_x + col_exp_w - 0.10 * inch, head_y, "EXPOSURE")
+    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
+    c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, head_y, "LIFT")
+
+    c.setStrokeColor(LIGHT_CARD_STROKE)
+    c.setLineWidth(0.4)
+    c.line(MARGIN + 0.20 * inch, cursor - head_h + 0.05 * inch,
+           MARGIN + CONTENT_W - 0.20 * inch, cursor - head_h + 0.05 * inch)
+    ry = cursor - head_h
+
+    for i, a in enumerate(rows):
+        rm = ry - row_h / 2 + 0.02 * inch
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        lbl = _sanitize(a.get("asset") or a.get("action_label") or "-")
+        if len(lbl) > 42:
+            lbl = lbl[:41].rstrip() + "..."
+        c.drawString(col_asset_x, rm, lbl)
+        c.setFillColor(LIGHT_TEXT_BODY)
+        c.setFont(_font(ff), 9)
+        ch = _sanitize(a.get("channel") or "-")
+        ph = _sanitize(a.get("phase") or "")
+        chp = ch + ("  \u00b7  " + ph if ph else "")
+        if len(chp) > 30:
+            chp = chp[:29].rstrip() + "..."
+        c.drawString(col_ch_x, rm, chp)
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_exp_x + col_exp_w - 0.10 * inch, rm,
+                          _fmt_int(a.get("exposure") or a.get("views_total")
+                                   or a.get("ext_view_count")))
+        c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, rm,
+                          _fmt_pct(a.get("response_pct")))
+        lift = a.get("lift_x")
+        if lift is not None:
+            try:
+                lv = float(lift); lift_str = f"{lv:.1f}x"
+                if lv >= 1.3:  c.setFillColor(SIGNAL_OLIVE)
+                else:          c.setFillColor(LIGHT_TEXT_BODY)
+            except (TypeError, ValueError):
+                lift_str = "-"; c.setFillColor(LIGHT_TEXT_MUTED)
+        else:
+            lift_str = "-"; c.setFillColor(LIGHT_TEXT_MUTED)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_lift_x + col_lift_w - 0.05 * inch, rm, lift_str)
+
+        ry -= row_h
+        if i < len(rows) - 1:
+            c.setStrokeColor(LIGHT_ROW_DIVIDER)
+            c.setLineWidth(0.3)
+            c.line(MARGIN + 0.20 * inch, ry,
+                   MARGIN + CONTENT_W - 0.20 * inch, ry)
+
+
+def _aud_table_light(c, ff, cursor, rows, row_h, head_h):
+    col_aud_w  = 2.55 * inch
+    col_over_w = 1.05 * inch
+    col_resp_w = 1.05 * inch
+    col_idx_w  = 0.75 * inch
+    col_aud_x  = MARGIN + 0.20 * inch
+    col_over_x = col_aud_x + col_aud_w
+    col_resp_x = col_over_x + col_over_w
+    col_idx_x  = col_resp_x + col_resp_w
+    col_fit_x  = col_idx_x + col_idx_w
+
+    c.setFillColor(LIGHT_TEXT_MUTED)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    head_y = cursor - 0.18 * inch
+    c.drawString(col_aud_x, head_y, "AUDIENCE")
+    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y, "OVERLAP")
+    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
+    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y, "VS GENPOP")
+    c.drawString(col_fit_x, head_y, "FIT")
+
+    c.setStrokeColor(LIGHT_CARD_STROKE)
+    c.setLineWidth(0.4)
+    c.line(MARGIN + 0.20 * inch, cursor - head_h + 0.05 * inch,
+           MARGIN + CONTENT_W - 0.20 * inch, cursor - head_h + 0.05 * inch)
+    ry = cursor - head_h
+
+    for i, a in enumerate(rows):
+        rm = ry - row_h / 2 + 0.02 * inch
+        name = _sanitize(a.get("audience") or a.get("display") or "-")
+        if len(name) > 40:
+            name = name[:39].rstrip() + "..."
+        c.setFillColor(LIGHT_TEXT_PRIMARY)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawString(col_aud_x, rm, name)
+        c.drawRightString(col_over_x + col_over_w - 0.10 * inch, rm,
+                          _fmt_pct(a.get("overlap_pct"), 1))
+        c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, rm,
+                          _fmt_pct(a.get("response_pct"), 1))
+        idx_v = a.get("vs_gen_pop_x")
+        if idx_v is not None:
+            try:
+                ivf = float(idx_v); idx_s = f"{ivf:.1f}x"
+                if ivf >= 1.3:   c.setFillColor(SIGNAL_OLIVE)
+                elif ivf < 0.7:  c.setFillColor(LIGHT_TEXT_MUTED)
+                else:            c.setFillColor(LIGHT_TEXT_BODY)
+            except (TypeError, ValueError):
+                idx_s = "-"; c.setFillColor(LIGHT_TEXT_MUTED)
+        else:
+            idx_s = "-"; c.setFillColor(LIGHT_TEXT_MUTED)
+        c.setFont(_font(ff, "-Medium"), 10)
+        c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, rm, idx_s)
+
+        fit_raw = _sanitize(a.get("fit") or "")
+        fk = _fit_key(fit_raw)
+        fill_c, text_c = FIT_TINTS_LIGHT[fk]
+        chip_w = 1.05 * inch
+        chip_h = 0.20 * inch
+        chip_x = col_fit_x
+        chip_y = rm - 0.05 * inch
+        c.setFillColor(fill_c); c.setStrokeColor(fill_c)
+        c.roundRect(chip_x, chip_y, chip_w, chip_h,
+                    chip_h / 2, stroke=0, fill=1)
+        c.setFillColor(text_c)
+        c.setFont(_font(ff, "-Bold"), 8)
+        c.drawCentredString(chip_x + chip_w / 2, chip_y + 0.05 * inch,
+                            (fit_raw or "Off-target").upper())
+
+        ry -= row_h
+        if i < len(rows) - 1:
+            c.setStrokeColor(LIGHT_ROW_DIVIDER)
+            c.setLineWidth(0.3)
+            c.line(MARGIN + 0.20 * inch, ry,
+                   MARGIN + CONTENT_W - 0.20 * inch, ry)
+
+
+def _footer_light(c, ff, week_end: str) -> None:
+    y = 0.55 * inch
+    c.setStrokeColor(LIGHT_CARD_STROKE)
+    c.setLineWidth(0.4)
+    c.line(MARGIN, y + 0.35 * inch, MARGIN + CONTENT_W, y + 0.35 * inch)
+    c.setFillColor(LIGHT_TEXT_FOOTER)
+    _draw_wrapped(
+        c,
+        "Directional read from Crosswalk's opted-in behavioral panel, "
+        "week ending " + _fmt_iso_date(week_end) + ". Under-served flags "
+        "cohorts responding above index with low reach; sweet spot flags "
+        "high reach and high affinity. Precise budget reallocations and "
+        "causal attribution require a higher validation standard.",
+        x=MARGIN, y=y + 0.20 * inch, max_width=CONTENT_W,
+        font=_font(ff), size=8, color=LIGHT_TEXT_FOOTER, leading=10,
+    )
+    c.setFillColor(LIGHT_TEXT_FOOTER)
+    c.setFont(_font(ff, "-Bold"), 7.5)
+    c.drawString(MARGIN, 0.30 * inch,
+                 "CROSSWALK  \u00b7  BEHAVIORAL INTELLIGENCE")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    c.drawRightString(MARGIN + CONTENT_W, 0.30 * inch,
+                      f"GENERATED {stamp}".upper())

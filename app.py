@@ -36,8 +36,10 @@ except Exception as _mta_iq_err:
 
 try:
     import attribution_weekly_pdf as _attribution_weekly_pdf  # type: ignore
+    import campaign_hero_image as _campaign_hero_image  # type: ignore
 except Exception as _weekly_pdf_err:
     _attribution_weekly_pdf = None
+    _campaign_hero_image = None
     print(f"⚠️ Attribution IQ weekly PDF module unavailable at import time: {_weekly_pdf_err}")
 
 try:
@@ -18227,6 +18229,38 @@ def api_intent_weekly_pdf(title_slug):
                 'distributor':  ov.get('distributor')  or payload['title'].get('distributor'),
                 'opening_date': ov.get('opening_date') or payload['title'].get('opening_date'),
             })
+
+        # Resolve + fetch the campaign hero image SERVER-SIDE (never
+        # trust bytes from the client; the endpoint would otherwise be
+        # a Crosswalk-branded image-embed oracle). campaign_hero_image
+        # walks the S3 snapshot: manual `title.hero_image_url` override
+        # first, then the first YouTube trailer's hqdefault thumb, then
+        # any asset thumbnail_s3_url / og_metadata.image. Fetches are
+        # subject to a 5s timeout, 2MB size cap, and a small allow-list
+        # of trusted hosts. Any failure returns None -> the PDF drops
+        # the hero tile silently and the header text takes the space.
+        if _campaign_hero_image is not None:
+            try:
+                snap_for_hero = _intent_iq._load_normalized_snapshot(title_slug)
+                hero_bytes, hero_url = _campaign_hero_image.resolve_and_fetch(snap_for_hero)
+                if hero_bytes:
+                    payload['hero_image_bytes'] = hero_bytes
+                    print(f"[weekly-pdf] hero image resolved for {title_slug} "
+                          f"({len(hero_bytes):,} bytes) from {hero_url}")
+                else:
+                    print(f"[weekly-pdf] no hero image for {title_slug}"
+                          + (f" (tried {hero_url})" if hero_url else ""))
+            except Exception as _hero_err:
+                # Never let a hero-fetch problem block the PDF.
+                print(f"[weekly-pdf] hero image resolution failed for "
+                      f"{title_slug}: {_hero_err}")
+
+        # Normalise theme: default 'dark' (dashboard's default ground)
+        # and clamp to the two supported values so a crafted string
+        # can't route to a code path that doesn't exist.
+        _t = str(payload.get('theme') or 'dark').lower().strip()
+        payload['theme'] = 'light' if _t == 'light' else 'dark'
+
         pdf_bytes = _attribution_weekly_pdf.build_weekly_pdf(payload)
         # Filename: `<Slug>_Weekly_Summary_<week_end>.pdf`
         wk = (payload.get('week_end') or payload.get('as_of') or '').replace('-', '_')
