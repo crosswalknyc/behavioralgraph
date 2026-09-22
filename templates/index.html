@@ -22434,6 +22434,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Pull Subscriber IQ for [streaming platform]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull a Subscriber IQ</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Create a digital journey')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Create a digital journey</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Build a Flywheel')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a Flywheel</button>
+                                    <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Set up Attribution Tracking')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Set up Attribution Tracking</button>
                                 </div>
                                 <textarea id="synthChatInput" placeholder="Ask something else about this audience..." rows="2" style="width: 100%; box-sizing: border-box; resize: vertical;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
@@ -37123,11 +37124,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var mViewsNow = Math.max(0, Math.round(mover.views_now));
                     if (!mover.views_prev || mover.views_prev < 1) {
                         var jViews = _iiqCountJitter(slug, 'mover_views', mViewsNow);
-                        bullets.push('Biggest mover: ' + mLabel + ' leans dominant this week, posted inside the last 7 days and already at ' + fmtCompact(jViews) + ' viewers.');
+                        bullets.push('Biggest mover this week: ' + mLabel + ' leans dominant this week, posted inside the last 7 days and already at ' + fmtCompact(jViews) + ' viewers.');
                     } else {
                         var mDeltaPct = mover.delta / mover.views_prev * 100;
                         if (mDeltaPct < 5) mDeltaPct = 5 + (Math.abs(_iiqCountJitter(slug, 'mover_pct', 1234)) % 10) / 10;
-                        bullets.push('Biggest mover: ' + mLabel + ' leans dominant this week, views up +' + mDeltaPct.toFixed(1) + '% over the 7 days prior.');
+                        bullets.push('Biggest mover this week: ' + mLabel + ' leans dominant this week, views up +' + mDeltaPct.toFixed(1) + '% over the 7 days prior.');
                     }
                 }
                 // 2. Strongest signal
@@ -37147,7 +37148,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var sLabel = top.asset.action_label || top.asset.asset_type || 'Untitled asset';
                         var metricNoun = useInfo ? 'info-seek driver' : 'ticketing driver';
                         var ratioTxt = ratio >= 1.6 ? (', roughly ' + ratio.toFixed(1) + 'x campaign median') : '';
-                        bullets.push('Strongest signal: ' + sLabel + ' reads as the strongest ' + metricNoun + ' in-window at ' + topRate.toFixed(1) + '%' + ratioTxt + '.');
+                        bullets.push('Strongest signal at this point: ' + sLabel + ' reads as the strongest ' + metricNoun + ' in-window at ' + topRate.toFixed(1) + '%' + ratioTxt + '.');
                     }
                 }
                 // 3. Audience finding
@@ -37165,7 +37166,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var aLabel = topAud.display || topAud.subject_key || 'Top cohort';
                         aLabel = String(aLabel).replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim();
                         var idxTxt = (index >= 1.15) ? ' (index ' + index.toFixed(1) + 'x campaign mean)' : '';
-                        bullets.push('Audience finding: ' + aLabel + ' skews as the highest-affinity cohort in-window at ' + Number(topAud.overlap_bp).toFixed(2) + '% overlap' + idxTxt + '.');
+                        bullets.push('Most meaningful audience finding: ' + aLabel + ' skews as the highest-affinity cohort in-window at ' + Number(topAud.overlap_bp).toFixed(2) + '% overlap' + idxTxt + '.');
                     }
                 }
                 // 4. Soft signal
@@ -37219,6 +37220,43 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         response_metric_label: responseLabel,
                         sample_size: sampleSize,
                     },
+                    wow_chip: (function() {
+                        // Mirrors the on-screen chip: "Launch week" pill
+                        // when the prior 7-day window predates the campaign
+                        // (no comparable exposure to compare against), or
+                        // "+/-X.X% WoW exposure" when there is. Same
+                        // deterministic anti-zero jitter as the DOM chip so
+                        // a truly-flat week never ships as +0.0.
+                        if (priorWeekBeforeCampaign || totalPrev <= 0) {
+                            return { text: 'Launch week', tone: 'launch' };
+                        }
+                        var dp = (totalNow - totalPrev) / totalPrev * 100;
+                        if (Math.abs(dp) < 0.05) {
+                            var salt = String(slug) + '|wow|' + asOf;
+                            var h = 0;
+                            for (var _i = 0; _i < salt.length; _i++) h = ((h << 5) - h + salt.charCodeAt(_i)) | 0;
+                            var jt = ((Math.abs(h) % 90) + 10) / 100;
+                            dp = (h % 2 === 0) ? jt : -jt;
+                        }
+                        var sign = dp > 0 ? '+' : '';
+                        return {
+                            text: sign + dp.toFixed(1) + '% WoW exposure',
+                            tone: dp > 0 ? 'up' : (dp < 0 ? 'down' : 'flat'),
+                        };
+                    })(),
+                    subtitle: (function() {
+                        // Single-line meta the dashboard renders under
+                        // the title: "Sep 22, 2026 · T+221 days" (or
+                        // "opening day"). Uses the same helpers the DOM
+                        // side uses so the strings are byte-identical.
+                        try {
+                            var pretty = (typeof _iiqFmtAsOfDate === 'function')
+                                ? _iiqFmtAsOfDate(asOf) : asOf;
+                            var t = (opening && typeof _iiqTMinusLabel === 'function')
+                                ? _iiqTMinusLabel(asOf, opening) : '';
+                            return t ? (pretty + ' · ' + t) : pretty;
+                        } catch (_e) { return asOf || ''; }
+                    })(),
                     bullets: bullets,
                     top_assets: topAssets,
                     top_audiences: topAudiences,
@@ -74123,6 +74161,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 chips += '<button type="button" onclick="synthChatChipFill(\'Pull Subscriber IQ for [streaming platform]\')" style="' + pill + '">Pull a Subscriber IQ</button>';
                 chips += '<button type="button" onclick="synthChatChipSend(\'Create a digital journey\')" style="' + pill + '">Create a digital journey</button>';
                 chips += '<button type="button" onclick="synthChatChipSend(\'Build a Flywheel\')" style="' + pill + '">Build a Flywheel</button>';
+                chips += '<button type="button" onclick="synthChatChipSend(\'Set up Attribution Tracking\')" style="' + pill + '">Set up Attribution Tracking</button>';
                 var el = document.createElement('div');
                 el.id = 'synthChatWelcomeBubble';
                 el.className = 'pm-msg pm-msg-agent';
@@ -74328,6 +74367,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         'The flywheel hit a snag and the team has been ' +
                         'notified. Nothing further is needed from you; ' +
                         'we will follow up when it lands.');
+                    return;
+                }
+            }
+        }
+
+        function _pmAiqIntent(text) {
+            var low = String(text || '').toLowerCase()
+                .replace(/\s+/g, ' ').trim();
+            if (low === 'set up attribution tracking') return true;
+            return low.indexOf('attribution') !== -1 &&
+                /set ?up|track|pull|build|start|create/.test(low);
+        }
+
+        async function _pmPollAiqJob(jobId) {
+            var waited = 0;
+            while (waited < 1200000) {
+                await new Promise(function(res) { setTimeout(res, 9000); });
+                waited += 9000;
+                var st = null;
+                try {
+                    var r = await fetch('/api/brief-chat/aiq-status/' + jobId,
+                        { credentials: 'same-origin' });
+                    st = r.ok ? await r.json() : null;
+                } catch (_) { st = null; }
+                if (!st) continue;
+                if (st.status === 'done') {
+                    synthChatPushTurn('agent',
+                        'Your Attribution tracking is live: ' +
+                        (st.subject || 'the campaign') +
+                        ' is in the Attribution IQ tab now with the ' +
+                        'Multi-Touch read on every URL.' +
+                        (st.daily && st.end_date ?
+                            ' Daily refreshes run each morning ' +
+                            'through ' + st.end_date + ', then ' +
+                            'tracking stops on its own.' : ''));
+                    return;
+                }
+                if (st.status === 'error') {
+                    synthChatPushTurn('agent',
+                        'The tracking setup hit a snag and the team ' +
+                        'has been notified. Nothing further is needed ' +
+                        'from you; we will follow up when it lands.');
                     return;
                 }
             }
@@ -76363,6 +76444,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmJiqConfirm = null;
             _pmFwCollect = false;
             _pmFwConfirm = null;
+            _pmAiqCollect = false;
+            _pmAiqConfirm = null;
             _synthChatClearDateState();
         }
 
@@ -76418,6 +76501,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // at the captured users, never US gen pop.
         var _pmFwCollect = false;
         var _pmFwConfirm = null;
+        // Attribution tracking setup flow (2026-09-22): campaign name,
+        // tagged URLs, conversion, optional prepaid daily window.
+        var _pmAiqCollect = false;
+        var _pmAiqConfirm = null;
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -76973,6 +77060,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     _pmFwConfirm = null;
                     try { _pmPollFwJob(data.fw_job_id); } catch (_) {}
                 }
+                if (data.aiq_collect) {
+                    _pmAiqCollect = true;
+                    _pmAiqConfirm = null;
+                }
+                if (data.aiq_confirm_payload) {
+                    _pmAiqConfirm = data.aiq_confirm_payload;
+                    _pmAiqCollect = false;
+                }
+                if (data.aiq_job_id) {
+                    _pmAiqCollect = false;
+                    _pmAiqConfirm = null;
+                    try { _pmPollAiqJob(data.aiq_job_id); } catch (_) {}
+                }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
                 });
@@ -77336,6 +77436,47 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 _pmMemoryConfirm = null;
+            }
+
+            // Attribution tracking follow-through (2026-09-22):
+            // same machine - confirm charges up front, collect
+            // re-parses, cancel releases.
+            if (_pmAiqConfirm) {
+                var _aqLow = text.trim().toLowerCase();
+                if (_aqLow.indexOf('start tracking') === 0 ||
+                    /^(yes|yeah|yep|ok(ay)?|sure|run it|go ahead|do it)[.! ]*$/i.test(_aqLow)) {
+                    var _aq = _pmAiqConfirm;
+                    _pmAiqConfirm = null;
+                    await _pmAnalyze(text, _pmCollectPageContext(), '',
+                        { aiq_confirm: _aq });
+                    return;
+                }
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(_aqLow)) {
+                    _pmAiqConfirm = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was charged. Ask me ' +
+                        'anything else when ready.');
+                    return;
+                }
+                _pmAiqConfirm = null;
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { aiq_inputs: true });
+                return;
+            }
+            if (_pmAiqCollect) {
+                _pmAiqCollect = false;
+                if (/^(never ?mind|no( thanks?)?|not now|cancel( (that|it))?)[.! ]*$/i.test(text.trim())) {
+                    synthChatPushTurn('agent',
+                        'No problem. Ask me anything else when ready.');
+                    return;
+                }
+                await _pmAnalyze(text, _pmCollectPageContext(), '',
+                    { aiq_inputs: true });
+                return;
+            }
+            if (_pmAiqIntent(text)) {
+                await _pmAnalyze(text, _pmCollectPageContext(), '', {});
+                return;
             }
 
             // Build a Flywheel follow-through (2026-09-17): same

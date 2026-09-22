@@ -59353,7 +59353,8 @@ def api_synth_chat_analyze():
     # plain text asks - guided-flow confirms pass through untouched.
     if not any(body.get(k) for k in (
             'bpiq_confirm', 'bpiq_inputs', 'jiq_confirm', 'jiq_inputs',
-            'fw_confirm', 'fw_inputs', 'panel_confirm')):
+            'fw_confirm', 'fw_inputs', 'aiq_confirm', 'aiq_inputs',
+            'panel_confirm')):
         try:
             _my_years = _pm_detect_multi_year_ask(text)
             if _my_years:
@@ -59444,6 +59445,125 @@ def api_synth_chat_analyze():
             'success': True, 'action': 'answer',
             'reply': _PM_BPIQ_ASK_COPY,
             'bpiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
+    # ---- Attribution IQ tracking flow (Jenna 2026-09-22) ----
+    _aiq_confirm = body.get('aiq_confirm')
+    if isinstance(_aiq_confirm, dict) \
+            and _aiq_confirm.get('campaign_name'):
+        _aname = str(_aiq_confirm['campaign_name'])
+        _adays = _pm_aiq_days(_aiq_confirm)
+        _atotal = _PM_AIQ_SETUP_CREDITS + \
+            _PM_AIQ_DAILY_CREDITS * _adays
+        _adesc = (f'Attribution IQ: {_aname} (setup'
+                  + (f' + {_adays} prepaid daily refreshes through '
+                     f'{_aiq_confirm.get("end_tracking_date")}'
+                     if _adays else '') + ')')
+        if not consume_credit(
+                _bpiq_user, description=_adesc,
+                pull_type='Attribution IQ Setup',
+                credits_used=_atotal):
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': (f'That tracking package needs {_atotal} '
+                          'credits and your account cannot cover it '
+                          'right now. Add funds or ask your admin, '
+                          'and I will set it up the moment you are '
+                          'set.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        _aiq_job = uuid.uuid4().hex[:12]
+        _aiq_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+        _pm_aiq_status_write(_aiq_job, {
+            'job_id': _aiq_job, 'user': _bpiq_user,
+            'status': 'queued', 'started_at': time.time()})
+        threading.Thread(
+            target=_pm_run_aiq_job,
+            args=(_aiq_job, _bpiq_user, _aiq_confirm, _aiq_extras),
+            daemon=True).start()
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': (f'On it. Setting up {_aname} tracking now - '
+                      'the campaign lands in the Attribution IQ tab '
+                      'with the Multi-Touch read on every URL, and I '
+                      'will confirm here when it is live.'
+                      + (f' Daily refreshes run each morning through '
+                         f'{_aiq_confirm.get("end_tracking_date")}, '
+                         f'then tracking stops on its own.'
+                         if _adays else '')),
+            'aiq_job_id': _aiq_job,
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    if body.get('aiq_inputs'):
+        _aparsed = _pm_aiq_parse(text, usage_extras=_pm_ppu)
+        if _pm_aiq_inputs_complete(_aparsed):
+            _aparsed.pop('missing', None)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pm_aiq_confirm_reply(_aparsed),
+                'aiq_confirm_payload': _aparsed,
+                'followups': ['Start tracking', 'Cancel'],
+                'offer_deck': False, 'deck_angle': None})
+        _amissing = _aparsed.get('missing') or []
+        if not _amissing:
+            _amissing = ['the campaign name', 'tagged URLs',
+                         'the conversion']
+            if _aparsed.get('daily_refresh') \
+                    and _pm_aiq_days(_aparsed) < 1:
+                _amissing = ['a stop date after today for the daily '
+                             'tracking']
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Almost there - I still need '
+                      + ', '.join(str(m) for m in _amissing)
+                      + '. Send the missing piece(s) and I will '
+                        'line it up.'),
+            'aiq_collect': True,
+            'followups': ['Cancel'],
+            'offer_deck': False, 'deck_angle': None})
+    if _pm_aiq_stop_intent(text):
+        try:
+            from migration.attribution_synthesis import (load_trackers,
+                                                         stop_tracker)
+            _low = ' '.join(str(text or '').lower().split())
+            _hit = None
+            for t in load_trackers(s3_client):
+                if not t.get('active'):
+                    continue
+                nm = str(t.get('campaign') or '').lower()
+                if nm and (nm in _low or all(
+                        w in _low for w in nm.split()[:3])):
+                    _hit = t
+                    break
+            if _hit:
+                stop_tracker(_hit['slug'], s3_client)
+                return jsonify({
+                    'success': True, 'action': 'answer',
+                    'reply': (f"Done - daily tracking for "
+                              f"{_hit['campaign']} is stopped. The "
+                              f"campaign and every day already "
+                              f"tracked stay in the Attribution IQ "
+                              f"tab; the prepaid window is not "
+                              f"refunded."),
+                    'followups': [], 'offer_deck': False,
+                    'deck_angle': None})
+            _act = [t['campaign'] for t in load_trackers(s3_client)
+                    if t.get('active')]
+            if _act:
+                return jsonify({
+                    'success': True, 'action': 'answer',
+                    'reply': ('Which campaign should stop tracking? '
+                              'Currently tracking: '
+                              + ', '.join(_act[:8])),
+                    'followups': [f'Stop attribution tracking for '
+                                  f'{c}' for c in _act[:3]],
+                    'offer_deck': False, 'deck_angle': None})
+        except Exception:
+            traceback.print_exc()
+    if _pm_aiq_intent(text):
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _PM_AIQ_ASK_COPY,
+            'aiq_collect': True,
             'followups': ['Cancel'],
             'offer_deck': False, 'deck_angle': None})
     # ---- Digital Journey flow (Jenna 2026-09-16) ----
@@ -60519,6 +60639,203 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
         _chatbot_error_email('brief-chat/fw-job', e)
 
 
+# ---- Attribution IQ tracking pull (Jenna 2026-09-22) -----------------
+# "$500 for the first setup pull ... toggle it on to refresh daily (at
+# 100$ x day) ... put in when you want it to stop tracking. so youre
+# charged up front for tracking through the day you want the tracking
+# to end ... input all of their urls and tag them as paid or organic,
+# name the campaign, etc."
+_PM_AIQ_JOB_PREFIX = 'system/pm_aiq_jobs/'
+_PM_AIQ_CHIP = 'Set up Attribution Tracking'
+_PM_AIQ_SETUP_CREDITS = 5      # $500 at the standard $100/credit
+_PM_AIQ_DAILY_CREDITS = 1      # $100 per prepaid daily-refresh day
+
+_PM_AIQ_ASK_COPY = (
+    "Happy to set up Attribution tracking. Give me, in one message:\n"
+    "1. The campaign name\n"
+    "2. Every campaign URL, each tagged paid or organic - paste them "
+    "line by line (URL, tag, optional asset name) or paste your CSV "
+    "with URL / Tag / Label columns\n"
+    "3. The conversion - one sentence on what counts (a signup, a "
+    "purchase, a ticket, an install)\n"
+    "4. Daily tracking on or off. If on: the date tracking should "
+    "STOP - you are charged up front through that date\n\n"
+    "Example: \"Campaign: Fall Launch. Conversion: signed up on the "
+    "landing page. Daily tracking through 2026-10-15.\n"
+    "https://youtube.com/watch?v=abc paid Hero spot\n"
+    "https://instagram.com/p/xyz organic Launch teaser\"")
+
+
+def _pm_aiq_intent(text):
+    low = ' '.join(str(text or '').lower().split())
+    if low == _PM_AIQ_CHIP.lower():
+        return True
+    return ('attribution' in low
+            and any(k in low for k in ('set up', 'setup', 'track',
+                                       'pull', 'build', 'start',
+                                       'create')))
+
+
+def _pm_aiq_stop_intent(text):
+    low = ' '.join(str(text or '').lower().split())
+    return (('stop' in low or 'end' in low or 'cancel' in low)
+            and ('tracking' in low or 'attribution' in low)
+            and 'attribution' in low)
+
+
+def _pm_aiq_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_AIQ_JOB_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_aiq_parse(text, usage_extras=None):
+    """Model extraction merged with the deterministic URL/tag parser -
+    the tags are the user's own, so the deterministic read wins
+    whenever it finds tagged lines (the model never guesses tags)."""
+    from migration.attribution_synthesis import (PARSE_SYSTEM_PROMPT,
+                                                 parse_url_lines)
+    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+                             max_tokens=2500, temperature=0.0,
+                             surface='aiq_parse',
+                             usage_extras=usage_extras)
+    parsed = parsed if isinstance(parsed, dict) else {}
+    det = parse_url_lines(text)
+    if det:
+        parsed['urls'] = det
+    return parsed
+
+
+def _pm_aiq_days(parsed):
+    """Prepaid daily-refresh days: tomorrow through the stop date
+    inclusive (the setup pull itself carries today's read)."""
+    from datetime import date as _d
+    if not parsed.get('daily_refresh'):
+        return 0
+    try:
+        end = datetime.strptime(
+            str(parsed.get('end_tracking_date') or ''),
+            '%Y-%m-%d').date()
+    except Exception:
+        return 0
+    return max(0, (end - _d.today()).days)
+
+
+def _pm_aiq_inputs_complete(parsed):
+    urls = [u for u in (parsed.get('urls') or [])
+            if isinstance(u, dict) and u.get('url')
+            and str(u.get('tag') or '').lower() in ('paid', 'organic')]
+    if not (parsed.get('campaign_name') and urls
+            and parsed.get('conversion_event')):
+        return False
+    if parsed.get('daily_refresh') is None:
+        return False
+    if parsed.get('daily_refresh') and _pm_aiq_days(parsed) < 1:
+        return False
+    return True
+
+
+def _pm_aiq_confirm_reply(parsed):
+    urls = parsed.get('urls') or []
+    paid = sum(1 for u in urls
+               if str(u.get('tag')).lower() == 'paid')
+    org = len(urls) - paid
+    setup_lbl = _pm_tool_price_label('attribution_iq_setup', '$500')
+    daily_lbl = _pm_tool_price_label('attribution_iq_daily', '$100')
+    days = _pm_aiq_days(parsed)
+    lines = [
+        "Here's the Attribution tracking I'll set up:",
+        f"- Campaign: {parsed['campaign_name']}",
+        f"- {len(urls)} URLs ({paid} paid, {org} organic)",
+        f"- Conversion: {parsed['conversion_event']}",
+    ]
+    if parsed.get('daily_refresh'):
+        end = parsed.get('end_tracking_date')
+        try:
+            _dl = float(str(daily_lbl).replace('$', '')
+                        .replace(',', ''))
+            _sl = float(str(setup_lbl).replace('$', '')
+                        .replace(',', ''))
+            total_lbl = f'${_sl + _dl * days:,.0f}'
+        except Exception:
+            total_lbl = f'{setup_lbl} + {days} x {daily_lbl}'
+        lines.append(
+            f"- Daily tracking through {end}: {days} prepaid "
+            f"refresh day(s) at {daily_lbl} each")
+        lines.append('')
+        lines.append(
+            f"Total today: {total_lbl} ({setup_lbl} setup + "
+            f"{days} x {daily_lbl}). The window is prepaid through "
+            f"{end} - tracking stops there on its own, and stopping "
+            f"early does not refund the remaining days.")
+    else:
+        lines.append('')
+        lines.append(f"One-time setup: {setup_lbl}. You can turn on "
+                     f"daily tracking later from this chat.")
+    lines.append('')
+    lines.append("The campaign lands in the Attribution IQ tab with "
+                 "the Multi-Touch read on every URL, and each daily "
+                 "refresh adds that day's numbers alongside. Start "
+                 "tracking?")
+    return '\n'.join(lines)
+
+
+def _pm_run_aiq_job(job_id, username, inputs, extras):
+    try:
+        from migration.attribution_synthesis import (build_campaign,
+                                                     register_tracker)
+        name = str(inputs.get('campaign_name') or 'Campaign')
+        _pm_aiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'running',
+            'subject': name, 'started_at': time.time()})
+        out = build_campaign(inputs, requested_by=username,
+                             s3_client=s3_client)
+        days = _pm_aiq_days(inputs)
+        if inputs.get('daily_refresh') and days > 0:
+            register_tracker(out['slug'], name, username,
+                             daily=True,
+                             end_date=str(
+                                 inputs.get('end_tracking_date')),
+                             s3_client=s3_client)
+        # Access: the requester sees their campaign in the tab.
+        try:
+            def _grant(data):
+                u = (data.get('users') or {}).get(username)
+                if not u:
+                    return None
+                changed = False
+                if not u.get('has_intent_iq_access'):
+                    u['has_intent_iq_access'] = True
+                    changed = True
+                runs = u.get('allowed_intent_iq_runs')
+                if isinstance(runs, list) and '*' not in runs \
+                        and out['slug'] not in runs:
+                    runs.append(out['slug'])
+                    changed = True
+                return data if changed else None
+            _users_cas_mutate(_grant)
+        except Exception as acc_err:
+            print(f"[aiq-job {job_id}] access grant skipped: "
+                  f"{acc_err}")
+        _pm_aiq_status_write(job_id, {
+            'job_id': job_id, 'user': username, 'status': 'done',
+            'subject': name, 'slug': out['slug'],
+            'asset_count': out['asset_count'],
+            'daily': bool(inputs.get('daily_refresh')),
+            'end_date': str(inputs.get('end_tracking_date') or ''),
+            'finished_at': time.time()})
+        print(f"[aiq-job {job_id}] done -> {out['slug']}")
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            _pm_aiq_status_write(job_id, {
+                'job_id': job_id, 'user': username, 'status': 'error',
+                'finished_at': time.time()})
+        except Exception:
+            pass
+        _chatbot_error_email('brief-chat/aiq-job', e)
+
 
 def _pm_deck_fuzzy_suggestions(query):
     """Closest-catalog deck suggestions for a subject / ask that did not
@@ -61045,6 +61362,28 @@ def api_synth_chat_fw_status(job_id):
     try:
         resp = s3_client.get_object(
             Bucket=S3_BUCKET, Key=f"{_PM_FW_JOB_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/aiq-status/<job_id>', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/aiq-status')
+def api_synth_chat_aiq_status(job_id):
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_AIQ_JOB_PREFIX}{job_id}.json")
         payload = json.loads(resp['Body'].read().decode('utf-8'))
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404

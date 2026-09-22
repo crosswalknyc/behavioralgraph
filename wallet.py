@@ -122,6 +122,11 @@ DEFAULT_PRICING = {
         "journey_iq": 500.0,
         # 2026-09-18 (Jenna): Flywheel report is $300 per pull.
         "flywheel_iq": 300.0,
+        # 2026-09-22 (Jenna): Attribution IQ tracking - $500 first
+        # setup pull, $100 per prepaid daily-refresh day (charged up
+        # front through the user's chosen end date; no refunds).
+        "attribution_iq_setup": 500.0,
+        "attribution_iq_daily": 100.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,
@@ -453,6 +458,10 @@ MODULE_CATALOG = [
      "modules", 10, 0.0, "has_journey_iq_access"),
     ("flywheel_iq",                "Flywheel IQ",
      "modules", 5, 0.0, "has_flywheel_iq_access"),
+    ("attribution_iq_setup",       "Attribution IQ - Tracking Setup",
+     "modules", 5, 0.0, "has_intent_iq_access"),
+    ("attribution_iq_daily",       "Attribution IQ - Daily Refresh",
+     "modules", 1, 0.0, "has_intent_iq_access"),
     ("share_of_time",              "Share of Time - View",
      "modules", 0, 0.0, "has_share_of_time_access"),
     ("share_of_time_run",          "Share of Time - Run",
@@ -1384,6 +1393,10 @@ _PULL_TYPE_TO_TOOL_KEY = {
     "journey iq":                    "journey_iq",
     "flywheel iq":                   "flywheel_iq",
     "build a flywheel":              "flywheel_iq",
+    "attribution iq setup":          "attribution_iq_setup",
+    "attribution tracking setup":    "attribution_iq_setup",
+    "attribution iq daily":          "attribution_iq_daily",
+    "attribution daily refresh":     "attribution_iq_daily",
     "attribution iq ingest":         "intent_iq",
     "intent iq":                     "intent_iq",
     "intent ingest":                 "intent_iq",
