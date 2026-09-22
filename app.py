@@ -46637,6 +46637,17 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "CANDIDATE PROFILES fall back to `new_build` with the full "
         "combined subject. Never pick an 'Avid Fan' or other cut/skin "
         "file as the parent - only base (Total Universe) profiles.\n"
+        "  7a-COLLECTIVE-CUTS (2026-09-21, Jenna): 'cut X by all "
+        "generations' / 'by gender' / 'by age bands' is a PACKAGE of "
+        "individual cuts, never one cut. Emit decision `derive_cut` "
+        "with `derive_type`='addon_cuts', every band as its own entry "
+        "in `addon_cuts` (Gen Z 18-24, Millennials 25-44, Gen X "
+        "45-64, Boomers 65+ each with pin_category AGE + its "
+        "pin_buckets), and NO collective `cut_label` - a cut named "
+        "'Generation Cuts' or 'Gender Cuts' is a defect. Each cut "
+        "ships as '<Parent> - <Band>'. A demographic cut package "
+        "NEVER sets universe_mode: cutting readers by age does not "
+        "make them churned.\n"
         "  7b. ARRAY LEANNESS: when returning an ARRAY, keep every "
         "element compact so the whole array always fits: `extra_rows` "
         "capped at 10 items, `persona_notes` under 300 characters. "
@@ -47499,6 +47510,23 @@ def _sg_guard_universe_mode(draft, text, hay, allow_ask):
     mode = str(draft.get('universe_mode') or '').strip().lower()
     if mode not in ('churned', 'sequence'):
         mode = ''
+    # 2026-09-21 (GOTW 'Generation Cuts' defect): the model emitted
+    # universe_mode='churned' on 'Cut ... readers by all generations' -
+    # an ask with zero churn language - and this guard kept it, so the
+    # cut shipped churn-sized with a 'lapsed or churned universe' note.
+    # A model-emitted mode is now VALIDATED against the request text:
+    # no churn/sequence vocabulary anywhere in the ask = the mode drops.
+    if mode == 'churned' and not _SG_CHURN_RE.search(hay):
+        print(f"[semantic-guard] model emitted universe_mode='churned' "
+              f"but the ask carries no churn language; dropping it "
+              f"(text={text[:80]!r})")
+        mode = ''
+        draft.pop('universe_note', None)
+    elif mode == 'sequence' and not _SG_SEQUENCE_RE.search(hay):
+        print(f"[semantic-guard] model emitted universe_mode='sequence' "
+              f"but the ask carries no sequence language; dropping it")
+        mode = ''
+        draft.pop('universe_note', None)
     if not mode and _SG_CHURN_RE.search(hay):
         mode = 'churned'
     if not mode and _SG_SEQUENCE_RE.search(hay):
@@ -62354,6 +62382,18 @@ def _maybe_promote_embedded_cuts_to_parent(draft, catalog=None,
             # AFTER age stamping + the match-confidence floor, so the
             # flip there keeps those protections. Chat paths flip here.
             _allowed.append('existing_match')
+        # 2026-09-21 (GOTW 'Generation Cuts' defect): a model-emitted
+        # derive_cut carrying demographic addon_cuts is the same
+        # package - it must run the addon engine per cut, never a
+        # single umbrella cut under a collective label ('Generation
+        # Cuts'). Dedicated skin types (avid / gender / casual) keep
+        # their own path.
+        _dt = str(draft.get('derive_type') or '').strip().lower()
+        if _dt not in ('avid', 'avid_fan', 'casual', 'casual_fan',
+                       'gender_f', 'gender_m', 'avid_f', 'avid_m',
+                       'casual_f', 'casual_m', 'addon_cuts',
+                       'addon_cut', 'demo_cuts'):
+            _allowed.append('derive_cut')
         if decision not in _allowed:
             return draft
         cuts = [c for c in (draft.get('addon_cuts') or [])
@@ -62362,7 +62402,7 @@ def _maybe_promote_embedded_cuts_to_parent(draft, catalog=None,
         if not cuts:
             return draft
         hit = None
-        if decision == 'existing_match':
+        if decision in ('existing_match', 'derive_cut'):
             # The matched file IS the parent for the qualifier cuts.
             _k = str(draft.get('existing_match_s3_key') or '').strip()
             _d = str(draft.get('existing_match_display_name')
