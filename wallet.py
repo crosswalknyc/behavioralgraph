@@ -2135,6 +2135,165 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
             _user_key(user, users_data) if isinstance(user, dict) else "")
 
 
+def admin_billing_row_for_user(username: str, user: dict,
+                               users_data: dict) -> dict:
+    """Admin Users-tab snapshot. Company-billed people show the
+    shared company wallet (balance, spend, card, txns), not their
+    empty personal wallet. That is why Kartel money vanished from
+    the Users list even though the company wallet was live.
+    """
+    if not isinstance(user, dict):
+        user = {}
+    subject, kind, key = resolve_billing_subject(user, users_data or {})
+    if not isinstance(subject, dict):
+        subject, kind, key = user, "user", username
+    billed = kind == "company"
+    paying = (is_paying_customer(subject) if billed
+              else bool(user.get("paying_customer")))
+    return {
+        "username": username,
+        "email": str(user.get("email") or ""),
+        "role": str(user.get("role") or ""),
+        "company": str(user.get("company") or ""),
+        "billing_source": str(user.get("billing_source") or "user"),
+        "company_billing_admin": bool(user.get("company_billing_admin")),
+        "paying_customer": paying,
+        "unlimited": is_unlimited(user),
+        "billing_mode": billing_mode(subject),
+        "wallet_balance_usd": wallet_balance(subject),
+        "wallet_lifetime_topups_usd": float(subject.get(
+            "wallet_lifetime_topups_usd", 0.0) or 0.0),
+        "wallet_lifetime_spend_usd": float(subject.get(
+            "wallet_lifetime_spend_usd", 0.0) or 0.0),
+        "auto_reload_threshold_usd": auto_reload_threshold(subject),
+        "auto_reload_amount_usd": auto_reload_amount(subject),
+        "monthly_invoice_limit_usd": monthly_invoice_limit(subject),
+        "has_card_on_file": has_card_on_file(subject),
+        "card_brand": str(subject.get(
+            "stripe_payment_method_brand") or ""),
+        "card_last4": str(subject.get(
+            "stripe_payment_method_last4") or ""),
+        "wallet_transactions": list(subject.get(
+            "wallet_transactions") or [])[:50],
+        "billed_via_company": billed,
+        "company_wallet_name": key if billed else "",
+    }
+
+
+def norm_usage_desc(s) -> str:
+    """Fold 'Title (revised to $275)' onto 'Title' so a wallet
+    deduct and a credit-history row of the same pull collapse."""
+    t = str(s or "").strip().lower()
+    if "(revised" in t:
+        t = t.split("(revised")[0].strip()
+    return t
+
+
+def collect_usage_ledger_rows(data, company_f="", user_f=""):
+    """Union credit_usage_history with wallet deducts.
+
+    Wallet-only pulls used to skip the user history write, so Kartel
+    usage (Five9, Metamucil, Superside, ...) never appeared on the
+    Usage Ledger even though the company wallet was charged.
+    """
+    company_f = (company_f or "").strip().lower()
+    user_f = (user_f or "").strip().lower()
+    data = data or {}
+    users = data.get("users") or {}
+    companies_map = data.get("companies") or {}
+    raw = []
+    companies = set()
+    user_list = []
+
+    def _usd(val):
+        try:
+            return abs(float(val or 0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _walk_wallet(txns, *, company, default_username, email=""):
+        for t in (txns or []):
+            if not isinstance(t, dict):
+                continue
+            if str(t.get("kind") or "") != "deduct":
+                continue
+            via = str(t.get("billed_via_username")
+                      or default_username or "").strip()
+            raw.append({
+                "used_at": str(t.get("ts") or "")[:19],
+                "company": company or "",
+                "username": via or default_username or "",
+                "email": email or "",
+                "description": str(t.get("description") or "Usage"),
+                "pull_type": t.get("tool_key") or "wallet",
+                "credits": 0,
+                "usd": _usd(t.get("amount_usd")),
+                "job_id": t.get("job_id") or "",
+            })
+
+    for uname, u in users.items():
+        if not isinstance(u, dict):
+            continue
+        comp = str(u.get("company") or "").strip()
+        if comp:
+            companies.add(comp)
+        email = str(u.get("email") or "")
+        user_list.append({
+            "username": uname, "company": comp, "email": email,
+        })
+        for h in (u.get("credit_usage_history") or []):
+            if not isinstance(h, dict):
+                continue
+            raw.append({
+                "used_at": str(h.get("used_at") or "")[:19],
+                "company": comp,
+                "username": uname,
+                "email": email,
+                "description": str(h.get("description") or ""),
+                "pull_type": h.get("pull_type") or "",
+                "credits": h.get("credits_used") or 0,
+                "usd": _usd(h.get("wallet_charged_usd")),
+                "job_id": h.get("job_id") or "",
+            })
+        source = str(u.get("billing_source") or "").strip().lower()
+        if source != "company":
+            _walk_wallet(
+                u.get("wallet_transactions"),
+                company=comp,
+                default_username=uname,
+                email=email,
+            )
+
+    for cname, c in companies_map.items():
+        if not isinstance(c, dict):
+            continue
+        companies.add(str(cname))
+        _walk_wallet(
+            c.get("wallet_transactions"),
+            company=str(cname),
+            default_username="",
+        )
+
+    seen = set()
+    rows = []
+    for row in raw:
+        key = (
+            (row.get("username") or "").lower(),
+            norm_usage_desc(row.get("description")),
+            str(row.get("job_id") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        if user_f and (row.get("username") or "").lower() != user_f:
+            continue
+        if company_f and (row.get("company") or "").lower() != company_f:
+            continue
+        rows.append(row)
+    rows.sort(key=lambda r: r["used_at"], reverse=True)
+    return rows, sorted(companies), user_list
+
+
 def lookup_user(users_data: dict, key: str):
     """Resolve a user record from a subject_key that may be the
     users.json dict key, an email, or a username field.
@@ -2667,7 +2826,9 @@ __all__ = [
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
-    "resolve_billing_subject", "lookup_user", "company_billing_admins",
+    "resolve_billing_subject", "admin_billing_row_for_user",
+    "norm_usage_desc", "collect_usage_ledger_rows",
+    "lookup_user", "company_billing_admins",
     "company_members", "iter_paying_subjects",
     "user_can_spend_from_company", "user_spend_scope_summary",
     "user_wallet_covers_pull",

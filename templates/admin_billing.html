@@ -310,8 +310,14 @@
                     align-items: center; margin-bottom: 16px;">
           <h2 style="margin: 0;">All Users</h2>
           <input id="search-box" type="text" placeholder="Search by
-            email or username">
+            email, username, or company">
         </div>
+        <p style="color: #6B7280; font-size: 13px;
+                  margin: 0 0 16px 0; max-width: 720px;">
+          Company-billed users show the shared company wallet (Kartel,
+          WME). Manage opens that company so the money and pulls sit
+          in one place.
+        </p>
         <div id="users-container"></div>
       </div>
     </div>
@@ -490,9 +496,9 @@
           <div>
             <h2 style="margin: 0;">Usage Ledger</h2>
             <p style="color: #6B7280; font-size: 13px; margin: 6px 0 0 0;">
-              Every piece of work delivered and the credits it carried,
-              filterable by company and user. Download the current view
-              as a CSV, or log a new entry below.
+              Every piece of work delivered, including dollar wallet
+              pulls, filterable by company and user. Download the
+              current view as a CSV, or log a new entry below.
             </p>
           </div>
           <button id="ledger-download">Download CSV</button>
@@ -831,7 +837,7 @@
       if (deepUser) {
         const hit = allUsers.find(u => (u.username || '') === deepUser);
         if (hit) {
-          openModal(deepUser);
+          await openUserOrCompany(deepUser);
         } else {
           $('banner').innerHTML =
             '<div class="banner error">User "' + deepUser +
@@ -844,7 +850,9 @@
       const q = ($('search-box').value || '').toLowerCase().trim();
       const filtered = q ? allUsers.filter(u =>
         (u.username || '').toLowerCase().includes(q) ||
-        (u.email || '').toLowerCase().includes(q)
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.company || '').toLowerCase().includes(q) ||
+        (u.company_wallet_name || '').toLowerCase().includes(q)
       ) : allUsers;
       let html = '<div class="user-row header">';
       html += '<div>User</div><div>Email</div><div>Paying</div>';
@@ -861,9 +869,14 @@
         };
         const balCls = u.wallet_balance_usd < 0 ? ' negative' : '';
         html += '<div class="user-row">';
-        html += '<div>' + (u.username || '') + '</div>';
+        html += '<div>' + esc(u.username || '');
+        if (u.billed_via_company && u.company_wallet_name) {
+          html += '<div style="color:#6B7280;font-size:11px;">' +
+            esc(u.company_wallet_name) + ' wallet</div>';
+        }
+        html += '</div>';
         html += '<div style="color: #6B7280;">' +
-          (u.email || '') + '</div>';
+          esc(u.email || '') + '</div>';
         if (u.unlimited) {
           html += '<div><span class="tag unlimited">Unlimited</span></div>';
           html += '<div style="color: #6B7280;">Not charged</div>';
@@ -885,8 +898,8 @@
         }
         html += '<div class="amount">' +
           fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
-        html += '<div><button onclick="openModal(\'' +
-          esc(u.username) + '\', \'user\')">Manage</button></div>';
+        html += '<div><button onclick="openUserOrCompany(\'' +
+          esc(u.username) + '\')">Manage</button></div>';
         html += '</div>';
       });
       $('users-container').innerHTML = html;
@@ -966,6 +979,16 @@
         html += '</div>';
       });
       $('companies-container').innerHTML = html;
+    }
+
+    async function openUserOrCompany(username) {
+      const u = allUsers.find(x => x.username === username);
+      if (u && u.billed_via_company && u.company_wallet_name) {
+        if (!allCompanies.length) await loadCompanies();
+        openModal(u.company_wallet_name, 'company');
+        return;
+      }
+      openModal(username, 'user');
     }
 
     async function openModal(key, kind) {
@@ -2159,10 +2182,12 @@
           uSel.dataset.filled = '1';
           uSel.dataset.comp = cSel.value;
         }
+        const usdTotal = Number(d.total_usd || 0);
         $('ledger-totals').textContent =
           d.row_count + ' entries · ' +
+          fmtUsd(usdTotal) + ' charged · ' +
           Number(d.total_credits).toLocaleString('en-US') +
-          ' credits total';
+          ' credits';
         const rows = d.rows || [];
         if (!rows.length) {
           tbl.innerHTML = '<p style="color:#6B7280;">No entries for this filter.</p>';
@@ -2171,7 +2196,8 @@
         tbl.innerHTML =
           '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
           '<thead><tr>' +
-          ['Date', 'Company', 'User', 'Work delivered', 'Type', 'Credits']
+          ['Date', 'Company', 'User', 'Work delivered', 'Type',
+           'Credits', 'USD']
             .map(h => '<th style="text-align:left;padding:6px 8px;' +
                       'border-bottom:2px solid #E5E7EB;position:sticky;top:0;' +
                       'background:#fff;">' + h + '</th>').join('') +
@@ -2179,7 +2205,7 @@
           rows.map(x =>
             '<tr>' +
             '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;white-space:nowrap;">' +
-              _ledgerEsc(x.used_at.replace('T', ' ')) + '</td>' +
+              _ledgerEsc((x.used_at || '').replace('T', ' ')) + '</td>' +
             '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;">' +
               _ledgerEsc(x.company) + '</td>' +
             '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;">' +
@@ -2190,6 +2216,8 @@
               _ledgerEsc(x.pull_type) + '</td>' +
             '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;text-align:right;">' +
               _ledgerEsc(x.credits) + '</td>' +
+            '<td style="padding:6px 8px;border-bottom:1px solid #F3F4F6;text-align:right;">' +
+              (Number(x.usd || 0) ? fmtUsd(x.usd) : '') + '</td>' +
             '</tr>').join('') +
           '</tbody></table>';
       } catch (e) {

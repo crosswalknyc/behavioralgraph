@@ -1472,40 +1472,12 @@ def admin_users_billing():
     import billing  # type: ignore
     from app import load_users  # type: ignore
 
+    data = load_users() or {}
     rows = []
-    for uname, u in ((load_users() or {}).get("users") or {}).items():
+    for uname, u in (data.get("users") or {}).items():
         if not isinstance(u, dict):
             continue
-        rows.append({
-            "username": uname,
-            "email": str(u.get("email") or ""),
-            "role": str(u.get("role") or ""),
-            "company": str(u.get("company") or ""),
-            "billing_source": str(
-                u.get("billing_source") or "user"),
-            "company_billing_admin": bool(
-                u.get("company_billing_admin")),
-            "paying_customer": bool(u.get("paying_customer")),
-            "unlimited": wallet.is_unlimited(u),
-            "billing_mode": wallet.billing_mode(u),
-            "wallet_balance_usd": wallet.wallet_balance(u),
-            "wallet_lifetime_topups_usd": float(u.get(
-                "wallet_lifetime_topups_usd", 0.0) or 0.0),
-            "wallet_lifetime_spend_usd": float(u.get(
-                "wallet_lifetime_spend_usd", 0.0) or 0.0),
-            "auto_reload_threshold_usd":
-                wallet.auto_reload_threshold(u),
-            "auto_reload_amount_usd": wallet.auto_reload_amount(u),
-            "monthly_invoice_limit_usd":
-                wallet.monthly_invoice_limit(u),
-            "has_card_on_file": wallet.has_card_on_file(u),
-            "card_brand": str(u.get(
-                "stripe_payment_method_brand") or ""),
-            "card_last4": str(u.get(
-                "stripe_payment_method_last4") or ""),
-            "wallet_transactions": list(u.get(
-                "wallet_transactions") or [])[:50],
-        })
+        rows.append(wallet.admin_billing_row_for_user(uname, u, data))
     rows.sort(key=lambda r: (
         not r["paying_customer"],  # paying first
         r["username"].lower(),

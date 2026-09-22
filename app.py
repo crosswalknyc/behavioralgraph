@@ -2508,6 +2508,26 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         return False
 
 
+def _record_wallet_fallback_usage(user, entry, outcome, credits_used):
+    """Wallet paid; still write the user's pull log.
+
+    consume_credit used to return after apply_wallet_deduct without
+    appending credit_usage_history. Admin Usage Ledger and the user
+    credits modal then hid every Kartel dollar pull.
+    """
+    stamped = dict(entry or {})
+    usd = outcome.get('wallet_charged_usd')
+    if usd is not None:
+        stamped['wallet_charged_usd'] = usd
+    if outcome.get('wallet_tool_key'):
+        stamped['wallet_tool_key'] = outcome['wallet_tool_key']
+    user['credits_used'] = user.get('credits_used', 0) + credits_used
+    history = user.setdefault('credit_usage_history', [])
+    history.insert(0, stamped)
+    user['credit_usage_history'] = history[:500]
+    outcome['ok'] = True
+
+
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
     """Consume credits from user and/or company pool.
     Returns True if successful.
@@ -2559,6 +2579,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
                                        username=username):
+                    _record_wallet_fallback_usage(
+                        user, entry, outcome, credits_used)
                     return data
                 return None
             if ceiling != -1 and ceiling_remaining < credits_used:
@@ -2566,6 +2588,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
                 if _try_wallet_fallback(user, pull_type, description,
                                        job_id, outcome, data=data,
                                        username=username):
+                    _record_wallet_fallback_usage(
+                        user, entry, outcome, credits_used)
                     return data
                 return None
 
@@ -2585,6 +2609,8 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             if _try_wallet_fallback(user, pull_type, description,
                                    job_id, outcome, data=data,
                                    username=username):
+                _record_wallet_fallback_usage(
+                    user, entry, outcome, credits_used)
                 return data
             return None
 
@@ -5681,43 +5707,28 @@ def api_admin_usage_ledger():
     user_f = (request.args.get('user') or '').strip().lower()
     fmt = (request.args.get('format') or 'json').strip().lower()
     data = load_users() or {}
-    rows = []
-    companies = set()
-    user_list = []
-    for uname, u in (data.get('users') or {}).items():
-        comp = str(u.get('company') or '').strip()
-        if comp:
-            companies.add(comp)
-        user_list.append({'username': uname, 'company': comp,
-                          'email': u.get('email') or ''})
-        if user_f and uname.lower() != user_f:
-            continue
-        if company_f and comp.lower() != company_f:
-            continue
-        for h in (u.get('credit_usage_history') or []):
-            rows.append({
-                'used_at': str(h.get('used_at') or '')[:19],
-                'company': comp, 'username': uname,
-                'email': u.get('email') or '',
-                'description': _fix(h.get('description') or ''),
-                'pull_type': h.get('pull_type') or '',
-                'credits': h.get('credits_used') or 0,
-            })
-    rows.sort(key=lambda r: r['used_at'], reverse=True)
-    total = sum(int(r['credits'] or 0) for r in rows)
+    import wallet as _wallet_ledger
+    rows, companies, user_list = _wallet_ledger.collect_usage_ledger_rows(
+        data, company_f=company_f, user_f=user_f)
+    for r in rows:
+        r['description'] = _fix(r.get('description') or '')
+    total = sum(int(r.get('credits') or 0) for r in rows)
+    total_usd = sum(float(r.get('usd') or 0) for r in rows)
     if fmt == 'csv':
         import csv as _csv
         import io as _io
         buf = _io.StringIO()
         w = _csv.writer(buf)
         w.writerow(['Date (UTC)', 'Company', 'User', 'Email',
-                    'Work Delivered', 'Type', 'Credits'])
+                    'Work Delivered', 'Type', 'Credits', 'USD'])
         for r in rows:
             w.writerow([r['used_at'].replace('T', ' '), r['company'],
                         r['username'], r['email'], r['description'],
-                        r['pull_type'], r['credits']])
+                        r['pull_type'], r['credits'],
+                        f"{float(r.get('usd') or 0):.2f}"])
         w.writerow([])
-        w.writerow(['TOTAL', '', '', '', '', '', total])
+        w.writerow(['TOTAL', '', '', '', '', '', total,
+                    f"{total_usd:.2f}"])
         name = 'Usage_Ledger'
         if company_f:
             name += '_' + re.sub(r'[^A-Za-z0-9]+', '_',
@@ -5734,8 +5745,9 @@ def api_admin_usage_ledger():
             })
     return jsonify({
         'success': True, 'rows': rows[:1000], 'total_credits': total,
+        'total_usd': total_usd,
         'row_count': len(rows),
-        'companies': sorted(companies),
+        'companies': companies,
         'users': sorted(user_list, key=lambda x: x['username'].lower()),
     })
 
