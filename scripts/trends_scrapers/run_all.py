@@ -142,6 +142,19 @@ SCRAPERS = [
     # single package `acp`. The Apple TV channel package `aat` is a
     # storefront for the same catalog, not a tier, so it stays out.
     ('amcplus',       'scripts.trends_scrapers.amcplus',       'AMC+',       'streaming'),
+    # MovieSphere+ (2026-09-22, Jenna). Lionsgate's ad-free on-demand
+    # service, same JustWatch path again, single package `mse`. The
+    # Cineverse packages that sit beside it in the Amazon Channels
+    # storefront are a different company's catalog and stay out.
+    ('moviesphereplus', 'scripts.trends_scrapers.moviesphereplus', 'MovieSphere+', 'streaming'),
+    # Lionsgate+ (2026-09-22, Jenna). The studio's own library service,
+    # sold in the US only as a Prime Video add-on channel. JustWatch
+    # carries no package for it, so this one reads the channel's own
+    # Prime Video storefront instead, with a Chrome TLS fingerprint.
+    # That is enough to run here rather than residentially: a plain
+    # request from this host gets the bot wall, the impersonated one
+    # gets the real page. No cookies, nothing for the operator to do.
+    ('lionsgateplus', 'scripts.trends_scrapers.lionsgateplus', 'Lionsgate+', 'streaming'),
     # Starz on Amazon (2026-09-15). Not a scrape: Starz sold through
     # Prime Video Channels is the same entitlement and the same title
     # list as Starz, so this mirrors `latest/starz.json` under its own

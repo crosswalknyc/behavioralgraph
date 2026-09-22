@@ -344,6 +344,29 @@ STREAMING_PLATFORMS = [
     # the same catalog resold, so it stays out. Runs from Hetzner in
     # the daily batch.
     ('amcplus',       'AMC+',       False),
+    # 2026-09-22 (Jenna): MovieSphere+, Lionsgate's ad-free on-demand
+    # service drawn from the studio library. Same JustWatch path as
+    # Paramount+ / Peacock / AMC+, single package `mse`. Its US
+    # carriage is Prime Video Channels plus YouTube Primetime
+    # Channels, so this panel already IS the Amazon-carried service -
+    # it is a standalone tab, NOT a parent wanting a "MovieSphere+ on
+    # Amazon" breakout the way Starz has one. See the module docstring
+    # in `scripts/trends_scrapers/moviesphereplus.py` for why such a
+    # breakout could not satisfy the subset invariant.
+    ('moviesphereplus', 'MovieSphere+', False),
+    # 2026-09-22 (Jenna): Lionsgate+, the studio's own library service
+    # and the international STARZPLAY brand now standing on its own
+    # after the 2025 Starz separation. It went live in the US on
+    # 2026-04-09 at $6.99 a month, ad-free, sold ONLY as a Prime Video
+    # add-on channel, so this panel already IS the Amazon-carried
+    # service: a standalone tab, NOT a parent wanting a "Lionsgate+ on
+    # Amazon" breakout the way Starz has one. JustWatch carries no
+    # package for it, so the catalog comes from the channel's own
+    # Prime Video storefront. See the module docstring in
+    # `scripts/trends_scrapers/lionsgateplus.py` for why a breakout
+    # could not satisfy the subset invariant, and for the two sources
+    # that were tried and do not work.
+    ('lionsgateplus', 'Lionsgate+', False),
     ('espnplus',   'ESPN+',        False),
     # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
     # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
@@ -4050,6 +4073,23 @@ _AUDIENCE_NOUN_BY_KIND_PLATFORM = {
     ('film', 'starz_amazon'):      'US views on Starz through Prime Video Channels',
     ('tv', 'starz_amazon'):        'US views on Starz through Prime Video Channels',
     ('title', 'starz_amazon'):     'US views on Starz through Prime Video Channels',
+    # MovieSphere+ is sold through Amazon and is not sold as an app of
+    # its own, so this panel already is the whole service AND the
+    # Amazon-carried one. Saying so inline is what stops a reader
+    # expecting a separate Amazon breakout, and stops anyone adding
+    # one: a breakout would be the whole parent, which the subset
+    # invariant forbids.
+    ('film', 'moviesphereplus'):   'US views on MovieSphere+, carried on Amazon',
+    ('tv', 'moviesphereplus'):     'US views on MovieSphere+, carried on Amazon',
+    ('title', 'moviesphereplus'):  'US views on MovieSphere+, carried on Amazon',
+    # Lionsgate+ is sold in the US only as a Prime Video add-on
+    # channel, so its whole audience already is its Amazon audience.
+    # Saying so inline is what stops a reader expecting a separate
+    # Amazon breakout, and stops anyone adding one: a breakout would
+    # be the whole parent, which the subset invariant forbids.
+    ('film', 'lionsgateplus'):     'US views on Lionsgate+, carried on Amazon',
+    ('tv', 'lionsgateplus'):       'US views on Lionsgate+, carried on Amazon',
+    ('title', 'lionsgateplus'):    'US views on Lionsgate+, carried on Amazon',
 }
 
 
@@ -4261,6 +4301,8 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'paramountplus': 'paramountplus',
     'peacock':       'peacock',
     'amcplus':       'amcplus',
+    'moviesphereplus': 'moviesphereplus',
+    'lionsgateplus':   'lionsgateplus',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See

@@ -147,14 +147,27 @@ _MAX_PODCAST_ITEMS   = 520   # 2026-09-09: was 300. 6 panels x full 100
 _MAX_SONG_ITEMS      = 480   # 2026-09-09: was 250. 6 music panels x
                              # full 100 rendered rows; same rank-81-100
                              # gap as podcasts before the bump.
-_MAX_STREAMING_ITEMS = 520   # 2026-09-14: was 480. 12 platforms
+_MAX_STREAMING_ITEMS = 600   # 2026-09-22: was 560 earlier the same
+                             # day, for MovieSphere+. Lionsgate+ lands
+                             # alongside it and draws on the same
+                             # Lionsgate library, so much of its list
+                             # is already in the union; the bump is
+                             # for the part that is not, mainly the
+                             # John Wick, Hunger Games and Saw film
+                             # rotations and the Lionsgate TV shelf.
+                             # 14 platforms
                              # (netflix, disneyplus, hulu, max,
                              # primevideo, paramountplus, peacock,
-                             # amcplus, espnplus, britbox, mgmplus,
-                             # starz) x top ~30-40 unique, PLUS the 4
-                             # Netflix global lists (global_films_en/
-                             # nonen, global_tv_en/nonen) that were
-                             # never collected before 2026-09-09.
+                             # amcplus, moviesphereplus, espnplus,
+                             # britbox, mgmplus, starz) x top ~30-40
+                             # unique, PLUS the 4 Netflix global lists
+                             # (global_films_en/nonen, global_tv_en/
+                             # nonen) that were never collected before
+                             # 2026-09-09. MovieSphere+ is a Lionsgate
+                             # library catalog that barely overlaps the
+                             # others, so the old cap would have begun
+                             # truncating the tail of the union rather
+                             # than absorbing it.
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
 # Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
@@ -481,6 +494,17 @@ _STREAMING_SLUGS = (
     # Same JustWatch-fed path as Paramount+ / Peacock. Anchors +
     # ceiling live in _STREAMING_PLATFORMS_META below.
     ('amcplus',       'AMC+'),
+    # 2026-09-22: MovieSphere+ (Lionsgate's ad-free on-demand service,
+    # JustWatch package mse). Same JustWatch-fed path as Paramount+ /
+    # Peacock / AMC+. Anchors + ceiling live in
+    # _STREAMING_PLATFORMS_META below.
+    ('moviesphereplus', 'MovieSphere+'),
+    # 2026-09-22: Lionsgate+ (the studio's own library service, sold
+    # in the US only as a Prime Video add-on channel). No JustWatch
+    # package exists for it, so its catalog comes from the channel's
+    # own Prime Video storefront. Anchors + ceiling live in
+    # _STREAMING_PLATFORMS_META below.
+    ('lionsgateplus', 'Lionsgate+'),
 )
 
 
@@ -2454,6 +2478,200 @@ _STREAMING_PLATFORMS_META = [
          'and NOT AMC Theatres - do not reason from linear AMC '
          'ratings or from box office.'
      )},
+    # 2026-09-22: MovieSphere+. The smallest service on the Streaming
+    # tab by a wide margin, and the newest, so the ceiling is roughly
+    # a hundredth of the premium tier's rather than a fraction of it.
+    #
+    # How the level was reached, since nobody publishes a subscriber
+    # count for this service and the anchors that do exist measure
+    # something else:
+    #   1. Antenna, State of Subscriptions Q3'26 (Q2'26 data), names
+    #      MovieSphere+ as one of the 31 Specialty SVOD services it
+    #      tracks, carried on Amazon Channels and on YouTube Primetime
+    #      Channels. 42M specialty subscriptions sit across those 31
+    #      services, but the distribution is heavily skewed to
+    #      Crunchyroll, BritBox, AMC+, MGM+ and PBS KIDS, so the 1.35M
+    #      simple average is an upper bound on a new entrant, not an
+    #      estimate of one.
+    #   2. Same report: Amazon Channels took 67% of specialty gross
+    #      adds in Q2'26 and averaged 4.8M gross adds a quarter across
+    #      its 37 services, of which 45% of new-to-Amazon sign-ups
+    #      chose a specialty service first.
+    #   3. MovieSphere+ launched in the US in May 2026 at $4.99, now
+    #      promoted at $1.25 for two months, so at the Q2'26 read it
+    #      has had roughly two promo-priced quarters on Amazon and a
+    #      smaller run on YouTube Primetime.
+    # A new entrant taking low single digits of the ~2.1M quarterly
+    # specialty gross adds billed through Amazon lands near 65-105K
+    # gross adds a quarter; Antenna's specialty survival curve is
+    # steep on promo-priced channels, so the standing base reasons to
+    # about 210-290K US subscriber ACCOUNTS.
+    #
+    # Accounts are not people and weekly is not daily, which is where
+    # a level like this usually goes wrong. At roughly 1.9 viewers an
+    # account the reachable base is about 470K US individuals; about
+    # half of a specialty add-on's base opens it in a given week, so
+    # about 235K weekly actives; a weekly active on a low-frequency
+    # film add-on opens it on roughly 2.2 days, so about 74K daily
+    # uniques service-wide, with the number one title taking on the
+    # order of 7-9% of a day's viewers.
+    #
+    # WEEKLY TO DAILY, FOR A TITLE. The tiers below are weekly, as
+    # every entry on this list is, and the stored value is daily. The
+    # divisor for a TITLE is not seven. A viewer watches a given film
+    # or a given episode once in a week, not once a day, so a title's
+    # weekly unique viewers spread over roughly three and a half days
+    # of arrival rather than seven. That is the divisor stated in the
+    # anchors, and it is what puts this rail in the same proportion to
+    # BritBox and MGM+ that their subscriber bases are in: BritBox at
+    # roughly 3M US subscribers tops out near 204K a day, and this
+    # service at a twelfth of that base tops out near 14K.
+    #
+    # The tiers are written as CONTIGUOUS rank ranges on purpose. The
+    # first version named "top-10", "ranks 10-40" and then "deep
+    # catalog" with no range, and the model filled the hole by
+    # inventing "ranks 40-100" for the ranks-11-40 band, which put a
+    # rank-84 title five times where it belonged. Every rank now falls
+    # in exactly one tier.
+    #
+    # DO NOT reason from MovieSphere the free FAST channel (Nielsen-
+    # measured across ~20 platforms since 2024) or from MovieSphere
+    # Gold (the over-the-air network in 30M+ homes). Those are free
+    # linear siblings of this service, not this service, and their
+    # reach is the total-brand-reach figure the rules rule out.
+    {'key': 'moviesphereplus',
+     'label': 'MovieSphere+',
+     'ceiling': 135_000,
+     'anchors': (
+         "MovieSphere+ is Lionsgate's ad-free on-demand subscription "
+         'drawn from the studio library, launched in the US in May '
+         '2026 at $4.99/month and sold through Prime Video Channels '
+         'and YouTube Primetime Channels. It is a NEW and SMALL '
+         'service: Antenna tracks it among its 31 Specialty SVOD '
+         'services but publishes no count for it, and reasoning from '
+         "Antenna's Amazon Channels gross-add flow and the service's "
+         'launch timing puts it near 210-290K US subscriber accounts, '
+         'roughly 470K US individuals reachable, roughly 235K of them '
+         'watching in a given week. The panel carries about 150 '
+         'titles and the weekly tiers below cover every rank with no '
+         'gap and no overlap, by the rank given in CHART CONTEXT: '
+         'rank 1 35,000-52,000 US viewers/week, and that top slot is '
+         'usually a marquee Lionsgate feature in rotation (Django '
+         'Unchained, a John Wick or Hunger Games entry, Kill Bill, '
+         'the Saw and Evil Dead horror catalog); ranks 2-10 '
+         '20,000-35,000/week; ranks 11-40 9,000-20,000/week; ranks '
+         '41-100 3,500-9,000/week; ranks 101 and below, which is '
+         'mostly deep Lionsgate TV and older acquisitions (Blue '
+         'Mountain State, Masters of Horror, Call Me Fitz), '
+         '1,200-3,500/week. Read the tier off the rank you are given '
+         'and do not promote a title into a higher tier because it is '
+         'famous: a well-known feature sitting at rank 84 on a '
+         'service this small is a rank-84 audience. WEEKLY TO DAILY '
+         'FOR THIS KIND: divide a title tier by 3.5, not by 7. A '
+         'viewer watches a given film or episode once in a week '
+         'rather than once a day, so a title\'s weekly viewers arrive '
+         'across roughly three and a half days. Rank 1 therefore '
+         'lands near 10,000-14,900 a day and the deep catalog near '
+         '340-1,000, before the day-of-week factor. Anchor: Antenna '
+         'State of Subscriptions Q3 2026 Specialty SVOD landscape + '
+         'the published US launch price and date. '
+         'IMPORTANT: MovieSphere+ the paid on-demand service, NOT '
+         'MovieSphere the free FAST channel and NOT MovieSphere Gold '
+         'the over-the-air network in 30M+ homes. Do not reason from '
+         'either free sibling, from Nielsen FAST ratings, or from the '
+         "box office of the Lionsgate titles in the catalog. Also NOT "
+         'Cineverse, which is a different company whose channels sit '
+         'beside this one in the same storefront.'
+     )},
+    # 2026-09-22: Lionsgate+. A sibling of the MovieSphere+ entry
+    # above in every way that matters here: the same studio's library,
+    # the same storefront, the same month or so of life, and the same
+    # absence of any published count. It reads a little larger, and
+    # the reasons are named below rather than assumed.
+    #
+    # How the level was reached:
+    #   1. Lionsgate+ went live in the US on 2026-04-09 at $6.99 a
+    #      month, ad-free, seven-day trial, and the service's own FAQ
+    #      names Amazon as the only way to subscribe or to cancel. So
+    #      it has had roughly two quarters, all of them on one
+    #      storefront.
+    #   2. Antenna, State of Subscriptions Q3'26 (Q2'26 data): 42M
+    #      specialty SVOD subscriptions across the 31 services it
+    #      tracks, and Lionsgate+ is not among them, having launched
+    #      inside the quarter. The 1.35M simple average across those
+    #      31 is skewed to Crunchyroll, BET+, BritBox, AMC+, MGM+ and
+    #      PBS KIDS, so it bounds a new entrant rather than estimating
+    #      one.
+    #   3. Same report: Amazon Channels took 67% of specialty gross
+    #      adds in Q2'26 and averaged 4.8M gross adds a quarter across
+    #      the storefront, and specialty retention runs 54% at three
+    #      months and 27% at twelve.
+    #   4. The closest published new-entrant marker is Howdy, which
+    #      Antenna put past 1M subscribers after about seven months.
+    #      That is a CEILING on this service, not a comparison: Howdy
+    #      launched at $2.99 inside Roku's own storefront, where it
+    #      took 23% of all SVOD signups, then added a mobile app and a
+    #      second country. Lionsgate+ has one storefront, no app of
+    #      its own, no originals, more than twice the price, and a
+    #      marketing site that at launch answered nothing about the
+    #      catalog.
+    #   5. It did ride Amazon's June 2026 channel promotion at $0.99
+    #      for two months, which lifts gross adds and steepens the
+    #      survival curve behind them.
+    # Reading those together, a new entrant taking low single digits
+    # of the roughly 2.1M quarterly specialty gross adds billed
+    # through Amazon, across about two quarters and against that
+    # retention curve, stands at about 240-330K US subscriber
+    # ACCOUNTS. That is modestly ahead of MovieSphere+ on the studio
+    # name and a one-month-earlier start, and held back by the higher
+    # price and the single storefront.
+    #
+    # Accounts are not people and weekly is not daily, which is where
+    # a level like this usually goes wrong. At roughly 1.9 viewers an
+    # account the reachable base is about 540K US individuals; about
+    # half of an add-on's base opens it in a given week, so about 270K
+    # weekly actives; a weekly active on a film-led add-on opens it on
+    # roughly 2.2 days, so about 85K daily uniques service-wide. The
+    # number one title takes on the order of 7-9% of a day's viewers,
+    # which is what puts the top slot near 6-8K a day and the bands
+    # below where they are.
+    {'key': 'lionsgateplus',
+     'label': 'Lionsgate+',
+     'ceiling': 155_000,
+     'anchors': (
+         "Lionsgate+ is the Lionsgate studio's own ad-free library "
+         'service, the brand Starz used internationally as STARZPLAY '
+         'before the 2022 rebrand and now standing on its own after '
+         'the 2025 Starz separation. It went live in the US on '
+         '2026-04-09 at $6.99/month and is sold in the US ONLY as a '
+         'Prime Video add-on channel. It is a NEW and SMALL service: '
+         'nobody publishes a count for it, and reasoning from '
+         "Antenna's Amazon Channels gross-add flow, its specialty "
+         'retention curve and the launch timing puts it near 240-330K '
+         'US subscriber accounts, roughly 540K US individuals '
+         'reachable, roughly 270K of them watching in a given week. '
+         'The catalog is the Lionsgate library: the John Wick films, '
+         'the Hunger Games and Saw rotations, La La Land, Knives Out, '
+         'Hacksaw Ridge, A Simple Favor, plus Lionsgate TV (Weeds, '
+         'Nurse Jackie, Spartacus, Nashville, Hell on Wheels, Party '
+         'Down, Minx, Amandaland). Bands: the number one title '
+         '32,000-60,000 US viewers/week, and that top slot is usually '
+         'a John Wick entry or another marquee feature in rotation; '
+         'top-10 14,000-32,000/week; ranks 10-40 4,500-14,000/week; '
+         'deep catalog and older Lionsgate TV 700-4,500/week. Anchor: '
+         'Antenna State of Subscriptions Q3 2026 Specialty SVOD '
+         'landscape + the published US launch price and date. '
+         'IMPORTANT: Lionsgate+ the add-on channel, NOT Starz, which '
+         'is a separate company since 2025 and last disclosed 12.7M '
+         'US streaming subscribers - the two share Lionsgate films in '
+         'the pay windows and share a brand lineage, and one is about '
+         'forty times the other. NOT the theatrical box office of the '
+         'films in the catalog. NOT Prime Video, which merely carries '
+         'it. NOT the international Lionsgate+ footprint across '
+         'eighteen countries. And NOT MovieSphere+, its sibling on '
+         'the same storefront drawn from the same library, which is a '
+         'different service with a different audience.'
+     )},
     # 2026-09-15: Starz as carried on Amazon Prime Video Channels.
     # `derived_from` marks it as a DISTRIBUTION PATH of another entry
     # rather than a service of its own: it is never put in front of
@@ -3091,6 +3309,20 @@ _CHART_LABEL_TO_PLATFORM = (
     ('amc+',             'amcplus'),
     ('amc plus',         'amcplus'),
     ('amcplus',          'amcplus'),
+    # 2026-09-22: MovieSphere+. No bare 'moviesphere' key on purpose -
+    # the free FAST channel and the over-the-air network share the
+    # brand name and are not on the Streaming tab, so only the '+'
+    # spellings route here.
+    ('moviesphere+',     'moviesphereplus'),
+    ('moviesphere plus', 'moviesphereplus'),
+    ('moviesphereplus',  'moviesphereplus'),
+    # 2026-09-22: Lionsgate+. No bare 'lionsgate' key on purpose - the
+    # studio name is not a service and appears as the brand tile on
+    # the channel's own storefront, so only the '+' spellings route
+    # here.
+    ('lionsgate+',       'lionsgateplus'),
+    ('lionsgate plus',   'lionsgateplus'),
+    ('lionsgateplus',    'lionsgateplus'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
     # 'xumo' must sit with the FAST group; the Streaming tab has no
     # Xumo panel.

@@ -43,6 +43,8 @@ _SERVICE_BY_PATH_HINT = {
     'peacock': 'peacock', 'appletv': 'apple', 'roku': 'roku', 'tubi': 'tubi',
     'pluto': 'pluto', 'xumo': 'xumo', 'starz': 'starz', 'mgmplus': 'mgm',
     'britbox': 'britbox', 'amcplus': 'amc',
+    'moviesphereplus': 'moviesphere',
+    'lionsgateplus': 'lionsgate',
 }
 
 # A rail that is one service carried on another names both, and both

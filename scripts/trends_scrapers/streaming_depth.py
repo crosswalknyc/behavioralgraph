@@ -39,7 +39,15 @@ ESPN+ is deliberately absent: JustWatch carries ~1 title for it (live
 sports don't chart), so the ESPN+ panel keeps its residential depth.
 Paramount+ and Peacock are also absent: their own Hetzner scrapers
 already pull 100 per kind straight from JustWatch via
-`_justwatch_svod.py`.
+`_justwatch_svod.py`. AMC+ and MovieSphere+ are absent for the same
+reason.
+
+Lionsgate+ is absent for the opposite reason and cannot be added:
+JustWatch carries no US package for it at all (all 350 live US
+packages were walked on 2026-09-22), so there is nothing here to
+extend it with. Its panel carries the depth its own scraper reads off
+the channel's Prime Video storefront. See
+`scripts/trends_scrapers/lionsgateplus.py`.
 
 Standalone:
     python3 -m scripts.trends_scrapers.streaming_depth

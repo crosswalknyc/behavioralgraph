@@ -139,6 +139,42 @@ _RAILS: dict[str, DerivedRail] = {
     ),
 }
 
+# NOT EVERY AMAZON-CARRIED SERVICE BELONGS HERE, and the test is not
+# "is it sold on Amazon Channels".
+#
+# A rail earns an entry only when the parent rail is the WHOLE service
+# across every distribution path and the child is one path through it,
+# because that is the only arrangement in which the child can sit
+# strictly below the parent. Starz qualifies: it has its own app, its
+# own storefront sales, MVPD-sold OTT, and Prime Video Channels, so
+# the Amazon path is a real proper subset.
+#
+# MovieSphere+ (added to the Streaming tab 2026-09-22) deliberately
+# has no entry. It is not sold as an app of its own; its US carriage
+# is Prime Video Channels plus YouTube Primetime Channels, and the
+# only US package JustWatch lists for it is the Amazon one, which is
+# what its panel is built from. A "MovieSphere+ on Amazon" rail would
+# therefore be all or nearly all of its parent, and `child_ceiling`
+# exists precisely to make a child that equals its parent
+# unrepresentable. The MovieSphere+ panel already IS the
+# Amazon-carried service and its scope label says so; there is
+# nothing left to break out. See
+# `scripts/trends_scrapers/moviesphereplus.py`.
+#
+# Lionsgate+ (added to the Streaming tab the same day) deliberately
+# has no entry either, and for the same reason stated even more
+# plainly by the service itself: its own FAQ answers "how do I
+# subscribe" with "add it as an additional channel to Amazon Prime
+# Video" and "how do I cancel" with amazon.com/yms. There is no app
+# and no second storefront, so its entire US audience already is its
+# Amazon audience, and a "Lionsgate+ on Amazon" rail would be 100% of
+# its parent on the first render. Do not be misled by the Starz
+# lineage: Lionsgate+ is the brand Starz used internationally, and
+# Starz does have a legitimate Amazon child, but they are separate
+# companies and separate services now, and the child of one is not
+# evidence for a child of the other. See
+# `scripts/trends_scrapers/lionsgateplus.py`.
+
 
 # ---------------------------------------------------------------------------
 # Registry
