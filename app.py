@@ -49201,7 +49201,11 @@ _PLACEHOLDER_SUBJECT_RE = re.compile(
     r'^(?:this|that|the|a|an|my|our|your|these|those)?'
     r'[\s-]*(?:profile|profiles|audience|audiences|cohort|cohorts|'
     r'subject|subjects|persona|personas|request|segment|segments|'
-    r'build|builds|it|them)s?$', re.IGNORECASE)
+    r'build|builds|it|them)s?$'
+    # Held/unverified markers (2026-09-22 Amandaland): a draft whose
+    # subject reads as a hold state is never a renderable card either.
+    r'|^(?:unknown|unverified|unconfirmed|tbd|n/?a|none|pending)$'
+    r'|^awaiting\b', re.IGNORECASE)
 
 
 def _is_placeholder_subject(subject) -> bool:
@@ -53798,24 +53802,59 @@ def api_synth_chat_interpret():
         # pronoun/noun is an interpret failure - ask for a rephrase
         # instead of shipping a garbage card.
         if _is_placeholder_subject(spec_draft.get('subject')):
-            guidance_msg = (
-                "Quick check on the audience: tell me who each "
-                "profile is for - e.g. 'Amazon EST buyers' or "
-                "'Vizio TV owners' - or list the segments and I'll "
-                "queue one profile per segment.")
-            try:
-                _prometheus_manual_look_email(
-                    text, guidance_msg,
-                    'The audience in this ask did not resolve to a '
-                    'named subject, so the user was asked to '
-                    'rephrase.')
-            except Exception:
-                traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'guidance': True,
-                'error': guidance_msg,
-            }), 400
+            # Research rescue (2026-09-22, Amandaland round 2): the
+            # model holds the subject when it cannot verify the entity
+            # - but 'run a profile on Amandaland' NAMES one. Identify
+            # it (search-enabled) and re-interpret with the verified
+            # context; the canned segments question below is only for
+            # Cartesian asks that truly name no subject.
+            _ph_subj = ''
+            for _f in ('resolved_title', 'resolved_identity', 'name'):
+                _c = str(spec_draft.get(_f) or '').strip()
+                if _c and not _is_placeholder_subject(_c):
+                    _ph_subj = _c
+                    break
+            if not _ph_subj:
+                _m_ph = re.search(
+                    r'\b(?:profile|audience|universe)\s+(?:on|for|of)'
+                    r'\s+([A-Za-z0-9][^,.;\n]{1,60})', text, re.I)
+                if _m_ph:
+                    _ph_subj = _m_ph.group(1).strip()
+            _ph_rescued = False
+            if _ph_subj:
+                _uv = _pm_rescue_unverified_draft(
+                    {'name': _ph_subj, 'decision': 'new_build',
+                     'tu_demos': {}})
+                if isinstance(_uv, dict) and isinstance(
+                        _uv.get('draft'), dict):
+                    spec_draft = _uv['draft']
+                    _ph_rescued = True
+                    print(f"[synth-chat interpret] placeholder "
+                          f"subject rescued by research: {_ph_subj!r}")
+                elif isinstance(_uv, dict) and _uv.get('ask'):
+                    return jsonify({
+                        'success': False, 'guidance': True,
+                        'error': _uv['ask'],
+                    }), 400
+            if not _ph_rescued:
+                guidance_msg = (
+                    "Quick check on the audience: tell me who each "
+                    "profile is for - e.g. 'Amazon EST buyers' or "
+                    "'Vizio TV owners' - or list the segments and I'll "
+                    "queue one profile per segment.")
+                try:
+                    _prometheus_manual_look_email(
+                        text, guidance_msg,
+                        'The audience in this ask did not resolve to a '
+                        'named subject, so the user was asked to '
+                        'rephrase.')
+                except Exception:
+                    traceback.print_exc()
+                return jsonify({
+                    'success': False,
+                    'guidance': True,
+                    'error': guidance_msg,
+                }), 400
 
         # Subscriber IQ intent net (2026-08-26): typo-tolerant
         # deterministic routing for Subscriber IQ asks the interpret
