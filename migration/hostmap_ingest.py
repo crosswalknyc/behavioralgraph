@@ -107,7 +107,15 @@ APPROVAL_SECRET_S3_KEY = "system/hostmap_approval_secret.txt"
 S3_REGION = "us-east-2"
 
 DEFAULT_BASE_URL = "https://dashboard.crosswalknyc.com"
-DEFAULT_SHEET_ID = "1zwy73Z0BZ5iMToo9YAqUezS4Nc94Twyb"
+# Native Google Sheet (Jenna 2026-09-21). Previous ID
+# 1zwy73Z0BZ5iMToo9YAqUezS4Nc94Twyb was an .xlsx uploaded to Drive and
+# the Sheets API cannot read/write Office files - see the header
+# comment on ``_sheet_credentials``. On the new sheet the CONTENT_MAPPING
+# tab (gid=1321298530, index 1) is the append target for the content
+# proposal flow; the hostmap tabs are dated
+# (HOSTMAP mm.dd.yy; most recent is HOSTMAP 04.20.26) and the resolver
+# below auto-picks the newest one so we never hardcode a stale target.
+DEFAULT_SHEET_ID = "1I5F5at4hJ92krhgYdew68pcwd7_gqpoVfWLAHKnLpzA"
 
 _ALNUM_ONLY_RE = re.compile(r"[^A-Z0-9]")
 _PUNCT_RUN_RE = re.compile(r"[^a-z0-9]+")
@@ -350,13 +358,52 @@ def verify_brands_in_table(brands) -> list:
 # ---------------------------------------------------------------------------
 # Google Sheet append (graceful skip when unconfigured)
 # ---------------------------------------------------------------------------
+# Credentials for the sheet append are searched in this order (first hit
+# wins). All paths are optional; a miss on every one degrades to a
+# graceful skip that never blocks the ClickHouse ingest.
+#
+#   1. env GOOGLE_SHEETS_CREDENTIALS_JSON = inline JSON string
+#   2. env GOOGLE_SHEETS_CREDENTIALS_JSON = filesystem path
+#   3. ~/.crosswalk/google_sheets_credentials.json  (mode 600)
+#   4. /root/.crosswalk/google_sheets_credentials.json  (Hetzner worker
+#      when it runs under a shell whose HOME is misresolved)
+#   5. s3://dashboard-inputs/system/google_sheets_credentials.json
+#      (private bucket, AES256 at rest; the shared fallback that lets
+#      Render, Hetzner, and local scripts all sign appends without any
+#      env plumbing)
+#
+# The bucket-side fallback is cached per process, matching how
+# approval_secret() caches the HMAC secret.
+_SHEET_CREDS_S3_KEY = "system/google_sheets_credentials.json"
+_SHEET_CREDS_CACHE: dict = {}
+
+
+def _sheet_cred_candidates():
+    """Return the ordered list of (label, resolver) tuples the loader
+    walks. Split out for testability and so callers can log which slot
+    a hit came from."""
+    import pwd as _pwd
+
+    def _real_home():
+        try:
+            return _pwd.getpwuid(os.getuid()).pw_dir
+        except Exception:
+            return os.path.expanduser("~") or ""
+
+    home = _real_home()
+    paths = []
+    if home:
+        paths.append(os.path.join(home, ".crosswalk",
+                                  "google_sheets_credentials.json"))
+    paths.append("/root/.crosswalk/google_sheets_credentials.json")
+    return paths
+
+
 def _sheet_credentials():
-    """Service-account credentials from GOOGLE_SHEETS_CREDENTIALS_JSON
-    (inline JSON or a file path). Returns None when unconfigured or the
-    google-auth stack is unavailable."""
-    raw = (os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON") or "").strip()
-    if not raw:
-        return None
+    """Service-account credentials for the mapping sheet. Walks the
+    resolution order documented above and returns google-auth
+    Credentials on the first hit, or None (with a log line) when
+    nothing resolves."""
     try:
         from google.oauth2 import service_account
         import google.auth.transport.requests as goog_transport
@@ -364,26 +411,178 @@ def _sheet_credentials():
         print("  [hostmap-ingest] sheet append skipped: google-auth "
               "not installed")
         return None
-    try:
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+
+    def _from_info(info, source):
+        try:
+            c = service_account.Credentials.from_service_account_info(
+                info, scopes=scopes)
+            c.refresh(goog_transport.Request())
+            print(f"  [hostmap-ingest] sheet credentials loaded from "
+                  f"{source}")
+            return c
+        except Exception as e:
+            print(f"  [hostmap-ingest] sheet credentials at {source} "
+                  f"failed to load ({e})")
+            return None
+
+    # 1 + 2: env var (inline JSON or a filesystem path)
+    raw = (os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON") or "").strip()
+    if raw:
         if raw.startswith("{"):
-            info = json.loads(raw)
-            creds = service_account.Credentials.from_service_account_info(
-                info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        else:
-            creds = service_account.Credentials.from_service_account_file(
-                raw, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        creds.refresh(goog_transport.Request())
+            try:
+                return _from_info(json.loads(raw), "env (inline JSON)")
+            except Exception as e:
+                print(f"  [hostmap-ingest] env inline JSON parse "
+                      f"failed ({e}); continuing to filesystem/S3")
+        elif os.path.isfile(raw) and os.access(raw, os.R_OK):
+            try:
+                with open(raw, "r", encoding="utf-8") as f:
+                    return _from_info(json.load(f), f"env path ({raw})")
+            except Exception as e:
+                print(f"  [hostmap-ingest] env-pointed file {raw} "
+                      f"failed to load ({e})")
+
+    # 3 + 4: filesystem candidates
+    for p in _sheet_cred_candidates():
+        try:
+            if os.path.isfile(p) and os.access(p, os.R_OK):
+                with open(p, "r", encoding="utf-8") as f:
+                    return _from_info(json.load(f), p)
+        except OSError:
+            continue
+
+    # 5: S3 fallback (cached per process)
+    cached = _SHEET_CREDS_CACHE.get("s3")
+    if cached is not None:
+        return cached
+    try:
+        body = _s3_client().get_object(
+            Bucket=APPROVAL_BUCKET, Key=_SHEET_CREDS_S3_KEY,
+        )["Body"].read().decode("utf-8")
+        creds = _from_info(json.loads(body),
+                           f"s3://{APPROVAL_BUCKET}/{_SHEET_CREDS_S3_KEY}")
+        _SHEET_CREDS_CACHE["s3"] = creds
         return creds
     except Exception as e:
-        print(f"  [hostmap-ingest] sheet append skipped: credential "
-              f"load failed ({e})")
+        _SHEET_CREDS_CACHE["s3"] = None
+        print(f"  [hostmap-ingest] sheet append skipped: no credentials "
+              f"resolved (env / ~/.crosswalk / /root/.crosswalk / S3 "
+              f"fallback all missed; last error: {e})")
         return None
 
 
-def append_rows_to_sheet(rows, sheet_id=None) -> dict:
-    """Append BRAND/HOSTNAME/CATEGORY/SECTION rows to the mapping
-    sheet. Graceful skip (never raises, never blocks the ingest):
-    returns {"appended": n} on success or {"skipped": reason}."""
+_HOSTMAP_TAB_DATE_RE = re.compile(
+    r"^\s*HOSTMAP\s+(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*$", re.IGNORECASE)
+
+
+def _pick_latest_hostmap_tab(sheets):
+    """Given the workbook's tabs list, pick the newest one whose title
+    matches ``HOSTMAP mm.dd.yy``. Returns the tab title or None.
+
+    Convention (Jenna): the mapping sheet keeps a dated hostmap tab
+    that rotates every few months (HOSTMAP 12.31.25, HOSTMAP 04.20.26,
+    ...). The active append target is always the most recent by parsed
+    date; older tabs are read-only history."""
+    best_date = None
+    best_title = None
+    for s in sheets or []:
+        p = s.get("properties") or {}
+        title = str(p.get("title") or "").strip()
+        m = _HOSTMAP_TAB_DATE_RE.match(title)
+        if not m:
+            continue
+        try:
+            month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if year < 100:
+                year += 2000
+            from datetime import date as _d
+            d = _d(year, month, day)
+        except Exception:
+            continue
+        if best_date is None or d > best_date:
+            best_date = d
+            best_title = title
+    return best_title
+
+
+def _resolve_tab_title(sheet_id, tab_gid=None, tab_title=None,
+                      headers=None):
+    """Resolve the target tab title.
+
+    Resolution order:
+    1. ``tab_title`` (exact match wins; error when the title doesn't
+       exist on the workbook).
+    2. ``tab_gid`` (numeric gid).
+    3. Env override ``HOST_MAPPING_TAB_TITLE``.
+    4. Latest dated hostmap tab (``HOSTMAP mm.dd.yy`` regex).
+    5. First tab on the workbook (legacy fallback; loud log line).
+    """
+    import requests
+    r = requests.get(
+        f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
+        f"?fields=sheets.properties(sheetId,title,index)",
+        headers=headers, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"metadata HTTP {r.status_code}: "
+                           f"{r.text[:200]}")
+    sheets = r.json().get("sheets") or []
+    if tab_title:
+        for s in sheets:
+            p = s.get("properties") or {}
+            if str(p.get("title") or "").strip() == str(tab_title).strip():
+                return p.get("title")
+        # Title miss - fall through to gid if provided, so a renamed
+        # tab still resolves via the numeric gid (Jenna 2026-09-21:
+        # tab titles get edited, gids are stable).
+        if tab_gid is None:
+            raise RuntimeError(f"tab title {tab_title!r} not found on "
+                               f"sheet (and no gid fallback given)")
+        print(f"  [hostmap-ingest] tab title {tab_title!r} missing on "
+              f"sheet; falling back to gid={tab_gid}")
+    if tab_gid is not None:
+        want = int(tab_gid)
+        for s in sheets:
+            p = s.get("properties") or {}
+            if int(p.get("sheetId", -1)) == want:
+                return p.get("title")
+        raise RuntimeError(f"tab gid={tab_gid} not found on sheet")
+    env_override = (os.environ.get("HOST_MAPPING_TAB_TITLE") or "").strip()
+    if env_override:
+        for s in sheets:
+            p = s.get("properties") or {}
+            if str(p.get("title") or "").strip() == env_override:
+                return p.get("title")
+        raise RuntimeError(f"HOST_MAPPING_TAB_TITLE={env_override!r} "
+                           f"not found on sheet")
+    latest = _pick_latest_hostmap_tab(sheets)
+    if latest:
+        print(f"  [hostmap-ingest] resolved dated hostmap tab: "
+              f"{latest!r}")
+        return latest
+    first = ((sheets[0].get("properties") or {}).get("title")
+             if sheets else None) or "Sheet1"
+    print(f"  [hostmap-ingest] no dated HOSTMAP tab found; falling "
+          f"back to first tab {first!r} - set HOST_MAPPING_TAB_TITLE "
+          f"env var to pin an explicit tab")
+    return first
+
+
+def append_rows_to_sheet(rows, sheet_id=None, tab_gid=None,
+                         tab_title=None, columns=None) -> dict:
+    """Append rows to the mapping sheet. Graceful skip (never raises,
+    never blocks the ClickHouse ingest): returns {"appended": n} on
+    success or {"skipped": reason}.
+
+    Defaults (backward compat, hostmap flow):
+    - ``columns`` = ("BRAND", "HOSTNAME", "CATEGORY", "SECTION")
+    - target tab = first tab on the workbook (the mapping tab)
+
+    For the content-map flow (Jenna 2026-09-21) the caller passes
+    ``tab_gid=1321298530`` (or the resolved tab_title) and
+    ``columns=("SHOW", "URL", "PRODUCTION", "PLATFORM", "SEASON")``.
+    The row dicts may use lowercase or uppercase keys interchangeably.
+    """
     rows = [r for r in (rows or []) if isinstance(r, dict)]
     if not rows:
         return {"skipped": "no rows"}
@@ -392,25 +591,28 @@ def append_rows_to_sheet(rows, sheet_id=None) -> dict:
         return {"skipped": "sheet credentials not configured"}
     sid = sheet_id or os.environ.get("HOST_MAPPING_SHEET_ID",
                                      DEFAULT_SHEET_ID)
+    cols = tuple(columns) if columns else ("BRAND", "HOSTNAME",
+                                            "CATEGORY", "SECTION")
     try:
         import requests
         headers = {"Authorization": f"Bearer {creds.token}"}
-        meta = requests.get(
-            f"https://sheets.googleapis.com/v4/spreadsheets/{sid}"
-            f"?fields=sheets.properties.title",
-            headers=headers, timeout=30)
-        if meta.status_code != 200:
-            raise RuntimeError(f"metadata HTTP {meta.status_code}: "
-                               f"{meta.text[:200]}")
-        sheets = (meta.json().get("sheets") or [])
-        title = ((sheets[0].get("properties") or {}).get("title")
-                 if sheets else None) or "Sheet1"
-        values = [[r.get("brand") or r.get("BRAND") or "",
-                   r.get("hostname") or r.get("HOSTNAME") or "",
-                   r.get("category") or r.get("CATEGORY") or "",
-                   r.get("section") or r.get("SECTION") or ""]
-                  for r in rows]
-        rng = _urlquote(f"'{title}'!A:D", safe="")
+        title = _resolve_tab_title(sid, tab_gid=tab_gid,
+                                   tab_title=tab_title, headers=headers)
+        # Column letter span: A, B, ..., Z. cols<=26 is enough for
+        # BRAND/HOSTNAME/CATEGORY/SECTION (4) and SHOW/URL/PRODUCTION/
+        # PLATFORM/SEASON (5). Extend if a future schema needs it.
+        last_col = chr(ord('A') + len(cols) - 1)
+        values = []
+        for r in rows:
+            row_vals = []
+            for c in cols:
+                # Accept both uppercase and lowercase keys.
+                v = r.get(c)
+                if v is None:
+                    v = r.get(str(c).lower())
+                row_vals.append("" if v is None else str(v))
+            values.append(row_vals)
+        rng = _urlquote(f"'{title}'!A:{last_col}", safe="")
         resp = requests.post(
             f"https://sheets.googleapis.com/v4/spreadsheets/{sid}"
             f"/values/{rng}:append"
@@ -420,9 +622,9 @@ def append_rows_to_sheet(rows, sheet_id=None) -> dict:
         if resp.status_code != 200:
             raise RuntimeError(f"append HTTP {resp.status_code}: "
                                f"{resp.text[:200]}")
-        print(f"  [hostmap-ingest] appended {len(values)} row(s) to the "
-              f"mapping sheet")
-        return {"appended": len(values)}
+        print(f"  [hostmap-ingest] appended {len(values)} row(s) to "
+              f"'{title}' tab of the mapping sheet")
+        return {"appended": len(values), "tab": title}
     except Exception as e:
         print(f"  [hostmap-ingest] sheet append skipped: {e}")
         return {"skipped": str(e)[:200]}
