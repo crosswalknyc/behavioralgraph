@@ -3703,67 +3703,6 @@
         #dashProfileRunsRow select { background-color: var(--bg-input); padding-right: 1.75rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px; }
         #dashViewDeltasBtn { background: #7c3aed; color: #a8b2c1; border-color: #7c3aed; white-space: nowrap; font-family: 'Space Mono', monospace; }
         #dashViewDeltasBtn:hover { background: #6d28d9; border-color: #6d28d9; color: #c5c7d4; }
-        /* Audience-share boxes (next to Data Cuts on Profile IQ dashboard).
-         * Each box represents the share of audience digital engagement
-         * that lives in one of the 5 Crosswalk Engager touchpoints:
-         * Social / Search / Owned / Retail / Media. Values sum to 100%.
-         * Computed via max-BP per category, summed into buckets, with a
-         * 5x weight on the subject's self-pin BP for the Owned slice.
-         * For talent profiles, Owned renders as "-" (talent doesn't have
-         * a brand .com / app channel). */
-        /* 2026-06-23: Boxes sit on the SAME row as the Data Cuts
-         * button (5 boxes are the 2nd grid column of #dashProfileRunsRow),
-         * each box 2rem tall to match Data Cuts. The section label
-         * "Total Universe Composition" is stacked INSIDE the 2nd grid
-         * column (#audienceShareCol) directly above the boxes only,
-         * so the label is horizontally aligned with the boxes (not
-         * the Data Cuts button). The parent grid uses align-items: end
-         * so the Data Cuts button and the boxes' bottom edges line up
-         * on the same Y axis. Each box uses a single horizontal line
-         * (label + pct side by side) to stay at 2rem. */
-        #audienceShareBoxes {
-            display: flex;
-            flex-direction: row;
-            flex-wrap: nowrap;
-            gap: 0.5rem;
-            align-items: center;
-        }
-        .asb-box {
-            display: inline-flex;
-            flex-direction: row;
-            align-items: center;
-            justify-content: center;
-            gap: 0.35rem;
-            height: 2rem;
-            padding: 0 0.55rem;
-            border-radius: 4px;
-            border: 1px solid transparent;
-            background: var(--bg-input);
-            font-family: 'Space Mono', monospace;
-            line-height: 1;
-            cursor: help;
-            white-space: nowrap;
-        }
-        .asb-box .asb-label {
-            font-size: 0.6rem;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-        }
-        .asb-box .asb-pct {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        .asb-box[data-channel="social"]  { border-color: #f92672; }
-        .asb-box[data-channel="search"]  { border-color: #66d9ef; }
-        .asb-box[data-channel="owned"]   { border-color: #a6e22e; }
-        .asb-box[data-channel="retail"]  { border-color: #fd971f; }
-        .asb-box[data-channel="media"]   { border-color: #ae81ff; }
-        .asb-box .asb-label { color: #ffffff; }
-        body[data-theme="light"] .asb-box .asb-label { color: #000000; }
-        .asb-box.asb-na .asb-pct { color: var(--text-secondary); font-weight: 500; }
         .btn-run-analysis {
             border-radius: 9999px; background: #4a8ac9; color: white;
             padding: 0.75rem 1.5rem; font-weight: 700; text-transform: uppercase;
@@ -18705,10 +18644,6 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         .audience-snapshot {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         }
-        /* Total Universe Composition pills wrap instead of clipping. */
-        #audienceShareBoxes {
-            flex-wrap: wrap !important;
-        }
         /* Insight cards never force the page wider than the viewport. */
         .dashboard-tab-content .insight-card-v2 { min-width: 0; max-width: 100%; }
 
@@ -23204,9 +23139,6 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights h2,
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights h3,
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-section-head h2,
-        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-label,
-        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-pct,
-        body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .asb-box .asb-desc,
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row,
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .key,
         body[data-theme="light"] #dashboardView.piq-v4 #tab-insights .piq-data-row .name,
@@ -23601,75 +23533,6 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 10px !important;
             font-weight: 500;
         }
-        #dashboardView.piq-v4 #tucCard {
-            background: #15252A !important;
-            border: 1px solid #3B3D38 !important;
-            padding: 18px 20px !important;
-        }
-        #dashboardView.piq-v4 #audienceShareBoxes {
-            display: grid !important;
-            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-            flex-wrap: unset !important;
-            align-items: stretch !important;
-            gap: 10px !important;
-            width: 100% !important;
-        }
-        #dashboardView.piq-v4 .asb-box {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            justify-content: flex-start !important;
-            height: auto !important;
-            min-height: 92px !important;
-            padding: 16px 14px 14px !important;
-            border-radius: 10px !important;
-            background: #1B2F35 !important;
-            border: 1px solid #3B3D38 !important;
-            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif !important;
-            position: relative !important;
-            white-space: normal !important;
-            gap: 4px !important;
-            width: auto !important;
-            flex: unset !important;
-        }
-        #dashboardView.piq-v4 .asb-box::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: #C7F23E;
-        }
-        #dashboardView.piq-v4 .asb-box:nth-child(1)::before,
-        #dashboardView.piq-v4 .asb-box[data-channel="social"]::before { background: #C7F23E; }
-        #dashboardView.piq-v4 .asb-box:nth-child(2)::before,
-        #dashboardView.piq-v4 .asb-box[data-channel="search"]::before { background: #3358FF; }
-        #dashboardView.piq-v4 .asb-box:nth-child(3)::before,
-        #dashboardView.piq-v4 .asb-box[data-channel="owned"]::before { background: #E682FF; }
-        #dashboardView.piq-v4 .asb-box:nth-child(4)::before,
-        #dashboardView.piq-v4 .asb-box[data-channel="retail"]::before { background: #B7B3D8; }
-        #dashboardView.piq-v4 .asb-box:nth-child(5)::before,
-        #dashboardView.piq-v4 .asb-box[data-channel="media"]::before { background: #5E7E12; }
-        #dashboardView.piq-v4 .asb-box .asb-label {
-            color: #7C878A !important;
-            font-size: 9.5px !important;
-            letter-spacing: 0.14em !important;
-            font-weight: 500 !important;
-        }
-        #dashboardView.piq-v4 .asb-box .asb-pct {
-            color: #E9E8E1 !important;
-            font-size: 24px !important;
-            font-weight: 800 !important;
-            letter-spacing: -0.02em !important;
-            line-height: 1.1;
-        }
-        body[data-theme="light"] #dashboardView.piq-v4 #tucCard,
-        body[data-theme="light"] #dashboardView.piq-v4 .asb-box {
-            background: #FFFFFF !important;
-            border-color: #C9C6BA !important;
-        }
-        body[data-theme="light"] #dashboardView.piq-v4 .asb-box .asb-pct { color: #0C1618 !important; }
         #dashboardView.piq-v4 .audience-snapshot {
             gap: 12px;
         }
@@ -23812,9 +23675,6 @@ https://www.instagram.com/p/..."></textarea>
             color: #E9E8E1 !important;
         }
         @media (max-width: 980px) {
-            #dashboardView.piq-v4 #audienceShareBoxes {
-                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            }
             #dashboardView.piq-v4 .dashboard-tab-content {
                 padding: 18px 16px 40px;
             }
@@ -23892,7 +23752,6 @@ https://www.instagram.com/p/..."></textarea>
             flex-direction: column !important;
             gap: 32px !important;
         }
-        #dashboardView.piq-v4 #tab-insights #tucCard,
         #dashboardView.piq-v4 #tab-insights .insight-card-v2 {
             background: transparent !important;
             border: 0 !important;
@@ -23944,15 +23803,6 @@ https://www.instagram.com/p/..."></textarea>
             font-family: inherit !important;
         }
         body[data-theme="light"] #dashboardView.piq-v4 .piq-section-head h2 { color: #0C1618 !important; }
-        #dashboardView.piq-v4 .asb-box .asb-desc {
-            display: block;
-            font-size: 10px;
-            color: #9AA09B;
-            font-weight: 500;
-            line-height: 1.35;
-            letter-spacing: 0;
-            text-transform: none;
-        }
         #dashboardView.piq-v4 #tab-insights .audience-snapshot {
             display: flex !important;
             flex-direction: column !important;
@@ -28029,27 +27879,10 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
                             
-                            <!-- Two-column layout: left (TUC + Audience Snapshot) / right (Behavioral Profile) -->
+                            <!-- Two-column layout: left (Audience Snapshot) / right (Behavioral Profile) -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; grid-column: 1 / -1;">
                                 <!-- Left column -->
                                 <div style="display: flex; flex-direction: column; gap: 1rem;">
-                                    <!-- Total Universe Composition (Insights tab only) -->
-                                    <div class="insight-card-v2" id="tucCard" style="display: none; padding: 0.75rem 1.25rem;">
-                                        <div class="insight-card-header" style="margin-bottom: 0.6rem;">
-                                            <h3 class="has-tooltip" data-tooltip="Composition of categorized digital touchpoints used for profile analysis" style="margin: 0;">
-                                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                                <span>🌎 Total Universe Composition</span>
-                                            </h3>
-                                        </div>
-                                        <div id="audienceShareBoxes" style="display: none; flex-wrap: nowrap; gap: 0.5rem;">
-                                            <div class="asb-box has-tooltip" data-channel="social" data-tooltip="Refers to social media digital touchpoints (includes YouTube)"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span><span class="asb-desc">TikTok, IG, Snap, YouTube</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="search" data-tooltip="Refers to touchpoints within search engines (includes AI search)"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span><span class="asb-desc">Google + YouTube search</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="owned"  data-tooltip="Refers to digital touchpoints to the domain(s) owned by the profile"><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span><span class="asb-desc">Subject-owned domains</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="retail" data-tooltip="Refers to digital touchpoints that correspond to transactional URLs that contain the profile name/brand anywhere within"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span><span class="asb-desc">Transactional touches</span></div>
-                                            <div class="asb-box has-tooltip" data-channel="media"  data-tooltip="Refers to digital touchpoints where the profile name can be read, watched, played, etc"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span><span class="asb-desc">Read + watch + listen</span></div>
-                                        </div>
-                                    </div>
-
                                     <!-- Audience Snapshot -->
                                     <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Audience Snapshot">
                                         <div class="insight-card-header">
@@ -130494,43 +130327,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 host.insertBefore(wrap, beforeEl || host.firstChild);
                 return wrap;
             }
-            var tuc = document.getElementById('tucCard');
-            var boxes = document.getElementById('audienceShareBoxes');
-            if (tuc && boxes) {
-                ensureHead(tuc, 'piqTucHead', '02 Total Universe Composition', 'Leans toward the strongest digital channel.', boxes);
-                var chans = [];
-                boxes.querySelectorAll('.asb-box').forEach(function(box) {
-                    var lbl = ((box.querySelector('.asb-label') || {}).textContent || '').trim().toLowerCase();
-                    var raw = ((box.querySelector('.asb-pct') || {}).textContent || '').replace(/[^0-9.]/g, '');
-                    var n = parseFloat(raw);
-                    if (lbl && isFinite(n)) chans.push({ lbl: lbl, n: n });
-                });
-                chans.sort(function(a, b) { return b.n - a.n; });
-                var h2 = document.querySelector('#piqTucHead h2');
-                if (h2 && chans.length) {
-                    var top = chans[0].lbl;
-                    var low = chans[chans.length - 1].lbl;
-                    var map = {
-                        social: 'social-first',
-                        search: 'search-first',
-                        media: 'media-first',
-                        retail: 'retail-first',
-                        owned: 'owned-first'
-                    };
-                    var lowMap = {
-                        social: 'social exposure minor',
-                        search: 'search exposure minor',
-                        media: 'media exposure minor',
-                        retail: 'retail exposure minor',
-                        owned: 'owned exposure minor'
-                    };
-                    h2.textContent = 'Leans ' + (map[top] || (top + '-first')) + ', ' + (lowMap[low] || (low + ' secondary')) + '.';
-                }
-            }
             var snap = document.getElementById('audienceSnapshot');
             var snapCard = snap ? snap.closest('.insight-card-v2') : null;
             if (snapCard && snap) {
-                ensureHead(snapCard, 'piqSnapHead', '03 Audience Snapshot', 'Dominant characteristic per category.', snap);
+                ensureHead(snapCard, 'piqSnapHead', '01 Audience Snapshot', 'Dominant characteristic per category.', snap);
                 if (!snap.querySelector('.piq-data-row') && snap.querySelector('.snapshot-item')) {
                     var catMap = {
                         'dominant gender': 'Gender',
@@ -130573,7 +130373,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var bpCard = document.getElementById('behavioralProfileCard');
             var right = bpCard ? bpCard.closest('.insight-card-v2') : null;
             if (right && !right.querySelector('#piqBehHead')) {
-                ensureHead(right, 'piqBehHead', '04 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
+                ensureHead(right, 'piqBehHead', '02 Behavioral read', 'The strongest behavioral signal on this file.', bpCard);
             }
             if (bpCard) {
                 bpCard.querySelectorAll('li, p').forEach(function(el) {
@@ -133066,7 +132866,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { window._piqV4OnProfile(parsed); } catch (_e) {}
             }
             _safeRender('renderTopInsights',          () => renderTopInsights(parsed));
-            _safeRender('_renderAudienceShareBoxes',  () => _renderAudienceShareBoxes(parsed, brandName));
         }
 
         function behavioralItemKey(name) {
@@ -135034,644 +134833,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // stays consistent.
         function _baseCohortLabel() {
             return 'Total Universe';
-        }
-
-        // ===================================================================
-        // Audience Share Boxes (Social / Search / Owned / Retail / Media)
-        // ===================================================================
-        // Five colored boxes that sit next to the "Data Cuts" button on the
-        // Profile IQ dashboard. They show the breakdown of audience digital
-        // engagement WITH THE SUBJECT, summing to 100%.
-        //
-        // Box definitions (clarified 2026-06-18):
-        //   SOCIAL - engaged with the subject on a social platform (YouTube
-        //            counts as SOCIAL, ditto IG / TikTok / FB / Twitter).
-        //            For influencers this is the PRIMARY channel.
-        //   SEARCH - discovered or looked up the subject via Google / AI
-        //            search. Secondary for most subjects.
-        //   OWNED  - went directly to the subject's own .com / app. Huge for
-        //            brands (login, account, ecommerce). N/A for talent /
-        //            influencer / sports-team (no brand-owned channel).
-        //   RETAIL - bought a product FROM the subject (their merch, their
-        //            brand's products, their service signup). For Target
-        //            this IS the brand. For Mark Rober this is Crunchlabs.
-        //            For Reba this is tour merch. NOT general-audience
-        //            "do they shop at Best Buy" behavior.
-        //   MEDIA  - engaged with the subject's content via traditional /
-        //            third-party media (TV, streaming series, films, music
-        //            on Spotify, news articles, podcasts).
-        //
-        // Algorithm (Strategy D2 - archetype-anchored, data nudge gated on
-        // signal richness - picked 2026-06-18 after Strategy D over-nudged
-        // Mark Rober's RETAIL to 26% by pulling on his audience's general
-        // shopping signals; under the corrected RETAIL definition those
-        // signals don't measure "bought from Mark Rober" so the nudge was
-        // wrong-headed):
-        //
-        //   1. Detect ARCHETYPE from BRAND CATEGORY (CREATOR/INFLUENCER,
-        //      TALENT, SPORTS_TEAM, RETAIL_BRAND, SERVICE_BRAND,
-        //      MEDIA_BRAND, SEARCH_BRAND, SOCIAL_BRAND, TRAVEL_BRAND, or
-        //      GENERIC fallback).
-        //   2. Look up the archetype's base 5-bucket distribution (sums to
-        //      100). These templates encode the user's general-rule - e.g.
-        //      INFLUENCER = social-heavy (55), TALENT = media-heavy (50) +
-        //      social (28), RETAIL_BRAND = retail (44) + owned (22).
-        //   3. Compute per-bucket data signals (max-BP per category, summed
-        //      within bucket). Count how many of the four non-owned buckets
-        //      have a non-trivial signal (>=5% max BP).
-        //   4. ONLY blend data when 3+ buckets have signals (rich profile).
-        //      For sparse profiles (most talent / influencer files) use
-        //      pure archetype - the per-category max-BPs measure general
-        //      audience behavior, not subject-specific engagement, so they
-        //      shouldn't override the archetype anchor.
-        //   5. When blending, weight is 80% archetype + 20% data on the
-        //      four non-owned buckets, scaled to (100 - owned).
-        //   6. Owned is always pulled directly from the archetype (no data
-        //      nudge - no clean panel signal exists for "engagement that
-        //      landed on the subject's own .com/app").
-        //   7. Final pass: re-normalize all 5 buckets to sum to 100.
-        //   8. For TALENT and INFLUENCER archetypes, Owned is forced to 0
-        //      and rendered as "-" (no meaningful brand-owned channel).
-        //      Sports teams ARE shown - their team .coms and apps
-        //      (tickets, scores) are real owned touchpoints.
-        const _AUDIENCE_SHARE_BUCKETS = {
-            // SOCIAL - direct social-platform engagement. CREATOR/INFLUENCER
-            // row category lands here because creator engagement is overwhelmingly
-            // via YouTube / IG / TikTok (all social-native).
-            social: new Set(['SOCIAL MEDIA', 'CREATOR/INFLUENCER']),
-            search: new Set(['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH']),
-            retail: new Set([
-                'QSR', 'RETAIL', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
-                'MOST PURCHASED BRANDS', 'MOST PURCHASED CATEGORIES',
-                'ACCESSORIES', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'AUTOMOBILE',
-                'PHARMACY', 'AMUSEMENT PARKS', 'MOVIE THEATER', 'PETS',
-                'TRAVEL', 'RESTAURANT', 'BANKING', 'CREDIT PROVIDER',
-                'DIGITAL BANKING', 'INSURANCE', 'INVESTMENTS',
-                'HEALTH & WELLNESS', 'EDUCATION & LEARNING', 'HEAVY MACHINERY',
-                'EVENTS'
-            ]),
-            media: new Set([
-                'STREAMING/PLATFORM', 'VMVPD', 'FAST', 'BROADCAST/CABLE',
-                'MEDIA', 'PODCAST', 'MUSIC', 'MUSIC GENRES', 'MUSICIAN/BAND',
-                'NEWS', 'MAGAZINE', 'BOOK', 'MOVIE', 'MOVIES', 'MOVIE GENRES',
-                'CONTENT', 'GAMES', 'GAMING PLATFORMS', 'FRANCHISE', 'TALENT',
-                'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INTEREST',
-                'APP/PLATFORM USAGE', 'SPORTS TEAM', 'SPORTS', 'SPORT',
-                'BETTING', 'GOLF', 'COLLEGE/UNIVERSITY',
-                'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'EPL', 'LA LIGA',
-                'SERIE A', 'LIGUE 1', 'BUNDESLIGA', 'CFB', 'SOCCER',
-                'AL', 'NL', 'AFC', 'NFC', 'WESTERN CONFERENCE',
-                'EASTERN CONFERENCE',
-                'MLB ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE', 'NHL ATHLETE',
-                'HORSE RACING'
-            ])
-        };
-        // Categories that should never count toward any bucket (demos,
-        // cohort cuts, persona meta, conf/division roll-ups already counted
-        // via their league row).
-        const _AUDIENCE_SHARE_EXCLUDE = new Set([
-            'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'AVID FAN',
-            'CASUAL FAN', 'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-            'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION',
-            'PARENTAL_STATUS', 'PARENTAL STATUS', 'OCCUPATION', 'LOCATION',
-            // Sports conference/division roll-ups (the underlying team
-            // already lives in the league row -> bucketed once into Media).
-            'AFC EAST', 'AFC WEST', 'AFC NORTH', 'AFC SOUTH',
-            'NFC EAST', 'NFC WEST', 'NFC NORTH', 'NFC SOUTH',
-            'AL EAST', 'AL WEST', 'AL CENTRAL',
-            'NL EAST', 'NL WEST', 'NL CENTRAL',
-            'ATLANTIC DIVISION', 'METROPOLITAN DIVISION',
-            'CENTRAL DIVISION', 'PACIFIC DIVISION'
-        ]);
-        // Archetype templates - base 5-bucket distribution (each row sums
-        // to 100). Each row encodes the prior expectation for how digital
-        // engagement with that kind of subject is split across the 5
-        // Crosswalk Engager touchpoints, BEFORE any data nudge is applied.
-        //
-        // Tuned to the user's general rule (2026-06-18) and the corrected
-        // RETAIL definition ("bought a product FROM the subject"):
-        //   - INFLUENCER: SOCIAL dominates (YouTube/IG/TikTok = primary
-        //     channel). MEDIA second (third-party press). RETAIL small
-        //     unless the creator runs a major merch line (Crunchlabs etc.)
-        //     - even MrBeast Burger / Feastables wouldn't push it above
-        //     ~10 because most fans never buy.
-        //   - TALENT: MEDIA dominates (TV / film / streaming / music
-        //     concerts is how fans actually consume). SOCIAL second
-        //     (fan engagement on IG/FB). RETAIL small (tour merch /
-        //     fragrance lines).
-        //   - SPORTS_TEAM: MEDIA dominant (game broadcasts), then
-        //     SOCIAL, then OWNED (team app for scores/tickets) and
-        //     RETAIL (team store / jerseys).
-        //   - RETAIL_BRAND: RETAIL + OWNED dominate (the brand IS its
-        //     product purchases + .com/app).
-        //   - SERVICE_BRAND: OWNED dominates (subscription / login /
-        //     account is the primary touchpoint).
-        //   - MEDIA_BRAND: MEDIA + OWNED (content viewing + their app).
-        //   - SEARCH / SOCIAL brands: their own touchpoint dominates.
-        //   - TRAVEL_BRAND: OWNED + RETAIL (book on app / buy trip).
-        //   - CONTENT: 100% MEDIA. Per user 2026-06-18: any profile in the
-        //     CONTENT bucket on the profile selector (MOVIE, PODCAST, GAMES,
-        //     GAME PLAYERS, VERTICAL SHORTS, SERIES - *) qualifies by virtue
-        //     of HAVING WATCHED / PLAYED that piece of content during the
-        //     window, so by definition 100% of engagers are media engagers.
-        //     The other four buckets and Owned are forced to zero / "-".
-        const _AUDIENCE_SHARE_ARCHETYPES = {
-            INFLUENCER:    { social: 55, search: 15, owned:  5, retail:  8, media: 17 },
-            TALENT:        { social: 28, search: 12, owned:  3, retail:  7, media: 50 },
-            SPORTS_TEAM:   { social: 22, search: 13, owned: 10, retail: 10, media: 45 },
-            RETAIL_BRAND:  { social: 10, search: 14, owned: 22, retail: 44, media: 10 },
-            SERVICE_BRAND: { social:  8, search: 16, owned: 42, retail: 14, media: 20 },
-            MEDIA_BRAND:   { social: 12, search: 12, owned: 26, retail:  8, media: 42 },
-            SEARCH_BRAND:  { social: 10, search: 58, owned: 20, retail:  4, media:  8 },
-            SOCIAL_BRAND:  { social: 62, search: 12, owned: 18, retail:  3, media:  5 },
-            TRAVEL_BRAND:  { social: 12, search: 20, owned: 28, retail: 30, media: 10 },
-            CONTENT:       { social:  0, search:  0, owned:  0, retail:  0, media: 100 },
-            // 2026-06-29 (Jenna): every profile in the PLATFORMS master
-            // (Netflix, Hulu, YouTube, Facebook, Instagram, Google,
-            // Spotify, broadcast networks, etc.) is - by qualification -
-            // engaged with the platform's own owned-and-operated channel
-            // (logged-in session / app session / direct visit). Mirror
-            // the CONTENT 100%-MEDIA short-circuit but for OWNED: the
-            // composition is 100% Owned with the other four boxes
-            // rendered as "-".
-            PLATFORM:      { social:  0, search:  0, owned: 100, retail:  0, media:   0 },
-            GENERIC:       { social: 18, search: 18, owned: 22, retail: 22, media: 20 }
-        };
-        // Archetypes for which there is no meaningful brand-owned .com /
-        // app channel - owned is forced to 0 and rendered as "-" (the
-        // remaining 4 buckets normalize to 100). Per user 2026-06-18:
-        // "Owned would only come into play if it is NOT a talent". An
-        // INFLUENCER is talent-like (Mark Rober's personal .com is
-        // marginal vs. his YouTube reach, so adding owned would just
-        // steal share from social), so it's also excluded. SPORTS_TEAM
-        // is NOT excluded - team .coms and team apps (tickets, scores)
-        // are a real, heavily-used owned channel.
-        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'CONTENT']);
-        // 2026-06-24: per-subject opt-outs from the CONTENT 100%-media
-        // short-circuit. The default CONTENT rule says "a movie/podcast/
-        // game profile qualifies by consuming the content, so by
-        // definition every engager is a media engager" → 100% Media,
-        // dashes on the other four boxes. For a small set of franchise
-        // movies the user wants the composition to reflect DIGITAL
-        // ENGAGEMENT across the 5 touchpoints (Social / Search / Owned
-        // / Retail / Media) instead. These are routed through the
-        // MEDIA_BRAND archetype + the standard 60/40 archetype-data
-        // blend so each profile still gets its own subject-specific
-        // shape (Grinch retail signal differs from Blue Crush, etc.).
-        // Keys are normalized: lowercased, trimmed, "the " prefix
-        // stripped, all punctuation/whitespace collapsed.
-        const _AUDIENCE_SHARE_CONTENT_OVERRIDE = new Set([
-            'catinthehat',
-            'bluecrush',
-            'grinch'
-        ]);
-        // Profiles forced to 100% Media / 0% everything else - as LITERAL
-        // 0%, not the "-" that CONTENT profiles render. Matched by
-        // normalized-subject startsWith so the Total Universe and every
-        // cohort/year cut collapse together. Both the display name and the
-        // underlying brand form are listed. (2026-09-08)
-        const _AUDIENCE_SHARE_FORCE_MEDIA = new Set([
-            'blairwitchadjacencies',
-            'horrorstreamingenthusiasts'
-        ]);
-        function _normSubjectKeyForAudienceShare(s) {
-            if (!s) return '';
-            return String(s)
-                .toLowerCase()
-                .trim()
-                .replace(/^the\s+/, '')
-                .replace(/[^a-z0-9]+/g, '');
-        }
-        // Archetype detection - keyed off BRAND CATEGORY (preferred) with
-        // _currentProfileCategory() as a fallback. Conservative: anything
-        // unrecognized falls through to GENERIC.
-        function _detectAudienceShareArchetype(brandCategory, profileCategory) {
-            const brand = String(brandCategory || '').trim().toUpperCase();
-            const prof  = String(profileCategory || '').trim().toUpperCase();
-            const cat = brand || prof;
-            if (!cat) return 'GENERIC';
-            // PLATFORMS master (Netflix / Hulu / YouTube / Facebook /
-            // Instagram / Google / Spotify / broadcast networks / FAST
-            // platforms / search engines / etc.) - takes priority over
-            // every per-brand-category mapping below. Per user 2026-06-29:
-            // "on anything in platform it should be 100% owned & operated."
-            // Qualification for any of these profiles is "the panelist
-            // engaged with the platform via the platform's own channel"
-            // (logged-in session / app session / direct visit), so by
-            // definition every engager is an Owned-channel engager. The
-            // CONTENT 100%-MEDIA short-circuit is the analogous case for
-            // movie / podcast / game / series profiles. Resolution via
-            // getMasterCategory so the override fires even when the
-            // brand-category column on the CSV uses a finer sub-bucket
-            // (e.g. SOCIAL MEDIA would normally route to SOCIAL_BRAND
-            // - but Facebook IS the platform, so 100% Owned wins).
-            if (typeof getMasterCategory === 'function') {
-                try {
-                    const brandMaster = brand ? String(getMasterCategory(brand, false) || '').toUpperCase() : '';
-                    const profMaster  = prof  ? String(getMasterCategory(prof, false)  || '').toUpperCase() : '';
-                    if (brandMaster === 'PLATFORMS' || profMaster === 'PLATFORMS') return 'PLATFORM';
-                } catch (_) {}
-            }
-            // CONTENT bucket (profile selector "Content" master) - takes
-            // priority over everything else because qualification = "they
-            // had to watch / play this piece of content during the window",
-            // so by definition every engager is a media engager. Forces
-            // 100% MEDIA and "-" on the other four boxes. Matches against
-            // BOTH the BRAND CATEGORY value and the profile-selector
-            // master category so genre-bucketed movies ("MOVIE - HORROR"),
-            // platform-bucketed series ("SERIES - NETFLIX"), podcasts,
-            // games, and vertical-shorts all land here.
-            const CONTENT_BRAND_CATS = new Set([
-                'MOVIE', 'MOVIES', 'PODCAST', 'PODCASTS',
-                'GAMES', 'GAME PLAYERS', 'GAMES - PLAYERS',
-                'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES'
-            ]);
-            const isContentBrand = brand && (
-                CONTENT_BRAND_CATS.has(brand)
-                || brand.startsWith('SERIES')   // SERIES - NETFLIX, SERIES - HBO MAX, ...
-                || brand.startsWith('MOVIE -')  // MOVIE - HORROR, MOVIE - ROMANTIC COMEDY, ...
-                || brand.startsWith('MOVIE-')
-            );
-            const isContentProf = prof && (
-                CONTENT_BRAND_CATS.has(prof)
-                || prof.startsWith('SERIES')
-                || prof.startsWith('MOVIE -')
-                || prof.startsWith('MOVIE-')
-            );
-            if (isContentBrand || isContentProf) return 'CONTENT';
-            // Creator / influencer / digital-native talent - caught by
-            // substring so 'CREATOR/INFLUENCER', 'INFLUENCER', 'CREATOR',
-            // 'YOUTUBER', 'STREAMER', 'PODCASTER' all map here.
-            if (/CREATOR|INFLUENCER|YOUTUBER|STREAMER|PODCASTER/.test(cat)) return 'INFLUENCER';
-            // Traditional talent (actors, musicians, athletes, etc.)
-            if ([
-                'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND',
-                'ATHLETE', 'HOST/PERSONALITY', 'COMEDIAN',
-                'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
-                'MLB ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE',
-                'NHL ATHLETE', 'WNBA ATHLETE', 'SOCCER ATHLETE'
-            ].includes(cat)) return 'TALENT';
-            // Sports team / league / school
-            if ([
-                'SPORTS TEAM', 'SPORTS ORGANIZATIONS', 'COLLEGE/UNIVERSITY',
-                'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'NWSL', 'EPL',
-                'PREMIER LEAGUE', 'LA LIGA', 'SERIE A', 'LIGUE 1',
-                'BUNDESLIGA', 'CFB', 'SOCCER', 'GOLF', 'TENNIS', 'RUGBY',
-                'HORSE RACING', 'VOLLEYBALL'
-            ].includes(cat)) return 'SPORTS_TEAM';
-            // Retail / commerce brand (what they sell drives engagement)
-            if ([
-                'RETAIL', 'QSR', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
-                'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'PHARMACY', 'PETS',
-                'AUTOMOBILE', 'ACCESSORIES', 'TOYS', 'WHERE THEY SHOP',
-                'WHERE THEY DINE', 'MOST PURCHASED BRANDS',
-                'MOST PURCHASED CATEGORIES', 'RESTAURANT', 'HEAVY MACHINERY'
-            ].includes(cat)) return 'RETAIL_BRAND';
-            // Service brand (subscription / login / account)
-            if ([
-                'BANKING', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'INSURANCE',
-                'INVESTMENTS', 'TELECOM', 'TECHNOLOGY/DEVICE',
-                'TECHNOLOGY BRAND', 'HEALTH & WELLNESS',
-                'EDUCATION & LEARNING', 'BETTING', 'WORKOUT FACILITY',
-                'TICKETING', 'VENUE', 'NON PROFIT/CHARITY',
-                'ORGANIZATIONAL MEMBERSHIPS'
-            ].includes(cat)) return 'SERVICE_BRAND';
-            // Media / streaming / content brand
-            if ([
-                'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'VMVPD',
-                'VIRTUAL MVPD FAST', 'FAST', 'BROADCAST/CABLE', 'MEDIA',
-                'PORN MEDIA', 'PODCAST', 'MOVIE', 'MOVIES', 'MOVIE GENRES',
-                'CONTENT', 'GAMES', 'GAMING PLATFORMS', 'FRANCHISE',
-                'MOVIE THEATER', 'MUSIC', 'MUSIC GENRES', 'NEWS',
-                'MAGAZINE', 'BOOK'
-            ].includes(cat)) return 'MEDIA_BRAND';
-            // Search / discovery
-            if (['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH',
-                 'APP/PLATFORM USAGE'].includes(cat)) return 'SEARCH_BRAND';
-            // Social-first
-            if (cat === 'SOCIAL MEDIA') return 'SOCIAL_BRAND';
-            // Travel / experience
-            if (['TRAVEL', 'AMUSEMENT PARKS', 'EVENTS'].includes(cat)) return 'TRAVEL_BRAND';
-            return 'GENERIC';
-        }
-
-        function _audienceShareBucketFor(col) {
-            const c = String(col || '').trim().toUpperCase();
-            if (!c || _AUDIENCE_SHARE_EXCLUDE.has(c)) return null;
-            for (const [bucket, members] of Object.entries(_AUDIENCE_SHARE_BUCKETS)) {
-                if (members.has(c)) return bucket;
-            }
-            return null;
-        }
-
-        function _computeAudienceShare(parsed, subjectName) {
-            if (!parsed || !parsed.behavioral) return null;
-            const beh = parsed.behavioral;
-            const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
-            const profileCat = _currentProfileCategory();
-            let archetype = _detectAudienceShareArchetype(brandCat, profileCat);
-
-            // Per-subject FORCE MEDIA=100% override (2026-09-08). Some
-            // profiles qualify purely on media consumption (e.g. Blair Witch
-            // & Adjacencies (Horror Streaming Enthusiasts)) and should read
-            // 100% Media with the other four channels at LITERAL 0% - not the
-            // "-" the CONTENT short-circuit renders. Returning a normal share
-            // object (archetype left as-is, noOwned false) makes
-            // _renderAudienceShareBoxes print "0%" for the four and "100%"
-            // for Media. startsWith match collapses the TU + every cut.
-            const _forceMediaKey = _normSubjectKeyForAudienceShare(subjectName);
-            if (_forceMediaKey) {
-                for (const ovr of _AUDIENCE_SHARE_FORCE_MEDIA) {
-                    if (_forceMediaKey.startsWith(ovr)) {
-                        return { social: 0, search: 0, retail: 0, media: 100, owned: 0,
-                                 archetype: 'MEDIA_BRAND', noOwned: false, dataActive: false };
-                    }
-                }
-            }
-
-            // 2026-06-24: per-subject opt-out of the CONTENT 100%-Media
-            // short-circuit. For movie franchises in the override list,
-            // re-route to MEDIA_BRAND so the composition reflects
-            // digital engagement across all 5 touchpoints. Sets
-            // contentOverride=true so the data-blend path below uses
-            // (1) sum-across-all-items per bucket instead of top-item-
-            // per-category (top-only collapses every movie to the
-            // same Google/Netflix/Amazon picks), (2) data-dominant
-            // 25/75 archetype-data weights so the per-profile brand
-            // mix actually shapes the boxes, and (3) the data blend
-            // is forced ON even when bucket coverage is sparse
-            // (typical for movie files where only 2-3 buckets are
-            // populated).
-            let contentOverride = false;
-            if (archetype === 'CONTENT') {
-                const subjKey = _normSubjectKeyForAudienceShare(subjectName);
-                // startsWith matching so cohort / year variants
-                // ("The Grinch - 2025" -> "grinch2025", "Cat in the
-                // Hat - Avid Fan" -> "catinthehatavidfan", "Blue
-                // Crush 2" -> "bluecrush2") also pick up the
-                // override. The 3 keys are distinctive enough that
-                // false-positive prefix collisions are negligible.
-                if (subjKey) {
-                    for (const ovr of _AUDIENCE_SHARE_CONTENT_OVERRIDE) {
-                        if (subjKey.startsWith(ovr)) {
-                            archetype = 'MEDIA_BRAND';
-                            contentOverride = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
-
-            // CONTENT short-circuit (2026-06-18): movie / podcast / game /
-            // vertical-short / series profiles qualify by virtue of having
-            // CONSUMED the content during the window, so the audience-share
-            // breakdown is 100% MEDIA by definition. We skip the data nudge
-            // entirely so floating-point math can't drift it off 100.
-            if (archetype === 'CONTENT') {
-                return { social: 0, search: 0, retail: 0, media: 100, owned: 0,
-                         archetype, noOwned: true, dataActive: false };
-            }
-            // PLATFORM short-circuit (2026-06-29): any profile in the
-            // PLATFORMS master is - by qualification - a logged-in /
-            // app-session engager on the platform's owned-and-operated
-            // channel. Force 100% Owned and "-" on the other four boxes
-            // (rendered in _renderAudienceShareBoxes via share.ownedOnly).
-            if (archetype === 'PLATFORM') {
-                return { social: 0, search: 0, retail: 0, media: 0, owned: 100,
-                         archetype, noOwned: false, ownedOnly: true, dataActive: false };
-            }
-
-            // (a) Archetype base - clone so we can mutate.
-            const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
-
-            // (b) Data signals - INDEX-WEIGHTED max-BP per category,
-            // summed within the four non-owned buckets.
-            //
-            // 2026-06-22 algorithm change. Previously this used raw
-            // max-BP, which captured GENERAL DIGITAL CONSUMPTION (every
-            // audience uses Google ~50%, Netflix ~70%, Amazon ~40%) and
-            // therefore produced almost-identical bucket sums for every
-            // profile in the same archetype. User report: "this is
-            // showing the same for all profiles".
-            //
-            // Switch to weighting each category's top-BP item by how
-            // much THAT item over-indexes vs Gen Pop. The over-index
-            // factor is what the subject's audience does DIFFERENTLY
-            // from the general population, so it cleanly separates
-            // (e.g.) a basketball-player audience from a music-talent
-            // audience even though both are TALENT archetype.
-            //
-            // overFactor = clamp(index / 100, 0.4, 2.5) - a 100 (parity)
-            // index contributes its raw BP; a 250 (2.5x over) index
-            // contributes 2.5x weight; anything under 40 collapses to
-            // 0.4 so under-indexed buckets still register some signal.
-            const dataSums = { social: 0, search: 0, retail: 0, media: 0 };
-            const SIG_THRESHOLD = contentOverride ? 1 : 3; // override path
-            // accepts any signal as real - movie files are sparse, so
-            // requiring >=3% BP in 3+ buckets (the default) would
-            // collapse them straight back to pure archetype and they'd
-            // all look identical.
-            let nonTrivialBuckets = 0;
-            const sawSignal = { social: false, search: false, retail: false, media: false };
-            for (const cat of Object.keys(beh)) {
-                const items = beh[cat];
-                let arr = [];
-                if (Array.isArray(items)) {
-                    arr = items;
-                } else if (items && typeof items === 'object') {
-                    arr = Object.entries(items).map(([n, p]) => ({ name: n, pct: parseFloat(p) || 0 }));
-                }
-                if (arr.length === 0) continue;
-                const bucket = _audienceShareBucketFor(cat);
-                if (!bucket || bucket === 'owned') continue;
-                if (contentOverride) {
-                    // SUM-ALL-ITEMS path. The default top-item-per-
-                    // category picks the same high-volume brand
-                    // (Google in SEARCH, Netflix in STREAMING, Amazon
-                    // in RETAIL) across every movie, which is exactly
-                    // why the three target profiles converged. By
-                    // summing every item's BP × overFactor we capture
-                    // the LONG-TAIL brand mix that differs per movie
-                    // (Grinch's plush/books vs Blue Crush's surf
-                    // brands vs Cat in the Hat's costume/kids retail).
-                    let catSum = 0;
-                    let maxItemBP = 0;
-                    for (const it of arr) {
-                        const p   = (typeof it.pct   === 'number') ? it.pct   : parseFloat(it.pct   || it.percentage || 0) || 0;
-                        const idx = (typeof it.index === 'number') ? it.index : parseFloat(it.index || 100) || 100;
-                        if (p <= 0) continue;
-                        const overFactor = Math.max(0.4, Math.min(2.5, idx / 100));
-                        catSum += p * overFactor;
-                        if (p > maxItemBP) maxItemBP = p;
-                    }
-                    if (catSum <= 0) continue;
-                    dataSums[bucket] += catSum;
-                    if (maxItemBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
-                        sawSignal[bucket] = true;
-                        nonTrivialBuckets += 1;
-                    }
-                } else {
-                    // Find the item with the strongest combined signal -
-                    // BP × clamped(index/100). That picks the category
-                    // representative the audience is BOTH consuming AND
-                    // over-indexing on, which is the most subject-specific
-                    // item.
-                    let topContribution = 0;
-                    let topRawBP = 0;
-                    for (const it of arr) {
-                        const p   = (typeof it.pct   === 'number') ? it.pct   : parseFloat(it.pct   || it.percentage || 0) || 0;
-                        const idx = (typeof it.index === 'number') ? it.index : parseFloat(it.index || 100) || 100;
-                        if (p <= 0) continue;
-                        const overFactor = Math.max(0.4, Math.min(2.5, idx / 100));
-                        const contrib = p * overFactor;
-                        if (contrib > topContribution) {
-                            topContribution = contrib;
-                            topRawBP = p;
-                        }
-                    }
-                    if (topContribution <= 0) continue;
-                    dataSums[bucket] += topContribution;
-                    if (topRawBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
-                        sawSignal[bucket] = true;
-                        nonTrivialBuckets += 1;
-                    }
-                }
-            }
-
-            // (c) Resolve Owned: 0 for talent/influencer/sports (rendered
-            // as "-" by _renderAudienceShareBoxes), archetype default
-            // otherwise. No data nudge on Owned - there's no clean panel
-            // signal for "engagement that landed on the subject's own
-            // .com/app", so it stays an archetype-level estimate.
-            const ownedPct = noOwned ? 0 : base.owned;
-
-            // (d) Blend archetype + data on the four non-owned buckets ONLY
-            // when the profile has rich enough data (3+ buckets with a
-            // signal >=5% max BP). For sparse profiles - typical for talent
-            // / influencer files where only a handful of behavioral
-            // categories are populated - fall back to pure archetype.
-            // Otherwise the per-category max-BPs (which measure GENERAL
-            // audience behavior like "% who shop at Best Buy" or "% who
-            // use Visa") would override the archetype anchor and produce
-            // results that fight the subject's actual engagement shape.
-            //
-            // Weight is 60% archetype / 40% data when active.
-            //
-            // 2026-06-22: bumped W_DATA from 0.20 → 0.40 so the new
-            // index-weighted data signal (see (b) above) can actually
-            // differentiate same-archetype profiles. At 20% the
-            // archetype completely dominated and profiles converged to
-            // identical-looking boxes. 40% gives the subject's own
-            // over-indexing pattern a real say while keeping the
-            // archetype as a structural anchor so e.g. an INFLUENCER
-            // file with thin behavioral data doesn't go off the rails.
-            // Override path: force the data blend on (even sparse bucket
-            // coverage counts) and flip the weights so the per-profile
-            // brand mix dominates over the archetype anchor. Without this,
-            // the 3 override profiles converge back to identical 12/12/26/
-            // 8/42 MEDIA_BRAND defaults.
-            const RICH_THRESHOLD = contentOverride ? 1 : 3;
-            const useData = contentOverride
-                ? (dataSums.social + dataSums.search + dataSums.retail + dataSums.media) > 0
-                : (nonTrivialBuckets >= RICH_THRESHOLD);
-            const W_ARCH = useData ? (contentOverride ? 0.25 : 0.60) : 1.00;
-            const W_DATA = useData ? (contentOverride ? 0.75 : 0.40) : 0.00;
-            const archRestSum = base.social + base.search + base.retail + base.media || 1;
-            const dataRestSum = dataSums.social + dataSums.search + dataSums.retail + dataSums.media;
-            const restPct = 100 - ownedPct;
-            const blended = { owned: ownedPct, social: 0, search: 0, retail: 0, media: 0 };
-            ['social', 'search', 'retail', 'media'].forEach(b => {
-                const archShare = (base[b] / archRestSum); // archetype share within the 4 non-owned
-                const dataShare = (useData && dataRestSum > 0) ? (dataSums[b] / dataRestSum) : archShare;
-                blended[b] = restPct * (W_ARCH * archShare + W_DATA * dataShare);
-            });
-
-            // (e) Final renormalize so total is exactly 100 (floating-point
-            // safety + guard against archetype rows that don't sum to 100).
-            const total = blended.social + blended.search + blended.retail + blended.media + blended.owned;
-            if (!total || !isFinite(total)) {
-                return { social: 0, search: 0, retail: 0, media: 0, owned: 0, archetype, noOwned, dataActive: useData };
-            }
-            return {
-                social: blended.social / total * 100,
-                search: blended.search / total * 100,
-                retail: blended.retail / total * 100,
-                media:  blended.media  / total * 100,
-                owned:  blended.owned  / total * 100,
-                contentOverride,
-                archetype: archetype,
-                noOwned:   noOwned,
-                dataActive: useData
-            };
-        }
-
-        function _renderAudienceShareBoxes(parsed, subjectName) {
-            const container = document.getElementById('audienceShareBoxes');
-            const tucCard = document.getElementById('tucCard');
-            if (!container) return;
-            // Subject is needed for the per-subject CONTENT override
-            // (Cat in the Hat / Blue Crush / The Grinch). Fall back to
-            // the dashboard header text or currentProfileData.name when
-            // the caller didn't pass it explicitly.
-            let subj = subjectName || '';
-            if (!subj) {
-                try {
-                    subj = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || '';
-                } catch (_) {}
-            }
-            if (!subj) {
-                try {
-                    const hdr = document.getElementById('dashBrandNameHeader');
-                    subj = hdr ? hdr.textContent : '';
-                } catch (_) {}
-            }
-            const share = _computeAudienceShare(parsed, subj);
-            if (!share) {
-                container.style.display = 'none';
-                if (tucCard) tucCard.style.display = 'none';
-                return;
-            }
-            const fmt = (v) => (v >= 0.5 ? Math.round(v) : (v > 0 ? v.toFixed(1) : 0)) + '%';
-            const apply = (id, val, isOwnedTalent) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                const box = el.closest('.asb-box');
-                if (isOwnedTalent) {
-                    el.textContent = '-';
-                    if (box) box.classList.add('asb-na');
-                } else {
-                    el.textContent = fmt(val);
-                    if (box) box.classList.remove('asb-na');
-                }
-            };
-            // For CONTENT-bucket profiles (movies, podcasts, games, series,
-            // vertical shorts) the qualification gate is "consumed the
-            // content," so MEDIA = 100% and the other four channels are
-            // not-applicable rather than literally zero. Render them as
-            // "-" instead of "0%" to make that distinction visible.
-            //
-            // For PLATFORM profiles (Netflix / Hulu / Facebook / Google /
-            // etc.), Owned = 100% by definition (every engager hit the
-            // platform's own logged-in / app session). Mirror the CONTENT
-            // treatment but inverted: Owned shows the 100%, the OTHER
-            // four (Social / Search / Retail / Media) render as "-".
-            const isContent  = share.archetype === 'CONTENT';
-            const isPlatform = share.archetype === 'PLATFORM' || share.ownedOnly === true;
-            apply('asbSocial', share.social, isContent || isPlatform);
-            apply('asbSearch', share.search, isContent || isPlatform);
-            apply('asbOwned',  share.owned,  share.noOwned);
-            apply('asbRetail', share.retail, isContent || isPlatform);
-            apply('asbMedia',  share.media,  isPlatform);
-            // Expose archetype on the container so dev tools (and the
-            // hover tooltip below) can show which template drove the
-            // numbers. Useful when debugging "why does Mark Rober look
-            // like a search-heavy profile?" - answer: detected
-            // archetype = INFLUENCER.
-            container.setAttribute('data-archetype', share.archetype || '');
-            container.removeAttribute('title');
-            container.style.display = 'flex';
-            if (tucCard) tucCard.style.display = '';
         }
 
         async function _fetchCategoryNorm() {
@@ -139570,9 +138731,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _resetComparisonRunsState('', profileId, []);
                     }
                 }
-                // Always populate the audience-share boxes - they sit on
-                // every profile, not just multi-sibling ones.
-                try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
