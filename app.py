@@ -46645,6 +46645,14 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "CANDIDATE PROFILES fall back to `new_build` with the full "
         "combined subject. Never pick an 'Avid Fan' or other cut/skin "
         "file as the parent - only base (Total Universe) profiles.\n"
+        "  7d-UNVERIFIED-SUBJECT (HARD RULE, 2026-09-22 Amandaland): "
+        "when you cannot verify the subject as a real entity, ASK and "
+        "wait ('What is <X> - a TV series, podcast, book, brand? "
+        "Where does it air or stream?'). NEVER emit a build draft "
+        "with empty tu_demos, empty subject_rows, or sizing held "
+        "'awaiting confirmation' - an approval card on an unverified "
+        "subject can only fail downstream. Asking IS the correct "
+        "output; a question in `assumptions` is not a question.\n"
         "  7a-YEAR-SERIES (2026-09-22, Jenna): a build ask naming "
         "MULTIPLE years ('Build Will And Grace year profiles for "
         "2022, 2023, 2024, 2025 and 2026') is an ARRAY of year-scoped "
@@ -55744,6 +55752,98 @@ def api_synth_chat_rebind_window():
     })
 
 
+def _pm_rescue_unverified_draft(draft, usage_extras=None):
+    """Approve-time rescue for a draft whose subject the interpret step
+    could not verify (2026-09-22, Jessie's 'run a profile on
+    Amandaland': the model shipped a new_build draft with EMPTY
+    tu_demos and its clarify question buried in assumptions; the queue
+    then 400'd 'tu_demos must be a non-empty dict' and the user got an
+    error email instead of either an answer or a question).
+
+    Order of rescue:
+      1. One search-enabled identification call - a real entity the
+         model simply did not know (Amandaland is a 2025 BBC sitcom)
+         resolves here without bothering the user.
+      2. Identified -> the interpret re-runs with the verified context
+         appended, producing a complete draft (demos included) that
+         continues into the normal approve flow.
+      3. Not identified / still incomplete -> a friendly in-chat
+         question (the guidance shape the widget already renders).
+
+    Returns {'draft': fresh_draft} on success, {'ask': question} when
+    the user has to answer, None on any internal failure (caller then
+    proceeds with the original draft and the standard validation)."""
+    try:
+        subject = str(draft.get('resolved_title') or draft.get('subject')
+                      or draft.get('name') or '').strip()
+        subject = re.sub(r'\s+(viewers|listeners|readers|players|fans)$',
+                         '', subject, flags=re.I).strip()
+        if not subject:
+            return None
+        ident = _pm_claude_json(
+            ('You identify real-world entities. Search the web when '
+             'unsure. Return STRICT JSON only: {"identified": bool, '
+             '"kind": "tv series|film|podcast|book|game|brand|person|'
+             'other", "summary": "2-3 sentences: what it is, year, '
+             'country, and where it streams/airs/sells in the US", '
+             '"platform": "primary US platform or null"}. identified '
+             'is true ONLY when you are confident this is a real '
+             'entity.'),
+            f'Identify: {subject}',
+            max_tokens=900, temperature=0.0,
+            surface='approve-rescue', usage_extras=usage_extras,
+            tools=[{'type': 'web_search_20250305', 'name': 'web_search',
+                    'max_uses': 4}])
+        data = (ident or {}).get('data') or {}
+        if not (ident.get('success') and data.get('identified')
+                and str(data.get('summary') or '').strip()):
+            print(f"[approve-rescue] {subject!r} not identified by "
+                  f"research; asking the user")
+            return {'ask': (
+                f"Before I build this: I could not verify what "
+                f"{subject} is. Is it a TV series, a podcast, a book, "
+                f"a brand, or something else - and if it is a show, "
+                f"where does it air or stream? One line is enough, "
+                f"and I will take it from there.")}
+        summary = ' '.join(str(data['summary']).split())
+        print(f"[approve-rescue] {subject!r} identified: "
+              f"{summary[:140]}")
+        sys_p, usr_p = _synth_chat_interpret_prompts(
+            (f"run a profile on {subject}\n\n"
+             f"VERIFIED CONTEXT (already researched, treat as fact): "
+             f"{subject} is {summary}"),
+            chat_history=None,
+            master_categories=MASTER_CATEGORIES,
+            candidate_matches=[])
+        fresh = _run_nflx_claude_agent(
+            system_prompt=sys_p, user_prompt=usr_p,
+            max_tokens=16000, temperature=0.4,
+            model=_SYNTH_CHAT_INTERPRET_MODEL,
+            usage_tag=('interpret', 'approve-rescue', None))
+        fd = (fresh or {}).get('data') or {}
+        if isinstance(fd, list):
+            fd = next((d for d in fd if isinstance(d, dict)), {})
+        if fresh.get('success') and isinstance(fd, dict) \
+                and fd.get('tu_demos'):
+            # carry the original ask's avid choice + any explicit
+            # window; everything else comes from the re-interpret
+            for k in ('run_avid',):
+                if k in draft:
+                    fd.setdefault(k, draft[k])
+            return {'draft': fd}
+        print(f"[approve-rescue] re-interpret still incomplete for "
+              f"{subject!r}; asking the user")
+        return {'ask': (
+            f"Before I build this: I could not verify what {subject} "
+            f"is. Is it a TV series, a podcast, a book, a brand, or "
+            f"something else - and if it is a show, where does it air "
+            f"or stream? One line is enough, and I will take it from "
+            f"there.")}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 @app.route('/api/brief-chat/approve', methods=['POST'])
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
@@ -55827,6 +55927,28 @@ def api_synth_chat_approve():
             draft.pop('estimated_credits_new_build', None)
         except Exception:
             pass
+
+    # Unverified-subject rescue (2026-09-22, Amandaland): a build draft
+    # with empty tu_demos means the interpret step could not verify the
+    # subject and held every sizing field. Posting it to the queue can
+    # only 400 ('tu_demos must be a non-empty dict') and email an error
+    # while the user gets nothing. Research the entity first (one
+    # search-enabled call - a real show the model did not know resolves
+    # without bothering anyone), re-interpret with the verified
+    # context, and only ask the user when research genuinely fails.
+    if str(draft.get('decision') or '').strip().lower() in \
+            ('new_build', 'cut_needs_parent') \
+            and not draft.get('tu_demos'):
+        _uv = _pm_rescue_unverified_draft(
+            draft, usage_extras=_pm_usage_extras(user))
+        if isinstance(_uv, dict) and _uv.get('draft'):
+            draft = _uv['draft']
+            print(f"[approve-rescue] proceeding with the researched "
+                  f"draft for {draft.get('subject') or draft.get('name')!r}")
+        elif isinstance(_uv, dict) and _uv.get('ask'):
+            return jsonify({
+                'success': False, 'guidance': True,
+                'error': _uv['ask'], 'followups': []})
 
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
