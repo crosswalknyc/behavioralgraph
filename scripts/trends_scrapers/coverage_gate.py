@@ -18,15 +18,18 @@ stream_estimates + headline_estimates have landed:
      (`est_basis='carried_forward'`), or which had no reading anywhere
      and took a rank-tier value (`est_basis='rank_tier'`), or which is
      rendering a cap correction rather than a reading taken for that
-     service (`est_basis='platform_cap'`, 2026-09-22), is priced through
+     service (`est_basis='platform_cap'`, 2026-09-22), or which was
+     rendering a reading taken for a DIFFERENT service
+     (`est_basis='cross_service'`, 2026-09-22), is priced through
      the SAME research machinery as the nightly pass (tiering intact:
      Sonnet for top-ranked, Haiku for long-tail). There is NO budget cap
      on this pass (Jenna 2026-09-09: "im okay with it exceeding a price
      cap if we need it to ensure each item has numbers") - spend is
      metered and reported, never used to stop.
-     A capped row is wrong about ONE service, so its result is merged
-     narrowly: only that service's block moves, and the title's rows on
-     services that were reading correctly stay where they are.
+     Both of the last two are wrong about ONE service, so the result
+     is merged narrowly: only that service's block moves, and the
+     title's rows on services that were reading correctly stay where
+     they are.
   4. Results merge into `latest/` AND today's dated snapshot so window
      math, deltas, and tomorrow's continuity guard stay coherent.
   5. Live compute_view caches are purged and the payload recomputed; the
@@ -105,12 +108,34 @@ _RANK_TIER_BASES = ('rank_tier', 'chart_baseline')
 # Lionsgate+ rows rendered a cap seat in the rail's top ten.
 _CAP_BASES = ('platform_cap',)
 
+# A row that was rendering a reading taken for a DIFFERENT service
+# (2026-09-22). A title on several services carries one reading per
+# service it was measured on, plus a total across all of them; a rail
+# holding no reading of its own used to render that total, which reads
+# as a sound number about a service it was never measured on. Unlike a
+# cap breach it can sit comfortably inside the service's ceiling, so
+# neither the cap pass nor this gate saw it: 422 rows of 3,473 on the
+# streaming and FAST rails were in that state, The Vampire Diaries on
+# Max among them, showing 880,074 off a reading taken for Prime Video.
+#
+# `trends_iq._enforce_service_provenance` now takes such a row onto a
+# number about its own service and leaves this mark on it. The mark is
+# what asks for the real thing: a reading researched FOR that service,
+# priced and merged below exactly the way a capped row is, because it
+# is the same shape of defect. One service of one title is wrong, so
+# one service block is written and the title's rows on services that
+# were reading correctly do not move.
+_CROSS_SERVICE_BASES = ('cross_service',)
+
+# Both are priced through the narrow per-service path.
+_PER_SERVICE_BASES = _CAP_BASES + _CROSS_SERVICE_BASES
+
 
 def _audience_state(it: dict) -> str:
     """'researched' | 'carried' | 'rank_tier' | 'platform_cap' |
-    'missing' for a rendered row. Sub-100 estimates count as missing
-    (credibility floor, 2026-09-09) so a degenerate research value
-    gets re-priced instead of passing."""
+    'cross_service' | 'missing' for a rendered row. Sub-100 estimates
+    count as missing (credibility floor, 2026-09-09) so a degenerate
+    research value gets re-priced instead of passing."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
@@ -123,6 +148,8 @@ def _audience_state(it: dict) -> str:
                         return 'carried'
                     if basis in _CAP_BASES:
                         return 'platform_cap'
+                    if basis in _CROSS_SERVICE_BASES:
+                        return 'cross_service'
                     return 'researched'
             except (TypeError, ValueError):
                 pass
@@ -331,9 +358,9 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
         if state in ('carried', 'rank_tier'):
             baseline += 1
         title = _item_title(it)
-        if state == 'platform_cap':
+        if state in ('platform_cap', 'cross_service'):
             _collect_cap_target(se, stored_keys, cap_by_key, path, rank, it,
-                                 title)
+                                 title, state)
             continue
         kind = _estimator_kind_for(path, it)
         if kind is None:
@@ -383,8 +410,10 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
 
 def _collect_cap_target(se, stored_keys, cap_by_key: dict,
                          path: str, rank: int, it: dict,
-                         title: str) -> None:
-    """Fold one capped row into the per-entry capped population."""
+                         title: str, state: str = 'platform_cap') -> None:
+    """Fold one row needing a service-scoped reading into the per-entry
+    population. `state` is the condition that put it here, kept only so
+    the run log can say how many of each there were."""
     if not title:
         return
     kind = _estimator_kind_for(path, it)
@@ -418,9 +447,11 @@ def _collect_cap_target(se, stored_keys, cap_by_key: dict,
             'best_rank':     rank,
             'platforms':     set(),
             'rows':          [],
+            'states':        set(),
         }
     tgt['platforms'].add(platform_key)
     tgt['rows'].append(path)
+    tgt['states'].add(state)
     if rank < tgt['best_rank']:
         tgt['best_rank'] = rank
 
@@ -479,6 +510,47 @@ def _cap_research_items(se, cap_targets: list[dict]) -> list[dict]:
     return items
 
 
+# How far under a service's own priced rows a fresh reading may land
+# before it reads as a failed call rather than a quiet title. A tenth
+# of the service's fifth percentile: an order of magnitude below the
+# bottom of what already charts there. Deliberately loose, because a
+# deep-catalog title genuinely does read low and only an absurdity
+# should be refused.
+_RAIL_FLOOR_FRACTION = 0.10
+_RAIL_FLOOR_MIN_ROWS = 20
+
+
+def _rail_credibility_floors(items: dict) -> dict:
+    """{service key: the lowest a fresh reading for it may be}.
+
+    Built from the service's own priced rows, so each service is judged
+    against itself: the rails span three orders of magnitude and one
+    absolute floor cannot describe both a comics panel and Netflix. A
+    service with too few priced rows to have a shape gets no floor.
+    """
+    pools: dict = {}
+    for entry in (items or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        for key, blk in (entry.get('by_platform') or {}).items():
+            if not isinstance(blk, dict):
+                continue
+            try:
+                v = int(blk.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                pools.setdefault(key, []).append(v)
+    out: dict = {}
+    for key, vals in pools.items():
+        if len(vals) < _RAIL_FLOOR_MIN_ROWS:
+            continue
+        vals.sort()
+        p05 = vals[int(len(vals) * 0.05)]
+        out[key] = int(p05 * _RAIL_FLOOR_FRACTION)
+    return out
+
+
 def _merge_cap_platform_blocks(results: dict[str, dict],
                                 cap_targets: list[dict],
                                 target_date_iso: str) -> dict[str, Any]:
@@ -505,6 +577,7 @@ def _merge_cap_platform_blocks(results: dict[str, dict],
 
     snap = se._read_snapshot('stream_estimates') or {}
     items = snap.get('items') or {}
+    floors = _rail_credibility_floors(items)
 
     for t in cap_targets:
         res = results.get(t['entry_key'])
@@ -530,11 +603,19 @@ def _merge_cap_platform_blocks(results: dict[str, dict],
                 v = int(blk.get('us_estimate') or 0)
             except (TypeError, ValueError):
                 v = 0
-            if v < 100:
-                # Same credibility floor the merge above applies: a
-                # sub-100 reading on a charting row is a failed call,
-                # not an audience. The cap correction stands and the
-                # nightly pass retries.
+            if v < max(100, floors.get(p, 0)):
+                # Same credibility floor the merge above applies, in
+                # the two forms it takes. A sub-100 reading on a
+                # charting row is a failed call, not an audience. So is
+                # one that lands an order of magnitude below the bottom
+                # of the service's own priced rows: a title cannot
+                # chart on a service and read far under everything else
+                # that charts there. Rick and Morty came back at 548 on
+                # Hulu, whose priced rows bottom out near 42,000, off a
+                # working that cited a top-10 band and then used a
+                # weekly anchor of 3,900. Held rather than written; the
+                # row keeps a number about its own service and tonight's
+                # pass tries again.
                 stats['no_block'].append(f'{t["entry_key"]}@{p}')
                 continue
             prev = (entry.get('by_platform') or {}).get(p) or {}
@@ -700,15 +781,18 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
      total, researched, baseline, cap_targets) = collect_missing(payload)
     cap_rows = sum(len(t['rows']) for t in cap_targets)
     cap_blocks = sum(len(t['platforms']) for t in cap_targets)
+    cross_titles = sum(1 for t in cap_targets
+                       if 'cross_service' in (t.get('states') or ()))
     pct_before = (100.0 * researched / total) if total else 100.0
     logger.info("coverage_gate: %d rendered non-Film items, %d researched "
                 "(%.2f%%), %d need pricing (%d stream-kind, %d headline), "
-                "%d row(s) on a cap correction across %d service "
-                "reading(s) on %d title(s)",
+                "%d row(s) want a reading of their own service across %d "
+                "service reading(s) on %d title(s), %d of which were "
+                "showing another service's reading",
                 total, researched, pct_before,
                 len(stream_items) + len(headline_items),
                 len(stream_items), len(headline_items),
-                cap_rows, cap_blocks, len(cap_targets))
+                cap_rows, cap_blocks, len(cap_targets), cross_titles)
 
     summary: dict[str, Any] = {
         'total': total,
@@ -718,8 +802,10 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         'priced_headline': 0,
         'capped_before': cap_rows,
         'cap_titles': len(cap_targets),
+        'cross_service_titles': cross_titles,
         'cap_blocks_written': 0,
         'capped_after': 0,
+        'cross_service_after': 0,
         'spend_usd': 0.0,
         'still_missing': 0,
         'rendered_after_pct': None,
@@ -794,7 +880,7 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
                                        force_refresh=True)
     cards2 = (payload2 or {}).get('cards') or {}
     total2 = researched2 = rendered2 = carried2 = rank_tier2 = 0
-    capped2 = 0
+    capped2 = cross2 = 0
     still_missing: list[tuple[str, str]] = []
     # Per-list tally. A board-wide percentage says something is wrong;
     # the per-list split says where, which is what makes the alert
@@ -810,7 +896,8 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         total2 += 1
         bucket = per_list.setdefault(path, {'total': 0, 'carried': 0,
                                              'rank_tier': 0,
-                                             'platform_cap': 0})
+                                             'platform_cap': 0,
+                                             'cross_service': 0})
         bucket['total'] += 1
         state = _audience_state(it)
         if state == 'researched':
@@ -831,6 +918,13 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             rendered2 += 1
             capped2 += 1
             bucket['platform_cap'] += 1
+        elif state == 'cross_service':
+            # The row is off the other service's number either way;
+            # it is still waiting on a reading researched for its own,
+            # which tonight's pass tries again.
+            rendered2 += 1
+            cross2 += 1
+            bucket['cross_service'] += 1
         else:
             still_missing.append((path, _item_title(it)))
 
@@ -847,17 +941,20 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     summary['rank_tier_after_pct'] = round(
         (100.0 * rank_tier2 / total2) if total2 else 0.0, 2)
     summary['capped_after'] = capped2
+    summary['cross_service_after'] = cross2
     summary['by_list'] = {
         name: {
             'total': v['total'],
             'carried': v['carried'],
             'rank_tier': v['rank_tier'],
             'platform_cap': v['platform_cap'],
+            'cross_service': v['cross_service'],
             'carried_pct': round(100.0 * v['carried'] / v['total'], 2),
             'rank_tier_pct': round(100.0 * v['rank_tier'] / v['total'], 2),
         }
         for name, v in sorted(per_list.items())
-        if v['carried'] or v['rank_tier'] or v['platform_cap']
+        if (v['carried'] or v['rank_tier'] or v['platform_cap']
+            or v['cross_service'])
     }
 
     logger.info("coverage_gate: FINAL coverage researched=%.2f%% "

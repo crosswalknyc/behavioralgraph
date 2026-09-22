@@ -4253,6 +4253,20 @@ def _stamp_stream_estimate(row: dict, entry: dict,
                 if entry.get(k) is not None}
         out['unit_label'] = _canonical_unit_label(kind_hint, '',
                                                    window_days)
+        if platform_key and kind_hint in _SERVICE_SCOPED_KINDS:
+            # This row names a service and the stored entry holds no
+            # reading for it, so the only number on offer is the
+            # title's total across every service it sits on. That is a
+            # real reading of a real title, taken for something other
+            # than what this row claims, which is why it reads as a
+            # sound number and sorts high: a total is at least as
+            # large as any one service inside it.
+            #
+            # Marked here rather than corrected here, because the
+            # correction needs the row's position in its list and this
+            # function sees one row at a time.
+            # `_enforce_service_provenance` reads the mark.
+            out['est_basis'] = 'cross_service'
 
     # The reasoning text lands in the tooltip, so it is read as
     # closely as the number and is held to the same individual-level
@@ -4284,6 +4298,16 @@ _PODCAST_PANEL_TO_PLATFORM = {
     'amazon':           'amazon',
     'audible':          'audible',
 }
+# Kinds whose rows each name one service, so a cross-platform total is
+# never the right number for them. The music / podcast / book / comic
+# families are absent deliberately: their levels are owned by the
+# re-anchoring pass that already took aggregate fallback to zero there
+# (`scripts/trends_scrapers/reanchor_podcast_book_comic_2026_09_15.py`).
+_SERVICE_SCOPED_KINDS = frozenset({
+    'film', 'tv', 'title',
+    'fast_film', 'fast_tv', 'fast_channel',
+})
+
 _STREAMING_PANEL_TO_PLATFORM = {
     'netflix':    'netflix',
     'disneyplus': 'disneyplus',
@@ -7545,6 +7569,265 @@ def _cap_corrected_value(blk: dict, kind: str, title: str,
         val = max(1, int(cap * 0.88))
     val = min(val, cap - 1) if cap > 1 else val
     return val, own_prev, own_day, 'cap_seat'
+
+
+# ============================================================================
+# A row renders a reading taken for the service it names
+# ============================================================================
+# The cap pass above catches a row whose number is too big for its own
+# service. It cannot catch the same defect when the number happens to
+# fit: a title that sits on several services carries one total across
+# all of them, and a rail with no reading of its own renders that
+# total. On a large rail the total lands inside the cap and the row
+# reads as a sound, researched number about a service it was never
+# measured on.
+#
+# The Vampire Diaries showed 880,074 on Max on 2026-09-22 and ranked
+# third on the rail, above House of the Dragon. Its stored reasoning
+# is about Prime Video, where the title charts at #17, and the working
+# in that same reasoning derives 143-429K a day. Max holds no reading
+# for it at all. The number was researched, correctly, for a different
+# service.
+#
+# This pass takes every such row off that number. What it becomes, in
+# order of preference, and both are readings about THIS service:
+#   1. what this rail showed for this title on its most recent day,
+#      walked to today through the shared per-item rhythm. The
+#      movement chip is then a real day-over-day move rather than the
+#      size of the correction.
+#   2. the rail's own priced rows sampled at this row's chart
+#      position, when the title has never been read on this service.
+#      Marked as a first reading, so the chip is the NEW treatment
+#      rather than a fabricated move.
+#
+# The row keeps its `cross_service` mark either way, which is what
+# puts it in front of the research pass in `coverage_gate`. That pass
+# writes a reading taken FOR this service into the stored entry, and
+# once it lands the annotator finds it and this pass stops firing for
+# that row. Same shape as the cap correction: correct what the reader
+# sees now, and queue a reading of its own.
+#
+# Derived rails are skipped. A derived rail takes its value from its
+# parent by design, so it has no reading of its own to be missing, and
+# `_rederive_derived_rails` recomputes it from the corrected parent
+# after this runs.
+def _natural_digits_for(value: int, title: str, salt: str) -> int:
+    """Natural trailing digits, the same draw the estimator uses.
+    Returns the value untouched if the estimator cannot be imported."""
+    try:
+        from scripts.trends_scrapers.stream_estimates import \
+            _natural_last_digits
+    except Exception:
+        return int(value)
+    try:
+        return int(_natural_last_digits(int(value), title, salt))
+    except Exception:
+        return int(value)
+
+
+def _prior_is_usable(dist: dict, prev_val: int, kind: str,
+                      platform: str) -> bool:
+    """Is a reading found in the record a sound place to carry from?
+
+    It has to sit inside the service's own published cap, and not an
+    order of magnitude below the bottom of what charts on that service.
+    Outside either, the record is holding an older defect rather than a
+    reading, and carrying it forward would reproduce it.
+    """
+    try:
+        v = int(prev_val)
+    except (TypeError, ValueError):
+        return False
+    if v < 100:
+        return False
+    cap = _platform_daily_cap(kind, platform)
+    if cap is not None and v > cap:
+        return False
+    vals = (dist.get('by_platform') or {}).get((kind, platform)) or []
+    if len(vals) >= 20:
+        p05 = vals[int(len(vals) * 0.05)]
+        if v < p05 * 0.10:
+            return False
+    return True
+
+
+def _enforce_service_provenance(cards: dict, stream_snap: dict) -> dict:
+    """Take every streaming / FAST row off a number researched for a
+    different service. Best-effort: never raises into compute_view."""
+    stats = {'checked': 0, 'corrected': 0, 'by_source': {}, 'rows': []}
+    dist = _coverage_baselines_from_estimates(stream_snap)
+    today_iso = _today_iso()
+    # One title on one rail is one number, decided once and applied to
+    # every copy of the row.
+    #
+    # A rail renders the same title as separate objects in its combined
+    # list, in its Film / TV split, and on Netflix in the four Global
+    # Top 10 rails. Those lists differ in length and put the title in
+    # different places, and where the title has never been read on this
+    # service its position is what sets the level. Taking whichever list
+    # happened to be walked first put Talamasca at 3.5M on Netflix: it
+    # sits 165th on the 200-row US chart and first on a 10-row global
+    # one, and rank one of ten reads as the top of Netflix.
+    #
+    # So: gather every appearance first, decide from the longest list,
+    # which is the rail's full chart and the only one whose positions
+    # describe the whole rail, then write. Two passes over the tree, one
+    # decision per title.
+    seen: dict = {}
+    decided: dict = {}
+
+    def _observe(it: dict, path: str, rank_pos: int, list_len: int) -> None:
+        blk = it.get('us_streams')
+        if not isinstance(blk, dict) or blk.get('est_basis') != 'cross_service':
+            return
+        platform = _coverage_platform_for_path(path)
+        if not platform or _is_derived_rail(platform):
+            return
+        title = _coverage_item_title(it)
+        if not title:
+            return
+        key = (platform, _cp_normalize(title))
+        prev = seen.get(key)
+        if prev is None or list_len > prev[2]:
+            seen[key] = (_coverage_kind_for_path(path, it), rank_pos,
+                          list_len, title)
+
+    def _fix(it: dict, path: str, rank_pos: int, list_len: int) -> None:
+        blk = it.get('us_streams')
+        if not isinstance(blk, dict):
+            return
+        if blk.get('est_basis') != 'cross_service':
+            return
+        platform = _coverage_platform_for_path(path)
+        if not platform or _is_derived_rail(platform):
+            return
+        title = _coverage_item_title(it)
+        if not title:
+            return
+        kind = _coverage_kind_for_path(path, it)
+        stats['checked'] += 1
+        try:
+            was = int(float(blk.get('us_estimate') or 0))
+        except (TypeError, ValueError):
+            was = 0
+
+        cached = decided.get((platform, _cp_normalize(title)))
+        if cached is None:
+            return
+        val, prev_val, prev_day, direction, delta, source, method = cached
+
+        blk['us_estimate'] = val
+        blk['us_estimate_low'] = int(val * 0.72)
+        blk['us_estimate_high'] = int(val * 1.38)
+        blk['delta_pct'] = delta
+        blk['direction'] = direction
+        blk['as_of_date'] = today_iso
+        blk['confidence'] = 'directional'
+        blk['unit_label'] = _canonical_unit_label(kind, platform)
+        blk['platform'] = platform
+        # The reasoning that travelled with the old number was written
+        # about another service, so it does not survive the change.
+        blk['method'] = method
+        blk.pop('sources', None)
+        if prev_val > 0:
+            blk['prev_estimate'] = prev_val
+            if prev_day:
+                blk['prev_date'] = prev_day
+            blk.pop('no_prior_reading', None)
+        else:
+            blk.pop('prev_estimate', None)
+            blk.pop('prev_date', None)
+            blk['no_prior_reading'] = True
+        stats['corrected'] += 1
+        stats['by_source'][source] = stats['by_source'].get(source, 0) + 1
+        stats['rows'].append((path, title, platform, was, val, source))
+
+    def _decide() -> None:
+        """One number per (service, title), from the row's place in the
+        longest list it appears in."""
+        for (platform, _norm), (kind, rank_pos, list_len,
+                                 title) in seen.items():
+            prior = _carry_find_prior(kind, title, platform)
+            if prior and not _prior_is_usable(dist, prior[0], kind,
+                                               platform):
+                # The record is not automatically a good reading. The
+                # rail held 7,768,929 for Talamasca on Netflix from
+                # 2026-09-14, close to twice what Netflix reaches in a
+                # day, so carrying it forward reproduced an old defect
+                # and then sat on the cap seat at the top of the rail.
+                # The cap correction refuses an out-of-band prior the
+                # same way; this refuses it for the same reason.
+                prior = None
+            if prior:
+                prev_val, prev_day, resolved_key = prior
+                val = _carry_walk_to_today(prev_val, kind, title,
+                                            resolved_key, prev_day)
+                direction, delta = _direction_from_prev(val, prev_val)
+                source = 'own_previous'
+                method = ("this title's own most recent reading on this "
+                          'service, moved to today')
+            else:
+                base = _coverage_pick_from_dist(dist, kind, rank_pos,
+                                                 list_len, platform)
+                val = _coverage_jitter(title, f'{kind}|{platform}', base)
+                # `_coverage_jitter` still forces a 1-9 last digit,
+                # which is the ban the 2026-09-09 amendment retired
+                # because a corpus with no zeros is its own tell. Re-
+                # draw the trailing digits naturally, as every other
+                # count on the board does.
+                val = _natural_digits_for(val, title, f'{platform}|{kind}')
+                prev_val, prev_day = 0, ''
+                direction, delta = 'new', 0.0
+                source = 'rail_tier'
+                method = 'first reading for this title on this service'
+            if val > 0:
+                decided[(platform, _cp_normalize(title))] = (
+                    val, prev_val, prev_day, direction, delta, source,
+                    method)
+
+    def _walk(node, path: str, fn) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, (dict, list)):
+                    _walk(v, f'{path}.{k}' if path else k, fn)
+            return
+        if not isinstance(node, list):
+            return
+        rows = [x for x in node
+                if isinstance(x, dict) and _coverage_item_title(x)]
+        n = len(rows)
+        for i, x in enumerate(rows):
+            try:
+                rank = int(x.get('rank') or (i + 1))
+            except (TypeError, ValueError):
+                rank = i + 1
+            fn(x, path, rank, n)
+        for x in node:
+            if isinstance(x, dict):
+                _walk(x, path, fn)
+
+    try:
+        for fn in (_observe, None):
+            if fn is None:
+                _decide()
+                fn = _fix
+            for root in _CAP_PASS_ROOTS:
+                node = (cards or {}).get(root)
+                if isinstance(node, (dict, list)):
+                    _walk(node, root, fn)
+    except Exception:
+        logger.exception("service provenance pass failed (non-fatal)")
+    if stats['corrected']:
+        for path, title, plat, was, now, src in stats['rows'][:20]:
+            logger.info("service provenance: %s '%s' on %s %s -> %s (%s)",
+                        path, title, plat, f'{was:,}', f'{now:,}', src)
+        logger.info("service provenance: %d row(s) of %d checked were "
+                    "showing a reading taken for another service and now "
+                    "show one taken for their own (%s)",
+                    stats['corrected'], stats['checked'],
+                    ', '.join(f'{k}={v}'
+                              for k, v in sorted(stats['by_source'].items())))
+    return stats
 
 
 def _enforce_platform_caps(cards: dict) -> dict:
@@ -12192,6 +12475,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                         headline_estimates_snap)
     except Exception as e:
         logger.warning("audience coverage pass failed: %s", e)
+
+    # No row may render a reading taken for a different service. Runs
+    # before the cap pass so a corrected value is still held to its own
+    # service's ceiling, and before the rank pass so the rail is
+    # ordered on the numbers it ends up showing.
+    try:
+        _enforce_service_provenance(payload['cards'],
+                                     stream_estimates_snap)
+    except Exception as e:
+        logger.warning("service provenance pass failed: %s", e)
 
     # No row may render above its own service's published cap. After
     # the coverage pass, so a carried or first-appearance value is
