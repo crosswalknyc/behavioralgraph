@@ -50,6 +50,12 @@ _OG_URL = re.compile(
     r'property=["\']og:url["\'][^>]+content=["\']([^"\']+)["\']', re.I)
 STORE = "us"
 
+try:
+    from match_gate import is_relevant           # shared over-match relevance floor
+except ImportError:                              # keep the sibling importable
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from match_gate import is_relevant
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 def tokens(s):
@@ -131,15 +137,20 @@ def pick(cands, title, kind):
         ct = tokens(c["title"])
         exact = ct == want
         subset = bool(want) and set(want) <= set(ct)
+        rel = is_relevant(title, c["title"])
         typ = (c.get("type") == want_type)
-        return (exact, typ, subset)
+        return (exact, subset, rel, typ)
 
     best = max(cands, key=rank)
-    r = rank(best)
-    # accept an exact/subset title match, or (failing that) the top relevance hit
-    if r[0] or r[2]:
+    exact, subset, rel, _typ = rank(best)
+    # Accept an exact/subset title match, or (failing that) a candidate that
+    # clears the shared relevance floor. NEVER fall back to the top search hit
+    # blindly — that let "Amandaland" resolve to the unrelated "Trying" (they
+    # share zero title tokens). No plausible match -> no Apple TV row, which is
+    # correct: the title simply isn't in Apple's TV+ search index.
+    if exact or subset or rel:
         return best
-    return cands[0]
+    return None
 
 
 def canonical_url(umc_id, kind):
