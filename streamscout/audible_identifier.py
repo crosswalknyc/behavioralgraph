@@ -46,12 +46,12 @@ _SERIES_IN_URL = re.compile(r"/series/([^?/]*?)/(" + _ASIN + r")", re.I)
 
 # ── fuzzy title matching ──────────────────────────────────────────────────────
 try:
-    from match_gate import is_relevant           # shared over-match relevance floor
+    from match_gate import is_relevant, is_variant_or_derivative  # shared floors
 except ImportError:                              # keep the sibling importable
     import os as _os
     import sys as _sys
     _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-    from match_gate import is_relevant
+    from match_gate import is_relevant, is_variant_or_derivative
 
 
 def tokens(s):
@@ -308,6 +308,12 @@ def _best_audible(page, query, want_one=True):
     scored = []
     qtok = set(tokens(query))
     for h in hits:
+        # Drop non-base format variants / derivatives (e.g. "… Part 1 of 2
+        # [Dramatized Adaptation]", study guides) — they carry the real title so
+        # is_relevant() would pass them, but they aren't the actual audiobook.
+        # Legit foreign-language editions ("Alas de Ónix (Onyx Storm)") stay.
+        if is_variant_or_derivative(h.get("title", "")):
+            continue
         ttok = set(tokens(h["title"]))
         shared = len(qtok & ttok)
         sc = similarity(query, h["title"])
