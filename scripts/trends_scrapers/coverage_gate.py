@@ -16,12 +16,17 @@ stream_estimates + headline_estimates have landed:
   3. Any non-Film item whose audience value is missing, or which is
      showing its own earlier reading carried forward
      (`est_basis='carried_forward'`), or which had no reading anywhere
-     and took a rank-tier value (`est_basis='rank_tier'`), is priced through
+     and took a rank-tier value (`est_basis='rank_tier'`), or which is
+     rendering a cap correction rather than a reading taken for that
+     service (`est_basis='platform_cap'`, 2026-09-22), is priced through
      the SAME research machinery as the nightly pass (tiering intact:
      Sonnet for top-ranked, Haiku for long-tail). There is NO budget cap
      on this pass (Jenna 2026-09-09: "im okay with it exceeding a price
      cap if we need it to ensure each item has numbers") - spend is
      metered and reported, never used to stop.
+     A capped row is wrong about ONE service, so its result is merged
+     narrowly: only that service's block moves, and the title's rows on
+     services that were reading correctly stay where they are.
   4. Results merge into `latest/` AND today's dated snapshot so window
      math, deltas, and tomorrow's continuity guard stay coherent.
   5. Live compute_view caches are purged and the payload recomputed; the
@@ -83,12 +88,29 @@ def _item_title(it: dict) -> str:
 _CARRIED_BASES = ('carried_forward',)
 _RANK_TIER_BASES = ('rank_tier', 'chart_baseline')
 
+# A row the cap pass had to correct (2026-09-22). `_enforce_platform_
+# caps` stamps this when the number a rail was about to render sat
+# above that service's published ceiling, which happens when the row
+# fell back to the title's cross-platform total because the research
+# returned no block for that service. The correction seats the row on
+# its own previous reading or just under the cap, so whichever way it
+# lands the row is not showing a reading taken FOR that title ON that
+# service. That is the same condition the other three bases describe,
+# so it is priced here with them.
+#
+# Before this, a capped row read as researched and the gate walked
+# past it. On a large rail the ceiling barely bites and the seat is
+# close to the real level, which is why it went unseen; on a small
+# rail it put the correction at the top of the board. Nine of the 120
+# Lionsgate+ rows rendered a cap seat in the rail's top ten.
+_CAP_BASES = ('platform_cap',)
+
 
 def _audience_state(it: dict) -> str:
-    """'researched' | 'carried' | 'rank_tier' | 'missing' for a
-    rendered row. Sub-100 estimates count as missing (credibility
-    floor, 2026-09-09) so a degenerate research value gets re-priced
-    instead of passing."""
+    """'researched' | 'carried' | 'rank_tier' | 'platform_cap' |
+    'missing' for a rendered row. Sub-100 estimates count as missing
+    (credibility floor, 2026-09-09) so a degenerate research value
+    gets re-priced instead of passing."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
@@ -99,6 +121,8 @@ def _audience_state(it: dict) -> str:
                         return 'rank_tier'
                     if basis in _CARRIED_BASES:
                         return 'carried'
+                    if basis in _CAP_BASES:
+                        return 'platform_cap'
                     return 'researched'
             except (TypeError, ValueError):
                 pass
@@ -192,19 +216,104 @@ def _platform_slug_from_path(path: str) -> str:
     return parts[1] if len(parts) >= 2 else ''
 
 
+# ---------------------------------------------------------------------
+# Capped rows: pricing one service's reading without touching the rest
+# ---------------------------------------------------------------------
+# A capped row is wrong about ONE service. The title's rows on the
+# services that were reading correctly are not wrong, so the pricing
+# below is written back into just the service block the capped row
+# reads. Replacing the stored entry wholesale would move those other
+# rows as a side effect, which is a different change from the one
+# being made here.
+
+
+def _cap_platform_key(path: str) -> str:
+    """The `by_platform` key the rail at `path` reads, or '' when the
+    rail has no per-service block (the row reads the total instead).
+
+    Resolved through the same tables the annotators stamp from, so a
+    rail that gains a panel gains this with it. A rail that is one
+    distribution path through another service resolves to the PARENT
+    key, which is the reading that has to move; the derived pass
+    recomputes the child from it.
+    """
+    slug = _platform_slug_from_path(path)
+    if not slug:
+        return ''
+    try:
+        import trends_iq
+    except Exception:
+        return ''
+    if path.startswith('fast_trending'):
+        return (getattr(trends_iq, '_FAST_PANEL_TO_PLATFORM', {})
+                or {}).get(slug, '')
+    if path.startswith('streaming_trending'):
+        return (getattr(trends_iq, '_STREAMING_PANEL_TO_PLATFORM', {})
+                or {}).get(slug, '')
+    return ''
+
+
+def _entry_key_candidates(se, kind: str, title: str, artist: str) -> list:
+    """Stored keys a row could resolve to, in the order the annotator
+    tries them.
+
+    A streaming row prefers the key matching its own Film / TV label
+    and falls back to the other two, so a film:/tv:/title: sibling
+    already holding the title is the entry the row is reading. Every
+    other kind has exactly one key.
+    """
+    if kind in ('film', 'tv', 'title'):
+        norm = se._cp_normalize(title)
+        order = {
+            'film':  ('film', 'tv', 'title'),
+            'tv':    ('tv', 'film', 'title'),
+            'title': ('title', 'film', 'tv'),
+        }[kind]
+        return [f'{k}:{norm}' for k in order]
+    return [se._lookup_key(kind, title, artist)]
+
+
+def _platform_chart_label(se, kind: str, platform_key: str) -> str:
+    """The service's own name, for the prompt's chart context. Marks
+    the service as one this title actually appears on, which is what
+    makes the research return a block for it."""
+    try:
+        for p in se._platforms_for_kind(kind) or []:
+            if p.get('key') == platform_key:
+                return str(p.get('label') or platform_key)
+    except Exception:
+        pass
+    return platform_key
+
+
 def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
-                                             int, int, int]:
+                                             int, int, int, list[dict]]:
     """Walk the rendered payload. Returns (stream_items,
-    headline_items, total_nonfilm, researched_count, baseline_count).
-    Items returned are the rows needing RESEARCH-grade pricing
-    (missing or baseline-stamped), mapped to estimator item dicts and
-    deduped by lookup key."""
+    headline_items, total_nonfilm, researched_count, baseline_count,
+    cap_targets).
+
+    The first two are rows needing RESEARCH-grade pricing (missing or
+    baseline-stamped), mapped to estimator item dicts and deduped by
+    lookup key. `cap_targets` is the capped population, deduped by the
+    stored entry the row reads and carrying the set of service keys
+    that need a reading of their own."""
     from scripts.trends_scrapers import stream_estimates as se
 
     cards = (payload or {}).get('cards') or {}
     stream_by_key: dict[str, dict] = {}
     headline_by_key: dict[str, dict] = {}
+    cap_by_key: dict[str, dict] = {}
     total = researched = baseline = 0
+
+    # Read lazily: the stored keys are only needed to resolve a capped
+    # row onto the entry it reads, and the snapshot is a large object.
+    _keys: dict = {}
+
+    def stored_keys() -> set:
+        if 'v' not in _keys:
+            _keys['v'] = set(((se._read_snapshot('stream_estimates') or {})
+                              .get('items') or {}))
+        return _keys['v']
 
     for path, rank, it in _walk_rendered(cards):
         if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
@@ -222,6 +331,10 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
         if state in ('carried', 'rank_tier'):
             baseline += 1
         title = _item_title(it)
+        if state == 'platform_cap':
+            _collect_cap_target(se, stored_keys, cap_by_key, path, rank, it,
+                                 title)
+            continue
         kind = _estimator_kind_for(path, it)
         if kind is None:
             key = se._cp_normalize(title)
@@ -257,8 +370,59 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
         if prev is None or rank < prev['best_rank']:
             stream_by_key[key] = item
 
+    # A title that is capped on one service AND unpriced on another is
+    # already covered by the full re-price, so it is dropped from the
+    # capped population to keep the two passes from pricing it twice.
+    priced_keys = set(stream_by_key)
+    cap_targets = [t for t in cap_by_key.values()
+                   if t['entry_key'] not in priced_keys]
+
     return (list(stream_by_key.values()), list(headline_by_key.values()),
-            total, researched, baseline)
+            total, researched, baseline, cap_targets)
+
+
+def _collect_cap_target(se, stored_keys, cap_by_key: dict,
+                         path: str, rank: int, it: dict,
+                         title: str) -> None:
+    """Fold one capped row into the per-entry capped population."""
+    if not title:
+        return
+    kind = _estimator_kind_for(path, it)
+    if kind is None:
+        return
+    platform_key = _cap_platform_key(path)
+    if not platform_key:
+        # No per-service block to write. The row is reading the
+        # title's total by construction, so there is nothing service-
+        # scoped to give it and the cap correction stands.
+        return
+    artist = (it.get('artist') or it.get('author') or '').strip()
+    if kind == 'fast_channel':
+        artist = _platform_slug_from_path(path)
+
+    candidates = _entry_key_candidates(se, kind, title, artist)
+    known = stored_keys()
+    entry_key = next((k for k in candidates if k in known), candidates[0])
+    # Price under the kind of the entry the row actually reads, so the
+    # result merges into that entry instead of creating a sibling key
+    # that would then win the annotator's lookup.
+    entry_kind = entry_key.split(':', 1)[0]
+
+    tgt = cap_by_key.get(entry_key)
+    if tgt is None:
+        tgt = cap_by_key[entry_key] = {
+            'entry_key':     entry_key,
+            'kind':          entry_kind,
+            'display_title': title,
+            'artist':        artist,
+            'best_rank':     rank,
+            'platforms':     set(),
+            'rows':          [],
+        }
+    tgt['platforms'].add(platform_key)
+    tgt['rows'].append(path)
+    if rank < tgt['best_rank']:
+        tgt['best_rank'] = rank
 
 
 def _merge_stream_results(results: dict[str, dict],
@@ -294,6 +458,111 @@ def _merge_stream_results(results: dict[str, dict],
     snap['coverage_gate_at'] = datetime.now(timezone.utc).isoformat()
     _base.write_snapshot('stream_estimates', snap)
     return len(results)
+
+
+def _cap_research_items(se, cap_targets: list[dict]) -> list[dict]:
+    """Estimator items for the capped population, one per stored
+    entry, naming every service that needs a reading of its own so the
+    research returns a block for each."""
+    items = []
+    for t in cap_targets:
+        labels = [f'{_platform_chart_label(se, t["kind"], p)} '
+                  f'#{t["best_rank"]}'
+                  for p in sorted(t['platforms'])]
+        items.append({
+            'kind':          t['kind'],
+            'display_title': t['display_title'],
+            'artist':        t['artist'],
+            'best_rank':     t['best_rank'],
+            'chart_labels':  labels,
+        })
+    return items
+
+
+def _merge_cap_platform_blocks(results: dict[str, dict],
+                                cap_targets: list[dict],
+                                target_date_iso: str) -> dict[str, Any]:
+    """Write the freshly priced per-service blocks into the stored
+    entries, and nothing else.
+
+    Only `by_platform[<service>]` moves. The entry's total, its blocks
+    for every other service, and its reasoning all stay exactly as
+    they were, so the same title's rows on services that were reading
+    correctly do not move. Returns a counter plus the per-row trail.
+    """
+    from scripts.trends_scrapers import stream_estimates as se
+    from scripts.trends_scrapers import _base
+
+    stats: dict[str, Any] = {'entries': 0, 'blocks': 0, 'no_result': [],
+                              'no_block': [], 'trail': []}
+    if not results or not cap_targets:
+        return stats
+
+    snap = se._read_snapshot('stream_estimates') or {}
+    items = snap.get('items') or {}
+
+    for t in cap_targets:
+        res = results.get(t['entry_key'])
+        if not isinstance(res, dict):
+            stats['no_result'].append(t['entry_key'])
+            continue
+        fresh = res.get('by_platform') or {}
+        entry = items.get(t['entry_key'])
+        if not isinstance(entry, dict):
+            # The row was reading a key the snapshot does not carry,
+            # so there is nothing to merge into without inventing an
+            # entry. Leave it; the nightly pass owns creating one.
+            stats['no_result'].append(t['entry_key'])
+            continue
+        blocks = dict(entry.get('by_platform') or {})
+        wrote = 0
+        for p in sorted(t['platforms']):
+            blk = fresh.get(p)
+            if not isinstance(blk, dict):
+                stats['no_block'].append(f'{t["entry_key"]}@{p}')
+                continue
+            try:
+                v = int(blk.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                v = 0
+            if v < 100:
+                # Same credibility floor the merge above applies: a
+                # sub-100 reading on a charting row is a failed call,
+                # not an audience. The cap correction stands and the
+                # nightly pass retries.
+                stats['no_block'].append(f'{t["entry_key"]}@{p}')
+                continue
+            prev = (entry.get('by_platform') or {}).get(p) or {}
+            try:
+                was = int(prev.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                was = 0
+            blocks[p] = blk
+            wrote += 1
+            stats['trail'].append({
+                'entry_key': t['entry_key'],
+                'title':     t['display_title'],
+                'platform':  p,
+                'stored_was': was or None,
+                'stored_now': v,
+                'rows':      list(t['rows']),
+            })
+        if not wrote:
+            continue
+        entry['by_platform'] = blocks
+        items[t['entry_key']] = entry
+        stats['entries'] += 1
+        stats['blocks'] += wrote
+
+    if not stats['blocks']:
+        return stats
+
+    snap['items'] = items
+    snap['count'] = len(items)
+    snap.setdefault('target_date', target_date_iso)
+    snap['coverage_gate_at'] = datetime.now(timezone.utc).isoformat()
+    _base.write_snapshot('stream_estimates', snap)
+    return stats
 
 
 def _merge_headline_results(results: dict[str, dict]) -> int:
@@ -410,7 +679,8 @@ def _price_stream_items(se, stream_items: list[dict], *,
 def run_gate(dry_run: bool = False) -> dict[str, Any]:
     """Run the full coverage gate. Returns a summary dict:
     {total, researched_before, researched_after, rendered_after_pct,
-     priced_stream, priced_headline, spend_usd, still_missing}."""
+     priced_stream, priced_headline, capped_before, cap_titles,
+     cap_blocks_written, capped_after, spend_usd, still_missing}."""
     import trends_iq
     from scripts.trends_scrapers import stream_estimates as se
     from scripts.trends_scrapers import headline_estimates as he
@@ -422,13 +692,18 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     payload = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
                                       force_refresh=True)
     (stream_items, headline_items,
-     total, researched, baseline) = collect_missing(payload)
+     total, researched, baseline, cap_targets) = collect_missing(payload)
+    cap_rows = sum(len(t['rows']) for t in cap_targets)
+    cap_blocks = sum(len(t['platforms']) for t in cap_targets)
     pct_before = (100.0 * researched / total) if total else 100.0
     logger.info("coverage_gate: %d rendered non-Film items, %d researched "
-                "(%.2f%%), %d need pricing (%d stream-kind, %d headline)",
+                "(%.2f%%), %d need pricing (%d stream-kind, %d headline), "
+                "%d row(s) on a cap correction across %d service "
+                "reading(s) on %d title(s)",
                 total, researched, pct_before,
                 len(stream_items) + len(headline_items),
-                len(stream_items), len(headline_items))
+                len(stream_items), len(headline_items),
+                cap_rows, cap_blocks, len(cap_targets))
 
     summary: dict[str, Any] = {
         'total': total,
@@ -436,6 +711,10 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         'researched_before_pct': round(pct_before, 2),
         'priced_stream': 0,
         'priced_headline': 0,
+        'capped_before': cap_rows,
+        'cap_titles': len(cap_targets),
+        'cap_blocks_written': 0,
+        'capped_after': 0,
         'spend_usd': 0.0,
         'still_missing': 0,
         'rendered_after_pct': None,
@@ -463,6 +742,33 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         logger.info("coverage_gate: priced + merged %d/%d stream-kind "
                     "items", len(results), len(stream_items))
 
+    # Capped rows. Priced the same way, merged narrowly: only the
+    # service block the capped row reads is written, so the title's
+    # rows on other services keep the numbers they already had.
+    if cap_targets:
+        cap_items = _cap_research_items(se, cap_targets)
+        cap_results = _price_stream_items(se, cap_items,
+                                           target_date_iso=target_date_iso,
+                                           meter=meter)
+        cap_stats = _merge_cap_platform_blocks(cap_results, cap_targets,
+                                                target_date_iso)
+        summary['cap_blocks_written'] = cap_stats['blocks']
+        summary['cap_trail'] = cap_stats['trail']
+        logger.info("coverage_gate: priced %d/%d capped title(s), wrote "
+                    "%d service reading(s) into %d entry(ies)",
+                    len(cap_results), len(cap_items), cap_stats['blocks'],
+                    cap_stats['entries'])
+        for miss in cap_stats['no_result'] + cap_stats['no_block']:
+            logger.info("coverage_gate: no usable reading for %s; its cap "
+                        "correction stands and tonight's pass retries",
+                        miss)
+        for row in cap_stats['trail']:
+            logger.info("coverage_gate cap re-price: %s on %s %s -> %s",
+                        row['title'], row['platform'],
+                        f'{row["stored_was"]:,}' if row['stored_was']
+                        else '(no reading)',
+                        f'{row["stored_now"]:,}')
+
     if headline_items:
         h_results = he._research_all(headline_items)
         summary['priced_headline'] = _merge_headline_results(h_results)
@@ -483,6 +789,7 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
                                        force_refresh=True)
     cards2 = (payload2 or {}).get('cards') or {}
     total2 = researched2 = rendered2 = carried2 = rank_tier2 = 0
+    capped2 = 0
     still_missing: list[tuple[str, str]] = []
     # Per-list tally. A board-wide percentage says something is wrong;
     # the per-list split says where, which is what makes the alert
@@ -497,7 +804,8 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             continue
         total2 += 1
         bucket = per_list.setdefault(path, {'total': 0, 'carried': 0,
-                                             'rank_tier': 0})
+                                             'rank_tier': 0,
+                                             'platform_cap': 0})
         bucket['total'] += 1
         state = _audience_state(it)
         if state == 'researched':
@@ -511,6 +819,13 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             rendered2 += 1
             rank_tier2 += 1
             bucket['rank_tier'] += 1
+        elif state == 'platform_cap':
+            # Still on a cap correction: the research came back with
+            # nothing usable for that service, so the seat stands and
+            # tonight's pass tries again.
+            rendered2 += 1
+            capped2 += 1
+            bucket['platform_cap'] += 1
         else:
             still_missing.append((path, _item_title(it)))
 
@@ -526,26 +841,30 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     summary['rank_tier_after'] = rank_tier2
     summary['rank_tier_after_pct'] = round(
         (100.0 * rank_tier2 / total2) if total2 else 0.0, 2)
+    summary['capped_after'] = capped2
     summary['by_list'] = {
         name: {
             'total': v['total'],
             'carried': v['carried'],
             'rank_tier': v['rank_tier'],
+            'platform_cap': v['platform_cap'],
             'carried_pct': round(100.0 * v['carried'] / v['total'], 2),
             'rank_tier_pct': round(100.0 * v['rank_tier'] / v['total'], 2),
         }
         for name, v in sorted(per_list.items())
-        if v['carried'] or v['rank_tier']
+        if v['carried'] or v['rank_tier'] or v['platform_cap']
     }
 
     logger.info("coverage_gate: FINAL coverage researched=%.2f%% "
                 "rendered=%.2f%% carried=%.2f%% rank_tier=%.2f%% "
-                "(total=%d, still_missing=%d, spend=$%.2f)",
+                "(total=%d, still_missing=%d, cap corrections %d -> %d, "
+                "spend=$%.2f)",
                 summary['researched_after_pct'],
                 summary['rendered_after_pct'],
                 summary['carried_after_pct'],
                 summary['rank_tier_after_pct'],
-                total2, len(still_missing), summary['spend_usd'])
+                total2, len(still_missing),
+                summary['capped_before'], capped2, summary['spend_usd'])
     for name, v in sorted(summary['by_list'].items(),
                           key=lambda kv: (kv[1]['rank_tier_pct'],
                                           kv[1]['carried_pct']),
