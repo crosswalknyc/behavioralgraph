@@ -36011,10 +36011,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (posted) subline += ' · posted ' + escapeHtml(posted);
                         var iconBg = '#15252A';
                         var iconFg = '#C7F23E';
+                        // Paid / Earned / Owned / Official chip. Defaults to
+                        // Organic when unset. Color language matches the
+                        // paid-vs-organic timeline card (Cobalt for paid,
+                        // Amethyst for earned, Olive for owned, Amber for
+                        // official, Dusk for organic/unknown) so an operator
+                        // recognizes the label without clicking into a row.
+                        var _poRaw = String(a.paid_or_organic || 'organic').toLowerCase();
+                        var _poMap = {
+                            paid:     { label: 'Paid',     fg: '#3358FF', bg: 'rgba(51,88,255,0.14)',   bd: 'rgba(51,88,255,0.45)'  },
+                            earned:   { label: 'Earned',   fg: '#8E3FA8', bg: 'rgba(142,63,168,0.16)',  bd: 'rgba(142,63,168,0.55)' },
+                            owned:    { label: 'Owned',    fg: '#5E7E12', bg: 'rgba(94,126,18,0.16)',   bd: 'rgba(94,126,18,0.55)'  },
+                            official: { label: 'Official', fg: '#fbbf24', bg: 'rgba(251,191,36,0.14)',  bd: 'rgba(251,191,36,0.45)' },
+                            organic:  { label: 'Organic',  fg: '#B7B3D8', bg: 'rgba(183,179,216,0.12)', bd: 'rgba(183,179,216,0.40)'},
+                            natural:  { label: 'Organic',  fg: '#B7B3D8', bg: 'rgba(183,179,216,0.12)', bd: 'rgba(183,179,216,0.40)'},
+                            unknown:  { label: 'Organic',  fg: '#797F81', bg: 'rgba(120,120,120,0.12)', bd: 'rgba(120,120,120,0.35)'}
+                        };
+                        var _po = _poMap[_poRaw] || _poMap.organic;
+                        var _poChip = '<span title="Media type" style="display:inline-block; background:' + _po.bg + '; border:1px solid ' + _po.bd + '; color:' + _po.fg + '; font-size:0.6rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; padding:0.08rem 0.4rem; border-radius:999px; white-space:nowrap; vertical-align:middle; margin-left:0.35rem;">' + _po.label + '</span>';
                         var assetCell = '<div style="display:flex; align-items:center; gap:0.6rem;">'
                             + '<div style="flex: 0 0 24px; width:24px; height:24px; border-radius:4px; background:' + iconBg + '; color:' + iconFg + '; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700;">' + escapeHtml(icon) + '</div>'
                             + '<div style="min-width:0;">'
-                            +   '<div title="' + escapeHtml(label) + '" style="color:#E9E8E1; font-size:0.85rem; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 380px;">' + escapeHtml(trimmed) + '</div>'
+                            +   '<div style="display:flex; align-items:center; min-width:0;">'
+                            +     '<div title="' + escapeHtml(label) + '" style="color:#E9E8E1; font-size:0.85rem; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 340px;">' + escapeHtml(trimmed) + '</div>'
+                            +     _poChip
+                            +   '</div>'
                             +   '<div style="color:#797F81; font-size:0.7rem; line-height:1.25; margin-top:0.1rem;">' + subline + '</div>'
                             + '</div>'
                             + '</div>';
@@ -36836,12 +36857,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 for (var j = 0; j < currRows.length; j++) {
                     var c = currRows[j];
                     var p = prevBySubj[c.subject_key];
+                    // Response rate delta -- kept as a secondary field on the
+                    // struct so drill-in surfaces can still read it, but no
+                    // longer the primary ranking signal (see script header).
                     var currPct = Number(c.response_pct) || 0;
                     var prevPct = p ? (Number(p.response_pct) || 0) : 0;
                     var deltaPp = currPct - prevPct;
                     var salt = String(c.subject_key || 'aud') + '|pp|' + asOfIso;
-                    var deltaPpJit = _iiqPctJitter(salt, deltaPp * 10) / 10; // preserve 0.01pp precision
-                    var launchWeek = (prevPct <= 0 && currPct > 0);
+                    var deltaPpJit = _iiqPctJitter(salt, deltaPp * 10) / 10;
+                    // Projected reached viewers per cohort at each cursor.
+                    // Moves when new assets enter the in-view set or when
+                    // existing assets accrue more PIT views by this week's
+                    // cursor -- so a creator drop wave shows as positive
+                    // delta on every audience it touched.
+                    var currReached = Number(c.reached) || 0;
+                    var prevReached = p ? (Number(p.reached) || 0) : 0;
+                    var deltaReached = currReached - prevReached;
+                    var launchWeek = (prevReached <= 0 && currReached > 0);
                     out.push({
                         subject_key: c.subject_key,
                         display: c.display,
@@ -36850,9 +36882,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         curr_pct: currPct,
                         prev_pct: prevPct,
                         delta_pp: deltaPpJit,
+                        curr_reached: currReached,
+                        prev_reached: prevReached,
+                        delta_reached: Math.round(deltaReached),
                         use_info: c.use_info,
                         launch_week: launchWeek,
-                        rank_score: Math.abs(deltaPpJit)
+                        rank_score: Math.abs(deltaReached)
                     });
                 }
                 out.sort(function(a, b) { return b.rank_score - a.rank_score; });
@@ -37148,7 +37183,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // as the empty state. Fold both into the empty-state
                 // copy so the panel never surfaces three visibly-flat
                 // rows as if they were movers.
-                var audMoversHaveSignal = audMovers.some(function(m) { return Math.abs(Number(m.delta_pp) || 0) >= 0.05; });
+                // Empty-state threshold in projected NEW-reached viewers
+                // per cohort (3,000). Picks up a drop wave that adds ~10K+
+                // reached across its exposed audiences; filters pure jitter.
+                var audMoversHaveSignal = audMovers.some(function(m) { return Math.abs(Number(m.delta_reached) || 0) >= 3000; });
                 if (!audMovers.length || !audMoversHaveSignal) {
                     audPanelHtml = '<div style="padding: 1rem; text-align:center; color:#797F81; font-size:0.78rem;">No audience movement in this window.</div>';
                 } else {
@@ -37170,17 +37208,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             +   '<div style="line-height:1.2; margin-top:0.15rem;">' + fitChip + '</div>'
                             + '</div>';
 
+                        // Ranked and colored by delta in projected reached
+                        // viewers week over week (matches the ranking above).
+                        var _dr = Number(m.delta_reached) || 0;
                         var arrow, deltaColor;
-                        if (m.delta_pp > 0)      { arrow = '▲'; deltaColor = '#C7F23E'; }
-                        else if (m.delta_pp < 0) { arrow = '▼'; deltaColor = '#f87171'; }
-                        else                     { arrow = '→'; deltaColor = '#B7B3D8'; }
-                        var deltaSign = m.delta_pp > 0 ? '+' : '';
+                        if (_dr > 0)      { arrow = '▲'; deltaColor = '#C7F23E'; }
+                        else if (_dr < 0) { arrow = '▼'; deltaColor = '#f87171'; }
+                        else              { arrow = '→'; deltaColor = '#B7B3D8'; }
+                        var deltaSign = _dr > 0 ? '+' : (_dr < 0 ? '-' : '');
                         var deltaBlock = '<div style="flex:0 0 auto; text-align:right; font-size:0.78rem; font-weight:700; color:' + deltaColor + '; white-space:nowrap;">'
-                            + arrow + ' ' + deltaSign + m.delta_pp.toFixed(2) + 'pp'
+                            + arrow + ' ' + deltaSign + fmtCompact(Math.abs(_dr)) + ' reached'
                             + '</div>';
 
+                        // Metric label. Shows the response rate (info-seek
+                        // or ticketing) that the CURRENT week reads for this
+                        // cohort as secondary context, so the primary count
+                        // delta above and the rate metric below reinforce.
+                        var _rateNow = Number(m.curr_pct) || 0;
                         var metricBlock = '<div style="flex:0 0 auto; text-align:right; font-size:0.62rem; color:#797F81; text-transform:uppercase; letter-spacing:0.06em; margin-left:0.4rem;">'
-                            + escapeHtml(primaryMetricLabel)
+                            + _rateNow.toFixed(2) + '% ' + escapeHtml(primaryMetricLabel)
                             + '</div>';
 
                         return '<div style="display:flex; align-items:center; gap:0.65rem; padding:0.5rem 0.15rem; border-bottom:1px solid #182528;">'
@@ -37191,7 +37237,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
 
                 var audPanel = '<div style="flex:1 1 50%; min-width: 280px;">'
-                    + '<div style="font-size:0.6rem; font-weight:600; color:#9AA09B; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.45rem;">Audiences leaning in (or out) this week</div>'
+                    + '<div style="font-size:0.6rem; font-weight:600; color:#9AA09B; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.45rem;">Audiences reached this week (net new)</div>'
                     + audPanelHtml
                     + '</div>';
 
