@@ -652,8 +652,26 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
         # what position? Everything else on the page is a listing.
         pub_index = published_chart_index(slug, snap)
         pub_label = published_chart_label(slug)
+
         for kind, items in buckets:
-            for i, it in enumerate(items[:40]):
+            # 40 rows off the top of the page, plus any charted title
+            # sitting below that line. A service is free to rank a
+            # title that its own storefront lists deep (Lionsgate+
+            # puts Top 10 members at page slots 12, 13 and 16), and
+            # dropping one for want of page prominence would leave a
+            # hole in the chart we just promised to mirror.
+            head = items[:40]
+            if pub_index:
+                head = head + [
+                    x for x in items[40:]
+                    if isinstance(x, dict) and published_rank_for(
+                        pub_index,
+                        'film' if str(x.get('category_display') or ''
+                                      ).lower().startswith(('film', 'movie'))
+                        else ('tv' if str(x.get('category_display') or ''
+                                          ).lower().startswith('tv') else ''),
+                        str(x.get('title') or ''))]
+            for i, it in enumerate(head):
                 title  = (it.get('title') or '').strip()
                 cat    = (it.get('category_display') or kind or '').lower()
                 item_kind = 'film' if cat == 'film' else ('tv' if 'tv' in cat else 'title')
@@ -6335,6 +6353,98 @@ def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
     return ('up' if delta > 0 else 'down'), round(delta, 4)
 
 
+def _enforce_published_chart_coherence(researched: dict[str, dict],
+                                        target_date_iso: str) -> dict:
+    """Bring every rail that mirrors a published chart into agreement
+    with it: readings descend across the positions the service gave,
+    and nothing it left off the chart out-draws the title it ranks
+    last.
+
+    Per-platform readings are what move, and the aggregate follows in
+    lockstep through the same rescale the continuity guard uses, so a
+    row never ends up with an aggregate its platform blocks cannot
+    add up to. A rail whose two blocks sit on different scales is
+    reported and left alone: at that point the levels were reasoned
+    against different anchors and the answer is to reason them again,
+    not to squeeze one block to fit the other.
+    """
+    from . import published_chart_coherence as _pcc
+    out = {'rails': 0, 'moved': 0, 'held': 0, 'detail': {}}
+    for slug, _label in _STREAMING_SLUGS:
+        if not has_published_chart(slug):
+            continue
+        ceiling = next((p['ceiling'] for p in _STREAMING_PLATFORMS_META
+                        if p['key'] == slug), None)
+        rows = []
+        for key, it in (researched or {}).items():
+            if not isinstance(it, dict):
+                continue
+            blk = (it.get('by_platform') or {}).get(slug)
+            if not isinstance(blk, dict):
+                continue
+            v = blk.get('us_estimate')
+            if not isinstance(v, int) or v <= 0:
+                continue
+            row = {'title': it.get('display_title') or key,
+                   '_item': it, '_key': key, '_blk': blk}
+            pr = it.get('published_rank')
+            # The position only counts on the rail that published it.
+            if isinstance(pr, int) and pr > 0 and slug in \
+                    _focus_keys_from_charts(it.get('chart_labels') or []):
+                lab = str(it.get('published_chart') or '')
+                if lab and published_chart_label(slug) == lab:
+                    row['published_rank'] = pr
+            rows.append(row)
+        if not rows or not any(r.get('published_rank') for r in rows):
+            continue
+        rows.sort(key=lambda r: (0 if r.get('published_rank') else 1,
+                                  r.get('published_rank') or 0,
+                                  -(r['_blk'].get('us_estimate') or 0)))
+
+        def _get(r):
+            return r['_blk'].get('us_estimate')
+
+        def _set(r, v, _slug=slug):
+            blk, it = r['_blk'], r['_item']
+            old = int(blk.get('us_estimate') or 0)
+            if old <= 0:
+                return
+            scale = v / old
+            blk['us_estimate'] = int(v)
+            for f in ('us_estimate_low', 'us_estimate_high'):
+                cur = blk.get(f)
+                if isinstance(cur, int) and cur > 0:
+                    blk[f] = max(1, int(round(cur * scale)))
+            if isinstance(blk.get('us_estimate_low'), int) and \
+                    blk['us_estimate_low'] > blk['us_estimate']:
+                blk['us_estimate_low'] = blk['us_estimate']
+            if isinstance(blk.get('us_estimate_high'), int) and \
+                    blk['us_estimate_high'] < blk['us_estimate']:
+                blk['us_estimate_high'] = blk['us_estimate']
+            # The aggregate is the sum of the platform mids, so it
+            # moves by exactly what this block moved.
+            agg = int(it.get('us_estimate') or 0)
+            if agg > 0:
+                new_agg = max(1, agg + (int(v) - old))
+                _rescale_estimate_blocks(
+                    it, agg, new_agg, r['_key'],
+                    f'{target_date_iso}|chartcoherence|{_slug}')
+
+        rep = _pcc.reconcile_rail(
+            rows, salt=f'{slug}|{target_date_iso}',
+            get_value=_get, set_value=_set, ceiling=ceiling)
+        out['rails'] += 1
+        out['moved'] += rep.get('moved') or 0
+        if rep.get('held'):
+            out['held'] += 1
+            logger.warning(
+                "stream_estimates: %s rail held by published-chart "
+                "coherence for %s: %s", slug, target_date_iso,
+                rep.get('reason'))
+        out['detail'][slug] = rep
+    return out
+
+
 def _attach_dod_trend(current: dict[str, dict],
                        yesterday: Optional[dict],
                        prev_date_iso: Optional[str] = None,
@@ -6785,6 +6895,27 @@ def fetch(only: Optional[set[str]] = None,
                 n_walked, n_nudged, target_date_iso, n_lifted)
     except Exception:
         logger.exception("stream_estimates: carried-forward day walk "
+                          "failed (non-fatal)")
+
+    # Where a service publishes a ranked list we mirror its order, so
+    # the readings on that rail have to descend across it: a rail that
+    # reads 1, 2, 3 down the page while the numbers beside it jump
+    # around asks the reader to hold two orderings at once. Runs
+    # before the distinctness pass so that pass gets the last word on
+    # every value, and before the trend attach so the chips describe
+    # what ships. Non-fatal by construction.
+    try:
+        _pc = _enforce_published_chart_coherence(researched,
+                                                  target_date_iso)
+        if _pc.get('moved'):
+            logger.info(
+                "stream_estimates: published-chart coherence moved %d "
+                "reading(s) across %d rail(s) for %s, %d rail(s) held "
+                "for re-reasoning",
+                _pc['moved'], _pc['rails'], target_date_iso,
+                _pc['held'])
+    except Exception:
+        logger.exception("stream_estimates: published-chart coherence "
                           "failed (non-fatal)")
 
     # No item repeats a reading it already holds inside its own
