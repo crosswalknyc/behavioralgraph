@@ -35008,11 +35008,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return '<div class="iiq-empty" style="padding:1rem;">Not enough exposure signal on this campaign to break out the full paths view yet.</div>';
                 }
 
-                var cardTitle = isFilm ? 'Paths to checkout page.' : 'Paths to conversion.';
-                var caption = isFilm
-                    ? 'How exposed viewers moved from first campaign touch to the checkout page, and where the drop-offs live.'
-                    : 'How exposed viewers moved from first campaign touch to ' + escapeHtml(overallConvNoun) + ', and where the drop-offs live.';
-                var attrScope = isFilm ? 'on checkout page reach only' : 'on conversions only';
+                // The end of the funnel is named the same way on every
+                // campaign: the bottom funnel destination (Jenna 2026-09-23).
+                var cardTitle = 'Paths to the bottom funnel destination.';
+                var caption = 'How exposed viewers moved from first campaign touch to the bottom funnel destination, and where the drop-offs live.';
+                var attrScope = 'on bottom funnel destination reach only';
                 var paidCount = 0;
                 if (nest.length >= 5) paidCount = Number(nest[4].us_accounts || 0);
 
@@ -35155,7 +35155,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>'
                     );
                 }
-                var attrPaidNoun = isFilm ? 'the checkout page' : ('a ' + escapeHtml(overallConvNoun));
+                var attrPaidNoun = 'the bottom funnel destination';
                 var attrSection = (firstTouch.length || lastTouch.length || assists.length) ?
                     '<section style="margin-top:1.1rem;">'
                   + '  <h5 style="margin: 0 0 0.25rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Attribution ' + escapeHtml(attrScope) + '.</h5>'
@@ -35182,12 +35182,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>'
                     );
                 }).join('');
-                var ttcToNoun = isFilm ? 'checkout page reach' : escapeHtml(overallConvNoun);
-                // Brand campaigns have no checkout; the partition is of
-                // whatever the title calls its bottom-funnel page.
-                var archPageNoun = isFilm ? 'checkout page'
-                    : (String(d.bottom_funnel_label || 'action page').toLowerCase().replace(/\s*page$/, '') + ' page');
-                var archOfNoun = isFilm ? 'checkout' : archPageNoun;
+                var ttcToNoun = 'bottom funnel destination';
+                var archPageNoun = 'bottom funnel destination';
+                var archOfNoun = 'bottom funnel destination';
                 var ttcSection = ttc.length ?
                     '<section style="margin-top:1.1rem;">'
                   + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Time to convert.</h5>'
@@ -35198,7 +35195,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // Section 6: path archetypes.
                 var archRows = archetypes.map(function(a) {
                     return (
-                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 80px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
+                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 150px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
                       + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
                       + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
                       + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
@@ -35509,7 +35506,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var qChip  = '<span style="display:inline-block; padding:0.1rem 0.55rem; font-size:0.68rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + qBg + '; color:' + qColor + ';">' + qLabel + '</span>';
                 var exposedLabel = audienceSlug ? 'Viewers in this cohort' : 'Exposed viewers';
                 var tiles = [
-                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), ((activePayload.title_type === 'film') ? 'share of exposed viewers who reached the checkout page in the attribution window' : 'share of exposed viewers who reached the ' + bfl.toLowerCase() + (/page$/i.test(bfl) ? '' : ' page') + ' in the attribution window')),
+                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), 'share of exposed viewers who reached the bottom funnel destination in the attribution window'),
                     iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read'),
                     '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
                       + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">Read strength</div>'
@@ -127204,7 +127201,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Assets',      ids: ['iiqAssetTableSection'] },
             { id: 'surfaces',    label: 'Surfaces',    heads: ['where they went'] },
-            { id: 'attribution', label: 'Attribution', heads: ['attribution on checkout page reach only',
+            { id: 'attribution', label: 'Attribution', heads: ['attribution on bottom funnel destination reach only',
                                                                'touchpoint contribution to '] },
             { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
             { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] },
