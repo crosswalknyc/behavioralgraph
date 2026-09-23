@@ -359,6 +359,29 @@ def _fetch_authenticated_daily() -> Optional[dict]:
         # stays as a second chance rather than being deleted.
         tv_items, film_items = _extract_top10_rows(html)
 
+    # Both rails live on the same page, so exactly one coming back
+    # empty is a lazy-render miss rather than Netflix publishing an
+    # empty chart. Render once more before accepting it: the first
+    # run after this path shipped caught the films rail short and
+    # published a TV-only day, which is the half-width archive day
+    # the carry-forward guard below exists to prevent and could not,
+    # because the previous snapshot came from the weekly file.
+    if bool(tv_items) != bool(film_items):
+        logger.info("netflix: only one rail rendered (%d TV, %d films); "
+                     "rendering once more", len(tv_items), len(film_items))
+        retry = _run_netflix_playwright()
+        if retry:
+            r_tv, r_film = _extract_pinot_daily(retry)
+            if r_tv and r_film:
+                tv_items, film_items = r_tv, r_film
+            else:
+                tv_items = tv_items or r_tv
+                film_items = film_items or r_film
+        if bool(tv_items) != bool(film_items):
+            logger.warning(
+                "netflix: still only one rail after a second render "
+                "(%d TV, %d films)", len(tv_items), len(film_items))
+
     if not tv_items and not film_items:
         if 'Top 10' not in html:
             logger.info("netflix: 'Top 10' text not in rendered body - "
@@ -386,6 +409,15 @@ def _fetch_authenticated_daily() -> Optional[dict]:
     # way before the guard existed.
     if bool(film_items) != bool(tv_items):
         prev = _load_previous_daily()
+        if not (prev.get('us_films') or prev.get('us_tv')):
+            # No previous daily capture to carry. The published
+            # weekly file still describes the missing rail better
+            # than shipping without it, and its rows say which
+            # source they came from.
+            try:
+                prev = _fetch_weekly_tsv() or {}
+            except Exception:
+                prev = {}
         for label, key, items in (('films', 'us_films', film_items),
                                    ('TV', 'us_tv', tv_items)):
             if items:
