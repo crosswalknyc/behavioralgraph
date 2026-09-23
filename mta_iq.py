@@ -1912,6 +1912,56 @@ _CARD_CONFIG: dict[str, dict] = {
         "leak_competing_note":         ("Opened DoorDash within 7d and ordered on "
                                           "Uber Eats or Grubhub instead"),
     },
+    # Be Good Influence (2026-09-23). Advocacy campaign: creator posts
+    # that should drive issue research, then a civic action page. No
+    # purchase, no checkout. `kind` stays brand so the funnel bands hold;
+    # the optional override keys below reshape every label so nothing
+    # reads as a site visit or a conversion.
+    "be_good_influence": {
+        "kind": "brand",
+        "ticketer_partition_surfaces": ["Advocacy org site", "house.gov / congress.gov",
+                                          "Petition platform", "Voter registration site",
+                                          "Small-dollar donation page"],
+        "infoseek_overlap_surfaces":   ["Issue search", "News or explainer coverage",
+                                          "Creator profile visit", "Wikipedia / Ballotpedia",
+                                          "Representative's official page"],
+        "assist_touchpoints":          ["Explainer viewed", "Creator reel",
+                                          "Issue search", "Cross-post on a second platform"],
+        "leak_competing_label":        "Took action on a different issue",
+        "leak_competing_note":         ("Opened an advocacy site within 14d and reached an "
+                                          "action page for a different issue instead"),
+        "nest_labels": {
+            "2_infoseek": "Mid funnel: Researched the issue within 14d",
+            "3_ticketer": "Lower funnel: Visited an issue or advocacy site within 14d",
+            "4_paid":     "Reached a civic action page within 14d",
+        },
+        "fork_questions": {
+            "1_exposed":  "Saw a Politics Girl post specifically",
+            "2_infoseek": "Hit multiple news or explainer surfaces",
+            "3_ticketer": "Visited more than one advocacy surface",
+        },
+        "archetypes": [
+            {"archetype": "Straight-through",
+             "description": "Exposed to advocacy site to action page, no research or second exposure"},
+            {"archetype": "Researched",
+             "description": "Exposed to issue research to advocacy site to action page"},
+            {"archetype": "Re-exposed",
+             "description": "Left the advocacy site and came back after a second creator post"},
+            {"archetype": "Compared",
+             "description": "Visited more than one advocacy surface before the action page"},
+        ],
+        "leak_labels": {
+            "infoseek_no_conv": (
+                "Researched, no advocacy site",
+                "Researched the issue within 14d but never opened an issue or advocacy site",
+            ),
+            "conv_visit_no_pay": (
+                "Advocacy site, no action page",
+                "Opened an issue or advocacy site within 14d but never reached an action page",
+            ),
+        },
+        "paths_conversion_noun": "civic action page",
+    },
 }
 
 
@@ -2353,6 +2403,11 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
         paid_pop = ticketer_pop - 1
 
     stage_labels = _nest_stage_labels(kind, display_name, conversion_noun, terminology)
+    # Per-campaign copy overrides (advocacy campaigns etc.) sit on top of
+    # the kind-level defaults so a campaign with no purchase step never
+    # reads as a site visit or a conversion.
+    stage_labels.update(cfg.get("nest_labels") or {})
+    cfg_fork_questions = cfg.get("fork_questions") or {}
     nest: list[dict] = [{
         "stage":                   "0_tam",
         "label":                   "US gen pop",
@@ -2391,7 +2446,7 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
         yes = max(1, min(yes, base - 1))
         forks.append({
             "of_stage": of_stage,
-            "question": _fork_question(kind, of_stage),
+            "question": cfg_fork_questions.get(of_stage) or _fork_question(kind, of_stage),
             "yes":      int(yes),
             "no":       int(base - yes),
         })
@@ -2496,7 +2551,7 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     ]
 
     # ---------- Path archetypes (partition of paid) ----------
-    arch_defs = _archetype_defs(kind)
+    arch_defs = cfg.get("archetypes") or _archetype_defs(kind)
     arch_labels = [a["archetype"] for a in arch_defs]
     arch_shape = [1.4, 2.5, 1.2, 0.9]
     arch_counts = _messy_partition(subj, "archetypes", paid_pop,
@@ -2508,7 +2563,8 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     ]
 
     # ---------- Leaks (what a brand pixel cannot see) ----------
-    leak_labels = _leak_stage_labels(kind)
+    leak_labels = dict(_leak_stage_labels(kind))
+    leak_labels.update(cfg.get("leak_labels") or {})
     infoseek_leak = int(infoseek_pop - ticketer_pop)
     conv_visit_leak = int(ticketer_pop - paid_pop)
     competing_share = _rng_uniform(subj, "competing_share", 0.08, 0.16)
@@ -2532,7 +2588,9 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     # the nest's stage-4 row); brand campaigns already carry a natural
     # noun on bottom_funnel_label ("chime.com visit", "Website visit"),
     # so we forward that verbatim.
-    if kind == "film":
+    if cfg.get("paths_conversion_noun"):
+        paths_conversion_noun = cfg["paths_conversion_noun"]
+    elif kind == "film":
         paths_conversion_noun = "checkout page visit"
     else:
         paths_conversion_noun = (bottom_funnel_label or conversion_noun
