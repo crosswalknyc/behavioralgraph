@@ -125932,30 +125932,67 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         // Every figure the rail can show, read off the slabs themselves so a
         // re-render keeps it honest. Each tab picks the ones that frame it.
-        function _aiqFacts() {
-            var f = {};
-            var mta = document.getElementById('intentIQView');
-            var txt = mta ? (mta.innerText || '') : '';
-            function grab(re) { var m = txt.match(re); return m ? m[1] : null; }
-            f.exposed = grab(/Exposed viewers\s*\n\s*([\d.,]+[KM]?)/i);
-            f.baseline = grab(/Baseline conversion rate\s*\n\s*([\d.]+%)/i);
-            f.panellists = grab(/Exposed panellists in this read:\s*([\d,]+)/i);
-            f.strength = grab(/Read strength\s*\n\s*([A-Za-z ]+?)\s*\n/i);
-            f.sufficiency = /Clears sufficiency/i.test(txt) ? 'Clears' : null;
-            var a = document.getElementById('iiqAssetTableSection');
-            if (a) {
-                var at = a.innerText || '';
-                var pc = at.match(/(\d+\.\d{2})%/);
-                if (pc) f.bestResponse = pc[1] + '%';
-                var lf = at.match(/(\d+\.\d)x/i);
-                if (lf) f.bestLift = lf[1] + 'x';
-                var n = at.match(/of\s+([\d,]+)\s+at\b/);
-                if (n) f.assets = n[1];
+        // Find a leaf carrying this label and return the value sitting with
+        // it. textContent, not innerText: by the time the rail asks, most of
+        // these slabs are behind another tab and innerText reads empty.
+        function _aiqPairAfter(root, label) {
+            var want = _aiqNorm(label);
+            var els = root.querySelectorAll('div,span,p,h5,td,th,b,strong');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.children.length) continue;
+                var t = _aiqNorm(el.textContent);
+                if (t !== want) continue;
+                var sib = el.nextElementSibling;
+                while (sib) {
+                    var v = (sib.textContent || '').trim();
+                    if (v) return v.split('\n')[0].trim();
+                    sib = sib.nextElementSibling;
+                }
+                var p = el.parentElement;
+                if (p) {
+                    var whole = (p.textContent || '').replace(/\s+/g, ' ').trim();
+                    var idx = _aiqNorm(whole).indexOf(want);
+                    if (idx === 0) {
+                        var rest = whole.slice(el.textContent.trim().length).trim();
+                        if (rest) return rest.split('  ')[0].trim();
+                    }
+                }
             }
-            var au = document.getElementById('iiqAudienceTableSection');
-            if (au) {
-                var nn = (au.innerText || '').match(/of\s+([\d,]+)\s+at\b/);
-                if (nn) f.cohorts = nn[1];
+            return null;
+        }
+        function _aiqFacts() {
+            var root = document.getElementById('intentIQView');
+            var f = {};
+            if (!root) return f;
+            var all = (root.textContent || '').replace(/\s+/g, ' ');
+            f.exposed = _aiqPairAfter(root, 'Exposed viewers');
+            f.baseline = _aiqPairAfter(root, 'Baseline conversion rate');
+            f.strength = _aiqPairAfter(root, 'Read strength');
+            var pm = all.match(/Exposed panellists in this read:\s*([\d,]+)/i);
+            if (pm) f.panellists = pm[1];
+            if (/Clears sufficiency/i.test(all)) f.sufficiency = 'Clears';
+            // The two ledgers state their own totals in the count line.
+            function ledger(id, key) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                var t = (el.textContent || '').replace(/\s+/g, ' ');
+                var n = t.match(/of\s+([\d,]+)\s+at\b/);
+                if (n) f[key] = n[1];
+                return t;
+            }
+            var at = ledger('iiqAssetTableSection', 'assets');
+            ledger('iiqAudienceTableSection', 'cohorts');
+            // Best response and best lift come off the top row, which is the
+            // row the sort put there.
+            var a = document.getElementById('iiqAssetTableSection');
+            var top = a && a.querySelector('tbody tr');
+            if (top) {
+                var tt = (top.textContent || '').replace(/\s+/g, ' ');
+                var pc = tt.match(/(\d+\.\d{2})%/);
+                if (pc) f.bestResponse = pc[1] + '%';
+                var lf = tt.match(/(\d+\.\d)x/i);
+                if (lf) f.bestLift = lf[1] + 'x';
             }
             return f;
         }
@@ -126024,9 +126061,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var secs = root.querySelectorAll('section');
             for (var i = 0; i < secs.length; i++) {
                 var sec = secs[i];
-                var h5 = sec.querySelector(':scope > h5');
-                if (!h5) continue;
-                var tid = _aiqTabForHead(_aiqNorm(h5.textContent));
+                var head = sec.querySelector(':scope > h5');
+                var htxt = head ? head.textContent
+                                : (sec.firstElementChild ? (sec.firstElementChild.textContent || '')
+                                                            .replace(/\s+/g, ' ').slice(0, 70) : '');
+                var tid = _aiqTabForHead(_aiqNorm(htxt));
                 if (!tid) continue;
                 var panel = panels.querySelector('[data-aiq-panel="' + tid + '"]');
                 if (panel && sec.parentElement !== panel) panel.appendChild(sec);
