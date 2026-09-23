@@ -780,15 +780,55 @@ def invalidate_live_compute_view_caches() -> int:
 # `s3://dashboard-inputs/trends_iq_snapshots/latest/{source}.json` every
 # morning. The read side is best-effort: missing or stale snapshots fall
 # back to the "coming soon" placeholder for that tile.
+def _folder_for_measured_day(measured: str) -> str:
+    """The dated folder holding the measurement taken on `measured`.
+
+    Degrades to the folder of the same name, which is what every
+    reader did before the calendar existed, so a calendar that cannot
+    be built changes nothing rather than breaking a read.
+    """
+    try:
+        from scripts.trends_scrapers.measurement_calendar import (
+            folder_for_or_self)
+        return folder_for_or_self(measured)
+    except Exception:
+        return measured
+
+
+def _latest_measured_day() -> Optional[str]:
+    """The newest day anything actually measured.
+
+    Not today. The newest folder holds yesterday's measurement on the
+    current convention, so there is no folder behind a request for
+    today and a reader that assumed otherwise served yesterday under
+    today's label.
+    """
+    try:
+        from scripts.trends_scrapers.measurement_calendar import (
+            latest_measured_day)
+        return latest_measured_day()
+    except Exception:
+        return None
+
+
 def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
     """Read a scraper snapshot from S3.
 
     asof:
       None  -> read `latest/{source}.json` and enforce the max-age
                freshness gate (returns None if the snapshot is stale).
-      DATE  -> read `{YYYY-MM-DD}/{source}.json` and SKIP the freshness
-               gate. Historic snapshots are meant to be old; the gate
-               would reject every historic read otherwise.
+      DATE  -> the day the reading was MEASURED. The folder holding
+               that measurement is looked up rather than assumed,
+               because a folder is named for the run that wrote it
+               and the run's measurement is sometimes the day before.
+               The freshness gate is skipped: historic snapshots are
+               meant to be old.
+
+    On the measured-vs-folder distinction, and why a uniform shift
+    would be wrong, see `scripts/trends_scrapers/measurement_calendar`.
+    Asking for 2026-09-22 used to return the day measured on
+    2026-09-21, because the folder of that name holds the run that
+    measured the day before it.
 
     Every scraper writes to both the `latest/` and the dated prefix via
     scripts/trends_scrapers/_base.py::write_snapshot, so any date the
@@ -798,7 +838,8 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
     if s3 is None:
         return None
     if asof:
-        prefix = _SNAPSHOT_DATED_PREFIX.format(date=asof)
+        prefix = _SNAPSHOT_DATED_PREFIX.format(
+            date=_folder_for_measured_day(asof))
     else:
         prefix = _SNAPSHOT_PREFIX
     key = f'{prefix}{source}.json'
@@ -1426,8 +1467,12 @@ def _accumulate_stream_estimates_over_window(
     # raise it only with a leaner per-day fold.
     n = max(1, min(n, 62))
 
-    # Reference date: asof when provided, otherwise today (UTC).
-    ref_iso = asof or _today_iso()
+    # Reference date, in MEASURED days. `asof` when provided,
+    # otherwise the newest day anything measured, which is not today:
+    # the newest folder holds yesterday's reading, and anchoring on
+    # today left the reference day empty and the window resolving
+    # around it.
+    ref_iso = asof or _latest_measured_day() or _today_iso()
     try:
         ref_date = date.fromisoformat(ref_iso)
     except Exception:
@@ -1476,6 +1521,12 @@ def _accumulate_stream_estimates_over_window(
             # Hand it back under its real date instead; the day dedupe
             # below folds it into the right window.
             if snap:
+                # `target_date` IS the measured day and `d_iso` is
+                # now a measured day too, so this compares like with
+                # like. It used to compare the measured day against a
+                # folder name, and on the current convention those
+                # differ by one BY DESIGN, so the guard re-filed
+                # `latest` onto an older day every single night.
                 real = str(snap.get('target_date') or '')[:10]
                 if real and real != d_iso:
                     return real, snap
