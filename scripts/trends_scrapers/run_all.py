@@ -688,6 +688,19 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: provenance share check crashed "
                                "(non-fatal)")
 
+        # A rail that could not reach its primary source and shipped
+        # from a fallback is not an error and will not show up in any
+        # of the checks above: it parsed rows, wrote a snapshot and
+        # reported success. Netflix sat in that state for weeks. This
+        # is where it surfaces.
+        try:
+            from scripts.trends_scrapers.run_guard import (
+                check_degraded_sources)
+            check_degraded_sources()
+        except Exception:
+            logging.exception("run_all: degraded-source check crashed "
+                               "(non-fatal)")
+
         # A bulk rewrite can quietly make the numbers stop looking
         # counted. The cheapest way to force values apart is to skip
         # digits, and an earlier build did exactly that to avoid round

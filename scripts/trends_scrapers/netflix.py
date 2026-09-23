@@ -725,8 +725,28 @@ def fetch() -> dict[str, Any]:
     payload = _fetch_authenticated_daily()
     if payload and (payload.get('national') or []):
         return payload
-    logger.info("netflix: using weekly TSV path")
-    return _fetch_weekly_tsv()
+
+    # Falling back to the weekly file is a DEGRADED run, not a
+    # healthy one, and has to say so. This path ran every night for
+    # weeks while the rail reported itself fine: the browse render
+    # could not reach a signed-in session, the daily rails were
+    # never in the page, and the weekly file produced perfectly
+    # plausible rows covering a week that ended days earlier. Fresh
+    # fetch, stale content, no signal anywhere.
+    out = _fetch_weekly_tsv()
+    try:
+        from . import source_health
+        source_health.record(
+            'netflix',
+            primary=source_health.PRIMARY_SIGNED_IN,
+            used='the published weekly file',
+            reason='the daily Top 10 rails need a signed-in browse '
+                   'page and the render did not produce one',
+            covers=(out or {}).get('week_us') or 'the previous chart week')
+        source_health.stamp(out, 'netflix')
+    except Exception:
+        pass
+    return out
 
 
 if __name__ == '__main__':

@@ -424,6 +424,60 @@ DIGIT_CHISQ_ALERT = float(os.environ.get("TRENDS_DIGIT_CHISQ_ALERT", "21.67"))
 DIGIT_ZERO_MIN_PCT = float(os.environ.get("TRENDS_DIGIT_ZERO_MIN_PCT", "7.0"))
 
 
+def check_degraded_sources(summary: Optional[dict] = None) -> Optional[dict]:
+    """Alert when a rail shipped from a fallback rather than its
+    primary source.
+
+    The guards above catch a run that stalls, overruns, or stops
+    looking counted. None of them catch the quietest failure of the
+    lot: a scraper that reaches a lesser source, parses it, writes a
+    plausible snapshot and reports success. Netflix sat in that state
+    for weeks, serving a weekly file under a daily label, and the
+    only trace was one INFO line a night.
+
+    A degraded rail is not an error and must not read as one. It is a
+    run that produced data of a different KIND than the rail is
+    supposed to carry, and the point is that somebody sees it.
+    """
+    try:
+        from . import source_health
+    except Exception:
+        try:
+            from scripts.trends_scrapers import source_health
+        except Exception:
+            return None
+    try:
+        summary = summary or source_health.summary()
+    except Exception:
+        return None
+    if not summary or not summary.get('count'):
+        logger.info("run_guard: every rail reached its primary source")
+        return summary
+
+    lines = source_health.report_lines()
+    names = ', '.join(summary.get('degraded_sources') or [])
+    logger.warning("run_guard: %d rail(s) shipped from a fallback: %s",
+                    summary['count'], names)
+    for ln in lines:
+        logger.warning("run_guard:%s", ln)
+    body = (
+        f"{summary['count']} rail(s) could not reach their primary "
+        f"source tonight and shipped from a fallback instead.\n\n"
+        + "\n".join(lines)
+        + "\n\nThese runs did not fail. Each produced rows and wrote "
+          "a snapshot. What they did not produce is the kind of data "
+          "the rail is supposed to carry, which is why this is worth "
+          "reading: the Netflix rail spent weeks in exactly this "
+          "state, serving a weekly published file under a daily "
+          "label, reporting success the whole time.\n"
+    )
+    send_alert('degraded_sources',
+                f"Trends IQ: {summary['count']} rail(s) on a fallback "
+                f"source ({names})",
+                body)
+    return summary
+
+
 def check_last_digit_distribution(values,
                                   *,
                                   chisq_alert: float = DIGIT_CHISQ_ALERT,
