@@ -648,6 +648,10 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
         # dashboard rail (up to 20 films + 20 tv shown per platform,
         # plus the historic "sustained" second-page rows) is covered.
         # Was 15 -> 30 (2026-08-05) -> 40 (2026-08-20).
+        # Which of these titles does the service itself rank, and at
+        # what position? Everything else on the page is a listing.
+        pub_index = published_chart_index(slug, snap)
+        pub_label = published_chart_label(slug)
         for kind, items in buckets:
             for i, it in enumerate(items[:40]):
                 title  = (it.get('title') or '').strip()
@@ -656,7 +660,13 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
                 key = f'{item_kind}:{_cp_normalize(title)}'
                 if not _cp_normalize(title):
                     continue
+                # `rank` here is the title's place on the page we read,
+                # nothing more. It still picks the cost tier and the
+                # collection cap, exactly as the airings position does
+                # for a scheduleless FAST platform, but it is never
+                # again presented to the research step as a ranking.
                 rank = i + 1
+                hit = published_rank_for(pub_index, item_kind, title)
                 e = per.setdefault(key, {
                     'kind':          item_kind,
                     'display_title': title,
@@ -666,10 +676,40 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
                     'image':         it.get('image'),
                     'url':           it.get('url'),
                 })
-                e['chart_labels'].append(f'{label} #{rank}')
-                if rank < e['best_rank']:
-                    e['best_rank'] = rank
-    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+                if hit:
+                    pos, chart_name = hit
+                    e['published_rank']  = pos
+                    e['published_chart'] = chart_name
+                    e['chart_labels'].append(f'{chart_name} #{pos}')
+                    if pos < e['best_rank']:
+                        e['best_rank'] = pos
+                else:
+                    # No published position, so none is asserted. The
+                    # label says what the page actually is, because a
+                    # bare '{service} #13' gets reasoned into a tier
+                    # and the tier becomes the value: the board then
+                    # ranks a browse page. Same failure, and same
+                    # answer, as the scheduleless FAST platforms.
+                    if pub_label:
+                        lab = (f'{label} catalog listing, not on the '
+                               f'{pub_label} it publishes, so no '
+                               f'position is claimed for it')
+                    else:
+                        lab = (f'{label} catalog listing; this service '
+                               f'publishes no ranked chart, so no '
+                               f'ordering signal exists and listing '
+                               f'position carries none')
+                    if lab not in e['chart_labels']:
+                        e['chart_labels'].append(lab)
+                    if rank < e['best_rank']:
+                        e['best_rank'] = rank
+    # A title the service ranks itself sorts ahead of one it does not,
+    # so the collection cap spends its budget on the charted titles
+    # first. Within each group the page position breaks ties.
+    return sorted(per.values(),
+                  key=lambda e: (0 if e.get('published_rank') else 1,
+                                 e.get('published_rank') or e['best_rank'],
+                                 e['best_rank']))[:max_items]
 
 
 def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
@@ -1873,17 +1913,28 @@ _PROMPT_HEADER = (
     "screenshots.\n"
     "  AVOID: SEO listicles, YouTube reaction videos, unattributed blogs.\n"
     "\n"
-    "CHART LABELS ARE REAL-TIME TIER-1 SIGNAL:\n"
-    "  The chart labels supplied for each item are trending-rail "
-    "positions on the target day on those specific platforms (scraped "
-    "for this run from the platform's own charts / editorial rails). "
-    "That means: if the item is labeled 'Netflix #3' or 'Spotify Daily "
-    "Top 200 (US) #7', you can trust that the item is IN TIER for that "
-    "platform on this day. Chart position alone is a defensible Tier-1 "
-    "anchor: apply the per-platform anchor tier corresponding to the "
-    "rank (converted to daily via /7 + DoW) and return a non-zero "
-    "estimate. Only return 0 for a platform if the item is NOT in that "
-    "platform's chart labels AND you have no other data.\n"
+    "A POSITION IS ONLY A SIGNAL WHEN SOMEONE PUBLISHED IT:\n"
+    "  A chart label that carries a POSITION ('Spotify Daily Top 200 "
+    "(US) #7', 'Netflix Top 10 US #3', 'Apple Podcasts Top 100 (US) "
+    "#12') is a real ranking that the service or the chart compiler "
+    "published, and it is a defensible Tier-1 anchor on its own: "
+    "apply the per-platform anchor tier for that rank (converted to "
+    "daily via /7 + DoW) and return a non-zero estimate.\n"
+    "  A chart label that carries NO position is telling you the "
+    "opposite, and you must take it at its word. A label reading "
+    "'catalog listing', 'no ranked chart', 'no ordering signal "
+    "exists' or 'no position is claimed' means the page we read was a "
+    "browse grid, a storefront shelf or an alphabetical lineup. Where "
+    "that title sat on the page says nothing about how many people "
+    "watched it. Do NOT infer a position, do NOT read a tier off one, "
+    "and do NOT treat the absence of a number as if it meant last "
+    "place. Size the item from its own IP recognition, cast, recency, "
+    "franchise weight and press against the platform's audience, and "
+    "expect the spread across such a service to be WIDE rather than "
+    "clustered, because a marquee franchise title and a deep catalog "
+    "title do not draw alike.\n"
+    "  Only return 0 for a platform if the item is NOT in that "
+    "platform's chart labels at all AND you have no other data.\n"
     "\n"
     "DIFFERENTIATE WITHIN A TIER (HARD RULE):\n"
     "  When two items share the same chart tier (both are 'top-100 "
@@ -1902,10 +1953,14 @@ _PROMPT_HEADER = (
     "\n"
     "REASONING RULES:\n"
     "  1. For each platform in TARGET_PLATFORMS below:\n"
-    "     - If the item has a chart label on this platform: use the "
-    "per-platform anchors + rank to place it in-tier (converted to "
-    "daily), biased LOW. Always return a non-zero estimate in this "
-    "case.\n"
+    "     - If the item has a chart label WITH A POSITION on this "
+    "platform: use the per-platform anchors + that rank to place it "
+    "in-tier (converted to daily), biased LOW. Always return a "
+    "non-zero estimate in this case.\n"
+    "     - If the item has a chart label with NO position on this "
+    "platform: it is on the service and you still return a non-zero "
+    "estimate, but you place it from the title itself and the "
+    "platform's audience, never from where it sat on the page.\n"
     "     - If the item has NO chart label on this platform: return "
     "0 unless you find Tier-1/Tier-2 press specifically citing that "
     "platform's DAILY (or weekly with conversion) US reach for this "
@@ -1915,9 +1970,17 @@ _PROMPT_HEADER = (
     "global, 20-30% of YouTube Music global for English-language "
     "songs, 35-45% of Netflix global views for English-language "
     "titles). Bias to the low end. State the share used.\n"
-    "  3. Chart-position sizing (bias LOW, not to the middle): "
-    "#1 = anchor high-third; #2-5 = anchor middle-third; #6-20 = "
-    "anchor low-third; #21+ = below the anchor's low.\n"
+    "  3. Chart-position sizing, and ONLY where a position was "
+    "published (bias LOW, not to the middle): #1 = anchor high-third; "
+    "#2-5 = anchor middle-third; #6-20 = anchor low-third; #21+ = "
+    "below the anchor's low. A published ranking is the service's own "
+    "statement of what is most watched, so your number has to be "
+    "consistent with it: a title the service ranks #2 draws less than "
+    "the one it ranks #1 and more than the one it ranks #3, and a "
+    "title the service does NOT rank cannot out-draw the title it "
+    "ranks last, or the service would have charted it. Land inside "
+    "the band the published position implies rather than at a round "
+    "step away from the neighbouring rank.\n"
     "  4. Return a RANGE (low, mid, high) that reflects real "
     "uncertainty. Low = worst-case defensible, High = best-case "
     "defensible. Mid = your best-guess conservative daily number "
@@ -4288,7 +4351,40 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
     else:
         unit  = 'daily US views'
         query = f'"{display_title}" daily viewers US streaming 2026'
-        item_line = f'TITLE: {display_title}'
+        pub_pos   = item.get('published_rank')
+        pub_chart = item.get('published_chart') or ''
+        if isinstance(pub_pos, int) and pub_pos > 0 and pub_chart:
+            pos_line = (
+                f'\nPUBLISHED CHART POSITION: #{pub_pos} on the '
+                f'{pub_chart}. The service publishes this ranking '
+                f'itself, so it is their own statement of what is most '
+                f'watched on it and it is the strongest signal you '
+                f'have. Your number must be consistent with it: sit '
+                f'below what the title one position above would draw '
+                f'and above what the title one position below would '
+                f'draw, inside the band this position implies in the '
+                f'platform anchors. Do not land on a round step away '
+                f'from the neighbouring rank.')
+            query = (f'"{display_title}" US viewers streaming '
+                     f'{pub_chart} 2026 Nielsen weekly')
+        else:
+            pos_line = (
+                '\nPUBLISHED CHART POSITION: none. Either this service '
+                'publishes no ranked chart at all, or this title is '
+                'not on the one it does publish. Where we read it was '
+                'a catalog or browse listing, and its place there is '
+                'not a popularity signal. Do NOT infer a position and '
+                'do NOT read a tier off one. Size this title from '
+                'what it actually is against the platform audience: '
+                'franchise weight and marquee cast lift it, a deep '
+                'library or older TV title sits far down, and recency '
+                'of arrival matters. The spread across a service like '
+                'this should be WIDE rather than clustered. If the '
+                'service does publish a chart and this title is '
+                'absent from it, that is itself informative: the '
+                'title draws LESS than the one the service ranks '
+                'last, because otherwise they would have charted it.')
+        item_line = f'TITLE: {display_title}{pos_line}'
 
     platforms = _platforms_for_kind(kind)
     # For FAST channels, restrict the prompt to the ONE platform the
@@ -4719,6 +4815,60 @@ def _sanitize_platform_block(kind: str, key: str, raw: Any,
     }
 
 
+# Addresses the research step keeps reaching for that stopped
+# resolving. max.com went away with the 2025 rebrand back to HBO Max
+# and its /trending path never existed on the new shell; the other
+# three are trending pages the services simply do not publish. Cited
+# 191 times across the 2026-09-22 board, led by max.com/trending at
+# 41. A citation that 404s is worse than no citation, because it
+# reads as a source right up until someone clicks it.
+_RETIRED_SOURCE_PATTERNS = (
+    'max.com/trending',
+    'max.com/browse',
+    'hbomax.com/trending',
+    'hbomax.com/charts',
+    'hbomax.com/content/streaming-trending',
+    'hulu.com/trending',
+    'disneyplus.com/trending',
+    'primevideo.com/top',
+)
+
+# A bare service homepage is not a source either. It cites nothing,
+# it dates nothing, and it is what the research step falls back on
+# when it found no figure at all, which is exactly when a citation
+# does the most damage.
+_BARE_HOME_SOURCES = frozenset({
+    'https://www.max.com', 'https://www.max.com/',
+    'http://www.max.com', 'http://www.max.com/',
+    'https://max.com', 'https://max.com/',
+    'https://www.hbomax.com', 'https://www.hbomax.com/',
+    'https://hbomax.com', 'https://hbomax.com/',
+    'https://www.hulu.com', 'https://www.hulu.com/',
+    'https://www.disneyplus.com', 'https://www.disneyplus.com/',
+    'https://www.netflix.com', 'https://www.netflix.com/',
+})
+
+
+def _usable_source(url: str) -> bool:
+    """Drop a citation only when it is an address that no longer
+    answers, or a bare service homepage standing in for a figure.
+
+    Deliberately narrow. Plenty of real citations are not links at
+    all ("AMC Networks Q2 2026 earnings", "Nielsen streaming ratings,
+    week of Sept 14"), and those name a document a reader can go and
+    find. Only a URL is checked, because only a URL can 404.
+    """
+    if not isinstance(url, str) or not url.strip():
+        return False
+    u = url.strip()
+    if not u.lower().startswith(('http://', 'https://')):
+        return True          # a described source, not an address
+    lo = u.lower().rstrip('/')
+    if lo in _BARE_HOME_SOURCES or lo + '/' in _BARE_HOME_SOURCES:
+        return False
+    return not any(p in lo for p in _RETIRED_SOURCE_PATTERNS)
+
+
 def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     """Normalize Claude's JSON output including per-platform block.
     Returns the enriched item dict or None if nothing usable came back."""
@@ -4880,7 +5030,7 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         'prev_day_estimate': int(prev_day_est) if prev_day_est else None,
         'prev_day_date':    prev_day_date or None,
         'sources':          [s for s in (parsed.get('sources') or [])
-                              if isinstance(s, str)][:4],
+                              if _usable_source(s)][:4],
         'by_platform':      by_platform,
     }
 
