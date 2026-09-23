@@ -74,13 +74,16 @@ TITLE_TYPE_DEFAULTS = {
             "audience_noun":              "Audience",
             "opening_moment_noun":        "Opening weekend",
             "launch_date_label":          "Opening date",
-            "presale_date_label":         "Ticketing on sale",
+            "presale_date_label":         "Showtimes live",
             "parent_org_label":           "Distributor",
             "top_funnel_label":           "Engagement",
             "mid_funnel_label":           "Info-seek",
             "mid_funnel_full":            "Searched title / IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days",
-            "bottom_funnel_label":        "Ticketing",
-            "bottom_funnel_full":         "Visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days",
+            # Jenna 2026-09-23: never say ticketing / bought a ticket. We
+            # observe traffic that reached a checkout page on a showtimes
+            # site, never a purchase.
+            "bottom_funnel_label":        "Checkout page",
+            "bottom_funnel_full":         "Reached a checkout page on a showtimes site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days",
             "conversion_noun":            "checkout page visit",
             "conversion_verb":            "reach the checkout page",
             "conversion_endpoint_label":  "checkout pages",
