@@ -22431,7 +22431,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
                                     <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut existing data</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Value a brand partnership')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Value a brand partnership</button>
-                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Pull Subscriber IQ for [streaming platform]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull a Subscriber IQ</button>
+                                    <button type="button" data-pm-mode="pull" onclick="_pmSubiqStartWizard()" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Pull a Subscriber IQ</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Create a digital journey')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Create a digital journey</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Build a Flywheel')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a Flywheel</button>
                                     <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Set up Attribution Tracking')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Set up Attribution Tracking</button>
@@ -77282,6 +77282,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmFwConfirm = null;
             _pmAiqCollect = false;
             _pmAiqConfirm = null;
+            _pmSubiqWiz = null;
             _synthChatClearDateState();
         }
 
@@ -77341,6 +77342,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // tagged URLs, conversion, optional prepaid daily window.
         var _pmAiqCollect = false;
         var _pmAiqConfirm = null;
+        // Subscriber IQ guided pull wizard (2026-09-23 Jenna): the
+        // chip walks the user through kind -> title -> season scope ->
+        // platforms with chips at each step, then composes one
+        // complete ask and hands it to the normal Subscriber IQ pull
+        // path (season window research, date confirmation, and the
+        // charge all happen there, unchanged).
+        var _pmSubiqWiz = null;
+
+        function _pmSubiqPlatformChips() {
+            return ['Netflix', 'Prime Video', 'Disney+', 'Hulu', 'Max',
+                    'Peacock', 'Paramount+', 'Apple TV+']
+                .map(function(p) { return { label: p, send: p }; });
+        }
+
+        function _pmSubiqStartWizard() {
+            if (window._pmFundsBlocked) {
+                if (typeof window._pmCheckFundsOnOpen === 'function') {
+                    window._pmCheckFundsOnOpen();
+                }
+                return;
+            }
+            _pmSubiqWiz = { step: 'kind', kind: '', title: '', season: '' };
+            _synthChatPushTurnWithMeta('agent',
+                'Subscriber IQ pull. Is this a series or a movie?',
+                { options: [
+                    { label: 'Series', send: 'Series' },
+                    { label: 'Movie', send: 'Movie' }
+                ] });
+        }
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -78191,6 +78221,112 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (active && active.run_id) {
                     await _synthChatReplyWithStatus(active.run_id, active.subject);
                     return;
+                }
+            }
+
+            // ===== SUB IQ GUIDED PULL WIZARD (2026-09-23 Jenna) =====
+            // Step-by-step collect started by the 'Pull a Subscriber
+            // IQ' chip. Each user message (typed or chip) advances one
+            // step; the final step composes a complete ask and
+            // re-submits it through the normal path so the Subscriber
+            // IQ promoter, window research, confirmation, and charge
+            // run exactly as they do for a typed ask. 'cancel' walks
+            // away; a question-shaped message hands control back to
+            // normal routing.
+            if (_pmSubiqWiz) {
+                if (/\?\s*$/.test(text)) {
+                    _pmSubiqWiz = null;
+                } else if (/^(never ?mind|nvm|forget (it|that)|cancel( (that|it))?|stop|abort|scratch that)[.! ]*$/i.test(text.trim())) {
+                    _pmSubiqWiz = null;
+                    synthChatPushTurn('agent',
+                        'No problem, the Subscriber IQ setup is closed. ' +
+                        'Ask me anything else when ready.');
+                    return;
+                } else {
+                    var _swz = _pmSubiqWiz;
+                    var _swLow = text.trim().toLowerCase();
+                    if (_swz.step === 'kind') {
+                        if (/\b(movie|film)\b/.test(_swLow)) {
+                            _swz.kind = 'movie';
+                        } else if (/\b(series|show|tv)\b/.test(_swLow)) {
+                            _swz.kind = 'series';
+                        } else {
+                            _synthChatPushTurnWithMeta('agent',
+                                'Series or movie? Click one or type it.',
+                                { options: [
+                                    { label: 'Series', send: 'Series' },
+                                    { label: 'Movie', send: 'Movie' }
+                                ] });
+                            return;
+                        }
+                        _swz.step = 'title';
+                        synthChatPushTurn('agent', _swz.kind === 'movie'
+                            ? 'What is the movie title?'
+                            : 'What is the series title?');
+                        return;
+                    }
+                    if (_swz.step === 'title') {
+                        if (!text.trim()) {
+                            synthChatPushTurn('agent',
+                                'Type the title to continue.');
+                            return;
+                        }
+                        _swz.title = text.trim();
+                        if (_swz.kind === 'series') {
+                            _swz.step = 'season';
+                            _synthChatPushTurnWithMeta('agent',
+                                'Do you want a specific season or all ' +
+                                'seasons combined? Click one or type it ' +
+                                '(for example "Season 3").',
+                                { options: [
+                                    { label: 'All seasons combined',
+                                      send: 'All seasons combined' },
+                                    { label: 'Latest season',
+                                      send: 'Latest season' },
+                                    { label: 'Season 1', send: 'Season 1' }
+                                ] });
+                            return;
+                        }
+                        _swz.step = 'platform';
+                        _synthChatPushTurnWithMeta('agent',
+                            'What platform(s) does it stream on? Click ' +
+                            'one or type them (for example "Netflix and ' +
+                            'Hulu").',
+                            { options: _pmSubiqPlatformChips() });
+                        return;
+                    }
+                    if (_swz.step === 'season') {
+                        _swz.season = text.trim() || 'all seasons combined';
+                        _swz.step = 'platform';
+                        _synthChatPushTurnWithMeta('agent',
+                            'What platform(s) does it stream on? Click ' +
+                            'one or type them (for example "Netflix and ' +
+                            'Hulu").',
+                            { options: _pmSubiqPlatformChips() });
+                        return;
+                    }
+                    if (_swz.step === 'platform') {
+                        if (!text.trim()) {
+                            synthChatPushTurn('agent',
+                                'Name at least one platform to continue.');
+                            return;
+                        }
+                        var _swComposed = 'Pull Subscriber IQ for ' +
+                            _swz.title +
+                            (_swz.kind === 'movie'
+                                ? ' (movie)'
+                                : ' (series, ' +
+                                  (_swz.season || 'all seasons combined') +
+                                  ')') +
+                            ' on ' + text.trim();
+                        _pmSubiqWiz = null;
+                        setTimeout(function() {
+                            try { synthChatChipSend(_swComposed); }
+                            catch (_) {}
+                        }, 60);
+                        return;
+                    }
+                    _pmSubiqWiz = null;
                 }
             }
 
