@@ -313,6 +313,29 @@ def _save_cache(slug: str, as_of: str, payload: dict) -> Optional[str]:
     if not s3:
         return None
     key = _cache_key(slug, as_of)
+    # Defense against clobber: if the existing file at this key carries
+    # a manual-recalibration or in-place relabel marker, we preserve it
+    # instead of overwriting with a fresh live compute. The dated file
+    # is the identifier of the frame we intended to ship (in-place
+    # corrections rule); a stray use_cache=False must not silently
+    # revert it. Live compute still returns to the caller; only the
+    # write-back is skipped, so downstream logic is unaffected.
+    try:
+        existing_obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        existing = json.loads(existing_obj["Body"].read().decode("utf-8"))
+        if isinstance(existing, dict) and (
+            existing.get("_materialized_from")
+            or existing.get("_relabels")
+            or existing.get("_manually_recalibrated_at_utc")
+        ):
+            logger.info(
+                "MTA: skipping write-back for %s as_of=%s "
+                "(existing file carries a manual-recalibration marker)",
+                slug, as_of,
+            )
+            return key
+    except Exception:
+        pass  # No existing file or unreadable; proceed with write
     try:
         s3.put_object(
             Bucket=S3_BUCKET,
