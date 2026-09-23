@@ -191,7 +191,7 @@ def audit(refresh: bool = True) -> tuple[list[str], dict]:
         _acc(t, p, False)
     lines.append('')
 
-    # ---------- Business / Wall Street / Philanthropy ----------
+    # ---------- Business / Wall Street ----------
     lines.append('## Business')
     biz = cards.get('business_news') or []
     t, p = _audit_panel_list('business/national', biz, lines)
@@ -209,16 +209,6 @@ def audit(refresh: bool = True) -> tuple[list[str], dict]:
     ws_by = cards.get('wall_street_news_by_source') or {}
     for slug, rows in sorted((ws_by or {}).items()):
         t, p = _audit_panel_list(f'wall_street/by_source/{slug}', rows, lines)
-        _acc(t, p, False)
-    lines.append('')
-
-    lines.append('## Philanthropy')
-    phil = cards.get('philanthropy_news') or []
-    t, p = _audit_panel_list('philanthropy/national', phil, lines)
-    _acc(t, p, False)
-    phil_by = cards.get('philanthropy_news_by_source') or {}
-    for slug, rows in sorted((phil_by or {}).items()):
-        t, p = _audit_panel_list(f'philanthropy/by_source/{slug}', rows, lines)
         _acc(t, p, False)
     lines.append('')
 

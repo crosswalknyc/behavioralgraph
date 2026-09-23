@@ -327,12 +327,11 @@ _SCRAPER_KIND_MAP = {
     # kind. See `_gdelt_source_for_kind`.
     'gdelt':         'headline',
     'gdelt-people':  'person',
-    # Wikipedia + Philanthropy: frontend `source` differs from the
-    # snapshot filename, so the reader has to alias via
-    # _SOURCE_SNAPSHOT_ALIAS below. Rows sit under `national` with the
-    # standard `title` key so the generic matcher works unchanged.
+    # Wikipedia: frontend `source` differs from the snapshot
+    # filename, so the reader has to alias via _SOURCE_SNAPSHOT_ALIAS
+    # below. Rows sit under `national` with the standard `title` key
+    # so the generic matcher works unchanged.
     'wikipedia':    'wikipedia',
-    'philanthropy': 'news',
     # Music sub-sources - registered here so callers reaching the
     # generic branch don't get a `unknown` kind, but history_for_item
     # short-circuits these to history_for_music because the rows sit
@@ -344,11 +343,10 @@ _SCRAPER_KIND_MAP = {
 
 
 # When the frontend `source` differs from the S3 snapshot filename, map
-# it here. `wikipedia` -> `wikipedia_trending.json`, `philanthropy` ->
-# `philanthropy_news.json`. Everything else uses source as filename.
+# it here. `wikipedia` -> `wikipedia_trending.json`. Everything else
+# uses source as filename.
 _SOURCE_SNAPSHOT_ALIAS = {
     'wikipedia':    'wikipedia_trending',
-    'philanthropy': 'philanthropy_news',
 }
 
 

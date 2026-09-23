@@ -3,7 +3,7 @@ US-gen-pop daily-readership estimator for headlines on the Trends IQ
 Headlines tab.
 
 For every headline that surfaces in the Trends IQ "Top trending" +
-"By news source" + "Philanthropy" boards, we ask Claude Sonnet 4.5
+"By news source" boards, we ask Claude Sonnet 4.5
 (with the native `web_search` tool) to painstakingly reason about how
 many US adults actually read the article in a typical 24h window:
 
@@ -89,7 +89,7 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 # -------------------------------------------------------------------------
 # Caps. Bumped 2026-08-31 (Jenna: "everything should have a value in US
 # Audience except films") to 800: the dashboard renders top 15 overall +
-# ~19 outlets x 5 + Business 40 + Wall Street 50 + Philanthropy 40 +
+# ~19 outlets x 5 + Business 40 + Wall Street 50 +
 # each of the *_by_source dicts (~200 more) ~= 500-600 unique headlines
 # per compute_view. 800 gives headroom for churn. Sonnet 4.5 web_search
 # ~$0.02/item -> ~$12-16/day, offset intra-day by the "already researched
@@ -219,7 +219,7 @@ def _compute_view_cards() -> dict:
 def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
     """Union of every headline compute_view is currently rendering
     (Trending Headlines + by-source outlets + Business + Wall Street
-    + Philanthropy + each of the *_by_source dicts) PLUS the live
+    + each of the *_by_source dicts) PLUS the live
     RSS pool + snapshot backfill. compute_view rows go FIRST so the
     dashboard-visible items always land inside the cap; snapshot +
     RSS backfill fills the tail."""
@@ -277,12 +277,6 @@ def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
                   a.get('url') or '', a.get('image') or '',
                   a.get('published') or a.get('seendate') or '',
                   origin='wall_street')
-        for a in (cards.get('philanthropy_news') or []):
-            _add(a.get('title') or '',
-                  a.get('source_label') or a.get('source') or 'philanthropy',
-                  a.get('url') or '', a.get('image') or '',
-                  a.get('published') or a.get('seendate') or '',
-                  origin='philanthropy')
         for _slug, rows in (cards.get('business_news_by_source') or {}).items():
             for a in (rows or []):
                 _add(a.get('title') or '',
@@ -297,13 +291,6 @@ def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
                       a.get('url') or '', a.get('image') or '',
                       a.get('published') or a.get('seendate') or '',
                       origin=f'wall_street/{_slug}')
-        for _slug, rows in (cards.get('philanthropy_news_by_source') or {}).items():
-            for a in (rows or []):
-                _add(a.get('title') or '',
-                      a.get('source_label') or a.get('source') or _slug,
-                      a.get('url') or '', a.get('image') or '',
-                      a.get('published') or a.get('seendate') or '',
-                      origin=f'philanthropy/{_slug}')
 
     # 2) Live RSS pool backfill (matches what the dashboard fetches
     #    on its next request but not yet cached).
@@ -323,11 +310,10 @@ def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
                   art.get('seendate') or art.get('published') or '',
                   origin=art.get('source') or 'rss')
 
-    # 3) Snapshot backfill - philanthropy / business / wall_street /
+    # 3) Snapshot backfill - business / wall_street /
     #    articles_by_source. Same-day snapshots the daily scraper cron
     #    already wrote for us.
-    for snap_key, origin in (('philanthropy_news', 'philanthropy'),
-                              ('business_news', 'business'),
+    for snap_key, origin in (('business_news', 'business'),
                               ('wall_street_news', 'wall_street')):
         try:
             obj = _s3().get_object(Bucket=_S3_BUCKET,
@@ -373,8 +359,6 @@ _PROMPT_HEADER = (
     "      NPR ~2.5M, Politico ~0.8M, The Hill ~1.2M, HuffPost ~2.5M,\n"
     "      Bloomberg (unpaywalled) ~1.2M, Reuters (US) ~1.5M, Axios ~1.0M,\n"
     "      Guardian US ~2.5M, Yahoo News ~6.0M, Vox ~0.9M, CNBC ~2.5M.\n"
-    "      Chronicle of Philanthropy ~30K, Nonprofit Quarterly ~15K,\n"
-    "      SSIR ~20K, Blue Avocado ~5K, Guardian Global Development ~150K.\n"
     "  A SINGLE article never captures the outlet's full daily uniques. "
     "Typical article-to-outlet ratios by placement:\n"
     "    - Front-page banner / hero:      15-30% of outlet's daily uniques\n"

@@ -17062,7 +17062,7 @@ _TIQ_MEDIA_CARD_KEYS = ('music_trending', 'podcasts_trending',
                         'streaming_trending', 'fast_trending', 'gaming_trending')
 _TIQ_MEDIA_COUNT_KEYS = ('music', 'podcasts', 'streaming', 'fast', 'gaming')
 _TIQ_TRENDS_CARD_KEYS = ('movers', 'trending_headlines', 'articles_by_source',
-                         'philanthropy_news', 'business_news', 'wall_street_news',
+                         'business_news', 'wall_street_news',
                          'trending_searches', 'trending_searches_by_category',
                          'trending_people', 'wikipedia_trending', 'books_trending',
                          'libby_trending', 'comics_trending', 'broadway_trending',
@@ -17079,7 +17079,7 @@ _TIQ_TAB_CARD_KEYS = {
     'searches':  ('trending_searches', 'trending_searches_by_category'),
     'movers':    ('movers',),
     'headlines': ('trending_headlines', 'articles_by_source',
-                  'philanthropy_news', 'business_news', 'wall_street_news'),
+                  'business_news', 'wall_street_news'),
     'people':    ('trending_people', 'wikipedia_trending'),
     'books':     ('books_trending', 'libby_trending'),
     'comics':    ('comics_trending',),

@@ -70,8 +70,7 @@ _TITLE_KEYS = ('title', 'term', 'name', 'display_name', 'query', 'show',
 _SKIP_CARD_KEYS = {'lens_config', 'lens_scores', 'lens_cutoffs'}
 _EXEMPT_PREFIXES = ('films_ticketing',)
 _READER_PREFIXES = ('trending_headlines', 'articles_by_source',
-                    'philanthropy_news', 'business_news',
-                    'wall_street_news')
+                    'business_news', 'wall_street_news')
 
 
 def _item_title(it: dict) -> str:

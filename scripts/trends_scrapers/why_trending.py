@@ -228,7 +228,6 @@ def _flatten_headline_pool(*snaps: Optional[dict]) -> list[str]:
     Sources we mine (in order of trust):
     - `gdelt.national[i].title`             top world / US headlines
     - `reddit.national[i].title`            top Reddit posts
-    - `philanthropy_news.national[i].title` philanthropy RSS
     - `youtube.national[i].title`           top YouTube trending videos
     - `x.national[i].title`                 X trending posts
 
@@ -600,14 +599,13 @@ def _collect_items() -> list[dict]:
     headlines_snap     = _read_snapshot('gdelt')
     reddit_snap        = _read_snapshot('reddit')
     youtube_snap       = _read_snapshot('youtube')
-    philanthropy_snap  = _read_snapshot('philanthropy_news')
     x_snap             = _read_snapshot('x')
     wiki_snap          = _read_snapshot('wikipedia_trending')
     google_snap        = _read_snapshot('google_wide') or _read_snapshot('google_trends')
 
     name_index    = _build_name_headline_index(people_snap)
     headline_pool = _flatten_headline_pool(
-        headlines_snap, reddit_snap, philanthropy_snap, youtube_snap, x_snap,
+        headlines_snap, reddit_snap, youtube_snap, x_snap,
     )
 
     # Pre-compute which names have NO local headline hit and batch-fetch

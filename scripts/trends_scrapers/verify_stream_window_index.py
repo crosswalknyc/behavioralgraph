@@ -49,7 +49,6 @@ ARCHIVE_CARDS = (
 LIVE_CARDS = (
     'trending_searches', 'trending_searches_by_category',
     'trending_headlines', 'articles_by_source', 'trending_people',
-    'philanthropy_news', 'philanthropy_news_by_source',
     'business_news', 'business_news_by_source',
     'wall_street_news', 'wall_street_news_by_source',
     'movers', 'fused_trending', 'products_by_retailer',

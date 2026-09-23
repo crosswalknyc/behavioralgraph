@@ -82,7 +82,6 @@ SCRAPERS = [
     # desc. Public HTML surface; curl_cffi Chrome-TLS impersonation
     # used defensively. Attendance is native (no Claude estimator).
     ('broadway_grosses',   'scripts.trends_scrapers.broadway_grosses',   'Broadway',             'broadway'),
-    ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
     ('wall_street_news',   'scripts.trends_scrapers.wall_street_news',   'Wall Street news',     'news'),
     # FAST (Free Ad-Supported Streaming TV): one snapshot covering the
@@ -578,12 +577,11 @@ def _run_main(argv: list[str] | None = None) -> int:
             results.append({'source': 'stream_estimates', 'error': str(e), 'national': []})
     # headline_estimates: US daily-readership estimates (Claude Sonnet +
     # web_search per article) for every headline on the Trends IQ
-    # Headlines tab. Runs AFTER philanthropy_news lands + inline
-    # against the live NEWS_FEEDS pool (fetched inside the scraper).
+    # Headlines tab. Runs inline against the live NEWS_FEEDS pool
+    # (fetched inside the scraper).
     # Cost is ~90 web_search calls / day (~$2). Estimates stamp onto
-    # `trending_headlines` + `articles_by_source[*].articles` +
-    # `philanthropy_news` at request time via
-    # `trends_iq._annotate_headlines_with_readers`.
+    # `trending_headlines` + `articles_by_source[*].articles` at
+    # request time via `trends_iq._annotate_headlines_with_readers`.
     if (not only or 'headline_estimates' in only) and 'headline_estimates' not in skip:
         try:
             results.append(_run_one(

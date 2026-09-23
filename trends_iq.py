@@ -3229,9 +3229,9 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     """
     # Bucket dict MUST list every non-overall category from
     # `_CATEGORY_PRIORITY` - the harvest pass (and the frontend cards)
-    # skip anything not present here. Missing `philanthropy` was the
-    # bug that kept the Philanthropy card empty even when the Chronicle
-    # of Philanthropy feed had 40 items ready to fold in.
+    # skip anything not present here, so a category that is missing
+    # from this dict renders as a permanently empty card no matter how
+    # much matching signal the pools carry.
     buckets: dict[str, list[dict]] = {
         'sports':        [],
         'entertainment': [],
@@ -3298,7 +3298,6 @@ def _augment_thin_buckets_from_pools(
         wikipedia_trending:  list[dict],
         articles_by_source:  Optional[list[dict]] = None,
         movers:              Optional[dict]      = None,
-        philanthropy_news:   Optional[list[dict]] = None,
         business_news:       Optional[list[dict]] = None,
         wall_street_news:    Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
@@ -3352,16 +3351,6 @@ def _augment_thin_buckets_from_pools(
     _news_seen_titles = {(h.get('title') or '').strip().lower()
                           for h in news_pool if h.get('title')}
     for h in (trending_headlines or []):
-        t = (h.get('title') or '').strip().lower()
-        if t and t not in _news_seen_titles:
-            news_pool.append(h)
-            _news_seen_titles.add(t)
-
-    # Philanthropy-specific feed (Chronicle of Philanthropy, NPQ, SSIR,
-    # Blue Avocado, Guardian Global Dev) - ~40 items dedicated to
-    # philanthropy stories. Merge into the news pool so the philanthropy
-    # bucket can fold them in when Google Trends misses the beat.
-    for h in (philanthropy_news or []):
         t = (h.get('title') or '').strip().lower()
         if t and t not in _news_seen_titles:
             news_pool.append(h)
@@ -4813,26 +4802,22 @@ def _accumulate_headline_estimates_over_window(
 
 def _annotate_headlines_with_readers(trending_headlines: list,
                                        articles_by_source: list,
-                                       philanthropy_news: list,
                                        estimates: dict,
                                        business_news: Optional[list] = None,
                                        wall_street_news: Optional[list] = None,
-                                       philanthropy_by_source: Optional[dict] = None,
                                        business_by_source: Optional[dict] = None,
                                        wall_street_by_source: Optional[dict] = None) -> None:
     """Stamp `us_readers` on every headline row across the surfaces
     the Headlines tab renders:
       1. `trending_headlines`         - flat "top" list
       2. `articles_by_source[i].articles` - per-outlet lists
-      3. `philanthropy_news`          - the Philanthropy sub-tab
-      4. `business_news`              - the Business sub-tab (NYT + WSJ)
-      5. `wall_street_news`           - the Wall Street sub-tab
+      3. `business_news`              - the Business sub-tab (NYT + WSJ)
+      4. `wall_street_news`           - the Wall Street sub-tab
                                         (WSJ / Barron's / FT / Bloomberg
                                          / MarketWatch / CNBC Markets /
                                          IBD / Seeking Alpha / Reuters)
-      6. `philanthropy_by_source`     - {outlet_slug: [rows]} dict
-      7. `business_by_source`         - {outlet_slug: [rows]} dict
-      8. `wall_street_by_source`      - {outlet_slug: [rows]} dict
+      5. `business_by_source`         - {outlet_slug: [rows]} dict
+      6. `wall_street_by_source`      - {outlet_slug: [rows]} dict
 
     All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
@@ -4858,15 +4843,10 @@ def _annotate_headlines_with_readers(trending_headlines: list,
     for outlet in (articles_by_source or []):
         for row in (outlet.get('articles') or []):
             _stamp(row)
-    for row in (philanthropy_news or []):
-        _stamp(row)
     for row in (business_news or []):
         _stamp(row)
     for row in (wall_street_news or []):
         _stamp(row)
-    for _outlet_slug, rows in (philanthropy_by_source or {}).items():
-        for row in (rows or []):
-            _stamp(row)
     for _outlet_slug, rows in (business_by_source or {}).items():
         for row in (rows or []):
             _stamp(row)
@@ -5760,9 +5740,8 @@ def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
     target_field:
       'us_streams' for entertainment tabs (streaming / FAST / books /
                     comics / gaming / podcast / music / films)
-      'us_readers' for headline tabs (business_news / wall_street_news
-                    / philanthropy_news) whose chip renders off
-                    `us_readers`.
+      'us_readers' for headline tabs (business_news / wall_street_news)
+                    whose chip renders off `us_readers`.
 
     delta_kind (2026-09-01 follow-up):
       'rank'   - rank-position deltas (Streaming, FAST film/tv,
@@ -6802,8 +6781,7 @@ _COVERAGE_TITLE_KEYS = ('title', 'term', 'name', 'display_name', 'query',
 _COVERAGE_SKIP_CARD_KEYS = {'lens_config', 'lens_scores', 'lens_cutoffs'}
 _COVERAGE_EXEMPT_PREFIXES = ('films_ticketing',)
 _COVERAGE_READER_PREFIXES = ('trending_headlines', 'articles_by_source',
-                              'philanthropy_news', 'business_news',
-                              'wall_street_news')
+                              'business_news', 'wall_street_news')
 
 # Payload path prefix -> estimator kind. Checked in order; first match
 # wins. Paths not matched fall back to 'search_term' (the most generic
@@ -8569,7 +8547,7 @@ def _annotate_movers_with_why(movers: dict) -> None:
 # ============================================================================
 # The "Trending" tab is a single ranked feed that fuses every signal in
 # the dashboard: searches, people, wikipedia, movers, music, podcasts,
-# books, social, streaming, films, headlines, philanthropy. Each item's
+# books, social, streaming, films, headlines. Each item's
 # score is:
 #
 #     score = sum_over_sources( rank_score * source_weight )
@@ -8598,12 +8576,10 @@ _FUSE_WEIGHTS = {
     'films':             0.60,   # theatrical
     'podcasts':          0.50,
     'books':             0.50,
-    'philanthropy':      0.40,
-    'business':          0.55,   # NYT + WSJ business desks (higher
-                                  # signal than philanthropy - both
+    'business':          0.55,   # NYT + WSJ business desks - both
                                   # outlets skew hard toward market-
                                   # moving news that also drives
-                                  # search interest)
+                                  # search interest
     'wall_street':       0.55,   # WSJ / Barron's / FT / Bloomberg /
                                   # MarketWatch / CNBC Markets / IBD /
                                   # Seeking Alpha / Reuters. Same
@@ -8833,14 +8809,6 @@ def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]
         _add(h.get('title') or '', h.get('title') or '',
              'headlines', 'Headlines', None, i + 1, max_h,
              url=h.get('url'), image=h.get('image'))
-
-    # ---------------- Philanthropy ----------------
-    phil = cards.get('philanthropy_news') or []
-    max_ph = min(len(phil), 15)
-    for i, p in enumerate(phil[:max_ph]):
-        _add(p.get('title') or '', p.get('title') or '',
-             'philanthropy', 'Philanthropy', None, i + 1, max_ph,
-             url=p.get('url'), image=p.get('image'))
 
     # ---------------- Business ----------------
     biz = cards.get('business_news') or []
@@ -11801,7 +11769,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'wattpad_charts':      lambda: _read_snapshot('wattpad_charts',     asof),
             'goodreads_charts':    lambda: _read_snapshot('goodreads_charts',   asof),
             'broadway_grosses':    lambda: _read_snapshot('broadway_grosses',   asof),
-            'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news',   asof),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
@@ -11846,7 +11813,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'wattpad_charts':      lambda: _read_snapshot('wattpad_charts'),
             'goodreads_charts':    lambda: _read_snapshot('goodreads_charts'),
             'broadway_grosses':    lambda: _read_snapshot('broadway_grosses'),
-            'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'business_news':       lambda: _read_snapshot('business_news'),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news'),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
@@ -12007,14 +11973,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     broadway_trending = broadway_snap.get('sources') or {}
     broadway_week_ending = broadway_snap.get('week_ending') or ''
 
-    # Philanthropy news snapshot -> combined list + per-source split.
-    # Frontend picks how to slice; both shapes travel in the payload.
-    phil_snap        = results.get('philanthropy_news') or {}
-    philanthropy_news = list(phil_snap.get('national') or [])[:150]
-    philanthropy_by_source = phil_snap.get('by_source') or {}
-
     # Business news (NYT Business RSS + WSJ Business via Google News
-    # RSS proxy). Same shape as philanthropy_news - a `national` list
+    # RSS proxy). A `national` list
     # for the flat "Business" sub-tab and a `by_source` split so the
     # UI can render per-outlet cards if we want that later.
     biz_snap         = results.get('business_news') or {}
@@ -12024,7 +11984,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Wall Street news (MarketWatch + CNBC Markets + IBD + Seeking
     # Alpha via native RSS; WSJ Markets + Barron's + FT + Bloomberg
     # Markets + Reuters Markets via Google News RSS proxy). Same
-    # shape as business_news / philanthropy_news - a `national` list
+    # shape as business_news - a `national` list
     # for the flat "Wall Street" sub-tab and a `by_source` split so
     # the UI can render per-outlet cards if we want that later.
     ws_snap          = results.get('wall_street_news') or {}
@@ -12221,7 +12181,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
 
     # Stamp `us_readers` (daily US-gen-pop reader estimate + DoD trend)
     # onto every headline surface: the flat "Top trending" list, the
-    # per-outlet "By news source" lists, and the Philanthropy sub-tab.
+    # and the per-outlet "By news source" lists.
     # Estimates come from a daily Claude Sonnet + web_search pass (see
     # scripts/trends_scrapers/headline_estimates.py). Missing snapshot
     # -> rows just don't carry `us_readers` and the frontend renders
@@ -12241,11 +12201,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         if _news_acc:
             headline_estimates_snap = _news_acc
     _annotate_headlines_with_readers(
-        headlines, articles_by_source, philanthropy_news,
+        headlines, articles_by_source,
         headline_estimates_snap,
         business_news             = business_news,
         wall_street_news          = wall_street_news,
-        philanthropy_by_source    = philanthropy_by_source,
         business_by_source        = business_by_source,
         wall_street_by_source     = wall_street_by_source)
     # Headlines rank delta: Business + Wall Street sub-tabs each ride
@@ -12264,12 +12223,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         wall_street_news, snapshot_source='wall_street_news',
         by_source_dict=wall_street_by_source,
         label='headlines.wall_street', lookback_days=lookback_days)
-    # Philanthropy rides the same shape and was the one news sub-tab
-    # never wired in, which left its rows with no movement chip.
-    _annotate_headlines_with_rank_change(
-        philanthropy_news, snapshot_source='philanthropy_news',
-        by_source_dict=philanthropy_by_source,
-        label='headlines.philanthropy', lookback_days=lookback_days)
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
@@ -12344,7 +12297,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         wikipedia_trending  = wikipedia_trending,
         articles_by_source  = articles_by_source,
         movers              = movers,
-        philanthropy_news   = philanthropy_news,
         business_news       = business_news,
         wall_street_news    = wall_street_news,
     )
@@ -12387,8 +12339,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             # `fused_trending` is populated below after the payload
             # dict is built - it needs the full `cards` slice to fuse.
             'fused_trending':                 [],
-            'philanthropy_news':              philanthropy_news,
-            'philanthropy_news_by_source':    philanthropy_by_source,
             'business_news':                  business_news,
             'business_news_by_source':        business_by_source,
             'wall_street_news':               wall_street_news,
@@ -12462,8 +12412,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             # (e.g. Off-Broadway) picks up the badge automatically.
             'broadway':      sum(len(((broadway_trending.get(k) or {}).get('items') or []))
                                   for k in (broadway_trending or {})),
-            'philanthropy':  (len(philanthropy_news) +
-                              len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +
@@ -12520,9 +12468,6 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         payload['cards']['business_news'] = \
             _sort_wall_street_by_readership(
                 payload['cards'].get('business_news') or [])
-        payload['cards']['philanthropy_news'] = \
-            _sort_wall_street_by_readership(
-                payload['cards'].get('philanthropy_news') or [])
     except Exception as e:
         logger.warning("headline readership sort failed: %s", e)
 

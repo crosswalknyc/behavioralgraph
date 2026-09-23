@@ -967,13 +967,13 @@ def _collect_all_items() -> list[dict]:
                   artist=it.get('artist') or '',
                   source_label=panel.get('label') or slug)
 
-    # Headlines - business + philanthropy share the same `headline:`
-    # keyspace with the top-headlines feed that trends_iq.py composites
-    # at runtime from GDELT. We can only score what has a snapshot;
+    # Headlines - the topic feeds share the same `headline:` keyspace
+    # with the top-headlines feed that trends_iq.py composites at
+    # runtime from GDELT. We can only score what has a snapshot;
     # top headlines from GDELT don't have a separate snapshot file
     # (they're recomputed per-request), so we score the two topic
     # feeds we do have plus every article on their `by_source` breakouts.
-    for src in ('philanthropy_news', 'business_news', 'wall_street_news'):
+    for src in ('business_news', 'wall_street_news'):
         snap = _read(src) or {}
         seen = set()
         for it in (snap.get('national') or [])[:150]:
