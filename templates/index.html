@@ -32444,9 +32444,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView h3, #intentIQView h4 { color: #E9E8E1; font-weight: 400; letter-spacing: -0.008em; }
         #intentIQView .iiq-panel > h3:first-child { margin-top: 0; }
 
-        /* Disclosure rows */
+        /* Disclosure rows read as an aside on a rule, not a slab */
         #intentIQView details > summary { color: #7C878A; font-size: 0.66rem; letter-spacing: 0.13em;
-            text-transform: uppercase; font-weight: 600; }
+            text-transform: uppercase; font-weight: 600; padding-left: 0 !important; }
+        #intentIQView .iiq-help-details { background: transparent !important; border: 0 !important;
+            border-left: 1px solid #27393D !important; border-radius: 0 !important;
+            padding-left: 0.9rem !important; margin: 0.6rem 0 1.1rem; }
+        #intentIQView .iiq-help-details > summary { padding: 0 !important; }
+        #intentIQView .iiq-help-details[open] > summary { margin-bottom: 0.55rem; }
+
+        /* Window control: a row of choices, not a row of buttons */
+        #intentIQView .iiq-window-chip, #intentIQView button[data-iiq-window] {
+            background: transparent !important; border-radius: 2px !important; }
+
+        body[data-theme="light"] #intentIQView .iiq-help-details { border-left-color: #C9C6BA !important; }
 
         body[data-theme="light"] #intentIQView {
             --text-primary: #0C1618; --text-secondary: #5C6560; --accent-cyan: #5E7E12;
@@ -125551,6 +125562,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
         }
+        // The window control renders as filled buttons. Keep the hairline so
+        // it still reads as a control, drop the fill.
+        function _aiqWindowChips() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var btns = root.querySelectorAll('button[style*="border-radius"]');
+            for (var i = 0; i < btns.length; i++) {
+                var b = btns[i];
+                if (b.dataset.aiqWin === '1') continue;
+                var r = b.getBoundingClientRect();
+                if (!r.width || r.width > 90 || r.height > 32) continue;
+                if (!/^T[-+]?\d+$|^T-0$/.test((b.textContent || '').trim())) continue;
+                b.dataset.aiqWin = '1';
+                b.style.background = 'transparent';
+                b.style.borderRadius = '2px';
+                b.style.letterSpacing = '0.06em';
+            }
+        }
         // A rail holding one tab is chrome with nothing to switch between.
         function _aiqTabRail() {
             var root = document.getElementById('intentIQView');
@@ -125573,7 +125602,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try {
                         _aiqWrap(); _aiqRepalette(); _aiqStripEmoji();
                         _aiqChips(); _aiqOrphanBoxes();
-                        _aiqFlattenPanels(); _aiqTabRail();
+                        _aiqFlattenPanels(); _aiqWindowChips(); _aiqTabRail();
                     } catch (e) { }
                 }, 120);
             }
