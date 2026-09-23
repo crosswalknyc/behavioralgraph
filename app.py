@@ -16934,7 +16934,10 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
     if role in ('admin', 'super_admin'):
         return True
     key_lower = (s3_key or '').lower()
-    if 'gen_pop' in key_lower:
+    # Gen Pop is universal: the canonical underscore form (Gen_Pop_2026.csv)
+    # AND the generational baseline skins ('Gen Pop 2026 - Gen Z.csv', ...)
+    # whose keys use spaces. Both serve as dashboard-wide baselines.
+    if 'gen_pop' in key_lower or key_lower.startswith('gen pop '):
         return True
     allowed_runs = user.get('allowed_runs')
     if allowed_runs is None or (isinstance(allowed_runs, list)
@@ -27455,7 +27458,11 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             for e in job_list:
                 sk = e.get('s3_key') or ''
-                if sk in allowed_set or 'gen_pop' in sk.lower():
+                sk_lower = sk.lower()
+                # Mirrors _user_can_access_profile_run: Gen Pop baselines
+                # (underscore canonical + spaced generational skins) are
+                # universal.
+                if sk in allowed_set or 'gen_pop' in sk_lower or sk_lower.startswith('gen pop '):
                     e['accessible'] = True
                 else:
                     e['accessible'] = False

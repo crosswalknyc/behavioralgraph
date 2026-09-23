@@ -136183,6 +136183,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // -------------------------------------------------------------------
         const _COMPARISON_PALETTE = ['#E682FF', '#C7F23E', '#B7B3D8', '#F0B3FF', '#E9E8E1', '#7C9BFF', '#9AA09B', '#3358FF'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
+        // Generational Gen Pop baselines (real S3 files, built 2026-09-23).
+        // Surfaced by the auto-collapsed "Gen Pop generations" expander in
+        // the Data Cuts popover: each loads like a normal comparison run
+        // (same /api/get-csv-data fetch + parseAllData) and joins the
+        // "Index against" picker, so users can index a profile against the
+        // Gen Z / Millennials / Gen X / Boomers Gen Pop instead of only
+        // the all-ages baseline.
+        const GENPOP_GENERATION_CUTS = [
+            { key: 'Gen Pop 2026 - Gen Z.csv',       label: 'GP Gen Z',       gen: 'Gen Z',       ages: '18-24' },
+            { key: 'Gen Pop 2026 - Millennials.csv', label: 'GP Millennials', gen: 'Millennials', ages: '25-44' },
+            { key: 'Gen Pop 2026 - Gen X.csv',       label: 'GP Gen X',       gen: 'Gen X',       ages: '45-64' },
+            { key: 'Gen Pop 2026 - Boomers.csv',     label: 'GP Boomers',     gen: 'Boomers',     ages: '65+' }
+        ];
+        function _isGenPopGenerationKey(k) {
+            return GENPOP_GENERATION_CUTS.some(c => c.key === k);
+        }
         // Synthetic key for the precomputed Category Norm "run". Treated by
         // every downstream rendering helper as if it were a real data cut.
         const CATEGORY_NORM_KEY = '__category_norm__';
@@ -136557,6 +136573,59 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         // ---------------------------------------------------------------
+        // GENERATIONAL GEN POP CUTS (Data Cuts -> "Gen Pop generations")
+        //
+        // Loads one of the four 'Gen Pop 2026 - <Generation>.csv' baseline
+        // skins through the standard comparison-run fetch (same
+        // parseAllData treatment as any real cut) and injects it into the
+        // compare pipeline. From there it renders as a column / bar
+        // alongside the profile AND becomes selectable in the "Index
+        // against" picker, e.g. Total Universe vs GP Millennials.
+        // The label is forced to the short 'GP <Gen>' form so a subject's
+        // own generational cut ("Millennials") and the Gen Pop baseline
+        // ("GP Millennials") stay distinguishable in headers + pickers.
+        // ---------------------------------------------------------------
+        async function _toggleGenPopGenerationCut(cut, checked) {
+            if (!cut || !cut.key) return { ok: false, reason: 'bad-cut' };
+            if (!checked) {
+                _comparisonRunsState.selectedKeys = (_comparisonRunsState.selectedKeys || [])
+                    .filter(k => k !== cut.key);
+                _updateCompareDateRangesButtonBadge();
+                // Refresh the picker FIRST: if this cut was the smart-
+                // default denominator, the index must fall back to the
+                // all-ages Gen Pop before the tables re-render.
+                try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+                try { _cmpApplyIndexSourcePicker(); } catch (_) {}
+                try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] gp-gen off charts failed', e); }
+                try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] gp-gen off tables failed', e); }
+                try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] gp-gen off render failed', e); }
+                return { ok: true };
+            }
+            const stub = { name: 'Gen Pop 2026 - ' + cut.gen, key: cut.key, isGenPopGeneration: true };
+            const entry = await _fetchComparisonRunData(cut.key, stub);
+            if (!entry) {
+                return { ok: false, reason: 'fetch' };
+            }
+            // Force the short disambiguated label over whatever
+            // _preferredRunLabel derived from the display name.
+            entry.label = cut.label;
+            entry.isGenPopGeneration = true;
+            if (!_comparisonRunsState.selectedKeys.includes(cut.key)) {
+                _comparisonRunsState.selectedKeys.push(cut.key);
+            }
+            _updateCompareDateRangesButtonBadge();
+            // Picker first (may smart-default the denominator to this
+            // generation), then apply so charts / tables read the final
+            // index sources.
+            try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+            try { _cmpApplyIndexSourcePicker(); } catch (_) {}
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] gp-gen on charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] gp-gen on tables failed', e); }
+            try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] gp-gen on render failed', e); }
+            return { ok: true };
+        }
+
+        // ---------------------------------------------------------------
         // INDEX SOURCE PICKER
         //
         // Build the dropdown choices for "what should the Index column
@@ -136602,8 +136671,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // the smart default resumes; cleared automatically if the
             // user's stored pick becomes invalid (e.g. they had a cut
             // selected as numerator and then removed that cut).
+            // Generational Gen Pop baselines are denominators by nature
+            // (like Gen Pop itself), so they never auto-promote to the
+            // numerator the way a subject's own single cut does.
             const realCuts = (_comparisonRunsState.selectedKeys || [])
-                .filter(k => k !== CATEGORY_NORM_KEY);
+                .filter(k => k !== CATEGORY_NORM_KEY && !_isGenPopGenerationKey(k));
             const smartDefaultNum = (realCuts.length === 1 && validKeys.has(realCuts[0]))
                 ? realCuts[0] : 'profile';
 
@@ -136615,8 +136687,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _comparisonRunsState.indexPickerUserTouched = false;
             }
 
+            // Smart-default denominator: when exactly ONE generational
+            // Gen Pop baseline is selected, index against THAT generation
+            // instead of the all-ages Gen Pop - that is the whole point of
+            // loading it. Falls back to 'genpop' otherwise; explicit user
+            // picks always win once touched.
+            const genPopGenSel = (_comparisonRunsState.selectedKeys || [])
+                .filter(k => _isGenPopGenerationKey(k));
+            const smartDefaultDen = (genPopGenSel.length === 1 && validKeys.has(genPopGenSel[0]))
+                ? genPopGenSel[0] : 'genpop';
             const num = touched ? (storedNum || 'profile') : smartDefaultNum;
-            const den = touched ? (storedDen || 'genpop') : 'genpop';
+            const den = touched ? (storedDen || 'genpop') : smartDefaultDen;
             const finalNum = validKeys.has(num) ? num : 'profile';
             const finalDen = validKeys.has(den) ? den : 'genpop';
             _comparisonRunsState.indexNumKey = (finalNum === 'profile') ? null : finalNum;
@@ -137648,15 +137729,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // Drop any cohort keys that no longer correspond to a
                     // valid sibling (profile was deleted, renamed, etc.).
                     // CATEGORY_NORM_KEY ('__category_norm__') is synthetic
-                    // and not in availableRuns - keep it.
-                    v = v.filter(kk => kk === CATEGORY_NORM_KEY || validKeySet.has(kk));
+                    // and not in availableRuns - keep it. Generational Gen
+                    // Pop baselines are subject-independent - keep them too.
+                    v = v.filter(kk => kk === CATEGORY_NORM_KEY || _isGenPopGenerationKey(kk) || validKeySet.has(kk));
                 }
                 _comparisonRunsState[k] = Array.isArray(v) ? v.slice() : v;
             });
             if (snap.runsByKey && typeof snap.runsByKey === 'object') {
                 _comparisonRunsState.runsByKey = _comparisonRunsState.runsByKey || {};
                 Object.entries(snap.runsByKey).forEach(([k, v]) => {
-                    if (k === CATEGORY_NORM_KEY || validKeySet.has(k)) {
+                    if (k === CATEGORY_NORM_KEY || _isGenPopGenerationKey(k) || validKeySet.has(k)) {
                         _comparisonRunsState.runsByKey[k] = v;
                     }
                 });
@@ -138038,6 +138120,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
                 const cnCb = pop.querySelector('#cmpIncludeCategoryNormCb');
                 if (cnCb) cnCb.checked = false;
+                const gpGenBadgeEl = pop.querySelector('#gpGenExpanderBadge');
+                if (gpGenBadgeEl) gpGenBadgeEl.textContent = '';
             }
         }
 
@@ -138171,6 +138255,106 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _setComparisonIncludeGenPop(gpCb.checked);
             });
             pop.appendChild(gpRow);
+
+            // ---- Gen Pop generations expander (auto-collapsed) ------------
+            // Four baseline skins of Gen Pop 2026 (Gen Z / Millennials /
+            // Gen X / Boomers). Collapsed by default; expands on click and
+            // auto-opens when a generation is already on. Checking a
+            // generation loads its file as a comparison column and makes
+            // it the "Index against" denominator (when it is the only one
+            // selected) so the Index reads vs that generation instead of
+            // the all-ages baseline.
+            const gpGenSelectedCount = GENPOP_GENERATION_CUTS
+                .filter(c => selected.has(c.key)).length;
+            const gpGenWrap = document.createElement('div');
+            gpGenWrap.style.cssText = 'margin:-0.15rem 0 0.45rem 0;border:1px solid rgba(156,163,175,0.18);border-radius:6px;background:rgba(156,163,175,0.05);overflow:hidden;';
+            const gpGenHead = document.createElement('div');
+            gpGenHead.style.cssText = 'display:flex;align-items:center;gap:0.45rem;padding:0.38rem 0.5rem;cursor:pointer;font-size:0.78rem;color:var(--text-primary, #e6e6e6);user-select:none;';
+            const gpGenCaret = document.createElement('span');
+            gpGenCaret.textContent = '\u25B8';
+            gpGenCaret.style.cssText = 'display:inline-block;font-size:0.7rem;color:var(--text-secondary, #9ca3af);transition:transform 0.15s ease;';
+            const gpGenTitle = document.createElement('span');
+            gpGenTitle.innerHTML = 'Gen Pop <strong style="color:var(--text-primary, #cbd5e1);">generations</strong>';
+            gpGenTitle.style.cssText = 'flex:1;min-width:0;';
+            const gpGenBadge = document.createElement('span');
+            gpGenBadge.id = 'gpGenExpanderBadge';
+            gpGenBadge.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);';
+            const _gpGenPaintBadge = function() {
+                const n = GENPOP_GENERATION_CUTS.filter(c =>
+                    (_comparisonRunsState.selectedKeys || []).includes(c.key)).length;
+                gpGenBadge.textContent = n > 0 ? (n + ' on') : '';
+            };
+            _gpGenPaintBadge();
+            gpGenHead.appendChild(gpGenCaret);
+            gpGenHead.appendChild(gpGenTitle);
+            gpGenHead.appendChild(gpGenBadge);
+            gpGenWrap.appendChild(gpGenHead);
+            const gpGenBody = document.createElement('div');
+            gpGenBody.style.cssText = 'padding:0.1rem 0.4rem 0.4rem;display:' + (gpGenSelectedCount > 0 ? 'block' : 'none') + ';';
+            if (gpGenSelectedCount > 0) gpGenCaret.style.transform = 'rotate(90deg)';
+            gpGenHead.addEventListener('click', function() {
+                const open = gpGenBody.style.display !== 'none';
+                gpGenBody.style.display = open ? 'none' : 'block';
+                gpGenCaret.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+            });
+            GENPOP_GENERATION_CUTS.forEach(cut => {
+                const row = document.createElement('label');
+                row.style.cssText = 'display:grid;grid-template-columns:18px 1fr auto minmax(58px,auto);column-gap:0.5rem;align-items:center;padding:0.3rem 0.35rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.2;';
+                row.onmouseenter = function() { row.style.background = 'rgba(156,163,175,0.10)'; };
+                row.onmouseleave = function() { row.style.background = 'transparent'; };
+                row.title = 'US Gen Pop baseline for ' + cut.gen + ' (ages ' + cut.ages + '). Adds a comparison column and an "Index against" option.';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.setAttribute('data-cmp-key', cut.key);
+                cb.checked = selected.has(cut.key);
+                cb.style.cssText = 'accent-color:#9ca3af;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+                const lbl = document.createElement('span');
+                lbl.textContent = cut.gen;
+                lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
+                const ages = document.createElement('span');
+                ages.textContent = cut.ages;
+                ages.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);';
+                const status = document.createElement('span');
+                status.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;text-align:right;';
+                row.appendChild(cb);
+                row.appendChild(lbl);
+                row.appendChild(ages);
+                row.appendChild(status);
+                cb.addEventListener('change', async function() {
+                    const wantOn = cb.checked;
+                    status.textContent = wantOn ? 'Loading\u2026' : '';
+                    status.style.color = 'var(--text-secondary, #9ca3af)';
+                    status.title = '';
+                    try {
+                        const result = await _toggleGenPopGenerationCut(cut, wantOn);
+                        if (!wantOn) {
+                            status.textContent = '';
+                        } else if (result && result.ok) {
+                            status.textContent = '';
+                        } else {
+                            const errDetail = (_comparisonRunsState.lastFetchError || {})[cut.key] || '';
+                            const short = String(errDetail).replace(/^http-/, '').slice(0, 18) || 'err';
+                            status.textContent = 'Failed (' + short + ')';
+                            status.style.color = '#f92672';
+                            status.title = 'See browser console for detail.\nKey: ' + cut.key;
+                            cb.checked = false;
+                        }
+                    } catch (e) {
+                        status.textContent = 'Failed';
+                        status.style.color = '#f92672';
+                        status.title = String(e && e.message || e);
+                        cb.checked = !wantOn;
+                    }
+                    _gpGenPaintBadge();
+                });
+                gpGenBody.appendChild(row);
+            });
+            const gpGenHint = document.createElement('div');
+            gpGenHint.style.cssText = 'font-size:0.66rem;color:var(--text-secondary, #9ca3af);padding:0.15rem 0.35rem 0;line-height:1.3;';
+            gpGenHint.textContent = 'Adds that generation\'s Gen Pop as a column and an "Index against" option.';
+            gpGenBody.appendChild(gpGenHint);
+            gpGenWrap.appendChild(gpGenBody);
+            pop.appendChild(gpGenWrap);
 
             // ---- Category Norm toggle -------------------------------------
             // Weighted-average BP across every profile in this profile's
