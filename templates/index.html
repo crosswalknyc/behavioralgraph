@@ -32532,6 +32532,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-panel { display: none; }
         #intentIQView .aiq-panel.on { display: block; }
         #intentIQView .aiq-attic { display: none !important; }
+        #intentIQView .aiq-promoted .iiq-subtab-bar { display: none !important; }
+        #intentIQView .aiq-promoted #iiqQNav { display: none !important; }
+        #intentIQView .aiq-controls .aiq-aud-pick { margin: 0 !important; background: transparent !important; border: 0 !important; padding: 0 !important; }
         #intentIQView .aiq-panel > section { margin: 0 0 2.4rem; }
         #intentIQView .aiq-panel > section:last-child { margin-bottom: 0; }
         #intentIQView .aiq-panel h5 { font-size: 0.95rem !important; font-weight: 400 !important;
@@ -41074,6 +41077,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var posted = asset.posted_date ? new Date(asset.posted_date) : null;
                 var openDate = new Date('2026-02-23T00:00:00Z'); // GOAT theatrical wind-down ~10d after open
                 var afterTheatrical = afterStream || (posted && !isNaN(posted.getTime()) && posted >= openDate);
+                // Brand / advocacy campaigns have no theatrical or streaming
+                // calendar; the film tilts below would otherwise cut the
+                // bottom-funnel share to a quarter on every post.
+                var _iiqJrnIsBrand = !!((window.__intentIQ && window.__intentIQ.overview || {}).title_type === 'brand');
+                if (_iiqJrnIsBrand) { afterTheatrical = false; afterStream = false; }
 
                 // // __IIQ_JOURNEY_BRAND_v1__
                 // Split of info-seek + bottom-funnel share into specific
@@ -41099,8 +41107,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     { label: 'Theater chain direct',            w: 0.06 }
                 ];
                 function _iiqDestList(src, bucket, color) {
-                    return src.map(function(d) {
-                        return { label: d.label, w: Number(d.w) || 0, bucket: bucket, color: color };
+                    // Destinations arrive as {label, w} objects on film
+                    // titles and as plain strings (or unweighted objects)
+                    // on brand titles. Unweighted lists split evenly and
+                    // every list is normalised to sum to 1 so the split
+                    // never drops the share it is meant to distribute.
+                    var list = (src || []).map(function(d) {
+                        if (d && typeof d === 'object') return { label: String(d.label || ''), w: Number(d.w) || 0 };
+                        return { label: String(d == null ? '' : d), w: 0 };
+                    }).filter(function(d) { return d.label; });
+                    var tot = list.reduce(function(s, d) { return s + d.w; }, 0);
+                    if (tot <= 0 && list.length) list.forEach(function(d) { d.w = 1 / list.length; });
+                    else if (tot > 0) list.forEach(function(d) { d.w = d.w / tot; });
+                    return list.map(function(d) {
+                        return { label: d.label, w: d.w, bucket: bucket, color: color };
                     });
                 }
                 var infoSplit = _iiqDestList(_iiqTerm.journey_info_destinations || _FILM_INFO_DESTS,       'info-seek', '#a5b4fc');
@@ -41123,7 +41143,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var items = [];
                 infoSplit.forEach(function(s) { items.push({ label: s.label, pct: infoPct * s.w, bucket: s.bucket, color: s.color }); });
-                if (tkPct > 0.1) tkSplit.forEach(function(s) { items.push({ label: s.label, pct: tkPct * s.w, bucket: s.bucket, color: s.color }); });
+                if (tkPct > (_iiqJrnIsBrand ? 0.02 : 0.1)) tkSplit.forEach(function(s) { items.push({ label: s.label, pct: tkPct * s.w, bucket: s.bucket, color: s.color }); });
                 items.push({ label: 'Shared / forwarded the asset',     pct: sharePct,        bucket: 'social',    color: '#22d3ee' });
                 // Film-specific downstream behaviors (trailer follow-up +
                 // "where to stream" search) are suppressed when the title's
@@ -41933,10 +41953,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                        +   _q2CompactDonut(donutSlices, 100)
                        + '</div>')
                     : '';
-                html += '<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                // A campaign with no paid placements has nothing to compare:
+                // the daily activity chart takes the full width and the
+                // as-of chip rides on it instead.
+                var _q2AllOrganic = hasAnyData && totalViewsPaid <= 0;
+                html += '<div style="display: grid; grid-template-columns: ' + (_q2AllOrganic ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1.35fr)') + '; gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                if (!_q2AllOrganic) {
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem; display:flex; flex-direction:column;">'
                     +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.5rem; gap:0.5rem;">'
-                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Paid vs. Organic <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">\u2014 who drove more</span></div>'
+                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Paid vs. Organic <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">- who drove more</span></div>'
                     +         asOfChip
                     +       '</div>'
                     +       '<div style="display:flex; gap:1rem; align-items:center; flex:1;">'
@@ -41944,10 +41969,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +         '<div style="flex:1; min-width:0;">' + funnelCardBody + '</div>'
                     +       '</div>'
                     +     '</div>';
+                }
                 html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.85rem; cursor:pointer; position:relative; transition: border-color 0.15s; display:flex; flex-direction:column;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
                     +       '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.3rem;">'
-                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Daily activity <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">\u2014 views + downstream funnel</span></div>'
-                    +         '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>'
+                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Daily activity <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">- views + downstream funnel</span></div>'
+                    +         (_q2AllOrganic ? '<div style="display:flex; gap:0.5rem; align-items:baseline;">' + asOfChip + '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div></div>'
+                                           : '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>')
                     +       '</div>'
                     +       '<div style="flex:1; min-height:0;">' + _q2ChartHtml(640, 220) + '</div>'
                     +     '</div>';
@@ -44711,8 +44738,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _iiqJrnTerm = _iiqJrnOv.terminology || {};
                 var _iiqInfoSub = _iiqJrnTerm.journey_info_sub_label       || 'Google / IMDB / RT / official';
                 var _iiqTkSub   = _iiqJrnTerm.journey_conversion_sub_label || 'Fandango / AMC / Regal / Cinemark / Atom';
-                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers \u2014 ' + _iiqInfoSub);
-                html +=   iiqSummaryTile('Ticketing visit', fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% \u2014 ' + _iiqTkSub);
+                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers - ' + _iiqInfoSub);
+                html +=   iiqSummaryTile(((typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page'), fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% - ' + _iiqTkSub);
                 html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
                 html += '</div>';
 
@@ -45139,6 +45166,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _iiqSubTerm = (_iiqSubOv.terminology && _iiqSubOv.terminology.subtab_intros) || {};
                     var _iiqIntro = (_iiqSubTerm[qid] != null) ? _iiqSubTerm[qid] : meta.intro;
                     var _iiqTitle = (_iiqSubTerm[qid + '_title'] != null) ? _iiqSubTerm[qid + '_title'] : meta.title;
+                    // A campaign with no paid placements has no paid /
+                    // organic split to show; the view reads as the daily
+                    // activity view (the tab carries the same label).
+                    if (qid === 'q2' && _iiqSubTerm['q2_title'] == null
+                        && typeof _aiqAllOrganic === 'function' && _aiqAllOrganic()) {
+                        _iiqTitle = 'Daily activity';
+                        _iiqIntro = 'Cumulative view growth by day across every placement, with the downstream funnel and the top in-flight assets. Every placement in this campaign is organic, so there is no paid comparison to draw.';
+                    }
                     document.getElementById('iiqQTitle').innerHTML =
                         '<h4 style="margin:0;">' + escapeHtml(_iiqTitle) + '</h4>'
                         + (_iiqIntro ? '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(_iiqIntro) + '</div>' : '');
@@ -126580,8 +126615,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Each slab the renderers produce is claimed by exactly one tab.
         // Matching is on the section's own h5, which the renderers write,
         // so this survives a re-render without knowing how it was built.
+        // Brand / legacy campaigns keep their views inside the legacy
+        // drawer (#iiqExploreDrawer). Every drawer view is promoted to a
+        // top-level tab here: `sub` names the legacy sub-tab to show,
+        // `q` the Performance question inside it. They all share the
+        // 'drawer' panel. The inner sub-tab bar and question rail are
+        // hidden once promoted (.aiq-promoted), so nothing is navigable
+        // twice. The Multi-touch sub-tab is not promoted: its sections
+        // already live in Paths / Surfaces / Attribution / Timing / Leaks
+        // and its audience picker moves into the controls bar.
         var _AIQ_TABS = [
-            { id: 'campaign',    label: 'Campaign',    ids: ['iiqExploreDrawer'], legacyOnly: true },
+            { id: 'l_overview',     label: 'Timeline',        panel: 'drawer', sub: 'overview',  legacyOnly: true },
+            { id: 'l_assets',       label: 'Assets',          panel: 'drawer', sub: 'assets',    legacyOnly: true },
             { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Assets',      ids: ['iiqAssetTableSection'] },
             { id: 'audiences',   label: 'Audiences',   ids: ['iiqAudienceTableSection'] },
@@ -126590,8 +126635,83 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'attribution', label: 'Attribution', heads: ['attribution on checkout page reach only',
                                                                'touchpoint contribution to '] },
             { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
-            { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] }
+            { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] },
+            { id: 'q_q1',           label: 'Categories',      panel: 'drawer', sub: 'questions', q: 'q1',           legacyOnly: true },
+            { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
+            { id: 'q_audiences',    label: 'Audiences',       panel: 'drawer', sub: 'questions', q: 'audiences',    legacyOnly: true },
+            { id: 'q_q3',           label: 'Intent',          panel: 'drawer', sub: 'questions', q: 'q3',           legacyOnly: true },
+            { id: 'q_q4',           label: 'Talent',          panel: 'drawer', sub: 'questions', q: 'q4',           legacyOnly: true },
+            { id: 'q_demographics', label: 'Demographics',    panel: 'drawer', sub: 'questions', q: 'demographics', legacyOnly: true },
+            { id: 'q_journey',      label: 'Journey',         panel: 'drawer', sub: 'questions', q: 'journey',      legacyOnly: true },
+            { id: 'l_conversion',   label: 'Conversion',      panel: 'drawer', sub: 'conversion', legacyOnly: true },
+            { id: 'l_roi',          label: 'ROI',             panel: 'drawer', sub: 'roi',        legacyOnly: true }
         ];
+        function _aiqPanelOf(t) { return (t && t.panel) || (t && t.id); }
+        function _aiqTabById(id) {
+            for (var i = 0; i < _AIQ_TABS.length; i++) if (_AIQ_TABS[i].id === id) return _AIQ_TABS[i];
+            return null;
+        }
+        // Is this drawer view switched on for the loaded title?
+        function _aiqDrawerTabLive(t) {
+            try {
+                if (t.sub && typeof window._iiqTabEnabled === 'function' && !window._iiqTabEnabled(t.sub)) return false;
+                if (t.q && typeof window._iiqQidEnabled === 'function' && !window._iiqQidEnabled(t.q)) return false;
+            } catch (e) { }
+            return true;
+        }
+        // A campaign with no paid placements has nothing to compare, so
+        // the Paid vs Organic view reads as the daily activity view.
+        function _aiqAllOrganic() {
+            try {
+                var slug = window.__intentIQ && window.__intentIQ.currentSlug;
+                var cards = slug && window.__intentIQAssetCache && window.__intentIQAssetCache[slug];
+                if (!cards || !cards.length) return false;
+                for (var i = 0; i < cards.length; i++) {
+                    var po = String(cards[i].paid_or_organic || '').toLowerCase();
+                    if (po && po !== 'organic') return false;
+                }
+                return true;
+            } catch (e) { return false; }
+        }
+        function _aiqTabLabel(t) {
+            if (t.organicLabel && _aiqAllOrganic()) return t.organicLabel;
+            return t.label;
+        }
+        // Drive the legacy drawer to the view a promoted tab names.
+        function _aiqSyncDrawer(t) {
+            if (!t || !t.sub) return;
+            try {
+                var cur = document.querySelector('#intentIQView .iiq-subtab.active');
+                var curSub = cur ? cur.getAttribute('data-iiq-subtab') : '';
+                if (curSub !== t.sub && typeof window.showIntentIQSubtab === 'function') window.showIntentIQSubtab(t.sub);
+                if (t.q && typeof window.showIntentIQQuestion === 'function') {
+                    var curQ = (window.__intentIQ && window.__intentIQ.currentQ) || '';
+                    var body = document.getElementById('iiqQBody');
+                    var mounted = body && body.getAttribute('data-aiq-q') === t.q;
+                    if (curQ !== t.q || !mounted) {
+                        window.showIntentIQQuestion(t.q);
+                        if (body) body.setAttribute('data-aiq-q', t.q);
+                    }
+                }
+            } catch (e) { }
+        }
+        // The Multi-touch audience picker re-fits every MTA slab, so it
+        // belongs beside the title selector, not inside a hidden sub-tab.
+        // The MTA renderer rebuilds its host on every change; the newest
+        // picker is always the one that moves, and the previous copy goes.
+        function _aiqLiftAudiencePicker(wrap) {
+            var controls = wrap.querySelector('.aiq-controls');
+            if (!controls) return;
+            var host = document.getElementById('iiqMTAContent');
+            var fresh = host && host.querySelector('#iiqMTAAudienceSelect');
+            if (!fresh) return;
+            var row = fresh.parentElement;
+            if (!row || row === controls) return;
+            var old = controls.querySelector('.aiq-aud-pick');
+            if (old) old.remove();
+            row.classList.add('aiq-aud-pick');
+            controls.appendChild(row);
+        }
         function _aiqNorm(s) {
             return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim();
         }
@@ -126664,10 +126784,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             wrap.insertBefore(tabs, rail.nextSibling);
             wrap.insertBefore(panels, tabs.nextSibling);
             wrap.appendChild(attic);
+            var madePanels = {};
             _AIQ_TABS.forEach(function (t) {
+                var pid = _aiqPanelOf(t);
+                if (madePanels[pid]) return;
+                madePanels[pid] = true;
                 var p = document.createElement('div');
                 p.className = 'aiq-panel';
-                p.setAttribute('data-aiq-panel', t.id);
+                p.setAttribute('data-aiq-panel', pid);
                 panels.appendChild(p);
             });
             // The original masthead and the old sub-tab rail are replaced by
@@ -126823,7 +126947,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             timing:      [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],
                           ['Panellists in read', 'panellists'], ['Read strength', 'strength']],
             leaks:       [['Exposed viewers', 'exposed'], ['Panellists in read', 'panellists'],
-                          ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']]
+                          ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']],
+            l_assets:    [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
+            q_audiences: [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']]
         };
         function _aiqRail(wrap, active) {
             var rail = wrap.querySelector('.aiq-rail');
@@ -126867,9 +126993,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var legacy = _aiqLegacyLanding();
             // claim the slabs
             var claimed = {};
+            wrap.classList.toggle('aiq-promoted', legacy);
+            if (legacy) {
+                var drawerEl = document.getElementById('iiqExploreDrawer');
+                var drawerPanel = panels.querySelector('[data-aiq-panel="drawer"]');
+                if (drawerEl && drawerPanel) {
+                    if (drawerEl.parentElement !== drawerPanel) drawerPanel.appendChild(drawerEl);
+                    _AIQ_TABS.forEach(function (t) {
+                        if (t.panel === 'drawer' && _aiqDrawerTabLive(t)) claimed[t.id] = true;
+                    });
+                }
+            }
+            _aiqLiftAudiencePicker(wrap);
             _AIQ_TABS.forEach(function (t) {
                 var panel = panels.querySelector('[data-aiq-panel="' + t.id + '"]');
                 if (t.legacyOnly && !legacy) return;
+                if (t.panel) return;
                 (t.ids || []).forEach(function (id) {
                     var el = document.getElementById(id);
                     if (!el) return;
@@ -126904,7 +127043,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var f = _aiqFacts();
             var counts = { assets: f.assets, audiences: f.cohorts };
             var tabsEl = wrap.querySelector('.aiq-tabs');
-            var sig = live.map(function (t) { return t.id + (counts[t.id] || ''); }).join('|');
+            var sig = live.map(function (t) { return t.id + ':' + _aiqTabLabel(t) + (counts[t.id] || ''); }).join('|');
             var active = wrap.getAttribute('data-aiq-active');
             if (!active || !claimed[active]) {
                 try { active = localStorage.getItem(_aiqLastTabKey()) || ''; } catch (e) { active = ''; }
@@ -126916,7 +127055,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 tabsEl.innerHTML = live.map(function (t) {
                     var c = counts[t.id] ? '<i>' + counts[t.id] + '</i>' : '';
                     return '<button type="button" class="aiq-tab" data-aiq-go="' + t.id + '">'
-                         + t.label + c + '</button>';
+                         + _aiqTabLabel(t) + c + '</button>';
                 }).join('');
                 Array.prototype.forEach.call(tabsEl.querySelectorAll('.aiq-tab'), function (b) {
                     b.addEventListener('click', function () { _aiqGo(b.getAttribute('data-aiq-go')); });
@@ -126925,9 +127064,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             Array.prototype.forEach.call(tabsEl.querySelectorAll('.aiq-tab'), function (b) {
                 b.classList.toggle('on', b.getAttribute('data-aiq-go') === active);
             });
+            var activeTab = _aiqTabById(active);
+            var activePanel = _aiqPanelOf(activeTab) || active;
             Array.prototype.forEach.call(panels.children, function (p) {
-                p.classList.toggle('on', p.getAttribute('data-aiq-panel') === active);
+                p.classList.toggle('on', p.getAttribute('data-aiq-panel') === activePanel);
             });
+            if (legacy && activeTab && activeTab.panel === 'drawer') _aiqSyncDrawer(activeTab);
             _aiqBanner(wrap);
             _aiqRail(wrap, active);
         }
