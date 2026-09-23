@@ -32333,7 +32333,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView *:not(code):not(pre):not(.mono) {
             font-family: 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         }
-        #intentIQView .aiq-wrap { max-width: 1180px; margin: 0 auto; padding: 0 2.25rem; }
+        #intentIQView .aiq-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 2.25rem;
+            flex: 0 0 auto; }
 
         /* Masthead */
         #intentIQView .iiq-header { display: block; margin: 0 0 1.6rem; padding: 2.1rem 0 1.4rem;
@@ -32481,7 +32482,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-banner-img { position: absolute; inset: 0; background-position: center 34%;
             background-size: cover; filter: saturate(.78); }
         #intentIQView .aiq-banner-scrim { position: absolute; inset: 0;
-            background: linear-gradient(90deg, #0C1618 22%, rgba(12,22,24,.80) 46%, rgba(12,22,24,.18) 100%); }
+            background: linear-gradient(90deg, #0C1618 27%, rgba(12,22,24,.84) 55%, rgba(12,22,24,.18) 100%); }
         #intentIQView .aiq-banner.is-bare { height: auto; background: transparent; margin-top: 8px; }
         #intentIQView .aiq-banner.is-bare .aiq-banner-img,
         #intentIQView .aiq-banner.is-bare .aiq-banner-scrim { display: none; }
@@ -32498,6 +32499,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-controls .iiq-selector-bar,
         #intentIQView .aiq-controls .iiq-selector-bar-v2 { border: 0 !important; padding: 0 !important;
             margin: 0 !important; background: transparent !important; }
+        #intentIQView .aiq-controls label { display: flex !important; align-items: center; gap: 0.5rem;
+            margin-bottom: 0.4rem !important; }
+        #intentIQView #iiqAsOfChip { background: transparent !important; border: 1px solid rgba(199,242,62,0.38);
+            border-radius: 2px; font-size: 0.52rem !important; letter-spacing: 0.08em; text-transform: uppercase;
+            padding: 0.1rem 0.36rem !important; margin-left: 0 !important; font-weight: 600 !important;
+            white-space: nowrap; }
+        body[data-theme="light"] #intentIQView #iiqAsOfChip { border-color: rgba(94,126,18,0.45); }
 
         #intentIQView .aiq-rail { display: flex; border-bottom: 1px solid #27393D; flex-wrap: wrap; }
         #intentIQView .aiq-rail > div { padding: 0.82rem 1.6rem 0.88rem; border-left: 1px solid #1A2629; }
@@ -125988,11 +125996,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var a = document.getElementById('iiqAssetTableSection');
             var top = a && a.querySelector('tbody tr');
             if (top) {
-                var tt = (top.textContent || '').replace(/\s+/g, ' ');
-                var pc = tt.match(/(\d+\.\d{2})%/);
-                if (pc) f.bestResponse = pc[1] + '%';
-                var lf = tt.match(/(\d+\.\d)x/i);
-                if (lf) f.bestLift = lf[1] + 'x';
+                Array.prototype.forEach.call(top.children, function (td) {
+                    var c = (td.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (!f.bestResponse) {
+                        var pc = c.match(/^(\d+\.\d{2})%/);
+                        if (pc) f.bestResponse = pc[1] + '%';
+                    }
+                    if (!f.bestLift) {
+                        var lf = c.match(/(?:^|[^\d.])(\d+\.\d)x\b/i);
+                        if (lf) f.bestLift = lf[1] + 'x';
+                    }
+                });
             }
             return f;
         }
