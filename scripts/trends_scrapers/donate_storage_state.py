@@ -173,6 +173,46 @@ def _host_matches(host: str, target: str) -> bool:
     return h == t or h.endswith('.' + t)
 
 
+def _belongs_to_platform(host: str, hosts: list[str]) -> bool:
+    """True when `host` is one of the platform's hosts, a parent of one,
+    or a subdomain of one.
+
+    All three directions matter, and missing the third was a real
+    defect. `_cookie_applies_to_target` answers only "would Chrome send
+    this cookie TO that host", which is the parent direction: a cookie
+    on `.hbomax.com` reaches `play.hbomax.com`. It says no for a cookie
+    scoped to a CHILD host, which is correct for a page request and
+    wrong for deciding ownership.
+
+    Measured 2026-09-23: HBO Max's session cookie `st` is scoped to
+    `.api.hbomax.com`, the host its app calls for everything. The
+    parent-only test dropped it from the donation, so the one cookie
+    the app authenticates with was the one cookie we never donated.
+    Nothing else in the profile carries that session: HBO Max's
+    IndexedDB is Amplitude and Braze analytics with no auth store at
+    all, so there was no second copy to fall back on.
+
+    Widening to subdomains cannot leak across platforms, because every
+    host it admits sits under a domain this platform already owns.
+    """
+    from .donate_cookies import _cookie_applies_to_target
+
+    h = (host or '').lstrip('.').lower()
+    if not h:
+        return False
+    for target in hosts:
+        t = (target or '').lstrip('.').lower()
+        if not t:
+            continue
+        # parent direction: the cookie would be sent to `t`
+        if _cookie_applies_to_target(h, t):
+            return True
+        # child direction: `h` is a subdomain of a host we own
+        if h.endswith('.' + t):
+            return True
+    return False
+
+
 def filter_state_for_domain(state: dict, domain: str) -> dict:
     """Keep only the cookies and origins that belong to `domain`.
 
@@ -181,16 +221,11 @@ def filter_state_for_domain(state: dict, domain: str) -> dict:
     platform's tokens, so each donation is narrowed to the hosts that
     service actually uses.
     """
-    from .donate_cookies import _cookie_applies_to_target
-
     hosts = guard.session_hosts(domain)
-
     cookies = [c for c in (state.get('cookies') or [])
-               if any(_cookie_applies_to_target(c.get('domain') or '', h)
-                      for h in hosts)]
+               if _belongs_to_platform(c.get('domain') or '', hosts)]
     origins = [o for o in (state.get('origins') or [])
-               if any(_host_matches(_host_of(o.get('origin') or ''), h)
-                      for h in hosts)]
+               if _belongs_to_platform(_host_of(o.get('origin') or ''), hosts)]
     return {'cookies': cookies, 'origins': origins}
 
 
@@ -376,12 +411,24 @@ def chrome_cookies_for(domains: list[str]) -> list[dict]:
     Reuses the reader the cookie donation already relies on, so there
     is one implementation of Chrome's cookie-scope rules rather than
     two that can disagree.
+
+    Asks per HOST rather than per domain. The reader answers "would
+    Chrome send this cookie to X", so asking it only about
+    `hbomax.com` never returns the `.api.hbomax.com` cookie the app
+    actually authenticates with. Asking about each of the platform's
+    hosts in turn does.
     """
     from .donate_cookies import _read_chrome_cookies
 
+    hosts: list[str] = []
+    for domain in domains:
+        for h in guard.session_hosts(domain):
+            if h not in hosts:
+                hosts.append(h)
+
     out: list[dict] = []
     seen: set[tuple] = set()
-    for domain in domains:
+    for domain in hosts:
         for c in _read_chrome_cookies(domain):
             key = (c.get('name'), c.get('domain'), c.get('path'))
             if key in seen or not (c.get('name') and c.get('value')):
@@ -403,8 +450,183 @@ def chrome_cookies_for(domains: list[str]) -> list[dict]:
 # ────────────────────────────────────────────────────────────────────
 # --login : one human sign-in, then automated forever after
 # ────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────
+# Capture from a real Chrome that is already open
+# ────────────────────────────────────────────────────────────────────
+# Relaunching the scraping profile under Playwright is not free. It
+# boots a second copy of every app in that profile, and an app that
+# boots runs its token refresh. Where a refresh token is single-use,
+# a relaunch that the platform then rejects can consume the token and
+# leave the profile signed out in REAL Chrome afterwards, which is a
+# plausible reading of what happened to HBO Max on 2026-09-23.
+#
+# Attaching to a browser that is already open avoids all of that. It
+# also removes every automation-launch difference in one go, since
+# the browser was started by hand with no automation flags at all.
+#
+# Start one the same way `start_chrome_for_cookie_export.command`
+# does, pointed at the scraping profile:
+#
+#   open -na "Google Chrome" --args \
+#       --user-data-dir="$HOME/Library/Application Support/\
+# CrosswalkTrendsLogin/chrome-profile" --remote-debugging-port=9223
+_DEFAULT_CDP_PORTS = (9223, 9222)
+
+
+def find_live_chrome(cdp_url: Optional[str] = None) -> Optional[str]:
+    """Return a reachable CDP endpoint, or None."""
+    import urllib.request
+
+    candidates = [cdp_url] if cdp_url else [
+        f'http://127.0.0.1:{p}' for p in _DEFAULT_CDP_PORTS]
+    for base in candidates:
+        if not base:
+            continue
+        try:
+            with urllib.request.urlopen(f'{base}/json/version', timeout=3):
+                return base
+        except Exception:
+            continue
+    return None
+
+
+def run_from_live_chrome(domains: list[str], *, cdp_url: Optional[str] = None,
+                         dry_run: bool = False, pw=None) -> int:
+    """Donate from a hand-started Chrome instead of relaunching one.
+
+    `pw` lets a caller that already has Playwright open hand it in.
+    Starting a second one inside the first raises, which is how the
+    recapture fallback first failed.
+    """
+    sp = _lazy_playwright()
+    if sp is None and pw is None:
+        print('Playwright is not installed.')
+        return 3
+
+    endpoint = find_live_chrome(cdp_url)
+    if not endpoint:
+        print('No Chrome with remote debugging is open. Start one on the')
+        print('scraping profile, sign in, then re-run this:')
+        print()
+        print('  open -na "Google Chrome" --args \\')
+        print(f'    --user-data-dir="{PROFILE_DIR}" \\')
+        print('    --remote-debugging-port=9223')
+        return 1
+
+    known = [d for d in domains if guard.site_spec(d)]
+    if not known:
+        print('No session-gated platforms in that list.')
+        return 1
+
+    print(f'Attached to the Chrome already open at {endpoint}.')
+    print('Its own tabs are left alone.')
+    print()
+
+    results: dict[str, tuple[str, str]] = {}
+    owns_pw = pw is None
+    manager = sp() if owns_pw else None
+    if owns_pw:
+        pw = manager.__enter__()
+    try:
+        try:
+            browser = pw.chromium.connect_over_cdp(endpoint)
+        except Exception as e:
+            print(f'Could not attach: {e}')
+            return 3
+        if not browser.contexts:
+            print('That browser has no context to read.')
+            return 3
+        ctx = browser.contexts[0]
+
+        opened = []
+        for domain in known:
+            try:
+                page = ctx.new_page()
+                opened.append(page)
+                page.goto(guard.app_url(domain),
+                          wait_until='domcontentloaded', timeout=60000)
+                results[domain] = _settle(page, domain)
+            except Exception as e:
+                results[domain] = ('unknown', f'{type(e).__name__}: {e}')
+
+        rc = _capture_and_upload(ctx, known, dry_run=dry_run, results=results)
+
+        for page in opened:
+            try:
+                page.close()
+            except Exception:
+                pass
+        # Deliberately NOT browser.close(). It is not ours to close.
+        return rc
+    finally:
+        if owns_pw and manager is not None:
+            manager.__exit__(None, None, None)
+
+
+def confirm_donations_survive(pw, ctx, domains: list[str]
+                              ) -> dict[str, tuple[bool, str]]:
+    """Capture what we WOULD donate for each domain and render it.
+
+    This is the same question `--verify` asks, asked early: not "does
+    this tab look signed in" but "does this session still work once it
+    has been captured and restored", which is what every scraper does.
+
+    One headless browser is shared across the whole set, so the cost
+    is one launch rather than one per platform. Never raises; a
+    platform that cannot be checked is reported as not surviving,
+    which errs toward offering a sign-in tab rather than skipping one.
+    """
+    out: dict[str, tuple[bool, str]] = {}
+    try:
+        full = ctx.storage_state(indexed_db=True)
+    except Exception as e:
+        return {d: (False, f'could not read the session: {e}') for d in domains}
+
+    browser = None
+    try:
+        browser = pw.chromium.launch(
+            channel='chrome', headless=True,
+            args=['--headless=new', '--no-sandbox',
+                  '--disable-blink-features=AutomationControlled'])
+    except Exception as e:
+        return {d: (False, f'could not open a check browser: {e}')
+                for d in domains}
+
+    for domain in domains:
+        state = filter_state_for_domain(full, domain)
+        if not (state.get('cookies') or state.get('origins')):
+            out[domain] = (False, 'nothing to donate for this platform')
+            continue
+        check = None
+        try:
+            check = browser.new_context(
+                storage_state=state, user_agent=UA,
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US', timezone_id='America/New_York',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'})
+            page = check.new_page()
+            _try_stealth(page)
+            page.goto(guard.app_url(domain),
+                      wait_until='domcontentloaded', timeout=60000)
+            verdict, detail = _settle(page, domain)
+            out[domain] = (verdict == 'signed_in', detail)
+        except Exception as e:
+            out[domain] = (False, f'{type(e).__name__}: {e}')
+        finally:
+            if check is not None:
+                try:
+                    check.close()
+                except Exception:
+                    pass
+    try:
+        browser.close()
+    except Exception:
+        pass
+    return out
+
+
 def run_login(domains: list[str], *, dry_run: bool = False,
-              seed: bool = True) -> int:
+              seed: bool = True, force: bool = False) -> int:
     """Get every platform to a signed-in state, then donate it.
 
     Most of the work is not the sign-in. The sessions already exist in
@@ -474,16 +696,49 @@ def run_login(domains: list[str], *, dry_run: bool = False,
                 print(f'  {guard.site_label(domain):<16s} could not open: '
                       f'{type(e).__name__}')
 
-        # First pass tells us who actually needs a human.
+        # First pass: what does the live tab say?
         done: set[str] = set()
+        looks_ok: list[str] = []
         for domain, page in pages.items():
             verdict, detail = _settle(page, domain)
             results[domain] = (verdict, detail)
             if verdict == 'signed_in':
+                looks_ok.append(domain)
+
+        # Second pass: does that survive being donated?
+        #
+        # A tab looking signed in is NOT the question. The question is
+        # whether the session still works once it has been captured
+        # and restored, which is what every scraper actually does and
+        # what --verify measures. On 2026-09-23 those two answers
+        # disagreed: this path printed "already signed in" for HBO Max
+        # and offered no tab, while --verify minutes later said signed
+        # out on the same profile. The optimistic detector was the one
+        # deciding to skip the work, so Jenna sat waiting for a window
+        # that never asked her for anything.
+        #
+        # So a tab is only skipped when the donation itself verifies.
+        survived: dict[str, tuple[bool, str]] = {}
+        if looks_ok and not force:
+            print(f'  checking {len(looks_ok)} session(s) survive donation ...')
+            survived = confirm_donations_survive(pw, ctx, looks_ok)
+
+        for domain in pages:
+            label = guard.site_label(domain)
+            if force:
+                print(f'  [OPEN]               {label}  (--force)')
+                continue
+            if domain not in looks_ok:
+                print(f'  [NEEDS SIGN-IN]      {label}')
+                continue
+            ok, why = survived.get(domain, (False, 'not checked'))
+            if ok:
                 done.add(domain)
-                print(f'  [already signed in]  {guard.site_label(domain)}')
+                print(f'  [already signed in]  {label}')
             else:
-                print(f'  [NEEDS SIGN-IN]      {guard.site_label(domain)}')
+                print(f'  [NEEDS SIGN-IN]      {label}  (the tab looks '
+                      f'signed in, but the session does not survive being '
+                      f'donated: {why[:60]})')
 
         waiting = [d for d in pages if d not in done]
         if waiting:
@@ -564,6 +819,24 @@ def run_recapture(domains: list[str], *, dry_run: bool = False,
         try:
             ctx = _launch_profile(pw, headed=False)
         except Exception as e:
+            # A Chrome already open on this profile holds its lock, so
+            # the relaunch cannot have it. That is a normal state, not
+            # a failure: somebody is signed in over there right now.
+            # Read from that browser instead of reporting a dead run,
+            # which is what would otherwise quietly stop the daily
+            # donation for as long as the window stayed open.
+            endpoint = find_live_chrome()
+            if endpoint:
+                print('The scraping profile is open in Chrome already, so '
+                      'reading the session from that window instead.')
+                print('Note: that window only has the platforms signed in '
+                      'inside it. The relaunch path also carries sessions '
+                      'across from everyday Chrome, so close that window '
+                      'when you are done to get the full set. Platforms '
+                      'that are not signed in there keep their existing '
+                      'donation rather than being overwritten.')
+                return run_from_live_chrome(domains, cdp_url=endpoint,
+                                            dry_run=dry_run, pw=pw)
             print(f'Could not open the Chrome profile: {e}')
             return 3
 
@@ -594,9 +867,48 @@ def run_recapture(domains: list[str], *, dry_run: bool = False,
     return rc
 
 
+def _touch_origins(ctx, domain: str) -> list:
+    """Open a throwaway document on each of the platform's hosts.
+
+    `storage_state` only reports origins that a page in this context
+    has actually visited. It is not reading the profile off disk, it
+    is reporting what it has seen, so an origin nobody opened comes
+    back with no localStorage and no IndexedDB even though both exist.
+
+    That is the whole explanation for the "32 cookies and ZERO
+    origins" capture over CDP on 2026-09-23. Nothing was wrong with
+    the CDP route; no page had been opened on those origins. Opening
+    one on each host first turns the same call into 4 origins, 137
+    localStorage keys and 9 IndexedDB stores.
+
+    `/robots.txt` is used because it is cheap and, unlike the app
+    routes, does not redirect away from the host when signed out,
+    which is exactly when we most need its storage.
+    """
+    opened = []
+    for host in guard.session_hosts(domain):
+        try:
+            page = ctx.new_page()
+            page.goto(f'https://{host}/robots.txt',
+                      wait_until='domcontentloaded', timeout=20000)
+            opened.append(page)
+        except Exception as e:
+            logger.debug('could not touch %s: %s', host, e)
+            try:
+                page.close()
+            except Exception:
+                pass
+    return opened
+
+
 def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
                         results: dict[str, tuple[str, str]]) -> int:
     """Capture once, narrow per platform, upload the proven ones."""
+    # Register every host before the capture, or its storage is
+    # invisible to `storage_state`. Held open until after the call.
+    touched: list = []
+    for domain in domains:
+        touched.extend(_touch_origins(ctx, domain))
     try:
         full = ctx.storage_state(indexed_db=True)
     except TypeError:
@@ -610,6 +922,12 @@ def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
     except Exception as e:
         print(f'Could not read the session from the profile: {e}')
         return 3
+    finally:
+        for page in touched:
+            try:
+                page.close()
+            except Exception:
+                pass
 
     print()
     print(f'{"platform":<18s} {"status":<14s} session')
@@ -772,6 +1090,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument('--no-seed', action='store_true',
                     help='Do not carry existing sessions across from '
                          'everyday Chrome first.')
+    ap.add_argument('--from-live-chrome', action='store_true',
+                    help='Donate from a Chrome you already started by '
+                         'hand, instead of relaunching the profile.')
+    ap.add_argument('--cdp-url', default=None,
+                    help='With --from-live-chrome: the debugging endpoint '
+                         '(default: try 9223 then 9222).')
+    ap.add_argument('--force', action='store_true',
+                    help='With --login: open every tab, even ones that '
+                         'already look signed in.')
     ap.add_argument('--force-seed', action='store_true',
                     help='Overwrite sessions already in the scraping '
                          'profile with whatever Chrome currently has.')
@@ -785,6 +1112,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.verify:
         return run_verify(domains, use_proxy=args.use_proxy)
+    if args.from_live_chrome:
+        return run_from_live_chrome(domains, cdp_url=args.cdp_url,
+                                    dry_run=args.dry_run)
     if args.recapture:
         return run_recapture(domains, dry_run=args.dry_run,
                              seed=not args.no_seed)
@@ -792,7 +1122,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         print('Signing in runs on the operator Mac, which has a real '
               'Chrome and a US residential address.')
         return 3
-    return run_login(domains, dry_run=args.dry_run, seed=not args.no_seed)
+    return run_login(domains, dry_run=args.dry_run, seed=not args.no_seed,
+                     force=args.force)
 
 
 if __name__ == '__main__':

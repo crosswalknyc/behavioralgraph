@@ -439,6 +439,16 @@ def main() -> int:
                           'still renders a signed-in page.')
     ap.add_argument('--use-proxy', action='store_true',
                      help='With --verify: route through the residential proxy.')
+    ap.add_argument('--from-live-chrome', action='store_true',
+                     help='Donate from a Chrome you already started by hand '
+                          'and signed into, instead of relaunching the '
+                          'profile. Needs --remote-debugging-port.')
+    ap.add_argument('--cdp-url', default=None,
+                     help='With --from-live-chrome: the debugging endpoint '
+                          '(default: try 9223 then 9222).')
+    ap.add_argument('--force', action='store_true',
+                     help='With --login: open every tab, even ones that '
+                          'already look signed in.')
     ap.add_argument('--auto-login', action='store_true',
                      help='Sign in automatically using credentials stored in '
                           'the macOS Keychain and donate the resulting '
@@ -452,19 +462,24 @@ def main() -> int:
 
     # Full-session paths. Delegated in-process (not over a subprocess)
     # so a bad flag surfaces here rather than as an opaque exit code.
-    if args.login or args.storage_state or args.verify:
+    if (args.login or args.storage_state or args.verify
+            or args.from_live_chrome):
         dss = _load_storage_state_module()
         domains = [d.strip().lower() for d in args.domains if d.strip()] \
             or dss.DEFAULT_STORAGE_DOMAINS
         if args.verify:
             return dss.run_verify(domains, use_proxy=args.use_proxy)
+        if args.from_live_chrome:
+            return dss.run_from_live_chrome(domains, cdp_url=args.cdp_url,
+                                            dry_run=args.dry_run)
         if args.storage_state:
             return dss.run_recapture(domains, dry_run=args.dry_run)
         if sys.platform != 'darwin':
             print('Signing in runs on the operator Mac, which has a real '
                   'Chrome and a US residential address.')
             return 3
-        return dss.run_login(domains, dry_run=args.dry_run)
+        return dss.run_login(domains, dry_run=args.dry_run,
+                             force=args.force)
 
     # Auto-login path delegates to the Keychain-backed engine. Run via
     # `-m` so its package-relative imports resolve regardless of whether

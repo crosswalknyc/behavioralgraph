@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,8 @@ def render_pages(pages: list[tuple[str, str]], *,
                  wait_selectors: Optional[list[str]] = None,
                  hydration_wait_ms: int = 10000,
                  use_proxy: bool = False,
-                 assert_signed_in: Optional[str] = None
+                 assert_signed_in: Optional[str] = None,
+                 page_hook: Optional[Callable] = None
                  ) -> list[tuple[str, str]]:
     """Render each `(label, url)` and return list of `(label, html)`.
 
@@ -149,6 +150,14 @@ def render_pages(pages: list[tuple[str, str]], *,
     publishes a plan picker as a viewership chart, and the rail looks
     populated and plausible while being wrong. Raising is what makes
     that impossible. See `_auth_guard`.
+
+    Pass `page_hook=fn` to drive the page before it is snapshotted.
+    It is called as `fn(page, label)` once the page has hydrated, and
+    whatever string it returns REPLACES the HTML for that page. That
+    is what a virtualised rail needs: the DOM only ever holds the few
+    tiles currently on screen, so the only way to see all of a
+    horizontal Top 10 is to advance it and keep what each pass
+    rendered. Returning None leaves the normal snapshot alone.
 
     Pass `use_proxy=True` to route every request through the IPRoyal
     residential proxy (config via IPROYAL_PROXY_* env vars). Silently
@@ -218,7 +227,8 @@ def render_pages(pages: list[tuple[str, str]], *,
                                 "(%s, age=%.0fh)",
                                 cookie_domain,
                                 describe_storage_state(donated_state),
-                                st.get('age_hours') or -1)
+                                st.get('age_hours')
+                                if st.get('age_hours') is not None else -1)
             except Exception as e:
                 logger.info("storage-state restore for %s failed: %s",
                             cookie_domain, e)
@@ -299,6 +309,16 @@ def render_pages(pages: list[tuple[str, str]], *,
                 page.wait_for_timeout(scroll_ms)
                 html = page.content()
 
+                # A hook returns a normalised record of what the
+                # page showed, not a page, so it is deliberately
+                # small and must not be measured against the
+                # empty-shell size heuristic below.
+                hooked_html = None
+                if page_hook:
+                    hooked_html = page_hook(page, label)
+                    if hooked_html:
+                        html = hooked_html
+
                 # Backstop for a session that dies mid-run. A browse
                 # page cannot prove a session, so this only refuses a
                 # page that IS a wall. Raising here rather than below
@@ -309,7 +329,7 @@ def render_pages(pages: list[tuple[str, str]], *,
                     refuse_if_signed_out(page, assert_signed_in,
                                          source=f'{assert_signed_in} {label}')
 
-                if html and len(html) > 5000:
+                if html and (hooked_html or len(html) > 5000):
                     results.append((label, html))
                 else:
                     logger.info("playwright %s: got %d-byte body, skipping",

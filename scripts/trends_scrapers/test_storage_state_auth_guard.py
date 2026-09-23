@@ -369,6 +369,120 @@ def test_redaction_never_leaks() -> None:
           'an absent session summarises rather than raising')
 
 
+def test_hbomax_chart_rail() -> None:
+    print('\n== HBO Max: the chart rail is identified by name ==')
+    from scripts.trends_scrapers import max_streaming as mx
+
+    # The real chart, captured by hand from a signed-in
+    # play.hbomax.com on 2026-09-23 and confirmed in the app.
+    tv = ['Lanterns', '90 Day: The Last Resort',
+          'Halloween Baking Championship', '90 Day Fiance', 'Youth',
+          'President Curtis', 'Stuart Fails to Save the Universe',
+          'Last Week Tonight With John Oliver', 'A Killer Story',
+          'Halloween Wars']
+    # The OTHER complete numbered rail that was on the same page. Ten
+    # rows, clean ranks, real titles, and the wrong chart.
+    films = ['Supergirl', 'Fuze', 'The Revenant', 'The Last Samurai',
+             'American Made', 'Miss Congeniality',
+             "Dr. Seuss' Horton Hears a Who!", 'The Craft', 'Beetlejuice',
+             "Blumhouse's Truth or Dare: Unrated Director's Cut"]
+
+    def rail(name, titles, kind='show'):
+        rows = ''.join(
+            f'<row rank="{i}" href="/{kind}/{i:08d}-aaaa-bbbb-cccc-'
+            f'{i:012d}" title="{t.replace(chr(34), "&quot;")}"/>'
+            for i, t in enumerate(titles, 1))
+        return f'<rail name="{name}">{rows}</rail>'
+
+    # Both rails present, which is the real page.
+    page = rail('Popular TV', tv) + rail('From Page to Screen', films,
+                                          'movie')
+    name, rows = mx.extract_chart(page)
+    check(name == 'Popular TV', 'the chart rail is the one that is named')
+    check([r['title'] for r in rows] == tv,
+          'the chart rows are the TV chart, not the film rail')
+    check(rows and rows[0]['title'] == 'Lanterns',
+          'Lanterns is number 1, which is the whole point')
+    check([r['rank'] for r in rows] == list(range(1, 11)),
+          'rank comes from the label, not from tile position')
+    check(rows and rows[0]['url'].startswith('https://play.hbomax.com/show/'),
+          'the deep link is carried through')
+    check(rows and rows[0]['collection'] == 'Popular TV',
+          'rows record which rail they came from')
+
+    # Rail order on the page must not decide it.
+    name, rows = mx.extract_chart(
+        rail('From Page to Screen', films, 'movie') + rail('Popular TV', tv))
+    check(name == 'Popular TV' and rows[0]['title'] == 'Lanterns',
+          'the film rail rendering first does not win')
+
+    # A page of ranked tiles with NO chart heading yields nothing.
+    # This is the failure that shipped the film list as the Top 10.
+    name, rows = mx.extract_chart(rail('From Page to Screen', films, 'movie'))
+    check(rows == [], 'a merchandising rail alone yields no chart')
+    check(name == '', 'and names no rail')
+
+    # An explicit Top 10 heading outranks Popular TV if HBO Max
+    # goes back to naming it outright.
+    name, _rows = mx.extract_chart(
+        rail('Popular TV', tv) + rail('Top 10 Shows', tv))
+    check(name == 'Top 10 Shows', 'an explicit Top 10 heading wins')
+
+    # Isolates are what make a naive pattern match nothing.
+    check(mx.strip_isolates('\u2066Number 1: Lanterns\u2069')
+          == 'Number 1: Lanterns', 'isolates are stripped')
+    check('\\u2066' in mx._COLLECT_JS,
+          'the in-page collector strips isolates too')
+
+    # Empty and malformed input refuse quietly rather than inventing.
+    for bad in ('', '<rail name="Popular TV"></rail>', 'not a rail at all'):
+        _n, r = mx.extract_chart(bad)
+        check(r == [], f'{bad[:28]!r} yields no chart')
+
+    check(mx.extract_chart(HBOMAX_MARKETING)[1] == [],
+          'the logged-out marketing page yields no chart')
+
+    # Film vs TV falls out of the href.
+    _n, rows = mx.extract_chart(rail('Popular TV', ['A Film'], 'movie'))
+    check(bool(rows) and rows[0]['category_display'] == 'Film',
+          'a movie href classifies as Film')
+
+
+def test_platform_narrowing_includes_api_hosts() -> None:
+    print('\n== A platform owns its API subdomain ==')
+    # The defect this pins: HBO Max authenticates with `st` on
+    # `.api.hbomax.com`, and a parent-direction cookie test drops it
+    # from a `hbomax.com` donation, so the one cookie that matters was
+    # the one cookie never donated.
+    state = {'cookies': [
+        {'name': 'st', 'domain': '.api.hbomax.com', 'path': '/'},
+        {'name': 'session', 'domain': '.hbomax.com', 'path': '/'},
+        {'name': 'RT', 'domain': '.www.hbomax.com', 'path': '/'},
+        {'name': 'other', 'domain': '.disneyplus.com', 'path': '/'},
+    ], 'origins': [
+        {'origin': 'https://play.hbomax.com', 'localStorage': []},
+        {'origin': 'https://api.hbomax.com', 'localStorage': []},
+        {'origin': 'https://www.disneyplus.com', 'localStorage': []},
+    ]}
+    kept = dss.filter_state_for_domain(state, 'hbomax.com')
+    names = {c['name'] for c in kept['cookies']}
+    check('st' in names, 'the api-host session cookie is donated')
+    check(names == {'st', 'session', 'RT'},
+          'every hbomax cookie is donated and nothing else is')
+    check('other' not in names, "another platform's cookie stays out")
+    origins = {o['origin'] for o in kept['origins']}
+    check('https://api.hbomax.com' in origins, 'the api origin is donated')
+    check('https://www.disneyplus.com' not in origins,
+          "another platform's origin stays out")
+    check('api.hbomax.com' in guard.session_hosts('hbomax.com'),
+          'api.hbomax.com is a registered host for HBO Max')
+
+    # Widening to subdomains must not start pulling in neighbours.
+    kept = dss.filter_state_for_domain(state, 'disneyplus.com')
+    check({c['name'] for c in kept['cookies']} == {'other'},
+          'narrowing still works the other way round')
+
+
 def test_registration() -> None:
     print('\n== registration ==')
     for domain in dss.DEFAULT_STORAGE_DOMAINS:
@@ -403,6 +517,8 @@ def main() -> int:
     test_unknown_is_a_refusal()
     test_geo()
     test_donation_is_narrowed()
+    test_platform_narrowing_includes_api_hosts()
+    test_hbomax_chart_rail()
     test_redaction_never_leaks()
     test_registration()
     print()

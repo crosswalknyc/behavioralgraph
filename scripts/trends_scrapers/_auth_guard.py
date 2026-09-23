@@ -93,10 +93,20 @@ _SITES: dict[str, dict[str, Any]] = {
         'label': 'HBO Max',
         'app_url': 'https://play.hbomax.com/',
         # Hosts whose cookies and origin storage belong to this
-        # session. play.* issues the token the app actually uses;
-        # auth.* is where the sign-in round trip lands.
+        # session. auth.* is where the sign-in round trip lands, and
+        # api.* is where the app calls for everything afterwards.
+        #
+        # api.hbomax.com is the one that matters and the one that was
+        # missing. Measured 2026-09-23: HBO Max is NOT an IndexedDB
+        # session at all. Its IndexedDB on play.hbomax.com holds five
+        # databases and every one is Amplitude or Braze analytics,
+        # with no auth store. The session rides on the `st` cookie
+        # scoped to `.api.hbomax.com`, which a parent-direction cookie
+        # test excludes from a `hbomax.com` donation. So the single
+        # cookie the app authenticates with was the single cookie
+        # never donated. See `_belongs_to_platform`.
         'hosts': ['hbomax.com', 'play.hbomax.com', 'auth.hbomax.com',
-                  'www.hbomax.com'],
+                  'www.hbomax.com', 'api.hbomax.com'],
         'signed_in': ['continue watching', 'keep watching', 'my list',
                       'because you watched', 'jump back in', 'top 10',
                       'trending now'],
