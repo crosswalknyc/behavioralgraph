@@ -194,53 +194,60 @@ def test_unpublished_titles_are_bracketed():
           f'({unsatisfiable} positions had crossing anchors)')
 
 
-def test_share_products_descend():
-    """The product of worldwide views and US share descends down the
-    chart, and every share stays inside the credible band.
+def test_published_scale_is_physical_and_ordered():
+    """The published figures set the chart's SCALE and today's order
+    decides the positions, with every title bounded by its own
+    worldwide count.
 
-    That product is the quantity the service ranked by, so it is the
-    thing that has to descend. Reasoning each share against its own
-    title and hoping the order followed put #5 at twice #1.
+    Two failures this guards. A pairwise product constraint across
+    two sources covering DIFFERENT periods is unsatisfiable by
+    construction, which is what the daily rail plus last week's file
+    produces. And deriving the chart's share from the values being
+    replaced is circular: a first attempt did that, clamped to the
+    top of the band, and put three titles above a 100% US share,
+    meaning more US viewers than the title had worldwide.
     """
     try:
         from . import chart_set_reasoning as CS
     except ImportError:
         from scripts.trends_scrapers import chart_set_reasoning as CS
-    rnd = random.Random(19)
-    bad_order = 0
-    bad_share = 0
+    rnd = random.Random(23)
+    bad_order = bad_share = 0
     for t in range(300):
         rows, vals = [], {}
         for i in range(10):
-            title = f's{t}-{i}'
+            title = f'p{t}-{i}'
             ww = rnd.randint(1_500_000, 14_000_000)
-            rows.append({'title': title, 'published_rank': i + 1,
-                         'weekly_views': ww})
-            # A share reasoned per title, with no regard for order.
-            vals[title] = int(ww * rnd.uniform(0.05, 0.70) * 0.15)
+            r = {'title': title, 'published_rank': i + 1,
+                 'weekly_views': ww,
+                 '_us_share': rnd.uniform(0.08, 0.62)}
+            rows.append(r)
+            # Values deliberately unrelated to the order, which is
+            # the state the call leaves them in.
+            vals[title] = rnd.randint(40_000, 3_000_000)
         ordered = [r['title'] for r in rows]
         out = dict(vals)
-        unmet = CS._enforce_anchor_descent(out, rows, ordered,
-                                           f's{t}', 0.15)
+        CS._apply_published_scale(out, rows, ordered, f'p{t}', 0.15)
         seq = [out[x] for x in ordered]
         for i in range(1, len(seq)):
-            if seq[i] >= seq[i - 1] and not unmet:
+            if seq[i] >= seq[i - 1]:
                 bad_order += 1
         for r in rows:
             share = out[r['title']] / (r['weekly_views'] * 0.15)
-            # A small tolerance: the solve clamps to the band edge.
-            if share < CS._SHARE_MIN * 0.99 or share > CS._SHARE_MAX * 1.01:
+            if share > 1.0:
                 bad_share += 1
-    assert bad_order == 0, f'{bad_order} pair(s) still out of order'
-    assert bad_share == 0, f'{bad_share} share(s) outside the band'
-    print('  products descend and every share stays credible')
+    assert bad_order == 0, f'{bad_order} pair(s) out of order'
+    assert bad_share == 0, (
+        f'{bad_share} title(s) implying more US viewers than they had '
+        f'worldwide')
+    print('  scale ordered by today, every share physically possible')
 
 
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_rather_than_forcing,
              test_no_ladder, test_last_digits_stay_natural,
              test_unpublished_titles_are_bracketed,
-             test_share_products_descend]
+             test_published_scale_is_physical_and_ordered]
     bad = 0
     for t in tests:
         print(t.__name__)

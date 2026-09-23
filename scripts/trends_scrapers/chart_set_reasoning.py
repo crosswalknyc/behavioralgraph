@@ -125,6 +125,14 @@ def _extract_json(text: str) -> Optional[dict]:
         return json.loads(t)
     except json.JSONDecodeError:
         pass
+    # A thousands separator inside a numeric literal is not valid
+    # JSON and cost the films chart three runs: the prompt's own
+    # example of a "messy" number was written 348,637, which taught
+    # the model to emit `"us_daily": 241,371`. The example is fixed,
+    # and this tolerates it regardless, because losing a whole chart
+    # to a comma is a poor trade.
+    t = re.sub(r'(:\s*-?\d{1,3})(?:,(\d{3}))+(?=\s*[,}\]])',
+               lambda mm: mm.group(0).replace(',', ''), t)
     start = t.find('{')
     if start < 0:
         return None
@@ -260,8 +268,10 @@ def _quantified_prompt(chart_label: str, platform_label: str,
         f"interval and must descend within it, spaced unevenly.\n"
         f"  - Never return a worldwide number. Every value is US, and "
         f"daily.\n"
-        f"  - Give exact integers, not round ones. 348,637 not "
-        f"350,000.\n\n"
+        f"  - Give exact integers, not round ones: 348637 rather "
+        f"than 350000. Write every number as PLAIN DIGITS with no "
+        f"thousands separators, because a comma inside a number is "
+        f"not valid JSON and the whole answer is lost.\n\n"
         f"PLATFORM CONTEXT:\n{anchors}\n\n"
         f"Return ONLY JSON:\n"
         f'{{\n'
@@ -316,7 +326,9 @@ def _envelope_prompt(chart_label: str, platform_label: str,
         f"other on the chart.\n"
         f"  - No value above {ceiling:,} on any single day. That is this service's published daily cap for its top slot and it is a hard limit, not a target.\n"
         f"  - Every value is US, and daily, not weekly.\n"
-        f"  - Give exact integers, not round ones.\n\n"
+        f"  - Give exact integers, not round ones, written as PLAIN "
+        f"DIGITS with no thousands separators: a comma inside a "
+        f"number is not valid JSON and the whole answer is lost.\n\n"
         f"PLATFORM AUDIENCE AND BANDS:\n{anchors}\n\n"
         f"Return ONLY JSON:\n"
         f'{{\n'
@@ -355,33 +367,40 @@ def _call(client, prompt: str) -> Optional[dict]:
     return _extract_json(text)
 
 
-def _enforce_anchor_descent(values: dict, rows: list[dict],
-                            ordered: list[str], slug: str,
-                            df: float) -> list:
-    """Make the PRODUCT of worldwide views and US share descend down
-    the chart, because that product is the quantity the service
-    ranked by.
+def _apply_published_scale(values: dict, rows: list[dict],
+                           ordered: list[str], slug: str,
+                           df: float) -> list:
+    """Let the published figures set the chart's SCALE, and today's
+    order decide the positions.
 
-    The shares are not free parameters. Netflix's chart is ordered by
-    US viewing and the published figure is worldwide, so for every
-    adjacent pair:
+    The pairwise form of this asked, for every adjacent pair, that
+    worldwide(n) x share(n) exceed worldwide(n+1) x share(n+1). That
+    is the right constraint when both inputs describe the same week,
+    and ours deliberately do not: since this morning the ORDER comes
+    from Netflix's live daily US rail and the FIGURES come from last
+    week's published worldwide file. A title that is hot today but
+    was modest last week can then only satisfy the pair with an
+    implausible share, and the call said so unprompted: putting Why
+    Did I Get Married Again below its neighbours needed a US share
+    under 0.046, indefensible for a Tyler Perry film, and it named
+    the period mismatch as the likely cause. It was right.
 
-        worldwide(n) x share(n)  >  worldwide(n+1) x share(n+1)
+    So the two sources each do what they are actually good for, which
+    has been the principle throughout. The published figures are the
+    best evidence anywhere for how big this chart is in absolute
+    terms, and poor evidence for today's relative ordering, which is
+    exactly what the daily rail is for.
 
-    Reasoning each share against its own title and hoping the order
-    falls out put #5 at twice #1. The constraint is also informative
-    rather than merely restrictive, which is the part worth leaning
-    on: a title sitting high on modest worldwide views MUST have a
-    high US share, and the chart is telling us so. That is how we
-    know WWE Raw skews US-heavy and a UK thriller does not.
+    The chart's total daily US audience comes from the published
+    worldwide total times the chart-level US share the call reasoned.
+    That total is then distributed across today's positions by a
+    decay drawn per chart, so the ordering is today's and the
+    magnitude is the published data's, and descent holds by
+    construction rather than by correction.
 
-    A share stays a real quantity, so each value is boxed by what the
-    share band allows for its own worldwide figure. Where the order
-    cannot be satisfied inside that box the pair is REPORTED rather
-    than forced, because an order bought with an incredible share is
-    not worth having.
-
-    Returns the pairs it could not reconcile.
+    A per-title implied share that lands outside the credible band is
+    REPORTED, not corrected. It is a real signal about the gap
+    between the two periods and worth seeing rather than smoothing.
     """
     _h01, _nat, _cp = _lazy()
     anchors = [(i, r) for i, r in enumerate(rows)
@@ -389,53 +408,74 @@ def _enforce_anchor_descent(values: dict, rows: list[dict],
     if len(anchors) < 2:
         return []
 
-    lo_box, hi_box, cur = [], [], []
+    total_ww = sum(float(r['weekly_views']) for _i, r in anchors)
+    if total_ww <= 0:
+        return []
+
+    # The chart-level share comes from the SHARES the call reasoned,
+    # weighted by each title's worldwide figure, not from the values
+    # it produced. Deriving it from the values is circular when those
+    # values are the thing being replaced: a first attempt did that
+    # and, fed the same bad numbers, clamped to the top of the band
+    # and put three titles above a 100% US share, which is more US
+    # viewers than the title had worldwide.
+    num = den = 0.0
     for _i, r in anchors:
+        sh = r.get('_us_share')
         ww = float(r['weekly_views'])
-        lo_box.append(ww * _SHARE_MIN * df)
-        hi_box.append(ww * _SHARE_MAX * df)
-        cur.append(float(values[r['title']]))
+        if isinstance(sh, (int, float)) and _SHARE_MIN <= sh <= _SHARE_MAX:
+            num += sh * ww
+            den += ww
+    chart_share = (num / den) if den else 0.38
+    chart_share = min(_SHARE_MAX, max(_SHARE_MIN, chart_share))
+    scale = total_ww * chart_share * df
 
-    steps = [_SEP_MIN + _h01(f'{slug}|{r["title"]}|prodsep')
-             * (_SEP_MAX - _SEP_MIN) for _i, r in anchors]
+    # Weights strictly decreasing down today's order, with the step
+    # drawn per title so the chart does not descend in even
+    # increments. Real charts drop hard near the top and flatten out.
+    weights, w = [], 1.0
+    for _i, r in anchors:
+        weights.append(w)
+        w *= 0.62 + _h01(f'{slug}|{r["title"]}|scaledecay') * 0.26
+    wsum = sum(weights) or 1.0
 
-    # Greedy down the chart: each value as close to what the call
-    # reasoned as its own box and the value above it allow. A second
-    # pass takes the highest the box permits at every step, which is
-    # the most room the band can possibly leave, before declaring a
-    # pair unreconcilable.
-    best, unmet = None, None
-    for greedy_high in (False, True):
-        out, bad, ceiling_v = [], [], None
-        for k in range(len(anchors)):
-            cap = hi_box[k] if ceiling_v is None else min(
-                hi_box[k], ceiling_v * (1.0 - steps[k]))
-            if cap < lo_box[k]:
-                # The order needs a share below what is credible for
-                # this title's worldwide figure.
-                bad.append((anchors[k - 1][1]['title'],
-                            anchors[k][1]['title'],
-                            cap / (float(anchors[k][1]['weekly_views'])
-                                   * df)))
-                cap = lo_box[k]
-            v = cap if greedy_high else min(cap, max(lo_box[k], cur[k]))
-            out.append(v)
-            ceiling_v = v
-        if best is None or len(bad) < len(unmet or []):
-            best, unmet = out, bad
-        if not bad:
-            break
-
-    for (idx, r), v in zip(anchors, best):
+    # The distribution says where each title sits; its own worldwide
+    # figure says what it could possibly be. A title cannot draw a
+    # larger US audience than its whole worldwide count, so each
+    # value is boxed by the share band applied to its OWN figure and
+    # the sequence is walked down inside those boxes. Where a box
+    # binds, the order is honoured and the deviation reported: that
+    # is the gap between today's rail and last week's file, and it
+    # is worth seeing rather than smoothing away.
+    unmet = []
+    ceiling_v = None
+    for (_i, r), wt in zip(anchors, weights):
+        ww = float(r['weekly_views'])
+        lo = ww * _SHARE_MIN * df
+        hi = ww * _SHARE_MAX * df
+        want = max(1.0, scale * wt / wsum)
+        cap = hi if ceiling_v is None else min(
+            hi, ceiling_v * (1.0 - (_SEP_MIN + _h01(
+                f'{slug}|{r["title"]}|scalesep') * (_SEP_MAX - _SEP_MIN))))
+        v = min(max(want, lo), max(cap, 1.0))
+        if ceiling_v is not None and v >= ceiling_v:
+            v = ceiling_v * 0.97
         values[r['title']] = max(1, int(round(v)))
+        ceiling_v = v
+        implied = v / (ww * df) if df else 0.0
+        if implied < _SHARE_MIN * 0.99 or implied > _SHARE_MAX * 1.01:
+            unmet.append((r['title'], implied))
+
     if unmet:
-        for above, below, need in unmet:
-            logger.warning(
-                "chart_set %s: putting %r below %r needs a US share of "
-                "%.0f%% for it, which is outside the credible band; "
-                "the pair is left as reasoned",
-                slug, below, above, need * 100)
-    return unmet or []
+        for title, implied in unmet:
+            logger.info(
+                "chart_set %s: %r sits where today's rail puts it, "
+                "which implies a US share of %.0f%% against last "
+                "week's worldwide figure. The two cover different "
+                "periods, so this is the gap between them rather "
+                "than a fault in either.",
+                slug, title, implied * 100)
+    return unmet
 
 
 def _bracket_unpublished(values: dict, rows: list[dict],
@@ -673,6 +713,13 @@ def reason_chart(client, *, slug: str, platform_label: str,
                     else:
                         fb = min(_SHARE_MAX, max(_SHARE_MIN, 0.38))
                         v = int(round(ww * fb * df))
+            if quantified:
+                try:
+                    sh = float(t.get('us_share') or 0)
+                except (TypeError, ValueError):
+                    sh = 0.0
+                if sh > 0:
+                    src['_us_share'] = sh
             if v <= 0:
                 continue
             if ceiling:
@@ -684,7 +731,7 @@ def reason_chart(client, *, slug: str, platform_label: str,
             # first. Bracketing an unpublished title between two
             # anchors only means something once those anchors are
             # themselves in order.
-            _enforce_anchor_descent(values, rows, ordered, slug, df)
+            _apply_published_scale(values, rows, ordered, slug, df)
         return _bracket_unpublished(values, rows, ordered, slug,
                                     quantified, ceiling)
 
