@@ -127,6 +127,83 @@ def _classify_row(heading: str) -> str:
     return 'mixed'
 
 
+# Netflix's browse page ships its rails as an Apollo cache rather
+# than as markup with readable tiles. A rail is a
+# `PinotCarouselSection` whose `displayString` names it, and whose
+# `entities.edges` reference ranked entries in chart order:
+#
+#   "displayString":"Top 10 TV Shows in the U.S. Today"
+#   "entities":{"totalCount":10,...,"edges":[
+#       {"node":{"__ref":"PinotRankedBoxshotEntityTreatment:
+#                          rankedBoxshot_Video:82068293_<section>"},
+#        "cursor":"MA=="}, ...
+#
+# and each of those refs resolves, elsewhere in the same cache, to an
+# entry carrying the title:
+#
+#   "...rankedBoxshot_Video:82068293_<section>":{...,
+#       "displayString":"Monster: The Lizzie Borden Story",...}
+#
+# The cursors are base64 ordinals ("MA==" is "0"), but the edges
+# already arrive in order, so position in the list is the rank.
+_PINOT_SECTION_RE = re.compile(
+    r'"displayString"\s*:\s*"(Top 10 [^"]{0,40}in the U\.S\. Today)"'
+    r'(.{0,40000}?)"edges"\s*:\s*\[(.*?)\]', re.S)
+_PINOT_REF_RE = re.compile(
+    r'"__ref"\s*:\s*"(PinotRankedBoxshotEntityTreatment:'
+    r'rankedBoxshot_Video:(\d+)_[0-9a-f-]+)"')
+
+
+def _pinot_titles(html: str) -> dict[str, str]:
+    """Every ranked-entry ref in the cache, mapped to its title."""
+    out: dict[str, str] = {}
+    for m in re.finditer(
+            r'"(PinotRankedBoxshotEntityTreatment:rankedBoxshot_Video:'
+            r'\d+_[0-9a-f-]+)"\s*:\s*\{(.{0,1200}?)"displayString"'
+            r'\s*:\s*"([^"]{1,200})"', html, re.S):
+        out.setdefault(m.group(1), unescape(m.group(3)).strip())
+    return out
+
+
+def _extract_pinot_daily(html: str) -> tuple[list[dict], list[dict]]:
+    """(tv, films) off the live 'Top 10 ... in the U.S. Today' rails.
+
+    These are what Netflix is showing US members RIGHT NOW, which is
+    a different thing from the weekly file: the file covers the week
+    that ended the previous Sunday and is published on the Tuesday
+    after, so it trails the day by three to nine days. The daily rail
+    is the honest order for a day view.
+    """
+    titles = _pinot_titles(html)
+    tv: list[dict] = []
+    films: list[dict] = []
+    for m in _PINOT_SECTION_RE.finditer(html):
+        label = m.group(1)
+        edges = m.group(3)
+        bucket = films if 'Movie' in label else tv
+        if bucket:
+            continue
+        seen: set = set()
+        for rank, r in enumerate(_PINOT_REF_RE.finditer(edges), start=1):
+            ref, vid = r.group(1), r.group(2)
+            title = titles.get(ref)
+            if not title or title.lower() in seen:
+                continue
+            seen.add(title.lower())
+            bucket.append({
+                'rank':   rank,
+                'title':  title,
+                'url':    f'https://www.netflix.com/title/{vid}',
+                'week':   '',
+                'source': 'daily_rail',
+                'netflix_video_id': vid,
+            })
+            if len(bucket) >= 10:
+                break
+        logger.info("netflix: %s parsed %d rows", label, len(bucket))
+    return tv, films
+
+
 def _extract_top10_rows(html: str) -> tuple[list[dict], list[dict]]:
     """Given the rendered HTML of a logged-in browse page, extract
     (top_10_tv, top_10_films). Falls back to a single mixed list if
@@ -182,125 +259,48 @@ def _extract_top10_rows(html: str) -> tuple[list[dict], list[dict]]:
 
 
 def _run_netflix_playwright() -> Optional[str]:
-    """Launch Chrome, inject cookies, click through the profile picker
-    if shown, and return the final rendered HTML of the browse page.
-    Returns None on any failure.
+    """Render the signed-in browse page and return its HTML.
+
+    This used to launch its own browser and inject donated cookies
+    directly. It stopped reaching a session: the cookie loader drops
+    a jar past its freshness window and returns nothing, so the
+    bespoke runner rendered anonymously and the daily rails were
+    never there, which is why the rail quietly fell back to the
+    weekly file for weeks while reporting itself healthy.
+
+    Session handling now lives in the shared renderer, which carries
+    a full signed-in session rather than cookies alone, so this goes
+    through it instead of keeping a second implementation in step.
+    Everything the old runner did by hand (warm the homepage, wait
+    for tiles, scroll the lazy rows in) the shared helper already
+    does, and it does it the same way for every other service.
+
+    Returns None on any failure; the caller falls back to the weekly
+    file.
     """
     try:
-        from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
-        from ._base import load_donated_cookies_playwright
+        from ._playwright import render_pages
     except Exception as e:
-        logger.info("netflix: playwright helper import failed: %s", e)
+        logger.info("netflix: renderer import failed: %s", e)
         return None
-
-    sp = _lazy_playwright()
-    if sp is None:
+    try:
+        rendered = render_pages(
+            [('Browse', 'https://www.netflix.com/browse')],
+            homepage='https://www.netflix.com/',
+            cookie_domain='netflix.com',
+            # A ranked tile is the highest-priority lazy content on
+            # the page, so waiting on a title link is enough.
+            wait_selectors=['a[href*="/title/"]', 'a[href*="/watch/"]',
+                            '.title-card'],
+            wait_ms=6000, scroll_ms=12000, hydration_wait_ms=12000)
+    except Exception as e:
+        logger.warning("netflix: browse render failed: %s", e)
         return None
-
-    donated = load_donated_cookies_playwright('netflix.com')
-    if not donated:
-        logger.info("netflix: no netflix.com cookies in S3")
-        return None
-
-    html: Optional[str] = None
-    with sp() as pw:
-        try:
-            browser, _channel = _launch_browser(pw, prefer_chrome=True,
-                                                  proxy=None)
-        except Exception as e:
-            logger.warning("netflix: playwright launch failed: %s", e)
-            return None
-
-        ctx = browser.new_context(
-            user_agent=UA,
-            viewport={'width': 1440, 'height': 900},
-            locale='en-US',
-            timezone_id='America/New_York',
-            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
-        )
-        try:
-            ctx.add_cookies(donated)
-            logger.info("netflix: injected %d cookies", len(donated))
-        except Exception as e:
-            logger.info("netflix: cookie injection failed: %s", e)
-
-        page = ctx.new_page()
-        _try_stealth(page)
-
-        try:
-            # Homepage warm-up so the session cookies attach cleanly.
-            page.goto('https://www.netflix.com/', wait_until='domcontentloaded',
-                       timeout=45000)
-            page.wait_for_timeout(2000)
-
-            page.goto('https://www.netflix.com/browse',
-                       wait_until='domcontentloaded', timeout=45000)
-
-            # Wait for EITHER the profile picker OR the browse tiles
-            # to appear. Which one appears first tells us where we are.
-            picker_sel = '[data-uia="action-select-profile+primary"], ' \
-                         '.profile-link, [data-uia^="action-select-profile"]'
-            browse_sel = 'a[href^="/title/"], [data-uia^="title-card"], ' \
-                         '.title-card-container'
-
-            profile_link = None
-            try:
-                # Wait up to 8s for the picker to attach - if not seen we
-                # probably landed directly on browse.
-                page.wait_for_selector(f'{picker_sel}, {browse_sel}',
-                                        timeout=8000, state='attached')
-            except Exception:
-                pass
-
-            profile_link = page.query_selector(picker_sel)
-            if profile_link:
-                logger.info("netflix: profile picker detected, clicking primary profile")
-                profile_link.click()
-                # Netflix loads browse client-side after profile click;
-                # wait for a ranked-card tile to appear (the Top-10
-                # rows are the highest-priority lazy-loaded content).
-                try:
-                    page.wait_for_selector(
-                        'a[data-uia="ranked-card"], a[href^="/title/"], '
-                        '[data-uia^="title-card"]',
-                        timeout=25000, state='attached')
-                except Exception:
-                    logger.info("netflix: no tile after profile click "
-                                 "within 25s; snapshotting anyway")
-
-            # Force lazy rows to render by scrolling several times
-            # with pauses. Netflix loads rows in batches as they enter
-            # viewport, so a single wheel event only gets ~1 row past
-            # the fold. Six scrolls at 800px each covers ~5000px of
-            # content, which comfortably includes both Top-10 rows.
-            page.wait_for_timeout(3000)
-            for i in range(6):
-                page.mouse.wheel(0, 800)
-                page.wait_for_timeout(1200)
-            # Scroll back to top so the render captures the earlier
-            # rows (which may have unmounted if the virtualizer is
-            # aggressive). Then one final small scroll to let the
-            # bottom row re-hydrate.
-            page.mouse.wheel(0, -6000)
-            page.wait_for_timeout(1500)
-            page.mouse.wheel(0, 3000)
-            page.wait_for_timeout(2000)
-            html = page.content()
-            logger.info("netflix: rendered %d-byte body on final page",
-                         len(html or ''))
-        except Exception as e:
-            logger.warning("netflix: navigation failed: %s", e)
-
-        try:
-            ctx.close()
-        except Exception:
-            pass
-        try:
-            browser.close()
-        except Exception:
-            pass
-
-    return html
+    for _label, html in rendered or []:
+        if html and len(html) > 50_000:
+            return html
+    logger.info("netflix: browse render came back too small to parse")
+    return None
 
 
 def _load_previous_daily() -> dict:
@@ -318,7 +318,7 @@ def _load_previous_daily() -> dict:
         d = json.loads(o['Body'].read().decode('utf-8'))
         if not isinstance(d, dict):
             return {}
-        return d if d.get('source_path') == 'authenticated_daily' else {}
+        return d if d.get('source_path') == ('authenticated_daily', 'daily_rail+weekly_figures') else {}
     except Exception as e:
         logger.info("netflix: could not read previous snapshot: %s", e)
         return {}
@@ -353,7 +353,11 @@ def _fetch_authenticated_daily() -> Optional[dict]:
         logger.info("netflix: playwright returned nothing; using weekly TSV")
         return None
 
-    tv_items, film_items = _extract_top10_rows(html)
+    tv_items, film_items = _extract_pinot_daily(html)
+    if not tv_items and not film_items:
+        # Netflix has cycled its markup before; the older tile parse
+        # stays as a second chance rather than being deleted.
+        tv_items, film_items = _extract_top10_rows(html)
 
     if not tv_items and not film_items:
         if 'Top 10' not in html:
@@ -398,6 +402,70 @@ def _fetch_authenticated_daily() -> Optional[dict]:
                 "netflix: %s rail parsed 0 rows; carrying %d rows forward "
                 "from the previous capture", label, len(carried))
 
+    # Their chart owns the ORDER, their published data owns the SIZE.
+    #
+    # The daily rail is current and is what a day view implies, but it
+    # carries no figures. The weekly file is three to nine days behind
+    # depending when you look, but it holds the only real audience
+    # numbers Netflix publishes anywhere. So the order comes from the
+    # rail above and the figures are attached here from the file,
+    # matched on title.
+    #
+    # The two do not line up perfectly and should not be forced to. A
+    # title on today's rail but absent from last week's file is new or
+    # climbing, and is reasoned into the set downstream the same way
+    # any unpublished title is. A title in the file but off today's
+    # rail simply is not on the day's chart and does not appear.
+    #
+    # The figures stay labelled as what they are: a WEEKLY worldwide
+    # count for the chart week, carried alongside a DAILY US position.
+    # Converting one into the other is the estimator's job and the
+    # prompt states both conversions, because treating a weekly
+    # worldwide view count as a daily US number is exactly how a
+    # plausible figure ends up an order of magnitude too big.
+    try:
+        weekly = _fetch_weekly_tsv()
+    except Exception:
+        weekly = {}
+    # The two sources spell a series differently. The weekly file
+    # qualifies it ("Monster: The Lizzie Borden Story: Season 1")
+    # because it ranks seasons; the daily rail names the show. Joining
+    # on the exact string matched 7 of 20 rows and left most of the TV
+    # chart without the figures it should have had.
+    def _join_key(t: str) -> str:
+        t = (t or '').strip().lower()
+        t = re.sub(r'\s*:\s*(?:season|series|part|volume|book|'
+                   r'limited series|chapter)\b.*$', '', t)
+        t = re.sub(r'[^a-z0-9]+', ' ', t)
+        return ' '.join(t.split())
+
+    figs: dict[str, dict] = {}
+    for _k in ('us_films', 'us_tv', 'global_films_en', 'global_tv_en',
+                'global_films_nonen', 'global_tv_nonen'):
+        for _r in (weekly.get(_k) or []):
+            if not _r.get('weekly_views'):
+                continue
+            _t = _join_key(_r.get('title'))
+            if _t:
+                figs.setdefault(_t, _r)
+    _week = weekly.get('week_us') or weekly.get('week_global') or ''
+    _matched = 0
+    for _r in film_items + tv_items:
+        _g = figs.get(_join_key(_r.get('title')))
+        if not _g:
+            continue
+        for _f in ('weekly_views', 'weekly_hours_viewed', 'runtime_hours',
+                    'weeks_in_top10'):
+            if _g.get(_f):
+                _r[_f] = _g[_f]
+        _r['weekly_figures_week'] = _week
+        _r['weekly_figures_scope'] = 'worldwide'
+        _matched += 1
+    logger.info("netflix: daily rail of %d rows, %d carrying published "
+                 "weekly figures from the week ending %s",
+                 len(film_items) + len(tv_items), _matched,
+                 _week or 'unknown')
+
     # Interleave films + TV for the `national` display list (rank 1 film,
     # rank 1 tv, rank 2 film, rank 2 tv, ...) - same shape as the weekly
     # TSV fallback so the dashboard can render either transparently.
@@ -419,7 +487,10 @@ def _fetch_authenticated_daily() -> Optional[dict]:
         # weekly aggregate.
         'week_us':      today_iso,
         'week_global':  today_iso,
-        'source_path':  'authenticated_daily',
+        'source_path':  'daily_rail+weekly_figures',
+        # What the attached figures cover, kept distinct from the day
+        # the rail was read so nothing downstream has to guess.
+        'figures_week': _week,
     }
 
 
