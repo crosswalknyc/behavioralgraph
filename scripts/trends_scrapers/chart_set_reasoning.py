@@ -630,6 +630,109 @@ def _bracket_unpublished(values: dict, rows: list[dict],
     return values
 
 
+_TAIL_CHUNK = 40
+
+
+def reason_catalog_tail(client, *, slug: str, platform_label: str,
+                        titles: list[str], ceiling_value: int,
+                        target_date_iso: str, anchors: str = '',
+                        floor_hint: int = 0) -> dict:
+    """Size the catalog BELOW a published chart, as a set.
+
+    The chart is only the top of a rail. Everything under it is
+    catalog, and on Lionsgate+ that catalog was still carrying
+    readings derived from where each title happened to sit on a
+    storefront page: 84 of 99 titles read above the chart's own last
+    position, topping out at 21,004 a day on a service whose entire
+    audience is around 38,600 a day. A title the service does not
+    chart cannot out-draw the one it ranks last, so those are not
+    levels, they are the old page-position regime still in place.
+
+    Reasoned against the platform's real audience with the chart's
+    floor as a hard ceiling, in chunks so a long catalog does not
+    have to fit one response, each chunk starting below the previous
+    one's floor. Titles the call skips keep what they had, so a
+    partial answer never empties a rail.
+    """
+    out: dict[str, int] = {}
+    if not titles or ceiling_value <= 1:
+        return out
+    ceiling = float(ceiling_value)
+    # A floor as well as a ceiling. Carrying each chunk's minimum
+    # forward as the next chunk's ceiling compounds: on a 99-title
+    # catalog the third chunk inherited a ceiling of 29 and the
+    # deepest titles landed near 2 viewers a day, which is not a
+    # reading of anything. A service's deepest catalog sits roughly
+    # an order of magnitude below its chart floor, not three, so the
+    # running ceiling is not allowed under that.
+    floor = max(float(floor_hint or 0), ceiling / 12.0, 1.0)
+    for start in range(0, len(titles), _TAIL_CHUNK):
+        chunk = titles[start:start + _TAIL_CHUNK]
+        listing = '\n'.join(f'  {i + 1}. {t}'
+                             for i, t in enumerate(chunk))
+        prompt = (
+            f"Size the daily US audience for {len(chunk)} titles in "
+            f"{platform_label}'s CATALOG for {target_date_iso}. These "
+            f"sit BELOW the service's own published chart, so none of "
+            f"them is among its most watched.\n\n"
+            f"HARD CEILING: {int(ceiling):,} daily US viewers. That is "
+            f"what the title at the BOTTOM of {platform_label}'s "
+            f"published chart draws. A title the service did not "
+            f"chart cannot out-draw the one it ranks last, or the "
+            f"service would have charted it. Every number you return "
+            f"must be below it, and most should be well below.\n\n"
+            f"TITLES (this order is the page's, not a ranking, and "
+            f"carries no popularity signal):\n{listing}\n\n"
+            f"Differentiate on what each title IS. A marquee "
+            f"franchise entry, a recognisable catalog film, an older "
+            f"TV season and a long-tail title do not draw alike, and "
+            f"the spread across a catalog should be WIDE rather than "
+            f"clustered. Write every number as PLAIN DIGITS with no "
+            f"thousands separators, exact rather than round.\n\n"
+            f"PLATFORM AUDIENCE:\n{anchors or '(none supplied)'}\n\n"
+            f'Return ONLY JSON: {{"titles": [{{"title": "<exactly as '
+            f'given>", "us_daily": <int>, "basis": "<max 10 words>"}}]}}')
+        parsed = _call(client, prompt)
+        if not isinstance(parsed, dict):
+            logger.info("chart_set %s: catalog chunk %d unreadable, "
+                         "those titles keep what they had",
+                         slug, start // _TAIL_CHUNK + 1)
+            continue
+        _h01, natural_digits, cp_norm = _lazy()
+        by_norm = {cp_norm(t): t for t in chunk}
+        got = []
+        for row in (parsed.get('titles') or []):
+            if not isinstance(row, dict):
+                continue
+            t = by_norm.get(cp_norm(str(row.get('title') or '')))
+            if not t:
+                continue
+            try:
+                v = int(float(row.get('us_daily') or 0))
+            except (TypeError, ValueError):
+                continue
+            if v <= 0:
+                continue
+            # The ceiling is not advisory.
+            if v >= ceiling:
+                v = int(ceiling * (0.80 - _h01(f'{slug}|{t}|tailcap')
+                                   * 0.25))
+            if v < floor:
+                v = int(round(floor * (1.0 + _h01(f'{slug}|{t}|tailfloor')
+                                       * 0.35)))
+            got.append((t, max(1, v)))
+        for t, v in got:
+            out[t] = max(1, natural_digits(
+                int(v), t, f'{slug}|catalog|{target_date_iso}'))
+        if got:
+            ceiling = max(min(v for _t, v in got), floor * 1.25)
+        logger.info("chart_set %s: catalog chunk %d sized %d of %d "
+                     "title(s), next ceiling %d", slug,
+                     start // _TAIL_CHUNK + 1, len(got), len(chunk),
+                     int(ceiling))
+    return out
+
+
 def reason_chart(client, *, slug: str, platform_label: str,
                  chart_label: str, rows: list[dict],
                  target_date_iso: str, ceiling: int,

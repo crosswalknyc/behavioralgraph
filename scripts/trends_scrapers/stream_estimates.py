@@ -6620,6 +6620,108 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             if res.get('notes'):
                 logger.info("chart sets: %s / %s notes: %s", slug,
                              pretty, res['notes'][:220])
+
+            # The chart is only the top of the rail. Everything under
+            # it is catalog, and on a rail whose catalog still
+            # carries page-position-era readings those sit ABOVE the
+            # chart's own floor, which cannot be true: a title the
+            # service did not chart cannot out-draw the one it ranks
+            # last. Size the catalog against the platform's audience
+            # with that floor as the ceiling, rather than crushing it
+            # to fit, which would buy the ordering at the price of
+            # the levels meaning anything.
+            try:
+                chart_floor = min(
+                    (researched[r['_item_key']]['by_platform'][slug]
+                     ['us_estimate'])
+                    for r in rows
+                    if isinstance(researched.get(r['_item_key']), dict)
+                    and isinstance((researched[r['_item_key']]
+                                    .get('by_platform') or {}).get(slug),
+                                   dict)
+                    and (researched[r['_item_key']]['by_platform'][slug]
+                         .get('us_estimate')))
+            except (ValueError, KeyError, TypeError):
+                chart_floor = 0
+            if chart_floor > 1:
+                tail = _rail_tail_rows(researched, slug, snap,
+                                        depth_sources, index)
+                over = [t for t in tail
+                        if (t['_blk'].get('us_estimate') or 0)
+                        >= chart_floor]
+                if over:
+                    logger.info(
+                        "chart sets: %s catalog has %d of %d title(s) "
+                        "reading at or above its own chart floor of "
+                        "%d; sizing the catalog as a set", slug,
+                        len(over), len(tail), chart_floor)
+                    try:
+                        sized = _csr.reason_catalog_tail(
+                            client, slug=slug,
+                            platform_label=label,
+                            titles=[t['title'] for t in tail],
+                            ceiling_value=int(chart_floor),
+                            target_date_iso=target_date_iso,
+                            anchors=anchors)
+                    except Exception:
+                        logger.exception(
+                            "chart sets: %s catalog sizing failed "
+                            "(non-fatal)", slug)
+                        sized = {}
+                    moved = 0
+                    for t in tail:
+                        v = sized.get(t['title'])
+                        if isinstance(v, int) and v > 0 and \
+                                _set_platform_reading(
+                                    t['_item'], slug, v, t['_key'],
+                                    f'{target_date_iso}|catalog|{slug}'):
+                            moved += 1
+                    out['titles'] += moved
+                    logger.info(
+                        "chart sets: %s catalog re-levelled %d title(s)",
+                        slug, moved)
+    return out
+
+
+def _rail_tail_rows(researched: dict, slug: str, snap: dict,
+                     depth_sources: dict, index: dict) -> list[dict]:
+    """The rail's rows BELOW the published chart, in render order.
+
+    Same population the coherence pass scopes to: the service's own
+    snapshot plus the depth extension, minus anything the service
+    charts."""
+    out, seen = [], set()
+
+    def _push(title: str, kind: str) -> None:
+        norm = _cp_normalize(title or '')
+        if not norm or (kind, norm) in seen:
+            return
+        seen.add((kind, norm))
+        if published_rank_for(index, kind, title):
+            return
+        key = f'{kind}:{norm}'
+        it = researched.get(key) or researched.get(f'title:{norm}')
+        if not isinstance(it, dict):
+            return
+        blk = (it.get('by_platform') or {}).get(slug)
+        if not isinstance(blk, dict) or not blk.get('us_estimate'):
+            return
+        out.append({'title': title, '_item': it, '_blk': blk,
+                    '_key': key})
+
+    if slug == 'netflix':
+        for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
+            for r in (snap.get(lk) or []):
+                _push(str(r.get('title') or ''), kind)
+    for r in (snap.get('national') or []):
+        cat = str(r.get('category_display') or '').strip().lower()
+        _push(str(r.get('title') or ''),
+              'film' if cat.startswith(('film', 'movie')) else 'tv')
+    dblk = depth_sources.get(slug) or {}
+    for lk, kind in (('films', 'film'), ('tv', 'tv')):
+        for r in (dblk.get(lk) or []):
+            _push(str(r.get('title') or ''), kind)
+    out.sort(key=lambda t: -(t['_blk'].get('us_estimate') or 0))
     return out
 
 
