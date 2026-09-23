@@ -42632,7 +42632,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             if (typeof av === 'string') return av.localeCompare(bv) * sign;
                             return (av - bv) * sign;
                         });
-                        var top = indexed.slice(0, 10);
+                        // Every asset lists (Jenna 2026-09-23); no top-N cut.
+                        var top = indexed;
+                        window._iiqQ2AssetRowCount = indexed.length;
                         var maxBar = Math.max.apply(null, rowsAll.map(function(b){ return _barVal(b); }).concat([0.001]));
                         var barColLabel = { views: 'Views', eng: 'Eng', info: 'Info-seek %', ticket: 'Ticketing %' }[barMetric] || 'Views';
                         var barColColor = { views: null, eng: null, info: '#a5b4fc', ticket: '#fbbf24' }[barMetric] || null;
@@ -42671,7 +42673,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var proj  = iiqAssetFunnelProjection(src);
                             var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
                             return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
-                                +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
+                                +   '<div style="font-size:0.78rem; color:#e2e8f0; line-height:1.3; overflow-wrap:anywhere;">' + escapeHtml(label) + '</div>'
                                 +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + barColor + ';"></div></div>'
                                 +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
@@ -42698,15 +42700,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                     };
 
+                    var q2AssetTableHtml = window._iiqRenderQ2AssetTable();
                     html += '<div class="iiq-card" style="padding:0.85rem;">';
                     html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; margin-bottom:0.45rem;">';
                     html +=     '<div style="display:flex; align-items:baseline; gap:0.5rem;">';
-                    html +=       '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets</div>';
+                    html +=       '<div style="font-size:0.78rem; color: var(--text-secondary);">All in-flight assets' + (window._iiqQ2AssetRowCount ? ' (' + window._iiqQ2AssetRowCount + ')' : '') + '</div>';
                     html +=       asOfChip;
                     html +=     '</div>';
                     html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">views / eng reflect post-decay accumulation as of this date \u00b7 click any row for the full daily curve</div>';
                     html +=   '</div>';
-                    html +=   '<div id="iiqQ2AssetTable">' + window._iiqRenderQ2AssetTable() + '</div>';
+                    html +=   '<div id="iiqQ2AssetTable">' + q2AssetTableHtml + '</div>';
                     html += '</div>';
                 }
                 return html;
