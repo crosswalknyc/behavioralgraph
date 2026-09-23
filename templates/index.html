@@ -38553,7 +38553,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                           + '</div>' : '')
                         + '<div style="margin-top:0.65rem; padding-top:0.55rem; border-top:1px solid rgba(255,255,255,0.07); display:grid; grid-template-columns: repeat(3, 1fr); gap:0.35rem;">'
                             + '<div title="' + escapeHtml(reachTip) + '">'
-                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + exp.reach_pct.toFixed(0) + '%</div>'
+                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + (exp.reach_pct < 10 ? exp.reach_pct.toFixed(1) : exp.reach_pct.toFixed(0)) + '%</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">saw any content</div>'
                             + '</div>'
                             + '<div title="' + escapeHtml(uniqueTip) + '">'
