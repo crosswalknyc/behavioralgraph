@@ -241,10 +241,76 @@ def lookup_from_frame(df, name, genpop=None):
             'brands': brands, 'demos': demos}
 
 
+def _merge_sibling_cuts(lookup, s3_client, bucket, s3_key, name=''):
+    """Sibling derived-cut files ('<Subject> - Millennials.csv', ...)
+    contribute their measured share-of-parent as demo-style entries so
+    a generation/cohort claim verifies against the CUT FILE's own
+    numbers (2026-09-23 Bria defect: a Millennials figure was derived
+    as the parent-minus-other-cuts residual, 687,413 against the cut
+    file's measured 662,142, and nothing caught it because the cuts
+    were not in the lookup). Fail-open: any miss just skips."""
+    if not isinstance(lookup, dict):
+        return lookup
+    try:
+        import prometheus_analysis as pma
+        display = str(name or '').strip()
+        if not display:
+            stem = s3_key.rsplit('/', 1)[-1]
+            display = re.sub(r'_\d{2}_\d{2}_\d{4}.*$', '',
+                             stem).replace('_', ' ').strip()
+        if not display:
+            return lookup
+        parent_proj = None
+        r = s3_client.list_objects_v2(Bucket=bucket,
+                                      Prefix=f'{display} - ')
+        sibs = [o['Key'] for o in (r.get('Contents') or [])
+                if o['Key'].lower().endswith('.csv')]
+        if not sibs:
+            return lookup
+        import csv as _csv
+        import io as _io
+        for sk in sibs[:8]:
+            try:
+                body = s3_client.get_object(
+                    Bucket=bucket, Key=sk)['Body'].read()
+                rows = list(_csv.DictReader(
+                    _io.StringIO(body.decode('utf-8', 'replace'))))
+                bi = next((x for x in rows
+                           if str(x.get('Column', '')).strip()
+                           .upper() in ('BRAND INPUT', 'SAMPLE SIZE')),
+                          None)
+                if not bi:
+                    continue
+                proj = float(str(bi.get('US Gen Pop Projection', '0'))
+                             .replace(',', '') or 0)
+                if proj <= 0:
+                    continue
+                if parent_proj is None:
+                    pb = (lookup.get('meta') or {}).get('projection')
+                    parent_proj = float(pb) if pb else None
+                cut_label = sk.rsplit(' - ', 1)[-1][:-4].strip()
+                cn = _norm(cut_label)
+                if not cn:
+                    continue
+                share = (round(proj / parent_proj * 100.0, 4)
+                         if parent_proj else None)
+                lookup.setdefault('demos', {}).setdefault(cn, []).append(
+                    ('GENERATION CUT', share if share is not None
+                     else proj, None, f'{cut_label} (derived cut)'))
+                lookup.setdefault('cut_projections', {})[cn] = int(proj)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return lookup
+
+
 def load_base_lookup(s3_client, bucket, s3_key, name=''):
     """Anchor source for one base profile: the nightly index table when
     its stored ETag still matches the live profile object, else the
-    CSV. None when the base is not a loadable profile."""
+    CSV. None when the base is not a loadable profile. Sibling derived
+    cuts merge in as demo-style entries (share of parent) so cohort
+    claims verify against the cut files' own measured values."""
     key = str(s3_key or '')
     if not key.lower().endswith('.csv'):
         return None
@@ -260,20 +326,32 @@ def load_base_lookup(s3_client, bucket, s3_key, name=''):
         genpop = pma.load_genpop_map(s3_client, bucket)
     except Exception:
         genpop = None
+    lk = None
     try:
         doc = pma.load_profile_index(s3_client, bucket, key)
         if isinstance(doc, dict) and live_etag \
                 and doc.get('etag') == live_etag:
             lk = build_base_lookup(doc, genpop=genpop)
-            if lk:
-                return lk
     except Exception:
-        pass
-    try:
-        df, _etag = pma.load_profile_df(s3_client, bucket, key)
-        return lookup_from_frame(df, name, genpop)
-    except Exception:
-        return None
+        lk = None
+    if not lk:
+        try:
+            df, _etag = pma.load_profile_df(s3_client, bucket, key)
+            lk = lookup_from_frame(df, name, genpop)
+            try:
+                bi_mask = df['Column'].astype(str).str.strip()\
+                    .str.upper().isin(['BRAND INPUT', 'SAMPLE SIZE'])
+                if bi_mask.any():
+                    projv = str(df.loc[bi_mask].iloc[0].get(
+                        'US Gen Pop Projection', '') or '')
+                    projf = float(projv.replace(',', '') or 0)
+                    if projf > 0 and isinstance(lk, dict):
+                        lk.setdefault('meta', {})['projection'] = projf
+            except Exception:
+                pass
+        except Exception:
+            return None
+    return _merge_sibling_cuts(lk, s3_client, bucket, key, name)
 
 
 # ---------------------------------------------------------------------------

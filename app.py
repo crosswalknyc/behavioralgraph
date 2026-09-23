@@ -58540,7 +58540,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     'claim, either use the measured value or drop '
                     'the claim entirely. Do not introduce any new '
                     'claims that were not in the prior reply. '
-                    'Keep every claim that was already correct.'
+                    'Keep every claim that was already correct. '
+                    'REWRITE flagged sentences cleanly so every '
+                    'derived figure (shares, indexes, totals, '
+                    'superlatives like smallest or weakest) '
+                    'recomputes from the corrected numbers - NEVER '
+                    'append a parenthetical contradiction next to a '
+                    'wrong claim.'
                 )
                 rev_prompt2 = user_prompt + '\n\n' + corrective_block
                 result3 = _pm_claude_json(
