@@ -125500,6 +125500,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             for (var i = 0; i < els.length; i++) {
                 var el = els[i];
                 if (el.dataset.aiqChip === '1') continue;
+                // A chip carries a label. A bar is a rounded rectangle with
+                // nothing written on it, and must keep its fill.
+                if (!(el.textContent || '').trim()) continue;
+                var cr = el.getBoundingClientRect();
+                if (!cr.width || cr.width > 200 || cr.height > 30) continue;
                 el.dataset.aiqChip = '1';
                 var m = (getComputedStyle(el).color || '').match(/(\d+),\s*(\d+),\s*(\d+)/);
                 var edge = m ? 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',0.38)' : 'rgba(255,255,255,0.22)';
