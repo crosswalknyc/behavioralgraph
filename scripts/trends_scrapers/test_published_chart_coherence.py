@@ -135,9 +135,69 @@ def test_last_digits_stay_natural():
     print(f'  {len(vals)} values, zeros {zero_pct:.1f}%, digit guard clean')
 
 
+def test_unpublished_titles_are_bracketed():
+    """A title the service published no figure for lands inside the
+    interval its published neighbours define.
+
+    The failure this guards is Top Gun: Maverick arriving at
+    1,683,644 beside neighbours near 250,000, because the call was
+    asked what its audience is rather than what belongs between two
+    known numbers. Bounds are checked against a monotone envelope of
+    the anchors, which is the tightest constraint that is actually
+    satisfiable: before the coherence pass runs the published values
+    do not necessarily descend among themselves, and where they cross
+    no value can sit between them.
+    """
+    try:
+        from . import chart_set_reasoning as CS
+    except ImportError:
+        from scripts.trends_scrapers import chart_set_reasoning as CS
+    rnd = random.Random(3)
+    outside = 0
+    unsatisfiable = 0
+    for t in range(300):
+        rows, vals = [], {}
+        for i in range(10):
+            title = f't{t}-{i}'
+            r = {'title': title, 'published_rank': i + 1}
+            if rnd.random() > 0.35:
+                r['weekly_views'] = rnd.randint(2_000_000, 12_000_000)
+                vals[title] = int(r['weekly_views']
+                                  * rnd.uniform(0.02, 0.09))
+            else:
+                vals[title] = rnd.randint(100_000, 4_000_000)
+            rows.append(r)
+        ordered = [r['title'] for r in rows]
+        out = CS._bracket_unpublished(dict(vals), rows, ordered,
+                                      f'p{t}', True, 4_285_714)
+        for i, r in enumerate(rows):
+            if r.get('weekly_views'):
+                continue
+            ups = [out[ordered[k]] for k in range(i)
+                   if rows[k].get('weekly_views')]
+            dns = [out[ordered[k]] for k in range(i + 1, 10)
+                   if rows[k].get('weekly_views')]
+            up = min(ups) if ups else None
+            dn = max(dns) if dns else None
+            if up is not None and dn is not None and up <= dn:
+                unsatisfiable += 1
+                continue
+            v = out[r['title']]
+            if up is not None and v >= up:
+                outside += 1
+            if dn is not None and v <= dn:
+                outside += 1
+    assert outside == 0, (
+        f'{outside} bracketed placement(s) outside a satisfiable '
+        f'interval')
+    print(f'  0 placements outside a satisfiable bracket '
+          f'({unsatisfiable} positions had crossing anchors)')
+
+
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_rather_than_forcing,
-             test_no_ladder, test_last_digits_stay_natural]
+             test_no_ladder, test_last_digits_stay_natural,
+             test_unpublished_titles_are_bracketed]
     bad = 0
     for t in tests:
         print(t.__name__)

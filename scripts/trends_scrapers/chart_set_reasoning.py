@@ -114,7 +114,7 @@ def _quantified_prompt(chart_label: str, platform_label: str,
                        rows: list[dict], target_date_iso: str,
                        ceiling: int, anchors: str) -> str:
     lines = []
-    for r in rows:
+    for i, r in enumerate(rows):
         v = r.get('weekly_views')
         h = r.get('weekly_hours_viewed')
         wk = r.get('weeks_in_top10')
@@ -123,10 +123,33 @@ def _quantified_prompt(chart_label: str, platform_label: str,
             bits.append(f'{int(v):,} views')
         if h:
             bits.append(f'{int(h):,} hours')
-        fig = ' and '.join(bits) if bits else 'not published for this title'
-        extra = f', {int(wk)} week(s) on the chart' if wk else ''
-        lines.append(f'  #{r["published_rank"]}  {r["title"]}  '
-                     f'[worldwide, chart week: {fig}{extra}]')
+        if bits:
+            extra = f', {int(wk)} week(s) on the chart' if wk else ''
+            fig = f'[worldwide, chart week: {" and ".join(bits)}{extra}]'
+        else:
+            # No figure for this one, so say what brackets it. A
+            # title at position N sold fewer than N-1 and more than
+            # N+1, and where those two have figures the interval is
+            # arithmetic rather than a question.
+            up = next((x.get('weekly_views') for x in reversed(rows[:i])
+                       if x.get('weekly_views')), None)
+            dn = next((x.get('weekly_views') for x in rows[i + 1:]
+                       if x.get('weekly_views')), None)
+            if up and dn:
+                fig = (f'[no figure published. BRACKETED: it drew less '
+                       f'than the {int(up):,}-view title above it and '
+                       f'more than the {int(dn):,}-view title below it]')
+            elif dn:
+                fig = (f'[no figure published, and it is at the TOP of '
+                       f'the chart: it drew MORE than the {int(dn):,}-'
+                       f'view title below it]')
+            elif up:
+                fig = (f'[no figure published, and it is at the BOTTOM '
+                       f'of the chart: it drew LESS than the '
+                       f'{int(up):,}-view title above it]')
+            else:
+                fig = '[no figure published]'
+        lines.append(f'  #{r["published_rank"]}  {r["title"]}  {fig}')
     return (
         f"You are sizing the US daily audience for every title on "
         f"{platform_label}'s own published chart, the {chart_label}, "
@@ -168,13 +191,16 @@ def _quantified_prompt(chart_label: str, platform_label: str,
         f"near the top and a long flat tail, and the shape differs "
         f"week to week.\n"
         f"  - No value above {ceiling:,} on any single day. That is this service's published daily cap for its top slot and it is a hard limit, not a target.\n"
-        f"  - A title with NO published figure is still ON THIS "
-        f"CHART, between the titles either side of it, so its value "
-        f"sits between theirs. That is the entire information content "
-        f"of its rank and it is not a licence to size the title "
-        f"freely: a well-known library film at #5 still drew less "
-        f"last week than whatever the service put at #4, or it would "
-        f"be at #4.\n"
+        f"  - A title marked BRACKETED has no published figure and "
+        f"is NOT a free-standing question. Its bounds are given and "
+        f"they are hard: place it INSIDE that interval. Do not ask "
+        f"what its audience is in general, ask what value belongs "
+        f"between those two numbers. A famous library film at #5 "
+        f"still drew less last week than whatever the service put at "
+        f"#4, or it would be at #4, and its worldwide fame is not "
+        f"evidence against the service's own ranking. Where several "
+        f"bracketed titles sit next to each other they share one "
+        f"interval and must descend within it, spaced unevenly.\n"
         f"  - Never return a worldwide number. Every value is US, and "
         f"daily.\n"
         f"  - Give exact integers, not round ones. 348,637 not "
@@ -272,6 +298,158 @@ def _call(client, prompt: str) -> Optional[dict]:
     return _extract_json(text)
 
 
+def _bracket_unpublished(values: dict, rows: list[dict],
+                         ordered: list[str], slug: str,
+                         quantified: bool,
+                         ceiling: Optional[int]) -> dict:
+    """Place every title the service published no figure for INSIDE
+    the interval its neighbours define.
+
+    A title at published position N is not a free-standing question.
+    It sold fewer than the title at N-1 and more than the title at
+    N+1, and where those two have published figures the interval is
+    known arithmetic rather than a hint. Asking the call what Top Gun:
+    Maverick drew produced 1,683,644 beside neighbours near 250,000;
+    asking what belongs between those neighbours cannot.
+
+    So the published figures are HARD BOUNDS here, applied after the
+    call rather than trusted to it. A run of consecutive unpublished
+    titles shares one interval and descends within it.
+
+    Two edges need their own rule because interpolation has nothing
+    to work with:
+      * position 1 unpublished has only a lower bound, so it sits a
+        drawn step ABOVE the first published figure below it
+      * the last position unpublished has only an upper bound, so it
+        sits a drawn step BELOW the last published figure above it
+
+    Spacing is drawn per title on the log scale. Even spacing between
+    two anchors is the easiest ladder in the world to produce
+    accidentally and would be visible as one.
+    """
+    _h01, natural_digits, _cp = _lazy()
+    if not quantified:
+        # Nothing published a figure, so there is no interval to
+        # place anything inside and the whole set was reasoned
+        # against the platform envelope instead.
+        return values
+
+    anchored: set = set()
+    for r in rows:
+        if r.get('weekly_views') and values.get(r['title']):
+            anchored.add(r['title'])
+    if not anchored:
+        return values
+
+    n = len(ordered)
+
+    def _val(i):
+        return values.get(ordered[i])
+
+    i = 0
+    while i < n:
+        if ordered[i] in anchored and _val(i):
+            i += 1
+            continue
+        # A maximal run of positions with no published figure.
+        j = i
+        while j < n and not (ordered[j] in anchored and _val(j)):
+            j += 1
+        # Bound against a MONOTONE ENVELOPE of the anchors rather
+        # than against the two nearest ones. Before the coherence
+        # pass runs the published values do not necessarily descend
+        # among themselves, so the nearest pair can be inverted and
+        # no value satisfies both. The envelope is the tightest
+        # bound that is actually satisfiable: the smallest anchor
+        # anywhere above, and the largest anchor anywhere below.
+        # Nothing here rewrites an anchor; a published block that
+        # genuinely conflicts with itself is the coherence pass's
+        # problem and it holds the rail rather than papering over it.
+        upper = None
+        for k in range(i - 1, -1, -1):
+            if ordered[k] in anchored and _val(k):
+                upper = _val(k) if upper is None else min(upper, _val(k))
+        lower = None
+        for k in range(j, n):
+            if ordered[k] in anchored and _val(k):
+                lower = _val(k) if lower is None else max(lower, _val(k))
+        run = ordered[i:j]
+        if upper is None and lower is None:
+            i = j
+            continue
+        if upper is None:
+            # Unpublished at the top of the chart: above everything
+            # below it, by a drawn margin rather than a fixed one.
+            base = lower
+            step = 1.0
+            for pos, title in enumerate(reversed(run), start=1):
+                step *= 1.10 + _h01(f'{slug}|{title}|headroom') * 0.34
+                v = base * step
+                if ceiling:
+                    v = min(v, float(ceiling))
+                values[title] = max(1, int(round(v)))
+            i = j
+            continue
+        if lower is None:
+            # Unpublished at the bottom: below everything above it.
+            v = float(upper)
+            for title in run:
+                v *= 0.88 - _h01(f'{slug}|{title}|tailroom') * 0.22
+                values[title] = max(1, int(round(max(v, 1.0))))
+            i = j
+            continue
+
+        # The ordinary case: a known interval, shared by the run.
+        import math
+        hi, lo = float(upper), float(lower)
+        if hi <= lo:
+            # The anchors above and below cross, so there is no
+            # interval to sit in. Place on the geometric mean and
+            # leave it: the coherence pass sees the same conflict
+            # and reports the rail rather than inventing a way out.
+            mid = math.sqrt(max(hi, 1.0) * max(lo, 1.0))
+            hi, lo = mid * 1.04, mid * 0.96
+        lhi, llo = math.log(max(hi, 1.0)), math.log(max(lo, 1.0))
+        weights = [0.55 + _h01(f'{slug}|{t}|bracket') for t in run]
+        weights.append(0.55 + _h01(f'{slug}|{run[-1]}|bracket|tail'))
+        total = sum(weights) or 1.0
+        acc = 0.0
+        for idx, title in enumerate(run):
+            acc += weights[idx]
+            v = math.exp(lhi - (lhi - llo) * (acc / total))
+            if ceiling:
+                v = min(v, float(ceiling))
+            values[title] = max(1, int(round(v)))
+        i = j
+
+    # Natural last digits can nudge a bracketed value onto or past a
+    # neighbour, so settle strict descent afterwards while keeping
+    # the digits natural.
+    for idx, title in enumerate(ordered):
+        v = values.get(title)
+        if not v:
+            continue
+        nv = max(1, natural_digits(int(v), title, f'{slug}|bracket'))
+        values[title] = nv
+    # Settle only the titles this pass placed. A published row that
+    # still reads out of order is the coherence pass's business: it
+    # has a move budget, it reports what it cannot reconcile, and it
+    # holds a rail rather than forcing one. Quietly pulling a
+    # figure-derived value down here would bypass all three.
+    for idx in range(1, n):
+        a, b = ordered[idx - 1], ordered[idx]
+        if a not in values or b not in values:
+            continue
+        if b in anchored:
+            continue
+        if values[b] >= values[a]:
+            drop = 0.955 - _h01(f'{slug}|{b}|settle') * 0.06
+            values[b] = max(1, int(round(values[a] * drop)))
+            while values[b] >= values[a] and values[b] > 1:
+                values[b] -= 1
+    return values
+
+
 def reason_chart(client, *, slug: str, platform_label: str,
                  chart_label: str, rows: list[dict],
                  target_date_iso: str, ceiling: int,
@@ -361,29 +539,8 @@ def reason_chart(client, *, slug: str, platform_label: str,
                 v = min(v, int(ceiling))
             values[src['title']] = max(1, v)
 
-        # A title the service charts but the call skipped is placed
-        # between its neighbours rather than dropped: it is on the
-        # chart, so it has an audience, and leaving a hole is what
-        # puts the rail back out of order.
-        for i, title in enumerate(ordered):
-            if title in values:
-                continue
-            above = next((values[ordered[j]] for j in range(i - 1, -1, -1)
-                          if ordered[j] in values), None)
-            below = next((values[ordered[j]]
-                          for j in range(i + 1, len(ordered))
-                          if ordered[j] in values), None)
-            if above and below:
-                frac = 0.38 + _h01(f'{slug}|{title}|gapfill') * 0.24
-                v = below + (above - below) * frac
-            elif above:
-                v = above * (0.72 + _h01(f'{slug}|{title}|tailfill') * 0.16)
-            elif below:
-                v = below * (1.16 + _h01(f'{slug}|{title}|headfill') * 0.22)
-            else:
-                continue
-            values[title] = max(1, int(round(v)))
-        return values
+        return _bracket_unpublished(values, rows, ordered, slug,
+                                    quantified, ceiling)
 
     def _violations(values: dict) -> list:
         """Neighbouring published positions this answer got backwards,
