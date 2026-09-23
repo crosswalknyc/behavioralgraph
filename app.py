@@ -46818,6 +46818,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "ships as '<Parent> - <Band>'. A demographic cut package "
         "NEVER sets universe_mode: cutting readers by age does not "
         "make them churned.\n"
+        "  7a-DATE-SNAPSHOT (2026-09-23, Jenna): an ask for a subject "
+        "AS OF a specific past date ('the BET profile from 101 days "
+        "ago', 'what did the X audience look like on June 14', 'as of "
+        "3/1/2026') with a library parent is a POINT-IN-TIME SNAPSHOT "
+        "cut: decision `derive_cut`, `derive_type`='date_snapshot', "
+        "`parent_s3_key` = the matched file, `cut_label` = the "
+        "resolved date as 'June 14 2026', and `snapshot_date` = the "
+        "ISO date. The engine researches what was happening for the "
+        "subject on that date and re-reads the whole file row by row "
+        "as it stood that day, shipping '<Subject> - <Month D YYYY>'. "
+        "Never treat the date phrase as a download request, a window "
+        "change, or a cut-picker answer; only past dates qualify.\n"
         "  7b. ARRAY LEANNESS: when returning an ARRAY, keep every "
         "element compact so the whole array always fits: `extra_rows` "
         "capped at 10 items, `persona_notes` under 300 characters. "
@@ -49316,6 +49328,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # off it instead of rebuilding (3 x cuts, no base).
         try:
             _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+            _pm_promote_date_snapshot_ask(spec_draft, per_prompt)
         except Exception:
             pass
         est_credits = int(spec_draft.get('estimated_credits')
@@ -49474,6 +49487,7 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         if catalog is not None:
             try:
                 _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+                _pm_promote_date_snapshot_ask(spec_draft, prompt_text)
             except Exception:
                 pass
     except Exception as e:
@@ -54321,6 +54335,7 @@ def api_synth_chat_interpret():
         # rebuild - flip to derive_cut/addon_cuts and charge 3 x cuts.
         try:
             _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+            _pm_promote_date_snapshot_ask(spec_draft, text)
             _dec_norm, _, _ = _normalize_v1_decision(spec_draft)
         except Exception:
             pass
@@ -63238,6 +63253,121 @@ def _find_tu_parent_for_subject(subject, catalog):
     if best is None:
         return None
     return best[1], best[2]
+
+
+_PM_SNAPSHOT_MONTHS = {m.lower(): i + 1 for i, m in enumerate(
+    ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+     'August', 'September', 'October', 'November', 'December'])}
+
+
+def _pm_resolve_snapshot_date(text):
+    """ISO date for 'N days/weeks/months ago', 'on June 14',
+    'June 14 2026', '6/14/2026', or bare ISO. Past dates only.
+    Self-contained twin of migration/date_snapshot_cut.resolve_
+    snapshot_date (the engine lives worker-side; Render only needs
+    the parse)."""
+    import datetime as _dt
+    t = str(text or '').lower()
+    today = _dt.date.today()
+    m = re.search(r'(\d{1,4})\s*(day|week|month)s?\s+ago', t)
+    if m:
+        n = int(m.group(1))
+        days = n * (1 if m.group(2) == 'day' else
+                    7 if m.group(2) == 'week' else 30)
+        if 1 <= days <= 3650:
+            return (today - _dt.timedelta(days=days)).isoformat()
+    m = re.search(
+        r'\b(january|february|march|april|may|june|july|august'
+        r'|september|october|november|december)\s+(\d{1,2})'
+        r'(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?', t)
+    if m:
+        mo = _PM_SNAPSHOT_MONTHS[m.group(1)]
+        dd = int(m.group(2))
+        yr = int(m.group(3)) if m.group(3) else today.year
+        try:
+            d = _dt.date(yr, mo, dd)
+        except ValueError:
+            return None
+        if d > today:
+            d = _dt.date(yr - 1, mo, dd) if not m.group(3) else None
+        return d.isoformat() if d and d <= today else None
+    m = re.search(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', t)
+    if m:
+        try:
+            d = _dt.date(int(m.group(3)), int(m.group(1)),
+                         int(m.group(2)))
+        except ValueError:
+            return None
+        return d.isoformat() if d <= today else None
+    m = re.search(r'\b(\d{4})-(\d{2})-(\d{2})\b', t)
+    if m:
+        try:
+            d = _dt.date(int(m.group(1)), int(m.group(2)),
+                         int(m.group(3)))
+        except ValueError:
+            return None
+        return d.isoformat() if d <= today else None
+    return None
+
+
+def _pm_promote_date_snapshot_ask(draft, text):
+    """Deterministic net under prompt rule 7a-DATE-SNAPSHOT (2026-09-23
+    Jenna): an ask for a subject AS OF a specific past date, bound to a
+    library parent, becomes a point-in-time snapshot cut
+    (derive_cut / date_snapshot). The engine researches the date and
+    re-reads the whole file row by row as it stood that day. Never
+    raises; returns True when it promoted."""
+    try:
+        if not isinstance(draft, dict):
+            return False
+        t = str(text or '')
+        if str(draft.get('derive_type') or '').strip().lower() == \
+                'date_snapshot':
+            if not draft.get('snapshot_date'):
+                iso0 = _pm_resolve_snapshot_date(t)
+                if iso0:
+                    draft['snapshot_date'] = iso0
+            return False
+        # phrase gate: dated-state phrasings only (a bare year or an
+        # explicit measurement window is a refresh, not a snapshot)
+        if not re.search(
+                r'\b\d{1,4}\s*(?:day|week|month)s?\s+ago\b|\bas of\b'
+                r'|\b(?:on|back on)\s+(?:january|february|march|april'
+                r'|may|june|july|august|september|october|november'
+                r'|december)\b',
+                t, re.I):
+            return False
+        iso = _pm_resolve_snapshot_date(t)
+        if not iso:
+            return False
+        parent = str(draft.get('parent_s3_key')
+                     or draft.get('existing_match_s3_key') or '').strip()
+        if not parent:
+            return False
+        if str(draft.get('decision') or '').strip().lower() not in (
+                'existing_match', 'derive_cut', 'time_shifted_refresh'):
+            return False
+        import datetime as _dt
+        d = _dt.date.fromisoformat(iso)
+        label = (list(_PM_SNAPSHOT_MONTHS)[d.month - 1].title()
+                 + f' {d.day} {d.year}')
+        draft['decision'] = 'derive_cut'
+        draft['derive_type'] = 'date_snapshot'
+        draft['parent_s3_key'] = parent
+        draft['cut_label'] = label
+        draft['snapshot_date'] = iso
+        draft['decision_reason'] = (
+            'Point-in-time snapshot: the audience as it stood on '
+            + label + ', built as a dated cut of the existing file.')
+        for k in ('ask_existing_profile', 'existing_profile_data',
+                  'ask_qualifier_match', 'qualifier_match_data'):
+            draft.pop(k, None)
+        print(f"[date-snapshot] promoted to derive_cut/date_snapshot "
+              f"({iso}, parent={parent!r})")
+        return True
+    except Exception as _dsp_err:
+        print(f"[date-snapshot] promoter failed (non-fatal): {_dsp_err}")
+        return False
 
 
 def _maybe_promote_embedded_cuts_to_parent(draft, catalog=None,
