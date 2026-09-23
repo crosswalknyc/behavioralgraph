@@ -5035,6 +5035,13 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         'artist':           item.get('artist') or '',
         'chart_labels':     item.get('chart_labels') or [],
         'best_rank':        item.get('best_rank'),
+        # The position the service published for this title, carried
+        # through from the collector. Without it the coherence pass
+        # downstream sees a rail with no chart on it and silently has
+        # nothing to do, which is exactly what happened on the first
+        # run after the pass shipped.
+        'published_rank':   item.get('published_rank'),
+        'published_chart':  item.get('published_chart'),
         'image':            item.get('image'),
         'url':              item.get('url'),
         'us_estimate':      agg_mid,
@@ -7114,7 +7121,8 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
     'primevideo': {
         'label': 'Prime Video Top 10 US',
         'mode':  'collection',
-        'collections': ('top 10 movies in the us',
+        'collections': ('top 10 in the us',
+                        'top 10 movies in the us',
                         'top 10 tv shows in the us'),
         'depth': 10,
     },
@@ -7168,7 +7176,11 @@ def published_chart_index(slug: str,
                 if isinstance(row, dict):
                     _add(kind, str(row.get('title') or ''), i + 1)
     elif spec['mode'] == 'collection':
-        wanted = {c.lower() for c in spec.get('collections') or ()}
+        # Matched loosely. A storefront names the same rail slightly
+        # differently by page and by locale, and an exact string set
+        # would silently drop the chart the day the wording moved,
+        # which looks identical to the service not publishing one.
+        pats = [c.lower() for c in spec.get('collections') or ()]
         # Ordinal within each named collection, in the order the rows
         # appear. The storefront interleaves the chart with its
         # merchandising rails, so a row's place in `national` is not
@@ -7178,7 +7190,9 @@ def published_chart_index(slug: str,
             if not isinstance(row, dict):
                 continue
             coll = str(row.get('collection') or '').strip().lower()
-            if coll not in wanted:
+            coll_n = ' '.join(coll.replace('.', '').split())
+            if not any(p.replace('.', '') in coll_n
+                       or coll_n in p.replace('.', '') for p in pats):
                 continue
             pos = seen_per_collection.get(coll, 0) + 1
             seen_per_collection[coll] = pos

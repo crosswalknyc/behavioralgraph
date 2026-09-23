@@ -41,6 +41,27 @@ so a full pull yields ~120 titles per page. We dedupe by displayTitle
 across containers and rank in container order (Continue Watching,
 Featured Originals, Popular Now, then genre rails), matching how
 Amazon surfaces them.
+
+Prime Video's own chart
+-----------------------
+One of those containers is the real thing: 'Top 10 TV shows in the US'
+and 'Top 10 movies in the US' are Amazon's own published rankings, and
+they arrive in the hydration blob in chart order like any other rail.
+Until 2026-09-23 they were treated as just another container and then
+lost, because the pull kept the first 20 deduped titles across four
+pages and the storefront's Hero Carousel got there first. What shipped
+as the Prime Video rail was therefore marketing placement: Neagley,
+Elle, You+Me, four hero slots and a row of Featured Originals.
+
+They now come first, in the order Amazon gives them, and
+`_PUBLISHED_CHARTS` in stream_estimates reads them off the collection
+name so those titles hold those positions on the board.
+
+Which Top 10 rails hydrate varies by run: TV is reliable on
+/gp/video/tv, movies appears on /gp/video/movies some runs and on the
+storefront others. Every page is scanned and whatever charted rails
+came back are used, so a run that only sees one still gets that one
+right rather than falling back to promotional order for both.
 """
 
 from __future__ import annotations
@@ -80,6 +101,18 @@ _HYDRATION_BLOB_RE = re.compile(
 )
 
 
+# Amazon's own published rankings, as the container is titled in the
+# hydration blob. Matched loosely because the wording varies by page
+# and by locale ('Top 10 in the US', 'Top 10 movies in the US', 'Top
+# 10 TV shows in the US'), but anchored on 'top 10' plus a US marker
+# so a 'Top 10 for you' personalised rail never qualifies.
+_TOP10_RE = re.compile(r'\btop\s*10\b.*\bin\s+the\s+u\.?s\.?\b', re.I)
+
+
+def _is_published_chart_rail(rail: str) -> bool:
+    return bool(_TOP10_RE.search(rail or ''))
+
+
 def _classify_entity(entity_type: str) -> str:
     """Prime uses 'TV Show', 'Movie', 'Live Event', 'Miniseries', etc."""
     et = (entity_type or '').lower()
@@ -114,15 +147,28 @@ def _extract_prime_hydration(html: str) -> list[dict]:
     if not isinstance(containers, list):
         return []
 
-    seen: set[str] = set()
-    out: list[dict] = []
-    for c in containers:
-        if not isinstance(c, dict):
-            continue
+    # Amazon's own Top 10 rails are read before anything else, so a
+    # charted title is never dropped as a duplicate of the same title
+    # sitting in a promotional rail further up the page.
+    def _rail_name(c):
         rail = c.get('title') or c.get('text') or ''
         if isinstance(rail, dict):
             rail = rail.get('text') or rail.get('displayText') or ''
-        rail = str(rail).strip()
+        return str(rail).strip()
+
+    ordered = (
+        [c for c in containers
+         if isinstance(c, dict) and _is_published_chart_rail(_rail_name(c))]
+        + [c for c in containers
+           if isinstance(c, dict)
+           and not _is_published_chart_rail(_rail_name(c))])
+
+    seen: set[str] = set()
+    out: list[dict] = []
+    for c in ordered:
+        if not isinstance(c, dict):
+            continue
+        rail = _rail_name(c)
         if c.get('isContinueWatching'):
             continue
         entities = c.get('entities') or []
@@ -208,25 +254,47 @@ def fetch() -> dict[str, Any]:
                              hydration_wait_ms=10000,
                              assert_signed_in='amazon.com')
 
-    all_items: list[dict] = []
+    charted: list[dict] = []
+    rest: list[dict] = []
     seen: set[str] = set()
     for label, html in rendered:
         items = _extract_prime_hydration(html)
         if not items:
             items = _extract_from_dom(html, limit=25)
+        n_chart = 0
         for it in items:
             key = it['title'].lower()
             if key in seen:
                 continue
             seen.add(key)
             it['collection'] = it.get('collection') or label
-            all_items.append(it)
-        logger.info("primevideo %s: parsed %d titles from %d-byte HTML",
-                     label, len(items), len(html))
+            if _is_published_chart_rail(it['collection']):
+                charted.append(it)
+                n_chart += 1
+            else:
+                rest.append(it)
+        logger.info("primevideo %s: parsed %d titles from %d-byte HTML "
+                     "(%d on a published Top 10 rail)",
+                     label, len(items), len(html), n_chart)
 
-    for i, it in enumerate(all_items[:20], start=1):
+    if not charted:
+        # Not a failure: Amazon does not hydrate the Top 10 rails on
+        # every run. The pull still ships, and the collector treats
+        # every row as an unranked listing rather than inventing an
+        # order, which is the honest reading of a page with no chart
+        # on it.
+        logger.warning("primevideo: no Top 10 rail hydrated this run; "
+                        "shipping the storefront with no chart")
+
+    # 60 rather than 20. The two Top 10 rails alone are 20 rows, and
+    # cutting at 20 was what buried the chart under the Hero Carousel
+    # in the first place.
+    all_items = charted + rest
+    for i, it in enumerate(all_items[:60], start=1):
         it['rank'] = i
-    return {'national': all_items[:20]}
+    logger.info("primevideo: %d titles, %d of them on a published "
+                 "Top 10 rail", min(len(all_items), 60), len(charted))
+    return {'national': all_items[:60]}
 
 
 if __name__ == '__main__':
