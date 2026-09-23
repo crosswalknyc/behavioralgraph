@@ -39396,6 +39396,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             };
 
             function iiqRenderDemographics(d) {
+                // Audience filter note rides every re-render (phase pills,
+                // compare dropdown, titles-cache refresh) since each one
+                // rebuilds the body from this function.
+                return _aiqAudienceNote('demographics') + _iiqRenderDemographicsBody(d);
+            }
+
+            function _iiqRenderDemographicsBody(d) {
                 // Kick off the /api/intent/titles fetch (once per session)
                 // so the "Compare vs" dropdown populates. The fetch is
                 // idempotent -- if the cache is already loaded, this is
@@ -41855,8 +41862,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
                     + iiqSummaryTile('Total assets (YTD)', String(grandAssets), '')
                     + iiqSummaryTile('Total YTD views', fmtCompact(grandViews), 'sum of ext_view_count across all assets')
-                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers \u2014 matches Assets page')
-                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 matches Assets page')
+                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers - matches Assets page')
+                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers - matches Assets page')
                     + '</div>';
 
                 var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'category name' };
@@ -45804,7 +45811,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         .then(function(d) {
                             try {
                                 IIQ_QDATA.demographics = d;
-                                var html = _aiqAudienceNote('demographics') + iiqRenderDemographics(d);
+                                var html = iiqRenderDemographics(d);
                                 IIQ_QCACHE.demographics = html;
                                 body.innerHTML = html;
                             } catch (err) {
