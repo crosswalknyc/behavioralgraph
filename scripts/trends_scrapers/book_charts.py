@@ -416,10 +416,15 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
             continue
         html = r.text or ''
         if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
-            logger.warning("audible books: got de-DE storefront - cookies "
-                           "may be stale, firing SES notify")
-            _mark_cookie_gap('audible_books', 'audible.com',
-                              reason='de-DE storefront returned despite cookies - session likely expired')
+            # `?ipRedirectOverride=true` is what holds the US
+            # storefront, not the donated session. A de-DE body means
+            # the geo-redirect fired anyway, which re-donating cookies
+            # cannot fix, so no cookie-gap notification here.
+            logger.warning(
+                "audible books: %s returned the de-DE storefront, so the "
+                "ipRedirectOverride flag no longer holds the US "
+                "storefront from this IP. This is a geo-redirect, not "
+                "an expired session.", _AUDIBLE_CHART_URL)
             return [], _WARMING_UP_HINT
         if len(html) < 100_000:
             logger.warning("audible books p%d: html too small (%d bytes)",

@@ -3,6 +3,7 @@
   "description": "Expected Python files in scripts/trends_scrapers/. Checked at run_all startup by _check_manifest(); files listed here but missing from disk log a WARN and best-effort email jenna@ + liz@ via cookie_gap_notify.notify_scraper_manifest_drift(). Git-tracked so it moves in lockstep with the codebase: adding or removing a scraper means updating this list in the same commit. The check does not compare against MD5s; it just verifies every expected filename resolves on disk. This is the guardrail that catches the class of gap where a scraper lands on origin/main but never gets rsync'd to Hetzner (2026-08-31 comics_charts.py, and prior recurrences).",
   "files": [
     "__init__.py",
+    "_amazon_music.py",
     "_base.py",
     "_bedrock_scorer.py",
     "_capture_html.py",
@@ -94,6 +95,7 @@
     "test_carriage_model.py",
     "test_derived_rails.py",
     "test_fast_free_tier_guards.py",
+    "test_hydration_diagnosis.py",
     "test_streaming_weeks_index.py",
     "tiktok.py",
     "trends_auto_login.py",

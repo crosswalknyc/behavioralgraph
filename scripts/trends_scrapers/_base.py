@@ -401,6 +401,102 @@ def cookie_donation_status(domain: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Hydration-failure diagnosis
+# ---------------------------------------------------------------------------
+# A cookie-gated scraper that waits on a selector and times out has NOT
+# established why it timed out. Three different causes produce the same
+# timeout and only one of them is a cookie problem:
+#
+#   no_cookies       nothing was donated for this domain
+#   session_rejected cookies were sent but the site bounced us to a
+#                    sign-in wall, so the session is genuinely dead
+#   page_changed     the session was accepted and the page rendered,
+#                    but the element we wait for is not there any more
+#
+# Asserting "cookies likely expired" on all three sends an operator to
+# re-donate a session that was never broken, and fires the cookie-gap
+# email for a page that simply changed shape. Only `session_rejected`
+# should ask for a re-donation, and only `session_rejected` /
+# `no_cookies` should notify.
+HYDRATION_NO_COOKIES       = 'no_cookies'
+HYDRATION_SESSION_REJECTED = 'session_rejected'
+HYDRATION_PAGE_CHANGED     = 'page_changed'
+
+# A redirect to one of these paths is hard evidence the session was
+# rejected. Matched against the FINAL url, not the requested one.
+_SIGNIN_URL_MARKERS = (
+    '/ap/signin', '/ap/cvf', '/signin', '/sign-in', '/login',
+    '/accounts/login', '/auth/login', '/users/sign_in',
+)
+
+# Text that only appears on an actual sign-in form. Deliberately narrow:
+# a "Sign in" link in a nav bar is not evidence of anything, so bare
+# "sign in" is not on this list.
+_SIGNIN_TEXT_MARKERS = (
+    'enter your password', 'sign in to your account', 'sign in with your',
+    'keep me signed in', 'forgot your password', 'create your account',
+    'log in to continue', 'sign in to continue',
+)
+
+
+def classify_hydration_failure(*, target_url: str, selector: str,
+                               final_url: str = '', page_text: str = '',
+                               cookie_count: int = 0,
+                               signed_in_markers: tuple[str, ...] = ()
+                               ) -> tuple[str, str, bool]:
+    """Work out why a hydration wait failed and say only what the
+    evidence supports.
+
+    Returns `(kind, message, notify_cookie_gap)` where `kind` is one of
+    the `HYDRATION_*` constants, `message` is the operator-facing
+    diagnostic, and `notify_cookie_gap` says whether the cookie-gap
+    email is warranted.
+
+    `signed_in_markers` are strings that, when present in `page_text`,
+    prove the session was accepted (an account name, a members-only
+    nav item). They veto the sign-in verdict, which is what stops a
+    signed-in page that happens to carry the words "sign in" from being
+    misread as a rejection.
+    """
+    final_url = final_url or target_url
+    low_text  = (page_text or '').lower()
+    low_url   = (final_url or '').lower()
+
+    if cookie_count <= 0:
+        return (
+            HYDRATION_NO_COOKIES,
+            (f'no donated cookies were available for this session, so '
+             f'{target_url} was requested anonymously and never '
+             f'rendered {selector}. Donate cookies for this domain.'),
+            True,
+        )
+
+    signed_in = any(m.lower() in low_text for m in signed_in_markers if m)
+    hit_signin_url  = any(m in low_url for m in _SIGNIN_URL_MARKERS)
+    hit_signin_text = any(m in low_text for m in _SIGNIN_TEXT_MARKERS)
+
+    if not signed_in and (hit_signin_url or hit_signin_text):
+        where = f' (landed on {final_url})' if final_url != target_url else ''
+        return (
+            HYDRATION_SESSION_REJECTED,
+            (f'the donated session was rejected and {target_url} bounced '
+             f'to a sign-in wall{where}. Re-donate cookies for this '
+             f'domain.'),
+            True,
+        )
+
+    where = f', ended on {final_url}' if final_url != target_url else ''
+    return (
+        HYDRATION_PAGE_CHANGED,
+        (f'the session was accepted but {target_url} did not render '
+         f'`{selector}`{where}. The page or the selector has changed. '
+         f'This is not a cookie problem and re-donating will not fix '
+         f'it.'),
+        False,
+    )
+
+
 def read_snapshot(source: str) -> Optional[dict]:
     """Read `latest/{source}.json` from S3. Returns None if the object
     doesn't exist or the read fails. Used by trends_iq.py at request time."""

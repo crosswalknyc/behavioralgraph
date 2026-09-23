@@ -352,25 +352,34 @@ def _fetch_apple(limit: int = 100) -> list[dict]:
 # ---------------------------------------------------------------------------
 # TikTok Sounds  (Creative Center Trends -> Songs tab, Playwright DOM)
 # ---------------------------------------------------------------------------
-# As of 2026-07 TikTok has removed the public Songs/Sounds tab from the
-# Creative Center. Only Hashtag + Video tabs render even with a fully-
-# authenticated session (sessionid + sid_guard + sid_tt on .tiktok.com);
-# the Creator tab explicitly reads "Coming soon". The old JSON APIs
-# (/creative_radar_api/v1/popular_trend/{sound,song,music}/list) all
-# return 404. No other free public source exposes TikTok trending
-# music - SoundOn (TikTok's own artist service) redirects the charts
-# page to /login for every visitor.
+# TikTok has removed the public Songs/Sounds chart. Re-verified
+# 2026-09-23 from a US residential connection with a fully
+# authenticated session (sessionid + sid_guard + sid_tt on
+# .tiktok.com):
 #
-# The scraper still runs Playwright to (a) probe whether TikTok ever
-# reinstates the Songs tab, and (b) capture a diagnostic in the daily
-# snapshot so we can see the day this comes back. If the scrape ever
-# yields data the dashboard picks it up automatically.
+#   * The Creative Center has been rebuilt as "TikTok One Creative
+#     Suite" and its trend routes moved to /creative/creativeCenter/
+#     trends/<tab>. The router serves three tabs: Hashtag, Creator
+#     ("Coming soon") and Video.
+#   * Every music route - /trends/music, /trends/song, /trends/sound,
+#     and the legacy /business/creativecenter/inspiration/popular/
+#     {music,song,sound} paths - 302s to the hashtag tab.
+#   * The old JSON APIs (/creative_radar_api/v1/popular_trend/
+#     {sound,song,music}/list) return 404.
+#   * The session is demonstrably valid: the tab we land on renders
+#     authenticated ranked hashtag data on the same request.
 #
-# Until then the frontend card shows an honest "not currently exposed"
-# note in place of a fake "Coming soon" placeholder.
+# No free public replacement exists. The TikTok Billboard Top 50 was
+# discontinued in March 2025 when the Billboard partnership ended, the
+# Viral 50 is in-app only, and SoundOn gates its charts behind a login.
+#
+# The scraper still runs Playwright daily to (a) probe whether TikTok
+# restores the music route, and (b) record the evidence in the
+# snapshot. It never fires the cookie-gap notification, because
+# nothing here is a cookie problem.
 
-_TT_CC_HASHTAG_URL = ('https://ads.tiktok.com/business/creativecenter/'
-                      'inspiration/popular/hashtag/pc/en')
+_TT_CC_MUSIC_URL = ('https://ads.tiktok.com/creative/creativeCenter/'
+                    'trends/music?region=US&period=7')
 
 # In a logged-in DOM, each Sounds/Songs card looks like:
 #   <div .../>#hashtag or Song title text</div>       <-- primary label
@@ -479,49 +488,67 @@ def _fetch_tiktok_sounds(limit: int = 40) -> tuple[list[dict], dict]:
                 page.wait_for_timeout(2000)
             except Exception:
                 pass
+            # Ask for the music route directly. If TikTok ever restores
+            # the songs chart it will serve it here; today the router
+            # 302s every music / song / sound path to the hashtag tab,
+            # and that redirect is the evidence we record.
             try:
-                page.goto(_TT_CC_HASHTAG_URL, wait_until='domcontentloaded',
+                page.goto(_TT_CC_MUSIC_URL, wait_until='domcontentloaded',
                            timeout=45000)
+                page.wait_for_timeout(6000)
             except Exception as e:
                 meta['reason'] = f'cc_nav_failed: {e}'
                 return [], meta
 
-            # First hydration check: whether ANY stat labels appeared.
+            landed = page.url or ''
+            meta['probe_url']  = _TT_CC_MUSIC_URL
+            meta['landed_url'] = landed
+
+            if '/trends/music' not in landed:
+                # Redirected away from the music route. Read the tab
+                # strip and check whether ranked rows rendered, so the
+                # verdict rests on what the page actually served rather
+                # than on a click that found no target.
+                try:
+                    tabs = page.evaluate("""() => {
+                        const seen = new Set();
+                        document.querySelectorAll(
+                            '[role="tab"], a[href*="/trends/"]').forEach((el) => {
+                            const t = (el.innerText || '').trim().split('\\n')[0];
+                            if (t && t.length < 30) seen.add(t);
+                        });
+                        return Array.from(seen).slice(0, 10);
+                    }""") or []
+                except Exception:
+                    tabs = []
+                try:
+                    rows_rendered = len(_TT_LABEL_RE.findall(page.content()))
+                except Exception:
+                    rows_rendered = 0
+                meta['tabs_seen']      = tabs
+                meta['rows_rendered']  = rows_rendered
+                meta['auth_required']  = False
+                meta['source_unavailable'] = True
+                meta['reason'] = (
+                    f'cc_music_route_retired - {_TT_CC_MUSIC_URL} '
+                    f'redirected to {landed}. The rebuilt Creative '
+                    f'Center ships Hashtag, Creator ("Coming soon") and '
+                    f'Video only; tabs seen: {tabs or "none read"}. The '
+                    f'donated session is good - {rows_rendered} ranked '
+                    f'rows rendered on the tab we landed on - so this is '
+                    f'not a cookie problem. No free public TikTok songs '
+                    f'chart is currently published: the TikTok Billboard '
+                    f'Top 50 ended in March 2025 and SoundOn requires a '
+                    f'login.')
+                return [], meta
+
+            # Music route served. Confirm the stat labels hydrated.
             try:
                 page.wait_for_selector('span:has-text("Posts")',
                                         timeout=15000, state='attached')
             except Exception:
                 logger.info("tiktok sounds: 'Posts' label never appeared "
-                             "on hashtag tab")
-
-            # Try to switch to the Songs tab. As of 2026-07 this tab
-            # doesn't exist in the CC anymore (Hashtag + Video only,
-            # Creator marked "Coming soon"). We probe for it anyway so
-            # this scraper starts working the day TikTok reinstates it.
-            switched = False
-            for label in ('Songs', 'Music', 'Sounds', 'Song'):
-                try:
-                    loc = page.get_by_text(label, exact=True)
-                    if loc.count() > 0:
-                        loc.first.click(timeout=3000)
-                        page.wait_for_timeout(2500)
-                        switched = True
-                        logger.info("tiktok sounds: clicked '%s' tab", label)
-                        break
-                except Exception:
-                    continue
-            if not switched:
-                meta['reason'] = ('cc_songs_tab_not_present - TikTok has '
-                                   'removed the public Songs chart from '
-                                   'Creative Center (mid-2026). Only '
-                                   'Hashtag + Video tabs render; Creator '
-                                   'reads "Coming soon". No other free '
-                                   'public source (SoundOn charts require '
-                                   'login) currently exposes trending '
-                                   'sounds.')
-                meta['auth_required'] = False
-                meta['source_unavailable'] = True
-                return [], meta
+                             "on the music tab")
 
             # Progressive scroll to trigger the CC's lazy-load.
             last_count = 0
@@ -894,7 +921,10 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
     """
     try:
         from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
-        from ._base import load_donated_cookies_playwright, cookie_donation_status
+        from ._base import (load_donated_cookies_playwright, cookie_donation_status,
+                            classify_hydration_failure)
+        from ._amazon_music import (goto_past_picker, dismiss_profile_picker,
+                                    SIGNED_IN_MARKERS)
     except Exception as e:
         logger.info("amazon music: playwright helpers unavailable: %s", e)
         _mark_cookie_gap('amazon_music', 'music.amazon.com',
@@ -951,37 +981,51 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
             # what surfaces the x-amzn-authentication token used by
             # subsequent /api/ calls). Skipping this leaves later
             # showPlaylistPage returning a "Service error" template.
+            # A signed-in account lands on the household profile
+            # chooser here, which intercepts every later navigation
+            # until a profile is picked, so clear it during the warmup.
             try:
                 page.goto(_AMAZON_MUSIC_HOMEPAGE,
                           wait_until='domcontentloaded', timeout=45000)
                 page.wait_for_timeout(3500)
+                dismiss_profile_picker(page)
             except Exception as e:
                 logger.info("amazon music: homepage warmup: %s", e)
 
-            page.goto(_AMAZON_MUSIC_PLAYLIST_URL,
-                      wait_until='domcontentloaded', timeout=45000)
-            page.wait_for_timeout(6000)
+            goto_past_picker(page, _AMAZON_MUSIC_PLAYLIST_URL)
 
-            # Wait for the first ~10 rows to hydrate. If they don't,
-            # the session is dead - drop out to the empty-sub path.
+            # Wait for the first ~10 rows to hydrate.
+            _row_selector = 'music-image-row[primary-text]'
             try:
                 page.wait_for_function(
-                    "() => document.querySelectorAll("
-                    "'music-image-row[primary-text]').length >= 10",
+                    f"() => document.querySelectorAll("
+                    f"'{_row_selector}').length >= 10",
                     timeout=25000,
                 )
             except Exception:
-                logger.warning("amazon music: first-batch hydration timed "
-                               "out - cookies likely expired, re-donate")
+                try:
+                    final_url = page.url or ''
+                    page_text = page.evaluate(
+                        "() => document.body ? document.body.innerText : ''"
+                    ) or ''
+                except Exception:
+                    final_url, page_text = '', ''
+                kind, why, notify = classify_hydration_failure(
+                    target_url=_AMAZON_MUSIC_PLAYLIST_URL,
+                    selector=_row_selector,
+                    final_url=final_url,
+                    page_text=page_text,
+                    cookie_count=len(donated),
+                    signed_in_markers=SIGNED_IN_MARKERS,
+                )
+                logger.warning("amazon music: %s (%s)", why, kind)
                 try:
                     ctx.close(); browser.close()
                 except Exception:
                     pass
-                _mark_cookie_gap('amazon_music', 'music.amazon.com',
-                                  reason=('All Hits playlist hydration '
-                                          'timed out after 25s; donated '
-                                          'session likely stale or '
-                                          'missing session cookie'))
+                if notify:
+                    _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                                      reason=why)
                 return [], _WARMING_UP_HINT
 
             # Virtualized list: repeatedly scroll the last row into view
@@ -1047,10 +1091,15 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
         return [], _WARMING_UP_HINT
 
     if not items:
-        _mark_cookie_gap('amazon_music', 'music.amazon.com',
-                          reason=('All Hits playlist returned 0 rows '
-                                  'after scroll+extract; session likely '
-                                  'valid but page structure changed'))
+        # Rows hydrated (we got past the wait above) and then extracted
+        # to nothing, so the session is demonstrably good and the
+        # attribute names on the row element have moved. No cookie-gap
+        # notification: re-donating cannot fix a renamed attribute.
+        logger.warning(
+            "amazon music: %s hydrated but `music-image-row` rows "
+            "extracted to 0 items. The row element's attributes have "
+            "changed. This is not a cookie problem.",
+            _AMAZON_MUSIC_PLAYLIST_URL)
         return [], _WARMING_UP_HINT
     return items, ''
 
@@ -1083,17 +1132,15 @@ def fetch() -> dict[str, Any]:
     _enrich_with_itunes_artwork(tt_items,      art_cache)
     logger.info("itunes artwork cache: %d unique lookups", len(art_cache))
 
-    # TikTok sub label reflects what actually happened. Since mid-2026
-    # TikTok has removed the public Songs chart entirely; we still
-    # probe daily in case it comes back.
+    # TikTok sub label reflects what actually happened. TikTok has
+    # removed the public songs chart entirely (re-verified 2026-09-23);
+    # we still probe daily in case it comes back.
     if tt_items:
         tt_sub = "Leading indicator for chart hits. What's about to break."
     elif tt_meta.get('source_unavailable'):
-        tt_sub = ('TikTok removed the public Songs chart from Creative '
-                  'Center in mid-2026. When they restore it (or when '
-                  'SoundOn opens their charts) this card will populate '
-                  'automatically. Spotify tracks TikTok-driven streams '
-                  'closely, so the Spotify card is the best proxy today.')
+        tt_sub = ('TikTok no longer publishes a public songs chart, so '
+                  'there is nothing to show here. The card fills itself '
+                  'in the day that changes.')
     elif tt_meta.get('auth_required'):
         tt_sub = ('Requires a logged-in ads.tiktok.com cookie donation '
                   'from a browser signed in to the Creative Center.')

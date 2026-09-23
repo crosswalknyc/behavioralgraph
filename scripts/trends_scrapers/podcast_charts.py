@@ -551,7 +551,10 @@ def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     """
     try:
         from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
-        from ._base import load_donated_cookies_playwright
+        from ._base import (load_donated_cookies_playwright,
+                            classify_hydration_failure)
+        from ._amazon_music import (goto_past_picker, dismiss_profile_picker,
+                                    SIGNED_IN_MARKERS)
     except Exception as e:
         logger.info("amazon podcasts: playwright helpers unavailable: %s", e)
         return [], 'Warming up.'
@@ -594,35 +597,50 @@ def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
             # Warm homepage so the auth-context bootstrap fires (needed
             # for the /podcasts page to receive the client token used
             # by its subsequent showBrowseWidgetPage GraphQL fetch).
+            # Clear the household profile chooser here too, otherwise
+            # it intercepts the /podcasts navigation below.
             try:
                 page.goto('https://music.amazon.com/',
                           wait_until='domcontentloaded', timeout=45000)
                 page.wait_for_timeout(3500)
+                dismiss_profile_picker(page)
             except Exception as e:
                 logger.info("amazon podcasts: homepage warmup: %s", e)
 
-            page.goto(_AMAZON_MUSIC_PODCASTS_URL,
-                      wait_until='domcontentloaded', timeout=45000)
-            page.wait_for_timeout(6000)
+            goto_past_picker(page, _AMAZON_MUSIC_PODCASTS_URL)
 
-            # Wait for the first batch of tiles to hydrate. If they
-            # never do, cookies are dead - drop out with the operator
-            # instruction.
+            # Wait for the first batch of tiles to hydrate.
+            _tile_selector = 'music-vertical-item[primary-text]'
             try:
                 page.wait_for_function(
-                    "() => document.querySelectorAll("
-                    "'music-vertical-item[primary-text]').length >= 10",
+                    f"() => document.querySelectorAll("
+                    f"'{_tile_selector}').length >= 10",
                     timeout=25000,
                 )
             except Exception:
-                logger.warning("amazon podcasts: tiles never hydrated - "
-                               "cookies likely expired, firing SES notify")
+                try:
+                    final_url = page.url or ''
+                    page_text = page.evaluate(
+                        "() => document.body ? document.body.innerText : ''"
+                    ) or ''
+                except Exception:
+                    final_url, page_text = '', ''
+                kind, why, notify = classify_hydration_failure(
+                    target_url=_AMAZON_MUSIC_PODCASTS_URL,
+                    selector=_tile_selector,
+                    final_url=final_url,
+                    page_text=page_text,
+                    cookie_count=len(donated),
+                    signed_in_markers=SIGNED_IN_MARKERS,
+                )
+                logger.warning("amazon podcasts: %s (%s)", why, kind)
                 try:
                     ctx.close(); browser.close()
                 except Exception:
                     pass
-                _mark_cookie_gap('amazon_podcasts', 'music.amazon.com',
-                                  reason='tiles never hydrated - cookies likely expired')
+                if notify:
+                    _mark_cookie_gap('amazon_podcasts', 'music.amazon.com',
+                                      reason=why)
                 return [], _WARMING_UP_HINT
 
             # Scroll to force lazy carousels below the fold to load.
@@ -788,10 +806,15 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     # German shell also >50k bytes but has `lang="de-DE"` in <html>.
     # Explicitly check we got the US storefront before parsing.
     if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
-        logger.warning("audible podcasts: got de-DE storefront despite "
-                       "cookies - cookies may be stale, firing SES notify")
-        _mark_cookie_gap('audible_podcasts', 'audible.com',
-                          reason='de-DE storefront returned despite cookies - session likely expired')
+        # The US storefront is held by `?ipRedirectOverride=true`, not by
+        # the donated session, so a de-DE body means the CDN geo-redirect
+        # fired despite the override. Re-donating cookies does not
+        # change that, so this is not a cookie-gap notification.
+        logger.warning(
+            "audible podcasts: %s returned the de-DE storefront, so the "
+            "ipRedirectOverride flag no longer holds the US storefront "
+            "from this IP. This is a geo-redirect, not an expired "
+            "session.", _AUDIBLE_PODCASTS_URL)
         return [], _WARMING_UP_HINT
     if len(html) < 50_000:
         logger.warning("audible podcasts: html too small (%d bytes) - "
