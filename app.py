@@ -57499,6 +57499,30 @@ _PM_BASE_GENERIC_TOKENS = {
 }
 
 
+def _pm_short_name_identity(toks, raw_text):
+    """Short-name subject identity (2026-09-23 Jenna, 'How many people
+    have watched BET content in the last 12 months' quoted a research
+    report instead of answering from the BET profile).
+
+    The catalog matcher's identity-token floor (distinctive tokens
+    must total >= 4 chars) keeps generic short words from binding
+    wrongly, but it also made 2-5 letter subjects (BET, CNN, NFL, GAP)
+    unmatchable as bases. Mirror of the hostmap initialism rule: a
+    single 2-5 letter subject token IS an identity when the ask
+    carries it as a standalone ALL-CAPS word. 'watched BET content'
+    binds the BET profile; 'how much do people bet' stays unbound."""
+    try:
+        if len(toks) != 1:
+            return False
+        tok = str(toks[0] or '')
+        if not (2 <= len(tok) <= 5) or not tok.isalpha():
+            return False
+        return bool(re.search(r'\b' + re.escape(tok.upper()) + r'\b',
+                              str(raw_text or '')))
+    except Exception:
+        return False
+
+
 def _pm_generation_base(subject_hint, text, ctx=None,
                         prefer_catalog=False):
     """Resolve the base that authorizes a generated read.
@@ -57562,7 +57586,13 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         for entry in _profile_catalog_for_chat():
             for field in ('subject', 'display_name'):
                 toks = _tokens(entry.get(field))
-                if not toks or sum(len(t) for t in toks) < 4:
+                if not toks:
+                    continue
+                if sum(len(t) for t in toks) < 4 and \
+                        not _pm_short_name_identity(
+                            toks, f"{text or ''} {subject_hint or ''}"):
+                    # identity-token floor, with the ALL-CAPS
+                    # initialism bypass for 2-5 letter subjects
                     continue
                 tset = set(toks)
                 is_tu = ' - ' not in str(entry.get('display_name') or '')
