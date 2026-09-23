@@ -6405,6 +6405,194 @@ def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
     return ('up' if delta > 0 else 'down'), round(delta, 4)
 
 
+def _set_platform_reading(it: dict, slug: str, new_value: int,
+                           item_key: str, salt: str) -> bool:
+    """Write one platform's reading and let the item's aggregate
+    follow by exactly that much.
+
+    Deliberately NOT `_rescale_estimate_blocks`. That helper moves the
+    aggregate and rescales every per-platform block in lockstep, which
+    is right when the aggregate is what changed and wrong here: called
+    after setting a block it re-multiplies the value just written by
+    the aggregate's own scale factor. On a service that dominates its
+    item's aggregate that roughly doubles the number, and it silently
+    scrambled a chart that had been sized correctly one line earlier.
+    The aggregate is the sum of the platform mids, so a block moving
+    by N moves the aggregate by N and leaves its siblings alone.
+    """
+    blk = (it.get('by_platform') or {}).get(slug)
+    if not isinstance(blk, dict):
+        return False
+    old = int(blk.get('us_estimate') or 0)
+    new_value = max(1, int(new_value))
+    if old <= 0 or new_value == old:
+        return False
+    scale = new_value / old
+    blk['us_estimate'] = new_value
+    for f in ('us_estimate_low', 'us_estimate_high'):
+        cur = blk.get(f)
+        if isinstance(cur, int) and cur > 0:
+            blk[f] = max(1, int(round(cur * scale)))
+    if isinstance(blk.get('us_estimate_low'), int) and \
+            blk['us_estimate_low'] > new_value:
+        blk['us_estimate_low'] = new_value
+    if isinstance(blk.get('us_estimate_high'), int) and \
+            blk['us_estimate_high'] < new_value:
+        blk['us_estimate_high'] = new_value
+
+    delta = new_value - old
+    agg = int(it.get('us_estimate') or 0)
+    if agg > 0:
+        new_agg = max(1, agg + delta)
+        a_scale = new_agg / agg
+        it['us_estimate'] = _natural_last_digits(new_agg, item_key, salt)
+        for f in ('us_estimate_low', 'us_estimate_high'):
+            cur = it.get(f)
+            if isinstance(cur, int) and cur > 0:
+                it[f] = max(1, int(round(cur * a_scale)))
+        if isinstance(it.get('us_estimate_low'), int) and \
+                it['us_estimate_low'] > it['us_estimate']:
+            it['us_estimate_low'] = it['us_estimate']
+        if isinstance(it.get('us_estimate_high'), int) and \
+                it['us_estimate_high'] < it['us_estimate']:
+            it['us_estimate_high'] = it['us_estimate']
+    return True
+
+
+def _reason_published_charts_as_sets(researched: dict[str, dict],
+                                      target_date_iso: str) -> dict:
+    """Re-level every published chart in one call each.
+
+    The per-item research pass cannot make a chart descend, because
+    each call sees one title and has nothing to be consistent with.
+    This runs after it and overwrites the charted rows with a set that
+    was reasoned together: one call per chart, the service's own
+    figures where it publishes them, its audience as the envelope
+    where it does not.
+
+    Only rows the service actually charts are touched. The tail keeps
+    the per-item reading it already had, which is the right answer for
+    a title nobody ranked.
+
+    Fail-safe: no client, a failed call, or an unusable response all
+    leave the rail exactly as it was, and the coherence pass
+    downstream still runs.
+    """
+    from . import chart_set_reasoning as _csr
+    out = {'charts': 0, 'titles': 0, 'skipped': 0}
+    try:
+        import anthropic
+        api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
+        if not api_key:
+            logger.info("chart sets: no API key, keeping per-item values")
+            return out
+        client = anthropic.Anthropic(api_key=api_key)
+    except Exception as e:
+        logger.info("chart sets: no client (%s), keeping per-item values", e)
+        return out
+
+    depth_sources = (_read_snapshot('streaming_depth') or {}).get(
+        'sources') or {}
+    for slug, label in _STREAMING_SLUGS:
+        if not has_published_chart(slug):
+            continue
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
+        index = published_chart_index(slug, snap)
+        if not index:
+            continue
+        meta = next((p for p in _STREAMING_PLATFORMS_META
+                     if p['key'] == slug), None)
+        ceiling = (meta or {}).get('ceiling') or 0
+        anchors = (meta or {}).get('anchors') or ''
+
+        # Gather the charted rows per chart, carrying whatever the
+        # service published for each of them.
+        charts: dict[str, list[dict]] = {}
+        srcs = []
+        if slug == 'netflix':
+            srcs += [(r, 'film') for r in (snap.get('us_films') or [])]
+            srcs += [(r, 'tv') for r in (snap.get('us_tv') or [])]
+        for r in (snap.get('national') or []):
+            cat = str(r.get('category_display') or '').strip().lower()
+            srcs.append((r, 'film' if cat.startswith(('film', 'movie'))
+                         else 'tv'))
+        seen: set = set()
+        for r, kind in srcs:
+            title = str(r.get('title') or '')
+            norm = _cp_normalize(title)
+            if not norm or (kind, norm) in seen:
+                continue
+            seen.add((kind, norm))
+            hit = published_rank_for(index, kind, title)
+            if not hit:
+                continue
+            group = hit[2] if len(hit) > 2 else ''
+            row = {'title': title, 'published_rank': hit[0],
+                   'kind': kind, 'category': r.get('category_display') or '',
+                   '_item_key': f'{kind}:{norm}'}
+            for f in ('weekly_views', 'weekly_hours_viewed',
+                      'weeks_in_top10'):
+                if r.get(f):
+                    row[f] = r[f]
+            charts.setdefault(group, []).append(row)
+
+        for group, rows in sorted(charts.items()):
+            rows = [r for r in rows
+                    if isinstance(researched.get(r['_item_key']), dict)]
+            if len(rows) < 2:
+                out['skipped'] += 1
+                continue
+            chart_label = published_chart_label(slug) or f'{label} chart'
+            if group and group not in ('us_films', 'us_tv'):
+                pretty = group.title()
+            elif group == 'us_films':
+                pretty = f'{chart_label} (films)'
+            elif group == 'us_tv':
+                pretty = f'{chart_label} (series)'
+            else:
+                pretty = chart_label
+            try:
+                res = _csr.reason_chart(
+                    client, slug=slug, platform_label=label,
+                    chart_label=pretty, rows=rows,
+                    target_date_iso=target_date_iso,
+                    ceiling=ceiling, anchors=anchors)
+            except Exception:
+                logger.exception("chart sets: %s / %s failed "
+                                  "(non-fatal)", slug, pretty)
+                out['skipped'] += 1
+                continue
+            values = res.get('values') or {}
+            if not values:
+                out['skipped'] += 1
+                continue
+            out['charts'] += 1
+            for r in rows:
+                v = values.get(r['title'])
+                if not isinstance(v, int) or v <= 0:
+                    continue
+                if _set_platform_reading(
+                        researched[r['_item_key']], slug, v,
+                        r['_item_key'],
+                        f'{target_date_iso}|chartset|{slug}'):
+                    out['titles'] += 1
+            logger.info(
+                "chart sets: %s / %s sized %d title(s) in one call "
+                "(%s anchor%s%s)", slug, pretty, len(values),
+                'published-figure' if res.get('quantified')
+                else 'platform-envelope',
+                f", day factor {res['day_factor']:.3f}"
+                if res.get('day_factor') else '',
+                f", model descent check {res['model_descends']}"
+                if res.get('model_descends') is not None else '')
+            if res.get('notes'):
+                logger.info("chart sets: %s / %s notes: %s", slug,
+                             pretty, res['notes'][:220])
+    return out
+
+
 def _enforce_published_chart_coherence(researched: dict[str, dict],
                                         target_date_iso: str) -> dict:
     """Bring every rail that mirrors a published chart into agreement
@@ -6497,27 +6685,9 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             return r['_blk'].get('us_estimate')
 
         def _set(r, v, _slug=slug):
-            blk, it = r['_blk'], r['_item']
-            old = int(blk.get('us_estimate') or 0)
-            if old <= 0:
-                return
-            scale = v / old
-            blk['us_estimate'] = int(v)
-            for f in ('us_estimate_low', 'us_estimate_high'):
-                cur = blk.get(f)
-                if isinstance(cur, int) and cur > 0:
-                    blk[f] = max(1, int(round(cur * scale)))
-            if isinstance(blk.get('us_estimate_low'), int) and \
-                    blk['us_estimate_low'] > blk['us_estimate']:
-                blk['us_estimate_low'] = blk['us_estimate']
-            if isinstance(blk.get('us_estimate_high'), int) and \
-                    blk['us_estimate_high'] < blk['us_estimate']:
-                blk['us_estimate_high'] = blk['us_estimate']
-            agg = int(it.get('us_estimate') or 0)
-            if agg > 0:
-                _rescale_estimate_blocks(
-                    it, agg, max(1, agg + (int(v) - old)), r['_key'],
-                    f'{target_date_iso}|chartcoherence|{_slug}')
+            _set_platform_reading(
+                r['_item'], _slug, int(v), r['_key'],
+                f'{target_date_iso}|chartcoherence|{_slug}')
 
         # One pass per published chart. A kind-specific chart governs
         # its own kind; a mixed one governs the whole rail.
@@ -7054,6 +7224,23 @@ def fetch(only: Optional[set[str]] = None,
     # before the distinctness pass so that pass gets the last word on
     # every value, and before the trend attach so the chips describe
     # what ships. Non-fatal by construction.
+    # A published chart is sized as a chart, in one call, before
+    # anything tries to reconcile it row by row. The per-item pass
+    # above cannot make a chart descend because each of its calls
+    # sees a single title; this is the pass that can.
+    try:
+        _cs = _reason_published_charts_as_sets(researched,
+                                                target_date_iso)
+        if _cs.get('charts'):
+            logger.info("stream_estimates: %d published chart(s) sized "
+                         "as a set for %s, %d title(s) re-levelled, %d "
+                         "chart(s) left to their per-item values",
+                         _cs['charts'], target_date_iso, _cs['titles'],
+                         _cs['skipped'])
+    except Exception:
+        logger.exception("stream_estimates: chart-set reasoning failed "
+                          "(non-fatal)")
+
     try:
         _nc = _reclamp_carried_to_platform_ceiling(researched)
         if _nc:
