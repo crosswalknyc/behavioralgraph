@@ -34938,23 +34938,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // "not significant" moves to a SECOND LINE under the OR text
                     // (block-level, right-aligned) so it never collides with the
                     // Read-strength chip in the next grid cell. See
-                    // splice_iiq_mta_coef_row_spacing_2026_09_23.py.
+                    // splice_iiq_mta_coef_row_spacing_2026_09_23.py. Tooltip
+                    // added per splice_iiq_mta_coef_row_tooltips_2026_09_23.py.
                     var notSigChip = '';
                     if (isFinite(orLoRaw) && isFinite(orHiRaw) && orLoRaw <= 1.0 && 1.0 <= orHiRaw) {
-                        notSigChip = '<div style="margin-top:0.15rem;"><span style="display:inline-block; padding:1px 6px; font-size:0.6rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; color:#7C878A; border:1px solid rgba(124,135,138,0.35);">not significant</span></div>';
+                        notSigChip = '<div style="margin-top:0.15rem;" title="The 95 percent CI includes 1.00, so we cannot rule out no effect. Read directionally, not as a hard lift."><span style="display:inline-block; padding:1px 6px; font-size:0.6rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; color:#7C878A; border:1px solid rgba(124,135,138,0.35);">not significant</span></div>';
                     }
+                    // Per-row tooltip for the read-strength chip. Kept on the
+                    // wrapping cell so _iiqMTASigChip stays context-free (it is
+                    // also called by _iiqMTAQualityChip on a different card).
+                    var sigTip = { strong: 'Strong read. The 95 percent CI is tight and clearly excludes 1.00.', moderate: 'Moderate read. The CI is on one side of 1.00 but not far from it.', weak: 'Weak read. The effect is small or the CI straddles 1.00.' }[r.significance] || 'Weak read. The effect is small or the CI straddles 1.00.';
                     return (
                         '<div style="display:grid; grid-template-columns: 240px 1fr 240px 100px; gap:0.9rem; align-items:center; padding:0.35rem 0;">'
                       + '  <div style="min-width:0;">'
                       + '    <div style="font-size:0.78rem; color: var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.asset_title) + '">' + escapeHtml(r.asset_title) + '</div>'
-                      + '    <div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.1rem;">' + escapeHtml(r.channel) + ' \u00b7 ' + escapeHtml(r.phase || '') + '</div>'
+                      + '    <div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.1rem;" title="Channel is the surface (TikTok, Instagram, YouTube, Google Search). Phase is when this asset was live: T-N is N weeks before opening, T-0 is opening week.">' + escapeHtml(r.channel) + ' \u00b7 ' + escapeHtml(r.phase || '') + '</div>'
                       + '  </div>'
-                      + '  <div style="display:flex; align-items:center; background: rgba(255,255,255,0.02); border-radius:9999px; padding:2px 6px;">' + leftHalf + centerRule + rightHalf + '</div>'
+                      + '  <div title="Signed coefficient magnitude. Green is a lift on conversion. Orchid is a drag. Gray is weak or not significant. Bar length is proportional to the raw coefficient, not the odds ratio." style="display:flex; align-items:center; background: rgba(255,255,255,0.02); border-radius:9999px; padding:2px 6px;">' + leftHalf + centerRule + rightHalf + '</div>'
                       + '  <div style="text-align:right;">'
-                      + '    <div style="font-size:0.75rem; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space:nowrap;">' + orText + '</div>'
+                      + '    <div style="font-size:0.75rem; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space:nowrap;" title="Odds ratio point estimate with 95 percent confidence interval. 1.00 is no effect.">' + orText + '</div>'
                       +      notSigChip
                       + '  </div>'
-                      + '  <div style="text-align:right;">' + _iiqMTASigChip(r.significance) + '</div>'
+                      + '  <div style="text-align:right;" title="' + sigTip + '">' + _iiqMTASigChip(r.significance) + '</div>'
                       + '</div>'
                     );
                 }
@@ -34964,10 +34969,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var barRowsExtra = extra.map(_renderCoefRow).join('');
                 var chartHead =
                     '<div style="display:grid; grid-template-columns: 240px 1fr 240px 100px; gap:0.9rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
-                  + '  <div>Touchpoint</div>'
-                  + '  <div style="text-align:center;">Lift shape</div>'
-                  + '  <div style="text-align:right;">Odds ratio (95% CI)</div>'
-                  + '  <div style="text-align:right;">Read strength</div>'
+                  + '  <div title="The asset, keyword, or surface that appeared in the exposure log. Line 1 is the asset title. Line 2 is the channel and the phase (T-N is N weeks before opening).">Touchpoint</div>'
+                  + '  <div style="text-align:center;" title="Visual size of the touchpoint effect on conversion. Bar to the right is a lift, bar to the left is a drag. Length is proportional to the coefficient magnitude.">Lift shape</div>'
+                  + '  <div style="text-align:right;" title="The lift as an odds ratio. 1.00 is no effect. 1.10 means an exposed viewer is 10 percent more likely to convert than a matched control. The 95 percent CI is the range we would defend.">Odds ratio (95% CI)</div>'
+                  + '  <div style="text-align:right;" title="How much weight to put on this row. Strong is a tight CI clear of 1.00. Moderate is one-sided but narrow. Weak is small or the CI straddles 1.00.">Read strength</div>'
                   + '</div>';
                 var rootId = 'iiqMTACoefChart_' + Math.floor(Math.random() * 1e9);
                 var showAllLabel = 'Show all ' + tps.length + ' touchpoints';
