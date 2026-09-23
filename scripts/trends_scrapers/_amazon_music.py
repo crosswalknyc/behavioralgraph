@@ -52,19 +52,11 @@ def on_profile_picker(page) -> bool:
         return False
 
 
-def dismiss_profile_picker(page, *, settle_ms: int = 6000) -> tuple[bool, str]:
-    """Pick the first real profile so navigation can continue.
-
-    Returns `(dismissed, note)`. `dismissed` is False both when we were
-    never on the chooser (note `not_on_picker`) and when we were but
-    could not get past it, which is a genuine failure worth logging.
-    Never raises.
-    """
-    if not on_profile_picker(page):
-        return False, 'not_on_picker'
-
+def _read_picker_labels(page) -> list[str]:
+    """Text of every clickable on the chooser, light DOM only, which is
+    where Amazon puts the profile buttons."""
     try:
-        labels = page.evaluate("""() => {
+        return page.evaluate("""() => {
             const out = [];
             document.querySelectorAll('button, music-link, a').forEach((el) => {
                 const t = (el.innerText || '').trim();
@@ -72,13 +64,48 @@ def dismiss_profile_picker(page, *, settle_ms: int = 6000) -> tuple[bool, str]:
             });
             return out;
         }""") or []
-    except Exception as e:
-        return False, f'picker_read_failed: {e}'
+    except Exception:
+        return []
 
-    candidates = [t for t in labels
-                  if t.strip().lower() not in _NON_PROFILE_LABELS]
+
+def dismiss_profile_picker(page, *, settle_ms: int = 6000,
+                           wait_ms: int = 24000) -> tuple[bool, str]:
+    """Pick the first real profile so navigation can continue.
+
+    Returns `(dismissed, note)`. `dismissed` is False both when we were
+    never on the chooser (note `not_on_picker`) and when we were but
+    could not get past it, which is a genuine failure worth logging.
+    Never raises.
+
+    The chooser paints a "Tuning in" shell first and only renders its
+    profile buttons once the identity call returns, which took about
+    ten seconds from the build server and under four from a home
+    connection. Reading the buttons once is therefore a race that the
+    slower host loses, so poll until they appear.
+    """
+    if not on_profile_picker(page):
+        return False, 'not_on_picker'
+
+    labels: list[str] = []
+    candidates: list[str] = []
+    waited = 0
+    while True:
+        labels = _read_picker_labels(page)
+        candidates = [t for t in labels
+                      if t.strip().lower() not in _NON_PROFILE_LABELS]
+        if candidates or waited >= wait_ms:
+            break
+        if not on_profile_picker(page):
+            return True, 'picker_cleared_itself'
+        try:
+            page.wait_for_timeout(1500)
+        except Exception:
+            break
+        waited += 1500
+
     if not candidates:
-        return False, f'picker_had_no_profile_button (saw {labels[:6]})'
+        return False, (f'picker_had_no_profile_button after {waited}ms '
+                       f'(saw {labels[:6]})')
 
     for label in candidates[:3]:
         try:

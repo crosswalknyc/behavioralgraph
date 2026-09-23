@@ -49,20 +49,31 @@ def check(ok: bool, what: str) -> None:
 
 
 class StubPage:
-    """Minimal stand-in for a Playwright page on the profile chooser."""
+    """Minimal stand-in for a Playwright page on the profile chooser.
 
-    def __init__(self, labels, clears_on):
+    `blank_reads` models the "Tuning in" shell: the first N reads of
+    the chooser return no buttons at all, which is what the build
+    server sees for its first ten seconds.
+    """
+
+    def __init__(self, labels, clears_on, blank_reads=0):
         self.url = ('https://music.amazon.com/identity/who-is-listening'
                     '?returnTo=https%3A%2F%2Fmusic.amazon.com%2F')
         self._labels = labels
         self._clears_on = clears_on
+        self._blank_reads = blank_reads
+        self.reads = 0
+        self.waits = 0
         self.clicked: list = []
 
     def evaluate(self, _js):
+        self.reads += 1
+        if self.reads <= self._blank_reads:
+            return []
         return self._labels
 
     def wait_for_timeout(self, _ms):
-        pass
+        self.waits += 1
 
     def get_by_text(self, text, exact=False):
         page = self
@@ -140,7 +151,25 @@ def main() -> int:
           'a profile is picked, never the "Add profile" button')
     check('jenna' in note, 'the note names the profile that was picked')
 
-    # 7. Off the chooser, the helper is a no-op.
+    # 7. The chooser paints a "Tuning in" shell before its buttons
+    #    exist. Reading once loses that race on a slow host.
+    slow = StubPage(['jenna', 'Add profile'], clears_on='jenna',
+                    blank_reads=6)
+    dismissed, note = am.dismiss_profile_picker(slow, settle_ms=0)
+    check(dismissed is True,
+          'a chooser that renders its buttons late is still cleared')
+    check(slow.waits >= 6, 'the helper polls rather than reading once')
+
+    # 8. A chooser that never renders a profile says so, and says how
+    #    long it waited, instead of blaming cookies.
+    never = StubPage([], clears_on=None)
+    dismissed, note = am.dismiss_profile_picker(never, settle_ms=0,
+                                                wait_ms=3000)
+    check(dismissed is False, 'an empty chooser is not reported as cleared')
+    check('after' in note and 'ms' in note,
+          'the failure note says how long it waited')
+
+    # 9. Off the chooser, the helper is a no-op.
     page.url = 'https://music.amazon.com/podcasts'
     dismissed, note = am.dismiss_profile_picker(page, settle_ms=0)
     check(dismissed is False and note == 'not_on_picker',
