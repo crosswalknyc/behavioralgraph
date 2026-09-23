@@ -8113,10 +8113,13 @@ def _published_slot(row: dict) -> Optional[int]:
 def _reseat_ranks_by_value(rows: list) -> int:
     """Order `rows` and give them dense ranks from 1.
 
-    Rows the service publishes a position for come first, in the
-    service's own order, and that order is not ours to change: if HBO
-    Max has Lanterns at #1 then Lanterns is #1 here. Everything below
-    the published block is ordered by the audience the row is
+    Rows the service publishes a position for come first and their
+    order within their own chart is not ours to change: if HBO Max
+    has Lanterns at #1 then Lanterns is #1 here. Where a service
+    publishes more than one chart the rail merges them by value,
+    preserving each chart's internal order, so the page descends
+    without anyone inventing a ranking across the two. Everything
+    below the published block is ordered by the audience the row is
     rendering, which is the whole point of the rail. Rows with no
     value hold their relative position at the end rather than being
     dropped. Returns rows moved.
@@ -8129,33 +8132,70 @@ def _reseat_ranks_by_value(rows: list) -> int:
     """
     if not isinstance(rows, list) or len(rows) < 2:
         return 0
-    decorated = []
+    if any(not isinstance(r, dict) for r in rows):
+        return 0
+
+    published: dict[str, list] = {}
+    rest: list = []
     for i, row in enumerate(rows):
-        if not isinstance(row, dict):
-            return 0
-        v = _rank_row_value(row)
         slot = _published_slot(row)
-        # Published rows first, in the service's order, with the film
-        # rail ahead of the TV rail at equal position so a zipped list
-        # keeps the shape it is built with. Then valued rows by value
-        # descending, current position breaking ties so a rail with
-        # tied values stays stable between renders. Unvalued rows keep
-        # their order at the end.
-        if slot is not None:
+        if slot is None:
+            rest.append((i, row))
+            continue
+        # Which of the service's charts this came from. Rows from
+        # before the group was stamped fall back to their kind, which
+        # is how Netflix and Prime Video split anyway.
+        g = str(row.get('published_group') or '')
+        if not g:
             cat = str(row.get('category_display') or '').strip().lower()
-            decorated.append((0, slot, 0 if cat.startswith(('film', 'movie'))
-                              else 1, i, row))
-        else:
-            decorated.append(((1 if v is not None else 2),
-                              -(v or 0), 0, i, row))
-    decorated.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
+            g = 'film' if cat.startswith(('film', 'movie')) else 'tv'
+        published.setdefault(g, []).append((slot, i, row))
+    for g in published:
+        published[g].sort(key=lambda t: (t[0], t[1]))
+
+    # A service can publish more than one chart and the rail shows
+    # them together. Netflix ranks films and series separately, so
+    # Why Did I Get Married Again and Monster: The Lizzie Borden
+    # Story are both a #1 and neither outranks the other. Laying them
+    # out by position alone put 781,805 above 871,181 on the first two
+    # lines of the page, which contradicts itself before the reader
+    # gets to line three.
+    #
+    # So the charts are MERGED by value the way two already-sorted
+    # lists are merged: take whichever chart's next title is larger.
+    # The rail then descends, and within films and within series the
+    # service's own order is never disturbed, so nothing here invents
+    # a cross-chart ranking the service did not publish.
+    heads = {g: 0 for g in published}
+    merged: list = []
+    while True:
+        best_g, best_v = None, None
+        for g, lst in published.items():
+            idx = heads[g]
+            if idx >= len(lst):
+                continue
+            v = _rank_row_value(lst[idx][2]) or 0
+            if best_v is None or v > best_v:
+                best_g, best_v = g, v
+        if best_g is None:
+            break
+        merged.append(published[best_g][heads[best_g]])
+        heads[best_g] += 1
+
+    # Below the published block the audience decides, with the row's
+    # current position breaking ties so a rail with tied values stays
+    # stable between renders. Rows carrying no value hold their order
+    # at the end rather than being dropped.
+    rest.sort(key=lambda t: (0 if _rank_row_value(t[1]) is not None else 1,
+                             -(_rank_row_value(t[1]) or 0), t[0]))
+
+    ordered = [t[2] for t in merged] + [t[1] for t in rest]
     moved = 0
-    for new_rank, entry in enumerate(decorated, start=1):
-        row = entry[-1]
+    for new_rank, row in enumerate(ordered, start=1):
         if row.get('rank') != new_rank:
             moved += 1
         row['rank'] = new_rank
-    rows[:] = [t[-1] for t in decorated]
+    rows[:] = ordered
     return moved
 
 
