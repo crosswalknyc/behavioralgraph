@@ -32429,6 +32429,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         /* Bars */
         #intentIQView .iiq-bar, #intentIQView [class*="-bar"] > i { border-radius: 1px; }
 
+        /* Show-all reads as a link on a rule, not a boxed button */
+        #intentIQView .iiq-show-all-btn { background: transparent !important; border: 0 !important;
+            border-top: 1px solid #1A2629 !important; border-radius: 0 !important; width: 100%;
+            padding: 0.85rem 0 0 !important; color: #7C878A !important; font-size: 0.66rem !important;
+            font-weight: 600 !important; letter-spacing: 0.13em; text-transform: uppercase;
+            text-align: left !important; cursor: pointer; }
+        #intentIQView .iiq-show-all-btn:hover { color: #C7F23E !important; }
+        body[data-theme="light"] #intentIQView .iiq-show-all-btn { color: #5C6560 !important;
+            border-top-color: #DAD8CE !important; }
+        body[data-theme="light"] #intentIQView .iiq-show-all-btn:hover { color: #5E7E12 !important; }
+
         /* Section heads */
         #intentIQView h3, #intentIQView h4 { color: #E9E8E1; font-weight: 400; letter-spacing: -0.008em; }
         #intentIQView .iiq-panel > h3:first-child { margin-top: 0; }
@@ -125401,7 +125412,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             'fb923c': 'E682FF', 'f87171': 'E682FF', 'ef4444': 'E682FF',
             'dc2626': 'E682FF', 'fca5a5': 'E682FF', 'fcd34d': 'E682FF',
             // purples already close enough to Amethyst/Orchid
-            'a78bfa': 'B7B3D8', 'c084fc': 'E682FF', '8b5cf6': '8E3FA8'
+            'a78bfa': 'B7B3D8', 'c084fc': 'E682FF', '8b5cf6': '8E3FA8',
+            '9fd628': 'C7F23E', '84cc16': 'C7F23E', 'a3e635': 'C7F23E'
         };
         function _aiqHex(r, g, b) {
             function p(n) { n = Math.max(0, Math.min(255, parseInt(n, 10) || 0)).toString(16); return n.length < 2 ? '0' + n : n; }
@@ -125468,13 +125480,101 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             kids.forEach(function (c) { wrap.appendChild(c); });
             root.dataset.aiqWrapped = '1';
         }
+        // A filled pill on every row of a long table is ten accents where one
+        // belongs. Keep the ink, drop the fill.
+        function _aiqChips() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('[style*="border-radius:999"],[style*="border-radius: 999"],[style*="border-radius:9999"],[style*="border-radius: 9999"]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.dataset.aiqChip === '1') continue;
+                el.dataset.aiqChip = '1';
+                var m = (getComputedStyle(el).color || '').match(/(\d+),\s*(\d+),\s*(\d+)/);
+                var edge = m ? 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',0.38)' : 'rgba(255,255,255,0.22)';
+                el.style.borderRadius = '2px';
+                el.style.background = 'transparent';
+                el.style.border = '1px solid ' + edge;
+                el.style.fontWeight = '600';
+                el.style.fontSize = '0.63rem';
+                el.style.letterSpacing = '0.09em';
+                el.style.textTransform = 'uppercase';
+                el.style.padding = '0.18rem 0.46rem';
+            }
+        }
+        // Stripping the emoji leaves the type badge holding a lone middle dot.
+        // The row already names the platform, so the box has nothing to say.
+        function _aiqOrphanBoxes() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('div,span');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.children.length || el.dataset.aiqBox === '1') continue;
+                var t = (el.textContent || '').trim();
+                if (t !== '' && t !== '\u00b7' && t !== '\u2022') continue;
+                var r = el.getBoundingClientRect();
+                if (!r.width || r.width > 40 || r.height > 40) continue;
+                var s = getComputedStyle(el);
+                if (s.backgroundColor === 'rgba(0, 0, 0, 0)' || s.backgroundColor === 'transparent') continue;
+                el.dataset.aiqBox = '1';
+                el.style.display = 'none';
+            }
+        }
+        // The renderers wrap blocks in boxes and then box the blocks inside
+        // them. Section headings already say where one read ends and the next
+        // begins, so the frames only add weight.
+        function _aiqFlattenPanels() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('[style*="border-radius"]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.dataset.aiqPanel === '1') continue;
+                var r = el.getBoundingClientRect();
+                if (r.width < 240 || r.height < 60) continue;
+                var s = getComputedStyle(el);
+                if (parseFloat(s.borderTopWidth) < 1 || parseFloat(s.borderTopLeftRadius) < 4) continue;
+                el.dataset.aiqPanel = '1';
+                var bd = s.borderTopColor;
+                // A callout keeps its voice, as a left rule rather than a frame.
+                var accent = /199,\s*242,\s*62|230,\s*130,\s*255|94,\s*126,\s*18|142,\s*63,\s*168/.test(bd);
+                el.style.background = 'transparent';
+                el.style.borderRadius = '0';
+                el.style.border = '0';
+                if (accent) {
+                    el.style.borderLeft = '2px solid ' + bd;
+                    el.style.paddingLeft = '0.9rem';
+                } else {
+                    el.style.paddingLeft = '0';
+                    el.style.paddingRight = '0';
+                }
+            }
+        }
+        // A rail holding one tab is chrome with nothing to switch between.
+        function _aiqTabRail() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var bar = root.querySelector('.iiq-subtab-bar');
+            if (!bar) return;
+            var shown = 0;
+            var tabs = bar.querySelectorAll('.iiq-subtab');
+            for (var i = 0; i < tabs.length; i++) {
+                if (getComputedStyle(tabs[i]).display !== 'none') shown++;
+            }
+            bar.style.display = shown > 1 ? '' : 'none';
+        }
         (function () {
             var pending = 0;
             function schedule() {
                 if (pending) return;
                 pending = setTimeout(function () {
                     pending = 0;
-                    try { _aiqWrap(); _aiqRepalette(); _aiqStripEmoji(); } catch (e) { }
+                    try {
+                        _aiqWrap(); _aiqRepalette(); _aiqStripEmoji();
+                        _aiqChips(); _aiqOrphanBoxes();
+                        _aiqFlattenPanels(); _aiqTabRail();
+                    } catch (e) { }
                 }, 120);
             }
             function attach() {
