@@ -3898,13 +3898,15 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         # to air on this channel to a defensible number.
         # `artist` carries the platform slug (roku/tubi/pluto/amazon).
         plat_slug = (item.get('fast_platform') or artist or '').lower()
-        plat_label_map = {
-            'roku':   'Roku Channel',
-            'tubi':   'Tubi',
-            'pluto':  'Pluto TV',
-            'amazon': 'Amazon Live TV',
-        }
-        plat_label = plat_label_map.get(plat_slug, plat_slug or '(unknown)')
+        # Read the label off the platform table rather than a local
+        # copy of it. The local copy listed the first four rails and
+        # never grew, so the six added since fell through to the raw
+        # slug and the prompt addressed the model with 'FAST PLATFORM:
+        # sling_freestream'. The table is the same one that supplies
+        # the anchors a few lines down, so the two always agree.
+        plat_label = next(
+            (p['label'] for p in _FAST_CHANNEL_PLATFORMS_META
+             if p['key'] == plat_slug), plat_slug or '(unknown)')
         unit = ('daily US viewers (unique US households tuning to '
                 'this 24/7 linear FAST channel for at least one '
                 'minute on the target day)')
@@ -4800,6 +4802,28 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         if agg_low  > agg_mid: agg_low  = agg_mid
         if agg_high < agg_mid: agg_high = agg_mid
 
+    # A FAST channel sits on exactly one platform, so its aggregate IS
+    # that platform's reading and cannot outrun that platform's own
+    # limit. The per-kind ceiling checked above is the widest rail on
+    # the board, so on a small rail it never binds: Philo's 500K
+    # weekly is a seventh of it, and 8 Philo rows had drifted past
+    # their own platform while passing the per-kind test. Scale back
+    # onto the platform's headroom rather than pinning to it, so two
+    # channels that both overrun do not land on one integer.
+    platform_capped = False
+    if kind == 'fast_channel' and by_platform:
+        plat_daily_cap = sum(
+            max(1, int(p['ceiling'] / 7))
+            for p in _platforms_for_kind(kind) if p['key'] in by_platform)
+        if plat_daily_cap and agg_mid > plat_daily_cap:
+            # [0.90, 0.99] of the cap, deterministic per channel.
+            room = 0.90 + (_per_title_jitter_factor(
+                title, f'{kind}|platform_cap') - 0.95) * 0.9
+            agg_mid  = max(1, int(plat_daily_cap * room))
+            agg_low  = min(agg_low,  agg_mid)
+            agg_high = min(agg_high, plat_daily_cap)
+            platform_capped = True
+
     # Trailing-zero guard on the aggregate value too (workspace rule
     # `no-round-numbers-in-deliverables.mdc`).
     if title:
@@ -4813,6 +4837,9 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     if clamped:
         method = (method + ' [clamped: raw aggregate exceeded per-kind '
                             'sanity ceiling]').strip()
+    if platform_capped:
+        method = (method + " [clamped: raw aggregate exceeded this "
+                            "platform's own ceiling]").strip()
 
     # day_specificity: mandatory audit field describing what makes the
     # target day different from the previous day for this item. When
