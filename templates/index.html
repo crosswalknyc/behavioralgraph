@@ -32317,9 +32317,146 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             color: #334155 !important;
         }
         </style>
+        <style id="aiqEditorial">
+        /* ---- Attribution IQ editorial system (Crosswalk brand v2.1.0) ---- */
+        #intentIQView {
+            --text-primary: #E9E8E1;
+            --text-secondary: #9AA09B;
+            --accent-cyan: #C7F23E;
+            --data-tab-active: transparent;
+            background: #0C1618;
+            color: #E9E8E1;
+            text-transform: none;
+            letter-spacing: 0;
+            padding: 0 0 4rem;
+        }
+        #intentIQView *:not(code):not(pre):not(.mono) {
+            font-family: 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        #intentIQView .aiq-wrap { max-width: 1180px; margin: 0 auto; padding: 0 2.25rem; }
+
+        /* Masthead */
+        #intentIQView .iiq-header { display: block; margin: 0 0 1.6rem; padding: 2.1rem 0 1.4rem;
+            border-bottom: 1px solid #27393D; }
+        #intentIQView .iiq-title { font-size: 2.05rem; font-weight: 300; letter-spacing: -0.018em;
+            line-height: 1.12; color: #E9E8E1; margin: 0.55rem 0 0; }
+        #intentIQView .iiq-title span { display: none; }
+        #intentIQView .iiq-subtitle { font-size: 0.95rem; line-height: 1.55; color: #9AA09B;
+            max-width: 62ch; margin: 0.7rem 0 0; font-weight: 300; }
+        #intentIQView .aiq-eyebrow { display: flex; align-items: center; gap: 0.5rem;
+            font-size: 0.66rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+            color: #7C878A; }
+        #intentIQView .aiq-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%;
+            background: #C7F23E; flex: 0 0 auto; }
+
+        /* Controls */
+        #intentIQView .iiq-selector-bar,
+        #intentIQView .iiq-selector-bar-v2 { background: transparent; border: 0; border-bottom: 1px solid #1E2C30;
+            border-radius: 0; padding: 0 0 1.1rem; margin: 0 0 1.4rem; gap: 1.6rem; }
+        #intentIQView .iiq-selector-bar label { font-size: 0.62rem; letter-spacing: 0.14em; color: #7C878A;
+            font-weight: 600; margin-bottom: 0.4rem; }
+        #intentIQView .iiq-selector-bar select,
+        #intentIQView .iiq-selector-bar input,
+        #intentIQView select {
+            background: transparent; color: #E9E8E1; border: 0; border-bottom: 1px solid #3B4A4E;
+            border-radius: 0; padding: 0.32rem 1.2rem 0.32rem 0; font-size: 0.88rem; font-weight: 400;
+            min-width: 170px; appearance: none; -webkit-appearance: none; cursor: pointer;
+            background-image: linear-gradient(45deg, transparent 50%, #7C878A 50%), linear-gradient(135deg, #7C878A 50%, transparent 50%);
+            background-position: calc(100% - 9px) calc(50% + 1px), calc(100% - 4px) calc(50% + 1px);
+            background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+        }
+        #intentIQView select:focus { outline: none; border-bottom-color: #C7F23E; }
+        #intentIQView select option { background: #15252A; color: #E9E8E1; }
+
+        /* Tab rail: underline, no fill, no emoji */
+        #intentIQView .iiq-subtab-bar { gap: 0; border-bottom: 1px solid #27393D; padding: 0;
+            margin: 0 0 1.9rem; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+        #intentIQView .iiq-subtab-bar::-webkit-scrollbar { display: none; }
+        #intentIQView .iiq-subtab { background: transparent !important; border: 0; border-bottom: 2px solid transparent;
+            border-radius: 0; color: #7C878A !important; padding: 0.62rem 0; margin-right: 1.9rem;
+            font-size: 0.7rem; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase;
+            white-space: nowrap; transition: color .14s, border-color .14s; }
+        #intentIQView .iiq-subtab:hover { background: transparent !important; color: #B8BEB9 !important; }
+        #intentIQView .iiq-subtab.active { background: transparent !important; color: #E9E8E1 !important;
+            border-bottom-color: #C7F23E; }
+
+        /* Cards become paper, not boxes */
+        #intentIQView .iiq-card,
+        #intentIQView .iiq-meta-card,
+        #intentIQView .iiq-support-card,
+        #intentIQView .iiq-phase-timeline {
+            background: transparent; border: 0; border-top: 1px solid #1E2C30; border-radius: 0;
+            padding: 1rem 0 0; }
+        #intentIQView .iiq-meta-row { gap: 0; border-top: 1px solid #27393D; border-bottom: 1px solid #27393D;
+            margin: 0 0 1.8rem; }
+        #intentIQView .iiq-meta-card { border-top: 0; padding: 1.05rem 1.6rem 1.15rem 0; margin-right: 1.6rem; }
+        #intentIQView .iiq-meta-card-label { font-size: 0.62rem; letter-spacing: 0.14em; color: #7C878A; font-weight: 600; }
+        #intentIQView .iiq-meta-card-value { font-size: 1.62rem; font-weight: 300; letter-spacing: -0.015em;
+            color: #E9E8E1; margin-top: 0.3rem; font-variant-numeric: tabular-nums; }
+        #intentIQView .iiq-hero-card { background: transparent; border: 0; border-left: 0;
+            border-top: 1px solid #27393D; border-bottom: 1px solid #27393D; border-radius: 0;
+            padding: 1.5rem 0; margin: 0 0 1.8rem; }
+        #intentIQView .iiq-support-card { background: transparent; border: 0; border-top: 1px solid #27393D;
+            border-radius: 0; padding: 1.5rem 0 0.4rem; margin: 0 0 1.9rem; }
+        #intentIQView .iiq-hero-eyebrow { font-size: 0.62rem; letter-spacing: 0.15em; color: #7C878A;
+            margin-bottom: 0.55rem; }
+        #intentIQView .iiq-hero-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%;
+            background: #C7F23E; flex: 0 0 auto; }
+        #intentIQView .iiq-hero-wow-chip { font-size: 0.6rem !important; font-weight: 600; padding: 0.22rem 0.5rem;
+            border-radius: 2px; background: transparent !important; border: 1px solid currentColor; opacity: 0.9; }
+        #intentIQView .iiq-explore-drawer { margin: 0; }
+
+        /* Ledger tables */
+        #intentIQView table { border-collapse: collapse; width: 100%; }
+        #intentIQView th { font-size: 0.6rem !important; font-weight: 600 !important; letter-spacing: 0.14em;
+            text-transform: uppercase; color: #7C878A !important; text-align: left;
+            padding: 0 0.9rem 0.6rem 0 !important; border-bottom: 1px solid #27393D !important;
+            background: transparent !important; }
+        #intentIQView td { padding: 0.72rem 0.9rem 0.72rem 0 !important; border-bottom: 1px solid #1A2629 !important;
+            background: transparent !important; font-size: 0.86rem; vertical-align: middle; }
+        #intentIQView tr { background: transparent !important; }
+        #intentIQView tbody tr:hover td { background: rgba(255,255,255,0.018) !important; }
+        #intentIQView td:last-child, #intentIQView th:last-child { padding-right: 0 !important; }
+        #intentIQView th[style*="text-align: right"], #intentIQView td[style*="text-align: right"],
+        #intentIQView .num { font-variant-numeric: tabular-nums; }
+
+        /* Chips calm down to hairlines */
+        #intentIQView .iiq-hero-wow-chip,
+        #intentIQView [class*="chip"], #intentIQView [class*="badge"], #intentIQView [class*="pill"] {
+            border-radius: 2px; font-size: 0.62rem; letter-spacing: 0.1em; font-weight: 600;
+            text-transform: uppercase; }
+
+        /* Bars */
+        #intentIQView .iiq-bar, #intentIQView [class*="-bar"] > i { border-radius: 1px; }
+
+        /* Section heads */
+        #intentIQView h3, #intentIQView h4 { color: #E9E8E1; font-weight: 400; letter-spacing: -0.008em; }
+        #intentIQView .iiq-panel > h3:first-child { margin-top: 0; }
+
+        /* Disclosure rows */
+        #intentIQView details > summary { color: #7C878A; font-size: 0.66rem; letter-spacing: 0.13em;
+            text-transform: uppercase; font-weight: 600; }
+
+        body[data-theme="light"] #intentIQView {
+            --text-primary: #0C1618; --text-secondary: #5C6560; --accent-cyan: #5E7E12;
+            background: #E9E8E1; color: #0C1618; }
+        body[data-theme="light"] #intentIQView .iiq-title { color: #0C1618; }
+        body[data-theme="light"] #intentIQView .iiq-subtitle,
+        body[data-theme="light"] #intentIQView .aiq-eyebrow { color: #5C6560; }
+        body[data-theme="light"] #intentIQView .aiq-eyebrow::before { background: #5E7E12; }
+        body[data-theme="light"] #intentIQView .iiq-header,
+        body[data-theme="light"] #intentIQView .iiq-subtab-bar,
+        body[data-theme="light"] #intentIQView .iiq-meta-row,
+        body[data-theme="light"] #intentIQView .iiq-hero-card,
+        body[data-theme="light"] #intentIQView th { border-color: #C9C6BA !important; }
+        body[data-theme="light"] #intentIQView td { border-color: #DAD8CE !important; }
+        body[data-theme="light"] #intentIQView .iiq-subtab.active { color: #0C1618 !important; border-bottom-color: #5E7E12; }
+        body[data-theme="light"] #intentIQView .iiq-meta-card-value { color: #0C1618; }
+        </style>
         <div id="intentIQView">
             <div class="iiq-header">
-                <h2 class="iiq-title">📈 Attribution IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
+                <div class="aiq-eyebrow">Attribution IQ</div>
+                <h2 class="iiq-title">Title-scoped marketing-intent measurement <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
                 <p class="iiq-subtitle">Ingest a title's marketing-asset map and report on campaign-phase performance, audience-of-interest overlap, paid vs organic interplay, talent halo, trailer viewership, and audience shift over the campaign life.</p>
             </div>
             <div class="iiq-selector-bar-v2">
@@ -125232,6 +125369,116 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function attach() {
                 root = document.getElementById('subscriberIQView');
+                if (!root) { setTimeout(attach, 800); return; }
+                new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
+                schedule();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attach);
+            } else { attach(); }
+        })();
+
+        // ── Attribution IQ editorial normalization ────────────
+        // The view predates the brand system and inherits the legacy body
+        // styling plus ~1.5k inline colors from its renderers. This maps the
+        // old palette onto the current one in place, so every data point
+        // stays and only the surface changes.
+        var _AIQ_COLOR = {
+            // greys / ink
+            '94a3b8': '7C878A', 'cbd5e1': '9AA09B', 'e2e8f0': '9AA09B',
+            '8a9bb5': '7C878A', 'bec8e4': '9AA09B', 'c4dcf2': '9AA09B',
+            'e6f1ff': 'E9E8E1', 'ffffff': 'E9E8E1', '64748b': '7C878A',
+            'a8b8cc': '9AA09B', 'd6e4f7': '9AA09B',
+            // blues / cyans -> Dusk (recessive series)
+            '5a9ad9': 'C7F23E', '66d9ef': 'B7B3D8', '22d3ee': 'B7B3D8',
+            '38bdf8': 'B7B3D8', '60a5fa': 'B7B3D8', '818cf8': 'B7B3D8',
+            'a5b4fc': 'B7B3D8', '3b82f6': 'B7B3D8', '06b6d4': 'B7B3D8',
+            // greens -> Signal Green
+            '22c55e': 'C7F23E', '4ade80': 'C7F23E', '86efac': 'C7F23E',
+            '34d399': 'C7F23E', '10b981': 'C7F23E', '16a34a': 'C7F23E',
+            // ambers / reds -> Orchid (the second voice)
+            'fbbf24': 'E682FF', 'f59e0b': 'E682FF', 'facc15': 'E682FF',
+            'fb923c': 'E682FF', 'f87171': 'E682FF', 'ef4444': 'E682FF',
+            'dc2626': 'E682FF', 'fca5a5': 'E682FF', 'fcd34d': 'E682FF',
+            // purples already close enough to Amethyst/Orchid
+            'a78bfa': 'B7B3D8', 'c084fc': 'E682FF', '8b5cf6': '8E3FA8'
+        };
+        function _aiqHex(r, g, b) {
+            function p(n) { n = Math.max(0, Math.min(255, parseInt(n, 10) || 0)).toString(16); return n.length < 2 ? '0' + n : n; }
+            return p(r) + p(g) + p(b);
+        }
+        function _aiqMapCss(css) {
+            if (!css) return css;
+            // rgb()/rgba() -> keep alpha, swap the hue
+            css = css.replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/gi,
+                function (all, r, g, b, a) {
+                    var to = _AIQ_COLOR[_aiqHex(r, g, b)];
+                    if (!to) return all;
+                    var R = parseInt(to.slice(0, 2), 16), G = parseInt(to.slice(2, 4), 16), B = parseInt(to.slice(4, 6), 16);
+                    return (a === undefined) ? 'rgb(' + R + ',' + G + ',' + B + ')'
+                                             : 'rgba(' + R + ',' + G + ',' + B + ',' + a + ')';
+                });
+            // #rgb / #rrggbb
+            css = css.replace(/#([0-9a-f]{3}|[0-9a-f]{6})\b/gi, function (all, h) {
+                if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+                var to = _AIQ_COLOR[h.toLowerCase()];
+                return to ? '#' + to : all;
+            });
+            return css;
+        }
+        function _aiqRepalette() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('[style]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.dataset.aiqc === '1') continue;
+                var css = el.getAttribute('style');
+                var next = _aiqMapCss(css);
+                if (next !== css) el.setAttribute('style', next);
+                el.dataset.aiqc = '1';
+            }
+        }
+        function _aiqStripEmoji() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            var node, hits = [];
+            while ((node = walker.nextNode())) {
+                if (node.nodeValue && _SUB_PICTO.test(node.nodeValue)) hits.push(node);
+            }
+            hits.forEach(function (n) {
+                var next = n.nodeValue.replace(_SUB_PICTO, '').replace(/^\s+/, '');
+                if (next !== n.nodeValue) n.nodeValue = next;
+            });
+        }
+        function _aiqWrap() {
+            var root = document.getElementById('intentIQView');
+            if (!root || root.dataset.aiqWrapped === '1') return;
+            var kids = [];
+            for (var i = 0; i < root.children.length; i++) {
+                var c = root.children[i];
+                if (c.tagName === 'STYLE' || c.tagName === 'SCRIPT') continue;
+                kids.push(c);
+            }
+            if (!kids.length) return;
+            var wrap = document.createElement('div');
+            wrap.className = 'aiq-wrap';
+            root.insertBefore(wrap, kids[0]);
+            kids.forEach(function (c) { wrap.appendChild(c); });
+            root.dataset.aiqWrapped = '1';
+        }
+        (function () {
+            var pending = 0;
+            function schedule() {
+                if (pending) return;
+                pending = setTimeout(function () {
+                    pending = 0;
+                    try { _aiqWrap(); _aiqRepalette(); _aiqStripEmoji(); } catch (e) { }
+                }, 120);
+            }
+            function attach() {
+                var root = document.getElementById('intentIQView');
                 if (!root) { setTimeout(attach, 800); return; }
                 new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
                 schedule();
