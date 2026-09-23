@@ -217,7 +217,15 @@ _MAX_GAMING_ITEMS    = 140
 # a defensive ceiling ONLY: it sits well above the whole corpus so
 # it does not bind today, and `_collect_fast_channels` logs an error
 # the moment it does.
-_MAX_FAST_CHANNEL_ITEMS = 2_600
+#
+# 2026-09-22: Philo Free, Plex Live TV and Sling Freestream took the
+# field from 2,647 channels to 4,070 and the ceiling started binding,
+# which is the state the note above says it must never be in. A
+# binding ceiling does not delay a channel, it withholds it: the
+# overflow ships with no audience value and cannot place in the
+# ranker at all. Raised to clear the field again with room for the
+# next platform.
+_MAX_FAST_CHANNEL_ITEMS = 6_000
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -925,6 +933,18 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
         # Haiku for the tail) and rides along as one research hint
         # among several; it decides nothing about the final ranking,
         # which is views desc over the whole field.
+        #
+        # Platforms that publish no schedule at all (Philo, Plex,
+        # Sling, MyFree DIRECTV) leave every airings count at zero, so
+        # the emitted order is the source page's own, which is
+        # alphabetical. Position there is not a popularity signal and
+        # must never be dressed up as one: telling the research step
+        # "channel rank #13" for the 13th channel alphabetically gets
+        # reasoned into a tier, the tier becomes the value, and the
+        # board ends up ranking the alphabet. Detect the scheduleless
+        # platform and withhold the position rather than assert it.
+        platform_has_schedule = any(
+            int(c.get('airings') or 0) > 0 for c in channels)
         for i, ch in enumerate(channels[:caps.get(slug, len(channels))]):
             name = (ch.get('name') or '').strip()
             if not _cp_normalize(name):
@@ -947,9 +967,14 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
             if airings > 0:
                 chart_label = (f'{label} channel rank #{rank} '
                                 f'({airings:,} airings/wk)')
-            else:
+            elif platform_has_schedule:
                 chart_label = (f'{label} channel rank #{rank} '
                                 f'(no published schedule for this channel)')
+            else:
+                chart_label = (
+                    f'{label} lineup of {counts.get(slug, 0):,} channels; '
+                    f'this platform publishes no schedule, so no ordering '
+                    f'signal exists and lineup position carries none')
             # Local broadcast feeds reach their own markets, not the
             # country. Carrying the size of that carriage stops the
             # research step pricing a single-market feed against the
@@ -977,6 +1002,12 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
                 'airings':        airings,
                 'content_type':   content_type,
                 'best_rank':      rank,
+                # False only when the whole platform is scheduleless,
+                # so the prompt withholds both the airings count and
+                # the position instead of passing off alphabetical
+                # order as popularity. `best_rank` still rides along
+                # because it picks the cost tier.
+                'ranking_signal': bool(airings > 0 or platform_has_schedule),
                 'chart_labels':   [chart_label],
                 'image':          '',
                 'url':            '',
@@ -3904,24 +3935,52 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
                 'daily audience must be AT LEAST as large as the '
                 'single largest title it airs):\n' + titles_bullets
             )
+        # A scheduleless platform has no airings and no meaningful
+        # lineup order, so it gets neither. Stating "airings: 0" under
+        # a header that says higher means more popular would read as
+        # the emptiest channel on the platform, and stating a position
+        # drawn from an alphabetical list would read as a rank. Both
+        # get reasoned into a tier that is really just spelling.
+        if item.get('ranking_signal', True):
+            signal_line = (
+                f'INTRA-PLATFORM AIRINGS/WEEK (raw signal, higher = more '
+                f'popular within this platform): {airings:,}')
+            signal_guidance = (
+                f'REASONING GUIDANCE: airings/wk is an intra-platform '
+                f'popularity signal only - use it to rank this channel '
+                f'RELATIVE to other channels on {plat_label}, but the '
+                f'absolute DAILY viewer number comes from '
+                f"{plat_label}'s total DAILY US actives times a share "
+                f"that reflects the channel's prominence + IP "
+                f'recognition + programming appeal. A no-name single-'
+                f'show reruns channel with 400 airings/wk gets far '
+                f'fewer viewers than a branded flagship (Nick Jr., '
+                f'CBS News, Fox Weather, Mr. Bean) even at the same '
+                f'airings count.')
+        else:
+            signal_line = (
+                f'INTRA-PLATFORM POPULARITY SIGNAL: none. {plat_label} '
+                f'publishes no schedule, so there is no airings count, '
+                f'and its lineup is listed alphabetically rather than by '
+                f'popularity')
+            signal_guidance = (
+                f'REASONING GUIDANCE: you have NO intra-platform ordering '
+                f'signal here, and any position you may infer from the '
+                f'lineup is alphabetical. Do NOT read a tier off a '
+                f'position. Size this channel from its own IP recognition '
+                f'and programming appeal against '
+                f"{plat_label}'s total DAILY US actives. A branded "
+                f'flagship (Nick Jr., CBS News, Fox Weather, Mr. Bean) '
+                f'sits far above a no-name reruns channel, and the spread '
+                f'across this lineup should be wide for that reason '
+                f'rather than clustered.')
         item_line = (
             f'FAST CHANNEL NAME: {display_title}\n'
             f'FAST PLATFORM: {plat_label}\n'
-            f'INTRA-PLATFORM AIRINGS/WEEK (raw signal, higher = more '
-            f'popular within this platform): {airings:,}'
+            f'{signal_line}'
             f'{ctype_str}'
             f'{titles_str}\n'
-            f'REASONING GUIDANCE: airings/wk is an intra-platform '
-            f'popularity signal only - use it to rank this channel '
-            f'RELATIVE to other channels on {plat_label}, but the '
-            f'absolute DAILY viewer number comes from '
-            f"{plat_label}'s total DAILY US actives times a share "
-            f"that reflects the channel's prominence + IP "
-            f'recognition + programming appeal. A no-name single-'
-            f'show reruns channel with 400 airings/wk gets far '
-            f'fewer viewers than a branded flagship (Nick Jr., '
-            f'CBS News, Fox Weather, Mr. Bean) even at the same '
-            f'airings count. Since a channel aggregates every title '
+            f'{signal_guidance} Since a channel aggregates every title '
             f'it airs, the daily channel viewer count must be at '
             f'least the daily viewer count of its single largest '
             f'title (see top-titles list above where present) - if '
