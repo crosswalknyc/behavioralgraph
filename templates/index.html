@@ -127194,13 +127194,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // 'drawer' panel. The inner sub-tab bar and question rail are
         // hidden once promoted (.aiq-promoted), so nothing is navigable
         // twice. The Multi-touch sub-tab is not promoted: its sections
-        // already live in Paths / Surfaces / Attribution / Timing / Leaks
-        // and its audience picker moves into the controls bar.
+        // already live in Surfaces / Attribution / Timing / Leaks (the
+        // nest and forks sections are retired, 2026-09-23) and its
+        // audience picker moves into the controls bar.
         var _AIQ_TABS = [
             { id: 'l_assets',       label: 'Assets',          panel: 'drawer', sub: 'assets',    legacyOnly: true },
             { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Assets',      ids: ['iiqAssetTableSection'] },
-            { id: 'paths',       label: 'Paths',       heads: ['the nest', 'forks along the way'] },
             { id: 'surfaces',    label: 'Surfaces',    heads: ['where they went'] },
             { id: 'attribution', label: 'Attribution', heads: ['attribution on checkout page reach only',
                                                                'touchpoint contribution to '] },
@@ -127663,9 +127663,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                           ['Assets in view', 'assets'], ['Read strength', 'strength']],
             assets:      [['Assets in view', 'assets'], ['Best response', 'bestResponse'],
                           ['Best lift', 'bestLift'], ['Exposed viewers', 'exposed'], ['Read strength', 'strength']],
-            paths:       [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],
-                          ['Panellists in read', 'panellists'], ['Sufficiency', 'sufficiency'],
-                          ['Read strength', 'strength']],
             surfaces:    [['Exposed viewers', 'exposed'], ['Panellists in read', 'panellists'],
                           ['Read strength', 'strength']],
             attribution: [['Baseline conversion', 'baseline'], ['Panellists in read', 'panellists'],
