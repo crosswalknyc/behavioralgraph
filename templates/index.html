@@ -32337,11 +32337,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         <style id="aiqEditorial">
         /* ---- Attribution IQ editorial system (Crosswalk brand v2.1.0) ---- */
         #intentIQView {
+            --aiq-rule: var(--cw-border, #2C4148);
+            --aiq-hair: #22343A;
+            --aiq-track: #263A41;
+            --aiq-edge: #3C555E;
             --text-primary: #E9E8E1;
             --text-secondary: #9AA09B;
             --accent-cyan: #C7F23E;
             --data-tab-active: transparent;
-            background: #0C1618;
+            background: var(--cw-page, #111F22);
             color: #E9E8E1;
             text-transform: none;
             letter-spacing: 0;
@@ -32355,7 +32359,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         /* Masthead */
         #intentIQView .iiq-header { display: block; margin: 0 0 1.6rem; padding: 2.1rem 0 1.4rem;
-            border-bottom: 1px solid #27393D; }
+            border-bottom: 1px solid var(--aiq-rule); }
         #intentIQView .iiq-title { font-size: 2.05rem; font-weight: 300; letter-spacing: -0.018em;
             line-height: 1.12; color: #E9E8E1; margin: 0.55rem 0 0; }
         #intentIQView .iiq-title span { display: none; }
@@ -32369,14 +32373,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         /* Controls */
         #intentIQView .iiq-selector-bar,
-        #intentIQView .iiq-selector-bar-v2 { background: transparent; border: 0; border-bottom: 1px solid #1E2C30;
+        #intentIQView .iiq-selector-bar-v2 { background: transparent; border: 0; border-bottom: 1px solid var(--aiq-hair);
             border-radius: 0; padding: 0 0 1.1rem; margin: 0 0 1.4rem; gap: 1.6rem; }
         #intentIQView .iiq-selector-bar label { font-size: 0.62rem; letter-spacing: 0.14em; color: #7C878A;
             font-weight: 600; margin-bottom: 0.4rem; }
         #intentIQView .iiq-selector-bar select,
         #intentIQView .iiq-selector-bar input,
         #intentIQView select {
-            background: transparent; color: #E9E8E1; border: 0; border-bottom: 1px solid #3B4A4E;
+            background: transparent; color: #E9E8E1; border: 0; border-bottom: 1px solid var(--aiq-edge);
             border-radius: 0; padding: 0.32rem 1.2rem 0.32rem 0; font-size: 0.88rem; font-weight: 400;
             min-width: 170px; appearance: none; -webkit-appearance: none; cursor: pointer;
             background-image: linear-gradient(45deg, transparent 50%, #7C878A 50%), linear-gradient(135deg, #7C878A 50%, transparent 50%);
@@ -32384,10 +32388,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
         }
         #intentIQView select:focus { outline: none; border-bottom-color: #C7F23E; }
-        #intentIQView select option { background: #15252A; color: #E9E8E1; }
+        #intentIQView select option { background: var(--cw-raised, #1B2E34); color: #E9E8E1; }
 
         /* Tab rail: underline, no fill, no emoji */
-        #intentIQView .iiq-subtab-bar { gap: 0; border-bottom: 1px solid #27393D; padding: 0;
+        #intentIQView .iiq-subtab-bar { gap: 0; border-bottom: 1px solid var(--aiq-rule); padding: 0;
             margin: 0 0 1.9rem; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
         #intentIQView .iiq-subtab-bar::-webkit-scrollbar { display: none; }
         #intentIQView .iiq-subtab { background: transparent !important; border: 0; border-bottom: 2px solid transparent;
@@ -32403,18 +32407,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .iiq-meta-card,
         #intentIQView .iiq-support-card,
         #intentIQView .iiq-phase-timeline {
-            background: transparent; border: 0; border-top: 1px solid #1E2C30; border-radius: 0;
+            background: transparent; border: 0; border-top: 1px solid var(--aiq-hair); border-radius: 0;
             padding: 1rem 0 0; }
-        #intentIQView .iiq-meta-row { gap: 0; border-top: 1px solid #27393D; border-bottom: 1px solid #27393D;
+        #intentIQView .iiq-meta-row { gap: 0; border-top: 1px solid var(--aiq-rule); border-bottom: 1px solid var(--aiq-rule);
             margin: 0 0 1.8rem; }
         #intentIQView .iiq-meta-card { border-top: 0; padding: 1.05rem 1.6rem 1.15rem 0; margin-right: 1.6rem; }
         #intentIQView .iiq-meta-card-label { font-size: 0.62rem; letter-spacing: 0.14em; color: #7C878A; font-weight: 600; }
         #intentIQView .iiq-meta-card-value { font-size: 1.62rem; font-weight: 300; letter-spacing: -0.015em;
             color: #E9E8E1; margin-top: 0.3rem; font-variant-numeric: tabular-nums; }
         #intentIQView .iiq-hero-card { background: transparent; border: 0; border-left: 0;
-            border-top: 1px solid #27393D; border-bottom: 1px solid #27393D; border-radius: 0;
+            border-top: 1px solid var(--aiq-rule); border-bottom: 1px solid var(--aiq-rule); border-radius: 0;
             padding: 1.5rem 0; margin: 0 0 1.8rem; }
-        #intentIQView .iiq-support-card { background: transparent; border: 0; border-top: 1px solid #27393D;
+        #intentIQView .iiq-support-card { background: transparent; border: 0; border-top: 1px solid var(--aiq-rule);
             border-radius: 0; padding: 1.5rem 0 0.4rem; margin: 0 0 1.9rem; }
         #intentIQView .iiq-hero-eyebrow { font-size: 0.62rem; letter-spacing: 0.15em; color: #7C878A;
             margin-bottom: 0.55rem; }
@@ -32428,9 +32432,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView table { border-collapse: collapse; width: 100%; }
         #intentIQView th { font-size: 0.6rem !important; font-weight: 600 !important; letter-spacing: 0.14em;
             text-transform: uppercase; color: #7C878A !important; text-align: left;
-            padding: 0 0.9rem 0.6rem 0 !important; border-bottom: 1px solid #27393D !important;
+            padding: 0 0.9rem 0.6rem 0 !important; border-bottom: 1px solid var(--aiq-rule) !important;
             background: transparent !important; }
-        #intentIQView td { padding: 0.72rem 0.9rem 0.72rem 0 !important; border-bottom: 1px solid #1A2629 !important;
+        #intentIQView td { padding: 0.72rem 0.9rem 0.72rem 0 !important; border-bottom: 1px solid var(--aiq-hair) !important;
             background: transparent !important; font-size: 0.86rem; vertical-align: middle; }
         #intentIQView tr { background: transparent !important; }
         #intentIQView tbody tr:hover td { background: rgba(255,255,255,0.018) !important; }
@@ -32449,7 +32453,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         /* Show-all reads as a link on a rule, not a boxed button */
         #intentIQView .iiq-show-all-btn { background: transparent !important; border: 0 !important;
-            border-top: 1px solid #1A2629 !important; border-radius: 0 !important; width: 100%;
+            border-top: 1px solid var(--aiq-hair) !important; border-radius: 0 !important; width: 100%;
             padding: 0.85rem 0 0 !important; color: #7C878A !important; font-size: 0.66rem !important;
             font-weight: 600 !important; letter-spacing: 0.13em; text-transform: uppercase;
             text-align: left !important; cursor: pointer; }
@@ -32466,7 +32470,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView details > summary { color: #7C878A; font-size: 0.66rem; letter-spacing: 0.13em;
             text-transform: uppercase; font-weight: 600; padding-left: 0 !important; }
         #intentIQView .iiq-help-details { background: transparent !important; border: 0 !important;
-            border-left: 1px solid #27393D !important; border-radius: 0 !important;
+            border-left: 1px solid var(--aiq-rule) !important; border-radius: 0 !important;
             padding-left: 0.9rem !important; margin: 0.6rem 0 1.1rem; }
         #intentIQView .iiq-help-details > summary { padding: 0 !important; }
         #intentIQView .iiq-help-details[open] > summary { margin-bottom: 0.55rem; }
@@ -32490,16 +32494,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         body[data-theme="light"] #intentIQView .iiq-hero-card,
         body[data-theme="light"] #intentIQView th { border-color: #C9C6BA !important; }
         body[data-theme="light"] #intentIQView td { border-color: #DAD8CE !important; }
-        body[data-theme="light"] #intentIQView .iiq-subtab.active { color: #0C1618 !important; border-bottom-color: #5E7E12; }
+        body[data-theme="light"] #intentIQView .iiq-subtab.active { color: var(--cw-page, #111F22) !important; border-bottom-color: #5E7E12; }
         body[data-theme="light"] #intentIQView .iiq-meta-card-value { color: #0C1618; }
 
         /* ================= tabbed shell ================= */
         #intentIQView .aiq-banner { position: relative; height: 172px; overflow: hidden; border-radius: 2px;
-            margin: 26px 0 0; background: #15252A; }
+            margin: 26px 0 0; background: var(--cw-raised, #1B2E34); }
         #intentIQView .aiq-banner-img { position: absolute; inset: 0; background-position: center 34%;
             background-size: cover; filter: saturate(.78); }
         #intentIQView .aiq-banner-scrim { position: absolute; inset: 0;
-            background: linear-gradient(90deg, #0C1618 27%, rgba(12,22,24,.84) 55%, rgba(12,22,24,.18) 100%); }
+            background: linear-gradient(90deg, var(--cw-page, #111F22) 27%, rgba(12,22,24,.84) 55%, rgba(12,22,24,.18) 100%); }
         #intentIQView .aiq-banner.is-bare { height: auto; background: transparent; margin-top: 8px; }
         #intentIQView .aiq-banner.is-bare .aiq-banner-img,
         #intentIQView .aiq-banner.is-bare .aiq-banner-scrim { display: none; }
@@ -32512,7 +32516,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             margin-top: 0.5rem; line-height: 1.5; }
 
         #intentIQView .aiq-controls { display: flex; gap: 2.4rem; align-items: flex-end; flex-wrap: wrap;
-            padding: 0.95rem 0 1rem; border-bottom: 1px solid #1A2629; }
+            padding: 0.95rem 0 1rem; border-bottom: 1px solid var(--aiq-hair); }
         #intentIQView .aiq-controls .iiq-selector-bar,
         #intentIQView .aiq-controls .iiq-selector-bar-v2 { border: 0 !important; padding: 0 !important;
             margin: 0 !important; background: transparent !important; }
@@ -32524,8 +32528,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             white-space: nowrap; }
         body[data-theme="light"] #intentIQView #iiqAsOfChip { border-color: rgba(94,126,18,0.45); }
 
-        #intentIQView .aiq-rail { display: flex; border-bottom: 1px solid #27393D; flex-wrap: wrap; }
-        #intentIQView .aiq-rail > div { padding: 0.82rem 1.6rem 0.88rem; border-left: 1px solid #1A2629; }
+        #intentIQView .aiq-rail { display: flex; border-bottom: 1px solid var(--aiq-rule); flex-wrap: wrap; }
+        #intentIQView .aiq-rail > div { padding: 0.82rem 1.6rem 0.88rem; border-left: 1px solid var(--aiq-hair); }
         #intentIQView .aiq-rail > div:first-child { padding-left: 0; border-left: 0; }
         #intentIQView .aiq-rail b { display: block; font-size: 0.53rem; letter-spacing: .15em; color: #7C878A;
             font-weight: 700; margin-bottom: 0.3rem; }
@@ -32533,7 +32537,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             font-variant-numeric: tabular-nums; color: #E9E8E1; }
         #intentIQView .aiq-rail span.sm { font-size: 0.86rem; }
 
-        #intentIQView .aiq-tabs { display: flex; border-bottom: 1px solid #27393D; margin: 0 0 1.85rem;
+        #intentIQView .aiq-tabs { display: flex; border-bottom: 1px solid var(--aiq-rule); margin: 0 0 1.85rem;
             overflow-x: auto; scrollbar-width: none; }
         #intentIQView .aiq-tabs::-webkit-scrollbar { display: none; }
         #intentIQView .aiq-tab { padding: 0.86rem 0; margin-right: 1.65rem; font-size: 0.59rem; font-weight: 700;
@@ -32542,7 +32546,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             transition: color .14s, border-color .14s; }
         #intentIQView .aiq-tab:hover { color: #B8BEB9; }
         #intentIQView .aiq-tab.on { color: #E9E8E1; border-bottom-color: #C7F23E; }
-        #intentIQView .aiq-tab i { font-style: normal; font-size: 0.53rem; color: #3B4A4E; margin-left: 0.4rem;
+        #intentIQView .aiq-tab i { font-style: normal; font-size: 0.53rem; color: var(--aiq-edge); margin-left: 0.4rem;
             font-variant-numeric: tabular-nums; }
         #intentIQView .aiq-tab.on i { color: #7C878A; }
 
@@ -32570,10 +32574,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-bandrow th { font-size: 0.5rem !important; letter-spacing: .2em;
             color: #4E5F62 !important; font-weight: 700 !important; padding-bottom: 0.4rem !important;
             border-bottom: 0 !important; }
-        #intentIQView .aiq-bandrow th.gp { border-left: 1px solid #1A2629 !important; padding-left: 1rem !important; }
+        #intentIQView .aiq-bandrow th.gp { border-left: 1px solid var(--aiq-hair) !important; padding-left: 1rem !important; }
         #intentIQView table.aiq-e th.gp, #intentIQView table.aiq-e td.gp {
-            border-left: 1px solid #1A2629 !important; padding-left: 1rem !important; }
-        #intentIQView .aiq-mini { height: 3px; background: #1A2629; margin-top: 0.38rem; position: relative; }
+            border-left: 1px solid var(--aiq-hair) !important; padding-left: 1rem !important; }
+        #intentIQView .aiq-mini { height: 3px; background: var(--aiq-hair); margin-top: 0.38rem; position: relative; }
         #intentIQView .aiq-mini i { position: absolute; top: 0; bottom: 0; left: 0; background: #C7F23E; display: block; }
 
         body[data-theme="light"] #intentIQView .aiq-banner-scrim {
@@ -32583,8 +32587,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         body[data-theme="light"] #intentIQView .aiq-rail,
         body[data-theme="light"] #intentIQView .aiq-tabs { border-bottom-color: #C9C6BA; }
         body[data-theme="light"] #intentIQView .aiq-rail span { color: #0C1618; }
-        body[data-theme="light"] #intentIQView .aiq-tab.on { color: #0C1618; border-bottom-color: #5E7E12; }
-        body[data-theme="light"] #intentIQView .aiq-panel h5 { color: #0C1618 !important; }
+        body[data-theme="light"] #intentIQView .aiq-tab.on { color: var(--cw-page, #111F22); border-bottom-color: #5E7E12; }
+        body[data-theme="light"] #intentIQView .aiq-panel h5 { color: var(--cw-page, #111F22) !important; }
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
@@ -182167,7 +182171,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
     (function () {
-        var GRAPHITE = ['profileIQ', 'cultureRankerIQ', 'trendsIQ', 'microdramasIQ'];
+        var GRAPHITE = ['profileIQ', 'cultureRankerIQ', 'trendsIQ', 'microdramasIQ',
+                        'intentIQ', 'brandPartnershipIQ'];
         function syncGround() {
             try {
                 var dd = document.getElementById('viewNavDropdown');
