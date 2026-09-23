@@ -31996,6 +31996,23 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-phase-bar { height: 22px; border-radius: 4px; opacity: 0.9; position: relative; }
             #intentIQView .iiq-phase-dates { font-size: 0.78rem; color: var(--text-secondary); text-align: right; }
             #intentIQView .iiq-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.85rem; }
+            /* Assets page: one horizontal row per asset. */
+            #intentIQView #iiqAssetGrid.iiq-asset-rows { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.02); }
+            #intentIQView .iiq-asset-row { display: grid; grid-template-columns: minmax(240px, 2.4fr) minmax(120px, 1.2fr) 0.8fr 0.7fr 0.8fr 0.8fr 56px; gap: 0.8rem; align-items: center; padding: 0.6rem 0.9rem 0.6rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06); border-left: 3px solid transparent; transition: background 0.15s ease, box-shadow 0.4s ease, transform 0.2s ease; }
+            #intentIQView .iiq-asset-row:last-child { border-bottom: 0; }
+            #intentIQView .iiq-asset-row:hover { background: rgba(255,255,255,0.035); }
+            #intentIQView .iiq-asset-row.is-head { font-size: 0.6rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); padding-top: 0.5rem; padding-bottom: 0.5rem; background: rgba(255,255,255,0.03); }
+            #intentIQView .iiq-asset-row.is-head:hover { background: rgba(255,255,255,0.03); }
+            #intentIQView .iiq-asset-row .num { font-variant-numeric: tabular-nums; text-align: right; font-size: 0.86rem; font-weight: 600; color: #cbd5e1; line-height: 1.1; }
+            #intentIQView .iiq-asset-row .num small { display: block; font-size: 0.6rem; font-weight: 400; color: var(--text-secondary); opacity: 0.85; margin-top: 0.12rem; }
+            #intentIQView .iiq-asset-row .iiq-asset-name { font-size: 0.8rem; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #intentIQView .iiq-asset-row .iiq-asset-sub { font-size: 0.66rem; color: var(--text-secondary); opacity: 0.8; margin-top: 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #intentIQView .iiq-asset-row .iiq-asset-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+            #intentIQView .iiq-asset-row .iiq-asset-bar { margin-top: 0.3rem; background: rgba(255,255,255,0.06); height: 4px; border-radius: 2px; overflow: hidden; }
+            #intentIQView .iiq-asset-row .iiq-asset-open { font-size: 0.7rem; text-align: right; }
+            @media (max-width: 1100px) {
+                #intentIQView .iiq-asset-row { grid-template-columns: minmax(200px, 2fr) minmax(100px, 1fr) 0.8fr 0.7fr 0.8fr 0.8fr 48px; gap: 0.5rem; }
+            }
             #intentIQView .iiq-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.85rem 1rem; }
             #intentIQView .iiq-card-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem; }
             #intentIQView .iiq-card-meta { font-size: 0.78rem; color: var(--text-secondary); }
@@ -32684,7 +32701,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
-                <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
+                <div class="iiq-cards-grid iiq-asset-rows" id="iiqAssetGrid"></div>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-questions">
@@ -40536,7 +40553,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqConvShortLabel(3))
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
-                        document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
+                        var rowsHtml = cards.map(function(c) {
                             var v = Number(c.ext_view_count)||0;
                             var e = Number(c.ext_engagement_count)||0;
                             var barPct = maxViews > 0 ? (v / maxViews * 100) : 0;
@@ -40556,30 +40573,39 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
                             var infoTip = window._iiqInfoSeekTooltip(infoSeekers);
                             var tkTip   = window._iiqConvTooltip(ticketVisits);
-                            return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
-                                + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
-                                + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
-                                // Views on its own row (full-width hero number),
-                                // then the 4 secondary metrics on a single row
-                                // beneath it (engagement / eng. rate / info-seek
-                                // / ticketing).
-                                + '<div style="margin-top:0.55rem;" title="Total impressions - how many times the asset was seen">'
-                                    + '<div style="font-size:1.4rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div>'
-                                    + '<div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7; margin-top:0.1rem;">views</div>'
+                            var name = c.action_label || c.asset_type || '-';
+                            var sub = [c.asset_type || '', c.channel || '', 'Posted ' + (c.posted_date || '-')].filter(function (x) { return x; }).join(' \u00b7 ');
+                            var chips = paidChip + phaseChip + talentBadges;
+                            // One horizontal row per asset: name, views with
+                            // its share-of-top bar, then the four rates, then
+                            // the link. Numbers right-aligned, tabular.
+                            return '<div class="iiq-asset-row" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left-color: ' + edgeColor + ';">'
+                                + '<div style="min-width:0;">'
+                                    + '<div class="iiq-asset-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>'
+                                    + '<div class="iiq-asset-sub">' + escapeHtml(sub) + '</div>'
+                                    + (chips ? '<div class="iiq-asset-chips">' + chips + '</div>' : '')
                                 + '</div>'
-                                + '<div style="margin-top:0.5rem; display:flex; align-items:baseline; justify-content:space-between; gap:0.4rem;">'
-                                    + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.9rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">engagement</div></div>'
-                                    + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.9rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">eng. rate</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.9rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">info-seek</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.9rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">ticketing</div></div>' : '')
+                                + '<div title="Total impressions - how many times the asset was seen">'
+                                    + '<div class="num" style="text-align:left; color:#fff; font-size:0.95rem;">' + fmtCompact(v) + '</div>'
+                                    + '<div class="iiq-asset-bar" title="' + barPct.toFixed(1) + '% of top performer"><div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div></div>'
                                 + '</div>'
-                                + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
-                                    + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
-                                + '</div>'
-                                + '<div class="iiq-card-meta" style="margin-top:0.5rem; font-size:0.7rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date || '-') + (c.url ? ' · <a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a>' : '') + '</div>'
-                                + '<div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.25rem;">' + paidChip + phaseChip + talentBadges + '</div>'
+                                + '<div class="num" title="Likes + comments + shares - how many people did something with the asset, not just saw it">' + fmtCompact(e) + '</div>'
+                                + '<div class="num" style="color:#94a3b8;" title="Engagement rate = engagement / views. Higher = more participatory audience.">' + (v > 0 ? (e/v*100).toFixed(2) + '%' : '-') + '</div>'
+                                + '<div class="num" style="color:#a5b4fc;" title="' + escapeHtml(infoTip) + '">' + (proj ? proj.info_pct.toFixed(2) + '%' : '-') + '</div>'
+                                + '<div class="num" style="color:#fbbf24;" title="' + escapeHtml(tkTip) + '">' + (proj ? proj.ticket_pct.toFixed(2) + '%' : '-') + '</div>'
+                                + '<div class="iiq-asset-open">' + (c.url ? '<a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a>' : '') + '</div>'
                                 + '</div>';
-                        }).join('') || (iiqAssetFilterActive()
+                        }).join('');
+                        var rowHead = '<div class="iiq-asset-row is-head">'
+                            + '<div>Asset</div>'
+                            + '<div>Views</div>'
+                            + '<div class="num" style="font-size:inherit; font-weight:inherit; color:inherit;">Engagement</div>'
+                            + '<div class="num" style="font-size:inherit; font-weight:inherit; color:inherit;">Eng. rate</div>'
+                            + '<div class="num" style="font-size:inherit; font-weight:inherit; color:inherit;">Info-seek %</div>'
+                            + '<div class="num" style="font-size:inherit; font-weight:inherit; color:inherit;">Ticketing %</div>'
+                            + '<div></div>'
+                            + '</div>';
+                        document.getElementById('iiqAssetGrid').innerHTML = (rowsHtml ? rowHead + rowsHtml : '') || (iiqAssetFilterActive()
                             ? '<div class="iiq-empty">No assets match the current type filter. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset()" style="color:#22d3ee;">Reset filter</a> to show all.</div>'
                             : '<div class="iiq-empty">No assets match filters.</div>');
             };
