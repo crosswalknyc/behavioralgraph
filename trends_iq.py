@@ -10737,7 +10737,14 @@ def _stamp_published_ranks(slug: str, snap: dict, *row_lists) -> int:
             hit = published_rank_for(index, kind, str(row.get('title') or ''))
             if not hit:
                 continue
-            row['published_rank'], row['published_chart'] = hit
+            row['published_rank'] = hit[0]
+            row['published_chart'] = hit[1]
+            # Which of the service's charts this came from. Netflix
+            # and Prime Video publish films and series separately, so
+            # two rows can both hold position 1 without either
+            # outranking the other.
+            if len(hit) > 2:
+                row['published_group'] = hit[2]
             marked += 1
     if marked:
         logger.info("%s: %d row(s) carry a published chart position (%s)",

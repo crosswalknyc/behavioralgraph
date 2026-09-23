@@ -475,7 +475,20 @@ def _pick_top10_for(rows: list[dict], week_iso: str,
             rank = int(r.get('weekly_rank') or (len(out) + 1))
         except ValueError:
             rank = len(out) + 1
-        out.append({
+        # Netflix publishes the numbers its own ranking is built
+        # from, on the global file: hours viewed and views for the
+        # week, per title. They were being parsed and dropped. They
+        # are the only first-party audience figure anywhere in this
+        # fleet, and carrying them means a Netflix row can be sized
+        # from what Netflix reported rather than reasoned from its
+        # rank, which is also what makes the readings descend across
+        # the chart by construction instead of by correction.
+        #
+        # The country file carries rank only, so a US row picks these
+        # up from its global twin where it has one. Absent (a US-only
+        # title, or a week the global file has not landed) the row
+        # simply ships without them.
+        row = {
             'rank':            rank,
             'title':           display_title,
             'category':        r.get('category') or '',
@@ -483,7 +496,22 @@ def _pick_top10_for(rows: list[dict], week_iso: str,
             'url':             _title_url(title),
             'week':            week_iso,
             'source':          'weekly_tsv',
-        })
+        }
+        for src, dst in (('weekly_views', 'weekly_views'),
+                          ('weekly_hours_viewed', 'weekly_hours_viewed')):
+            try:
+                v = int(float(r.get(src) or 0))
+            except (TypeError, ValueError):
+                v = 0
+            if v > 0:
+                row[dst] = v
+        try:
+            rt = float(r.get('runtime') or 0)
+        except (TypeError, ValueError):
+            rt = 0.0
+        if rt > 0:
+            row['runtime_hours'] = rt
+        out.append(row)
     return out
 
 
@@ -537,6 +565,33 @@ def _fetch_weekly_tsv() -> dict[str, Any]:
             global_tv_nonen = _pick_top10_for(
                 rows, latest_global_week,
                 lambda c: c.strip().lower() == 'tv (non-english)')
+
+    # Carry the published weekly figures across to the US rows. The
+    # country file does not repeat them, so a US title that also
+    # charted globally takes them from its global twin. Matched on the
+    # title as printed in both files.
+    _global_figs: dict[str, dict] = {}
+    for _lst in (global_films_en, global_tv_en,
+                  global_films_nonen, global_tv_nonen):
+        for _r in _lst:
+            _k = (_r.get('title') or '').strip().lower()
+            if _k and _r.get('weekly_views'):
+                _global_figs.setdefault(_k, _r)
+    _matched = 0
+    for _lst in (us_films, us_tv):
+        for _r in _lst:
+            _g = _global_figs.get((_r.get('title') or '').strip().lower())
+            if not _g:
+                continue
+            for _f in ('weekly_views', 'weekly_hours_viewed',
+                        'runtime_hours'):
+                if _g.get(_f) and not _r.get(_f):
+                    _r[_f] = _g[_f]
+            _r['weekly_figures_scope'] = 'global'
+            _matched += 1
+    logger.info("netflix: %d of %d US top-10 rows carry Netflix's "
+                 "published weekly figures", _matched,
+                 len(us_films) + len(us_tv))
 
     # Combine US films + US TV as the "national" surface for the tile.
     national: list[dict] = []

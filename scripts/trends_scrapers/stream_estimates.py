@@ -694,11 +694,22 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
                     'image':         it.get('image'),
                     'url':           it.get('url'),
                 })
+                # Netflix publishes the figures its own ranking is
+                # built from. Where a row carries them they are the
+                # strongest anchor on this whole surface, and they
+                # ride along to the prompt.
+                for _f in ('weekly_views', 'weekly_hours_viewed',
+                            'weeks_in_top10'):
+                    if it.get(_f) and not e.get(_f):
+                        e[_f] = it[_f]
                 if hit:
-                    pos, chart_name = hit
+                    pos, chart_name, group = hit
                     e['published_rank']  = pos
                     e['published_chart'] = chart_name
-                    e['chart_labels'].append(f'{chart_name} #{pos}')
+                    e['published_group'] = group
+                    _lab = f'{chart_name} #{pos}'
+                    if _lab not in e['chart_labels']:
+                        e['chart_labels'].append(_lab)
                     if pos < e['best_rank']:
                         e['best_rank'] = pos
                 else:
@@ -3806,6 +3817,70 @@ def _work_identity_block(item: dict) -> str:
     return '\n'.join(out) + '\n'
 
 
+def _streaming_position_block(item: dict) -> str:
+    """What this title's position and published figures are worth.
+
+    Three streaming kinds reach the prompt (film, tv, and the bare
+    title fallback) and all three need the same paragraph, so it is
+    built once here. An earlier version lived inside the fallback
+    branch only, which meant the films and series that make up almost
+    the whole surface never saw it.
+    """
+    pub_pos   = item.get('published_rank')
+    pub_chart = item.get('published_chart') or ''
+    pub_views = item.get('weekly_views')
+    pub_hours = item.get('weekly_hours_viewed')
+    wk_top10  = item.get('weeks_in_top10')
+
+    fig_line = ''
+    if pub_views or pub_hours:
+        bits = []
+        if pub_views:
+            bits.append(f'{int(pub_views):,} views')
+        if pub_hours:
+            bits.append(f'{int(pub_hours):,} hours viewed')
+        fig_line = (
+            f'\nFIGURES THE SERVICE PUBLISHED FOR THIS TITLE (for the '
+            f'chart week, WORLDWIDE): {" and ".join(bits)}. This is '
+            f"the service's own reported number and it outranks every "
+            f'other anchor you have, so work from it rather than from '
+            f'a tier. Two conversions before it becomes your answer: '
+            f'take the US share of a worldwide figure (35-45% for an '
+            f'English-language title, far less for a non-English one, '
+            f'and state the share you used), then convert the week to '
+            f'the target day. Never return the worldwide number.')
+        if wk_top10:
+            fig_line += (
+                f' It has been on the chart {int(wk_top10)} week(s), so '
+                f'weigh whether demand is still building or decaying '
+                f'into catalog.')
+
+    if isinstance(pub_pos, int) and pub_pos > 0 and pub_chart:
+        return fig_line + (
+            f'\nPUBLISHED CHART POSITION: #{pub_pos} on the {pub_chart}. '
+            f'The service publishes this ranking itself, so it is their '
+            f'own statement of what is most watched and it is the '
+            f'strongest ordering signal you have. Your number must be '
+            f'consistent with it: below what the title one position '
+            f'above would draw and above what the title one position '
+            f'below would draw. Do not land on a round step away from '
+            f'the neighbouring rank.')
+    return fig_line + (
+        '\nPUBLISHED CHART POSITION: none. Either this service '
+        'publishes no ranked chart at all, or this title is not on the '
+        'one it does publish. Where we read it was a catalog or browse '
+        'listing, and its place there is not a popularity signal. Do '
+        'NOT infer a position and do NOT read a tier off one. Size this '
+        'title from what it actually is against the platform audience: '
+        'franchise weight and marquee cast lift it, a deep library or '
+        'older TV title sits far down, and recency of arrival matters. '
+        'The spread across a service like this should be WIDE rather '
+        'than clustered. If the service does publish a chart and this '
+        'title is absent from it, that is itself informative: the title '
+        'draws LESS than the one the service ranks last, because '
+        'otherwise they would have charted it.')
+
+
 def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
     kind          = item['kind']
     display_title = item['display_title']
@@ -3862,12 +3937,14 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         unit  = 'daily US views'
         query = (f'"{display_title}" Nielsen daily streaming US '
                  f'households 2026')
-        item_line = f'FILM TITLE: {display_title}'
+        item_line = (f'FILM TITLE: {display_title}'
+                      f'{_streaming_position_block(item)}')
     elif kind == 'tv':
         unit  = 'daily US views'
         query = (f'"{display_title}" Nielsen daily streaming US TV '
                  f'series 2026')
-        item_line = f'TV SERIES TITLE: {display_title}'
+        item_line = (f'TV SERIES TITLE: {display_title}'
+                      f'{_streaming_position_block(item)}')
     elif kind in ('fast_film', 'fast_tv'):
         # FAST = Free Ad-Supported Streaming TV. Frame the ask around
         # "who watched for free ON THIS DAY on an ad-supported linear-
@@ -4369,40 +4446,7 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
     else:
         unit  = 'daily US views'
         query = f'"{display_title}" daily viewers US streaming 2026'
-        pub_pos   = item.get('published_rank')
-        pub_chart = item.get('published_chart') or ''
-        if isinstance(pub_pos, int) and pub_pos > 0 and pub_chart:
-            pos_line = (
-                f'\nPUBLISHED CHART POSITION: #{pub_pos} on the '
-                f'{pub_chart}. The service publishes this ranking '
-                f'itself, so it is their own statement of what is most '
-                f'watched on it and it is the strongest signal you '
-                f'have. Your number must be consistent with it: sit '
-                f'below what the title one position above would draw '
-                f'and above what the title one position below would '
-                f'draw, inside the band this position implies in the '
-                f'platform anchors. Do not land on a round step away '
-                f'from the neighbouring rank.')
-            query = (f'"{display_title}" US viewers streaming '
-                     f'{pub_chart} 2026 Nielsen weekly')
-        else:
-            pos_line = (
-                '\nPUBLISHED CHART POSITION: none. Either this service '
-                'publishes no ranked chart at all, or this title is '
-                'not on the one it does publish. Where we read it was '
-                'a catalog or browse listing, and its place there is '
-                'not a popularity signal. Do NOT infer a position and '
-                'do NOT read a tier off one. Size this title from '
-                'what it actually is against the platform audience: '
-                'franchise weight and marquee cast lift it, a deep '
-                'library or older TV title sits far down, and recency '
-                'of arrival matters. The spread across a service like '
-                'this should be WIDE rather than clustered. If the '
-                'service does publish a chart and this title is '
-                'absent from it, that is itself informative: the '
-                'title draws LESS than the one the service ranks '
-                'last, because otherwise they would have charted it.')
-        item_line = f'TITLE: {display_title}{pos_line}'
+        item_line = f'TITLE: {display_title}{_streaming_position_block(item)}'
 
     platforms = _platforms_for_kind(kind)
     # For FAST channels, restrict the prompt to the ONE platform the
@@ -5042,6 +5086,7 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         # run after the pass shipped.
         'published_rank':   item.get('published_rank'),
         'published_chart':  item.get('published_chart'),
+        'published_group':  item.get('published_group'),
         'image':            item.get('image'),
         'url':              item.get('url'),
         'us_estimate':      agg_mid,
@@ -6367,46 +6412,86 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
     and nothing it left off the chart out-draws the title it ranks
     last.
 
-    Per-platform readings are what move, and the aggregate follows in
-    lockstep through the same rescale the continuity guard uses, so a
-    row never ends up with an aggregate its platform blocks cannot
-    add up to. A rail whose two blocks sit on different scales is
-    reported and left alone: at that point the levels were reasoned
-    against different anchors and the answer is to reason them again,
-    not to squeeze one block to fit the other.
+    Scoped to the rail the reader actually sees. The estimates store
+    holds a row for every title ever collected on a service, and most
+    of them are not on today's page: reconciling against that wider
+    population tests containment against titles nobody is looking at,
+    which is how an early version of this pass reported 134 of 166
+    Lionsgate+ titles breaching a chart that only 40 of them render
+    beside. The rail is the service's own snapshot plus the depth
+    extension, in render order, which is what `_fetch_streaming_
+    trending` builds.
+
+    Reconciled one chart at a time. A service can publish more than
+    one and they are independent: Netflix's top film and its top
+    series are both #1 and neither outranks the other, so demanding a
+    single descent across both is meaningless. Each chart takes the
+    slice of the rail it governs, by kind where the chart is
+    kind-specific and the whole rail where it is mixed.
+
+    Per-platform readings move and the aggregate follows in lockstep.
+    A rail whose two blocks sit on different scales is reported and
+    left alone: the levels were reasoned against different anchors and
+    the answer is to reason them again, not to squeeze one to fit the
+    other.
     """
     from . import published_chart_coherence as _pcc
     out = {'rails': 0, 'moved': 0, 'held': 0, 'detail': {}}
+    depth_sources = (_read_snapshot('streaming_depth') or {}).get(
+        'sources') or {}
+
     for slug, _label in _STREAMING_SLUGS:
         if not has_published_chart(slug):
             continue
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
         ceiling = next((p['ceiling'] for p in _STREAMING_PLATFORMS_META
                         if p['key'] == slug), None)
-        rows = []
-        for key, it in (researched or {}).items():
+        index = published_chart_index(slug, snap)
+        if not index:
+            continue
+
+        # The titles on the rail, in render order, with the same
+        # film/tv split the page uses.
+        by_kind: dict[str, list[dict]] = {'film': [], 'tv': []}
+        seen: set[tuple] = set()
+
+        def _push(title: str, kind: str) -> None:
+            norm = _cp_normalize(title or '')
+            if not norm or (kind, norm) in seen:
+                return
+            seen.add((kind, norm))
+            it = researched.get(f'{kind}:{norm}') or researched.get(
+                f'title:{norm}')
             if not isinstance(it, dict):
-                continue
+                return
             blk = (it.get('by_platform') or {}).get(slug)
             if not isinstance(blk, dict):
-                continue
+                return
             v = blk.get('us_estimate')
             if not isinstance(v, int) or v <= 0:
-                continue
-            row = {'title': it.get('display_title') or key,
-                   '_item': it, '_key': key, '_blk': blk}
-            pr = it.get('published_rank')
-            # The position only counts on the rail that published it.
-            if isinstance(pr, int) and pr > 0 and slug in \
-                    _focus_keys_from_charts(it.get('chart_labels') or []):
-                lab = str(it.get('published_chart') or '')
-                if lab and published_chart_label(slug) == lab:
-                    row['published_rank'] = pr
-            rows.append(row)
-        if not rows or not any(r.get('published_rank') for r in rows):
-            continue
-        rows.sort(key=lambda r: (0 if r.get('published_rank') else 1,
-                                  r.get('published_rank') or 0,
-                                  -(r['_blk'].get('us_estimate') or 0)))
+                return
+            row = {'title': title, '_item': it, '_blk': blk,
+                   '_key': f'{kind}:{norm}'}
+            hit = published_rank_for(index, kind, title)
+            if hit:
+                row['published_rank'] = hit[0]
+                row['_group'] = hit[2] if len(hit) > 2 else ''
+            by_kind[kind].append(row)
+
+        if slug == 'netflix':
+            for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
+                for r in (snap.get(lk) or []):
+                    _push(str(r.get('title') or ''), kind)
+        for r in (snap.get('national') or []):
+            cat = str(r.get('category_display') or '').strip().lower()
+            _push(str(r.get('title') or ''),
+                  'film' if cat.startswith(('film', 'movie')) else 'tv')
+        dblk = depth_sources.get(slug) or {}
+        for lk, kind in (('films', 'film'), ('tv', 'tv')):
+            for r in (dblk.get(lk) or []):
+                _push(str(r.get('title') or ''), kind)
 
         def _get(r):
             return r['_blk'].get('us_estimate')
@@ -6428,28 +6513,86 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             if isinstance(blk.get('us_estimate_high'), int) and \
                     blk['us_estimate_high'] < blk['us_estimate']:
                 blk['us_estimate_high'] = blk['us_estimate']
-            # The aggregate is the sum of the platform mids, so it
-            # moves by exactly what this block moved.
             agg = int(it.get('us_estimate') or 0)
             if agg > 0:
-                new_agg = max(1, agg + (int(v) - old))
                 _rescale_estimate_blocks(
-                    it, agg, new_agg, r['_key'],
+                    it, agg, max(1, agg + (int(v) - old)), r['_key'],
                     f'{target_date_iso}|chartcoherence|{_slug}')
 
-        rep = _pcc.reconcile_rail(
-            rows, salt=f'{slug}|{target_date_iso}',
-            get_value=_get, set_value=_set, ceiling=ceiling)
-        out['rails'] += 1
-        out['moved'] += rep.get('moved') or 0
-        if rep.get('held'):
-            out['held'] += 1
-            logger.warning(
-                "stream_estimates: %s rail held by published-chart "
-                "coherence for %s: %s", slug, target_date_iso,
-                rep.get('reason'))
-        out['detail'][slug] = rep
+        # One pass per published chart. A kind-specific chart governs
+        # its own kind; a mixed one governs the whole rail.
+        groups: dict[str, set] = {}
+        for kind in ('film', 'tv'):
+            for r in by_kind[kind]:
+                if r.get('published_rank'):
+                    groups.setdefault(r.get('_group') or '', set()).add(kind)
+        for group, kinds in sorted(groups.items()):
+            rows = [r for k in sorted(kinds) for r in by_kind[k]
+                    if not r.get('published_rank')
+                    or (r.get('_group') or '') == group]
+            if not rows or not any(r.get('published_rank') for r in rows):
+                continue
+            rows.sort(key=lambda r: (0 if r.get('published_rank') else 1,
+                                      r.get('published_rank') or 0,
+                                      -(_get(r) or 0)))
+            rep = _pcc.reconcile_rail(
+                rows, salt=f'{slug}|{group}|{target_date_iso}',
+                get_value=_get, set_value=_set, ceiling=ceiling)
+            out['rails'] += 1
+            out['moved'] += rep.get('moved') or 0
+            if rep.get('held'):
+                out['held'] += 1
+                logger.warning(
+                    "stream_estimates: %s / %s held by published-chart "
+                    "coherence for %s: %s", slug, group or 'chart',
+                    target_date_iso, rep.get('reason'))
+            out['detail'][f'{slug}:{group}'] = rep
     return out
+
+
+def _reclamp_carried_to_platform_ceiling(researched: dict[str, dict]
+                                          ) -> int:
+    """Put any reading back under its platform's ceiling.
+
+    The ceiling is applied when a value is researched, but a carried
+    value never passes through that check again and the daily walk
+    multiplies it, so a row can drift over the cap and sit there. Two
+    were live on 2026-09-22: Law Abiding Citizen reading 3,135,044 a
+    day on Lionsgate+, a service whose whole US audience is around
+    270,000 a week, against a ceiling of 155,000.
+
+    Clamped to a jittered fraction just under the ceiling rather than
+    to the ceiling itself, so no two clamped rows land on the same
+    number and none of them sits on a round one.
+    """
+    ceilings = {p['key']: p['ceiling'] for p in _STREAMING_PLATFORMS_META}
+    ceilings.update({p['key']: p['ceiling'] for p in _FAST_PLATFORMS_META})
+    fixed = 0
+    for key, it in (researched or {}).items():
+        if not isinstance(it, dict):
+            continue
+        for slug, blk in (it.get('by_platform') or {}).items():
+            cap = ceilings.get(slug)
+            if not cap or not isinstance(blk, dict):
+                continue
+            v = blk.get('us_estimate')
+            if not isinstance(v, int) or v <= cap:
+                continue
+            tgt = int(cap * (0.86 + _h01(f'{key}|{slug}|ceilclamp') * 0.11))
+            tgt = _ensure_non_zero_last_digit(
+                max(1, tgt), key, f'{slug}|ceilclamp')
+            scale = tgt / v
+            blk['us_estimate'] = tgt
+            for f in ('us_estimate_low', 'us_estimate_high'):
+                cur = blk.get(f)
+                if isinstance(cur, int) and cur > 0:
+                    blk[f] = max(1, int(round(cur * scale)))
+            logger.warning(
+                "stream_estimates: %r on %s read %d against a ceiling "
+                "of %d, clamped to %d", it.get('display_title'), slug,
+                v, cap, tgt)
+            fixed += 1
+    return fixed
 
 
 def _attach_dod_trend(current: dict[str, dict],
@@ -6912,6 +7055,15 @@ def fetch(only: Optional[set[str]] = None,
     # every value, and before the trend attach so the chips describe
     # what ships. Non-fatal by construction.
     try:
+        _nc = _reclamp_carried_to_platform_ceiling(researched)
+        if _nc:
+            logger.info("stream_estimates: %d carried reading(s) put "
+                         "back under their platform ceiling", _nc)
+    except Exception:
+        logger.exception("stream_estimates: ceiling re-check failed "
+                          "(non-fatal)")
+
+    try:
         _pc = _enforce_published_chart_coherence(researched,
                                                   target_date_iso)
         if _pc.get('moved'):
@@ -7144,14 +7296,24 @@ def _pc_key(kind: str, norm: str) -> str:
 
 
 def published_chart_index(slug: str,
-                          snap: Optional[dict]) -> dict[str, tuple[int, str]]:
+                          snap: Optional[dict]) -> dict[str, tuple]:
     """Positions this service actually publishes, for one snapshot.
 
-    Returns `{'film:norm title': (position, chart label), ...}`, with a
-    bare `'norm title'` alias so a caller that does not know the kind
-    can still resolve. An empty dict means no published position for
-    anything here, which is the answer for most of the fleet and is
-    not a failure.
+    Returns `{'film:norm title': (position, chart label, chart group),
+    ...}`, with a bare `'norm title'` alias so a caller that does not
+    know the kind can still resolve.
+
+    The GROUP matters: a service can publish more than one ranking and
+    they are independent of each other. Netflix ranks films and series
+    separately, so their #1s are two different titles and neither
+    outranks the other; Prime Video does the same. Treating the two as
+    one sequence is what made an early version of the coherence pass
+    demand that Netflix's top film out-draw its top series, which it
+    has no reason to. A single mixed chart (Lionsgate+) reports one
+    group and behaves as one ranking.
+
+    An empty dict means no published position for anything here, which
+    is the answer for most of the fleet and is not a failure.
     """
     spec = _PUBLISHED_CHARTS.get(slug)
     if not spec or not isinstance(snap, dict):
@@ -7160,12 +7322,12 @@ def published_chart_index(slug: str,
     depth = int(spec.get('depth') or 0) or None
     out: dict[str, tuple[int, str]] = {}
 
-    def _add(kind: str, title: str, pos: int) -> None:
+    def _add(kind: str, title: str, pos: int, group: str) -> None:
         norm = _cp_normalize(title or '')
         if not norm:
             return
-        out.setdefault(_pc_key(kind, norm), (pos, label))
-        out.setdefault(norm, (pos, label))
+        out.setdefault(_pc_key(kind, norm), (pos, label, group))
+        out.setdefault(norm, (pos, label, group))
 
     if spec['mode'] == 'lists':
         for list_key, kind in spec.get('lists') or ():
@@ -7174,7 +7336,8 @@ def published_chart_index(slug: str,
                 continue
             for i, row in enumerate(rows[:depth] if depth else rows):
                 if isinstance(row, dict):
-                    _add(kind, str(row.get('title') or ''), i + 1)
+                    _add(kind, str(row.get('title') or ''), i + 1,
+                         list_key)
     elif spec['mode'] == 'collection':
         # Matched loosely. A storefront names the same rail slightly
         # differently by page and by locale, and an exact string set
@@ -7201,7 +7364,7 @@ def published_chart_index(slug: str,
             cat = str(row.get('category_display') or '').strip().lower()
             kind = 'film' if cat.startswith(('film', 'movie')) else (
                 'tv' if cat.startswith('tv') else '')
-            _add(kind, str(row.get('title') or ''), pos)
+            _add(kind, str(row.get('title') or ''), pos, coll)
     return out
 
 
