@@ -37468,22 +37468,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35);">Launch week</span>';
                 } else {
                     var deltaPct = (totalNow - totalPrev) / totalPrev * 100;
-                    // Never ship a round zero; nudge by 0.1 in the direction
-                    // of the raw delta so the chip reads as measurement,
-                    // not a placeholder.
                     if (Math.abs(deltaPct) < 0.05) {
-                        var salt = String(slug) + '|wow|' + asOf;
-                        var h = 0;
-                        for (var _i = 0; _i < salt.length; _i++) h = ((h << 5) - h + salt.charCodeAt(_i)) | 0;
-                        var jitter = ((Math.abs(h) % 90) + 10) / 100; // 0.10..0.99
-                        deltaPct = (h % 2 === 0) ? jitter : -jitter;
+                        // Below the WoW threshold: say so, in the same words
+                        // as the total-exposure tile, rather than inventing
+                        // a fractional move.
+                        wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35);">Steady state WoW</span>';
                     }
                     var pos = deltaPct > 0;
                     var chipColor = pos ? '#C7F23E' : '#f87171';
                     var chipBg = pos ? 'rgba(199,242,62,0.14)' : 'rgba(248,113,113,0.14)';
                     var chipBorder = pos ? 'rgba(199,242,62,0.45)' : 'rgba(248,113,113,0.45)';
                     var sign = pos ? '+' : '';
-                    wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:' + chipColor + '; background: ' + chipBg + '; border: 1px solid ' + chipBorder + ';">' + sign + deltaPct.toFixed(1) + '% WoW exposure</span>';
+                    if (!wowChipHtml) wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:' + chipColor + '; background: ' + chipBg + '; border: 1px solid ' + chipBorder + ';">' + sign + deltaPct.toFixed(1) + '% WoW exposure</span>';
                 }
 
                 // ===== Bullet: biggest mover this week =====
