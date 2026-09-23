@@ -32474,6 +32474,81 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         body[data-theme="light"] #intentIQView td { border-color: #DAD8CE !important; }
         body[data-theme="light"] #intentIQView .iiq-subtab.active { color: #0C1618 !important; border-bottom-color: #5E7E12; }
         body[data-theme="light"] #intentIQView .iiq-meta-card-value { color: #0C1618; }
+
+        /* ================= tabbed shell ================= */
+        #intentIQView .aiq-banner { position: relative; height: 172px; overflow: hidden; border-radius: 2px;
+            margin: 26px 0 0; background: #15252A; }
+        #intentIQView .aiq-banner-img { position: absolute; inset: 0; background-position: center 34%;
+            background-size: cover; filter: saturate(.78); }
+        #intentIQView .aiq-banner-scrim { position: absolute; inset: 0;
+            background: linear-gradient(90deg, #0C1618 22%, rgba(12,22,24,.80) 46%, rgba(12,22,24,.18) 100%); }
+        #intentIQView .aiq-banner.is-bare { height: auto; background: transparent; margin-top: 8px; }
+        #intentIQView .aiq-banner.is-bare .aiq-banner-img,
+        #intentIQView .aiq-banner.is-bare .aiq-banner-scrim { display: none; }
+        #intentIQView .aiq-banner.is-bare .aiq-banner-txt { position: static; padding: 26px 0 4px; }
+        #intentIQView .aiq-banner-txt { position: absolute; left: 30px; top: 0; bottom: 0; display: flex;
+            flex-direction: column; justify-content: center; max-width: 620px; }
+        #intentIQView .aiq-banner-title { font-size: 1.95rem; font-weight: 300; letter-spacing: -.026em;
+            line-height: 1.05; margin: 0.45rem 0 0; color: #E9E8E1; }
+        #intentIQView .aiq-banner-deck { font-size: 0.79rem; color: #9AA09B; font-weight: 300;
+            margin-top: 0.5rem; line-height: 1.5; }
+
+        #intentIQView .aiq-controls { display: flex; gap: 2.4rem; align-items: flex-end; flex-wrap: wrap;
+            padding: 0.95rem 0 1rem; border-bottom: 1px solid #1A2629; }
+        #intentIQView .aiq-controls .iiq-selector-bar,
+        #intentIQView .aiq-controls .iiq-selector-bar-v2 { border: 0 !important; padding: 0 !important;
+            margin: 0 !important; background: transparent !important; }
+
+        #intentIQView .aiq-rail { display: flex; border-bottom: 1px solid #27393D; flex-wrap: wrap; }
+        #intentIQView .aiq-rail > div { padding: 0.82rem 1.6rem 0.88rem; border-left: 1px solid #1A2629; }
+        #intentIQView .aiq-rail > div:first-child { padding-left: 0; border-left: 0; }
+        #intentIQView .aiq-rail b { display: block; font-size: 0.53rem; letter-spacing: .15em; color: #7C878A;
+            font-weight: 700; margin-bottom: 0.3rem; }
+        #intentIQView .aiq-rail span { font-size: 1.06rem; font-weight: 300; letter-spacing: -.018em;
+            font-variant-numeric: tabular-nums; color: #E9E8E1; }
+        #intentIQView .aiq-rail span.sm { font-size: 0.86rem; }
+
+        #intentIQView .aiq-tabs { display: flex; border-bottom: 1px solid #27393D; margin: 0 0 1.85rem;
+            overflow-x: auto; scrollbar-width: none; }
+        #intentIQView .aiq-tabs::-webkit-scrollbar { display: none; }
+        #intentIQView .aiq-tab { padding: 0.86rem 0; margin-right: 1.65rem; font-size: 0.59rem; font-weight: 700;
+            letter-spacing: .14em; color: #5F6D70; border: 0; border-bottom: 2px solid transparent;
+            background: transparent; white-space: nowrap; cursor: pointer; text-transform: uppercase;
+            transition: color .14s, border-color .14s; }
+        #intentIQView .aiq-tab:hover { color: #B8BEB9; }
+        #intentIQView .aiq-tab.on { color: #E9E8E1; border-bottom-color: #C7F23E; }
+        #intentIQView .aiq-tab i { font-style: normal; font-size: 0.53rem; color: #3B4A4E; margin-left: 0.4rem;
+            font-variant-numeric: tabular-nums; }
+        #intentIQView .aiq-tab.on i { color: #7C878A; }
+
+        #intentIQView .aiq-panel { display: none; }
+        #intentIQView .aiq-panel.on { display: block; }
+        #intentIQView .aiq-attic { display: none !important; }
+        #intentIQView .aiq-panel > section { margin: 0 0 2.4rem; }
+        #intentIQView .aiq-panel > section:last-child { margin-bottom: 0; }
+        #intentIQView .aiq-panel h5 { font-size: 0.95rem !important; font-weight: 400 !important;
+            letter-spacing: -.008em; color: #E9E8E1 !important; text-transform: none !important;
+            margin: 0 0 0.3rem !important; }
+
+        /* grouped column bands on the two ledgers */
+        #intentIQView .aiq-bandrow th { font-size: 0.5rem !important; letter-spacing: .2em;
+            color: #4E5F62 !important; font-weight: 700 !important; padding-bottom: 0.4rem !important;
+            border-bottom: 0 !important; }
+        #intentIQView .aiq-bandrow th.gp { border-left: 1px solid #1A2629 !important; padding-left: 1rem !important; }
+        #intentIQView table.aiq-e th.gp, #intentIQView table.aiq-e td.gp {
+            border-left: 1px solid #1A2629 !important; padding-left: 1rem !important; }
+        #intentIQView .aiq-mini { height: 3px; background: #1A2629; margin-top: 0.38rem; position: relative; }
+        #intentIQView .aiq-mini i { position: absolute; top: 0; bottom: 0; left: 0; background: #C7F23E; display: block; }
+
+        body[data-theme="light"] #intentIQView .aiq-banner-scrim {
+            background: linear-gradient(90deg, #E9E8E1 22%, rgba(233,232,225,.82) 46%, rgba(233,232,225,.18) 100%); }
+        body[data-theme="light"] #intentIQView .aiq-banner-title { color: #0C1618; }
+        body[data-theme="light"] #intentIQView .aiq-banner-deck { color: #5C6560; }
+        body[data-theme="light"] #intentIQView .aiq-rail,
+        body[data-theme="light"] #intentIQView .aiq-tabs { border-bottom-color: #C9C6BA; }
+        body[data-theme="light"] #intentIQView .aiq-rail span { color: #0C1618; }
+        body[data-theme="light"] #intentIQView .aiq-tab.on { color: #0C1618; border-bottom-color: #5E7E12; }
+        body[data-theme="light"] #intentIQView .aiq-panel h5 { color: #0C1618 !important; }
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
@@ -125607,6 +125682,404 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 b.style.letterSpacing = '0.06em';
             }
         }
+        // ---- grouped-band ledger -------------------------------------
+        var _AIQ_GROUP = [
+            ['Identity', ['asset', 'audience', 'touchpoint', 'stage']],
+            ['Response', ['ticketing %', 'info-seek %', 'response %', 'overlap %',
+                          'lift vs benchmark', 'vs gen pop index', 'contribution']],
+            ['Scale',    ['exposure', 'sample size', 'us accounts', 'reach']],
+            ['Quality',  ['confidence', 'fit']]
+        ];
+        function _aiqGroupOf(label) {
+            var h = _aiqNorm(label).replace(/\s*\(\?\)\s*$/, '').replace(/[\u25be\u25b4]/g, '').trim();
+            for (var g = 0; g < _AIQ_GROUP.length; g++) {
+                var keys = _AIQ_GROUP[g][1];
+                for (var k = 0; k < keys.length; k++) {
+                    if (h.indexOf(_aiqNorm(keys[k])) === 0) return g;
+                }
+            }
+            return -1;
+        }
+        function _aiqCellNum(td) {
+            var t = (td.innerText || '').trim();
+            var m = t.match(/(-?[\d.]+)\s*%/) || t.match(/(-?[\d.]+)\s*x/i);
+            return m ? parseFloat(m[1]) : null;
+        }
+        function _aiqLedger() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var tables = root.querySelectorAll('table');
+            for (var t = 0; t < tables.length; t++) {
+                var tbl = tables[t];
+                var hr = tbl.querySelector('thead tr:not(.aiq-bandrow)');
+                if (!hr) continue;
+                var ths = Array.prototype.slice.call(hr.children);
+                if (ths.length < 4) continue;
+                var groups = ths.map(function (th) { return _aiqGroupOf(th.textContent); });
+                if (groups.indexOf(-1) !== -1) continue;   // not a ledger we understand
+                if (groups.filter(function (g, i, a) { return a.indexOf(g) === i; }).length < 2) continue;
+
+                // Sort the columns into group order, keeping the order inside
+                // each group. Idempotent: a sorted table reorders to itself.
+                var order = ths.map(function (_, i) { return i; }).sort(function (a, b) {
+                    return (groups[a] - groups[b]) || (a - b);
+                });
+                var isSorted = order.every(function (v, i) { return v === i; });
+                if (!isSorted) {
+                    var rows = [hr].concat(Array.prototype.slice.call(tbl.querySelectorAll('tbody tr')));
+                    rows.forEach(function (row) {
+                        var cells = Array.prototype.slice.call(row.children);
+                        if (cells.length !== order.length) return;
+                        order.forEach(function (from) { row.appendChild(cells[from]); });
+                    });
+                    ths = Array.prototype.slice.call(hr.children);
+                    groups = ths.map(function (th) { return _aiqGroupOf(th.textContent); });
+                }
+                tbl.classList.add('aiq-e');
+
+                // Rule between the groups, on the header and every body cell.
+                var spans = [];
+                groups.forEach(function (g, i) {
+                    var last = spans[spans.length - 1];
+                    if (last && last.g === g) { last.n++; } else { spans.push({ g: g, n: 1, at: i }); }
+                });
+                var edges = {};
+                spans.forEach(function (s, i) { if (i) edges[s.at] = true; });
+                var bodyRows = tbl.querySelectorAll('tbody tr');
+                [hr].concat(Array.prototype.slice.call(bodyRows)).forEach(function (row) {
+                    Array.prototype.forEach.call(row.children, function (c, i) {
+                        c.classList.toggle('gp', !!edges[i]);
+                    });
+                });
+
+                // Band header. Rebuilt only when the shape changes.
+                var sig = spans.map(function (s) { return s.g + ':' + s.n; }).join(',');
+                var band = tbl.querySelector('thead tr.aiq-bandrow');
+                if (!band || band.getAttribute('data-aiq-sig') !== sig) {
+                    if (band) band.parentNode.removeChild(band);
+                    band = document.createElement('tr');
+                    band.className = 'aiq-bandrow';
+                    band.setAttribute('data-aiq-sig', sig);
+                    band.innerHTML = spans.map(function (s, i) {
+                        return '<th colspan="' + s.n + '"' + (i ? ' class="gp"' : '') + '>'
+                             + _AIQ_GROUP[s.g][0] + '</th>';
+                    }).join('');
+                    hr.parentNode.insertBefore(band, hr);
+                }
+
+                // A bar under each response measure, scaled to the best value
+                // in its own column, so the ranking has a shape you can read.
+                groups.forEach(function (g, ci) {
+                    if (g !== 1) return;
+                    var vals = [], cells = [];
+                    Array.prototype.forEach.call(bodyRows, function (row) {
+                        var td = row.children[ci];
+                        if (!td) return;
+                        var v = _aiqCellNum(td);
+                        cells.push({ td: td, v: v });
+                        if (v != null) vals.push(v);
+                    });
+                    if (vals.length < 2) return;
+                    var max = Math.max.apply(null, vals);
+                    if (!(max > 0)) return;
+                    cells.forEach(function (c) {
+                        var bar = c.td.querySelector(':scope > .aiq-mini');
+                        if (c.v == null) { if (bar) bar.remove(); return; }
+                        var pct = Math.max(2, Math.min(100, (c.v / max) * 100));
+                        if (!bar) {
+                            bar = document.createElement('div');
+                            bar.className = 'aiq-mini';
+                            bar.innerHTML = '<i></i>';
+                            c.td.appendChild(bar);
+                        }
+                        bar.firstChild.style.width = pct.toFixed(1) + '%';
+                    });
+                });
+            }
+        }
+
+        // ---- tabbed shell -------------------------------------------
+        // Each slab the renderers produce is claimed by exactly one tab.
+        // Matching is on the section's own h5, which the renderers write,
+        // so this survives a re-render without knowing how it was built.
+        var _AIQ_TABS = [
+            { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
+            { id: 'assets',      label: 'Assets',      ids: ['iiqAssetTableSection'] },
+            { id: 'audiences',   label: 'Audiences',   ids: ['iiqAudienceTableSection'] },
+            { id: 'paths',       label: 'Paths',       heads: ['the nest', 'forks along the way'] },
+            { id: 'surfaces',    label: 'Surfaces',    heads: ['where they went'] },
+            { id: 'attribution', label: 'Attribution', heads: ['attribution on paid tickets only',
+                                                               'touchpoint contribution to ticketing'] },
+            { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
+            { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] }
+        ];
+        function _aiqNorm(s) {
+            return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim();
+        }
+        function _aiqTabForHead(h) {
+            for (var i = 0; i < _AIQ_TABS.length; i++) {
+                var t = _AIQ_TABS[i];
+                if (!t.heads) continue;
+                for (var j = 0; j < t.heads.length; j++) {
+                    if (h.indexOf(t.heads[j]) === 0) return t.id;
+                }
+            }
+            return null;
+        }
+        function _aiqLastTabKey() {
+            var slug = '';
+            try { slug = (window.__intentIQ && window.__intentIQ.currentSlug) || ''; } catch (e) { }
+            return 'aiqTab_' + (slug || 'default');
+        }
+
+        // Artwork is found by name, the same way a Flywheel study finds its
+        // hero: drop goat.jpg into static/titles and the Goat title picks it
+        // up. No file means a typographic masthead, never a broken image.
+        var _AIQ_ART = {};
+        function _aiqArtFor(slug, onFound) {
+            if (!slug) return;
+            if (Object.prototype.hasOwnProperty.call(_AIQ_ART, slug)) {
+                if (_AIQ_ART[slug]) onFound(_AIQ_ART[slug]);
+                return;
+            }
+            _AIQ_ART[slug] = null;
+            var exts = ['.jpg', '.png', '.webp', '.jpeg'], i = 0;
+            (function tryNext() {
+                if (i >= exts.length) return;
+                var url = '/static/titles/' + slug + exts[i++];
+                var im = new Image();
+                im.onload = function () { _AIQ_ART[slug] = url; onFound(url); };
+                im.onerror = tryNext;
+                im.src = url;
+            })();
+        }
+
+        function _aiqBuildChrome(wrap) {
+            if (wrap.querySelector('.aiq-tabs')) return wrap.querySelector('.aiq-panels');
+            var banner = document.createElement('div');
+            banner.className = 'aiq-banner is-bare';
+            banner.innerHTML = '<div class="aiq-banner-img"></div><div class="aiq-banner-scrim"></div>'
+                + '<div class="aiq-banner-txt"><div class="aiq-eyebrow">Attribution IQ</div>'
+                + '<div class="aiq-banner-title"></div><div class="aiq-banner-deck"></div></div>';
+            var controls = document.createElement('div');
+            controls.className = 'aiq-controls';
+            var rail = document.createElement('div');
+            rail.className = 'aiq-rail';
+            var tabs = document.createElement('div');
+            tabs.className = 'aiq-tabs';
+            var panels = document.createElement('div');
+            panels.className = 'aiq-panels';
+            var attic = document.createElement('div');
+            attic.className = 'aiq-attic';
+            wrap.insertBefore(banner, wrap.firstChild);
+            wrap.insertBefore(controls, banner.nextSibling);
+            wrap.insertBefore(rail, controls.nextSibling);
+            wrap.insertBefore(tabs, rail.nextSibling);
+            wrap.insertBefore(panels, tabs.nextSibling);
+            wrap.appendChild(attic);
+            _AIQ_TABS.forEach(function (t) {
+                var p = document.createElement('div');
+                p.className = 'aiq-panel';
+                p.setAttribute('data-aiq-panel', t.id);
+                panels.appendChild(p);
+            });
+            // The original masthead and the old sub-tab rail are replaced by
+            // the banner and this rail, so they retire to the attic rather
+            // than being removed: the renderers still address them.
+            var hdr = wrap.querySelector('.iiq-header');
+            if (hdr) attic.appendChild(hdr);
+            return panels;
+        }
+
+        function _aiqBanner(wrap) {
+            var banner = wrap.querySelector('.aiq-banner');
+            if (!banner) return;
+            var sel = document.getElementById('iiqTitleSelect');
+            var opt = sel && sel.options[sel.selectedIndex];
+            var raw = opt ? (opt.text || '').trim() : '';
+            if (!raw) return;
+            var name = raw.replace(/\s*\([0-9]{4}-[0-9]{2}-[0-9]{2}\)\s*$/, '').trim() || raw;
+            var dm = raw.match(/\(([0-9]{4})-([0-9]{2})-([0-9]{2})\)/);
+            var bits = [];
+            if (dm) {
+                var MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+                           'August', 'September', 'October', 'November', 'December'];
+                bits.push('In theaters ' + MON[parseInt(dm[2], 10) - 1] + ' ' + parseInt(dm[3], 10) + ', ' + dm[1]);
+            }
+            var hero = document.getElementById('iiqWeeklySummaryCard');
+            var tplus = hero && (hero.innerText || '').match(/T[+-]\d+\s*days/);
+            if (tplus) bits.push(tplus[0]);
+            var assetSec = document.getElementById('iiqAssetTableSection');
+            var na = assetSec && (assetSec.innerText || '').match(/of\s+([\d,]+)\s+at\b/);
+            if (na) bits.push(na[1] + ' assets in the window');
+            var tEl = banner.querySelector('.aiq-banner-title');
+            var dEl = banner.querySelector('.aiq-banner-deck');
+            if (tEl && tEl.textContent !== name) tEl.textContent = name;
+            var deck = bits.join(' \u00b7 ');
+            if (dEl && dEl.textContent !== deck) dEl.textContent = deck;
+            var slug = '';
+            try { slug = (window.__intentIQ && window.__intentIQ.currentSlug) || (sel && sel.value) || ''; } catch (e) { }
+            if (slug && banner.getAttribute('data-aiq-slug') !== slug) {
+                banner.setAttribute('data-aiq-slug', slug);
+                banner.classList.add('is-bare');
+                _aiqArtFor(slug, function (url) {
+                    if (banner.getAttribute('data-aiq-slug') !== slug) return;
+                    banner.querySelector('.aiq-banner-img').style.backgroundImage = 'url("' + url + '")';
+                    banner.classList.remove('is-bare');
+                });
+            }
+        }
+
+        // Every figure the rail can show, read off the slabs themselves so a
+        // re-render keeps it honest. Each tab picks the ones that frame it.
+        function _aiqFacts() {
+            var f = {};
+            var mta = document.getElementById('intentIQView');
+            var txt = mta ? (mta.innerText || '') : '';
+            function grab(re) { var m = txt.match(re); return m ? m[1] : null; }
+            f.exposed = grab(/Exposed viewers\s*\n\s*([\d.,]+[KM]?)/i);
+            f.baseline = grab(/Baseline conversion rate\s*\n\s*([\d.]+%)/i);
+            f.panellists = grab(/Exposed panellists in this read:\s*([\d,]+)/i);
+            f.strength = grab(/Read strength\s*\n\s*([A-Za-z ]+?)\s*\n/i);
+            f.sufficiency = /Clears sufficiency/i.test(txt) ? 'Clears' : null;
+            var a = document.getElementById('iiqAssetTableSection');
+            if (a) {
+                var at = a.innerText || '';
+                var pc = at.match(/(\d+\.\d{2})%/);
+                if (pc) f.bestResponse = pc[1] + '%';
+                var lf = at.match(/(\d+\.\d)x/i);
+                if (lf) f.bestLift = lf[1] + 'x';
+                var n = at.match(/of\s+([\d,]+)\s+at\b/);
+                if (n) f.assets = n[1];
+            }
+            var au = document.getElementById('iiqAudienceTableSection');
+            if (au) {
+                var nn = (au.innerText || '').match(/of\s+([\d,]+)\s+at\b/);
+                if (nn) f.cohorts = nn[1];
+            }
+            return f;
+        }
+        var _AIQ_RAIL = {
+            summary:     [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],
+                          ['Assets in view', 'assets'], ['Cohorts', 'cohorts'], ['Read strength', 'strength']],
+            assets:      [['Assets in view', 'assets'], ['Best response', 'bestResponse'],
+                          ['Best lift', 'bestLift'], ['Exposed viewers', 'exposed'], ['Read strength', 'strength']],
+            audiences:   [['Cohorts', 'cohorts'], ['Exposed viewers', 'exposed'],
+                          ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
+            paths:       [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],
+                          ['Panellists in read', 'panellists'], ['Sufficiency', 'sufficiency'],
+                          ['Read strength', 'strength']],
+            surfaces:    [['Exposed viewers', 'exposed'], ['Panellists in read', 'panellists'],
+                          ['Read strength', 'strength']],
+            attribution: [['Baseline conversion', 'baseline'], ['Panellists in read', 'panellists'],
+                          ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']],
+            timing:      [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],
+                          ['Panellists in read', 'panellists'], ['Read strength', 'strength']],
+            leaks:       [['Exposed viewers', 'exposed'], ['Panellists in read', 'panellists'],
+                          ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']]
+        };
+        function _aiqRail(wrap, active) {
+            var rail = wrap.querySelector('.aiq-rail');
+            if (!rail) return;
+            var f = _aiqFacts();
+            var spec = _AIQ_RAIL[active] || _AIQ_RAIL.summary;
+            var html = '';
+            spec.forEach(function (pair) {
+                var v = f[pair[1]];
+                if (!v) return;
+                var cls = /^[\d.,]+[KM%]?$/.test(v) ? '' : ' class="sm"';
+                var style = (pair[1] === 'sufficiency') ? ' style="color:#C7F23E"' : '';
+                html += '<div><b>' + pair[0] + '</b><span' + cls + style + '>' + v + '</span></div>';
+            });
+            if (rail.getAttribute('data-aiq-sig') !== html) {
+                rail.setAttribute('data-aiq-sig', html);
+                rail.innerHTML = html;
+            }
+            rail.style.display = html ? '' : 'none';
+        }
+
+        function _aiqShell() {
+            var root = document.getElementById('intentIQView');
+            if (!root) return;
+            var wrap = root.querySelector('.aiq-wrap');
+            if (!wrap) return;
+            var panels = _aiqBuildChrome(wrap);
+            var attic = wrap.querySelector('.aiq-attic');
+            var controls = wrap.querySelector('.aiq-controls');
+
+            // controls: the title / as-of bar and the audience picker
+            var bar = wrap.querySelector('.iiq-selector-bar-v2') || wrap.querySelector('.iiq-selector-bar');
+            if (bar && bar.parentElement !== controls) controls.appendChild(bar);
+
+            // claim the slabs
+            var claimed = {};
+            _AIQ_TABS.forEach(function (t) {
+                var panel = panels.querySelector('[data-aiq-panel="' + t.id + '"]');
+                (t.ids || []).forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && el.parentElement !== panel) panel.appendChild(el);
+                    if (el) claimed[t.id] = true;
+                });
+            });
+            var secs = root.querySelectorAll('section');
+            for (var i = 0; i < secs.length; i++) {
+                var sec = secs[i];
+                var h5 = sec.querySelector(':scope > h5');
+                if (!h5) continue;
+                var tid = _aiqTabForHead(_aiqNorm(h5.textContent));
+                if (!tid) continue;
+                var panel = panels.querySelector('[data-aiq-panel="' + tid + '"]');
+                if (panel && sec.parentElement !== panel) panel.appendChild(sec);
+                claimed[tid] = true;
+            }
+            // Whatever is left of the drawer is chrome we have replaced.
+            var drawer = document.getElementById('iiqExploreDrawer');
+            if (drawer && drawer.parentElement !== attic) attic.appendChild(drawer);
+
+            // rail of tabs, built from the slabs that actually arrived
+            var live = _AIQ_TABS.filter(function (t) { return claimed[t.id]; });
+            if (!live.length) return;
+            var f = _aiqFacts();
+            var counts = { assets: f.assets, audiences: f.cohorts };
+            var tabsEl = wrap.querySelector('.aiq-tabs');
+            var sig = live.map(function (t) { return t.id + (counts[t.id] || ''); }).join('|');
+            var active = wrap.getAttribute('data-aiq-active');
+            if (!active || !claimed[active]) {
+                try { active = localStorage.getItem(_aiqLastTabKey()) || ''; } catch (e) { active = ''; }
+                if (!active || !claimed[active]) active = live[0].id;
+                wrap.setAttribute('data-aiq-active', active);
+            }
+            if (tabsEl.getAttribute('data-aiq-sig') !== sig) {
+                tabsEl.setAttribute('data-aiq-sig', sig);
+                tabsEl.innerHTML = live.map(function (t) {
+                    var c = counts[t.id] ? '<i>' + counts[t.id] + '</i>' : '';
+                    return '<button type="button" class="aiq-tab" data-aiq-go="' + t.id + '">'
+                         + t.label + c + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabsEl.querySelectorAll('.aiq-tab'), function (b) {
+                    b.addEventListener('click', function () { _aiqGo(b.getAttribute('data-aiq-go')); });
+                });
+            }
+            Array.prototype.forEach.call(tabsEl.querySelectorAll('.aiq-tab'), function (b) {
+                b.classList.toggle('on', b.getAttribute('data-aiq-go') === active);
+            });
+            Array.prototype.forEach.call(panels.children, function (p) {
+                p.classList.toggle('on', p.getAttribute('data-aiq-panel') === active);
+            });
+            _aiqBanner(wrap);
+            _aiqRail(wrap, active);
+        }
+        function _aiqGo(id) {
+            var root = document.getElementById('intentIQView');
+            var wrap = root && root.querySelector('.aiq-wrap');
+            if (!wrap) return;
+            wrap.setAttribute('data-aiq-active', id);
+            try { localStorage.setItem(_aiqLastTabKey(), id); } catch (e) { }
+            _aiqShell();
+            root.scrollTop = 0;
+        }
+        window._aiqGo = _aiqGo;
+
         // A rail holding one tab is chrome with nothing to switch between.
         function _aiqTabRail() {
             var root = document.getElementById('intentIQView');
@@ -125630,6 +126103,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _aiqWrap(); _aiqRepalette(); _aiqStripEmoji();
                         _aiqChips(); _aiqOrphanBoxes();
                         _aiqFlattenPanels(); _aiqWindowChips(); _aiqTabRail();
+                        _aiqShell(); _aiqLedger();
                     } catch (e) { }
                 }, 120);
             }
