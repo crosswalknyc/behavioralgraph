@@ -558,8 +558,8 @@ def get_overview(title_slug: str) -> dict:
                     "source": "clickhouse",
                     **{k: reg_meta[k] for k in ("title_type", "terminology",
                                                  "enabled_tabs", "brand_config",
-                                                 "legacy_landing")
-                       if k in reg_meta},
+                                                 "legacy_landing", "image_url")
+                       if k in reg_meta and reg_meta[k] is not None},
                 }
                 # `legacy_landing` (per-title opt-out from the new film
                 # landing) usually lives on the S3 snapshot's title dict,
@@ -627,11 +627,13 @@ def get_overview(title_slug: str) -> dict:
             # keys so an admin can flip a per-campaign flag (e.g.
             # `enabled_tabs.mta`) without touching the snapshot itself.
             **{k: t.get(k) for k in ("title_type", "terminology",
-                                       "brand_config", "legacy_landing")
+                                       "brand_config", "legacy_landing",
+                                       "image_url")
                if t.get(k) is not None},
             **{k: reg_meta[k] for k in ("title_type", "terminology",
-                                          "brand_config", "legacy_landing")
-               if k in reg_meta},
+                                          "brand_config", "legacy_landing",
+                                          "image_url")
+               if k in reg_meta and reg_meta[k] is not None},
         }
         if merged_enabled:
             out["enabled_tabs"] = merged_enabled
