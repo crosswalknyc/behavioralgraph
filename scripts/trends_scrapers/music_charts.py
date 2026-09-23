@@ -1,7 +1,6 @@
 """
 Music charts scraper - Spotify Top 200, Apple Music Top 100, Shazam
-Top 200, YouTube Music (US weekly), TikTok Sounds, and Amazon Music
-All Hits.
+Top 200, YouTube Music (US weekly), and Amazon Music All Hits.
 
 Aggregates the biggest free (and cookie-donated) music trending signals
 into a single snapshot the dashboard renders as one tab:
@@ -11,7 +10,6 @@ into a single snapshot the dashboard renders as one tab:
     Shazam Top 200 US        -> what people are IDing right now (discovery)
     YouTube Music US Weekly  -> what's most-played on YouTube in the US
                                 (via kworb.net, YouTube's own stream data)
-    TikTok Trending Sounds   -> what's about to hit the charts (leading)
     Amazon Music All Hits    -> Amazon's editorial flagship hits
                                 playlist (needs music.amazon.com cookies)
 
@@ -27,7 +25,6 @@ Snapshot shape (kind='music'):
         "apple":    {"label": "Apple Music Top 100 (US)",   "items": [{...}]},
         "shazam":   {"label": "Shazam Top 200 (US)",        "items": [{...}]},
         "youtube":  {"label": "YouTube Music (US)",         "items": [{...}]},
-        "tiktok":   {"label": "TikTok Sounds",              "items": [{...}], "available": bool},
         "amazon":   {"label": "Amazon Music: All Hits (US)", "items": [{...}], "available": bool}
       }
     }
@@ -347,395 +344,6 @@ def _fetch_apple(limit: int = 100) -> list[dict]:
             'image':  t.get('artworkUrl100') or '',
         })
     return items
-
-
-# ---------------------------------------------------------------------------
-# TikTok Sounds  (Creative Center Trends -> Songs tab, Playwright DOM)
-# ---------------------------------------------------------------------------
-# TikTok has removed the public Songs/Sounds chart. Re-verified
-# 2026-09-23 from a US residential connection with a fully
-# authenticated session (sessionid + sid_guard + sid_tt on
-# .tiktok.com):
-#
-#   * The Creative Center has been rebuilt as "TikTok One Creative
-#     Suite" and its trend routes moved to /creative/creativeCenter/
-#     trends/<tab>. The router serves three tabs: Hashtag, Creator
-#     ("Coming soon") and Video.
-#   * Every music route - /trends/music, /trends/song, /trends/sound,
-#     and the legacy /business/creativecenter/inspiration/popular/
-#     {music,song,sound} paths - 302s to the hashtag tab.
-#   * The old JSON APIs (/creative_radar_api/v1/popular_trend/
-#     {sound,song,music}/list) return 404.
-#   * The session is demonstrably valid: the tab we land on renders
-#     authenticated ranked hashtag data on the same request.
-#
-# No free public replacement exists. The TikTok Billboard Top 50 was
-# discontinued in March 2025 when the Billboard partnership ended, the
-# Viral 50 is in-app only, and SoundOn gates its charts behind a login.
-#
-# The scraper still runs Playwright daily to (a) probe whether TikTok
-# restores the music route, and (b) record the evidence in the
-# snapshot. It never fires the cookie-gap notification, because
-# nothing here is a cookie problem.
-
-_TT_CC_MUSIC_URL = ('https://ads.tiktok.com/creative/creativeCenter/'
-                    'trends/music?region=US&period=7')
-
-# In a logged-in DOM, each Sounds/Songs card looks like:
-#   <div .../>#hashtag or Song title text</div>       <-- primary label
-#   <span>Artist Name</span>                          <-- author (optional)
-#   <span>234.5K</span><span>Posts</span>
-#   <span>213M</span><span>Plays</span> or <span>Views</span>
-# The class names are Emotion-hashed (rebuilt each deploy) so we match on
-# text-node structure and label proximity, exactly like tiktok.py.
-_TT_LABEL_RE = re.compile(r'>\s*(Posts|Plays|Views|Publish|Play)\s*<',
-                          re.IGNORECASE)
-_TT_STAT_RE = re.compile(
-    r'>([\d.,]+\s*[KMB]?)</span>\s*<span[^>]*>\s*(Posts|Plays|Views|Publish|Play)',
-    re.IGNORECASE,
-)
-
-
-def _parse_shorthand_count(s: str) -> int:
-    """'1.2M' -> 1_200_000, '340K' -> 340_000, '9,876' -> 9876."""
-    if not s:
-        return 0
-    txt = s.strip().replace(',', '').replace(' ', '')
-    m = re.match(r'^([\d.]+)\s*([KkMmBb])?$', txt)
-    if not m:
-        return 0
-    try:
-        num = float(m.group(1))
-    except ValueError:
-        return 0
-    suf  = (m.group(2) or '').upper()
-    mult = {'K': 1_000, 'M': 1_000_000, 'B': 1_000_000_000}.get(suf, 1)
-    return int(num * mult)
-
-
-def _fetch_tiktok_sounds(limit: int = 40) -> tuple[list[dict], dict]:
-    """Playwright DOM scrape of the CC Songs tab. Returns (items, meta)
-    where `meta` describes what happened (auth status, cookie age,
-    what the anonymous fallback rendered) so `fetch()` can decide
-    whether to surface an actionable message in the snapshot payload.
-
-    Fully auth'd: returns 20-40 sounds with title/artist/plays/posts.
-    Anonymous / partial auth: returns [] with meta['auth_required']
-    so the dashboard can prompt for a fresh cookie donation."""
-    meta: dict = {'auth_required': False, 'cookie_ok': False,
-                  'reason': None}
-
-    try:
-        from playwright.sync_api import sync_playwright  # type: ignore
-    except ImportError:
-        meta['reason'] = 'playwright_not_installed'
-        return [], meta
-
-    try:
-        from ._playwright import UA, _launch_browser, _try_stealth
-        from ._proxy import get_proxy_config, playwright_proxy
-        from ._base import (load_donated_cookies_playwright,
-                            cookie_donation_status)
-    except Exception as e:
-        meta['reason'] = f'playwright_helpers_missing: {e}'
-        return [], meta
-
-    donated_cookies = load_donated_cookies_playwright('ads.tiktok.com')
-    donation        = cookie_donation_status('ads.tiktok.com')
-    meta['cookie_age_hours'] = donation.get('age_hours')
-    meta['cookie_count']     = donation.get('count') or len(donated_cookies)
-    # Sessionid + sid_guard are the actual auth cookies. They live on
-    # the parent `.tiktok.com` domain, not `ads.tiktok.com`, so the
-    # donate_cookies.py fix that harvests parent-domain cookies is
-    # what unlocks this path.
-    donated_names = {c.get('name') for c in donated_cookies}
-    has_session   = bool(donated_names & {'sessionid', 'sid_guard',
-                                          'sid_ucp_v1', 'sid_tt'})
-    meta['has_session_cookie'] = has_session
-
-    if not donated_cookies:
-        meta['reason'] = 'no_donated_cookies'
-        meta['auth_required'] = True
-        return [], meta
-
-    proxy_dict = playwright_proxy(get_proxy_config()) or None
-    final_html = ''
-    with sync_playwright() as pw:
-        try:
-            browser, _channel = _launch_browser(pw, prefer_chrome=True,
-                                                 proxy=proxy_dict)
-        except Exception as e:
-            meta['reason'] = f'playwright_launch_failed: {e}'
-            return [], meta
-        try:
-            ctx = browser.new_context(
-                user_agent=UA,
-                viewport={'width': 1440, 'height': 900},
-                locale='en-US',
-                timezone_id='America/New_York',
-                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
-            )
-            try:
-                ctx.add_cookies(donated_cookies)
-            except Exception as e:
-                logger.info("tiktok sounds: cookie inject failed: %s", e)
-            page = ctx.new_page()
-            _try_stealth(page)
-            # Warm the cookie jar on ads.tiktok.com root before nav.
-            try:
-                page.goto('https://ads.tiktok.com/', wait_until='domcontentloaded',
-                           timeout=30000)
-                page.wait_for_timeout(2000)
-            except Exception:
-                pass
-            # Ask for the music route directly. If TikTok ever restores
-            # the songs chart it will serve it here; today the router
-            # 302s every music / song / sound path to the hashtag tab,
-            # and that redirect is the evidence we record.
-            try:
-                page.goto(_TT_CC_MUSIC_URL, wait_until='domcontentloaded',
-                           timeout=45000)
-                page.wait_for_timeout(6000)
-            except Exception as e:
-                meta['reason'] = f'cc_nav_failed: {e}'
-                return [], meta
-
-            landed = page.url or ''
-            meta['probe_url']  = _TT_CC_MUSIC_URL
-            meta['landed_url'] = landed
-
-            if '/trends/music' not in landed:
-                # Redirected away from the music route. Read the tab
-                # strip and check whether ranked rows rendered, so the
-                # verdict rests on what the page actually served rather
-                # than on a click that found no target.
-                try:
-                    tabs = page.evaluate("""() => {
-                        const seen = new Set();
-                        document.querySelectorAll(
-                            '[role="tab"], a[href*="/trends/"]').forEach((el) => {
-                            const t = (el.innerText || '').trim().split('\\n')[0];
-                            if (t && t.length < 30) seen.add(t);
-                        });
-                        return Array.from(seen).slice(0, 10);
-                    }""") or []
-                except Exception:
-                    tabs = []
-                try:
-                    rows_rendered = len(_TT_LABEL_RE.findall(page.content()))
-                except Exception:
-                    rows_rendered = 0
-                meta['tabs_seen']      = tabs
-                meta['rows_rendered']  = rows_rendered
-                meta['auth_required']  = False
-                meta['source_unavailable'] = True
-                meta['reason'] = (
-                    f'cc_music_route_retired - {_TT_CC_MUSIC_URL} '
-                    f'redirected to {landed}. The rebuilt Creative '
-                    f'Center ships Hashtag, Creator ("Coming soon") and '
-                    f'Video only; tabs seen: {tabs or "none read"}. The '
-                    f'donated session is good - {rows_rendered} ranked '
-                    f'rows rendered on the tab we landed on - so this is '
-                    f'not a cookie problem. No free public TikTok songs '
-                    f'chart is currently published: the TikTok Billboard '
-                    f'Top 50 ended in March 2025 and SoundOn requires a '
-                    f'login.')
-                return [], meta
-
-            # Music route served. Confirm the stat labels hydrated.
-            try:
-                page.wait_for_selector('span:has-text("Posts")',
-                                        timeout=15000, state='attached')
-            except Exception:
-                logger.info("tiktok sounds: 'Posts' label never appeared "
-                             "on the music tab")
-
-            # Progressive scroll to trigger the CC's lazy-load.
-            last_count = 0
-            stalled = 0
-            for i in range(25):
-                try:
-                    html_now = page.content()
-                except Exception:
-                    break
-                count = len(_TT_LABEL_RE.findall(html_now))
-                if count >= limit + 3:
-                    final_html = html_now
-                    break
-                if count == last_count:
-                    stalled += 1
-                    if stalled >= 4:
-                        final_html = html_now
-                        break
-                else:
-                    stalled = 0
-                    last_count = count
-                try:
-                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                    page.wait_for_timeout(1600)
-                except Exception:
-                    break
-            if not final_html:
-                try:
-                    final_html = page.content()
-                except Exception:
-                    pass
-        finally:
-            try: ctx.close()
-            except Exception: pass
-            try: browser.close()
-            except Exception: pass
-
-    items = _parse_tt_sounds_dom(final_html, limit=limit)
-    meta['cookie_ok'] = len(items) > 5
-    if not items:
-        meta['auth_required'] = True
-        meta['reason'] = meta['reason'] or 'dom_parse_yielded_zero'
-    return items, meta
-
-
-def _parse_tt_sounds_dom(html: str, *, limit: int = 40) -> list[dict]:
-    """Parse the CC Songs card list. Each card window is delimited by
-    a Play/Plays/Posts stat label; we walk from label back to the
-    nearest title text and forward to the artist row.
-
-    The DOM structure once hydrated is:
-      <div ...>1</div>                    (rank in a bold cell)
-      <div class="...truncate...">Choosin' Texas</div>   (title)
-      <span class="...">Ella Langley</span>              (artist, optional)
-      <span>1.2M</span><span>Posts</span>
-      <span>340M</span><span>Plays</span>
-
-    Selectors are hashed classes so we anchor on the "Posts"/"Plays"
-    labels and rewind through the preceding text nodes."""
-    if not html:
-        return []
-    # Find every stat label position; each is roughly the end of a card.
-    label_matches = list(_TT_LABEL_RE.finditer(html))
-    if not label_matches:
-        return []
-
-    # A card starts at the previous card's end (or 0) and ends after
-    # its Views/Plays label window. Group consecutive labels: each card
-    # has 2 label rows (Posts + Plays/Views), so pair them.
-    out: list[dict] = []
-    seen: set[str] = set()
-    idx = 0
-    prev_end = 0
-    while idx < len(label_matches) - 1 and len(out) < limit:
-        # Consume 2 labels per card if they're within 300 chars of each
-        # other (adjacent stat spans); otherwise treat as single label.
-        first  = label_matches[idx]
-        second = label_matches[idx + 1] if idx + 1 < len(label_matches) else first
-        if second.start() - first.end() > 400:
-            card_end = first.end()
-            step = 1
-        else:
-            card_end = second.end()
-            step = 2
-
-        card_html = html[prev_end:card_end]
-
-        # Title: the first text node inside a "truncate" or "font-bold"
-        # span that isn't a stat number. Fall back to any long-ish text.
-        title = ''
-        for tm in re.finditer(
-                r'<div[^>]*truncate[^>]*>\s*([^<]{2,120})\s*</div>|'
-                r'<span[^>]*font-bold[^>]*>\s*([^<]{2,120})\s*</span>',
-                card_html):
-            cand = _html.unescape((tm.group(1) or tm.group(2) or '').strip())
-            # Skip pure stat numbers like "234.5K"
-            if cand and not re.match(r'^[\d.,]+\s*[KMB]?$', cand) \
-                    and cand.lower() not in {'posts', 'plays', 'views'}:
-                title = cand
-                break
-
-        if not title:
-            idx += step
-            prev_end = card_end
-            continue
-
-        # Artist: the next non-stat text node after the title, usually
-        # inside a smaller span. Bail if we can't find one.
-        artist = ''
-        artist_search = card_html[card_html.find(title) + len(title):]
-        for am in re.finditer(r'<span[^>]*>\s*([^<]{2,80})\s*</span>',
-                              artist_search):
-            cand = _html.unescape(am.group(1).strip())
-            if not cand or cand.lower() in {'posts', 'plays', 'views'}:
-                continue
-            if re.match(r'^[\d.,]+\s*[KMB]?$', cand):
-                continue
-            # Category rows read like "News & Entertainment" - skip
-            # if it's clearly a category label rather than an artist.
-            if cand in ('News & Entertainment', 'Sports', 'Comedy',
-                         'Fashion', 'Beauty', 'Music', 'Lifestyle'):
-                continue
-            artist = cand
-            break
-
-        # Stats
-        posts = 0
-        plays = 0
-        for sm in _TT_STAT_RE.finditer(card_html):
-            val   = _parse_shorthand_count(sm.group(1))
-            label = sm.group(2).lower()
-            if 'post' in label or 'publish' in label:
-                posts = max(posts, val)
-            elif 'play' in label or 'view' in label:
-                plays = max(plays, val)
-
-        key = re.sub(r'\s+', ' ', f"{title}|{artist}").lower()
-        if key in seen:
-            idx += step
-            prev_end = card_end
-            continue
-        seen.add(key)
-
-        # Deep link: TikTok surfaces music at
-        # https://www.tiktok.com/music/<slug-numericid>. Without the ID
-        # we can only link to a search fallback.
-        q = requests.utils.quote(f"{title} {artist}".strip())
-        deep_url = f'https://www.tiktok.com/search/music?q={q}'
-
-        out.append({
-            'rank':   len(out) + 1,
-            'title':  title,
-            'artist': artist,
-            'posts':  posts,
-            'plays':  plays,
-            'url':    deep_url,
-        })
-        idx += step
-        prev_end = card_end
-
-    return out[:limit]
-
-
-def _load_tiktok_cookies_from_s3() -> Optional[dict]:
-    """Kept for reference / debugging - the Playwright path uses
-    _base.load_donated_cookies_playwright directly. Returns
-    {name: value} for shells that want to test the old API path
-    outside Playwright."""
-    try:
-        import boto3
-        s3  = boto3.client('s3')
-        obj = s3.get_object(Bucket='dashboard-inputs',
-                             Key='trends_iq_cookies/ads.tiktok.com.json')
-        raw = json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception as e:
-        logger.info("tiktok sounds: no cookies (%s)", e)
-        return None
-    if isinstance(raw, list):
-        return {c['name']: c['value'] for c in raw
-                if c.get('name') and c.get('value')}
-    if isinstance(raw, dict):
-        cookies = raw.get('cookies')
-        if isinstance(cookies, list):
-            return {c['name']: c['value'] for c in cookies
-                    if c.get('name') and c.get('value')}
-        return {k: v for k, v in raw.items() if isinstance(v, str)}
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1115,37 +723,26 @@ def fetch() -> dict[str, Any]:
     apple_items   = _fetch_apple(limit=100)
     shazam_items  = _fetch_shazam(limit=100)
     ytm_items     = _fetch_youtube_music(limit=100)
-    tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
     amz_items, amz_sub = _fetch_amazon_music(limit=100)
 
     # Backfill artwork thumbnails from iTunes Search API for every
     # source that doesn't ship its own image field. Shared cache so a
     # track that appears on multiple charts is only looked up once.
     # Apple items already carry `artworkUrl100` from the RSS, so
-    # `_enrich_with_itunes_artwork` no-ops on them. TikTok items rarely
-    # have artist metadata, but we run enrichment anyway - it skips
-    # items missing artist/title.
+    # `_enrich_with_itunes_artwork` no-ops on them.
     art_cache: dict[tuple[str, str], str] = {}
     _enrich_with_itunes_artwork(spotify_items, art_cache)
     _enrich_with_itunes_artwork(shazam_items,  art_cache)
     _enrich_with_itunes_artwork(ytm_items,     art_cache)
-    _enrich_with_itunes_artwork(tt_items,      art_cache)
     logger.info("itunes artwork cache: %d unique lookups", len(art_cache))
 
-    # TikTok sub label reflects what actually happened. TikTok has
-    # removed the public songs chart entirely (re-verified 2026-09-23);
-    # we still probe daily in case it comes back.
-    if tt_items:
-        tt_sub = "Leading indicator for chart hits. What's about to break."
-    elif tt_meta.get('source_unavailable'):
-        tt_sub = ('TikTok no longer publishes a public songs chart, so '
-                  'there is nothing to show here. The card fills itself '
-                  'in the day that changes.')
-    elif tt_meta.get('auth_required'):
-        tt_sub = ('Requires a logged-in ads.tiktok.com cookie donation '
-                  'from a browser signed in to the Creative Center.')
-    else:
-        tt_sub = 'TikTok Sounds temporarily unavailable.'
+    # TikTok retired 2026-09-23 (Jenna). TikTok rebuilt the Creative
+    # Center as TikTok One and its music routes now redirect to the
+    # hashtag tab, so no public songs chart exists to read. The
+    # Billboard partnership ended in March 2025, the Viral 50 is
+    # in-app only, and SoundOn gates its charts behind a login. There
+    # is nothing to substitute that would still be TikTok's own
+    # measurement, so the rail is gone rather than permanently empty.
 
     return {
         # `national` mirrors Spotify (the biggest reach) so the standard
@@ -1153,7 +750,7 @@ def fetch() -> dict[str, Any]:
         # breakdown lives in `sources` and is what compute_view reads.
         'national': spotify_items[:100] or apple_items[:100],
         'available': bool(spotify_items or apple_items or shazam_items
-                          or ytm_items or tt_items),
+                          or ytm_items or amz_items),
         'sources': {
             'spotify': {
                 'label':     'Spotify Daily Top 200 (US)',
@@ -1172,17 +769,6 @@ def fetch() -> dict[str, Any]:
                 'sub':       'What people are watching and listening to on YouTube.',
                 'items':     ytm_items,
                 'available': bool(ytm_items),
-            },
-            'tiktok': {
-                'label':          'TikTok Sounds (7d)',
-                'sub':            tt_sub,
-                'items':          tt_items,
-                'available':      bool(tt_items),
-                'cookie_ok':      tt_meta.get('cookie_ok', False),
-                'auth_required':  tt_meta.get('auth_required', False),
-                'diagnostic':     tt_meta.get('reason'),
-                'cookie_age_h':   tt_meta.get('cookie_age_hours'),
-                'has_session':    tt_meta.get('has_session_cookie', False),
             },
             'shazam': {
                 'label':     'Shazam Top 200 (US)',
