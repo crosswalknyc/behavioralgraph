@@ -33964,15 +33964,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqROIAssetId(a) {
                 return String(a.asset_id || a.id || a.url || a.action_label || '');
             }
+            // Some asset labels arrive already HTML-escaped (og titles);
+            // decode once so the renderer's escape does not double up.
+            var _iiqROIDecodeEl = null;
+            function _iiqROIDecode(s) {
+                s = String(s || '');
+                if (s.indexOf('&') < 0) return s;
+                try {
+                    if (!_iiqROIDecodeEl) _iiqROIDecodeEl = document.createElement('textarea');
+                    _iiqROIDecodeEl.innerHTML = s;
+                    return _iiqROIDecodeEl.value;
+                } catch (e) { return s; }
+            }
             function _iiqROIAssetLabel(a, max) {
-                var lab = a.action_label || '';
+                var lab = _iiqROIDecode(a.action_label || '');
                 if (!lab) {
                     var who = (a.talent_tags && a.talent_tags[0]) || a.source || '';
                     var bits = [];
                     if (who) bits.push(who);
                     if (a.channel) bits.push(a.channel);
                     if (a.note || a.title) bits.push(a.note || a.title);
-                    lab = bits.join(' - ');
+                    lab = _iiqROIDecode(bits.join(' - '));
                 }
                 lab = String(lab).replace(/\s+/g, ' ').trim();
                 var cap = max || 88;
