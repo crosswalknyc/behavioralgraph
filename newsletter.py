@@ -1149,6 +1149,178 @@ def resolve_recipients(state, list_id=None, emails=None, segment_id=None):
     return out
 
 
+def _export_filename(name, suffix=".csv"):
+    stem = _safe_filename(name or "export")
+    if "." in stem:
+        stem = stem.rsplit(".", 1)[0]
+    stem = (stem or "export")[:80]
+    return stem + suffix
+
+
+def _csv_text(headers, rows):
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return buf.getvalue()
+
+
+def _csv_response(filename, headers, rows):
+    body = _csv_text(headers, rows)
+    safe = _safe_filename(filename) or "export.csv"
+    return Response(
+        body,
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+def list_export_table(state, lid):
+    """Everyone on a list, subscribed and unsubscribed. One row per address."""
+    lst = _list(state, lid)
+    if not lst:
+        return None
+    names = {
+        row.get("id"): (row.get("name") or row.get("id"))
+        for row in (state.get("lists") or [])
+    }
+    rows = []
+    seen = set()
+    for sub in state.get("subscribers") or []:
+        email = _valid_email(sub.get("email"))
+        if not email or email in seen:
+            continue
+        if lid not in (sub.get("list_ids") or []):
+            continue
+        seen.add(email)
+        list_names = ", ".join(
+            names.get(x, x) for x in (sub.get("list_ids") or []) if x
+        )
+        rows.append([
+            email,
+            (sub.get("name") or "").strip(),
+            (sub.get("company") or "").strip(),
+            sub.get("status") or "subscribed",
+            ", ".join(sub.get("tags") or []),
+            list_names,
+            sub.get("source") or "",
+            sub.get("added_at") or "",
+            sub.get("unsubscribed_at") or "",
+        ])
+    rows.sort(key=lambda r: r[0])
+    headers = [
+        "email", "name", "company", "status", "tags", "lists",
+        "source", "added_at", "unsubscribed_at",
+    ]
+    filename = _export_filename(lst.get("name") or lid, "_list.csv")
+    return filename, headers, rows
+
+
+def segment_export_table(state, sid):
+    seg = _segment(state, sid)
+    if not seg:
+        return None
+    recips = resolve_recipients(state, segment_id=sid)
+    headers = ["email", "name", "company", "tags"]
+    rows = [
+        [
+            r.get("email") or "",
+            r.get("name") or "",
+            r.get("company") or "",
+            ", ".join(r.get("tags") or []),
+        ]
+        for r in recips
+    ]
+    filename = _export_filename(seg.get("name") or sid, "_segment.csv")
+    return filename, headers, rows
+
+
+def campaign_results_export_table(cid, state=None, snap=None, store=None):
+    """Recipient-level send results, with download columns merged on email."""
+    state = load_state() if state is None else state
+    camp = _campaign(state, cid)
+    if not camp:
+        return None
+    if snap is None:
+        snap = get_send_snapshot(cid)
+    if store is None:
+        store = get_download_store(cid)
+    leads_by = {}
+    for key, lead in ((store or {}).get("leads") or {}).items():
+        email = _valid_email(key) or (key or "").strip().lower()
+        if email:
+            leads_by[email] = lead or {}
+    seen = set()
+    rows = []
+    for key, row in ((snap or {}).get("recipients") or {}).items():
+        email = _valid_email(key) or (key or "").strip().lower()
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        row = row or {}
+        clicks = row.get("clicks") or []
+        click_count = sum(int(c.get("count") or 1) for c in clicks)
+        links = "; ".join(c.get("url") or "" for c in clicks if c.get("url"))
+        lead = leads_by.get(email) or {}
+        amount = ""
+        downloaded = ""
+        paid = ""
+        dl_count = 0
+        if lead:
+            downloaded = "yes"
+            dl_count = int(lead.get("download_count") or 0)
+            paid = "yes" if lead.get("paid") else ""
+            amount = round(int(lead.get("amount_cents") or 0) / 100.0, 2)
+        rows.append([
+            email,
+            row.get("name") or "",
+            row.get("status") or "",
+            row.get("sent_at") or "",
+            row.get("opened_at") or "",
+            int(row.get("open_count") or 0),
+            click_count,
+            links,
+            row.get("unsubscribed_at") or "",
+            row.get("error") or "",
+            downloaded,
+            dl_count,
+            paid,
+            amount,
+        ])
+    for email, lead in leads_by.items():
+        if email in seen:
+            continue
+        rows.append([
+            email,
+            (lead or {}).get("name") or "",
+            "download only",
+            "",
+            "",
+            0,
+            0,
+            "",
+            "",
+            "",
+            "yes",
+            int((lead or {}).get("download_count") or 0),
+            "yes" if (lead or {}).get("paid") else "",
+            round(int((lead or {}).get("amount_cents") or 0) / 100.0, 2),
+        ])
+    rows.sort(key=lambda r: r[0])
+    headers = [
+        "email", "name", "status", "sent_at", "opened_at", "open_count",
+        "click_count", "links", "unsubscribed_at", "error",
+        "downloaded", "download_count", "paid", "amount_usd",
+    ]
+    filename = _export_filename(camp.get("name") or cid, "_results.csv")
+    return filename, headers, rows
+
+
 _CSV_EMAIL_KEYS = {"email", "e-mail", "e_mail", "mail", "email address", "emailaddress"}
 _CSV_NAME_KEYS = {"name", "full name", "fullname", "contact"}
 _CSV_FIRST_KEYS = {"first", "first name", "firstname", "given"}
@@ -2362,6 +2534,16 @@ def api_report(cid):
     })
 
 
+@newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/export")
+@admin_required
+def api_export_campaign(cid):
+    table = campaign_results_export_table(cid)
+    if not table:
+        return jsonify({"success": False, "error": "campaign not found"}), 404
+    filename, headers, rows = table
+    return _csv_response(filename, headers, rows)
+
+
 @newsletter_bp.route("/api/admin/newsletter/lists", methods=["POST"])
 @admin_required
 def api_create_list():
@@ -2399,6 +2581,26 @@ def api_delete_list(lid):
 
     _cas_update_state(mutate)
     return jsonify(_overview_payload())
+
+
+@newsletter_bp.route("/api/admin/newsletter/lists/<lid>/export")
+@admin_required
+def api_export_list(lid):
+    table = list_export_table(load_state(), lid)
+    if not table:
+        return jsonify({"success": False, "error": "list not found"}), 404
+    filename, headers, rows = table
+    return _csv_response(filename, headers, rows)
+
+
+@newsletter_bp.route("/api/admin/newsletter/segments/<sid>/export")
+@admin_required
+def api_export_segment(sid):
+    table = segment_export_table(load_state(), sid)
+    if not table:
+        return jsonify({"success": False, "error": "segment not found"}), 404
+    filename, headers, rows = table
+    return _csv_response(filename, headers, rows)
 
 
 @newsletter_bp.route("/api/admin/newsletter/lists/dashboard-users/sync", methods=["POST"])

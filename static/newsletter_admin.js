@@ -157,6 +157,7 @@
                     <div class="nl-card-foot">
                         <button class="btn btn-small btn-secondary" onclick="nlOpenEditor('${esc(c.id)}')">Edit</button>
                         ${sendBtn}
+                        ${(c.status === 'sent' || c.status === 'sending') ? `<button class="btn btn-small btn-secondary" onclick="nlExportCampaign('${esc(c.id)}')">Export</button>` : ''}
                         <button class="btn btn-small btn-secondary" onclick="nlDuplicate('${esc(c.id)}')">Duplicate</button>
                         ${c.status === 'sent' || c.status === 'sending' ? '' : `<button class="btn btn-small btn-secondary" onclick="nlDeleteCampaign('${esc(c.id)}')">Delete</button>`}
                     </div>
@@ -956,7 +957,10 @@
                     <td>${fmtNum(d.unique_downloads)}</td>
                     <td>${fmtNum(d.paid)}</td>
                     <td>${fmtMoney(d.revenue_usd)}</td>
-                    <td><button class="btn btn-small btn-secondary" onclick="nlOpenReport('${c.id}')">Open</button></td>
+                    <td>
+                        <button class="btn btn-small btn-secondary" onclick="nlOpenReport('${c.id}')">Open</button>
+                        ${(c.status === 'sent' || c.status === 'sending') ? `<button class="btn btn-small btn-secondary" onclick="nlExportCampaign('${c.id}')">Export</button>` : ''}
+                    </td>
                 </tr>`;
             }).join('') +
             '</tbody></table>';
@@ -969,7 +973,10 @@
                 <div class="k">${esc(l.kind || 'list')}</div>
                 <div class="v" style="font-size:1.1rem">${esc(l.name)}</div>
                 <div class="k" style="margin-top:0.35rem">${fmtNum(l.subscriber_count)} subscribed</div>
-                ${l.id === 'dashboard-users' || l.id === 'the-read' ? '' : `<button class="btn btn-small btn-secondary" style="margin-top:0.5rem" onclick="nlDeleteList('${l.id}')">Remove</button>`}
+                <div style="margin-top:0.5rem; display:flex; gap:0.35rem; flex-wrap:wrap">
+                    <button class="btn btn-small btn-secondary" onclick="nlExportList('${l.id}')">Export</button>
+                    ${l.id === 'dashboard-users' || l.id === 'the-read' ? '' : `<button class="btn btn-small btn-secondary" onclick="nlDeleteList('${l.id}')">Remove</button>`}
+                </div>
             </div>
         `).join('');
         fillListSelect($('nl-add-list'));
@@ -988,7 +995,8 @@
                       return `<tr>
                         <td>${esc(s.name)}<div class="nl-sub">${esc(bits.join(' · ') || 'All subscribed')}</div></td>
                         <td>${fmtNum(s.subscriber_count)}</td>
-                        <td><button class="btn btn-small btn-secondary" onclick="nlEditSegment('${s.id}')">Edit</button>
+                        <td><button class="btn btn-small btn-secondary" onclick="nlExportSegment('${s.id}')">Export</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlEditSegment('${s.id}')">Edit</button>
                             <button class="btn btn-small btn-secondary" onclick="nlDeleteSegment('${s.id}')">Remove</button></td>
                       </tr>`;
                   }).join('') + '</tbody></table>'
@@ -1152,6 +1160,53 @@
             state.data = data;
             renderAll();
         } catch (e) { toast(e.message, true); }
+    };
+
+    async function downloadExport(path, fallbackName) {
+        const resp = await fetch(path, { credentials: 'same-origin' });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || ('HTTP ' + resp.status));
+        }
+        const blob = await resp.blob();
+        let name = fallbackName;
+        const disp = resp.headers.get('Content-Disposition') || '';
+        const m = disp.match(/filename="([^"]+)"/);
+        if (m) name = m[1];
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    window.nlExportList = async function (id) {
+        try {
+            await downloadExport('/api/admin/newsletter/lists/' + encodeURIComponent(id) + '/export', 'list.csv');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlExportSegment = async function (id) {
+        try {
+            await downloadExport('/api/admin/newsletter/segments/' + encodeURIComponent(id) + '/export', 'segment.csv');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlExportCampaign = async function (id) {
+        try {
+            await downloadExport('/api/admin/newsletter/campaigns/' + encodeURIComponent(id) + '/export', 'campaign_results.csv');
+        } catch (e) { toast(e.message, true); }
+    };
+
+    window.nlExportCurrentReport = function () {
+        if (!state.reportId) {
+            toast('Open a report first', true);
+            return;
+        }
+        return nlExportCampaign(state.reportId);
     };
 
     window.nlDeleteList = async function (id) {
