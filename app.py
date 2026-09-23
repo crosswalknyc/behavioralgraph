@@ -5355,6 +5355,12 @@ def create_user():
         # Purgatory clearance grant block retired 2026-09-09 (Jenna,
         # "remove ... purgatory since we dont need it anymore"). The
         # has_purgatory_approval field is silently ignored on create.
+        try:
+            import wallet as _wallet_co
+            if str(data['users'][username].get('billing_source') or '').lower() == 'company':
+                _wallet_co.ensure_company_record(data, company)
+        except Exception:
+            pass
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -5677,6 +5683,13 @@ def update_user(username):
             data['users'][new_username] = user
             del data['users'][username]
             username = new_username
+
+        try:
+            import wallet as _wallet_co
+            if str(user.get('billing_source') or '').lower() == 'company':
+                _wallet_co.ensure_company_record(data, user.get('company'))
+        except Exception:
+            pass
         
         save_users(data)
         return jsonify({'success': True, 'message': f'User {username} updated'})

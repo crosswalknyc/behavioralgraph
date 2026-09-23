@@ -2135,6 +2135,33 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
             _user_key(user, users_data) if isinstance(user, dict) else "")
 
 
+def ensure_company_record(users_data: dict, company_name: str):
+    """Create the companies[name] dict if it is missing.
+
+    Setting billing_source='company' on a user does not by itself
+    create the company wallet. Paramount+ hit that: three seats
+    routed through 'Paramount+' with no companies['Paramount+']
+    row, so resolve_billing_subject fell back to each personal
+    wallet (Robert $5,000, Tania/Casey $0).
+    """
+    if not isinstance(users_data, dict):
+        return None
+    name = str(company_name or "").strip()
+    if not name:
+        return None
+    companies = users_data.setdefault("companies", {})
+    existing = companies.get(name)
+    if isinstance(existing, dict):
+        return existing
+    rec = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "credit_pool": 0,
+        "credit_pool_used": 0,
+    }
+    companies[name] = rec
+    return rec
+
+
 def admin_billing_row_for_user(username: str, user: dict,
                                users_data: dict) -> dict:
     """Admin Users-tab snapshot. Company-billed people show the
@@ -2826,7 +2853,8 @@ __all__ = [
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
-    "resolve_billing_subject", "admin_billing_row_for_user",
+    "resolve_billing_subject", "ensure_company_record",
+    "admin_billing_row_for_user",
     "norm_usage_desc", "collect_usage_ledger_rows",
     "lookup_user", "company_billing_admins",
     "company_members", "iter_paying_subjects",
