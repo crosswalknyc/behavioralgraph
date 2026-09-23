@@ -507,12 +507,14 @@ def run_login(domains: list[str], *, dry_run: bool = False,
                             done.add(domain)
                             print(f'  [signed in]  '
                                   f'{guard.site_label(domain)}          ')
-                    left = int(deadline - time.time())
+                    left = max(0, int(deadline - time.time()))
                     still = [guard.site_label(d) for d in waiting
                              if d not in done]
                     if still:
+                        # Padded so a shorter line never leaves the
+                        # tail of a longer one behind it.
                         print(f'  waiting on: {", ".join(still)} '
-                              f'({left // 60}m {left % 60}s left)',
+                              f'({left // 60}m {left % 60}s left)'.ljust(78),
                               end='\r', flush=True)
             except KeyboardInterrupt:
                 print('\n  stopping here; saving whatever is signed in')
