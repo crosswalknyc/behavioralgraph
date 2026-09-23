@@ -32532,6 +32532,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-panel { display: none; }
         #intentIQView .aiq-panel.on { display: block; }
         #intentIQView .aiq-attic { display: none !important; }
+        #intentIQView .aiq-panel[data-aiq-panel="roi"] > #iiqPanel-roi { display: block !important; }
         #intentIQView .aiq-promoted .iiq-subtab-bar { display: none !important; }
         #intentIQView .aiq-promoted #iiqQNav { display: none !important; }
         #intentIQView .aiq-controls .aiq-aud-pick { margin: 0 !important; background: transparent !important; border: 0 !important; padding: 0 !important; }
@@ -32806,10 +32807,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             <div class="iiq-panel" id="iiqPanel-roi">
                 <div style="margin-bottom: 0.65rem;">
-                    <h4 style="margin: 0;">Campaign ROI &mdash; equivalent paid value</h4>
-                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">What it would have cost to buy this reach + engagement + high-intent traffic through paid media. Rates below are US industry benchmarks with citations - tune any of them in the <strong>Rate Assumptions</strong> panel to see live sensitivity.</div>
+                    <h4 style="margin: 0;">ROI: what each piece of content is worth, and the campaign as a whole</h4>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">The paid media it would have taken to buy the same reach, engagement and high-intent traffic. Value the whole campaign or any single post, add a cost to see the return, and tune any rate in <strong>Rate assumptions</strong> to see the sensitivity.</div>
                 </div>
-                <div id="iiqROIContent"><div class="iiq-empty" style="padding:1.5rem;">Loading ROI model...</div></div>
+                <div id="iiqROIContent"><div class="iiq-empty" style="padding:1.5rem;">Loading...</div></div>
             </div>
                 </div><!-- /.iiq-explore-body -->
             </div><!-- /#iiqExploreDrawer -->
@@ -33814,6 +33815,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         conversion:    'Average US theatrical ticket price 2024 = $11.75 (NATO industry average). Used as the conversion-value anchor because a ticket-purchase converts at the box-office register.'
                     }
                 },
+                advocacy: {
+                    label: 'Advocacy / Civic / Nonprofit',
+                    channels: {
+                        youtube:   { cpm: 12.50, label: 'YouTube (pre-roll / in-stream)' },
+                        tiktok:    { cpm:  8.25, label: 'TikTok (in-feed video)' },
+                        instagram: { cpm:  9.25, label: 'Instagram (Reels / feed)' },
+                        facebook:  { cpm: 10.75, label: 'Facebook (feed video)' },
+                        twitter:   { cpm:  6.25, label: 'X / Twitter (promoted video)' },
+                        snapchat:  { cpm:  3.75, label: 'Snapchat (Discover / Spotlight)' },
+                        podcast:   { cpm: 21.00, label: 'Podcast (host-read spot)' },
+                        linkedin:  { cpm: 16.50, label: 'LinkedIn (feed / video)' },
+                        pinterest: { cpm:  6.75, label: 'Pinterest (idea pin / video)' },
+                        reddit:    { cpm:  5.75, label: 'Reddit (promoted post)' },
+                        other:     { cpm:  7.75, label: 'Blended / other social' },
+                        newsletter:{ cpm: 28.00, label: 'Newsletter (sponsored send)' },
+                        substack:  { cpm: 28.00, label: 'Substack / newsletter note' }
+                    },
+                    engagement_value_per_action: 0.22,
+                    info_seek_value:              2.75,
+                    website_visit_value:          2.60,
+                    conversion_value:            12.50,
+                    citations: {
+                        channels:      'Advocacy and issue-campaign social video buys land a few points under general-market CPMs; newsletter sends carry the highest unit cost per reader.',
+                        engagement:    'Blended like / comment / share value across major social platforms; issue content over-indexes on shares, so the per-action value sits slightly above the general midpoint.',
+                        info_seek:     'Issue-research event (searched the issue, opened a rep lookup, visited the campaign profile) valued at a quarter of the action-page acquisition cost.',
+                        website_visit: 'Nonprofit / advocacy search click to an action page, median US rate.',
+                        conversion:    'Cost to acquire one completed action (petition, rep contact, pledge) on a US advocacy campaign.'
+                    }
+                },
                 general: {
                     label: 'General / Blended',
                     channels: {
@@ -33859,6 +33889,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (/bank|fintech|financial|credit|invest|payment|payroll/.test(bc)) return 'financial_services';
                 if (/qsr|food|restaurant|delivery|dining|grocer|cpg|beverage/.test(bc)) return 'food_delivery';
                 if (/film|movie|theatrical|streaming|entertainment/.test(bc))          return 'film_theatrical';
+                if (/advocacy|civic|nonprofit|non-profit|non profit|charity|cause|political|issue/.test(bc)) return 'advocacy';
                 // Chime the display_name has no brand_category set yet;
                 // fall back to display_name pattern-match so the
                 // fintech defaults still apply to it.
@@ -33896,6 +33927,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (s.indexOf('linkedin')  >= 0) return 'linkedin';
                 if (s.indexOf('pinterest') >= 0) return 'pinterest';
                 if (s.indexOf('reddit')    >= 0) return 'reddit';
+                if (s.indexOf('substack')  >= 0) return 'substack';
+                if (s.indexOf('newsletter') >= 0 || s.indexOf('email') >= 0) return 'newsletter';
                 return 'other';
             }
 
@@ -33920,36 +33953,85 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return rates;
             }
 
+            function _iiqROIChannelCPM(rates, k) {
+                if (rates.channels[k] && rates.channels[k].cpm != null) return rates.channels[k].cpm;
+                var d = window.IIQ_ROI_DEFAULTS || {};
+                if (d.channels && d.channels[k] && d.channels[k].cpm != null) return d.channels[k].cpm;
+                var adv = (window.IIQ_ROI_BY_VERTICAL.advocacy || {}).channels || {};
+                if (adv[k] && adv[k].cpm != null) return adv[k].cpm;
+                return rates.channels.other.cpm;
+            }
+            function _iiqROIAssetId(a) {
+                return String(a.asset_id || a.id || a.url || a.action_label || '');
+            }
+            function _iiqROIAssetLabel(a, max) {
+                var lab = a.action_label || '';
+                if (!lab) {
+                    var who = (a.talent_tags && a.talent_tags[0]) || a.source || '';
+                    var bits = [];
+                    if (who) bits.push(who);
+                    if (a.channel) bits.push(a.channel);
+                    if (a.note || a.title) bits.push(a.note || a.title);
+                    lab = bits.join(' - ');
+                }
+                lab = String(lab).replace(/\s+/g, ' ').trim();
+                var cap = max || 88;
+                if (lab.length > cap) lab = lab.slice(0, cap - 1).trim() + '\u2026';
+                return lab || 'Untitled post';
+            }
+            // Value one piece of content: its views at the channel CPM,
+            // its engagement, and the downstream research and action
+            // traffic it drove, each at the active rate.
+            function _iiqROIAssetValue(a, rates) {
+                var v = Number(a.ext_view_count) || 0;
+                var e = Number(a.ext_engagement_count) || 0;
+                var chKey = _iiqROIChannelKey(a.channel || a.platform);
+                var p = (typeof iiqAssetFunnelProjection === 'function')
+                        ? iiqAssetFunnelProjection(a) : { info_pct: 0, ticket_pct: 0 };
+                var info = v * (Number(p.info_pct)   || 0) / 100;
+                var web  = v * (Number(p.ticket_pct) || 0) / 100;
+                var cpm  = _iiqROIChannelCPM(rates, chKey);
+                var r = {
+                    id: _iiqROIAssetId(a), asset: a, chKey: chKey, cpm: cpm,
+                    views: v, eng: e, info: info, web: web,
+                    views_value: v / 1000 * cpm,
+                    eng_value:   e    * rates.engagement_value_per_action,
+                    info_value:  info * rates.info_seek_value,
+                    web_value:   web  * rates.website_visit_value
+                };
+                r.total_value = r.views_value + r.eng_value + r.info_value + r.web_value;
+                r.per_k = v > 0 ? r.total_value / (v / 1000) : 0;
+                return r;
+            }
             function _iiqROICompute(assets, rates) {
                 var byChannel = {};
+                var perAsset = [];
                 var totalViews = 0, totalEng = 0, totalInfo = 0, totalWeb = 0;
                 (assets || []).forEach(function(a) {
                     var v = Number(a.ext_view_count) || 0;
                     if (v <= 0) return;
-                    var e = Number(a.ext_engagement_count) || 0;
-                    var chKey = _iiqROIChannelKey(a.channel || a.platform);
-                    var p = (typeof iiqAssetFunnelProjection === 'function')
-                            ? iiqAssetFunnelProjection(a) : { info_pct: 0, ticket_pct: 0 };
-                    var info = v * (Number(p.info_pct)   || 0) / 100;
-                    var web  = v * (Number(p.ticket_pct) || 0) / 100;
+                    var av = _iiqROIAssetValue(a, rates);
+                    perAsset.push(av);
+                    var chKey = av.chKey;
                     var row = byChannel[chKey] || (byChannel[chKey] = {
                         key: chKey, label: rates.channels[chKey] ? rates.channels[chKey].label : (a.channel || 'Other'),
                         assets: 0, views: 0, eng: 0, info: 0, web: 0
                     });
                     row.assets += 1;
                     row.views  += v;
-                    row.eng    += e;
-                    row.info   += info;
-                    row.web    += web;
+                    row.eng    += av.eng;
+                    row.info   += av.info;
+                    row.web    += av.web;
                     totalViews += v;
-                    totalEng   += e;
-                    totalInfo  += info;
-                    totalWeb   += web;
+                    totalEng   += av.eng;
+                    totalInfo  += av.info;
+                    totalWeb   += av.web;
                 });
+                perAsset.sort(function(a, b) { return b.total_value - a.total_value; });
                 // Attach values per channel
                 Object.keys(byChannel).forEach(function(k) {
                     var c = byChannel[k];
-                    var cpm = (rates.channels[k] && rates.channels[k].cpm) || rates.channels.other.cpm;
+                    var cpm = _iiqROIChannelCPM(rates, k);
                     c.cpm         = cpm;
                     c.views_value = c.views / 1000 * cpm;
                     c.eng_value   = c.eng   * rates.engagement_value_per_action;
@@ -33971,7 +34053,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     web_value:    totalWeb   * rates.website_visit_value
                 };
                 totals.grand_value = totals.views_value + totals.eng_value + totals.info_value + totals.web_value;
-                return { byChannel: byChannel, totals: totals };
+                perAsset.forEach(function(r, i) {
+                    r.rank  = i + 1;
+                    r.share = totals.grand_value > 0 ? r.total_value / totals.grand_value * 100 : 0;
+                });
+                totals.per_k = totalViews > 0 ? totals.grand_value / (totalViews / 1000) : 0;
+                return { byChannel: byChannel, totals: totals, perAsset: perAsset };
             }
 
             function _iiqROIFmtUSD(n) {
@@ -33983,24 +34070,201 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return '$' + n.toFixed(2);
             }
 
+            function _iiqROIMidLabel() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                return ((ov.terminology || {}).mid_funnel_label) || 'Info-seek';
+            }
+            function _iiqROIBotLabel() {
+                return (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Site visit';
+            }
+            function _iiqROIPlural(s) {
+                s = String(s || '');
+                if (!s) return s;
+                if (/s$/i.test(s)) return s;
+                return s + 's';
+            }
+            function _iiqROICostKey(scopeId) {
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                return slug + (scopeId ? ('|' + scopeId) : '');
+            }
+            function _iiqROICostFor(scopeId) {
+                var c = (window.__iiqROICosts || {})[_iiqROICostKey(scopeId)];
+                return (c != null && isFinite(c) && c > 0) ? Number(c) : 0;
+            }
+            function _iiqROIFmtX(n) {
+                if (!isFinite(n)) return '';
+                if (n >= 100) return Math.round(n) + 'x';
+                if (n >= 10) return n.toFixed(1) + 'x';
+                return n.toFixed(2) + 'x';
+            }
+            // Cost input + return read. Cost is whatever the operator
+            // knows (production, creator fee, placement); with it the
+            // value becomes a return multiple and a net figure.
+            function _iiqROICostBlock(scopeId, value, isPost) {
+                var cost = _iiqROICostFor(scopeId);
+                var esc = String(scopeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                var right = '';
+                if (cost > 0) {
+                    var mult = value / cost;
+                    var net = value - cost;
+                    var col = net >= 0 ? '#C7F23E' : '#fca5a5';
+                    right = ''
+                      + '<div style="display:flex; gap:1.4rem; align-items:baseline; flex-wrap:wrap;">'
+                      +   '<div><div style="font-size:0.66rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Return on cost</div>'
+                      +     '<div style="font-size:1.55rem; font-weight:800; color:' + col + '; line-height:1.1;">' + _iiqROIFmtX(mult) + '</div></div>'
+                      +   '<div><div style="font-size:0.66rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Net value</div>'
+                      +     '<div style="font-size:1.55rem; font-weight:800; color:' + col + '; line-height:1.1;">' + (net < 0 ? '-' : '') + _iiqROIFmtUSD(Math.abs(net)) + '</div></div>'
+                      +   '<div><div style="font-size:0.66rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Cost</div>'
+                      +     '<div style="font-size:1.55rem; font-weight:800; color:#e5e7eb; line-height:1.1;">' + _iiqROIFmtUSD(cost) + '</div></div>'
+                      + '</div>';
+                } else {
+                    right = '<div style="font-size:0.74rem; color:var(--text-secondary);">Add what ' + (isPost ? 'this post' : 'the campaign') + ' cost to see the return multiple and net value.</div>';
+                }
+                return ''
+                  + '<div class="iiq-card" style="padding:0.85rem 1rem; margin-bottom:0.85rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">'
+                  +   '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                  +     '<div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">' + (isPost ? 'Post cost' : 'Campaign cost') + '</div>'
+                  +     '<span style="color:var(--text-secondary); font-size:0.85rem;">$</span>'
+                  +     '<input type="number" min="0" step="100" placeholder="optional" value="' + (cost > 0 ? cost : '') + '" '
+                  +       'onchange="iiqROISetCost(\'' + esc + '\', this.value)" '
+                  +       'style="width:8.5rem; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.35rem 0.5rem; font-size:0.9rem; font-weight:600; text-align:right;">'
+                  +   '</div>'
+                  +   right
+                  + '</div>';
+            }
+            function _iiqROIVerticalBadge() {
+                var v = window._iiqROIResolveVertical();
+                var vlab = (window.IIQ_ROI_BY_VERTICAL[v] || {}).label || 'General';
+                return '<div style="font-size:0.62rem; color:#f0fdf4; background:rgba(34,197,94,0.22); border:1px solid rgba(34,197,94,0.55); border-radius:999px; padding:0.14rem 0.55rem; letter-spacing:0.04em; text-transform:uppercase; font-weight:700;" title="Rate set in use. Every rate is editable under Rate assumptions.">Rate set: ' + escapeHtml(vlab) + '</div>';
+            }
             function _iiqROIHero(bd, rates, term, selectedPhase) {
                 var t = bd.totals;
-                // Use terminology to label the bottom-funnel destination
-                var bfl = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Website visit';
+                var midL = _iiqROIMidLabel();
+                var botL = _iiqROIBotLabel();
                 var brand = (window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.display_name) || 'the campaign';
-                var _phaseLabel = selectedPhase ? (' - ' + selectedPhase) : ' - All campaigns';
+                var _phaseLabel = selectedPhase ? (' (' + selectedPhase + ')') : '';
                 return ''
                   + '<div class="iiq-card" style="padding:1.1rem; margin-bottom:0.85rem; background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(16,185,129,0.06)); border:1px solid rgba(34,197,94,0.35);">'
-                  +   (function(){ var v=window._iiqROIResolveVertical(); var vlab=(window.IIQ_ROI_BY_VERTICAL[v]||{}).label||'General'; return '<div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Estimated campaign value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">(equivalent paid-media cost)</div><div style="font-size:0.62rem; color:#f0fdf4; background:rgba(34,197,94,0.22); border:1px solid rgba(34,197,94,0.55); border-radius:999px; padding:0.14rem 0.55rem; letter-spacing:0.04em; text-transform:uppercase; font-weight:700;" title="Benchmark set auto-resolved from campaign vertical. Rates below reflect this vertical\'s CPMs / CPAs.">Benchmark: '+escapeHtml(vlab)+'</div></div>'; })()
+                  +   '<div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Whole campaign value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">equivalent paid media</div>' + _iiqROIVerticalBadge() + '</div>'
                   +   '<div style="font-size:2.4rem; font-weight:800; color:#f0fdf4; line-height:1.1; margin-top:0.25rem;">' + _iiqROIFmtUSD(t.grand_value) + '</div>'
-                  +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">What ' + escapeHtml(brand) + ' would have paid to buy equivalent reach + engagement + high-intent traffic through paid media' + escapeHtml(_phaseLabel) + '.</div>'
+                  +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">What ' + escapeHtml(brand) + ' would have paid to buy the same reach, engagement and high-intent traffic through paid media' + escapeHtml(_phaseLabel) + '. ' + fmtInt(t.assets) + ' pieces of content, ' + _iiqROIFmtUSD(t.per_k) + ' of value per 1K views.</div>'
                   + '</div>'
+                  + _iiqROICostBlock('', t.grand_value, false)
                   + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;">'
                   +   _iiqROITile('Views value',       t.views_value, fmtInt(Math.round(t.views))        + ' views',        '#22d3ee')
                   +   _iiqROITile('Engagement value',  t.eng_value,   fmtInt(Math.round(t.eng))          + ' actions',      '#a78bfa')
-                  +   _iiqROITile('Info-seek value',   t.info_value,  fmtInt(Math.round(t.info_seekers)) + ' info-seekers', '#818cf8')
-                  +   _iiqROITile(bfl + ' value',      t.web_value,   fmtInt(Math.round(t.web_visits))   + ' ' + bfl.toLowerCase() + 's', '#fbbf24')
+                  +   _iiqROITile(midL + ' value',     t.info_value,  fmtInt(Math.round(t.info_seekers)) + ' ' + _iiqROIPlural(midL).toLowerCase() + ' events', '#818cf8')
+                  +   _iiqROITile(botL + ' value',     t.web_value,   fmtInt(Math.round(t.web_visits))   + ' ' + _iiqROIPlural(botL).toLowerCase(), '#fbbf24')
                   + '</div>';
+            }
+            // Single post: the same read for one piece of content, with
+            // its rank and share against the rest of the campaign.
+            function _iiqROIPostHero(av, bd, rates) {
+                var a = av.asset;
+                var t = bd.totals;
+                var midL = _iiqROIMidLabel();
+                var botL = _iiqROIBotLabel();
+                var n = bd.perAsset.length;
+                var ch = rates.channels[av.chKey] ? rates.channels[av.chKey].label : (a.channel || 'Other');
+                var vsAvg = t.per_k > 0 ? (av.per_k / t.per_k) : 0;
+                var vsTxt = vsAvg > 0 ? (vsAvg >= 1 ? _iiqROIFmtX(vsAvg) + ' the campaign average per 1K views' : Math.round(vsAvg * 100) + '% of the campaign average per 1K views') : '';
+                var meta = [];
+                if (a.asset_type) meta.push(a.asset_type);
+                if (a.channel) meta.push(a.channel);
+                if (a.posted_date) meta.push('posted ' + a.posted_date);
+                if (a.paid_or_organic) meta.push(String(a.paid_or_organic).charAt(0).toUpperCase() + String(a.paid_or_organic).slice(1));
+                var link = a.url ? ' <a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener" style="color:#6ee7b7; font-size:0.72rem;">open post \u2197</a>' : '';
+                return ''
+                  + '<div class="iiq-card" style="padding:1.1rem; margin-bottom:0.85rem; background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(16,185,129,0.06)); border:1px solid rgba(34,197,94,0.35);">'
+                  +   '<div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Single post value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">equivalent paid media</div>' + _iiqROIVerticalBadge() + '</div>'
+                  +   '<div style="font-size:0.95rem; font-weight:700; color:#f0fdf4; margin-top:0.4rem; line-height:1.3;">' + escapeHtml(_iiqROIAssetLabel(a, 140)) + link + '</div>'
+                  +   (meta.length ? '<div style="font-size:0.7rem; color:#bbf7d0; margin-top:0.15rem;">' + escapeHtml(meta.join(' \u00b7 ')) + '</div>' : '')
+                  +   '<div style="font-size:2.4rem; font-weight:800; color:#f0fdf4; line-height:1.1; margin-top:0.35rem;">' + _iiqROIFmtUSD(av.total_value) + '</div>'
+                  +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">Ranked #' + av.rank + ' of ' + n + ' by value \u00b7 ' + av.share.toFixed(1) + '% of the campaign\u2019s ' + _iiqROIFmtUSD(t.grand_value) + ' \u00b7 ' + _iiqROIFmtUSD(av.per_k) + ' per 1K views' + (vsTxt ? ', ' + vsTxt : '') + '. Views priced at the ' + escapeHtml(ch) + ' rate of $' + av.cpm.toFixed(2) + ' CPM.</div>'
+                  + '</div>'
+                  + _iiqROICostBlock(av.id, av.total_value, true)
+                  + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;">'
+                  +   _iiqROITile('Views value',       av.views_value, fmtInt(Math.round(av.views)) + ' views',   '#22d3ee')
+                  +   _iiqROITile('Engagement value',  av.eng_value,   fmtInt(Math.round(av.eng))   + ' actions', '#a78bfa')
+                  +   _iiqROITile(midL + ' value',     av.info_value,  fmtInt(Math.round(av.info))  + ' ' + _iiqROIPlural(midL).toLowerCase() + ' events', '#818cf8')
+                  +   _iiqROITile(botL + ' value',     av.web_value,   fmtInt(Math.round(av.web))   + ' ' + _iiqROIPlural(botL).toLowerCase(), '#fbbf24')
+                  + '</div>';
+            }
+            // Scope picker: whole campaign, or one post from a dropdown
+            // sorted by value. Any row in the table below also selects.
+            function _iiqROIScopePicker(bd, scopeId) {
+                var opts = '<option value=""' + (!scopeId ? ' selected' : '') + '>Whole campaign (' + bd.perAsset.length + ' pieces of content)</option>';
+                bd.perAsset.forEach(function(r) {
+                    opts += '<option value="' + escapeHtml(r.id) + '"' + (r.id === scopeId ? ' selected' : '') + '>#' + r.rank + ' \u00b7 ' + escapeHtml(_iiqROIAssetLabel(r.asset, 70)) + ' \u00b7 ' + _iiqROIFmtUSD(r.total_value) + '</option>';
+                });
+                var isWhole = !scopeId;
+                function pill(on, label, onclick) {
+                    var bg = on ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.05)';
+                    var bc = on ? 'rgba(34,197,94,0.65)' : 'rgba(255,255,255,0.10)';
+                    var col = on ? '#f0fdf4' : '#cbd5e1';
+                    return '<button type="button" onclick="' + onclick + '" style="background:' + bg + '; color:' + col + '; border:1px solid ' + bc + '; border-radius:999px; padding:0.32rem 0.85rem; font-size:0.78rem; font-weight:600; cursor:pointer;">' + label + '</button>';
+                }
+                return ''
+                  + '<div class="iiq-card" style="padding:0.75rem 1rem; margin-bottom:0.85rem; display:flex; align-items:center; gap:0.85rem; flex-wrap:wrap;">'
+                  +   '<div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Value</div>'
+                  +   pill(isWhole, 'Whole campaign', "iiqROISetAsset('')")
+                  +   pill(!isWhole, 'Single post', "iiqROIPickFirstPost()")
+                  +   '<select id="iiqROIAssetSelect" onchange="iiqROISetAsset(this.value)" style="flex:1; min-width:16rem; max-width:44rem; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.38rem 0.5rem; font-size:0.78rem;">' + opts + '</select>'
+                  + '</div>';
+            }
+            // Every piece of content, ranked by what it is worth.
+            window.__iiqROIShowAll = window.__iiqROIShowAll || false;
+            function _iiqROIContentTable(bd, rates, scopeId) {
+                var rows = bd.perAsset;
+                if (!rows.length) return '<div class="iiq-empty" style="padding:1rem;">No content with measured views.</div>';
+                var midL = _iiqROIMidLabel();
+                var botL = _iiqROIBotLabel();
+                var limit = window.__iiqROIShowAll ? rows.length : Math.min(rows.length, 20);
+                var body = rows.slice(0, limit).map(function(r) {
+                    var a = r.asset;
+                    var on = r.id === scopeId;
+                    var esc = escapeHtml(String(r.id)).replace(/'/g, '&#39;');
+                    return ''
+                      + '<tr onclick="iiqROISetAsset(\'' + esc + '\')" title="Value this post on its own" style="cursor:pointer; ' + (on ? 'background: rgba(34,197,94,0.14);' : '') + '">'
+                      +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right; font-variant-numeric:tabular-nums;">' + r.rank + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#e5e7eb; font-weight:600; max-width:26rem;"><div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(_iiqROIAssetLabel(a, 96)) + '</div>'
+                      +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-weight:400;">' + escapeHtml([a.asset_type, a.posted_date].filter(Boolean).join(' \u00b7 ')) + '</div></td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary);">' + escapeHtml(a.channel || '') + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right; font-variant-numeric:tabular-nums;">' + fmtInt(Math.round(r.views)) + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#22d3ee; text-align:right;">' + _iiqROIFmtUSD(r.views_value) + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#a78bfa; text-align:right;">' + _iiqROIFmtUSD(r.eng_value)  + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#818cf8; text-align:right;">' + _iiqROIFmtUSD(r.info_value) + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; text-align:right;">' + _iiqROIFmtUSD(r.web_value)  + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:#f0fdf4; text-align:right; font-weight:700;">' + _iiqROIFmtUSD(r.total_value) + '</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + r.share.toFixed(1) + '%</td>'
+                      +   '<td style="padding:0.45rem 0.55rem; color:var(--text-secondary); text-align:right;">' + _iiqROIFmtUSD(r.per_k) + '</td>'
+                      + '</tr>';
+                }).join('');
+                var more = rows.length > 20
+                    ? '<div style="margin-top:0.45rem;"><button type="button" onclick="iiqROIToggleShowAll()" style="background: rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:0.3rem 0.75rem; font-size:0.74rem; cursor:pointer;">' + (window.__iiqROIShowAll ? 'Show top 20' : 'Show all ' + rows.length + ' pieces of content') + '</button></div>'
+                    : '';
+                return ''
+                  + '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value of every piece of content</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by total value. Click any row to value that post on its own. Per 1K is total value per thousand views, the cleanest read of which content is doing more with each view.</div>'
+                  + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
+                  +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
+                  +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;">'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">#</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Content</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:left;">Channel</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Views $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Eng $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(midL) + ' $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">' + escapeHtml(botL) + ' $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Total $</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Share</th>'
+                  +       '<th style="padding:0.45rem 0.55rem; text-align:right;">Per 1K</th>'
+                  +     '</tr></thead>'
+                  +     '<tbody>' + body + '</tbody>'
+                  +   '</table>'
+                  + '</div>'
+                  + more;
             }
 
             function _iiqROITile(label, value, sub, color) {
@@ -34033,8 +34297,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</tr>';
                 }).join('');
                 return ''
-                  + '<div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value breakdown by channel</div>'
-                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Views value uses channel-specific CPM. Engagement/info-seek/site-visit values use the flat rates below (they don\'t vary by channel).</div>'
+                  + '<div style="margin-top:1rem; margin-bottom:0.4rem; font-size:0.85rem; font-weight:600; color:#e5e7eb;">Value by channel</div>'
+                  + '<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.4rem;">Views are priced at each channel\'s CPM. Engagement, ' + escapeHtml(_iiqROIMidLabel().toLowerCase()) + ' and ' + escapeHtml(_iiqROIBotLabel().toLowerCase()) + ' values use the flat rates below and do not vary by channel.</div>'
                   + '<div style="overflow-x:auto; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="background: rgba(0,0,0,0.35); color:#94a3b8; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;">'
@@ -34044,8 +34308,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">CPM</th>'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Views $</th>'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Eng $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Info-seek $</th>'
-                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Site-visit $</th>'
+                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(_iiqROIMidLabel()) + ' $</th>'
+                  +       '<th style="padding:0.5rem 0.6rem; text-align:right;">' + escapeHtml(_iiqROIBotLabel()) + ' $</th>'
                   +       '<th style="padding:0.5rem 0.6rem; text-align:right;">Total $</th>'
                   +     '</tr></thead>'
                   +     '<tbody>' + body + '</tbody>'
@@ -34063,6 +34327,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var chRows = Object.keys(d.channels).map(function(k) {
                     var r = rates.channels[k];
                     var isOverride = window.__iiqROIOverrides && window.__iiqROIOverrides['ch_' + k] != null;
+                    if (!r) return '';
                     return ''
                       + '<div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.35rem 0.55rem; border-radius:6px; ' + (isOverride ? 'background: rgba(251,191,36,0.10);' : '') + '">'
                       +   '<div style="font-size:0.78rem; color:#e5e7eb;">' + escapeHtml(r.label) + '</div>'
@@ -34070,10 +34335,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>';
                 }).join('');
                 return ''
-                  + '<details style="margin-top:1rem; background: rgba(15,23,42,0.55); border:1px solid rgba(148,163,184,0.30); border-radius:8px; padding:0.6rem 0.85rem;" open>'
+                  + '<details style="margin-top:1rem; background: rgba(15,23,42,0.55); border:1px solid rgba(148,163,184,0.30); border-radius:8px; padding:0.6rem 0.85rem;">'
                   +   '<summary style="cursor:pointer; font-size:0.9rem; font-weight:700; color:#e2e8f0; display:flex; align-items:center; gap:0.55rem;">'
                   +     '<span>🎛️ Rate assumptions</span>'
-                  +     '<button type="button" onclick="event.preventDefault(); event.stopPropagation(); iiqROIResetRates();" title="Reset all ROI rates to industry-benchmark defaults" style="margin-left:auto; background: rgba(255,255,255,0.06); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:0.25rem 0.7rem; font-size:0.72rem; font-weight:600; cursor:pointer;">↺ Reset to defaults</button>'
+                  +     '<button type="button" onclick="event.preventDefault(); event.stopPropagation(); iiqROIResetRates();" title="Reset every rate to the rate set default" style="margin-left:auto; background: rgba(255,255,255,0.06); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:0.25rem 0.7rem; font-size:0.72rem; font-weight:600; cursor:pointer;">↺ Reset to defaults</button>'
                   +   '</summary>'
                   +   '<div style="margin-top:0.7rem; display:grid; grid-template-columns: 1.15fr 1fr; gap:1rem;">'
                   +     '<div>'
@@ -34083,9 +34348,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +     '<div>'
                   +       '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:#94a3b8; margin-bottom:0.4rem;">Funnel value rates</div>'
                   +       _iiqROIFunnelRow('Engagement (per like/comment/share)',   'engagement_value_per_action', rates.engagement_value_per_action, '0.01')
-                  +       _iiqROIFunnelRow('Info-seek (per branded search / product-page visit)', 'info_seek_value', rates.info_seek_value, '0.50')
-                  +       _iiqROIFunnelRow('Site-visit (per qualified click to destination)', 'website_visit_value', rates.website_visit_value, '0.10')
-                  +       _iiqROIFunnelRow('Conversion (per new customer / signup)', 'conversion_value', rates.conversion_value, '1.00')
+                  +       _iiqROIFunnelRow(_iiqROIMidLabel() + ' (per event)', 'info_seek_value', rates.info_seek_value, '0.50')
+                  +       _iiqROIFunnelRow(_iiqROIBotLabel() + ' (per visit)', 'website_visit_value', rates.website_visit_value, '0.10')
+                  +       _iiqROIFunnelRow('Completed action (reference rate)', 'conversion_value', rates.conversion_value, '1.00')
                   +     '</div>'
                   +   '</div>'
                   + '</details>';
@@ -34190,26 +34455,73 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 setTimeout(function() { window.scrollTo(0, y); }, 0);
             };
 
+            // Scope: '' = whole campaign, otherwise one asset id. Costs
+            // keyed by slug (campaign) or slug|asset (post), session only.
+            window.__iiqROIScope = window.__iiqROIScope || { slug: null, asset: '' };
+            window.__iiqROICosts = window.__iiqROICosts || {};
+            function _iiqROIKeepScroll(fn) {
+                var root = document.getElementById('intentIQView');
+                var st = root ? root.scrollTop : 0;
+                var y = window.scrollY;
+                fn();
+                setTimeout(function() { if (root) root.scrollTop = st; window.scrollTo(0, y); }, 0);
+            }
+            window.iiqROISetAsset = function(id) {
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                window.__iiqROIScope = { slug: slug, asset: String(id || '') };
+                _iiqROIKeepScroll(_iiqROIRenderFromCache);
+            };
+            window.iiqROIPickFirstPost = function() {
+                var allAssets = (window.__iiqROICache && window.__iiqROICache.assets) || [];
+                var bd = _iiqROICompute(allAssets, _iiqROIActiveRates());
+                if (bd.perAsset.length) window.iiqROISetAsset(bd.perAsset[0].id);
+            };
+            window.iiqROIToggleShowAll = function() {
+                window.__iiqROIShowAll = !window.__iiqROIShowAll;
+                _iiqROIKeepScroll(_iiqROIRenderFromCache);
+            };
+            window.iiqROISetCost = function(scopeId, val) {
+                var n = Number(val);
+                window.__iiqROICosts = window.__iiqROICosts || {};
+                if (!isFinite(n) || n <= 0) delete window.__iiqROICosts[_iiqROICostKey(scopeId)];
+                else window.__iiqROICosts[_iiqROICostKey(scopeId)] = n;
+                _iiqROIKeepScroll(_iiqROIRenderFromCache);
+            };
             function _iiqROIRenderFromCache() {
                 var host = document.getElementById('iiqROIContent');
                 if (!host) return;
                 try {
                     var allAssets   = (window.__iiqROICache && window.__iiqROICache.assets) || [];
                     var overview    = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var slug        = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                    host.setAttribute('data-roi-slug', slug);
                     var selected    = window.__iiqROISelectedPhase || '';
-                    var assets      = _iiqROIFilterByPhase(allAssets, selected);
                     var rates       = _iiqROIActiveRates();
-                    var bd          = _iiqROICompute(assets, rates);
                     var term        = overview.terminology || {};
+                    var scope       = window.__iiqROIScope || {};
+                    var scopeId     = (scope.slug === slug) ? (scope.asset || '') : '';
+                    // A single post is valued against the whole campaign,
+                    // never against a phase slice.
+                    var assets      = scopeId ? allAssets : _iiqROIFilterByPhase(allAssets, selected);
+                    var bd          = _iiqROICompute(assets, rates);
+                    var picked      = null;
+                    if (scopeId) {
+                        for (var i = 0; i < bd.perAsset.length; i++) if (bd.perAsset[i].id === scopeId) { picked = bd.perAsset[i]; break; }
+                        if (!picked) scopeId = '';
+                    }
+                    var phaseNames = {};
+                    allAssets.forEach(function(x) { if (x && x.phase_name) phaseNames[x.phase_name] = 1; });
+                    var phasePick = (!scopeId && Object.keys(phaseNames).length > 1) ? _iiqROIPhasePicker(overview, selected, allAssets) : '';
                     host.innerHTML = ''
-                      + _iiqROIPhasePicker(overview, selected, allAssets)
-                      + _iiqROIHero(bd, rates, term, selected)
-                      + _iiqROIChannelTable(bd, rates)
-                      + _iiqROIRateEditor(rates)
-                      + _iiqROIMethodology(rates);
+                      + _iiqROIScopePicker(bd, scopeId)
+                      + phasePick
+                      + (picked ? _iiqROIPostHero(picked, bd, rates) : _iiqROIHero(bd, rates, term, selected))
+                      + _iiqROIContentTable(bd, rates, scopeId)
+                      + (picked ? '' : _iiqROIChannelTable(bd, rates))
+                      + _iiqROIRateEditor(rates);
                 } catch (err) {
                     console.error('[ROI] render failed:', err);
-                    host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">ROI render error: ' + escapeHtml(err && err.message || String(err)) + '<br><span style="font-size:0.7rem; color:#94a3b8;">Check the browser console for a full stack trace.</span></div>';
+                    host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">This view could not be drawn: ' + escapeHtml(err && err.message || String(err)) + '</div>';
                 }
             }
 
@@ -34218,16 +34530,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!isFinite(n) || n < 0) return;
                 window.__iiqROIOverrides = window.__iiqROIOverrides || {};
                 window.__iiqROIOverrides[id] = n;
-                // Re-render from cache so rate edits are instant.
-                var y = window.scrollY;
-                _iiqROIRenderFromCache();
-                setTimeout(function() { window.scrollTo(0, y); }, 0);
+                _iiqROIKeepScroll(_iiqROIRenderFromCache);
             };
             window.iiqROIResetRates = function() {
                 window.__iiqROIOverrides = {};
-                var y = window.scrollY;
-                _iiqROIRenderFromCache();
-                setTimeout(function() { window.scrollTo(0, y); }, 0);
+                _iiqROIKeepScroll(_iiqROIRenderFromCache);
             };
 
             window.iiqRenderROI = function() {
@@ -34235,6 +34542,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var host = document.getElementById('iiqROIContent');
                 if (!host) { console.warn('[ROI] host div #iiqROIContent missing'); return; }
                 if (!slug) { host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Load a campaign first.</div>'; return; }
+                // Mark the host with the slug in flight so the shell does
+                // not ask again while the fetch is running.
+                host.setAttribute('data-roi-slug', slug);
                 // Serve from cache if same slug fetched within 5min
                 if (window.__iiqROICache.slug === slug && window.__iiqROICache.assets && (Date.now() - window.__iiqROICache.ts) < 300000) {
                     console.log('[ROI] rendering from cache (' + window.__iiqROICache.assets.length + ' assets)');
@@ -34242,7 +34552,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 console.log('[ROI] fetching /api/intent/' + slug + '/assets?window=all');
-                host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Loading ROI model &mdash; fetching assets...</div>';
+                host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Loading content...</div>';
                 fetch('/api/intent/' + slug + '/assets?window=all', { credentials: 'same-origin' })
                     .then(function(r) {
                         console.log('[ROI] response status', r.status);
@@ -34257,7 +34567,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     .then(function(d) {
                         console.log('[ROI] response payload keys:', d && Object.keys(d));
                         if (!d || !d.success) {
-                            host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">API returned failure: ' + escapeHtml((d && d.error) || 'no error message') + '</div>';
+                            host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">Content could not be loaded: ' + escapeHtml((d && d.error) || 'no detail') + '</div>';
                             return;
                         }
                         var assets = d.cards || d.assets || [];
@@ -34267,7 +34577,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     })
                     .catch(function(e) {
                         console.error('[ROI] fetch chain failed:', e);
-                        host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">ROI load failed: ' + escapeHtml(e.message || String(e)) + '<br><span style="font-size:0.7rem; color:#94a3b8;">Check the browser console for a full stack trace.</span></div>';
+                        host.removeAttribute('data-roi-slug');
+                        host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">Content could not be loaded: ' + escapeHtml(e.message || String(e)) + '</div>';
                     });
             };
             // ============================================================
@@ -126644,8 +126955,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'q_demographics', label: 'Demographics',    panel: 'drawer', sub: 'questions', q: 'demographics', legacyOnly: true },
             { id: 'q_journey',      label: 'Journey',         panel: 'drawer', sub: 'questions', q: 'journey',      legacyOnly: true },
             { id: 'l_conversion',   label: 'Conversion',      panel: 'drawer', sub: 'conversion', legacyOnly: true },
-            { id: 'l_roi',          label: 'ROI',             panel: 'drawer', sub: 'roi',        legacyOnly: true }
+            // ROI values every piece of content and the campaign as a
+            // whole. It lives in its own panel on every landing (brand
+            // and film), gated by the title's roi flag.
+            { id: 'roi',            label: 'ROI',             ids: ['iiqPanel-roi'], gate: 'roi' }
         ];
+        // The ROI slab renders on demand; ask once per loaded title.
+        function _aiqEnsureROI() {
+            try {
+                var host = document.getElementById('iiqROIContent');
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                if (!host || !slug) return;
+                if (host.getAttribute('data-roi-slug') === slug) return;
+                if (typeof window.iiqRenderROI === 'function') window.iiqRenderROI();
+            } catch (e) { }
+        }
         function _aiqPanelOf(t) { return (t && t.panel) || (t && t.id); }
         function _aiqTabById(id) {
             for (var i = 0; i < _AIQ_TABS.length; i++) if (_AIQ_TABS[i].id === id) return _AIQ_TABS[i];
@@ -126949,7 +127273,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             leaks:       [['Exposed viewers', 'exposed'], ['Panellists in read', 'panellists'],
                           ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']],
             l_assets:    [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
-            q_audiences: [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']]
+            q_audiences: [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
+            roi:         [['Exposed viewers', 'exposed'], ['Assets in view', 'assets'], ['Read strength', 'strength']]
         };
         function _aiqRail(wrap, active) {
             var rail = wrap.querySelector('.aiq-rail');
@@ -127009,6 +127334,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var panel = panels.querySelector('[data-aiq-panel="' + t.id + '"]');
                 if (t.legacyOnly && !legacy) return;
                 if (t.panel) return;
+                if (t.gate && typeof window._iiqTabEnabled === 'function' && !window._iiqTabEnabled(t.gate)) return;
                 (t.ids || []).forEach(function (id) {
                     var el = document.getElementById(id);
                     if (!el) return;
@@ -127070,6 +127396,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 p.classList.toggle('on', p.getAttribute('data-aiq-panel') === activePanel);
             });
             if (legacy && activeTab && activeTab.panel === 'drawer') _aiqSyncDrawer(activeTab);
+            if (activeTab && activeTab.id === 'roi') _aiqEnsureROI();
             _aiqBanner(wrap);
             _aiqRail(wrap, active);
         }
