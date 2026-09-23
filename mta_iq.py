@@ -1303,7 +1303,7 @@ def compute_mta_coefficients(campaign_slug: str,
     conversion_noun = term.get("conversion_noun") or (
         "signup" if ttype == "brand" else "checkout page visit"
     )
-    bottom_funnel_label = term.get("bottom_funnel_label") or "Ticketing"
+    bottom_funnel_label = term.get("bottom_funnel_label") or "Cart / checkout"
     display_name = overview.get("display_name") or slug
 
     assets_resp = _intent_iq.get_assets(slug, window="all")
@@ -1851,7 +1851,7 @@ _CARD_CONFIG: dict[str, dict] = {
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
         "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
+        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     },
     "dhar_mann_minions_and_monsters": {
@@ -1862,7 +1862,7 @@ _CARD_CONFIG: dict[str, dict] = {
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
         "leak_competing_label":        "Reached checkout for a competing family film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
+        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
                                           "different family film that weekend"),
     },
     "the_influencer_project_hades": {
@@ -1873,7 +1873,7 @@ _CARD_CONFIG: dict[str, dict] = {
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
         "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
+        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     },
     "chime": {
@@ -1944,7 +1944,7 @@ def _card_config(slug: str, ttype: str, display_name: str,
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
         "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
+        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     }
 
@@ -1959,7 +1959,7 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
     tier on its own without cross-referencing the stage code. The
     specific action after the colon still varies per campaign kind and
     per campaign terminology ('Ticket purchased' vs the brand's own
-    conversion noun, 'Ticketing-site visit' vs 'Website or app visit',
+    conversion noun, 'Cart/purchase page reach' vs 'Website or app visit',
     the attribution-window days from the terminology block).
     """
     term = terminology or {}
@@ -1968,7 +1968,7 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
         return {
             "1_exposed":  f"Top of funnel: Exposed to {display_name}",
             "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
-            "3_ticketer": f"Lower funnel: Ticketing-site visit within {window_days}d",
+            "3_ticketer": f"Lower funnel: Reached the cart/purchase page within {window_days}d",
             "4_paid":     f"Reached the checkout page within {window_days}d",
         }
     conv_action = (conversion_noun[:1].upper() + conversion_noun[1:]
@@ -1988,7 +1988,7 @@ def _fork_question(kind: str, of_stage: str) -> str:
         return {
             "1_exposed":  "Saw the trailer specifically",
             "2_infoseek": "Hit multiple review surfaces",
-            "3_ticketer": "Hit more than one ticketer (deal-hunt)",
+            "3_ticketer": "Hit more than one cart/purchase surface (deal-hunt)",
         }[of_stage]
     return {
         "1_exposed":  "Saw the flagship creative specifically",
@@ -2004,13 +2004,13 @@ def _archetype_defs(kind: str) -> list[dict]:
     if kind == "film":
         return [
             {"archetype": "Straight-through",
-             "description": "Exposed to ticketer to paid, no research or retarget"},
+             "description": "Exposed to cart page to checkout, no research or retarget"},
             {"archetype": "Researched",
-             "description": "Exposed to info-seek to ticketer to paid"},
+             "description": "Exposed to info-seek to cart page to checkout"},
             {"archetype": "Retargeted",
              "description": "Bagged and left, came back after a paid social retarget"},
             {"archetype": "Deal-hunt",
-             "description": "Touched multiple ticketers before paying"},
+             "description": "Touched multiple cart/purchase surfaces before reaching checkout"},
         ]
     return [
         {"archetype": "Straight-through",
@@ -2032,11 +2032,11 @@ def _leak_stage_labels(kind: str) -> dict:
         return {
             "infoseek_no_conv": (
                 "Info-seek no ticket",
-                "Searched the title within 7d but never hit a ticketer",
+                "Searched the title within 7d but never reached a cart/purchase page",
             ),
             "conv_visit_no_pay": (
-                "Ticketer visit no ticket",
-                "Opened a ticketer within 7d but never reached the checkout page, the bag-abandon equivalent",
+                "Cart-page visit no checkout",
+                "Reached a cart/purchase page within 7d but never reached the checkout page, the bag-abandon equivalent",
             ),
         }
     return {
