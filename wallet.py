@@ -2135,14 +2135,17 @@ def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
             _user_key(user, users_data) if isinstance(user, dict) else "")
 
 
-def ensure_company_record(users_data: dict, company_name: str):
-    """Create the companies[name] dict if it is missing.
+def ensure_company_record(users_data: dict, company_name: str,
+                          seed_user: Optional[dict] = None):
+    """Create a real shared company wallet when a seat is billed
+    through the company.
 
-    Setting billing_source='company' on a user does not by itself
-    create the company wallet. Paramount+ hit that: three seats
-    routed through 'Paramount+' with no companies['Paramount+']
-    row, so resolve_billing_subject fell back to each personal
-    wallet (Robert $5,000, Tania/Casey $0).
+    Jenna 2026-09-23: adding a user and clicking Company shared
+    wallet must create that company wallet automatically. A bare
+    companies[name] stub (credit_pool only) is not enough: the
+    charge path requires paying_customer plus a wallet balance.
+    Existing wallets keep their money and flags. Stubs get the
+    missing wallet fields filled in.
     """
     if not isinstance(users_data, dict):
         return None
@@ -2150,15 +2153,33 @@ def ensure_company_record(users_data: dict, company_name: str):
     if not name:
         return None
     companies = users_data.setdefault("companies", {})
-    existing = companies.get(name)
-    if isinstance(existing, dict):
-        return existing
-    rec = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "credit_pool": 0,
-        "credit_pool_used": 0,
-    }
-    companies[name] = rec
+    rec = companies.get(name)
+    created = False
+    if not isinstance(rec, dict):
+        rec = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "credit_pool": 0,
+            "credit_pool_used": 0,
+        }
+        companies[name] = rec
+        created = True
+    rec.setdefault("credit_pool", 0)
+    rec.setdefault("credit_pool_used", 0)
+    rec.setdefault("wallet_balance_usd", 0.0)
+    rec.setdefault("wallet_lifetime_spend_usd", 0.0)
+    rec.setdefault("wallet_lifetime_topups_usd", 0.0)
+    rec.setdefault("wallet_transactions", [])
+    if rec.get("paying_customer") is None:
+        rec["paying_customer"] = True
+    if created or not str(rec.get("billing_mode") or "").strip():
+        rec["billing_mode"] = rec.get("billing_mode") or "prepay_only"
+        if rec.get("billing_mode") not in (
+                "prepay_only", "auto_reload", "monthly_invoice"):
+            rec["billing_mode"] = "prepay_only"
+    if seed_user and isinstance(seed_user, dict):
+        email = str(seed_user.get("email") or "").strip()
+        if email and not str(rec.get("billing_email") or "").strip():
+            rec["billing_email"] = email
     return rec
 
 

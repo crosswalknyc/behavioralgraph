@@ -5207,7 +5207,16 @@ def create_user():
         
         role = _normalize_role(req_data.get('role', 'user'))
         
-        company = req_data.get('company', '')
+        company = (req_data.get('company') or '').strip()
+        _bs_new = (
+            'company'
+            if str(req_data.get('billing_source') or '').strip().lower()
+            == 'company' else 'user')
+        if _bs_new == 'company' and not company:
+            return jsonify({
+                'success': False,
+                'error': 'Company name is required for a shared company wallet',
+            }), 400
         cd = data.get('company_defaults', {}).get(company) if company else None
 
         data['users'][username] = {
@@ -5355,12 +5364,10 @@ def create_user():
         # Purgatory clearance grant block retired 2026-09-09 (Jenna,
         # "remove ... purgatory since we dont need it anymore"). The
         # has_purgatory_approval field is silently ignored on create.
-        try:
-            import wallet as _wallet_co
-            if str(data['users'][username].get('billing_source') or '').lower() == 'company':
-                _wallet_co.ensure_company_record(data, company)
-        except Exception:
-            pass
+        import wallet as _wallet_co
+        if str(data['users'][username].get('billing_source') or '').lower() == 'company':
+            _wallet_co.ensure_company_record(
+                data, company, seed_user=data['users'][username])
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -5422,7 +5429,7 @@ def update_user(username):
         if 'last_name' in req_data:
             user['last_name'] = req_data['last_name']
         if 'company' in req_data:
-            user['company'] = req_data['company']
+            user['company'] = str(req_data.get('company') or '').strip()
         if 'department' in req_data:
             user['department'] = req_data['department']
         # Company-shared wallet routing (Jenna 2026-09-09). A user with
@@ -5684,12 +5691,15 @@ def update_user(username):
             del data['users'][username]
             username = new_username
 
-        try:
+        if str(user.get('billing_source') or '').lower() == 'company':
+            if not str(user.get('company') or '').strip():
+                return jsonify({
+                    'success': False,
+                    'error': 'Company name is required for a shared company wallet',
+                }), 400
             import wallet as _wallet_co
-            if str(user.get('billing_source') or '').lower() == 'company':
-                _wallet_co.ensure_company_record(data, user.get('company'))
-        except Exception:
-            pass
+            _wallet_co.ensure_company_record(
+                data, user.get('company'), seed_user=user)
         
         save_users(data)
         return jsonify({'success': True, 'message': f'User {username} updated'})
