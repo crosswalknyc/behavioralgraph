@@ -194,10 +194,53 @@ def test_unpublished_titles_are_bracketed():
           f'({unsatisfiable} positions had crossing anchors)')
 
 
+def test_share_products_descend():
+    """The product of worldwide views and US share descends down the
+    chart, and every share stays inside the credible band.
+
+    That product is the quantity the service ranked by, so it is the
+    thing that has to descend. Reasoning each share against its own
+    title and hoping the order followed put #5 at twice #1.
+    """
+    try:
+        from . import chart_set_reasoning as CS
+    except ImportError:
+        from scripts.trends_scrapers import chart_set_reasoning as CS
+    rnd = random.Random(19)
+    bad_order = 0
+    bad_share = 0
+    for t in range(300):
+        rows, vals = [], {}
+        for i in range(10):
+            title = f's{t}-{i}'
+            ww = rnd.randint(1_500_000, 14_000_000)
+            rows.append({'title': title, 'published_rank': i + 1,
+                         'weekly_views': ww})
+            # A share reasoned per title, with no regard for order.
+            vals[title] = int(ww * rnd.uniform(0.05, 0.70) * 0.15)
+        ordered = [r['title'] for r in rows]
+        out = dict(vals)
+        unmet = CS._enforce_anchor_descent(out, rows, ordered,
+                                           f's{t}', 0.15)
+        seq = [out[x] for x in ordered]
+        for i in range(1, len(seq)):
+            if seq[i] >= seq[i - 1] and not unmet:
+                bad_order += 1
+        for r in rows:
+            share = out[r['title']] / (r['weekly_views'] * 0.15)
+            # A small tolerance: the solve clamps to the band edge.
+            if share < CS._SHARE_MIN * 0.99 or share > CS._SHARE_MAX * 1.01:
+                bad_share += 1
+    assert bad_order == 0, f'{bad_order} pair(s) still out of order'
+    assert bad_share == 0, f'{bad_share} share(s) outside the band'
+    print('  products descend and every share stays credible')
+
+
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_rather_than_forcing,
              test_no_ladder, test_last_digits_stay_natural,
-             test_unpublished_titles_are_bracketed]
+             test_unpublished_titles_are_bracketed,
+             test_share_products_descend]
     bad = 0
     for t in tests:
         print(t.__name__)

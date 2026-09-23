@@ -76,6 +76,12 @@ _MAX_TOKENS = int(os.environ.get('CHART_SET_MAX_TOKENS') or 4000)
 _SHARE_MIN = 0.04
 _SHARE_MAX = 0.75
 
+# Separation between neighbouring published positions, as a fraction
+# of the one above, drawn per title inside this band so a chart
+# forced to descend does not descend in even steps.
+_SEP_MIN = 0.015
+_SEP_MAX = 0.060
+
 # Day factor: a week converted to one day. 1/7 is the flat case and
 # real day-of-week effects sit either side of it.
 _DAY_MIN = 0.07
@@ -182,9 +188,23 @@ def _quantified_prompt(chart_label: str, platform_label: str,
         f"Reason the real one from the day of week and anything "
         f"specific about this date, and state it.\n\n"
         f"HARD CONSTRAINTS:\n"
-        f"  - Daily US audience descends strictly down the chart: #1 "
-        f"is the largest number, #2 the next, and so on to the bottom. "
-        f"This is the whole point of the exercise.\n"
+        f"  - The shares are NOT free parameters. The chart is "
+        f"ordered by US viewing and the figures are worldwide, so for "
+        f"every adjacent pair the PRODUCT must descend:\n"
+        f"        worldwide(n) x share(n)  >  worldwide(n+1) x "
+        f"share(n+1)\n"
+        f"    Solve that jointly across the whole chart rather than "
+        f"picking a share per title and hoping the order falls out. "
+        f"It is informative, not just restrictive: a title sitting "
+        f"high on modest worldwide views MUST have a high US share, "
+        f"and the chart is telling you so.\n"
+        f"  - Daily US audience therefore descends strictly down the "
+        f"chart: #1 is the largest number, #2 the next, and so on to "
+        f"the bottom. This is the whole point of the exercise.\n"
+        f"  - A share is still a real quantity. If the only way to "
+        f"satisfy the order is a share you cannot defend for that "
+        f"title, say which pair in `notes` rather than returning an "
+        f"absurd one.\n"
         f"  - Gaps between neighbours must VARY. A chart whose values "
         f"step down by a near-constant amount or a near-constant ratio "
         f"reads as manufactured. Real charts have a big drop somewhere "
@@ -296,6 +316,89 @@ def _call(client, prompt: str) -> Optional[dict]:
         if getattr(block, 'type', None) == 'text':
             text += getattr(block, 'text', '') or ''
     return _extract_json(text)
+
+
+def _enforce_anchor_descent(values: dict, rows: list[dict],
+                            ordered: list[str], slug: str,
+                            df: float) -> list:
+    """Make the PRODUCT of worldwide views and US share descend down
+    the chart, because that product is the quantity the service
+    ranked by.
+
+    The shares are not free parameters. Netflix's chart is ordered by
+    US viewing and the published figure is worldwide, so for every
+    adjacent pair:
+
+        worldwide(n) x share(n)  >  worldwide(n+1) x share(n+1)
+
+    Reasoning each share against its own title and hoping the order
+    falls out put #5 at twice #1. The constraint is also informative
+    rather than merely restrictive, which is the part worth leaning
+    on: a title sitting high on modest worldwide views MUST have a
+    high US share, and the chart is telling us so. That is how we
+    know WWE Raw skews US-heavy and a UK thriller does not.
+
+    A share stays a real quantity, so each value is boxed by what the
+    share band allows for its own worldwide figure. Where the order
+    cannot be satisfied inside that box the pair is REPORTED rather
+    than forced, because an order bought with an incredible share is
+    not worth having.
+
+    Returns the pairs it could not reconcile.
+    """
+    _h01, _nat, _cp = _lazy()
+    anchors = [(i, r) for i, r in enumerate(rows)
+               if r.get('weekly_views') and values.get(r['title'])]
+    if len(anchors) < 2:
+        return []
+
+    lo_box, hi_box, cur = [], [], []
+    for _i, r in anchors:
+        ww = float(r['weekly_views'])
+        lo_box.append(ww * _SHARE_MIN * df)
+        hi_box.append(ww * _SHARE_MAX * df)
+        cur.append(float(values[r['title']]))
+
+    steps = [_SEP_MIN + _h01(f'{slug}|{r["title"]}|prodsep')
+             * (_SEP_MAX - _SEP_MIN) for _i, r in anchors]
+
+    # Greedy down the chart: each value as close to what the call
+    # reasoned as its own box and the value above it allow. A second
+    # pass takes the highest the box permits at every step, which is
+    # the most room the band can possibly leave, before declaring a
+    # pair unreconcilable.
+    best, unmet = None, None
+    for greedy_high in (False, True):
+        out, bad, ceiling_v = [], [], None
+        for k in range(len(anchors)):
+            cap = hi_box[k] if ceiling_v is None else min(
+                hi_box[k], ceiling_v * (1.0 - steps[k]))
+            if cap < lo_box[k]:
+                # The order needs a share below what is credible for
+                # this title's worldwide figure.
+                bad.append((anchors[k - 1][1]['title'],
+                            anchors[k][1]['title'],
+                            cap / (float(anchors[k][1]['weekly_views'])
+                                   * df)))
+                cap = lo_box[k]
+            v = cap if greedy_high else min(cap, max(lo_box[k], cur[k]))
+            out.append(v)
+            ceiling_v = v
+        if best is None or len(bad) < len(unmet or []):
+            best, unmet = out, bad
+        if not bad:
+            break
+
+    for (idx, r), v in zip(anchors, best):
+        values[r['title']] = max(1, int(round(v)))
+    if unmet:
+        for above, below, need in unmet:
+            logger.warning(
+                "chart_set %s: putting %r below %r needs a US share of "
+                "%.0f%% for it, which is outside the credible band; "
+                "the pair is left as reasoned",
+                slug, below, above, need * 100)
+    return unmet or []
 
 
 def _bracket_unpublished(values: dict, rows: list[dict],
@@ -539,6 +642,12 @@ def reason_chart(client, *, slug: str, platform_label: str,
                 v = min(v, int(ceiling))
             values[src['title']] = max(1, v)
 
+        if quantified:
+            # Settle the figure-carrying rows against each other
+            # first. Bracketing an unpublished title between two
+            # anchors only means something once those anchors are
+            # themselves in order.
+            _enforce_anchor_descent(values, rows, ordered, slug, df)
         return _bracket_unpublished(values, rows, ordered, slug,
                                     quantified, ceiling)
 
