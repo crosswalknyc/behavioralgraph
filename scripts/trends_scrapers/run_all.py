@@ -623,39 +623,23 @@ def _run_main(argv: list[str] | None = None) -> int:
             results.append({'source': 'coverage_gate', 'error': str(e),
                             'national': []})
 
-        # Single-provenance rank: a platform tile's rank is the
-        # title's position ordered by that day's audience. This runs
-        # AFTER the gate, not before it (where it sat until
-        # 2026-09-15), because the gate re-prices whatever the
-        # estimator missed. Ordering the stored snapshots first meant
-        # any sizeable gate pass left the ranking describing values
-        # that were no longer the ones on the page: Wednesday at #198
-        # with 885,913 against Stranger Things at #88 with 225,041.
-        # Re-seats view-carrying rows in each platform snapshot
-        # (latest + today's dated copy) and keeps items' chart labels
-        # in step. The render side derives rank from the values it is
-        # actually showing, so this keeps the stored copy in agreement
-        # with the page rather than being the page's only defence.
-        # Non-fatal.
-        try:
-            from scripts.trends_scrapers.stream_estimates import (
-                align_snapshot_ranks)
-            today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-            for folder in ('latest', today_iso):
-                align_snapshot_ranks(folder)
-        except Exception:
-            logging.exception("run_all: platform rank alignment crashed "
-                               "(non-fatal)")
-
+        # A platform snapshot is the platform's record of its own
+        # page and nothing in this run writes to it. The pass that
+        # used to reorder those files to match that day's audience
+        # values was removed on 2026-09-23: it was a closed loop, and
+        # the position it wrote came back the next morning as if the
+        # platform had published it. Where a service publishes a
+        # ranked list that list is authoritative and our values are
+        # reasoned to descend across it; see `_PUBLISHED_CHARTS` in
+        # stream_estimates.
         # The dashboard reads up to 60 dated days of estimates per
         # request and only needs three fields out of each, so it reads
         # them from a lean sibling index roughly twenty times smaller
         # than the snapshot. The index is written beside every snapshot
-        # as it lands, but the gate re-prices and the rank alignment
-        # above rewrites the day in place, so today's index is stale by
-        # the time we get here and some earlier day may have been
-        # touched by a repair script since. This pass puts the trailing
-        # window back in agreement.
+        # as it lands, but the gate re-prices the day in place, so
+        # today's index is stale by the time we get here and some
+        # earlier day may have been touched by a repair script since.
+        # This pass puts the trailing window back in agreement.
         #
         # Cheap in the healthy case: a day whose index already matches
         # its snapshot costs a HEAD and a small read, and only a day

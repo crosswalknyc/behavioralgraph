@@ -8081,8 +8081,10 @@ def _rederive_derived_rails(cards: dict) -> dict:
 #
 # This pass runs last, after every annotator, after the coverage pass,
 # and orders each rail by the value that row is actually rendering.
-# Single provenance: nothing here reads a chart position, so rank
-# cannot be a blend of chart order and audience.
+# Single provenance, with one thing above it: where a service
+# publishes its own ranked list, those titles hold the positions the
+# service gives them and the audience orders everything below. Rank is
+# still never a blend, because the two never overlap.
 #
 # Conventions preserved. The full list for a service is the authority
 # and stays dense from 1 with no gaps and no rows dropped. The TV and
@@ -8165,10 +8167,29 @@ def _rank_identity(row: dict) -> tuple:
             str(row.get('category_display') or '').strip().lower())
 
 
+def _published_slot(row: dict) -> Optional[int]:
+    """The position this service publishes for the row, if any."""
+    p = row.get('published_rank') if isinstance(row, dict) else None
+    return p if isinstance(p, int) and p > 0 else None
+
+
 def _reseat_ranks_by_value(rows: list) -> int:
-    """Order `rows` by rendered value descending and give them dense
-    ranks from 1. Rows with no value hold their relative position at
-    the end rather than being dropped. Returns rows moved."""
+    """Order `rows` and give them dense ranks from 1.
+
+    Rows the service publishes a position for come first, in the
+    service's own order, and that order is not ours to change: if HBO
+    Max has Lanterns at #1 then Lanterns is #1 here. Everything below
+    the published block is ordered by the audience the row is
+    rendering, which is the whole point of the rail. Rows with no
+    value hold their relative position at the end rather than being
+    dropped. Returns rows moved.
+
+    Note this pass no longer decides anything for the published block.
+    Making the numbers descend across those positions is the
+    reasoning's job, not a re-seat's; see `_PUBLISHED_CHARTS` in
+    stream_estimates for why the direction of reconciliation runs that
+    way round.
+    """
     if not isinstance(rows, list) or len(rows) < 2:
         return 0
     decorated = []
@@ -8176,18 +8197,28 @@ def _reseat_ranks_by_value(rows: list) -> int:
         if not isinstance(row, dict):
             return 0
         v = _rank_row_value(row)
-        # Valued rows first, by value descending; current position
-        # breaks ties so a rail with tied values stays stable between
-        # renders. Unvalued rows keep their order at the end.
-        decorated.append(((0 if v is not None else 1),
-                          -(v or 0), i, row))
-    decorated.sort(key=lambda t: (t[0], t[1], t[2]))
+        slot = _published_slot(row)
+        # Published rows first, in the service's order, with the film
+        # rail ahead of the TV rail at equal position so a zipped list
+        # keeps the shape it is built with. Then valued rows by value
+        # descending, current position breaking ties so a rail with
+        # tied values stays stable between renders. Unvalued rows keep
+        # their order at the end.
+        if slot is not None:
+            cat = str(row.get('category_display') or '').strip().lower()
+            decorated.append((0, slot, 0 if cat.startswith(('film', 'movie'))
+                              else 1, i, row))
+        else:
+            decorated.append(((1 if v is not None else 2),
+                              -(v or 0), 0, i, row))
+    decorated.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
     moved = 0
-    for new_rank, (_, _, _, row) in enumerate(decorated, start=1):
+    for new_rank, entry in enumerate(decorated, start=1):
+        row = entry[-1]
         if row.get('rank') != new_rank:
             moved += 1
         row['rank'] = new_rank
-    rows[:] = [t[3] for t in decorated]
+    rows[:] = [t[-1] for t in decorated]
     return moved
 
 
@@ -8214,7 +8245,14 @@ def _reseat_within_slots(rows: list) -> bool:
                    if isinstance(r.get('rank'), int))
     if len(slots) != len(valued):
         return False
-    order = sorted(valued, key=lambda t: (-t[1], t[0].get('rank') or 0))
+    # A published position outranks the view's own numbers for the
+    # same reason it does on the full list: the order belongs to the
+    # service, not to us.
+    order = sorted(valued,
+                   key=lambda t: (0 if _published_slot(t[0]) is not None
+                                  else 1,
+                                  _published_slot(t[0]) or 0,
+                                  -t[1], t[0].get('rank') or 0))
     changed = False
     for slot, (row, _) in zip(slots, order):
         if row.get('rank') != slot:
@@ -10721,6 +10759,55 @@ def _merge_streaming_depth(primary: list[dict], extension: list[dict],
     return merged
 
 
+def _stamp_published_ranks(slug: str, snap: dict, *row_lists) -> int:
+    """Mark every row that sits on this service's own published chart.
+
+    Sets `published_rank` (the position the service gives it) and
+    `published_chart` (what to call that chart) on the row. Services
+    that publish nothing leave every row unmarked, which is the
+    answer for most of the fleet: a browse or catalog listing position
+    is not a ranking and must never be dressed up as one.
+
+    Best-effort. A service whose chart cannot be read this morning
+    simply has no marked rows, and the rail falls back to being
+    ordered by the audience each row is rendering.
+    """
+    try:
+        from scripts.trends_scrapers.stream_estimates import (
+            published_chart_index, published_rank_for)
+    except Exception:
+        return 0
+    try:
+        index = published_chart_index(slug, snap)
+    except Exception:
+        logger.exception("published chart read failed for %s (non-fatal)",
+                         slug)
+        return 0
+    if not index:
+        return 0
+    marked = 0
+    seen: set = set()
+    for rows in row_lists:
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or id(row) in seen:
+                continue
+            seen.add(id(row))
+            cat = str(row.get('category_display') or '').strip().lower()
+            kind = 'film' if cat.startswith(('film', 'movie')) else (
+                'tv' if cat.startswith('tv') else '')
+            hit = published_rank_for(index, kind, str(row.get('title') or ''))
+            if not hit:
+                continue
+            row['published_rank'], row['published_chart'] = hit
+            marked += 1
+    if marked:
+        logger.info("%s: %d row(s) carry a published chart position (%s)",
+                    slug, marked, next(iter(index.values()))[1])
+    return marked
+
+
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                                 keywords: Optional[list[str]] = None,
                                 asof: Optional[str] = None) -> dict:
@@ -10826,6 +10913,16 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             for i, r in enumerate(tv, 1):
                 r['category_display'] = 'TV'
                 r['bucket_rank']      = i
+
+        # Where this service publishes a ranked list of its own, mark
+        # the rows that are on it with the position the service gives
+        # them. That mark is the only thing downstream may treat as a
+        # rank: the render pass seats those rows in the service's
+        # order and never moves them, and a row without the mark has
+        # no published position at all. Depth-extension rows below
+        # never carry one, which is correct, because they arrive in a
+        # popularity order that is not the service's own.
+        _stamp_published_ranks(slug, snap, items, films, tv)
 
         # Depth extension merge (Jenna 2026-09-09: every list carries
         # 100+ items where the source has them). The platform's own

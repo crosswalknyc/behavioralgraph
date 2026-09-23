@@ -6754,78 +6754,191 @@ def fetch_for_date(target_date_iso: str,
                  target_date_iso)
     # Full-day success: remove the WIP checkpoint if one was in play.
     _delete_wip_checkpoint(target_date_iso)
-    # Single-provenance rank (2026-09-09): keep the dated platform
-    # snapshots' orderings in step with the freshly written estimates.
-    align_snapshot_ranks(target_date_iso)
+    # A platform snapshot is the platform's record of its own page and
+    # this module does not write to it. The pass that used to reorder
+    # those files to match our values was removed on 2026-09-23; see
+    # the note above `_PUBLISHED_CHARTS`.
     return payload
 
 
 # ---------------------------------------------------------------------------
-# Platform rank <-> views alignment (single-provenance rank, 2026-09-09).
+# Published charts: whose order is it?
 #
-# A platform tile's rank must be the title's position in that platform's
-# list ordered by that day's audience estimate. Mixed provenance (for
-# example a published weekly chart ordering riding next to daily view
-# estimates) shows up under audit as rank moving in exact seven-day
-# blocks while views move daily, or as rank inversions against the
-# same-day view column. This pass runs after the estimator lands and
-# re-seats every view-carrying row within the rank slots those rows
-# already occupy, ordered by views descending. Rows without a same-day
-# view estimate keep their positions. Netflix's `national` list is
-# rebuilt by interleaving the aligned films/tv lists (mirror of the
-# live scraper), and items' chart labels + best_rank follow.
+# A platform snapshot is the platform's record of its own page. Until
+# 2026-09-23 this module reordered those files to match our audience
+# values and wrote them back to S3 (`align_platform_ranks_to_views` /
+# `align_snapshot_ranks`, shipped 2026-09-09 for single-provenance
+# rank). Nothing outside that loop constrained it. `_collect_streaming`
+# read the rewritten position back the next morning as the platform's
+# own order, the prompt presented it as a Tier-1 chart anchor, the
+# research step sized the value off it, and the value reordered the
+# file again. Measured against the 2026-09-22 estimates it moved 8 of
+# the 10 positions on Netflix's published US Top 10 films, seating The
+# Angry Birds Movie 2 above the title Netflix themselves had at #1.
+#
+# Jenna 2026-09-23, verbatim: "our numbers should align so that they
+# do descend down based on that ranking does that make sense".
+#
+# So the direction of reconciliation inverts. The published chart is
+# authoritative and immutable: we never write our ordering into a
+# platform snapshot again, and where a platform publishes a ranked
+# list those titles hold those positions. What moves instead is our
+# own number, which is reasoned to descend across the published
+# positions. Below the published block the order is ours to reason as
+# that service's real viewership.
+#
+# Everything that needs to know whether a position is real reads the
+# declaration below: the collector that labels an item, the prompt
+# that tells the research step what a position is worth, and the
+# render pass in `trends_iq` that seats the rail. A rail absent from
+# this table publishes no chart, and a browse or catalog listing
+# position on it carries no popularity signal at all.
+#
+#   mode 'lists'       positions are the index within named snapshot
+#                      lists, which is how Netflix's published Top 10
+#                      arrives (us_films / us_tv, straight off their
+#                      own weekly TSV).
+#   mode 'collection'  positions are the ordinal within a named
+#                      collection on the snapshot's `national` list,
+#                      which is how a storefront rail arrives. The
+#                      rail is usually interleaved with merchandising
+#                      rows, so the ordinal within the collection is
+#                      the position and the row's place in `national`
+#                      is not.
 # ---------------------------------------------------------------------------
 
-_RANK_ALIGN_SLUGS: tuple[tuple[str, str], ...] = _STREAMING_SLUGS
+_PUBLISHED_CHARTS: dict[str, dict] = {
+    'netflix': {
+        'label': 'Netflix Top 10 US',
+        'mode':  'lists',
+        'lists': (('us_films', 'film'), ('us_tv', 'tv')),
+        'depth': 10,
+    },
+    # The channel's Prime Video storefront carries a real 'Top 10 in
+    # the U.S.' rail alongside Recently added / Popular / Featured,
+    # and the scraper already tags every row with the collection it
+    # came from. Those ten are the chart; the merchandising rails
+    # around them are not.
+    'lionsgateplus': {
+        'label': 'Lionsgate+ Top 10 in the U.S.',
+        'mode':  'collection',
+        'collections': ('top 10 in the u.s.', 'top 10 in the us'),
+        'depth': 10,
+    },
+    # Prime Video publishes 'Top 10 movies in the US' and 'Top 10 TV
+    # shows in the US' on its storefront. Declared here ahead of the
+    # scraper change that collects them, so the day those collections
+    # land in the snapshot they are treated as the chart rather than
+    # as another promotional rail.
+    'primevideo': {
+        'label': 'Prime Video Top 10 US',
+        'mode':  'collection',
+        'collections': ('top 10 movies in the us',
+                        'top 10 tv shows in the us'),
+        'depth': 10,
+    },
+}
 
 
-def _rank_align_kind(list_key: str, row: dict) -> Optional[str]:
-    if list_key == 'us_tv':
-        return 'tv'
-    if list_key == 'us_films':
-        return 'film'
-    cat = str(row.get('category_display') or row.get('category')
-              or '').strip().lower()
-    if cat.startswith('tv'):
-        return 'tv'
-    if cat.startswith('film') or cat == 'movie':
-        return 'film'
-    return None
+def has_published_chart(slug: str) -> bool:
+    """True when this service publishes a ranked list we can read."""
+    return slug in _PUBLISHED_CHARTS
 
 
-def _rank_align_views(items: dict, slug: str, kind: Optional[str],
-                       title: str) -> Optional[int]:
+def published_chart_label(slug: str) -> Optional[str]:
+    spec = _PUBLISHED_CHARTS.get(slug)
+    return spec.get('label') if spec else None
+
+
+def _pc_key(kind: str, norm: str) -> str:
+    return f'{kind}:{norm}'
+
+
+def published_chart_index(slug: str,
+                          snap: Optional[dict]) -> dict[str, tuple[int, str]]:
+    """Positions this service actually publishes, for one snapshot.
+
+    Returns `{'film:norm title': (position, chart label), ...}`, with a
+    bare `'norm title'` alias so a caller that does not know the kind
+    can still resolve. An empty dict means no published position for
+    anything here, which is the answer for most of the fleet and is
+    not a failure.
+    """
+    spec = _PUBLISHED_CHARTS.get(slug)
+    if not spec or not isinstance(snap, dict):
+        return {}
+    label = spec['label']
+    depth = int(spec.get('depth') or 0) or None
+    out: dict[str, tuple[int, str]] = {}
+
+    def _add(kind: str, title: str, pos: int) -> None:
+        norm = _cp_normalize(title or '')
+        if not norm:
+            return
+        out.setdefault(_pc_key(kind, norm), (pos, label))
+        out.setdefault(norm, (pos, label))
+
+    if spec['mode'] == 'lists':
+        for list_key, kind in spec.get('lists') or ():
+            rows = snap.get(list_key)
+            if not isinstance(rows, list):
+                continue
+            for i, row in enumerate(rows[:depth] if depth else rows):
+                if isinstance(row, dict):
+                    _add(kind, str(row.get('title') or ''), i + 1)
+    elif spec['mode'] == 'collection':
+        wanted = {c.lower() for c in spec.get('collections') or ()}
+        # Ordinal within each named collection, in the order the rows
+        # appear. The storefront interleaves the chart with its
+        # merchandising rails, so a row's place in `national` is not
+        # its chart position.
+        seen_per_collection: dict[str, int] = {}
+        for row in snap.get('national') or []:
+            if not isinstance(row, dict):
+                continue
+            coll = str(row.get('collection') or '').strip().lower()
+            if coll not in wanted:
+                continue
+            pos = seen_per_collection.get(coll, 0) + 1
+            seen_per_collection[coll] = pos
+            if depth and pos > depth:
+                continue
+            cat = str(row.get('category_display') or '').strip().lower()
+            kind = 'film' if cat.startswith(('film', 'movie')) else (
+                'tv' if cat.startswith('tv') else '')
+            _add(kind, str(row.get('title') or ''), pos)
+    return out
+
+
+def published_rank_for(index: dict, kind: str,
+                       title: str) -> Optional[tuple[int, str]]:
+    """Look one row up in an index from `published_chart_index`."""
+    if not index:
+        return None
     norm = _cp_normalize(title or '')
     if not norm:
         return None
-    kinds = (kind,) if kind else ('tv', 'film', 'title')
-    for k in kinds:
-        it = items.get(f'{k}:{norm}')
-        if not isinstance(it, dict):
-            continue
-        blk = (it.get('by_platform') or {}).get(slug)
-        if isinstance(blk, dict):
-            v = blk.get('us_estimate')
-            if isinstance(v, int) and v > 0:
-                return v
-    return None
+    return index.get(_pc_key(kind or '', norm)) or index.get(norm)
 
 
-# Per-item plausibility bands for the rank alignment (2026-09-10).
+# Per-item plausibility bands (2026-09-10).
 # ---------------------------------------------------------------------
-# When a shallow platform rank list carries a title whose researched view
-# level is high WITHIN THE LIST but the title is a library evergreen or
-# long-tail catalog title in reality, the view-driven align pass sits the
-# title at the top of the shallow list. The result reads as "Netflix #1
-# for 6 consecutive days" for a title that should be mid-list. The
-# plausibility band is a small per-item lookup that clamps the aligned
-# rank to a real-world position band (min_rank, max_rank) once the
-# view-driven ordering has settled. The band is consulted lazily: an
-# item with no entry is aligned unchanged. Slug key is the platform, kind
-# key is the normalized title (matches `_cp_normalize`). Bands were set
-# from analyst-verified real-world guidance (leaving-soon binge, catalog
-# depth, arrival promotional slot decay). Extend the map when future
-# audits surface the same pattern for another title.
+# A shallow rail can carry a title whose researched level is high
+# WITHIN THE LIST while the title is a library evergreen or long-tail
+# catalog title in reality. Ordering that rail by value alone sits it
+# at the top, and the board reads "Netflix #1 for 6 consecutive days"
+# for a title that should be mid-list. The band is a small per-item
+# lookup that clamps the settled position to a real-world range
+# (min_rank, max_rank). Consulted lazily: an item with no entry is
+# left alone. Slug key is the platform, the other key is the
+# normalized title (matches `_cp_normalize`). Bands were set from
+# analyst-verified real-world guidance (leaving-soon binge, catalog
+# depth, arrival promotional slot decay). Extend the map when an audit
+# surfaces the same pattern for another title.
+#
+# The band never overrides a published position. A title Netflix
+# themselves rank at #2 is at #2, whatever band it carries; the clamp
+# only applies where the order is ours to decide.
 _RANK_PLAUSIBILITY_BANDS: dict[str, dict[str, tuple[int, int]]] = {
     'gilmore girls': {
         'netflix':    (10, 29),
@@ -6846,15 +6959,19 @@ def _plausibility_band(slug: str, kind: str, norm: str) -> Optional[tuple[int, i
 
 
 def _clamp_rank_to_band(rows: list, slug: str) -> bool:
-    """Post-align defensive clamp: when a row's title has a stored
-    plausibility band and the align pass placed it outside the band,
-    move the row to the nearer band edge and cascade-shift neighbouring
-    rows so ranks stay dense. Returns True on any change."""
+    """Defensive clamp applied after a rail has been seated by value:
+    when a row's title has a stored plausibility band and it settled
+    outside that band, move it to the nearer band edge and cascade-
+    shift neighbours so positions stay dense. A row holding a
+    published chart position is skipped, because that position is the
+    platform's and not ours to clamp. Returns True on any change."""
     if not isinstance(rows, list) or len(rows) < 2:
         return False
     changed = False
     for row in list(rows):
         if not isinstance(row, dict):
+            continue
+        if isinstance(row.get('published_rank'), int):
             continue
         title = str(row.get('title') or '')
         norm = _cp_normalize(title)
@@ -6871,16 +6988,19 @@ def _clamp_rank_to_band(rows: list, slug: str) -> bool:
         if lo <= r <= hi:
             continue
         # Target: nearer band edge, capped at list depth so we never
-        # invent a rank slot the platform's chart list doesn't have.
+        # invent a position the rail does not have.
         list_max = max((int(x.get('rank') or 0) for x in rows if isinstance(x, dict)),
                        default=lo)
         target = min(hi, list_max) if r < lo else lo
         if target == r:
             continue
-        # Shift other rows to make room, preserving dense ordering.
+        # Shift other rows to make room, preserving dense ordering. A
+        # published row does not move to make space.
         if target > r:
             for x in rows:
                 if x is row or not isinstance(x, dict):
+                    continue
+                if isinstance(x.get('published_rank'), int):
                     continue
                 try:
                     xr = int(x.get('rank') or 0)
@@ -6891,6 +7011,8 @@ def _clamp_rank_to_band(rows: list, slug: str) -> bool:
         else:
             for x in rows:
                 if x is row or not isinstance(x, dict):
+                    continue
+                if isinstance(x.get('published_rank'), int):
                     continue
                 try:
                     xr = int(x.get('rank') or 0)
@@ -6903,227 +7025,6 @@ def _clamp_rank_to_band(rows: list, slug: str) -> bool:
     if changed:
         rows.sort(key=lambda r: int(r.get('rank') or 10 ** 9))
     return changed
-
-
-def _rank_align_list(rows: list, slug: str, list_key: str,
-                      items: dict) -> bool:
-    """Re-seat view-carrying rows within their occupied rank slots,
-    ordered by same-day views descending. Applies plausibility-band
-    clamp afterward so library-evergreen titles that top a shallow
-    view-carrier set (e.g. Gilmore Girls on Netflix Jun 2026) don't
-    settle at rank 1-3. Returns True on any change."""
-    if not isinstance(rows, list) or len(rows) < 2:
-        return False
-    view_rows = []
-    for idx, row in enumerate(rows):
-        if not isinstance(row, dict):
-            return False
-        kind = _rank_align_kind(list_key, row)
-        v = _rank_align_views(items, slug, kind,
-                               str(row.get('title') or ''))
-        if v is not None:
-            view_rows.append((idx, row, v))
-    if len(view_rows) < 2:
-        return False
-    try:
-        slots = sorted(int(row.get('rank') or (idx + 1))
-                       for idx, row, _ in view_rows)
-        order = sorted(view_rows,
-                       key=lambda t: (-t[2],
-                                       int(t[1].get('rank') or (t[0] + 1))))
-    except (TypeError, ValueError):
-        return False
-    changed = False
-    for slot, (_, row, _) in zip(slots, order):
-        if int(row.get('rank') or 0) != slot:
-            row['rank'] = slot
-            changed = True
-    if changed:
-        rows.sort(key=lambda r: int(r.get('rank') or 10 ** 9))
-    # Defensive: clamp any plausibility-band-tagged rows that the
-    # view-driven pass placed outside their band.
-    if _clamp_rank_to_band(rows, slug):
-        changed = True
-    return changed
-
-
-def _rebuild_netflix_national(data: dict) -> bool:
-    """Mirror of the live scraper's national build: interleave the
-    (aligned) films/tv lists. Preserves the existing national row count
-    per category so historical shapes stay intact."""
-    nat = data.get('national')
-    films = data.get('us_films') or []
-    tv = data.get('us_tv') or []
-    if not isinstance(nat, list) or not nat or not (films or tv):
-        return False
-    n_f = sum(1 for r in nat if _rank_align_kind('national', r) == 'film')
-    n_t = sum(1 for r in nat if _rank_align_kind('national', r) == 'tv')
-    if not n_f and not n_t:
-        return False
-    rebuilt: list = []
-    for i in range(max(n_f, n_t)):
-        if i < min(n_f, len(films)):
-            rebuilt.append({**films[i], 'category_display': 'Film'})
-        if i < min(n_t, len(tv)):
-            rebuilt.append({**tv[i], 'category_display': 'TV'})
-    if not rebuilt or rebuilt == nat:
-        return False
-    data['national'] = rebuilt
-    return True
-
-
-def _rank_align_label_maps(slug: str, data: dict) -> dict:
-    """Position maps mirroring `_collect_streaming` label semantics:
-    Netflix labels index the kind lists; other platforms index the
-    national list."""
-    maps: dict[str, dict[str, int]] = {'film': {}, 'tv': {}}
-    if slug == 'netflix':
-        for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
-            for i, row in enumerate(data.get(lk) or []):
-                k = _cp_normalize(str(row.get('title') or ''))
-                if k and k not in maps[kind]:
-                    maps[kind][k] = i + 1
-    else:
-        for i, row in enumerate(data.get('national') or []):
-            k = _cp_normalize(str(row.get('title') or ''))
-            if not k:
-                continue
-            kind = _rank_align_kind('national', row)
-            targets = [maps[kind]] if kind in maps else \
-                [maps['film'], maps['tv']]
-            for m in targets:
-                m.setdefault(k, i + 1)
-    return maps
-
-
-def align_platform_ranks_to_views(platform_snaps: dict,
-                                   items: dict) -> tuple[set, int]:
-    """Align every loaded platform snapshot's ranks to same-day views
-    and update items' chart labels + best_rank to match. Mutates both
-    arguments in place. Returns (changed_slugs, labels_edited)."""
-    label_by_slug = dict(_RANK_ALIGN_SLUGS)
-    changed: set = set()
-    label_maps: dict[str, dict] = {}
-    for slug, data in (platform_snaps or {}).items():
-        if not isinstance(data, dict) or slug not in label_by_slug:
-            continue
-        any_change = False
-        if slug == 'netflix':
-            for lk in ('us_films', 'us_tv'):
-                if _rank_align_list(data.get(lk) or [], slug, lk, items):
-                    any_change = True
-            if any_change and _rebuild_netflix_national(data):
-                pass
-        else:
-            for lk in ('national', 'us_tv', 'us_films'):
-                if lk in data and _rank_align_list(
-                        data.get(lk) or [], slug, lk, items):
-                    any_change = True
-        label_maps[slug] = _rank_align_label_maps(slug, data)
-        if any_change:
-            changed.add(slug)
-
-    prefix_to_slug = {label: slug for slug, label in _RANK_ALIGN_SLUGS}
-    lab_re = re.compile(r'^(.+?) #(\d+)$')
-    edited = 0
-    for key, it in (items or {}).items():
-        if not isinstance(it, dict):
-            continue
-        labs = it.get('chart_labels')
-        if not isinstance(labs, list) or not labs:
-            continue
-        kind, _, norm = str(key).partition(':')
-        new_labs: list = []
-        item_edited = False
-        seen_prefix: set = set()
-        for lab in labs:
-            m = lab_re.match(str(lab))
-            slug = prefix_to_slug.get(m.group(1)) if m else None
-            if not slug or slug not in label_maps \
-                    or (slug, str(lab)) in seen_prefix:
-                new_labs.append(lab)
-                continue
-            seen_prefix.add((slug, str(lab)))
-            maps = label_maps[slug]
-            pos = maps.get(kind, {}).get(norm) if kind in maps else None
-            if pos is None and kind not in ('film', 'tv'):
-                pos = maps['film'].get(norm) or maps['tv'].get(norm)
-            if pos is None:
-                # Not on this platform's list today (carried-forward
-                # items keep their last charted label by convention;
-                # Netflix global-rail labels also land here). Untouched.
-                new_labs.append(lab)
-                continue
-            new_lab = f'{m.group(1)} #{pos}'
-            if new_lab != lab:
-                item_edited = True
-            new_labs.append(new_lab)
-        if item_edited:
-            it['chart_labels'] = new_labs
-            ranks = []
-            for lab in new_labs:
-                m = lab_re.match(str(lab))
-                if m:
-                    try:
-                        ranks.append(int(m.group(2)))
-                    except ValueError:
-                        pass
-            if ranks:
-                it['best_rank'] = min(ranks)
-            edited += 1
-    return changed, edited
-
-
-def align_snapshot_ranks(folder: str) -> dict:
-    """Load one snapshot folder ('latest' or 'YYYY-MM-DD') from S3, run
-    the rank<->views alignment, and write back any changed platform
-    files plus the stream_estimates items when labels moved. Non-fatal
-    by design: every failure logs and returns a summary dict."""
-    out = {'folder': folder, 'changed': [], 'labels_edited': 0}
-    try:
-        s3 = _s3()
-        prefix = (f'trends_iq_snapshots/{folder}/' if folder == 'latest'
-                  else _S3_DATED.format(date=folder))
-
-        def _load(name):
-            try:
-                r = s3.get_object(Bucket=_S3_BUCKET, Key=f'{prefix}{name}')
-                return json.loads(r['Body'].read())
-            except Exception:
-                return None
-
-        se = _load('stream_estimates.json')
-        items = (se or {}).get('items')
-        if not isinstance(items, dict) or not items:
-            return out
-        snaps = {}
-        for slug, _label in _RANK_ALIGN_SLUGS:
-            data = _load(f'{slug}.json')
-            if isinstance(data, dict):
-                snaps[slug] = data
-        if not snaps:
-            return out
-        changed, edited = align_platform_ranks_to_views(snaps, items)
-        for slug in sorted(changed):
-            body = json.dumps(snaps[slug], ensure_ascii=False).encode('utf-8')
-            s3.put_object(Bucket=_S3_BUCKET, Key=f'{prefix}{slug}.json',
-                           Body=body, ContentType='application/json')
-        if edited:
-            body = json.dumps(se, ensure_ascii=False).encode('utf-8')
-            s3.put_object(Bucket=_S3_BUCKET,
-                           Key=f'{prefix}stream_estimates.json',
-                           Body=body, ContentType='application/json')
-        out['changed'] = sorted(changed)
-        out['labels_edited'] = edited
-        if changed or edited:
-            logger.info("stream_estimates: rank alignment (%s) reordered "
-                         "%s and edited %d item label set(s)",
-                         folder, ', '.join(sorted(changed)) or 'nothing',
-                         edited)
-    except Exception:
-        logger.exception("stream_estimates: rank alignment failed for %s "
-                          "(non-fatal)", folder)
-    return out
 
 
 if __name__ == '__main__':
