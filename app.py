@@ -51582,6 +51582,63 @@ def _chatbot_calm_payload(**extra):
     return body
 
 
+# Flat rate card for pricing questions (2026-09-23 Jenna, verbatim
+# copy): 'if someone asks a credit question they should get this'.
+# Served deterministically on BOTH chat surfaces before any routing -
+# 'how much is a credit' once fell into the build intake and drafted
+# a build brief (cpearson, 2026-09-23 20:39Z).
+_PM_PRICING_COPY = (
+    "Pricing is:\n\n"
+    "Digital Journey - $500\n"
+    "Profile - $300\n"
+    "Subscriber Acquisition - $500\n"
+    "Flywheel - $300\n"
+    "Brand Partnership - $500\n"
+    "Add Attribution - $500 for the initial pull and $100 x day to "
+    "track per campaign\n\n"
+    "All Prometheus (chat bot) usage is billed at a metered rate of "
+    "$10.50 / $52.50 per million in/out, plus $0.021 per search.")
+
+
+def _pm_pricing_question(text):
+    """True when the ask is about what things COST. Balance and usage
+    asks ('how many credits do I have left'), category mentions
+    ('credit provider'), and analytic how-much asks ('how much does
+    the female cut index on Nike') never match."""
+    t = str(text or '').strip().lower()
+    if not t or len(t) > 300:
+        return False
+    if re.search(r'credit (provider|card|karma|union|score)', t):
+        return False
+    if re.search(r'\b(do i have|left|remaining|balance|my credits'
+                 r'|have i used|usage so far)\b', t):
+        return False
+    # explicit cost vocabulary with product / credit context
+    if re.search(r'\b(pricing|price list|rate card|price sheet)\b', t):
+        return True
+    if re.search(r'\bhow (is|does)\b.{0,40}\b(billed|billing|charged)\b',
+                 t) or re.search(r'\b(billing|metered) rate\b', t):
+        return True
+    if (re.search(r'\b(cost|costs|price|prices|charge|charges|charged'
+                  r'|billed)\b', t)
+            and re.search(r'\b(credit|credits|profile|pull|cut|report'
+                          r'|deck|build|journey|subscriber|flywheel'
+                          r'|attribution|brand partnership|prometheus'
+                          r'|search|it)\b', t)):
+        return True
+    # object-noun form: 'how much is a credit / a profile / one pull' -
+    # rejected when the sentence is an analytic read, not a price ask
+    if re.search(r'\bhow much (is|are|does|do|would|will) (a|an|the|one'
+                 r'|it|each|per)\b.{0,40}\b(credit|profile|pull|cut'
+                 r'|report|deck|build|journey|subscriber|flywheel'
+                 r'|attribution|brand partnership)\b', t):
+        if not re.search(r'\b(index|indexes|overlap|watch|viewers'
+                         r'|audience|penetration|reach|skew|engage)\b',
+                         t):
+            return True
+    return False
+
+
 def _chatbot_error_email(route, err, user_email=None, payload=None,
                          tb=None):
     """Email chatbot failure detail to ops (Jenna + Jessie). SES
@@ -53635,6 +53692,15 @@ def api_synth_chat_interpret():
         return jsonify(_chatbot_calm_payload())
 
     history = body.get('history') or []
+
+    # ------------------------------------------------------------------
+    # PRICING QUESTIONS (2026-09-23 Jenna): the flat rate card, never
+    # the build intake. Runs before every detector - 'how much is a
+    # credit' once reached interpret and drafted a build brief.
+    # ------------------------------------------------------------------
+    if _pm_pricing_question(text):
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _PM_PRICING_COPY})
 
     # ------------------------------------------------------------------
     # INCIDENCE / SAMPLE-SIZE PRE-CHECK (2026-08-19): questions like
@@ -59448,6 +59514,11 @@ def api_synth_chat_analyze():
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
+    # Pricing questions (2026-09-23 Jenna): the flat rate card, served
+    # before the tier and funds gates - a drained account asking what
+    # things cost gets the answer, free, no model call.
+    if _pm_pricing_question(text):
+        return jsonify({'success': True, 'reply': _PM_PRICING_COPY})
     # Prometheus tier gate (2026-08-26): pulls_only users without the
     # pay-as-you-go opt-in get Jenna's offer instead of any analysis
     # flow. Runs before every branch so no analysis path leaks.
