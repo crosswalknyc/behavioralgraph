@@ -34077,11 +34077,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqROIBotLabel() {
                 return (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Site visit';
             }
-            function _iiqROIPlural(s) {
-                s = String(s || '');
-                if (!s) return s;
-                if (/s$/i.test(s)) return s;
-                return s + 's';
+            // "29,068 issue research events" / "4,639 action page visits" /
+            // "812 site visits": the funnel label plus the noun it needs.
+            function _iiqROIMidNoun(n) { return fmtInt(Math.round(n)) + ' ' + _iiqROIMidLabel().toLowerCase() + ' events'; }
+            function _iiqROIBotNoun(n) {
+                var b = _iiqROIBotLabel();
+                return fmtInt(Math.round(n)) + ' ' + b.toLowerCase() + (/visit$/i.test(b) ? 's' : ' visits');
             }
             function _iiqROICostKey(scopeId) {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
@@ -34153,8 +34154,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;">'
                   +   _iiqROITile('Views value',       t.views_value, fmtInt(Math.round(t.views))        + ' views',        '#22d3ee')
                   +   _iiqROITile('Engagement value',  t.eng_value,   fmtInt(Math.round(t.eng))          + ' actions',      '#a78bfa')
-                  +   _iiqROITile(midL + ' value',     t.info_value,  fmtInt(Math.round(t.info_seekers)) + ' ' + _iiqROIPlural(midL).toLowerCase() + ' events', '#818cf8')
-                  +   _iiqROITile(botL + ' value',     t.web_value,   fmtInt(Math.round(t.web_visits))   + ' ' + _iiqROIPlural(botL).toLowerCase(), '#fbbf24')
+                  +   _iiqROITile(midL + ' value',     t.info_value,  _iiqROIMidNoun(t.info_seekers), '#818cf8')
+                  +   _iiqROITile(botL + ' value',     t.web_value,   _iiqROIBotNoun(t.web_visits), '#fbbf24')
                   + '</div>';
             }
             // Single post: the same read for one piece of content, with
@@ -34186,8 +34187,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;">'
                   +   _iiqROITile('Views value',       av.views_value, fmtInt(Math.round(av.views)) + ' views',   '#22d3ee')
                   +   _iiqROITile('Engagement value',  av.eng_value,   fmtInt(Math.round(av.eng))   + ' actions', '#a78bfa')
-                  +   _iiqROITile(midL + ' value',     av.info_value,  fmtInt(Math.round(av.info))  + ' ' + _iiqROIPlural(midL).toLowerCase() + ' events', '#818cf8')
-                  +   _iiqROITile(botL + ' value',     av.web_value,   fmtInt(Math.round(av.web))   + ' ' + _iiqROIPlural(botL).toLowerCase(), '#fbbf24')
+                  +   _iiqROITile(midL + ' value',     av.info_value,  _iiqROIMidNoun(av.info), '#818cf8')
+                  +   _iiqROITile(botL + ' value',     av.web_value,   _iiqROIBotNoun(av.web), '#fbbf24')
                   + '</div>';
             }
             // Scope picker: whole campaign, or one post from a dropdown
