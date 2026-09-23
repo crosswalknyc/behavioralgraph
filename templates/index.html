@@ -36963,10 +36963,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // day-level tail rounded to zero for mature assets, which
             // made the tile read "+0 viewers" while the header still
             // read a real WoW %.
-            function _iiqTrendTotalExposureThisWeek(asOfIso, slug) {
+            function _iiqTrendTotalExposureThisWeek(asOfIso, slug, startDate) {
                 var stash = window.__intentIQAssetsRaw;
-                if (!stash || !Array.isArray(stash.cards)) return { delta: 0, prev: 0, launch: true };
-                if (!asOfIso) return { delta: 0, prev: 0, launch: true };
+                if (!stash || !Array.isArray(stash.cards)) return { delta: 0, prev: 0, launch: true, steady: false };
+                if (!asOfIso) return { delta: 0, prev: 0, launch: true, steady: false };
                 var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
                 var prevIso = _iiqAddDaysIso(asOfIso, -7);
                 var prevPrevIso = _iiqAddDaysIso(asOfIso, -14);
@@ -36983,17 +36983,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     totalDelta += Math.max(0, totalViews * (pitNow - pitPrev));
                     totalPrev  += Math.max(0, totalViews * (pitPrev - pitPrevPrev));
                 }
-                // Launch-signal floor: when the prior 7d had < 50 viewers
-                // of accrual (typical for launch-week or earliest posted
-                // assets), the absolute delta is arithmetically tiny even
-                // when the RATIO looks huge. Signal that state to the
-                // caller so the tile can show 'Launch signal' instead of
-                // a `+1 viewer` display that reads as a placeholder.
-                var launch = (totalPrev < 50);
+                // Distinguish TRUE launch (the prior 7d window sits BEFORE
+                // the campaign started) from THIN ACCRUAL (post-launch, the
+                // week's absolute accrual delta is small). Only the true
+                // case earns the 'Launch signal' label; the thin-accrual
+                // case renders as 'Steady state' + the actual delta value.
+                var prevIsoCheck = _iiqAddDaysIso(asOfIso, -7);
+                var priorWeekBeforeCampaign = !!(startDate && prevIsoCheck && prevIsoCheck < startDate);
+                var launch = priorWeekBeforeCampaign || (totalPrev < 50 && !startDate);
+                var steady = !launch && (totalPrev < 50 || Math.abs(totalDelta) < 50);
                 return {
                     delta: _iiqCountJitter(slug || 'default', 'trend_expo_' + asOfIso, Math.round(totalDelta)),
                     prev:  Math.round(totalPrev),
                     launch: launch,
+                    steady: steady,
                 };
             }
 
@@ -37139,7 +37142,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 // ---- Sub-panel B: audience movers -------------------
                 var audPanelHtml;
-                if (!audMovers.length) {
+                // A cohort mover set where every |delta_pp| rounds to
+                // 0.00 renders as three '→ +0.00pp' rows and reads as
+                // '0% growth across cohorts', which is the same signal
+                // as the empty state. Fold both into the empty-state
+                // copy so the panel never surfaces three visibly-flat
+                // rows as if they were movers.
+                var audMoversHaveSignal = audMovers.some(function(m) { return Math.abs(Number(m.delta_pp) || 0) >= 0.05; });
+                if (!audMovers.length || !audMoversHaveSignal) {
                     audPanelHtml = '<div style="padding: 1rem; text-align:center; color:#797F81; font-size:0.78rem;">No audience movement in this window.</div>';
                 } else {
                     audPanelHtml = audMovers.map(function(m) {
@@ -37187,7 +37197,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 // ---- Summary strip: 3 tiles ------------------------
                 var weeksLabel = _iiqTrendWeeksLabel(asOf, opening, ov);
-                var totalExpo = _iiqTrendTotalExposureThisWeek(asOf, slug);
+                // Campaign start = earliest phase.start_date (already the
+                // convention across the module) so 'launch signal' only
+                // fires when the prior 7d actually sits before that.
+                var _cmpStart = '';
+                try {
+                    var _phs = (ov && Array.isArray(ov.phases)) ? ov.phases : [];
+                    for (var _pi = 0; _pi < _phs.length; _pi++) {
+                        var _s = _phs[_pi] && _phs[_pi].start_date;
+                        if (_s && (!_cmpStart || _s < _cmpStart)) _cmpStart = _s;
+                    }
+                    if (!_cmpStart && ov && ov.opening_date) _cmpStart = ov.opening_date;
+                } catch(_e) {}
+                var totalExpo = _iiqTrendTotalExposureThisWeek(asOf, slug, _cmpStart);
                 var traj = _iiqComputeTrajectory(asOf, opening);
 
                 var trajTier = traj ? traj.tier : 'steady';
@@ -37212,7 +37234,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var expoTileBody, expoTileNote;
                 if (totalExpo && totalExpo.launch) {
                     expoTileBody = '<span style="color:#B7B3D8; font-size:0.95rem; font-weight:600;">Launch signal</span>';
-                    expoTileNote = 'prior 7d has too little accrual for a weekly delta yet';
+                    expoTileNote = 'prior 7d sits before the campaign start';
+                } else if (totalExpo && totalExpo.steady) {
+                    var deltaSteady = (totalExpo && typeof totalExpo === 'object') ? totalExpo.delta : totalExpo;
+                    var stSign = deltaSteady > 0 ? '+' : '';
+                    expoTileBody = '<span style="color:#B7B3D8; font-size:0.95rem; font-weight:600;">Steady state</span>';
+                    expoTileNote = stSign + fmtCompact(deltaSteady) + ' this week, below WoW threshold';
                 } else {
                     var deltaVal = (totalExpo && typeof totalExpo === 'object') ? totalExpo.delta : totalExpo;
                     expoTileBody = '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">+' + fmtCompact(deltaVal) + ' viewers</span>';
