@@ -68,7 +68,13 @@ logger = logging.getLogger(__name__)
 _MODEL = (os.environ.get('CHART_SET_MODEL')
           or os.environ.get('STREAM_ESTIMATES_MODEL_HI')
           or 'claude-sonnet-4-5')
-_MAX_TOKENS = int(os.environ.get('CHART_SET_MAX_TOKENS') or 4000)
+# Headroom. The joint share constraint made the answers longer (a
+# reason per share plus a notes block), and at 4,000 the JSON was
+# being truncated mid-object, which `_extract_json` correctly refused
+# and which surfaced as "no usable answer" for a whole chart. A
+# silent truncation that looks like a model failure is expensive to
+# diagnose, so the budget sits well clear of what the format needs.
+_MAX_TOKENS = int(os.environ.get('CHART_SET_MAX_TOKENS') or 12000)
 
 # A returned value further than this from what the published figure
 # implies is not a US-share judgement any more, it is the call
@@ -99,20 +105,51 @@ def _lazy():
 
 
 def _extract_json(text: str) -> Optional[dict]:
+    """The JSON object in a reply, however it is wrapped.
+
+    An earlier version took the span from the first brace to the LAST
+    one, which fails the moment a reply carries a fenced block plus a
+    sentence of prose after it: the span then runs past the end of
+    the object and no longer parses. A whole Netflix chart was lost
+    that way, reported as "no usable answer" while the model had in
+    fact answered correctly and had even flagged the one pair it
+    could not reconcile. Scanning for the balanced close brace is the
+    fix, and it costs nothing.
+    """
     if not text:
         return None
     t = text.strip()
-    t = re.sub(r'^```(?:json)?|```$', '', t, flags=re.M).strip()
+    t = re.sub(r'^\s*```(?:json)?\s*', '', t)
+    t = re.sub(r'\s*```\s*$', '', t).strip()
     try:
         return json.loads(t)
     except json.JSONDecodeError:
         pass
-    i, j = t.find('{'), t.rfind('}')
-    if i >= 0 and j > i:
-        try:
-            return json.loads(t[i:j + 1])
-        except json.JSONDecodeError:
-            return None
+    start = t.find('{')
+    if start < 0:
+        return None
+    depth, in_str, esc = 0, False, False
+    for i in range(start, len(t)):
+        c = t[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == '\\':
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(t[start:i + 1])
+                except json.JSONDecodeError:
+                    return None
     return None
 
 
@@ -233,7 +270,7 @@ def _quantified_prompt(chart_label: str, platform_label: str,
         f'  "titles": [\n'
         f'    {{"rank": <int>, "title": "<exactly as given>", '
         f'"us_share": <float 0-1>, "us_daily": <int>, '
-        f'"share_reason": "<short, why this title skews US or not>"}}\n'
+        f'"share_reason": "<max 12 words>"}}\n'
         f'  ],\n'
         f'  "descends": <true|false, YOUR OWN CHECK that us_daily '
         f'falls strictly as rank rises>,\n'
