@@ -3944,6 +3944,16 @@ def _cp_normalize(text: str) -> str:
     s = text.lower().lstrip('#').strip()
     s = re.sub(r'[^\w\s]+', ' ', s)
     tokens = [t for t in s.split() if t and t not in _CP_STOPWORDS]
+    if not tokens:
+        # A title made entirely of stopwords reduces to nothing, and
+        # every such title then collides on the same empty key and
+        # they overwrite each other in the estimates store. Netflix's
+        # own #2 today is "Best of the Best", which is exactly that
+        # shape. Keep the stripped words when removing them would
+        # leave nothing: the point of dropping stopwords is to make
+        # two spellings of one title agree, and there is no agreement
+        # to be had with an empty string.
+        tokens = [t for t in s.split() if t]
     return ' '.join(tokens)
 
 
@@ -4193,6 +4203,12 @@ _PLATFORM_UNIT_LABEL = {
 }
 
 
+# Rows that asked for a service's reading, had none, and were left
+# blank rather than handed the cross-platform total. Counted so the
+# run can say how often it happens instead of it being invisible.
+_AGG_WITHHELD = 0
+
+
 def _stamp_stream_estimate(row: dict, entry: dict,
                             platform_key: str = '',
                             kind_hint: str = '') -> None:
@@ -4202,8 +4218,28 @@ def _stamp_stream_estimate(row: dict, entry: dict,
     When `platform_key` is provided AND `entry.by_platform[platform_key]`
     exists, we stamp THAT platform's number (Spotify song row shows
     Spotify-only US streams; Apple Music row shows Apple-Music-only;
-    etc.). When the per-platform block is missing we fall back to the
-    aggregate estimate so old-shape snapshots still render.
+    etc.).
+
+    When it does NOT exist, a service row gets nothing here. It used
+    to get the aggregate, which is the cross-platform total and is
+    not a reading for this service: Top Gun: Maverick has no Netflix
+    block at all and was rendering 292,564 on the Netflix rail,
+    borrowed from an item-level total. That is the render-time
+    version of the defect the stored-side provenance pass fixed at
+    b4301787, and that pass could not have caught it because it
+    audits what is stored.
+
+    The rule is the same either way. A row on service X shows a
+    reading researched for X, or its own last reading walked forward,
+    or nothing. The walk-forward is the coverage pass's job and it
+    runs after this, so a row left blank here is picked up there with
+    its own history rather than with someone else's number.
+
+    One narrow exception survives: an entry with NO `by_platform` key
+    at all predates the per-platform schema, and blanking those would
+    darken historic reads wholesale rather than correct them. Those
+    stamp the aggregate and say so in `est_basis`, so the provenance
+    audit can still see them for what they are.
 
     `kind_hint` fills in `unit_label` when the entry didn't carry one
     (per-platform blocks don't - the frontend derives it from kind
@@ -4256,11 +4292,18 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # baseline behind the chip is inspectable.
             'prev_days_covered':   per.get('prev_days_covered'),
         }
+    elif platform_key and isinstance(entry.get('by_platform'), dict):
+        # A service row with no reading of its own for this service.
+        # It gets nothing rather than the aggregate; the coverage
+        # pass will give it its own last reading walked forward.
+        global _AGG_WITHHELD
+        _AGG_WITHHELD += 1
+        return
     else:
-        # Fallback to aggregate. This still preserves old-snapshot
-        # rendering while the daily cron picks up the new schema. The
-        # aggregate is the cross-platform total, so it names no
-        # service.
+        # No per-platform schema on this entry at all, so there is no
+        # service-scoped number to withhold in favour of. Pre-schema
+        # historic snapshots only. Marked so the provenance audit can
+        # see what it is.
         out = {k: entry.get(k) for k in _STREAM_FIELDS
                 if entry.get(k) is not None}
         out['unit_label'] = _canonical_unit_label(kind_hint, '',
@@ -12623,6 +12666,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # before the cap pass so a corrected value is still held to its own
     # service's ceiling, and before the rank pass so the rail is
     # ordered on the numbers it ends up showing.
+    if _AGG_WITHHELD:
+        logger.info(
+            "service provenance: %d row(s) had no reading for their own "
+            "service and were left for the coverage pass rather than "
+            "given the cross-platform total", _AGG_WITHHELD)
+
     try:
         _enforce_service_provenance(payload['cards'],
                                      stream_estimates_snap)

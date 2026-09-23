@@ -396,6 +396,16 @@ def _cp_normalize(text: str) -> str:
     s = text.lower().lstrip('#').strip()
     s = re.sub(r'[^\w\s]+', ' ', s)
     tokens = [t for t in s.split() if t and t not in _STOPWORDS]
+    if not tokens:
+        # A title made entirely of stopwords reduces to nothing, and
+        # every such title then collides on the same empty key and
+        # they overwrite each other in the estimates store. Netflix's
+        # own #2 today is "Best of the Best", which is exactly that
+        # shape. Keep the stripped words when removing them would
+        # leave nothing: the point of dropping stopwords is to make
+        # two spellings of one title agree, and there is no agreement
+        # to be had with an empty string.
+        tokens = [t for t in s.split() if t]
     return ' '.join(tokens)
 
 
