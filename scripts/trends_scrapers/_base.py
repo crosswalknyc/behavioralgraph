@@ -72,12 +72,26 @@ S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_LATEST_PREFIX = 'trends_iq_snapshots/latest/'
 S3_DATED_PREFIX  = 'trends_iq_snapshots/{date}/'
 S3_COOKIES_PREFIX = 'trends_iq_cookies/'
+# Full signed-in sessions (cookies plus localStorage plus IndexedDB),
+# written by donate_storage_state.py. Separate prefix from the cookie
+# donations because the contents are more sensitive and the lifetime
+# is different: see load_donated_storage_state below.
+S3_STORAGE_STATE_PREFIX = 'trends_iq_storage_state/'
 
 # Donated cookies older than this are ignored - most retailer/session
 # cookies expire in 30-90 days but the anti-bot session tokens (Akamai
 # _abck, DataDome datadome, PerimeterX _px) rotate faster, and stale
 # ones look more suspicious than none at all. 48h is the sweet spot.
 DEFAULT_COOKIE_MAX_AGE_H = 48
+
+# A storage state is a real streaming session, not an anti-bot token.
+# Those refresh tokens are good for weeks, and the thing that ends one
+# is a sign-out or a password change, not the clock. Expiring them at
+# 48h would send an operator to re-authorize a session that still
+# works. The honest expiry signal is the content check in
+# `_auth_guard`, which asks the platform rather than the timestamp,
+# so this ceiling is only a backstop against a truly ancient donation.
+DEFAULT_STORAGE_STATE_MAX_AGE_H = 24 * 30
 
 DEFAULT_HTTP_TIMEOUT_S = 20
 DEFAULT_RETRY_COUNT    = 3
@@ -398,6 +412,96 @@ def cookie_donation_status(domain: str) -> dict:
         'donated_at': payload.get('donated_at'),
         'donor_host': payload.get('donor_host'),
         'fresh':      fresh,
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Donated storage state (cookies + localStorage + IndexedDB)
+# ────────────────────────────────────────────────────────────────────────────
+# A cookie jar is enough for a retailer. It is not enough for a
+# streaming SPA, which keeps its access and refresh tokens in
+# IndexedDB. Restoring one of these into `browser.new_context(
+# storage_state=...)` is what makes a scraper genuinely signed in
+# rather than a visitor reading the marketing site.
+#
+# This is additive. `load_donated_cookies_playwright` still works and
+# is still the right call for every source where cookie donation
+# already succeeds.
+_STORAGE_STATE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _load_storage_state_payload(domain: str) -> Optional[dict]:
+    """Read the raw storage-state donation for `domain` from S3.
+
+    Cached per process, same as the cookie path, so a scraper that
+    renders several pages pays one S3 read.
+    """
+    cached = _STORAGE_STATE_CACHE.get(domain)
+    if cached is not None:
+        return cached[1] or None
+    payload = None
+    try:
+        s3 = _s3_client()
+        key = f'{S3_STORAGE_STATE_PREFIX}{domain}.json'
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception as e:
+        logger.debug("no storage-state donation for %s: %s", domain, e)
+    _STORAGE_STATE_CACHE[domain] = (time.time(), payload or {})
+    return payload
+
+
+def load_donated_storage_state(
+        domain: str, *,
+        max_age_hours: float = DEFAULT_STORAGE_STATE_MAX_AGE_H
+) -> Optional[dict]:
+    """Return a Playwright storage-state dict for `domain`, or None.
+
+    Pass the result straight to `browser.new_context(storage_state=...)`.
+    Returns None when nothing was donated, when the donation is past
+    the backstop age, or when the read fails, so callers can fall back
+    to cookie-only injection without a guard.
+
+    Never logs a value from the state. The log line reports counts via
+    `_auth_guard.describe_storage_state`.
+    """
+    payload = _load_storage_state_payload(domain)
+    if not payload:
+        return None
+    age = _cookie_age_hours(payload)
+    if age is not None and age > max_age_hours:
+        logger.info("donated session for %s is %.0fh old (>%.0fh) - ignoring",
+                    domain, age, max_age_hours)
+        return None
+    state = payload.get('storage_state')
+    if not isinstance(state, dict):
+        return None
+    if not (state.get('cookies') or state.get('origins')):
+        return None
+    return state
+
+
+def storage_state_status(domain: str) -> dict:
+    """Freshness and shape of the storage-state donation for `domain`.
+
+    Value-free by construction: the `summary` field carries counts
+    only, because a storage state can hold access and refresh tokens
+    and none of them belong in a log or a status table.
+    """
+    payload = _load_storage_state_payload(domain)
+    if not payload:
+        return {'domain': domain, 'donated': False}
+    age_h = _cookie_age_hours(payload)
+    return {
+        'domain':     domain,
+        'donated':    True,
+        'age_hours':  round(age_h, 1) if age_h is not None else None,
+        'donated_at': payload.get('donated_at'),
+        'donor_host': payload.get('donor_host'),
+        'verdict':    payload.get('verdict'),
+        'summary':    payload.get('summary') or {},
+        'fresh':      age_h is not None
+                      and age_h <= DEFAULT_STORAGE_STATE_MAX_AGE_H,
     }
 
 

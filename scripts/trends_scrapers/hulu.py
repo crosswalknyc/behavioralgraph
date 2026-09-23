@@ -242,7 +242,8 @@ def fetch() -> dict[str, Any]:
                              wait_selectors=_HULU_HYDRATE_SELECTORS,
                              wait_ms=6000,
                              scroll_ms=2500,
-                             hydration_wait_ms=15000)
+                             hydration_wait_ms=15000,
+                             assert_signed_in='hulu.com')
 
     # Bucket parsed items by kind (Film vs TV) so we can guarantee film
     # representation in the final 20. Previously we appended every rail

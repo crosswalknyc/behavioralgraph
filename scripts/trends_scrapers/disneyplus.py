@@ -173,16 +173,85 @@ def _extract_title_from_node(node: dict) -> str | None:
     return None
 
 
+# Signed-in Disney+ is client-side rendered and ships no
+# `__NEXT_DATA__` at all, so the parser below finds nothing on it.
+#
+# That is not a regression, it is the shape of the page we were never
+# reaching. The logged-out browse page is server-rendered and carries
+# the stitchDocument blob; the real one hydrates its rails in the
+# browser. Measured 2026-09-23: a signed-in `/browse/disney` is 664 KB
+# with no `__NEXT_DATA__` and 117 tiles in the DOM, every one of them
+# this shape:
+#
+#   <a data-item-id="<uuid>" data-testid="set-item"
+#      aria-label="The Wonderful Autumn of Mickey Mouse Disney+ Original
+#                  Select for details on this title."
+#      href="/browse/entity-<uuid>">
+#
+# The entity UUID is the stable identity and the aria-label is the
+# title plus a fixed screen-reader suffix.
+_DPLUS_TILE_RE = re.compile(
+    r'<a\s[^>]*?data-testid="set-item"[^>]*?aria-label="([^"]{2,300})"'
+    r'[^>]*?href="(/browse/entity-[0-9a-f\-]{8,})"',
+    re.IGNORECASE | re.DOTALL,
+)
+# The screen-reader tail and the badge Disney+ appends inside the same
+# label. Removed so the title is the title.
+_DPLUS_ARIA_NOISE = re.compile(
+    r'\s*(?:select for (?:details|more information)[^.]*\.?'
+    r'|disney\+\s+originals?'
+    r'|(?:new|new season|new episode|coming soon)\s+badge'
+    r'|\bbadge\b)\s*',
+    re.IGNORECASE,
+)
+
+
+def _clean_dplus_aria(raw: str) -> str:
+    return re.sub(r'\s+', ' ', _DPLUS_ARIA_NOISE.sub(' ', unescape(raw))).strip()
+
+
+def _extract_disneyplus_dom(html: str, limit: int = 120) -> list[dict]:
+    """Pull tiles out of the hydrated (signed-in) browse DOM.
+
+    Deduped on the entity UUID rather than the title, because the same
+    title legitimately appears on several rails of one page and the
+    first position is the one worth keeping.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in _DPLUS_TILE_RE.finditer(html):
+        title = _clean_dplus_aria(m.group(1))
+        path = m.group(2)
+        uuid = path.rsplit('-', 1)[-1].lower()
+        if uuid in seen or not _looks_like_title(title):
+            continue
+        seen.add(uuid)
+        out.append({
+            'rank':             len(out) + 1,
+            'title':            title,
+            'url':              f'https://www.disneyplus.com{path}',
+            'category_display': '',
+            'collection':       '',
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _extract_disneyplus(html: str) -> list[dict]:
     """Walk stitchDocument.mainContent and pull every content-item title.
     Rank is preserved in-order (Disney+ arranges rails by editorial
-    curation, so the first N are the surfaced/promoted rails)."""
+    curation, so the first N are the surfaced/promoted rails).
+
+    Falls through to the hydrated-DOM reader when the page carries no
+    `__NEXT_DATA__`, which is every signed-in page.
+    """
     if _BAMGRID_ERROR_MARKER in html and len(html) < 200_000:
         # Datacenter block - no point parsing the shell.
         return []
     m = _NEXT_DATA_RE.search(html)
     if not m:
-        return []
+        return _extract_disneyplus_dom(html)
     try:
         obj = json.loads(m.group(1))
     except json.JSONDecodeError:
@@ -301,7 +370,8 @@ def fetch() -> dict[str, Any]:
                              cookie_domain='disneyplus.com',
                              wait_ms=4000,
                              scroll_ms=2500,
-                             hydration_wait_ms=12000)
+                             hydration_wait_ms=12000,
+                             assert_signed_in='disneyplus.com')
 
     # Datacenter-block detection: if every page came back as the ~76KB
     # error shell, retry via plain HTTP (sometimes shorter path works)

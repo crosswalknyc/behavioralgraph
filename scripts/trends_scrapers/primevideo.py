@@ -205,7 +205,8 @@ def fetch() -> dict[str, Any]:
                              homepage='https://www.amazon.com/',
                              cookie_domain='amazon.com',
                              wait_selectors=_PRIME_HYDRATE_SELECTORS,
-                             hydration_wait_ms=10000)
+                             hydration_wait_ms=10000,
+                             assert_signed_in='amazon.com')
 
     all_items: list[dict] = []
     seen: set[str] = set()

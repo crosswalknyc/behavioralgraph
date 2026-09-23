@@ -4,6 +4,7 @@
   "files": [
     "__init__.py",
     "_amazon_music.py",
+    "_auth_guard.py",
     "_base.py",
     "_bedrock_scorer.py",
     "_capture_html.py",
@@ -39,6 +40,7 @@
     "disambiguate_held_titles.py",
     "disneyplus.py",
     "donate_cookies.py",
+    "donate_storage_state.py",
     "espnplus.py",
     "fast_channel_genres.py",
     "fast_channels.py",
@@ -96,6 +98,7 @@
     "test_derived_rails.py",
     "test_fast_free_tier_guards.py",
     "test_hydration_diagnosis.py",
+    "test_storage_state_auth_guard.py",
     "test_streaming_weeks_index.py",
     "tiktok.py",
     "trends_auto_login.py",

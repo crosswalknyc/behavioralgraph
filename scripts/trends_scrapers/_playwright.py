@@ -122,7 +122,9 @@ def render_pages(pages: list[tuple[str, str]], *,
                  timeout_ms: int = 45000,
                  wait_selectors: Optional[list[str]] = None,
                  hydration_wait_ms: int = 10000,
-                 use_proxy: bool = False) -> list[tuple[str, str]]:
+                 use_proxy: bool = False,
+                 assert_signed_in: Optional[str] = None
+                 ) -> list[tuple[str, str]]:
     """Render each `(label, url)` and return list of `(label, html)`.
 
     Pass `cookie_domain='target.com'` (etc.) to auto-inject the latest
@@ -134,6 +136,19 @@ def render_pages(pages: list[tuple[str, str]], *,
     grids like Target's have time to hydrate). If none appears within
     the budget we still fall through to the fixed `wait_ms` timer, so
     servers that ship products directly in SSR HTML aren't slowed down.
+
+    Pass `assert_signed_in='hbomax.com'` on a session-gated source.
+    Every rendered page then has to PROVE it is an authenticated US
+    page before it is handed back, and the first one that cannot
+    raises out of here rather than returning.
+
+    That is deliberately harsher than the rest of this function, which
+    logs and moves on. These platforms do not fail by erroring: HBO
+    Max answers HTTP 200 with its full marketing site, plan cards and
+    promotional artwork included. It parses. A scraper that returns it
+    publishes a plan picker as a viewership chart, and the rail looks
+    populated and plausible while being wrong. Raising is what makes
+    that impossible. See `_auth_guard`.
 
     Pass `use_proxy=True` to route every request through the IPRoyal
     residential proxy (config via IPROYAL_PROXY_* env vars). Silently
@@ -168,17 +183,56 @@ def render_pages(pages: list[tuple[str, str]], *,
             logger.warning("playwright launch failed: %s", e)
             return []
 
-        ctx = browser.new_context(
-            user_agent=UA,
-            viewport={'width': 1440, 'height': 900},
-            locale='en-US',
-            timezone_id='America/New_York',
-            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
-        )
+        ctx_kwargs = {
+            'user_agent': UA,
+            'viewport': {'width': 1440, 'height': 900},
+            'locale': 'en-US',
+            'timezone_id': 'America/New_York',
+            'extra_http_headers': {'Accept-Language': 'en-US,en;q=0.9'},
+        }
+
+        # Prefer a donated STORAGE STATE over a donated cookie jar.
+        #
+        # A cookie jar is the whole session for a retailer. For a
+        # streaming SPA it is not: those keep their access and refresh
+        # tokens in IndexedDB, so a cookie-only injection renders the
+        # logged-out marketing page rather than the app. A storage
+        # state carries cookies, localStorage and IndexedDB together
+        # and has to be handed to the context at construction, which
+        # is why this runs before new_context rather than after.
+        #
+        # Additive: when no storage state has been donated for this
+        # domain we fall through to the cookie path below exactly as
+        # before, which is still correct for every retail and social
+        # source where cookie donation already works.
+        donated_state = None
+        if cookie_domain:
+            try:
+                from ._base import load_donated_storage_state, storage_state_status
+                donated_state = load_donated_storage_state(cookie_domain)
+                if donated_state:
+                    from ._auth_guard import describe_storage_state
+                    st = storage_state_status(cookie_domain)
+                    ctx_kwargs['storage_state'] = donated_state
+                    logger.info("playwright[%s]: restored donated session "
+                                "(%s, age=%.0fh)",
+                                cookie_domain,
+                                describe_storage_state(donated_state),
+                                st.get('age_hours') or -1)
+            except Exception as e:
+                logger.info("storage-state restore for %s failed: %s",
+                            cookie_domain, e)
+                donated_state = None
+
+        ctx = browser.new_context(**ctx_kwargs)
 
         # Inject donated cookies BEFORE any navigation so the very first
-        # request lands with the operator's real session state.
-        if cookie_domain:
+        # request lands with the operator's real session state. Skipped
+        # when a storage state was restored: that state already carries
+        # its own cookies, and layering a second session's jar for the
+        # same domain on top is how you get a half-authenticated
+        # context that fails in a new way.
+        if cookie_domain and not donated_state:
             try:
                 from ._base import load_donated_cookies_playwright, cookie_donation_status
                 donated = load_donated_cookies_playwright(cookie_domain)
@@ -198,6 +252,17 @@ def render_pages(pages: list[tuple[str, str]], *,
 
         page = ctx.new_page()
         _try_stealth(page)
+
+        # Pre-flight identity check, once, on the platform's app home.
+        # Everything after this point is only worth rendering if this
+        # passes, so it runs before the homepage warm-up and raises
+        # straight out of render_pages.
+        if assert_signed_in:
+            from ._auth_guard import prove_signed_in
+            evidence = prove_signed_in(page, assert_signed_in,
+                                       source=f'{assert_signed_in} pre-flight')
+            logger.info("playwright[%s]: session proven (%s)",
+                        assert_signed_in, evidence)
 
         if homepage:
             try:
@@ -233,12 +298,31 @@ def render_pages(pages: list[tuple[str, str]], *,
                 page.mouse.wheel(0, 2400)
                 page.wait_for_timeout(scroll_ms)
                 html = page.content()
+
+                # Backstop for a session that dies mid-run. A browse
+                # page cannot prove a session, so this only refuses a
+                # page that IS a wall. Raising here rather than below
+                # is the point: the auth errors must escape the
+                # handler that swallows ordinary render failures.
+                if assert_signed_in:
+                    from ._auth_guard import refuse_if_signed_out
+                    refuse_if_signed_out(page, assert_signed_in,
+                                         source=f'{assert_signed_in} {label}')
+
                 if html and len(html) > 5000:
                     results.append((label, html))
                 else:
                     logger.info("playwright %s: got %d-byte body, skipping",
                                  label, len(html or ''))
             except Exception as e:
+                from ._auth_guard import AuthWallError, GeoMismatchError
+                if isinstance(e, (AuthWallError, GeoMismatchError)):
+                    try:
+                        ctx.close()
+                        browser.close()
+                    except Exception:
+                        pass
+                    raise
                 logger.warning("playwright %s (%s): %s", label, url, e)
 
         try:

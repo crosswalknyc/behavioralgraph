@@ -30,6 +30,26 @@ Usage
     # Dry-run (write to /tmp instead of S3)
     python3 scripts/trends_scrapers/donate_cookies.py --dry-run
 
+Streaming platforms need more than cookies
+------------------------------------------
+Everything above copies Chrome's cookie jar, which is the whole
+session for a retailer or a social site. A streaming SPA keeps its
+access and refresh tokens in IndexedDB instead, so a cookie-only
+donation renders the logged-out marketing page. These three flags
+donate the FULL session (cookies, localStorage and IndexedDB) from a
+dedicated Chrome profile, and no password is ever typed or stored:
+
+    # Sign in once. Opens a Chrome window, one tab per platform.
+    python3 scripts/trends_scrapers/donate_cookies.py --login
+
+    # Re-donate from that saved profile, no interaction. Daily job.
+    python3 scripts/trends_scrapers/donate_cookies.py --storage-state
+
+    # Which platforms are actually signed in right now?
+    python3 scripts/trends_scrapers/donate_cookies.py --verify
+
+See donate_storage_state.py for the engine behind those three.
+
 After a successful donation the script automatically refreshes the
 data for whatever the donated domain feeds: residential-only scrapers
 re-run right here in this terminal, Hetzner-run sources are kicked off
@@ -183,6 +203,29 @@ def _load_refresh_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _load_storage_state_module():
+    """Import donate_storage_state whether this script was launched as
+    a module or as a plain file.
+
+    The documented invocation is a bare path
+    (`python3 scripts/trends_scrapers/donate_cookies.py`), which leaves
+    this file outside its package and breaks relative imports. Same
+    problem `_load_refresh_module` solves, but donate_storage_state has
+    relative imports of its own, so it has to be loaded as part of the
+    package rather than as a lone file.
+    """
+    try:
+        from . import donate_storage_state as dss
+        return dss
+    except ImportError:
+        import importlib
+        repo_root = str(Path(__file__).resolve().parents[2])
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        return importlib.import_module(
+            'scripts.trends_scrapers.donate_storage_state')
 
 
 def _auto_refresh(donated_domains: list[str]) -> None:
@@ -378,6 +421,24 @@ def main() -> int:
                      help='Skip the automatic post-donation data refresh '
                           '(used by local_residential_run, which runs the '
                           'full scraper batch itself right after donating).')
+    # Full-session donation. Cookies alone cannot authenticate a
+    # streaming SPA, which keeps its tokens in IndexedDB, so these
+    # three flags drive donate_storage_state.py. Same CLI so there is
+    # one command to remember rather than two tools to choose between.
+    ap.add_argument('--login', action='store_true',
+                     help='Open a Chrome window and sign into the streaming '
+                          'platforms once. Captures the whole session '
+                          '(cookies, localStorage, IndexedDB), not just '
+                          'cookies. No password is typed or stored.')
+    ap.add_argument('--storage-state', action='store_true',
+                     help='Re-donate the streaming sessions from the saved '
+                          'sign-in profile with no interaction. This is what '
+                          'the daily run uses.')
+    ap.add_argument('--verify', action='store_true',
+                     help='Report, per platform, whether the donated session '
+                          'still renders a signed-in page.')
+    ap.add_argument('--use-proxy', action='store_true',
+                     help='With --verify: route through the residential proxy.')
     ap.add_argument('--auto-login', action='store_true',
                      help='Sign in automatically using credentials stored in '
                           'the macOS Keychain and donate the resulting '
@@ -388,6 +449,22 @@ def main() -> int:
                           'can finish any 2FA / CAPTCHA once; the persistent '
                           'profile keeps the session afterward.')
     args = ap.parse_args()
+
+    # Full-session paths. Delegated in-process (not over a subprocess)
+    # so a bad flag surfaces here rather than as an opaque exit code.
+    if args.login or args.storage_state or args.verify:
+        dss = _load_storage_state_module()
+        domains = [d.strip().lower() for d in args.domains if d.strip()] \
+            or dss.DEFAULT_STORAGE_DOMAINS
+        if args.verify:
+            return dss.run_verify(domains, use_proxy=args.use_proxy)
+        if args.storage_state:
+            return dss.run_recapture(domains, dry_run=args.dry_run)
+        if sys.platform != 'darwin':
+            print('Signing in runs on the operator Mac, which has a real '
+                  'Chrome and a US residential address.')
+            return 3
+        return dss.run_login(domains, dry_run=args.dry_run)
 
     # Auto-login path delegates to the Keychain-backed engine. Run via
     # `-m` so its package-relative imports resolve regardless of whether

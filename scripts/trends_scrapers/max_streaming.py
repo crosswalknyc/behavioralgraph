@@ -203,7 +203,13 @@ def fetch() -> dict[str, Any]:
                              wait_ms=4000,
                              scroll_ms=3000,
                              hydration_wait_ms=12000,
-                             use_proxy=True)
+                             use_proxy=True,
+                             # Logged out, play.hbomax.com bounces to
+                             # the marketing site and serves plan cards
+                             # and promotional artwork at HTTP 200. That
+                             # parses into tiles, so nothing here may be
+                             # published without proving the session.
+                             assert_signed_in='hbomax.com')
 
     all_items: list[dict] = []
     seen: set[str] = set()

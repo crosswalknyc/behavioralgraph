@@ -222,12 +222,47 @@ def _auto_login_refresh() -> int:
     return proc.returncode
 
 
+def _refresh_storage_state() -> int:
+    """Re-donate the FULL signed-in sessions for the streaming
+    platforms, not just their cookies.
+
+    A cookie jar is the whole session for a retailer. For a streaming
+    SPA it is not, because those keep their tokens in IndexedDB, so
+    the cookie donation above leaves Disney+, Hulu, HBO Max and Prime
+    Video rendering the logged-out marketing page. This carries the
+    rest of the session across.
+
+    Best-effort in every direction. A platform that is genuinely
+    signed out is left alone rather than overwritten with a dead
+    session, and the batch continues either way: those scrapers then
+    refuse to publish rather than publishing a plan picker, which is
+    the behaviour we want when nobody has re-authorized yet.
+    """
+    logger.info("refreshing donated streaming sessions ...")
+    cmd = [sys.executable, '-m',
+           'scripts.trends_scrapers.donate_storage_state', '--recapture']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[donate_storage_state stdout] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[donate_storage_state stderr] %s", proc.stderr.strip())
+    if proc.returncode != 0:
+        logger.info("storage-state donation exited %d; continuing with "
+                    "whatever sessions are already donated",
+                    proc.returncode)
+    return proc.returncode
+
+
 def _run_all() -> int:
     """Refresh donated cookies from local Chrome, then run every
     RESIDENTIAL_SCRAPERS entry. Returns 0 if at least one scraper
     succeeded, 1 if all failed."""
     _refresh_cookies()
     _auto_login_refresh()
+    # Last, so it sees the freshest cookies: the streaming sessions are
+    # assembled from the cookie half plus the IndexedDB half.
+    _refresh_storage_state()
     ok_count = 0
     for module_name, label in RESIDENTIAL_SCRAPERS:
         rc = _run_scraper(module_name, label)
