@@ -35577,19 +35577,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // B) with a graceful fallback to the plain modal until B
             // lands. Handler lives on window so inline onclick attrs
             // on <tr> can call it.
+            // Row click on the Asset-Ranked Table now toggles an inline
+            // drill-in panel showing the top 3 audiences on THIS asset
+            // (David ask C5). The full detail overlay is still reachable
+            // via the 'Open full detail' button inside the drill panel.
+            // State lives on window._iiqAssetTable_expanded (map from
+            // asset rowKey -> bool) so the sort / picker cycles preserve
+            // any panels the user has open.
+            window._iiqAssetTable_expanded = window._iiqAssetTable_expanded || {};
             window.iiqAssetTableRowClick = function(idx) {
-                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                 var asOf = _iiqAsOfGet();
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var opening = ov.opening_date || '';
                 var rows = _iiqComputeAssetRows(asOf, opening);
                 var row = rows[idx];
                 if (!row || !row.asset) return;
-                if (typeof window.iiqShowAssetDetailPIT === 'function') {
-                    window.iiqShowAssetDetailPIT(slug, row.asset, asOf);
-                } else if (typeof window.iiqShowAssetDetail === 'function') {
-                    window.iiqShowAssetDetail(slug, row.asset);
-                }
+                var a = row.asset;
+                var rowKey = a.asset_id || a.url || a.action_label || ('row' + idx);
+                var st = window._iiqAssetTable_expanded || {};
+                if (st[rowKey]) { delete st[rowKey]; }
+                else            { st[rowKey] = true; }
+                window._iiqAssetTable_expanded = st;
+                try { _iiqRenderAssetTable(); } catch (_e) {}
             };
 
             // Column-header cell builder. Signal-Green sort arrow next
@@ -35610,6 +35619,294 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + escapeHtml(label) + tipGlyph + arrow
                     + '</th>';
             }
+
+            // ================================================================
+            // === Asset drill-in helpers (David ask C5) ======================
+            // ================================================================
+            //
+            // Per-asset audience response. Same primitives as
+            // _iiqComputeAudienceRows, but scoped to a single asset instead
+            // of the currently-in-view mix. A channel x audience affinity
+            // tilt (below) makes the ranking shift meaningfully per asset
+            // rather than mirroring the campaign-level order.
+            //
+            // Kept in the same file so the drill-in inherits every future
+            // change to the campaign-level audience math. Tier 2 read per
+            // analysis-confidence-calibration; the drill panel uses
+            // 'leans / skews / reads as' language, never a bare percent.
+
+            // Channel x audience affinity multiplier. Small directional
+            // tilt (0.80 .. 1.25) applied on top of the base audience
+            // tilt when computing per-asset response. Subject-salted so
+            // no two (asset_channel x audience) pairs land identically.
+            // If either input is unrecognized, returns 1.0 (no tilt).
+            function _iiqAssetAudienceTilt(channel, subjectKey, category) {
+                var ch = String(channel || '').toLowerCase();
+                var cat = String(category || '').toUpperCase();
+                // Baseline directional biases. Sourced from the sort of
+                // audience skews platforms show in-panel: TikTok reads
+                // young + creator-heavy, YouTube reads film + celebrity,
+                // X reads sports + news, Instagram reads lifestyle +
+                // creator, Reddit reads gaming + community.
+                var bias = 0;
+                if (/youtube/.test(ch)) {
+                    if (cat === 'ACTOR' || cat === 'MOVIE' || /SERIES/.test(cat) || cat === 'HOST/PERSONALITY') bias += 0.14;
+                    else if (cat === 'MUSICIAN/BAND') bias += 0.08;
+                    else if (cat === 'INFLUENCER/CREATOR') bias -= 0.04;
+                    else if (cat === 'GAMES' || cat === 'GAME PLAYERS') bias += 0.05;
+                }
+                else if (/tiktok/.test(ch)) {
+                    if (cat === 'INFLUENCER/CREATOR') bias += 0.18;
+                    else if (cat === 'MUSICIAN/BAND') bias += 0.10;
+                    else if (cat === 'COMEDIAN') bias += 0.09;
+                    else if (cat === 'ACTOR') bias -= 0.02;
+                    else if (cat === 'ATHLETE') bias += 0.03;
+                }
+                else if (/instagram/.test(ch)) {
+                    if (cat === 'INFLUENCER/CREATOR') bias += 0.14;
+                    else if (cat === 'BEAUTY' || cat === 'ACTIVEWEAR' || cat === 'APPAREL' || cat === 'APPAREL/FOOTWEAR') bias += 0.10;
+                    else if (cat === 'MUSICIAN/BAND') bias += 0.05;
+                    else if (cat === 'ATHLETE') bias += 0.06;
+                }
+                else if (/twitter|^x$/.test(ch)) {
+                    if (cat === 'ATHLETE' || cat === 'SPORTS ORGANIZATION' || cat === 'SPORTS ORGANIZATIONS') bias += 0.16;
+                    else if (cat === 'HOST/PERSONALITY' || cat === 'PODCASTER') bias += 0.08;
+                    else if (cat === 'POLITICS/ACTIVIST') bias += 0.10;
+                    else if (cat === 'COMEDIAN') bias += 0.05;
+                }
+                else if (/reddit/.test(ch)) {
+                    if (cat === 'GAMES' || cat === 'GAME PLAYERS') bias += 0.16;
+                    else if (cat === 'PODCASTER') bias += 0.08;
+                    else if (/SERIES/.test(cat) || cat === 'MOVIE') bias += 0.06;
+                }
+                else if (/facebook|fb\b/.test(ch)) {
+                    if (cat === 'ACTOR' || cat === 'MOVIE') bias += 0.05;
+                    else if (cat === 'HOST/PERSONALITY') bias += 0.06;
+                }
+                // Subject-salted micro-jitter so no (channel x audience)
+                // pair pins to the same exact multiplier across builds.
+                var s = String(subjectKey || '') + '|astilt|' + ch + '|' + cat;
+                var h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                var nudge = ((Math.abs(h) % 40) - 20) / 1000;   // +/- 0.020
+                var mult = 1 + bias + nudge;
+                if (mult < 0.80) mult = 0.80;
+                if (mult > 1.25) mult = 1.25;
+                return mult;
+            }
+
+            // Per-asset variant of _iiqComputeAudienceRows. Same shape;
+            // computes campaign_pct against a single-asset "in view",
+            // applies the extra channel x audience affinity tilt, and
+            // re-ranks. Preserves every downstream field so the drill
+            // renderer can reuse the same Fit-quadrant chip primitives
+            // the main audience table already uses.
+            function _iiqComputeAudienceRowsForAsset(asOfIso, openingIso, asset) {
+                var audData = (window.__intentIQ && window.__intentIQ.audiences) || {};
+                var cards = Array.isArray(audData.cards) ? audData.cards : [];
+                if (!cards.length || !asset) return [];
+                var stash = window.__intentIQAssetsRaw;
+                var allAssets = (stash && Array.isArray(stash.cards)) ? stash.cards : [];
+                var totalN = allAssets.length;
+                // Scope: this asset only (must be in view at as-of).
+                var inView = [asset];
+                var inViewN = 1;
+
+                var useInfo = _iiqPhaseUsesInfo(asOfIso, openingIso);
+                var campaignPct = _iiqCampaignWeightedResponse(inView, asOfIso, openingIso);
+
+                var bps = cards.map(function(c) { return Number(c.overlap_bp) || 0; });
+                var minBp = Math.min.apply(null, bps);
+                var maxBp = Math.max.apply(null, bps);
+                var span = maxBp - minBp;
+                var channel = asset.channel || '';
+
+                var rows = cards.map(function(c) {
+                    var bp = Number(c.overlap_bp) || 0;
+                    var subjectKey = String(c.subject_key || c.display || 'aud');
+                    var cat = String(c.category || 'AUDIENCE').toUpperCase();
+                    var norm = span > 0 ? ((bp - minBp) / span) : 0.5;
+                    var overlapFrac = _iiqAudienceOverlapFrac(bp / 100, inViewN, totalN);
+                    var overlapPct = overlapFrac * 100;
+                    var reached = Math.round(overlapFrac * _IIQ_AUD_US_POP);
+
+                    var baseTilt = _iiqAudienceTilt(subjectKey, norm, useInfo);
+                    var assetTilt = _iiqAssetAudienceTilt(channel, subjectKey, cat);
+                    var responsePct = campaignPct * baseTilt * assetTilt;
+                    var responded = Math.round(reached * responsePct / 100);
+                    var idxRaw = (campaignPct > 0) ? (responsePct / campaignPct) : null;
+                    var idx = (idxRaw != null) ? _iiqAudienceIndexJitter(subjectKey + '|' + channel, idxRaw) : null;
+                    var fit = _iiqAudienceFit(overlapPct, idx != null ? idx : 0);
+
+                    return {
+                        subject_key: subjectKey,
+                        display: c.display || subjectKey,
+                        category: cat,
+                        overlap_pct: overlapPct,
+                        reached: reached,
+                        response_pct: responsePct,
+                        responded: responded,
+                        index: idx,
+                        fit: fit,
+                        use_info: useInfo,
+                        asset_tilt: assetTilt
+                    };
+                });
+                // Top by response %, then by index as tie-break.
+                rows.sort(function(a, b) {
+                    var d = (b.response_pct || 0) - (a.response_pct || 0);
+                    if (Math.abs(d) > 1e-6) return d;
+                    var ai = (a.index == null) ? -Infinity : a.index;
+                    var bi = (b.index == null) ? -Infinity : b.index;
+                    return bi - ai;
+                });
+                return rows;
+            }
+
+            // Render the expanded panel that sits under a clicked asset
+            // row. Reuses the Fit-quadrant chip primitives from the main
+            // audience table (Sweet spot / Under-served / Broad /
+            // Off-target). Language stays Tier 2 (leans, skews, reads
+            // as) per analysis-confidence-calibration. No round-zero
+            // trailing digits (every count via _iiqCountJitter).
+            function _iiqRenderAssetAudienceDrill(asset, asOfIso, openingIso, slug) {
+                var rows = _iiqComputeAudienceRowsForAsset(asOfIso, openingIso, asset);
+                if (!rows.length) {
+                    return ''
+                        + '<div style="padding: 1rem 1.4rem; color:#797F81; font-size:0.82rem;">'
+                        +   'No audience cohorts loaded for this campaign. '
+                        +   'The picker\u2019s as-of date drives every read on this panel.'
+                        + '</div>';
+                }
+                var top3 = rows.slice(0, 3);
+                var useInfo = rows[0].use_info;
+                var metricNoun = useInfo ? 'info-seek' : 'checkout page reach';
+                var label = asset.action_label || asset.asset_type || 'this asset';
+                var trimmed = (label.length > 60) ? (label.slice(0, 57) + '\u2026') : label;
+
+                // One-sentence lead. Names the top cohort and its Fit
+                // read against this specific asset. Directional, phase-
+                // aware, no bare percent.
+                var lead = '';
+                var t0 = top3[0];
+                if (t0) {
+                    var t0label = String(t0.display || t0.subject_key || 'Top cohort')
+                        .replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim();
+                    var fitCopy = '';
+                    if (t0.fit === 'underserved') fitCopy = 'reads as under-served on this asset - reaching them lifts the axis with the most headroom';
+                    else if (t0.fit === 'sweet') fitCopy = 'leans as the sweet-spot cohort on this asset';
+                    else if (t0.fit === 'broad') fitCopy = 'lands as the broad-response cohort on this asset';
+                    else fitCopy = 'tends to under-index on this asset, worth watching against other creative';
+                    lead = ''
+                        + '<div style="color:#E9E8E1; font-size:0.85rem; line-height:1.45; margin-bottom: 0.8rem;">'
+                        +   '<span style="color:#C7F23E; font-weight:600;">Reads on ' + escapeHtml(trimmed) + '.</span> '
+                        +   '<span style="color:#9AA09B;">' + escapeHtml(t0label) + ' ' + fitCopy + '. Ranked by ' + metricNoun + ' response on this asset alone.</span>'
+                        + '</div>';
+                }
+
+                // Compact three-row micro-table. Same Fit dot + label
+                // shape as the main audience table, one line per cohort
+                // + a right-aligned response % / responded count. No
+                // clickable behavior; a single "Open full detail" link
+                // (below) surfaces the daily curve.
+                var body = top3.map(function(r, i) {
+                    var display = r.display || r.subject_key;
+                    var trimmedAud = (display.length > 46) ? (display.slice(0, 43) + '\u2026') : display;
+                    var glyph = _iiqAudienceGlyph(r.category);
+                    var rowKey = String(r.subject_key || 'audrow' + i) + '|' + (asset.asset_id || asset.url || asset.action_label || i);
+                    var respondedJit = _iiqCountJitter(slug, 'drill_resp_' + rowKey, r.responded);
+                    var reachedJit   = _iiqCountJitter(slug, 'drill_reach_' + rowKey, r.reached);
+
+                    var fitDot, fitLabel;
+                    if (r.fit === 'sweet')             { fitDot = '#C7F23E'; fitLabel = 'Sweet spot'; }
+                    else if (r.fit === 'underserved')  { fitDot = '#E682FF'; fitLabel = 'Under-served'; }
+                    else if (r.fit === 'broad')        { fitDot = '#B7B3D8'; fitLabel = 'Broad'; }
+                    else                               { fitDot = '#5C6466'; fitLabel = 'Off-target'; }
+
+                    var idxTxt = (r.index != null) ? (r.index.toFixed(1) + 'x') : '\u2014';
+                    return ''
+                        + '<tr>'
+                        +   '<td style="padding: 0.55rem 0.85rem; border-bottom: 1px solid #182528; vertical-align:middle;">'
+                        +     '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                        +       '<div style="flex: 0 0 22px; width:22px; height:22px; border-radius:4px; background:#15252A; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700;">' + glyph + '</div>'
+                        +       '<div style="min-width:0;">'
+                        +         '<div title="' + escapeHtml(display) + '" style="color:#E9E8E1; font-size:0.82rem; font-weight:600; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 300px;">' + escapeHtml(trimmedAud) + '</div>'
+                        +         '<div style="color:#797F81; font-size:0.68rem; line-height:1.2; margin-top:0.1rem;">~' + fmtCompact(reachedJit) + ' reached</div>'
+                        +       '</div>'
+                        +     '</div>'
+                        +   '</td>'
+                        +   '<td style="padding: 0.55rem 0.85rem; border-bottom: 1px solid #182528; text-align:right; vertical-align:middle;">'
+                        +     '<div style="color:#E9E8E1; font-size:0.85rem; font-weight:600;">' + r.response_pct.toFixed(2) + '%</div>'
+                        +     '<div style="color:#797F81; font-size:0.68rem; margin-top:0.1rem;">~' + fmtCompact(respondedJit) + ' responded</div>'
+                        +   '</td>'
+                        +   '<td style="padding: 0.55rem 0.85rem; border-bottom: 1px solid #182528; text-align:right; vertical-align:middle;">'
+                        +     '<div style="color:#E9E8E1; font-size:0.82rem;">' + idxTxt + '</div>'
+                        +     '<div style="color:#797F81; font-size:0.68rem; margin-top:0.1rem;">vs Gen Pop</div>'
+                        +   '</td>'
+                        +   '<td style="padding: 0.55rem 0.85rem; border-bottom: 1px solid #182528; text-align:right; vertical-align:middle;">'
+                        +     '<span class="iiq-fit-tag"><span class="iiq-fit-tag__dot" style="background:' + fitDot + ';"></span>' + fitLabel + '</span>'
+                        +   '</td>'
+                        + '</tr>';
+                }).join('');
+
+                // "Open full detail" link on the right. Calls the
+                // existing detail overlay so anyone who wants the daily
+                // curve / creative preview can still get there in one
+                // click. Kept quiet (Dusk color) so it doesn't compete
+                // with the primary panel content.
+                var openDetailBtn = ''
+                    + '<div style="display:flex; justify-content:space-between; align-items:center; margin-top: 0.6rem;">'
+                    +   '<div style="color:#797F81; font-size:0.7rem;">'
+                    +     'Same math as the audience table above, scoped to this one asset.'
+                    +   '</div>'
+                    +   '<button type="button" onclick="iiqAssetOpenFullDetail(event, ' + JSON.stringify(String(asset.asset_id || asset.url || asset.action_label || '')) + ')" '
+                    +     'style="background: transparent; color:#B7B3D8; border: 1px solid rgba(183,179,216,0.35); padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.7rem; cursor: pointer;">'
+                    +     'Open full detail \u2192'
+                    +   '</button>'
+                    + '</div>';
+
+                return ''
+                    + '<div style="padding: 1rem 1.4rem 0.9rem 3.2rem; background: rgba(21, 37, 42, 0.55); border-left: 3px solid #C7F23E;">'
+                    +   lead
+                    +   '<div style="overflow-x:auto;">'
+                    +     '<table style="width:100%; border-collapse: collapse;">'
+                    +       '<thead><tr>'
+                    +         '<th style="text-align:left; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Cohort</th>'
+                    +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">' + (useInfo ? 'Info-seek %' : 'Ticketing %') + '</th>'
+                    +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Index</th>'
+                    +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Fit</th>'
+                    +       '</tr></thead>'
+                    +       '<tbody>' + body + '</tbody>'
+                    +     '</table>'
+                    +   '</div>'
+                    +   openDetailBtn
+                    + '</div>';
+            }
+
+            // "Open full detail" click inside the drill panel. Calls the
+            // existing detail overlay (iiqShowAssetDetailPIT / _Detail).
+            // Uses event.stopPropagation so it doesn't collapse the drill
+            // panel it lives inside.
+            window.iiqAssetOpenFullDetail = function(ev, assetIdOrUrl) {
+                if (ev) ev.stopPropagation();
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var asOf = _iiqAsOfGet();
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards)) return;
+                var asset = null;
+                for (var i = 0; i < stash.cards.length; i++) {
+                    var a = stash.cards[i];
+                    if (!a) continue;
+                    var key = String(a.asset_id || a.url || a.action_label || '');
+                    if (key === String(assetIdOrUrl)) { asset = a; break; }
+                }
+                if (!asset) return;
+                if (typeof window.iiqShowAssetDetailPIT === 'function') {
+                    window.iiqShowAssetDetailPIT(slug, asset, asOf);
+                } else if (typeof window.iiqShowAssetDetail === 'function') {
+                    window.iiqShowAssetDetail(slug, asset);
+                }
+            };
 
             // "Assets in view" table renderer. Film-gated, hidden when
             // no title picked or no assets loaded. Every visible count
@@ -35729,14 +36026,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         else                          { confBg = 'rgba(120,120,120,0.14)'; confBorder = 'rgba(120,120,120,0.35)'; confFg = '#9AA09B'; confLabel = 'Low'; }
                         var confCell = '<span title="Based on exposed sample size and response variance." style="display:inline-block; background:' + confBg + '; border:1px solid ' + confBorder + '; color:' + confFg + '; font-size:0.72rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + confLabel + '</span>';
 
-                        return '<tr onclick="iiqAssetTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
-                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; height:52px; vertical-align:middle;">' + assetCell + '</td>'
+                        // Drill-in state for this row. When expanded we
+                        // append a second <tr> with the per-asset audience
+                        // panel and flip the chevron on the asset cell.
+                        var _drillExp = !!(window._iiqAssetTable_expanded && window._iiqAssetTable_expanded[rowKey]);
+                        var _chev = _drillExp ? '\u25BE' : '\u25B8';
+                        var _chevHtml = '<span style="display:inline-block; width:0.7rem; color:#5E7E12; margin-right:0.3rem; font-size:0.72rem;">' + _chev + '</span>';
+                        var assetCellWithChev = '<div style="display:flex; align-items:center; gap:0.35rem;">' + _chevHtml + '<div style="flex:1 1 auto; min-width:0;">' + assetCell + '</div></div>';
+                        var mainTr = '<tr onclick="iiqAssetTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; height:52px; vertical-align:middle;">' + assetCellWithChev + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + exposureCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + pctCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + liftCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + sampleCell + '</td>'
                             + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + confCell + '</td>'
                             + '</tr>';
+                        var drillTr = '';
+                        if (_drillExp) {
+                            drillTr = '<tr><td colspan="6" style="padding: 0; background: #0C1618; border-bottom:1px solid #182528;">' + _iiqRenderAssetAudienceDrill(a, asOf, opening, slug) + '</td></tr>';
+                        }
+                        return mainTr + drillTr;
                     }).join('') + '</tbody>';
                 }
 
@@ -37144,13 +37453,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                 }
 
+                // ===== Bullet: implications for next week =====
+                // David ask C1: findings sit next to each other with no
+                // explicit 'so what' line. This bullet names the phase-
+                // appropriate next action in one directional sentence.
+                // Names the top mover asset + top under-served cohort
+                // when both are available; falls back to a phase-only
+                // sentence otherwise. Tier 2 language throughout.
+                var bulletImplications = '';
+                var topUnderserved = null;
+                try {
+                    var _audRows = _iiqComputeAudienceRows(asOf, opening) || [];
+                    for (var _ui = 0; _ui < _audRows.length; _ui++) {
+                        if (_audRows[_ui] && _audRows[_ui].fit === 'underserved') { topUnderserved = _audRows[_ui]; break; }
+                    }
+                } catch (_e) { topUnderserved = null; }
+                var _implMover = (mover && mover.asset) ? (mover.asset.action_label || mover.asset.asset_type || '') : '';
+                var _implAud = topUnderserved ? String(topUnderserved.display || topUnderserved.subject_key || '').replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim() : '';
+                if (useInfo) {
+                    if (_implMover && _implAud) {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: ' + escapeHtml(_implMover) + ' is carrying the exposure story and info-seek is climbing on it. Pair the next drop with the ' + escapeHtml(_implAud) + ' cohort to lift on the axis with the most headroom.</span>';
+                    } else if (_implMover) {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: keep ' + escapeHtml(_implMover) + ' in rotation while the info-seek signal is still building. Reassess after the next drop.</span>';
+                    } else {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout-page reach.</span>';
+                    }
+                } else {
+                    if (_implMover && _implAud) {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: ' + escapeHtml(_implMover) + ' reads as the checkout-page driver right now, and the ' + escapeHtml(_implAud) + ' cohort responds hard when reached. Prioritize retargeting there in the final week.</span>';
+                    } else if (_implMover) {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: ' + escapeHtml(_implMover) + ' reads as the checkout-page driver right now. Concentrate spend behind it through the final week.</span>';
+                    } else {
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: pull the read forward with the picker to see the assets carrying the checkout-page signal, then concentrate spend there in the final week.</span>';
+                    }
+                }
+
                 // ===== Compose the card =====
                 // Phase 2 polish: hide the entire card (header + body)
                 // when no bullets compute. The Asset-Ranked Table's own
                 // empty-state ("No assets in view at this as-of date")
                 // now carries the "move the picker forward" prompt, so
                 // an empty Weekly Summary here just dilutes the surface.
-                var bulletsArr = [bulletMover, bulletSignal, bulletAud, bulletSoft].filter(function(x) { return !!x; });
+                var bulletsArr = [bulletMover, bulletSignal, bulletAud, bulletSoft, bulletImplications].filter(function(x) { return !!x; });
                 if (!bulletsArr.length) {
                     card.style.display = 'none';
                     card.innerHTML = '';
@@ -37197,6 +37541,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +   '</div>'
                     + '</details>';
 
+                // ==== Watch this week (David ask C3) ====
+                // Phase-aware KPI band above the intro line. Pre-T-14
+                // spotlights info-seek on assets with meaningful
+                // exposure; post-T-14 spotlights checkout-page reach.
+                // The supporting line names the current leader over the
+                // 100K viewer threshold so the operator can move on the
+                // signal without opening another tab.
+                var watchThreshold = 100000; // viewer floor for a meaningful read
+                var watchKpi = useInfo ? 'Info-seek % on assets above 100K viewers' : 'Checkout-page reach % on assets above 100K viewers';
+                var watchTopAsset = null, watchTopRate = 0;
+                for (var _wi = 0; _wi < ratedAssets.length; _wi++) {
+                    var _ra = ratedAssets[_wi];
+                    var _views = _iiqAssetPitViews(_ra.asset, asOf);
+                    if (_views < watchThreshold) continue;
+                    var _rate = useInfo ? _ra.info_pct : _ra.ticket_pct;
+                    if (_rate > watchTopRate) { watchTopRate = _rate; watchTopAsset = _ra.asset; }
+                }
+                var watchDetail;
+                if (watchTopAsset) {
+                    var _wl = watchTopAsset.action_label || watchTopAsset.asset_type || 'Untitled asset';
+                    var _wlTrim = (_wl.length > 60) ? (_wl.slice(0, 57) + '\u2026') : _wl;
+                    var _wviews = Math.round(_iiqAssetPitViews(watchTopAsset, asOf));
+                    var _wvj = _iiqCountJitter(slug, 'watch_views', _wviews);
+                    watchDetail = 'Leader: ' + escapeHtml(_wlTrim) + ' at ' + watchTopRate.toFixed(1) + '% on ~' + fmtCompact(_wvj) + ' viewers.';
+                } else {
+                    watchDetail = 'No asset has cleared the 100K viewer threshold at this as-of date. Move the picker forward to pick up the first meaningful read.';
+                }
+                var watchBandHtml = ''
+                    + '<div style="margin: 0.75rem 0 0.5rem; padding: 0.7rem 0.9rem; border: 1px solid rgba(199,242,62,0.32); border-radius: 8px; background: rgba(199,242,62,0.06);">'
+                    +   '<div style="color:#C7F23E; font-size:0.62rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; margin-bottom: 0.15rem;">Watch this week</div>'
+                    +   '<div style="color:#E9E8E1; font-size:0.95rem; font-weight:600; line-height:1.3;">' + escapeHtml(watchKpi) + '</div>'
+                    +   '<div style="color:#9AA09B; font-size:0.78rem; margin-top:0.25rem;">' + watchDetail + '</div>'
+                    + '</div>';
+
                 var headerHtml = '<div style="display:flex; align-items:flex-start; gap:1.1rem; flex-wrap:wrap;">'
                     + '<div style="display:flex; align-items:center; gap:0.95rem; flex:1 1 auto; min-width:220px;">'
                         + posterHtml
@@ -37211,6 +37589,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +   '<button type="button" class="iiq-weekly-pdf-btn" onclick="iiqDownloadWeeklyPdf(this)" title="Download this weekly summary as a one-page PDF"><span class="iiq-weekly-pdf-arrow" aria-hidden="true">\u2193</span> Download PDF</button>'
                     + '</div>'
                 + '</div>'
+                + watchBandHtml
                 + '<div class="iiq-hero-intro">What changed this week.</div>'
                 + helpHtml;
 
@@ -37473,6 +37852,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         bullets.push('Where signals are soft: ' + bLabel + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%. One angle: platform-audience-content mismatch, worth watching.');
                     }
                 }
+                // 5. Implications for next week (David ask C1). Names
+                // the top mover asset + top under-served cohort where
+                // both are available, phase-appropriate action. Tier 2
+                // directional language; never a bare percent.
+                try {
+                    var _pdfTopUnderserved = null;
+                    var _pdfAudRows = _iiqComputeAudienceRows(asOf, opening) || [];
+                    for (var _pi = 0; _pi < _pdfAudRows.length; _pi++) {
+                        if (_pdfAudRows[_pi] && _pdfAudRows[_pi].fit === 'underserved') { _pdfTopUnderserved = _pdfAudRows[_pi]; break; }
+                    }
+                    var _pdfMoverAsset = null;
+                    var _perByDelta = perAsset.slice().sort(function(a, b) { return b.delta - a.delta; });
+                    if (_perByDelta[0] && _perByDelta[0].delta > 0) _pdfMoverAsset = _perByDelta[0].asset;
+                    var _pdfMoverLabel = _pdfMoverAsset ? (_pdfMoverAsset.action_label || _pdfMoverAsset.asset_type || '') : '';
+                    var _pdfAudLabel = _pdfTopUnderserved ? String(_pdfTopUnderserved.display || _pdfTopUnderserved.subject_key || '').replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim() : '';
+                    var _pdfImpl = '';
+                    if (useInfo) {
+                        if (_pdfMoverLabel && _pdfAudLabel) _pdfImpl = 'Implications for next week: One angle: ' + _pdfMoverLabel + ' is carrying the exposure story and info-seek is climbing on it. Pair the next drop with the ' + _pdfAudLabel + ' cohort to lift on the axis with the most headroom.';
+                        else if (_pdfMoverLabel)             _pdfImpl = 'Implications for next week: One angle: keep ' + _pdfMoverLabel + ' in rotation while the info-seek signal is still building. Reassess after the next drop.';
+                        else                                 _pdfImpl = 'Implications for next week: One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout-page reach.';
+                    } else {
+                        if (_pdfMoverLabel && _pdfAudLabel) _pdfImpl = 'Implications for next week: One angle: ' + _pdfMoverLabel + ' reads as the checkout-page driver right now, and the ' + _pdfAudLabel + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
+                        else if (_pdfMoverLabel)             _pdfImpl = 'Implications for next week: One angle: ' + _pdfMoverLabel + ' reads as the checkout-page driver right now. Concentrate spend behind it through the final week.';
+                        else                                 _pdfImpl = 'Implications for next week: One angle: pull the read forward with the picker to see the assets carrying the checkout-page signal, then concentrate spend there in the final week.';
+                    }
+                    if (_pdfImpl) bullets.push(_pdfImpl);
+                } catch (_pdfImplErr) { /* keep 4 bullets on failure */ }
 
                 // Theme mirrors the on-screen dashboard so the downloaded
                 // PDF reads as a continuation of the surface the user is

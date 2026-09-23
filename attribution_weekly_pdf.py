@@ -749,9 +749,13 @@ def _build_dark_pdf(payload: dict) -> bytes:
     # with the "Where signals are soft" bullet's label sitting in Dusk
     # so a soft finding never masquerades as an accent moment.
     if d["bullets"]:
-        rows = d["bullets"][:4]
+        # David ask C1 (2026-09-23): allow the Implications bullet
+        # to ride as the 5th line. b_row_h shaved slightly so 5
+        # bullets still fit the same visual card without pushing
+        # the asset + audience tables off the one-page frame.
+        rows = d["bullets"][:5]
         b_title_h = 0.30 * inch
-        b_row_h   = 0.46 * inch  # room for a two-line wrap on the body
+        b_row_h   = 0.44 * inch  # room for a two-line wrap on the body
         b_card_h  = b_title_h + b_row_h * len(rows) + 0.10 * inch
         card_x = MARGIN
         card_y = cursor - b_card_h
@@ -775,10 +779,17 @@ def _build_dark_pdf(payload: dict) -> bytes:
         for b in rows:
             label, body = _split_label_body(b)
             is_soft = label.lower().startswith("where signals are soft")
-            # Olive dot before each bullet, per dashboard convention
-            # (Signal Olive is the safe stand-in for Signal Green on
-            # anything smaller than ~4pt on a dark ground).
-            c.setFillColor(SIGNAL_OLIVE if not is_soft else DUSK)
+            is_impl = label.lower().startswith("implications for next week")
+            # Dot color: Signal Green for the strategic-recommendation
+            # Implications bullet (dashboard accent), Signal Olive for
+            # standard bullets, Dusk for the soft-signal bullet.
+            if is_impl:
+                _dot_color = SIGNAL_GREEN
+            elif is_soft:
+                _dot_color = DUSK
+            else:
+                _dot_color = SIGNAL_OLIVE
+            c.setFillColor(_dot_color)
             c.circle(MARGIN + 0.28 * inch, y + 0.04 * inch, 0.040 * inch,
                      stroke=0, fill=1)
             lbl_color = DUSK if is_soft else DARK_TEXT_PRIMARY
