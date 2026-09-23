@@ -138289,7 +138289,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             gpGenCaret.textContent = '\u25B8';
             gpGenCaret.style.cssText = 'display:inline-block;font-size:0.7rem;color:var(--text-secondary, #9ca3af);transition:transform 0.15s ease;';
             const gpGenTitle = document.createElement('span');
-            gpGenTitle.innerHTML = 'Gen Pop <strong style="color:var(--text-primary, #cbd5e1);">cohorts</strong>';
+            gpGenTitle.innerHTML = '<strong style="color:var(--text-primary, #cbd5e1);">Cuts</strong>';
             gpGenTitle.style.cssText = 'flex:1;min-width:0;';
             const gpGenBadge = document.createElement('span');
             gpGenBadge.id = 'gpGenExpanderBadge';
@@ -138300,9 +138300,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 gpGenBadge.textContent = n > 0 ? (n + ' on') : '';
             };
             _gpGenPaintBadge();
-            gpGenHead.appendChild(gpGenCaret);
+            // Caret sits on the RIGHT edge of the row (Jenna 2026-09-23).
             gpGenHead.appendChild(gpGenTitle);
             gpGenHead.appendChild(gpGenBadge);
+            gpGenHead.appendChild(gpGenCaret);
             gpGenWrap.appendChild(gpGenHead);
             const gpGenBody = document.createElement('div');
             gpGenBody.style.cssText = 'padding:0.1rem 0.4rem 0.4rem;display:' + (gpGenSelectedCount > 0 ? 'block' : 'none') + ';';
