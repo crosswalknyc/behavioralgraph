@@ -2390,75 +2390,6 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         # markets signal. Keep the pure-yield tickers here.
         'refi rate', 'auto loan rate', 'high yield savings',
     ],
-    # Philanthropy / nonprofit sector (added 2026-07-10). Sits in the
-    # priority list BEFORE `politics` so philanthropy-adjacent policy
-    # news ("proposed grant rules", "foundation funding") lands here
-    # instead of leaking into politics. Terms are compound where
-    # possible - single-word "grant" catches Grant Cardone, Grant Hill,
-    # Ulysses S. Grant so we don't include it bare.
-    'philanthropy': [
-        # sector-defining vocabulary
-        'philanthropy', 'philanthropist', 'philanthropic',
-        'nonprofit', 'non-profit', 'nonprofits', 'ngo', '501c3', '501(c)(3)',
-        'charity', 'charities', 'charitable',
-        # "foundation" alone would false-positive on makeup and sports
-        # club names; use context compounds instead. Together these
-        # catch every real philanthropy story: "Gates Foundation",
-        # "Ford Foundation", "family foundation", "foundation
-        # announced", "'s foundation", etc.
-        'foundation grant', 'foundation funding', 'foundation gift',
-        'foundation announced', 'foundation launches', 'foundation says',
-        'foundation moves', 'foundation to donate', 'foundation to give',
-        'foundation pledges', 'foundation commits',
-        'family foundation', 'family foundations',
-        'charitable foundation', 'private foundation',
-        'community foundation', 'nonprofit foundation',
-        'philanthropic foundation', "'s foundation",
-        'grantmaking', 'grant funding', 'grant rules',
-        'grantmaker', 'grantee', 'grant program',
-        'endowment', 'donor advised fund', 'daf ',
-        # fundraising surface
-        'fundraiser', 'fundraising', 'fundraise', 'gofundme',
-        'kickstarter charity', 'indiegogo relief',
-        'giving pledge', 'giving tuesday', 'year-end giving',
-        'year end giving', 'planned giving', 'donation drive',
-        'donate', 'donation', 'donations', 'donor',
-        # marquee nonprofits / NGOs
-        'red cross', 'american red cross', 'salvation army',
-        'unicef', 'united way', 'feeding america', 'meals on wheels',
-        'doctors without borders', 'msf ', 'oxfam', 'care international',
-        'save the children', 'world vision', 'habitat for humanity',
-        'goodwill', 'boys and girls club', 'boys & girls club',
-        'make a wish', 'make-a-wish', 'st jude', "st. jude",
-        "st. jude children's", 'toys for tots', 'mackenzie scott',
-        # foundations / major philanthropists
-        'gates foundation', 'bill and melinda gates',
-        'ford foundation', 'macarthur foundation', 'rockefeller foundation',
-        'carnegie corporation', 'buffett giving',
-        'chan zuckerberg', 'open society foundations',
-        'bloomberg philanthropies', 'walton foundation',
-        # relief / humanitarian
-        'disaster relief', 'humanitarian aid', 'humanitarian crisis',
-        'famine relief', 'refugee aid', 'hurricane relief',
-        'wildfire relief', 'earthquake relief', 'flood relief',
-        'ukraine relief', 'gaza aid', 'sudan aid',
-        # sector coverage
-        'chronicle of philanthropy', 'nonprofit quarterly',
-        'giving usa report', 'inside philanthropy',
-        # celebrity-driven giving (common trending pattern)
-        'megadonation', 'mega-donation', 'anonymous donor',
-        'billionaire donation', 'celebrity donation',
-        'celebrity giving', 'celebrity philanthropy',
-        'annual donation', 'annual gift', 'gift of $', 'donates $',
-        'donated $', 'pledges $', 'pledged $',
-        'gift to', 'donation to', 'donates to',
-        # additional foundations (Ariana Grande's Protect & Defend,
-        # Buffett family, Bezos day one, etc.)
-        'ariana grande foundation', "grande's foundation",
-        'buffett family foundation', 'day one fund', 'earth fund',
-        'bezos earth', 'melinda french', 'melinda gates',
-        'pivotal ventures', "warren buffett's",
-    ],
     # Gaming (video-game content). Sits after entertainment/sports so
     # broadly popular events still peel off first, but before tech so
     # a Fortnite / Elden Ring / GTA search doesn't get pulled into the
@@ -3158,12 +3089,6 @@ _CATEGORY_PRIORITY = (
     # catch-all. Retail then absorbs true shopping-intent searches.
     'health', 'food', 'travel', 'auto', 'fashion', 'home', 'business',
     'retail',
-    # Philanthropy sits ahead of the political cluster so grant / policy
-    # news that also carries a partisan angle ("proposed grant rules")
-    # peels into the philanthropy bucket first. Nonprofit / charity /
-    # foundation keywords are unambiguous enough that we don't lose
-    # true political stories to it.
-    'philanthropy',
     # Political cluster: partisan buckets first, neutral politics
     # third, so Trump / MAGA / AOC peel off cleanly.
     'conservative', 'progressive', 'politics',
@@ -3217,37 +3142,44 @@ def _categorize_search_term(term: str, related: Iterable[str]) -> list[str]:
 
 def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
                                     ) -> dict[str, list[dict]]:
-    """Split trending searches into the four topical buckets PLUS an
+    """Split trending searches into the topical buckets PLUS an
     "overall" catch-all of uncategorized terms.
 
     Rows arrive already sorted by score descending. Each term goes to
     AT MOST one topical bucket (per `_categorize_search_term`). Terms
-    that don't match any category are appended to the "overall" bucket
-    instead - so Overall is a proper catch-all and doesn't duplicate
-    what's already visible in Entertainment / Retail / Politics /
-    Finance.
+    that don't match any category, AND terms whose category is no
+    longer rendered, are appended to the "overall" bucket instead - so
+    Overall is a proper catch-all and doesn't duplicate what's already
+    visible in Entertainment / Retail / Politics / Finance.
     """
-    # Bucket dict MUST list every non-overall category from
-    # `_CATEGORY_PRIORITY` - the harvest pass (and the frontend cards)
-    # skip anything not present here, so a category that is missing
-    # from this dict renders as a permanently empty card no matter how
-    # much matching signal the pools carry.
+    # This dict is the render list: a category only reaches the
+    # dashboard if it has a key here.
+    #
+    # 2026-09-23 (Jenna): the categories that could not sustain a real
+    # list were retired - fashion, food, travel, home, crime, gaming,
+    # weather and health. Each sat far below the ten-item target on
+    # every window we measured, and health only ever reached ten by
+    # borrowing humanitarian and disaster-relief articles from the
+    # philanthropy feed that came out the same week.
+    #
+    # Those eight KEEP their entries in `_CATEGORY_PRIORITY` and
+    # `_SEARCH_CATEGORY_KEYWORDS` on purpose. The classifier returns
+    # the FIRST priority match, so deleting their vocabulary would let
+    # their terms fall through to the next bucket that matches on
+    # related text - which put "hurricane polo" and "elizabeth holmes"
+    # into Sports and a listeria recall into Retail when we measured
+    # it. Keeping the vocabulary means those terms are still
+    # recognised, land in Overall, and never contaminate a surviving
+    # card. Philanthropy was retired in the same pass and its
+    # vocabulary WAS deleted, because every one of its terms tested as
+    # uncategorized rather than falling into another bucket.
     buckets: dict[str, list[dict]] = {
         'sports':        [],
         'entertainment': [],
-        'gaming':        [],
         'tech':          [],
-        'weather':       [],
-        'crime':         [],
-        'health':        [],
-        'food':          [],
-        'travel':        [],
         'auto':          [],
-        'fashion':       [],
-        'home':          [],
         'business':      [],
         'retail':        [],
-        'philanthropy':  [],
         'politics':      [],
         'conservative':  [],
         'progressive':   [],
@@ -3256,7 +3188,9 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     }
     for r in rows:
         cats = _categorize_search_term(r.get('term') or '', r.get('related') or [])
-        if not cats:
+        # Uncategorized, or categorized into a retired bucket: either
+        # way the term belongs in Overall rather than being dropped.
+        if not cats or cats[0] not in buckets:
             buckets['overall'].append(r)
             continue
         for c in cats:
@@ -3306,17 +3240,20 @@ def _augment_thin_buckets_from_pools(
     Google-Trends-only bucketing pass.
 
     Runs the SAME `_categorize_search_term` matcher against the title
-    of each headline / person / wiki article, so a "Karen Read verdict"
-    headline lands in `crime` and a "Jack Smith" GDELT person lands in
-    `crime` too.  Each fold-in row is stamped with `origin` so the UI
-    can render it with a subtle "via news" / "via people" / "via wiki"
-    badge instead of pretending it's a Google search.
+    of each headline / person / wiki article, so an "Nvidia earnings"
+    headline lands in `business` and a "Jerome Powell" GDELT person
+    lands in `finance`.  Each fold-in row is stamped with `origin` so
+    the UI can render it with a subtle "via news" / "via people" /
+    "via wiki" badge instead of pretending it's a Google search.
 
-    This is the fix for the "how can crime be empty for 7 days" UX
-    complaint: Google Trends is only ONE of five trending signals, and
-    when the top-search pool skews sports-and-entertainment on a given
-    day, the other pools still carry the crime / health / finance /
-    business beat that the user expects to see.
+    Google Trends is only ONE of five trending signals, so when the
+    top-search pool skews sports-and-entertainment on a given day, the
+    other pools still carry the finance / business / tech beat that the
+    user expects to see.
+
+    A term whose category was retired no longer has a bucket key here,
+    so it is skipped rather than folded. The retired categories are
+    listed in `_bucket_searches_by_category`.
     """
     if not by_cat:
         return by_cat
@@ -4484,7 +4421,7 @@ _READER_FIELDS = (
 # audience, so its direction holds and the ceiling below decides how
 # large a claim we will make about it. Sector lists carry genuinely
 # small readerships, so testing the larger side is what keeps a real
-# philanthropy story from being silenced by yesterday's low base.
+# trade-desk story from being silenced by yesterday's low base.
 _NEWS_MIN_AUDIENCE_READERS = 500.0
 
 # Where a news move lands when it clears the six-fold per-day ceiling
@@ -12459,16 +12396,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'searches':      len(trending_searches),
             'sports':        len(searches_by_category.get('sports')        or []),
             'entertainment': len(searches_by_category.get('entertainment') or []),
-            'gaming':        len(searches_by_category.get('gaming')        or []),
             'tech':          len(searches_by_category.get('tech')          or []),
-            'weather':       len(searches_by_category.get('weather')       or []),
-            'crime':         len(searches_by_category.get('crime')         or []),
-            'health':        len(searches_by_category.get('health')        or []),
-            'food':          len(searches_by_category.get('food')          or []),
-            'travel':        len(searches_by_category.get('travel')        or []),
             'auto':          len(searches_by_category.get('auto')          or []),
-            'fashion':       len(searches_by_category.get('fashion')       or []),
-            'home':          len(searches_by_category.get('home')          or []),
             'business':      len(searches_by_category.get('business')      or []),
             'retail':        len(searches_by_category.get('retail')        or []),
             'politics':      len(searches_by_category.get('politics')      or []),
