@@ -167,7 +167,7 @@ def _quantified_prompt(chart_label: str, platform_label: str,
         f"reads as manufactured. Real charts have a big drop somewhere "
         f"near the top and a long flat tail, and the shape differs "
         f"week to week.\n"
-        f"  - No value above {ceiling:,}.\n"
+        f"  - No value above {ceiling:,} on any single day. That is this service's published daily cap for its top slot and it is a hard limit, not a target.\n"
         f"  - A title with NO published figure is still ON THIS "
         f"CHART, between the titles either side of it, so its value "
         f"sits between theirs. That is the entire information content "
@@ -231,7 +231,7 @@ def _envelope_prompt(chart_label: str, platform_label: str,
         f"entry, a current original, a library evergreen and an older "
         f"TV season do not draw alike even when they sit next to each "
         f"other on the chart.\n"
-        f"  - No value above {ceiling:,}.\n"
+        f"  - No value above {ceiling:,} on any single day. That is this service's published daily cap for its top slot and it is a hard limit, not a target.\n"
         f"  - Every value is US, and daily, not weekly.\n"
         f"  - Give exact integers, not round ones.\n\n"
         f"PLATFORM AUDIENCE AND BANDS:\n{anchors}\n\n"
@@ -338,14 +338,21 @@ def reason_chart(client, *, slug: str, platform_label: str,
                 if ww > 0:
                     usable = _SHARE_MIN <= share <= _SHARE_MAX
                     implied = int(round(ww * share * df)) if usable else 0
-                    if v > 0 and implied > 0 and \
+                    if implied > 0 and v > 0 and \
                             0.30 <= (v / implied) <= 3.0:
-                        pass
-                    elif v > 0 and usable:
-                        pass
+                        pass                  # agrees with its own share
                     elif implied > 0:
+                        # The value and the share it came with do not
+                        # describe the same title. The arithmetic on a
+                        # figure the service published wins over a
+                        # number that contradicts it: an earlier
+                        # version kept the value whenever the share
+                        # LOOKED plausible, and shipped a Netflix #1
+                        # at 7,837,259 a day against 9.7M worldwide
+                        # views for the week, which needs a US share
+                        # of 5.21.
                         v = implied
-                    elif v <= 0:
+                    else:
                         fb = min(_SHARE_MAX, max(_SHARE_MIN, 0.38))
                         v = int(round(ww * fb * df))
             if v <= 0:

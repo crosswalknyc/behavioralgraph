@@ -6405,6 +6405,26 @@ def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
     return ('up' if delta > 0 else 'down'), round(delta, 4)
 
 
+def _platform_daily_cap_for(slug: str) -> int:
+    """This service's published cap for its top slot, per DAY.
+
+    The `ceiling` values in the platform tables are US WEEKLY caps and
+    `trends_iq._platform_daily_cap` divides by seven before capping a
+    rendered row. Writing a daily value against the undivided weekly
+    number therefore produces readings the page silently rewrites,
+    which is exactly how a Netflix chart that measured clean here
+    arrived on the board with its #1 replaced by a carried value and
+    the rail back out of order. One reading of the constant, and it
+    is the render's.
+    """
+    for table in (_STREAMING_PLATFORMS_META, _FAST_PLATFORMS_META):
+        for p in table:
+            if p.get('key') == slug:
+                weekly = int(p.get('ceiling') or 0)
+                return max(1, weekly // 7) if weekly > 0 else 0
+    return 0
+
+
 def _set_platform_reading(it: dict, slug: str, new_value: int,
                            item_key: str, salt: str) -> bool:
     """Write one platform's reading and let the item's aggregate
@@ -6504,7 +6524,7 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             continue
         meta = next((p for p in _STREAMING_PLATFORMS_META
                      if p['key'] == slug), None)
-        ceiling = (meta or {}).get('ceiling') or 0
+        ceiling = _platform_daily_cap_for(slug)
         anchors = (meta or {}).get('anchors') or ''
 
         # Gather the charted rows per chart, carrying whatever the
@@ -6634,8 +6654,7 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
         snap = _read_snapshot(slug)
         if not snap:
             continue
-        ceiling = next((p['ceiling'] for p in _STREAMING_PLATFORMS_META
-                        if p['key'] == slug), None)
+        ceiling = _platform_daily_cap_for(slug) or None
         index = published_chart_index(slug, snap)
         if not index:
             continue
@@ -6731,12 +6750,20 @@ def _reclamp_carried_to_platform_ceiling(researched: dict[str, dict]
     day on Lionsgate+, a service whose whole US audience is around
     270,000 a week, against a ceiling of 155,000.
 
-    Clamped to a jittered fraction just under the ceiling rather than
-    to the ceiling itself, so no two clamped rows land on the same
-    number and none of them sits on a round one.
+    The cap is the DAILY one, which is the weekly ceiling over seven
+    and is what the render enforces. Reading it as a weekly bound on a
+    daily value left 41 readings above what the page would allow, and
+    the page rewrote every one of them to a carried number, so a rail
+    could measure clean here and still render out of order.
+
+    Clamped to a jittered fraction just under the cap rather than to
+    the cap itself, so no two clamped rows land on the same number and
+    none of them sits on a round one.
     """
-    ceilings = {p['key']: p['ceiling'] for p in _STREAMING_PLATFORMS_META}
-    ceilings.update({p['key']: p['ceiling'] for p in _FAST_PLATFORMS_META})
+    ceilings = {p['key']: _platform_daily_cap_for(p['key'])
+                for p in _STREAMING_PLATFORMS_META}
+    ceilings.update({p['key']: _platform_daily_cap_for(p['key'])
+                     for p in _FAST_PLATFORMS_META})
     fixed = 0
     for key, it in (researched or {}).items():
         if not isinstance(it, dict):
