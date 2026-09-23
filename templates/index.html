@@ -40945,7 +40945,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // measures ticket-buying intent for the subject (panel signals)
             // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
-                q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Each category compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a category is high reach / low conversion, low reach / high conversion, or both.' },
+                q1: { short: 'Funnel Levels',    title: 'Content Engagement by Funnel Level',                               intro: 'Each funnel level compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a funnel level is high reach / low conversion, low reach / high conversion, or both.' },
                 q2: { short: 'Paid / Organic / Earned', title: 'Paid vs Organic vs Earned Performance', intro: 'Cumulative view growth by day, split three ways: paid activations, organic first-party posts, and earned media pickups. Top-performing in-flight assets at the bottom.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
@@ -41845,7 +41845,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + 'style="cursor:pointer; user-select:none; color:' + baseColor + ';" '
                         + 'title="Click to sort by this column. Click again to flip direction.">'
                         +   escapeHtml(mainLabel)
-                        +   (subLabel ? ' <span style="color: var(--text-secondary); font-weight:400;">\u2014 ' + escapeHtml(subLabel) + '</span>' : '')
+                        +   (subLabel ? ' <span style="color: var(--text-secondary); font-weight:400;">- ' + escapeHtml(subLabel) + '</span>' : '')
                         +   '<span style="opacity:' + arrowOp + '; font-size:0.78rem; margin-left:0.25rem;">' + arrow + '</span>'
                         + '</div>';
                 }
@@ -41855,24 +41855,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (_q1AssetTypesList.length) {
                     html += iiqAssetFilterBarHtml(_q1AssetTypesList);
                 }
-                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
-                    + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
-                    + iiqSummaryTile('Total assets (YTD)', String(grandAssets), '')
-                    + iiqSummaryTile('Total YTD views', fmtCompact(grandViews), 'sum of ext_view_count across all assets')
-                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers - matches Assets page')
-                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers - matches Assets page')
-                    + '</div>';
+                // The tile strip (categories ranked, totals, blended rates)
+                // was retired 2026-09-23; the ranked table is the page.
 
-                var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'category name' };
+                var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'funnel level' };
                 var sortLabel = (sortLabelMap[sortKey] || sortKey) + ' (' + sortDir + ')';
 
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html += '<div style="margin-bottom:0.55rem;">';
-                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Each category shown across 3 metrics \u00b7 sorted by ' + escapeHtml(sortLabel) + ' \u00b7 <span style="opacity:0.7;">click any header to re-sort</span></div>';
+                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Each funnel level shown across 3 metrics \u00b7 sorted by ' + escapeHtml(sortLabel) + ' \u00b7 <span style="opacity:0.7;">click any header to re-sort</span></div>';
                 html += '</div>';
 
                 html += '<div style="display:grid; grid-template-columns: 230px 1fr 1fr 1fr; gap:0.85rem; padding:0.3rem 0.25rem 0.45rem; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.7rem; align-items:end;">'
-                    +   sortHdr('label',      'var(--text-secondary)', 'Category', '')
+                    +   sortHdr('label',      'var(--text-secondary)', 'Funnel level', '')
                     +   sortHdr('share_pct',  '#c4b5fd', 'Share of YTD views', 'reach')
                     +   sortHdr('info_pct',   '#a5b4fc', 'Info-seek %',        'mid-funnel')
                     +   sortHdr('ticket_pct', '#fbbf24', 'Ticketing %',        'bottom-funnel')
@@ -41902,7 +41897,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         +   '</div>';
                 });
 
-                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars are scaled to a fixed 0-100% axis so magnitudes are directly comparable across categories and across columns: a 5% bar looks proportionally small next to an 81% bar.</div>';
+                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each funnel level\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars are scaled to a fixed 0-100% axis so magnitudes are directly comparable across funnel levels and across columns: a 5% bar looks proportionally small next to an 81% bar.</div>';
                 html += '</div>';
                 return html;
             }
@@ -127205,7 +127200,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                                                'touchpoint contribution to '] },
             { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
             { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] },
-            { id: 'q_q1',           label: 'Categories',      panel: 'drawer', sub: 'questions', q: 'q1',           legacyOnly: true },
+            { id: 'q_q1',           label: 'Funnel Levels',   panel: 'drawer', sub: 'questions', q: 'q1',           legacyOnly: true },
             { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'q_q3',           label: 'Intent',          panel: 'drawer', sub: 'questions', q: 'q3',           legacyOnly: true },
             { id: 'q_q4',           label: 'Talent',          panel: 'drawer', sub: 'questions', q: 'q4',           legacyOnly: true },
