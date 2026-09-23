@@ -7013,6 +7013,42 @@ def fetch(only: Optional[set[str]] = None,
         k for k, v in prior_items.items()
         if v.get('as_of_date') == target_date_iso and v.get('us_estimate')
     }
+
+    # Covered for the DAY is not the same as covered for the
+    # PLATFORM. An item researched this morning for one service gets
+    # an `as_of_date` and an aggregate, and is then skipped for the
+    # rest of the day even if it turns up on another service's chart
+    # in the meantime, where it has no reading at all.
+    #
+    # Top Gun: Maverick did exactly that. It was priced as a
+    # Paramount+ catalog title, then appeared at #3 on Netflix's
+    # daily Top 10, and the day-level test skipped it, so the most
+    # visible position on the board had no Netflix figure behind it.
+    # The row then borrowed one, first from the aggregate and then
+    # from the rank tier, which is how a research-scope gap became a
+    # provenance defect two passes downstream.
+    #
+    # So an item is only covered if it carries a reading for every
+    # platform it currently charts on.
+    _uncovered_platform = set()
+    for it in items:
+        k = _lookup_key(it['kind'], it['display_title'],
+                        it.get('artist') or '')
+        if k not in already_covered:
+            continue
+        prior = prior_items.get(k) or {}
+        blocks = prior.get('by_platform') or {}
+        for plat in _focus_keys_from_charts(it.get('chart_labels') or []):
+            blk = blocks.get(plat)
+            if not isinstance(blk, dict) or not blk.get('us_estimate'):
+                _uncovered_platform.add(k)
+                logger.info(
+                    "stream_estimates: %r is covered for %s but has no "
+                    "reading for %s, which it now charts on; "
+                    "re-researching", it['display_title'],
+                    target_date_iso, plat)
+                break
+    already_covered -= _uncovered_platform
     # -----------------------------------------------------------------
     # WIP checkpoint resume (Lever 4). On restart, skip items already
     # researched in the WIP snapshot for the target day. Both paths:

@@ -4208,6 +4208,30 @@ _PLATFORM_UNIT_LABEL = {
 # run can say how often it happens instead of it being invisible.
 _AGG_WITHHELD = 0
 
+# How recent an entry has to be for a missing `by_platform` to be a
+# fault rather than its age. Anything inside this window came from a
+# pipeline that always emits the key, so it must not reach the
+# aggregate fallback.
+_PRE_SCHEMA_GRACE_DAYS = 30
+
+
+def _entry_is_current(entry: dict) -> bool:
+    """True when this entry is recent enough that a missing
+    `by_platform` is a defect rather than an old schema."""
+    stamp = ''
+    for f in ('as_of_date', 'prev_date'):
+        v = (entry or {}).get(f)
+        if isinstance(v, str) and len(v) >= 10:
+            stamp = v[:10]
+            break
+    if not stamp:
+        return False
+    try:
+        return (date.today() - date.fromisoformat(stamp)).days \
+            <= _PRE_SCHEMA_GRACE_DAYS
+    except Exception:
+        return False
+
 
 def _stamp_stream_estimate(row: dict, entry: dict,
                             platform_key: str = '',
@@ -4235,11 +4259,12 @@ def _stamp_stream_estimate(row: dict, entry: dict,
     runs after this, so a row left blank here is picked up there with
     its own history rather than with someone else's number.
 
-    One narrow exception survives: an entry with NO `by_platform` key
-    at all predates the per-platform schema, and blanking those would
-    darken historic reads wholesale rather than correct them. Those
-    stamp the aggregate and say so in `est_basis`, so the provenance
-    audit can still see them for what they are.
+    One narrow exception survives: an entry that predates the
+    per-platform schema, which blanking would darken historic reads
+    wholesale rather than correct. It is scoped to genuinely OLD
+    entries rather than to the absence of a field, because "has no
+    by_platform key" is a hole the whole fix would leak through the
+    first time a current entry is written without one.
 
     `kind_hint` fills in `unit_label` when the entry didn't carry one
     (per-platform blocks don't - the frontend derives it from kind
@@ -4292,7 +4317,8 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # baseline behind the chip is inspectable.
             'prev_days_covered':   per.get('prev_days_covered'),
         }
-    elif platform_key and isinstance(entry.get('by_platform'), dict):
+    elif platform_key and (isinstance(entry.get('by_platform'), dict)
+                           or _entry_is_current(entry)):
         # A service row with no reading of its own for this service.
         # It gets nothing rather than the aggregate; the coverage
         # pass will give it its own last reading walked forward.
@@ -7330,7 +7356,8 @@ def _ensure_full_audience_coverage(cards: dict,
     dist = _coverage_baselines_from_estimates(stream_snap)
     outlet_med, reader_global_med = _coverage_reader_baselines(headline_snap)
     today_iso = _today_iso()
-    counts = {'carried_forward': 0, 'rank_tier': 0}
+    counts = {'carried_forward': 0, 'rank_tier': 0,
+              'withheld_service': 0}
 
     def _stamp_baseline(it: dict, path: str, rank_pos: int,
                          list_len: int) -> None:
@@ -7413,11 +7440,31 @@ def _ensure_full_audience_coverage(cards: dict,
             counts['carried_forward'] += 1
             return
 
-        # No reading for this title on any day in the record: a
-        # genuinely new chart entry. The rank tier is the only thing
-        # left, and it is marked so it can be counted and re-priced.
-        # Scaled to the rail it lands on, so a thin panel is not given
-        # the leading panel's number.
+        # No reading for this title on any day in the record.
+        #
+        # On a SERVICE rail that is where it stops. The rank tier is
+        # derived from where the row sits in a list, which is not a
+        # reading of anything and certainly not a reading for this
+        # service. It is how Top Gun: Maverick came to render
+        # 1,469,597 on the Netflix rail with `platform` reading None,
+        # having no Netflix figure anywhere: closing the aggregate
+        # fallback at the stamp moved where the borrowed number
+        # entered rather than stopping it.
+        #
+        # The rule ends in "or nothing" for a reason. A row we cannot
+        # price honestly shows nothing, and a blank cell is the right
+        # answer rather than a number with no provenance. Reaching
+        # for the rank tier, or a platform-cap-derived figure, to
+        # avoid an empty cell is the same defect wearing a different
+        # label.
+        #
+        # Panels that are not service-scoped keep the tier: there is
+        # no service to be wrong about there.
+        if slug:
+            counts['withheld_service'] = counts.get(
+                'withheld_service', 0) + 1
+            return
+
         base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len,
                                          _coverage_platform_for_path(path))
         val = _coverage_jitter(title, kind, base)
@@ -7473,6 +7520,12 @@ def _ensure_full_audience_coverage(cards: dict,
         _walk(cards or {}, '')
     except Exception:
         logger.exception("audience coverage pass failed (non-fatal)")
+    if counts.get('withheld_service'):
+        logger.info(
+            "audience coverage: %d service row(s) had no reading of "
+            "their own and no service-scoped history, and were left "
+            "blank rather than priced off a rank slot",
+            counts['withheld_service'])
     if counts['carried_forward'] or counts['rank_tier']:
         logger.info("audience coverage pass: %d row(s) carried their own "
                     "previous reading forward, %d had no prior reading "
