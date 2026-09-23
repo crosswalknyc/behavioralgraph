@@ -32643,18 +32643,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <span class="iiq-explore-eyebrow">Explore the full breakdown</span>
                     <span class="iiq-explore-chevron" id="iiqExploreChevron" aria-hidden="true">&#9662;</span>
                 </div>
-                <div class="iiq-explore-hint" id="iiqExploreHint">Timeline, Assets, Performance, Intent to Conversion, Multi-Touch, ROI.</div>
+                <div class="iiq-explore-hint" id="iiqExploreHint">Assets, Performance, Intent to Conversion, Multi-Touch, ROI.</div>
                 <div class="iiq-explore-body" id="iiqExploreBody">
             <div class="iiq-subtab-bar">
-                <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
-                <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
+                <button class="iiq-subtab active" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="conversion" onclick="showIntentIQSubtab('conversion')">💰 INTENT TO CONVERSION</button>
                 <button class="iiq-subtab" data-iiq-subtab="mta" onclick="showIntentIQSubtab('mta')">🎯 MULTI-TOUCH</button>
                 <button class="iiq-subtab" data-iiq-subtab="roi" onclick="showIntentIQSubtab('roi')">💵 ROI</button>
             </div>
 
-            <div class="iiq-panel active" id="iiqPanel-overview">
+            <div class="iiq-panel" id="iiqPanel-overview">
                 <div class="iiq-meta-row" id="iiqOverviewMeta"></div>
                 <details style="margin-top: 1rem;">
                     <summary style="cursor: pointer; user-select: none; padding: 0.5rem 0; font-weight: 600; font-size: 1rem; color: var(--text-primary); list-style: none; display: flex; align-items: center; gap: 0.5rem;">
@@ -32665,7 +32664,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 </details>
             </div>
 
-            <div class="iiq-panel" id="iiqPanel-assets">
+            <div class="iiq-panel active" id="iiqPanel-assets">
                 <div style="margin-bottom: 0.65rem;">
                     <h4 style="margin: 0;">Asset performance scoreboard</h4>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" - the Performance tab rolls these up by category / paid-organic / talent.</div>
@@ -32993,6 +32992,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return ov.enabled_tabs || null;   // null = no per-title config (film default)
             };
             window._iiqTabEnabled = function(key) {
+                if (key === 'overview') return false;   // Timeline page retired 2026-09-23
                 var et = window._iiqEnabledTabs();
                 if (!et) return true;   // no per-title config -> everything enabled (film default)
                 if (!(key in et)) return true;   // missing key -> enabled (safe default)
@@ -126965,7 +126965,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // already live in Paths / Surfaces / Attribution / Timing / Leaks
         // and its audience picker moves into the controls bar.
         var _AIQ_TABS = [
-            { id: 'l_overview',     label: 'Timeline',        panel: 'drawer', sub: 'overview',  legacyOnly: true },
             { id: 'l_assets',       label: 'Assets',          panel: 'drawer', sub: 'assets',    legacyOnly: true },
             { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Assets',      ids: ['iiqAssetTableSection'] },
@@ -127134,6 +127133,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var wrap = root && root.querySelector('.aiq-wrap');
             window.__aiqStaleSlug = slug || '';
             if (!wrap) return;
+            // Reloading the title already on screen retires nothing:
+            // every slab is this campaign's, and a redraw that lands on
+            // identical content would otherwise never come back.
+            var prevSlug = wrap.getAttribute('data-aiq-slug');
+            if (prevSlug !== null && prevSlug === (slug || '')) return;
             wrap.setAttribute('data-aiq-slug', slug || '');
             var kids = wrap.querySelectorAll('.aiq-panel > *');
             for (var i = 0; i < kids.length; i++) {
@@ -127141,7 +127145,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (k.tagName === 'SECTION') { k.remove(); continue; }
                 if (k.id === 'iiqExploreDrawer') continue;
                 k.classList.add('aiq-stale');
-                k.setAttribute('data-aiq-sig', _aiqSlabSig(k));
+                if (k.id === 'iiqPanel-roi') {
+                    // The ROI slab records which title drew it; a title
+                    // without ROI leaves the prior title's read in place,
+                    // so content alone cannot say whether it is current.
+                    k.setAttribute('data-aiq-stale-until', 'roi');
+                } else {
+                    k.setAttribute('data-aiq-sig', _aiqSlabSig(k));
+                }
             }
             // The legacy drawer's sub-panels (Timeline, Assets, the
             // question views, Conversion) redraw at different moments
@@ -127182,7 +127193,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             for (var i = 0; i < kids.length; i++) {
                 var k = kids[i];
                 var release;
-                if (k.getAttribute('data-aiq-stale-until') === 'assets') release = assetsReady;
+                var until = k.getAttribute('data-aiq-stale-until');
+                if (until === 'assets') release = assetsReady;
+                else if (until === 'roi') {
+                    var roiHost = document.getElementById('iiqROIContent');
+                    release = !!(roiHost && slug && roiHost.getAttribute('data-roi-slug') === slug);
+                }
                 else release = !k.childElementCount || k.getAttribute('data-aiq-sig') !== _aiqSlabSig(k);
                 if (release) {
                     k.classList.remove('aiq-stale');
