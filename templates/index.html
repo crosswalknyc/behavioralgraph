@@ -32533,6 +32533,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView .aiq-panel.on { display: block; }
         #intentIQView .aiq-attic { display: none !important; }
         #intentIQView .aiq-panel[data-aiq-panel="roi"] > #iiqPanel-roi { display: block !important; }
+        #intentIQView .aiq-stale,
+        #intentIQView .aiq-panel > #iiqPanel-roi.aiq-stale { display: none !important; }
         #intentIQView .aiq-promoted .iiq-subtab-bar { display: none !important; }
         #intentIQView .aiq-promoted #iiqQNav { display: none !important; }
         #intentIQView .aiq-controls .aiq-aud-pick { margin: 0 !important; background: transparent !important; border: 0 !important; padding: 0 !important; }
@@ -33390,6 +33392,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     if (window.__iiqMTACache) {
                         window.__iiqMTACache = { slug: null, audience_slug: '', data: null, ts: 0 };
+                    }
+                    // The slabs that stay (Weekly Summary, Asset
+                    // Table, Audience Table, ROI, the legacy drawer)
+                    // still hold the prior title until their own
+                    // renderers rewrite them. Until then they are
+                    // hidden and the rail / banner do not read them.
+                    if (typeof window._aiqMarkStale === 'function') window._aiqMarkStale(slug);
+                    if (window.__intentIQAssetsRaw && window.__intentIQAssetsRaw.slug !== slug) {
+                        window.__intentIQAssetsRaw = null;
                     }
                 } catch(_e) {}
                 Promise.all([
@@ -35145,6 +35156,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     );
                 }).join('');
                 var ttcToNoun = isFilm ? 'checkout page reach' : escapeHtml(overallConvNoun);
+                // Brand campaigns have no checkout; the partition is of
+                // whatever the title calls its bottom-funnel page.
+                var archPageNoun = isFilm ? 'checkout page'
+                    : (String(d.bottom_funnel_label || 'action page').toLowerCase().replace(/\s*page$/, '') + ' page');
+                var archOfNoun = isFilm ? 'checkout' : archPageNoun;
                 var ttcSection = ttc.length ?
                     '<section style="margin-top:1.1rem;">'
                   + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Time to convert.</h5>'
@@ -35159,14 +35175,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
                       + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
                       + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
-                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of checkout</div>'
+                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of ' + escapeHtml(archOfNoun) + '</div>'
                       + '</div>'
                     );
                 }).join('');
                 var archSection = archetypes.length ?
                     '<section style="margin-top:1.1rem;">'
                   + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Path archetypes.</h5>'
-                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the checkout page falls into one of these four shapes.</div>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the ' + escapeHtml(archPageNoun) + ' falls into one of these four shapes.</div>'
                   + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
                   + '</section>' : '';
 
@@ -127002,6 +127018,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             try {
                 var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                 var cards = slug && window.__intentIQAssetCache && window.__intentIQAssetCache[slug];
+                if ((!cards || !cards.length) && slug) {
+                    var stash = window.__intentIQAssetsRaw;
+                    if (stash && stash.slug === slug) cards = stash.cards;
+                }
                 if (!cards || !cards.length) return false;
                 for (var i = 0; i < cards.length; i++) {
                     var po = String(cards[i].paid_or_organic || '').toLowerCase();
@@ -127098,6 +127118,80 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             })();
         }
 
+        // A slab is stale when it was rendered for a different title than
+        // the one now selected. It stays in its panel (the renderers still
+        // address it by id) but is hidden and unread until its content
+        // changes, which is the renderer writing the new title into it.
+        function _aiqSlabSig(el) {
+            var t = (el.textContent || '').replace(/\s+/g, ' ');
+            return el.childElementCount + ':' + t.length + ':' + t.slice(0, 160);
+        }
+        function _aiqIsStale(el) {
+            return !!(el && el.classList && el.classList.contains('aiq-stale'));
+        }
+        function _aiqMarkStale(slug) {
+            var root = document.getElementById('intentIQView');
+            var wrap = root && root.querySelector('.aiq-wrap');
+            window.__aiqStaleSlug = slug || '';
+            if (!wrap) return;
+            wrap.setAttribute('data-aiq-slug', slug || '');
+            var kids = wrap.querySelectorAll('.aiq-panel > *');
+            for (var i = 0; i < kids.length; i++) {
+                var k = kids[i];
+                if (k.tagName === 'SECTION') { k.remove(); continue; }
+                if (k.id === 'iiqExploreDrawer') continue;
+                k.classList.add('aiq-stale');
+                k.setAttribute('data-aiq-sig', _aiqSlabSig(k));
+            }
+            // The legacy drawer's sub-panels (Timeline, Assets, the
+            // question views, Conversion) redraw at different moments
+            // as the new title loads; they come back together once the
+            // title's assets are on hand, which is the last of them.
+            var subs = document.querySelectorAll('#iiqExploreBody > [id^="iiqPanel-"]');
+            for (var j = 0; j < subs.length; j++) {
+                if (subs[j].id === 'iiqPanel-mta' || subs[j].id === 'iiqPanel-roi') continue;
+                subs[j].classList.add('aiq-stale');
+                subs[j].setAttribute('data-aiq-stale-until', 'assets');
+            }
+            // The lifted audience picker lists the prior title's cohorts.
+            var pick = wrap.querySelector('.aiq-controls .aiq-aud-pick');
+            if (pick) pick.remove();
+            // The MTA host still shows the prior title's tiles until it
+            // redraws; the rail would read them.
+            var mta = document.getElementById('iiqMTAContent');
+            if (mta) mta.innerHTML = '';
+            var rail = wrap.querySelector('.aiq-rail');
+            if (rail) { rail.innerHTML = ''; rail.setAttribute('data-aiq-sig', ''); rail.style.display = 'none'; }
+            // The tab this title was last left on is restored once its
+            // slab has drawn, not whichever slab happens to land first.
+            wrap.removeAttribute('data-aiq-active');
+            var want = '';
+            try { want = localStorage.getItem('aiqTab_' + (slug || 'default')) || ''; } catch (e) { }
+            if (want) wrap.setAttribute('data-aiq-want', want); else wrap.removeAttribute('data-aiq-want');
+        }
+        window._aiqMarkStale = _aiqMarkStale;
+        // A stale slab whose content moved on has been redrawn for the
+        // current title and comes back; an emptied one has nothing to hide.
+        function _aiqRefreshStale(wrap) {
+            var slug = '';
+            try { slug = (window.__intentIQ && window.__intentIQ.currentSlug) || ''; } catch (e) { }
+            var stash = window.__intentIQAssetsRaw;
+            var assetsReady = !!(stash && slug && stash.slug === slug);
+            var root = document.getElementById('intentIQView') || wrap;
+            var kids = root.querySelectorAll('.aiq-stale');
+            for (var i = 0; i < kids.length; i++) {
+                var k = kids[i];
+                var release;
+                if (k.getAttribute('data-aiq-stale-until') === 'assets') release = assetsReady;
+                else release = !k.childElementCount || k.getAttribute('data-aiq-sig') !== _aiqSlabSig(k);
+                if (release) {
+                    k.classList.remove('aiq-stale');
+                    k.removeAttribute('data-aiq-sig');
+                    k.removeAttribute('data-aiq-stale-until');
+                }
+            }
+        }
+
         function _aiqBuildChrome(wrap) {
             if (wrap.querySelector('.aiq-tabs')) return wrap.querySelector('.aiq-panels');
             var banner = document.createElement('div');
@@ -127169,9 +127263,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 bits.push(dateLabel + ' ' + MON[parseInt(dm[2], 10) - 1] + ' ' + parseInt(dm[3], 10) + ', ' + dm[1]);
             }
             var hero = document.getElementById('iiqWeeklySummaryCard');
+            if (_aiqIsStale(hero)) hero = null;
             var tplus = hero && (hero.innerText || '').match(/T[+-]\d+\s*days/);
             if (tplus) bits.push(tplus[0]);
             var assetSec = document.getElementById('iiqAssetTableSection');
+            if (_aiqIsStale(assetSec)) assetSec = null;
             var na = assetSec && (assetSec.innerText || '').match(/of\s+([\d,]+)\s+at\b/);
             if (na) bits.push(na[1] + ' assets in the window');
             var tEl = banner.querySelector('.aiq-banner-title');
@@ -127206,6 +127302,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // Never read the rail itself: it carries the prior title's
                 // figures until it is rebuilt.
                 if (el.closest && el.closest('.aiq-rail')) continue;
+                if (el.closest && el.closest('.aiq-stale')) continue;
                 var t = _aiqNorm(el.textContent);
                 if (t !== want) continue;
                 var sib = el.nextElementSibling;
@@ -127231,6 +127328,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var f = {};
             if (!root) return f;
             var all = (root.textContent || '').replace(/\s+/g, ' ');
+            var staleEls = root.querySelectorAll('.aiq-panel > .aiq-stale');
+            for (var si = 0; si < staleEls.length; si++) {
+                var st = (staleEls[si].textContent || '').replace(/\s+/g, ' ');
+                if (st) all = all.split(st).join(' ');
+            }
             f.exposed = _aiqPairAfter(root, 'Exposed viewers');
             f.baseline = _aiqPairAfter(root, 'Baseline conversion rate');
             f.strength = _aiqPairAfter(root, 'Read strength');
@@ -127240,7 +127342,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // The two ledgers state their own totals in the count line.
             function ledger(id, key) {
                 var el = document.getElementById(id);
-                if (!el) return;
+                if (!el || _aiqIsStale(el)) return;
                 var t = (el.textContent || '').replace(/\s+/g, ' ');
                 var n = t.match(/of\s+([\d,]+)\s+at\b/);
                 if (n) f[key] = n[1];
@@ -127251,6 +127353,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Best response and best lift come off the top row, which is the
             // row the sort put there.
             var a = document.getElementById('iiqAssetTableSection');
+            if (_aiqIsStale(a)) a = null;
             var top = a && a.querySelector('tbody tr');
             if (top) {
                 Array.prototype.forEach.call(top.children, function (td) {
@@ -127289,6 +127392,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             q_audiences: [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
             roi:         [['Exposed viewers', 'exposed'], ['Assets in view', 'assets'], ['Read strength', 'strength']]
         };
+        function _aiqRailClear(wrap) {
+            var rail = wrap.querySelector('.aiq-rail');
+            if (!rail) return;
+            if (rail.innerHTML) rail.innerHTML = '';
+            rail.setAttribute('data-aiq-sig', '');
+            rail.style.display = 'none';
+        }
         function _aiqRail(wrap, active) {
             var rail = wrap.querySelector('.aiq-rail');
             if (!rail) return;
@@ -127329,6 +127439,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // instead of retiring to the attic. Film campaigns on the new
             // landing keep the attic behaviour.
             var legacy = _aiqLegacyLanding();
+            // A title change that arrived by some path other than
+            // reloadIntentIQ still retires the prior title's slabs.
+            var slugNow = '';
+            try { slugNow = (window.__intentIQ && window.__intentIQ.currentSlug) || ''; } catch (e) { }
+            var slugWas = wrap.getAttribute('data-aiq-slug');
+            if (slugNow && slugWas === null) wrap.setAttribute('data-aiq-slug', slugNow);
+            else if (slugNow && slugWas !== slugNow && window.__aiqStaleSlug !== slugNow) _aiqMarkStale(slugNow);
+            _aiqRefreshStale(wrap);
+            var ovNow = null;
+            try { ovNow = window.__intentIQ && window.__intentIQ.overview; } catch (e) { }
+            var ovFresh = !slugNow || !ovNow || !ovNow.title_slug || ovNow.title_slug === slugNow;
+            if (!ovFresh) {
+                _aiqBanner(wrap);
+                var oldTabs = wrap.querySelector('.aiq-tabs');
+                if (oldTabs && oldTabs.innerHTML) { oldTabs.innerHTML = ''; oldTabs.setAttribute('data-aiq-sig', ''); }
+                Array.prototype.forEach.call(panels.children, function (p) { p.classList.remove('on'); });
+                _aiqRailClear(wrap);
+                return;
+            }
             // claim the slabs
             var claimed = {};
             wrap.classList.toggle('aiq-promoted', legacy);
@@ -127338,7 +127467,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (drawerEl && drawerPanel) {
                     if (drawerEl.parentElement !== drawerPanel) drawerPanel.appendChild(drawerEl);
                     _AIQ_TABS.forEach(function (t) {
-                        if (t.panel === 'drawer' && _aiqDrawerTabLive(t)) claimed[t.id] = true;
+                        if (t.panel !== 'drawer' || !_aiqDrawerTabLive(t)) return;
+                        if (_aiqIsStale(document.getElementById('iiqPanel-' + t.sub))) return;
+                        claimed[t.id] = true;
                     });
                 }
             }
@@ -127355,6 +127486,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // campaign) is not a tab.
                     if (!t.legacyOnly && !el.childElementCount) return;
                     if (el.parentElement !== panel) panel.appendChild(el);
+                    // The ROI slab only redraws on request, so a stale
+                    // one is asked for now; it returns once it has drawn.
+                    if (_aiqIsStale(el)) { if (t.id === 'roi') _aiqEnsureROI(); return; }
                     claimed[t.id] = true;
                 });
             });
@@ -127368,7 +127502,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var tid = _aiqTabForHead(_aiqNorm(htxt));
                 if (!tid) continue;
                 var panel = panels.querySelector('[data-aiq-panel="' + tid + '"]');
-                if (panel && sec.parentElement !== panel) panel.appendChild(sec);
+                if (panel && sec.parentElement !== panel) {
+                    // A fresh render of the same section replaces the
+                    // copy an earlier render left in the panel.
+                    var normHead = _aiqNorm(htxt);
+                    Array.prototype.slice.call(panel.children).forEach(function (old) {
+                        if (old === sec || old.tagName !== 'SECTION') return;
+                        var oh = old.querySelector(':scope > h5');
+                        var ot = oh ? oh.textContent
+                                    : (old.firstElementChild ? (old.firstElementChild.textContent || '')
+                                                                .replace(/\s+/g, ' ').slice(0, 70) : '');
+                        if (_aiqNorm(ot) === normHead) old.remove();
+                    });
+                    panel.appendChild(sec);
+                }
                 claimed[tid] = true;
             }
             // Whatever is left of the drawer is chrome we have replaced
@@ -127378,12 +127525,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             // rail of tabs, built from the slabs that actually arrived
             var live = _AIQ_TABS.filter(function (t) { return claimed[t.id]; });
-            if (!live.length) return;
+            _aiqBanner(wrap);
+            if (!live.length) {
+                // Nothing has arrived for this title yet: no tabs, no
+                // rail, no panel showing.
+                var emptyTabs = wrap.querySelector('.aiq-tabs');
+                if (emptyTabs && emptyTabs.innerHTML) { emptyTabs.innerHTML = ''; emptyTabs.setAttribute('data-aiq-sig', ''); }
+                Array.prototype.forEach.call(panels.children, function (p) { p.classList.remove('on'); });
+                _aiqRailClear(wrap);
+                return;
+            }
             var f = _aiqFacts();
             var counts = { assets: f.assets, audiences: f.cohorts };
             var tabsEl = wrap.querySelector('.aiq-tabs');
             var sig = live.map(function (t) { return t.id + ':' + _aiqTabLabel(t) + (counts[t.id] || ''); }).join('|');
             var active = wrap.getAttribute('data-aiq-active');
+            var want = wrap.getAttribute('data-aiq-want');
+            if (want && claimed[want]) { active = want; wrap.setAttribute('data-aiq-active', want); wrap.removeAttribute('data-aiq-want'); }
             if (!active || !claimed[active]) {
                 try { active = localStorage.getItem(_aiqLastTabKey()) || ''; } catch (e) { active = ''; }
                 if (!active || !claimed[active]) active = live[0].id;
@@ -127410,7 +127568,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
             if (legacy && activeTab && activeTab.panel === 'drawer') _aiqSyncDrawer(activeTab);
             if (activeTab && activeTab.id === 'roi') _aiqEnsureROI();
-            _aiqBanner(wrap);
             _aiqRail(wrap, active);
         }
         function _aiqGo(id) {
@@ -127418,6 +127575,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var wrap = root && root.querySelector('.aiq-wrap');
             if (!wrap) return;
             wrap.setAttribute('data-aiq-active', id);
+            wrap.removeAttribute('data-aiq-want');
             try { localStorage.setItem(_aiqLastTabKey(), id); } catch (e) { }
             _aiqShell();
             root.scrollTop = 0;
