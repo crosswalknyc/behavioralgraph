@@ -69,7 +69,7 @@ _STAGE_PREFIXES = {
     "1_exposed":  "Top of funnel:",
     "2_infoseek": "Mid funnel:",
     "3_ticketer": "Lower funnel:",
-    "4_paid":     "Conversion:",
+    "4_paid":     "Reached the checkout page",
 }
 
 

@@ -1278,7 +1278,7 @@ def compute_mta_coefficients(campaign_slug: str,
     ttype = (overview.get("title_type") or "film").lower()
     term = overview.get("terminology") or {}
     conversion_noun = term.get("conversion_noun") or (
-        "signup" if ttype == "brand" else "ticket buyer"
+        "signup" if ttype == "brand" else "checkout page visit"
     )
     bottom_funnel_label = term.get("bottom_funnel_label") or "Ticketing"
     display_name = overview.get("display_name") or slug
@@ -1827,8 +1827,8 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Paid a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+        "leak_competing_label":        "Reached checkout for a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     },
     "dhar_mann_minions_and_monsters": {
@@ -1838,8 +1838,8 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Paid a competing family film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+        "leak_competing_label":        "Reached checkout for a competing family film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
                                           "different family film that weekend"),
     },
     "the_influencer_project_hades": {
@@ -1849,8 +1849,8 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Paid a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+        "leak_competing_label":        "Reached checkout for a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     },
     "chime": {
@@ -1920,8 +1920,8 @@ def _card_config(slug: str, ttype: str, display_name: str,
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Paid a competing film",
-        "leak_competing_note":         ("Opened a ticketer within 7d and bought a "
+        "leak_competing_label":        "Reached checkout for a competing film",
+        "leak_competing_note":         ("Opened a ticketer within 7d and reached the checkout page for a "
                                           "different film that weekend"),
     }
 
@@ -1946,7 +1946,7 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
             "1_exposed":  f"Top of funnel: Exposed to {display_name}",
             "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
             "3_ticketer": f"Lower funnel: Ticketing-site visit within {window_days}d",
-            "4_paid":     "Conversion: Ticket purchased",
+            "4_paid":     f"Reached the checkout page within {window_days}d",
         }
     conv_action = (conversion_noun[:1].upper() + conversion_noun[1:]
                     if conversion_noun else "Converted")
@@ -1954,7 +1954,7 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
         "1_exposed":  f"Top of funnel: Exposed to {display_name}",
         "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
         "3_ticketer": f"Lower funnel: Website or app visit within {window_days}d",
-        "4_paid":     f"Conversion: {conv_action}",
+        "4_paid":     f"Reached: {conv_action}",
     }
 
 
@@ -2013,7 +2013,7 @@ def _leak_stage_labels(kind: str) -> dict:
             ),
             "conv_visit_no_pay": (
                 "Ticketer visit no ticket",
-                "Opened a ticketer within 7d but never paid, the bag-abandon equivalent",
+                "Opened a ticketer within 7d but never reached the checkout page, the bag-abandon equivalent",
             ),
         }
     return {
@@ -2510,7 +2510,7 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     # noun on bottom_funnel_label ("chime.com visit", "Website visit"),
     # so we forward that verbatim.
     if kind == "film":
-        paths_conversion_noun = "ticket purchase"
+        paths_conversion_noun = "checkout page visit"
     else:
         paths_conversion_noun = (bottom_funnel_label or conversion_noun
                                     or "conversion")

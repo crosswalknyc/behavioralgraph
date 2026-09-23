@@ -81,9 +81,9 @@ TITLE_TYPE_DEFAULTS = {
             "mid_funnel_full":            "Searched title / IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days",
             "bottom_funnel_label":        "Ticketing",
             "bottom_funnel_full":         "Visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days",
-            "conversion_noun":            "ticket buyer",
-            "conversion_verb":            "buy a ticket",
-            "conversion_endpoint_label":  "ticketing sites",
+            "conversion_noun":            "checkout page visit",
+            "conversion_verb":            "reach the checkout page",
+            "conversion_endpoint_label":  "checkout pages",
             "attribution_window_days":    7,
         },
         "enabled_tabs": {

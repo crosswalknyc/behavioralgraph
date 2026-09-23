@@ -33403,7 +33403,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         document.getElementById('iiqConvHero').innerHTML = [
                             iiqSummaryTile('Total views (duplicated)',     fmtCompact(totalViews),    'raw impressions in window'),
                             iiqSummaryTile('Total engagement (duplicated)', fmtCompact(totalEng),     'likes + comments + shares'),
-                            iiqSummaryTile('Unique potential ticket buyers reached', fmtCompact(uniqueReached), 'dedup ÷ ' + IIQ_CONV_REACH_DEDUPE.toFixed(1) + ' (avg frequency × unique assets per viewer)'),
+                            iiqSummaryTile('Unique potential viewers reached', fmtCompact(uniqueReached), 'dedup ÷ ' + IIQ_CONV_REACH_DEDUPE.toFixed(1) + ' (avg frequency × unique assets per viewer)'),
                             iiqSummaryTile('Unique info-seekers',          fmtCompact(uniqueInfo),    'dedup ÷ ' + IIQ_CONV_INFO_DEDUPE.toFixed(2) + ' (search + IMDb/RT/Letterboxd visits)'),
                             iiqSummaryTile('Unique ticketing-site visitors', fmtCompact(uniqueTick),  'dedup ÷ ' + IIQ_CONV_TICK_DEDUPE.toFixed(2) + ' (Fandango/AMC/Regal/Cinemark/Atom)')
                         ].join('');
@@ -34660,11 +34660,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>'
                     );
                 }
-                var attrPaidNoun = isFilm ? 'paid ticket purchase' : escapeHtml(overallConvNoun);
+                var attrPaidNoun = isFilm ? 'checkout page visit' : escapeHtml(overallConvNoun);
                 var attrSection = (firstTouch.length || lastTouch.length || assists.length) ?
                     '<section style="margin-top:1.1rem;">'
                   + '  <h5 style="margin: 0 0 0.25rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Attribution ' + escapeHtml(attrScope) + '.</h5>'
-                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">These three cuts read only the ' + fmtInt(paidCount) + ' US accounts that completed a ' + attrPaidNoun + '.</div>'
+                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">These three cuts read only the ' + fmtInt(paidCount) + ' US accounts that reached a ' + attrPaidNoun + '.</div>'
                   + '  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.75rem;">'
                   +      renderAttrTable('First touch (partition)', firstTouch, false)
                   +      renderAttrTable('Last touch (partition)', lastTouch, false)
@@ -34997,7 +34997,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var qChip  = '<span style="display:inline-block; padding:0.1rem 0.55rem; font-size:0.68rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background:' + qBg + '; color:' + qColor + ';">' + qLabel + '</span>';
                 var exposedLabel = audienceSlug ? 'Viewers in this cohort' : 'Exposed viewers';
                 var tiles = [
-                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), 'share of exposed viewers who visited the ' + bfl.toLowerCase() + ' page in the attribution window'),
+                    iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), ((activePayload.title_type === 'film') ? 'share of exposed viewers who reached the checkout page in the attribution window' : 'share of exposed viewers who reached the ' + bfl.toLowerCase() + ' page in the attribution window')),
                     iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read'),
                     '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
                       + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">Read strength</div>'
@@ -36546,21 +36546,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // read a real WoW %.
             function _iiqTrendTotalExposureThisWeek(asOfIso, slug) {
                 var stash = window.__intentIQAssetsRaw;
-                if (!stash || !Array.isArray(stash.cards)) return 0;
-                if (!asOfIso) return 0;
+                if (!stash || !Array.isArray(stash.cards)) return { delta: 0, prev: 0, launch: true };
+                if (!asOfIso) return { delta: 0, prev: 0, launch: true };
                 var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
-                var prev = _iiqAddDaysIso(asOfIso, -7);
-                var total = 0;
+                var prevIso = _iiqAddDaysIso(asOfIso, -7);
+                var prevPrevIso = _iiqAddDaysIso(asOfIso, -14);
+                var totalDelta = 0;
+                var totalPrev = 0;
                 for (var i = 0; i < inView.length; i++) {
                     var a = inView[i];
                     if (!a) continue;
                     var totalViews = Number(a.ext_view_count) || 0;
                     if (totalViews <= 0) continue;
                     var pitNow = _iiqPitFactor(a, asOfIso);
-                    var pitPrev = _iiqPitFactor(a, prev);
-                    total += Math.max(0, totalViews * (pitNow - pitPrev));
+                    var pitPrev = _iiqPitFactor(a, prevIso);
+                    var pitPrevPrev = _iiqPitFactor(a, prevPrevIso);
+                    totalDelta += Math.max(0, totalViews * (pitNow - pitPrev));
+                    totalPrev  += Math.max(0, totalViews * (pitPrev - pitPrevPrev));
                 }
-                return _iiqCountJitter(slug || 'default', 'trend_expo_' + asOfIso, Math.round(total));
+                // Launch-signal floor: when the prior 7d had < 50 viewers
+                // of accrual (typical for launch-week or earliest posted
+                // assets), the absolute delta is arithmetically tiny even
+                // when the RATIO looks huge. Signal that state to the
+                // caller so the tile can show 'Launch signal' instead of
+                // a `+1 viewer` display that reads as a placeholder.
+                var launch = (totalPrev < 50);
+                return {
+                    delta: _iiqCountJitter(slug || 'default', 'trend_expo_' + asOfIso, Math.round(totalDelta)),
+                    prev:  Math.round(totalPrev),
+                    launch: launch,
+                };
             }
 
             // Weeks-in-campaign label. Combines the T-minus phrasing
@@ -36761,9 +36776,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var weeksTile = tile('Weeks in campaign',
                     '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">' + escapeHtml(weeksLabel) + '</span>',
                     '');
-                var expoTile = tile('Total exposure this week',
-                    '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">+' + fmtCompact(totalExpo) + ' viewers</span>',
-                    'over ' + escapeHtml(_iiqFmtAsOfDate(_iiqAddDaysIso(asOf, -6))) + ' to ' + escapeHtml(_iiqFmtAsOfDate(asOf)));
+                var expoTileBody, expoTileNote;
+                if (totalExpo && totalExpo.launch) {
+                    expoTileBody = '<span style="color:#B7B3D8; font-size:0.95rem; font-weight:600;">Launch signal</span>';
+                    expoTileNote = 'prior 7d has too little accrual for a weekly delta yet';
+                } else {
+                    var deltaVal = (totalExpo && typeof totalExpo === 'object') ? totalExpo.delta : totalExpo;
+                    expoTileBody = '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">+' + fmtCompact(deltaVal) + ' viewers</span>';
+                    expoTileNote = 'over ' + escapeHtml(_iiqFmtAsOfDate(_iiqAddDaysIso(asOf, -6))) + ' to ' + escapeHtml(_iiqFmtAsOfDate(asOf));
+                }
+                var expoTile = tile('Total exposure this week', expoTileBody, expoTileNote);
                 var trajInner = '<span title="Vs the trailing 4-week mean." style="display:inline-block; background:' + trajBg + '; border:1px solid ' + trajBorder + '; color:' + trajFg + '; font-size:0.78rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + trajArrow + ' ' + escapeHtml(trajLabel) + '</span>';
                 var trajTile = tile('Trajectory', trajInner, 'Vs the trailing 4-week mean' + trajRatioTxt);
 
