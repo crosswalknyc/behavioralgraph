@@ -45944,9 +45944,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var html = '';
 
-                // Asset-type filter (shared with other tabs).
-                var assetTypes = iiqAssetTypesInList(assetsAll);
-                if (assetTypes.length) html += iiqAssetFilterBarHtml(assetTypes);
+                // No asset-type chip bar here. This page already cuts by
+                // platform and by source and then works one asset at a
+                // time, so a third filter was clutter. The shared filter
+                // still applies to these rows if it was set on another
+                // view; its chips live on the four views that have them.
 
                 // Channel + paid/organic filters.
                 html += '<div class="iiq-card" style="padding:0.55rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem;">';
