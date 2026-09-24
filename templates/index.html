@@ -39791,6 +39791,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + ' <span style="color:var(--text-secondary); opacity:0.7;">vs GP</span>';
             };
 
+            var _IIQ_DEMO_SELECT = 'background:#22383F; color:#E9E8E1; border:1px solid #2C4148; border-radius:6px; padding:0.34rem 0.5rem; font-size:0.74rem; font-family:inherit;';
+            function _iiqDemoControl(label, inner) {
+                return '<div style="display:flex; flex-direction:column; gap:0.32rem; min-width:0;">'
+                     +   '<span style="font-size:0.58rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em;">' + escapeHtml(label) + '</span>'
+                     +   '<div style="display:flex; align-items:center;">' + inner + '</div>'
+                     + '</div>';
+            }
+
             // One grid for the header row and every data row, so the
             // columns cannot drift apart when either is edited.
             var _IIQ_DEMO_GRID = 'display:grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px 62px 50px; gap:0.6rem;';
@@ -39966,7 +39974,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!d || (d.success === false && !(d.phases && d.phases.length))) {
                     var msg = (d && d.error) || 'Demographics have not been generated for this campaign yet.';
                     return '<div class="iiq-empty" style="padding:2rem 1rem; text-align:center;">'
-                        +    '<div style="font-size:0.9rem; color:#fbbf24; margin-bottom:0.5rem;">Demographics not available</div>'
+                        +    '<div style="font-size:0.9rem; color:#E9E8E1; margin-bottom:0.5rem;">Demographics not available</div>'
                         +    '<div style="font-size:0.78rem; color:var(--text-secondary); max-width: 640px; margin: 0 auto;">' + escapeHtml(msg) + '</div>'
                         +  '</div>';
                 }
@@ -40043,22 +40051,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!g) { pickHtml += opts.map(_demoOptTag).join(''); return; }
                     pickHtml += '<optgroup label="' + escapeHtml(g) + '">' + opts.map(_demoOptTag).join('') + '</optgroup>';
                 });
-                var pills = ''
-                    + '<div style="display:inline-flex; align-items:center; gap:0.45rem; padding:0.3rem 0.55rem; background: rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.22); border-radius:6px; max-width:100%;">'
-                    +   '<span style="font-size:0.7rem; color:#93c5fd; letter-spacing:0.04em; text-transform:uppercase; font-weight:600; white-space:nowrap;">Show</span>'
-                    +   '<select onchange="iiqDemoSetPhase(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(59,130,246,0.35); border-radius:4px; padding:0.25rem 0.4rem; font-size:0.74rem; max-width:560px;">'
-                    +     pickHtml
-                    +   '</select>'
-                    + '</div>';
+                // Both controls take the shape the page already uses at
+                // the top: a small label above the control. They were a
+                // blue pill and an amber pill on two separate rows, in two
+                // colours the palette does not have.
+                var pills = _iiqDemoControl('Show', ''
+                    + '<select onchange="iiqDemoSetPhase(this.value)" style="' + _IIQ_DEMO_SELECT + ' width:100%; max-width:560px;">'
+                    +   pickHtml
+                    + '</select>');
                 // Which link, who posted it, where. Only when a single link
                 // is picked.
                 var linkMeta = '';
                 if (picked.url || picked.creator) {
-                    linkMeta = '<div style="margin-top:0.45rem; font-size:0.72rem; color: var(--text-secondary); line-height:1.4; overflow-wrap:anywhere;">'
-                        + (picked.creator ? '<span style="color:#e2e8f0;">' + escapeHtml(picked.creator) + '</span>' : '')
+                    linkMeta = '<div style="margin:-0.85rem 0 1.35rem; font-size:0.72rem; color:#7C878A; line-height:1.4; overflow-wrap:anywhere;">'
+                        + (picked.creator ? '<span style="color:#E9E8E1;">' + escapeHtml(picked.creator) + '</span>' : '')
                         + (picked.channel ? ' \u00b7 ' + escapeHtml(picked.channel) : '')
                         + (picked.posted_date ? ' \u00b7 posted ' + escapeHtml(picked.posted_date) : '')
-                        + (picked.url ? ' \u00b7 <a href="' + escapeHtml(picked.url) + '" target="_blank" rel="noopener" style="color:#93c5fd;">' + escapeHtml(picked.url) + '</a>' : '')
+                        + (picked.url ? ' \u00b7 <a href="' + escapeHtml(picked.url) + '" target="_blank" rel="noopener" style="color:#C7F23E;">' + escapeHtml(picked.url) + '</a>' : '')
                         + '</div>';
                 }
 
@@ -40134,41 +40143,39 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         return '<option value="' + escapeHtml(t.title_slug) + '"' + sel + '>' + escapeHtml(lbl) + '</option>';
                     }).join('');
                 var cmpLoadingLabel = (cmpSlug && !window._iiqDemoCompareCache[cmpSlug])
-                    ? ' <span style="color:#fbbf24; font-size:0.7rem; margin-left:0.4rem;">loading</span>' : '';
-                var compareUi = ''
-                    + '<div style="display:inline-flex; align-items:center; gap:0.4rem; margin-left:0.75rem; padding:0.3rem 0.55rem; background: rgba(251,191,36,0.06); border:1px solid rgba(251,191,36,0.20); border-radius:6px;">'
-                    +   '<span style="font-size:0.7rem; color:#fbbf24; letter-spacing:0.04em; text-transform:uppercase; font-weight:600;">Compare vs</span>'
-                    +   '<select onchange="window.iiqDemoSetCompare(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(251,191,36,0.35); border-radius:4px; padding:0.2rem 0.4rem; font-size:0.72rem;">'
-                    +     cmpOptionsHtml
-                    +   '</select>'
-                    +   cmpLoadingLabel
-                    + '</div>';
+                    ? '<span style="color:#E682FF; font-size:0.66rem; margin-left:0.4rem;">loading</span>' : '';
+                var compareUi = _iiqDemoControl('Compare against', ''
+                    + '<select onchange="window.iiqDemoSetCompare(this.value)" style="' + _IIQ_DEMO_SELECT + ' min-width:220px;">'
+                    +   cmpOptionsHtml
+                    + '</select>'
+                    + cmpLoadingLabel);
 
                 return ''
-                    + '<div style="margin-bottom: 0.9rem;">'
-                    +   '<div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">'
-                    +     '<div style="font-size:0.82rem; color:#fff; font-weight:600;">'
-                    +       escapeHtml(picked.label)
+                    + '<div style="display:flex; align-items:flex-end; gap:1.5rem; flex-wrap:wrap; padding-bottom:1rem; margin-bottom:1.35rem; border-bottom:1px solid #2C4148;">'
+                    +   pills
+                    +   compareUi
+                    +   '<div style="margin-left:auto; text-align:right; font-variant-numeric:tabular-nums;">'
+                    +     '<div style="font-size:0.95rem; color:#E9E8E1; font-weight:300; letter-spacing:-0.018em;">'
+                    +       fmtCompact(picked.view_count || 0) + ' views'
                     +     '</div>'
-                    +     '<div style="font-size:0.72rem; color: var(--text-secondary);">'
-                    +       fmtCompact(picked.view_count || 0) + ' views \u00b7 '
+                    +     '<div style="font-size:0.58rem; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em; margin-top:0.15rem;">'
                     +       fmtCompact(picked.asset_count || 0) + (picked.asset_count === 1 ? ' link' : ' links')
                     +     '</div>'
-                    +     methodTag
-                    +     compareUi
                     +   '</div>'
-                    +   '<div style="margin-top:0.55rem;">' + pills + '</div>'
-                    +   linkMeta
                     + '</div>'
-                    + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 0.75rem;">'
+                    + linkMeta
+                    // Two across, not three. At three the label column had
+                    // to be narrow enough that a third of the buckets read
+                    // as "Another Race/Ethnic...".
+                    + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1rem;">'
                     +   cards
                     + '</div>'
-                    + '<div style="margin-top:1rem; font-size:0.66rem; color: var(--text-secondary); opacity:0.65; line-height:1.4;">'
-                    +   'Colored bars = current campaign share. White tick on each bar = Gen Pop (Gen_Pop_2026 baseline). '
+                    + '<div style="margin-top:1.35rem; padding-top:0.85rem; border-top:1px solid #2C4148; font-size:0.66rem; color:#7C878A; line-height:1.5;">'
+                    +   'Each bar is this cut\'s share of the bucket. The pale tick on every bar is Gen Pop. '
                     +   (cmpPayload
-                        ? '<span style="color:#fbbf24;">Amber tick = ' + escapeHtml(cmpPayload.label) + ' share (their All-campaigns cut).</span> Deltas show current vs Gen Pop (uncolored chip) and current vs comparison (amber-bordered chip). '
-                        : 'Pick another campaign in the "Compare vs" dropdown to overlay its audience shape as a second amber tick + delta chip. ')
-                    +   'Median age + median income are linearly-interpolated from the bucketed distributions.'
+                        ? '<span style="color:#E682FF;">The orchid tick is ' + escapeHtml(cmpPayload.label) + ', on their all-campaigns cut,</span> and the outlined chip beside each delta reads against them rather than against Gen Pop. '
+                        : 'Pick a campaign under Compare against to lay its audience over this one as a second tick. ')
+                    +   'Median age and median income read off the bucketed distributions.'
                     + '</div>';
             }
 
