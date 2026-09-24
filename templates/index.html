@@ -44919,7 +44919,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (!key) return;
                         if (!by[key]) by[key] = {
                             talent: key, views: 0, eng_weighted: 0,
-                            info_seekers: 0, ticket_visits: 0, asset_count: 0
+                            info_seekers: 0, ticket_visits: 0, asset_count: 0, assets: []
                         };
                         var b = by[key];
                         b.views        += v;
@@ -44927,6 +44927,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         b.info_seekers += info;
                         b.ticket_visits+= ticket;
                         b.asset_count  += 1;
+                        b.assets.push(c);
                     });
                 });
                 return Object.keys(by).map(function(k) {
@@ -44942,7 +44943,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // click the same header again to flip direction. Default sort is
             // Views, descending. Strings default ascending, numerics
             // descending. Same UX as Q1's sortable header row.
-            window._iiqQ4 = window._iiqQ4 || { sortKey: 'views', sortDir: 'desc', data: null };
+            window._iiqQ4 = window._iiqQ4 || { sortKey: 'views', sortDir: 'desc', data: null, collapsed: {}, keys: [] };
+            // Every creator's posts are listed under their row by default
+            // (Jenna 2026-09-24: all talent, all posts). A row click folds
+            // that creator; the header control folds or opens everyone.
+            window.iiqQ4TogglePosts = function(i) {
+                var s = window._iiqQ4;
+                var key = (s.keys || [])[i];
+                if (key == null) return;
+                s.collapsed = s.collapsed || {};
+                if (s.collapsed[key]) delete s.collapsed[key]; else s.collapsed[key] = true;
+                if (s.data) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ4(s.data);
+                }
+            };
+            window.iiqQ4ToggleAll = function() {
+                var s = window._iiqQ4;
+                s.collapsed = s.collapsed || {};
+                var keys = s.keys || [];
+                var anyOpen = keys.some(function(k) { return !s.collapsed[k]; });
+                s.collapsed = {};
+                if (anyOpen) keys.forEach(function(k) { s.collapsed[k] = true; });
+                if (s.data) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ4(s.data);
+                }
+            };
             window.iiqQ4Sort = function(key) {
                 var s = window._iiqQ4;
                 if (s.sortKey === key) {
@@ -45030,8 +45057,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers - matches Assets page' : 'requires asset feed')
                     + '</div>';
 
+                window._iiqQ4.keys = rows.map(function(r) { return r.talent; });
+                window._iiqQ4.collapsed = window._iiqQ4.collapsed || {};
+                var _q4AnyOpen = rows.some(function(r) { return !window._iiqQ4.collapsed[r.talent]; });
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
-                html += '<div style="display:flex; justify-content:flex-end; align-items:baseline; margin-bottom:0.55rem;">';
+                html += '<div style="display:flex; justify-content:' + (usingAssets ? 'space-between' : 'flex-end') + '; align-items:baseline; margin-bottom:0.55rem; gap:0.75rem;">';
+                if (usingAssets) {
+                    html += '<div style="font-size:0.72rem; color: var(--text-secondary);">Every post is listed under its creator. '
+                        + '<a href="#" onclick="event.preventDefault(); iiqQ4ToggleAll();" style="color:#C7F23E; text-decoration:underline; text-underline-offset:2px;">' + (_q4AnyOpen ? 'Collapse all' : 'Expand all') + '</a></div>';
+                }
                 html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
                 function _q4Hdr(key, label, baseColor, align, tip) {
@@ -45071,8 +45105,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var infoCntCell   = r.info_seekers  == null ? '<span style="opacity:0.4;">-</span>' : fmtCompact(r.info_seekers||0);
                     var tkPctCell     = r.ticket_pct    == null ? '<span style="opacity:0.4;">-</span>' : r.ticket_pct.toFixed(2) + '%';
                     var tkCntCell     = r.ticket_visits == null ? '<span style="opacity:0.4;">-</span>' : fmtCompact(r.ticket_visits||0);
-                    html += '<tr>'
-                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04);">' + escapeHtml(r.talent) + '</td>'
+                    var _q4Idx = window._iiqQ4.keys.indexOf(r.talent);
+                    var _q4Open = usingAssets && !window._iiqQ4.collapsed[r.talent] && (r.assets || []).length > 0;
+                    var _q4Caret = usingAssets ? '<span style="display:inline-block; width:1em; opacity:0.6; margin-right:0.2rem;">' + (_q4Open ? '\u25BE' : '\u25B8') + '</span>' : '';
+                    html += '<tr' + (usingAssets ? ' onclick="iiqQ4TogglePosts(' + _q4Idx + ')" style="cursor:pointer;" title="Click to show or hide this creator\'s posts"' : '') + '>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04);">' + _q4Caret + escapeHtml(r.talent) + '</td>'
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color: var(--text-secondary);">' + r.asset_count + '</td>'
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right;">'
                         +     '<div style="display:flex; align-items:center; gap:0.5rem; justify-content:flex-end;">'
@@ -45088,6 +45125,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + tkPctCell + '</td>'
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums; opacity:0.85;">' + tkCntCell + '</td>'
                         + '</tr>';
+                    if (_q4Open) {
+                        var _bflRow = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page';
+                        var posts = (r.assets || []).slice().sort(function(a, b) { return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); });
+                        var pg = 'display:grid; grid-template-columns: minmax(0,1fr) 110px 78px 70px 74px 80px 48px; gap:0.6rem; align-items:center; padding:0.3rem 0.5rem; font-size:0.74rem;';
+                        html += '<tr class="iiq-q4-posts"><td colspan="8" style="padding:0.15rem 0.5rem 0.55rem 1.6rem; border-bottom:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.015);">';
+                        html += '<div style="' + pg + ' color: var(--text-secondary); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em;">'
+                            + '<div>Post</div><div>Platform</div><div style="text-align:right;">Views</div><div style="text-align:right;">Eng %</div><div style="text-align:right;">Info-seek %</div><div style="text-align:right;">' + escapeHtml(_bflRow) + ' %</div><div style="text-align:right;">Link</div></div>';
+                        posts.forEach(function(c) {
+                            var pv = Number(c.ext_view_count) || 0;
+                            var pe = pv > 0 ? Math.min(60, (Number(c.ext_engagement_count) || 0) / pv * 100) : 0;
+                            var pp = iiqAssetFunnelProjection(c);
+                            var label = String(c.note || c.action_label || c.url || '').trim();
+                            var pre = r.talent + ' - ';
+                            if (label.indexOf(pre) === 0) label = label.slice(pre.length);
+                            var plat = String(c.channel || '') + (c.asset_type ? ' \u00b7 ' + String(c.asset_type).replace(/ \(.*\)$/, '') : '') + (c.posted_date ? ' \u00b7 ' + c.posted_date : '');
+                            html += '<div style="' + pg + ' border-top:1px solid rgba(255,255,255,0.04);">'
+                                + '<div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
+                                + '<div style="color: var(--text-secondary); font-size:0.7rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(plat) + '">' + escapeHtml(plat) + '</div>'
+                                + '<div style="text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(pv) + '</div>'
+                                + '<div style="text-align:right; color:#fb923c; font-variant-numeric: tabular-nums;">' + pe.toFixed(1) + '%</div>'
+                                + '<div style="text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + Number(pp.info_pct || 0).toFixed(2) + '%</div>'
+                                + '<div style="text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + Number(pp.ticket_pct || 0).toFixed(2) + '%</div>'
+                                + (c.url ? '<div style="text-align:right;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="' + escapeHtml(c.url) + '" style="color:#C7F23E; text-decoration:underline; text-underline-offset:2px;">Open</a></div>' : '<div></div>')
+                                + '</div>';
+                        });
+                        html += '</td></tr>';
+                    }
                 });
                 html += '</tbody></table></div>';
                 if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
