@@ -41904,7 +41904,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             function iiqRenderQ2(d) {
                 var cum = d.cumulative || [];
-                var bestRaw = _aiqScopeAssets(d.best_in_flight_ytd || d.best_in_flight_14d || []);
+                var bestSrc = d.best_in_flight_ytd || d.best_in_flight_14d || [];
+                if ((d._assets || []).length) {
+                    // Every asset lists (Jenna 2026-09-23). The asset set is
+                    // already cut to the selected audience, so the totals
+                    // read from it carry the cohort through.
+                    bestSrc = (d._assets || []).map(function (c) {
+                        var o = {};
+                        for (var k in c) { if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k]; }
+                        o.views_total = Number(c.ext_view_count || c.lifetime_view_count || 0);
+                        o.engagement_total = Number(c.ext_engagement_count || c.lifetime_engagement_count || 0);
+                        return o;
+                    });
+                }
+                var bestRaw = _aiqScopeAssets(bestSrc);
                 var bestLabel = d.best_in_flight_window_label || 'YTD';
                 if (!cum.length && !bestRaw.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
 
