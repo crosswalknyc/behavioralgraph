@@ -140533,58 +140533,56 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
             pop.appendChild(cfRow);
 
-            // ---- Gen Pop baseline toggle ----------------------------------
-            // Always visible: lets the user drop Gen Pop from compare-mode
-            // visuals when they only care about old-vs-new (or run-vs-run).
-            // Has no effect outside compare mode (selectedKeys empty -> the
-            // native render owns the Gen Pop column).
-            const gpRow = document.createElement('label');
-            gpRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(156,163,175,0.08);border:1px solid rgba(156,163,175,0.18);';
+            // ---- Gen Pop baseline, with its cuts folded in ----------------
+            // One subject, one row. The checkbox includes or drops the Gen
+            // Pop baseline from compare-mode visuals; the caret on the same
+            // row opens the four generational baselines underneath it.
+            // Both were separate stacked controls until 2026-09-24, which
+            // read as two settings for one thing.
+            //
+            // The head is a <div>, not a <label>: a label would toggle the
+            // checkbox on every click, and the row's job is to expand. The
+            // checkbox keeps its own hit area and stops the click there, so
+            // ticking the baseline never opens or closes the drawer.
+            const gpGenSelectedCount = GENPOP_GENERATION_CUTS
+                .filter(c => selected.has(c.key)).length;
+            const gpGenWrap = document.createElement('div');
+            gpGenWrap.style.cssText = 'margin:0 0 0.45rem 0;border:1px solid rgba(156,163,175,0.18);border-radius:6px;background:rgba(156,163,175,0.08);overflow:hidden;';
+            const gpGenHead = document.createElement('div');
+            gpGenHead.style.cssText = 'display:grid;grid-template-columns:18px 1fr auto auto;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;cursor:pointer;font-size:0.82rem;line-height:1.25;color:var(--text-primary, #e6e6e6);user-select:none;';
+            gpGenHead.title = 'Include the US Gen Pop baseline. Open for the generational cuts.';
+
             const gpCb = document.createElement('input');
             gpCb.type = 'checkbox';
             gpCb.id = 'cmpIncludeGenPopCb';
             gpCb.checked = _comparisonRunsState.includeGenPop !== false;
             gpCb.style.cssText = 'accent-color:#9ca3af;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
-            const gpLbl = document.createElement('span');
-            gpLbl.innerHTML = 'Include <strong style="color:var(--text-primary, #cbd5e1);">Gen Pop</strong> baseline';
-            gpLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
-            gpRow.appendChild(gpCb);
-            gpRow.appendChild(gpLbl);
-            gpCb.addEventListener('change', function() {
+            gpCb.addEventListener('click', function(ev) { ev.stopPropagation(); });
+            gpCb.addEventListener('change', function(ev) {
+                ev.stopPropagation();
                 _setComparisonIncludeGenPop(gpCb.checked);
             });
-            pop.appendChild(gpRow);
 
-            // ---- Gen Pop generations expander (auto-collapsed) ------------
-            // Four baseline skins of Gen Pop 2026 (Gen Z / Millennials /
-            // Gen X / Boomers). Collapsed by default; expands on click and
-            // auto-opens when a generation is already on. Checking a
-            // generation loads its file as a comparison column and makes
-            // it the "Index against" denominator (when it is the only one
-            // selected) so the Index reads vs that generation instead of
-            // the all-ages baseline.
-            const gpGenSelectedCount = GENPOP_GENERATION_CUTS
-                .filter(c => selected.has(c.key)).length;
-            const gpGenWrap = document.createElement('div');
-            gpGenWrap.style.cssText = 'margin:-0.15rem 0 0.45rem 0;border:1px solid rgba(156,163,175,0.18);border-radius:6px;background:rgba(156,163,175,0.05);overflow:hidden;';
-            const gpGenHead = document.createElement('div');
-            gpGenHead.style.cssText = 'display:flex;align-items:center;gap:0.45rem;padding:0.38rem 0.5rem;cursor:pointer;font-size:0.78rem;color:var(--text-primary, #e6e6e6);user-select:none;';
-            const gpGenCaret = document.createElement('span');
-            gpGenCaret.textContent = '\u25B8';
-            gpGenCaret.style.cssText = 'display:inline-block;font-size:0.7rem;color:var(--text-secondary, #9ca3af);transition:transform 0.15s ease;';
             const gpGenTitle = document.createElement('span');
-            gpGenTitle.innerHTML = '<strong style="color:var(--text-primary, #cbd5e1);">Cuts</strong>';
-            gpGenTitle.style.cssText = 'flex:1;min-width:0;';
+            gpGenTitle.innerHTML = 'Include <strong style="color:var(--text-primary, #cbd5e1);">Gen Pop</strong> baseline';
+            gpGenTitle.style.cssText = 'min-width:0;';
+
             const gpGenBadge = document.createElement('span');
             gpGenBadge.id = 'gpGenExpanderBadge';
             gpGenBadge.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);';
             const _gpGenPaintBadge = function() {
                 const n = GENPOP_GENERATION_CUTS.filter(c =>
                     (_comparisonRunsState.selectedKeys || []).includes(c.key)).length;
-                gpGenBadge.textContent = n > 0 ? (n + ' on') : '';
+                gpGenBadge.textContent = n > 0 ? (n + ' cut' + (n === 1 ? '' : 's') + ' on') : '';
             };
             _gpGenPaintBadge();
+
             // Caret sits on the RIGHT edge of the row (Jenna 2026-09-23).
+            const gpGenCaret = document.createElement('span');
+            gpGenCaret.textContent = '\u25B8';
+            gpGenCaret.style.cssText = 'display:inline-block;font-size:0.7rem;color:var(--text-secondary, #9ca3af);transition:transform 0.15s ease;';
+
+            gpGenHead.appendChild(gpCb);
             gpGenHead.appendChild(gpGenTitle);
             gpGenHead.appendChild(gpGenBadge);
             gpGenHead.appendChild(gpGenCaret);
