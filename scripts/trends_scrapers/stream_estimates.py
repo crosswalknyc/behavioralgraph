@@ -8249,6 +8249,14 @@ def published_chart_index(slug: str,
                 continue
             coll = str(row.get('collection') or '').strip().lower()
             coll_n = ' '.join(coll.replace('.', '').split())
+            # A row with NO collection is not on any chart. Without
+            # this the loose match below hands it every chart on the
+            # service, because `'' in anything` is true: Paramount+'s
+            # 182 catalog rows all carry a blank collection and all
+            # read as charted, which numbered the catalog 1 to 182 and
+            # invented a chart the service never published.
+            if not coll_n:
+                continue
             if not any(p.replace('.', '') in coll_n
                        or coll_n in p.replace('.', '') for p in pats):
                 continue

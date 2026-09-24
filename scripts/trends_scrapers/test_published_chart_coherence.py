@@ -402,6 +402,45 @@ def test_number_one_is_lifted_over_number_two():
           f"contained")
 
 
+def test_a_blank_collection_is_not_a_chart():
+    """A row with no collection is on no chart.
+
+    Live defect, Paramount+, 2026-09-24. The collection match is
+    deliberately loose, because a storefront names the same rail
+    slightly differently by page and an exact set would silently drop
+    a chart the day the wording moved. But `'' in anything` is true,
+    so every row carrying a BLANK collection matched every pattern.
+    Paramount+'s 182 catalog rows all carry one, so the whole catalog
+    read as charted, got numbered 1 to 182, and the board grew a third
+    chart group the service never published, led by a title that is
+    not on either of its real rails.
+    """
+    try:
+        from . import stream_estimates as se
+    except ImportError:
+        from scripts.trends_scrapers import stream_estimates as se
+
+    snap = {'national': [
+        {'title': 'Lanterns', 'collection': 'Most Watched Shows',
+         'category_display': 'TV'},
+        {'title': 'Bridgerton', 'collection': 'Most Watched Shows',
+         'category_display': 'TV'},
+        {'title': 'Zamboni', 'collection': '', 'category_display': 'TV'},
+        {'title': 'Quokka', 'category_display': 'TV'},
+        {'title': 'Wombat', 'collection': '   ',
+         'category_display': 'Film'},
+    ]}
+    idx = se.published_chart_index('paramountplus', snap)
+    charted = {k for k in idx if ':' in k}
+    assert any('lanterns' in k for k in charted), \
+        'the real chart row was dropped'
+    for stray in ('zamboni', 'quokka', 'wombat'):
+        assert not any(stray in k for k in idx), (
+            f'{stray!r} has no collection and must not be charted')
+    print(f'  {len(charted)} charted key(s), no blank-collection row '
+          f'among them')
+
+
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_the_tail_but_still_orders_the_chart,
              test_no_ladder, test_last_digits_stay_natural,
@@ -409,7 +448,8 @@ def main() -> int:
              test_published_scale_is_physical_and_ordered,
              test_nothing_lands_over_the_ceiling,
              test_descends_even_when_the_ceiling_binds,
-             test_number_one_is_lifted_over_number_two]
+             test_number_one_is_lifted_over_number_two,
+             test_a_blank_collection_is_not_a_chart]
     bad = 0
     for t in tests:
         print(t.__name__)
