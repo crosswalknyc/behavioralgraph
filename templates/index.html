@@ -30308,8 +30308,7 @@ https://www.instagram.com/p/..."></textarea>
                screen the main dashboard boots with, scoped inside the
                Trends panel instead of fixed over the page. Reuses the
                .app-boot-* classes so the two never drift apart. */
-            #trendsIQView .tiq-boot { align-items: center; justify-content: center; min-height: 460px; padding: 48px 16px; margin-bottom: 1rem; background: radial-gradient(ellipse 54% 42% at 50% 38%, #15252A 0%, rgba(21,37,42,0) 70%), #0C1618; }
-            body[data-theme="light"] #trendsIQView .tiq-boot { background: radial-gradient(ellipse 54% 42% at 50% 38%, #FFFFFF 0%, rgba(233,232,225,0) 70%), #E9E8E1; }
+            #trendsIQView .tiq-boot { align-items: center; justify-content: center; min-height: 460px; padding: 48px 16px; margin-bottom: 1rem; background: transparent; }
             #trendsIQView .tiq-boot .app-boot-title { font-size: 34px; }
             #trendsIQView .tiq-boot .app-boot-mark { width: 72px; height: 72px; margin-bottom: 20px; box-shadow: 0 14px 40px rgba(51, 88, 255, 0.26); }
             #trendsIQView .tiq-boot .app-boot-progress { margin-bottom: 32px; }
@@ -31330,13 +31329,13 @@ https://www.instagram.com/p/..."></textarea>
                     </button>
                 </span>
             </div>
-            <div id="trendsIQLoading" class="tiq-boot" style="display: none;" role="status" aria-live="polite" aria-label="Loading Trends and Rankers">
+            <div id="trendsIQLoading" class="tiq-boot" style="display: none;" role="status" aria-live="polite" aria-label="Loading Rankers">
                 <div class="app-boot-card">
                     <div class="app-boot-mark" aria-hidden="true">
                         <svg width="30" height="30" viewBox="0 0 64 64"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
                     </div>
                     <div class="app-boot-word">Crosswalk</div>
-                    <div class="app-boot-title" id="tiqBootTitle">Loading Trends.</div>
+                    <div class="app-boot-title" id="tiqBootTitle">Loading Rankers.</div>
                     <div class="app-boot-sub" id="tiqBootSub">Reading today's charts on every service&hellip;</div>
                     <div class="app-boot-progress">
                         <div class="app-boot-progress-track"><div class="app-boot-progress-fill" id="tiqBootProgressFill"></div></div>
@@ -39752,25 +39751,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // ============================================================
             window._iiqDemoState = window._iiqDemoState || {};
 
-            window._iiqDemoBarColor = function(idx, cat) {
-                // Category-tinted palette so different demo cards read
-                // distinctly at a glance. Idx desaturates further down.
-                var palettes = {
-                    AGE:                ['#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#1e3a8a','#172554'],
-                    GENDER:             ['#f472b6','#ec4899','#db2777','#be185d','#9d174d','#831843'],
-                    ETHNICITY:          ['#fbbf24','#f59e0b','#d97706','#b45309','#92400e','#78350f'],
-                    INCOME:             ['#34d399','#10b981','#059669','#047857','#065f46','#064e3b','#022c22'],
-                    EDUCATION:          ['#a78bfa','#8b5cf6','#7c3aed','#6d28d9','#5b21b6'],
-                    PARENTAL_STATUS:    ['#22d3ee','#06b6d4','#0891b2'],
-                    NUMBER_OF_CHILDREN: ['#67e8f9','#22d3ee','#06b6d4','#0891b2','#0e7490'],
-                    AGE_OF_CHILDREN:    ['#5eead4','#2dd4bf','#14b8a6','#0d9488','#0f766e','#115e59'],
-                    RELATIONSHIP:       ['#fb923c','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'],
-                    SEXUAL_ORIENTATION: ['#f9a8d4','#f472b6','#ec4899','#db2777','#be185d'],
-                    OCCUPATION:         ['#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a','#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a','#94a3b8'],
-                    PRIMARY_LANGUAGE:   ['#c4b5fd','#a78bfa','#8b5cf6','#7c3aed'],
-                };
-                var pal = palettes[cat] || ['#60a5fa','#3b82f6','#2563eb'];
-                return pal[Math.min(idx, pal.length - 1)];
+            // One accent doing one job. The panels used to carry twelve
+            // different hues between them, which made a page of the same
+            // measure read as twelve unrelated charts. Rank steps the
+            // weight down instead, so the leading bucket still reads first.
+            window._iiqDemoBarColor = function(idx) {
+                var a = Math.max(0.30, 1 - (Number(idx) || 0) * 0.115);
+                return 'rgba(199,242,62,' + a.toFixed(2) + ')';
+            };
+            // Above Gen Pop is the accent, below it is the recessive voice.
+            // Red and green are not in the palette, and a delta is a
+            // direction rather than an alarm.
+            window._iiqDemoDeltaColor = function(delta) {
+                var a = Math.abs(delta);
+                if (a < 0.5) return '#7C878A';
+                return (delta > 0) ? '#C7F23E' : '#B7B3D8';
             };
 
             // Format helpers for the AGE / INCOME median header line.
@@ -39791,12 +39786,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var absD = Math.abs(d);
                 var sign = d > 0 ? '+' : (d < 0 ? '\u2212' : '');
                 var deltaLabel = sign + (fmtFn ? fmtFn(absD) : absD.toFixed(1));
-                var color = (absD < 1) ? '#94a3b8'
-                            : (d < 0)  ? '#60a5fa'
-                                       : '#fb923c';
+                var color = (absD < 1) ? '#7C878A' : window._iiqDemoDeltaColor(d);
                 return ' <span style="color:' + color + '; font-weight:600;">' + deltaLabel + '</span>'
                      + ' <span style="color:var(--text-secondary); opacity:0.7;">vs GP</span>';
             };
+
+            // One grid for the header row and every data row, so the
+            // columns cannot drift apart when either is edited.
+            var _IIQ_DEMO_GRID = 'display:grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px 62px 50px; gap:0.6rem;';
+            var _IIQ_DEMO_MEDIAN = 'font-size:0.7rem; color:#E9E8E1; margin:0.5rem 0 0.75rem; padding-left:0.6rem; border-left:2px solid #C7F23E; font-variant-numeric:tabular-nums;';
 
             window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count, gpDist, medians, gpMedians, cmp) {
                 gpDist    = gpDist    || {};
@@ -39823,7 +39821,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var rows = entries.map(function(e, i) {
                     var wPct = Math.max(2, Math.round(e.pct / maxPct * 100));
-                    var barColor = window._iiqDemoBarColor(i, cat);
+                    var barColor = window._iiqDemoBarColor(i);
                     var absCount = Math.round((e.pct / 100) * (phase_view_count || 0));
                     var absStr = phase_view_count ? fmtCompact(absCount) : '';
 
@@ -39833,13 +39831,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (isFinite(gpPct) && gpPct > 0) {
                         var tickPos = Math.max(0, Math.min(100, gpPct / maxPct * 100));
                         tickHtml = '<div title="Gen Pop: ' + gpPct.toFixed(1) + '%" style="'
-                                 + 'position:absolute; left:' + tickPos.toFixed(2) + '%; top:-2px; bottom:-2px;'
-                                 + ' width:2px; background:#e5e7eb; opacity:0.85; border-radius:1px;'
-                                 + ' box-shadow: 0 0 0 1px rgba(0,0,0,0.4);"></div>';
+                                 + 'position:absolute; left:' + tickPos.toFixed(2) + '%; top:-3px; bottom:-3px;'
+                                 + ' width:2px; background:#E9E8E1; opacity:0.9; border-radius:1px;'
+                                 + ' box-shadow: 0 0 0 1px rgba(12,22,24,0.55);"></div>';
                         var delta = e.pct - gpPct;
                         var absD = Math.abs(delta);
-                        var dColor = (absD < 0.5) ? '#94a3b8'
-                                     : (delta > 0) ? '#34d399' : '#f87171';
+                        var dColor = window._iiqDemoDeltaColor(delta);
                         var dSign = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
                         deltaHtml = '<span title="vs Gen Pop ' + gpPct.toFixed(1) + '%" style="color:' + dColor + '; font-size:0.66rem; font-variant-numeric:tabular-nums;">'
                                   + dSign + absD.toFixed(1) + 'pp</span>';
@@ -39852,15 +39849,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var cmpTickPos = Math.max(0, Math.min(100, cmpPct / maxPct * 100));
                         var cmpTip = escapeHtml(cmpLabel || 'Compare') + ': ' + cmpPct.toFixed(1) + '%';
                         tickHtml += '<div title="' + cmpTip + '" style="'
-                                  + 'position:absolute; left:' + cmpTickPos.toFixed(2) + '%; top:-4px; bottom:-4px;'
-                                  + ' width:2px; background:#fbbf24; opacity:0.95; border-radius:1px;'
-                                  + ' box-shadow: 0 0 0 1px rgba(0,0,0,0.55);"></div>';
+                                  + 'position:absolute; left:' + cmpTickPos.toFixed(2) + '%; top:-5px; bottom:-5px;'
+                                  + ' width:2px; background:#E682FF; opacity:0.95; border-radius:1px;'
+                                  + ' box-shadow: 0 0 0 1px rgba(12,22,24,0.6);"></div>';
                         var cDelta = e.pct - cmpPct;
                         var cAbsD  = Math.abs(cDelta);
-                        var cColor = (cAbsD < 0.5) ? '#94a3b8'
-                                    : (cDelta > 0) ? '#34d399' : '#f87171';
                         var cSign  = cDelta > 0 ? '+' : (cDelta < 0 ? '\u2212' : '');
-                        deltaHtml += '<span title="vs ' + escapeHtml(cmpLabel || 'Compare') + ' ' + cmpPct.toFixed(1) + '%" style="color:' + cColor + '; background: rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.35); border-radius:3px; padding:0 0.28rem; font-size:0.62rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
+                        deltaHtml += '<span title="vs ' + escapeHtml(cmpLabel || 'Compare') + ' ' + cmpPct.toFixed(1) + '%" style="color:#E682FF; border:1px solid rgba(230,130,255,0.40); border-radius:3px; padding:0 0.28rem; font-size:0.62rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
                                    + cSign + cAbsD.toFixed(1) + 'pp</span>';
                     }
 
@@ -39869,15 +39864,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // variable-width auto cell). Each numeric column is
                     // right-aligned and uses tabular-nums so the digits
                     // stack cleanly.
-                    return '<div style="display:grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 44px 62px 48px; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
-                        +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
-                        +    '<div style="position:relative; height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:visible;">'
-                        +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:3px;"></div>'
+                    // Two lines of label rather than one clipped line. At
+                    // three panels across, a third of these read as
+                    // "Another Race/Ethnic..." and the page looked broken.
+                    return '<div style="' + _IIQ_DEMO_GRID + ' align-items:center; font-size:0.72rem; line-height:1.25; padding:0.3rem 0; border-top:1px solid rgba(255,255,255,0.045);">'
+                        +    '<div style="color:#C6CCC8; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
+                        +    '<div style="position:relative; height:9px; background:#3B3D38; border-radius:9999px; overflow:visible;">'
+                        +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:9999px;"></div>'
                         +      tickHtml
                         +    '</div>'
-                        +    '<div style="text-align:right; color:#fff; font-weight:600; font-variant-numeric:tabular-nums;">' + e.pct.toFixed(1) + '%</div>'
+                        +    '<div style="text-align:right; color:#E9E8E1; font-weight:600; font-variant-numeric:tabular-nums;">' + e.pct.toFixed(1) + '%</div>'
                         +    '<div style="text-align:right; font-variant-numeric:tabular-nums;">' + deltaHtml + '</div>'
-                        +    '<div style="text-align:right; color:var(--text-secondary); opacity:0.75; font-variant-numeric:tabular-nums;">' + absStr + '</div>'
+                        +    '<div style="text-align:right; color:#7C878A; font-variant-numeric:tabular-nums;">' + absStr + '</div>'
                         +  '</div>';
                 }).join('');
 
@@ -39885,30 +39883,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (cat === 'AGE' && medians.median_age != null) {
                     var gpAge  = gpMedians.median_age;
                     var cmpAge = cmpMedians.median_age;
-                    medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(59,130,246,0.08); border-left: 2px solid #60a5fa; border-radius: 0 3px 3px 0;">'
-                                 + '<span style="opacity:0.7;">Median age:</span> '
+                    medianHeader = '<div style="' + _IIQ_DEMO_MEDIAN + '">'
+                                 + '<span style="color:#7C878A;">Median age</span> '
                                  + '<span style="font-weight:700;">' + window._iiqDemoFmtAge(medians.median_age) + '</span>'
                                  + (gpAge != null
-                                    ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtAge(gpAge) + '</span>'
+                                    ? ' <span style="color:#5F6D70;">/</span> <span style="color:#7C878A;">Gen Pop</span> <span style="color:#9AA09B;">' + window._iiqDemoFmtAge(gpAge) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_age, gpAge, 'yrs', function(v){ return v.toFixed(1) + ' yrs'; })
                                     : '')
                                  + (cmpAge != null
-                                    ? ' <span style="opacity:0.5;">| <span style="color:#fbbf24;">' + escapeHtml(cmpLabel || 'Compare') + '</span> ' + window._iiqDemoFmtAge(cmpAge) + '</span>'
+                                    ? ' <span style="color:#5F6D70;">/</span> <span style="color:#E682FF;">' + escapeHtml(cmpLabel || 'Compare') + '</span> <span style="color:#9AA09B;">' + window._iiqDemoFmtAge(cmpAge) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_age, cmpAge, 'yrs', function(v){ return v.toFixed(1) + ' yrs'; })
                                     : '')
                                  + '</div>';
                 } else if (cat === 'INCOME' && medians.median_income != null) {
                     var gpInc  = gpMedians.median_income;
                     var cmpInc = cmpMedians.median_income;
-                    medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(16,185,129,0.08); border-left: 2px solid #34d399; border-radius: 0 3px 3px 0;">'
-                                 + '<span style="opacity:0.7;">Median income:</span> '
+                    medianHeader = '<div style="' + _IIQ_DEMO_MEDIAN + '">'
+                                 + '<span style="color:#7C878A;">Median income</span> '
                                  + '<span style="font-weight:700;">' + window._iiqDemoFmtIncome(medians.median_income) + '</span>'
                                  + (gpInc != null
-                                    ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtIncome(gpInc) + '</span>'
+                                    ? ' <span style="color:#5F6D70;">/</span> <span style="color:#7C878A;">Gen Pop</span> <span style="color:#9AA09B;">' + window._iiqDemoFmtIncome(gpInc) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_income, gpInc, '$', window._iiqDemoFmtIncome)
                                     : '')
                                  + (cmpInc != null
-                                    ? ' <span style="opacity:0.5;">| <span style="color:#fbbf24;">' + escapeHtml(cmpLabel || 'Compare') + '</span> ' + window._iiqDemoFmtIncome(cmpInc) + '</span>'
+                                    ? ' <span style="color:#5F6D70;">/</span> <span style="color:#E682FF;">' + escapeHtml(cmpLabel || 'Compare') + '</span> <span style="color:#9AA09B;">' + window._iiqDemoFmtIncome(cmpInc) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_income, cmpInc, '$', window._iiqDemoFmtIncome)
                                     : '')
                                  + '</div>';
@@ -39920,15 +39918,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // phase's share; "vs Gen Pop" is the pp delta chip
                 // column; "Viewers" is the campaign's projected count
                 // in that bucket (share * phase view total).
-                var colHeader = '<div style="display:grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 44px 62px 48px; gap:0.5rem; align-items:end; font-size:0.58rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.06em; margin: 0 0 0.4rem; padding-bottom:0.28rem; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                var colHeader = '<div style="' + _IIQ_DEMO_GRID + ' align-items:end; font-size:0.56rem; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em; padding-bottom:0.3rem;">'
                     +  '<div></div>'
                     +  '<div></div>'
                     +  '<div style="text-align:right;">Cohort</div>'
                     +  '<div style="text-align:right;">vs Gen Pop</div>'
                     +  '<div style="text-align:right;">Viewers</div>'
                     +  '</div>';
-                return '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
-                    +    '<div style="font-size:0.78rem; font-weight:600; color:#fff; margin-bottom:0.5rem; letter-spacing:0.02em;">' + escapeHtml(label) + '</div>'
+                return '<div style="background:#15252A; border:1px solid #2C4148; border-radius:10px; padding:1rem 1.15rem 1.1rem;">'
+                    +    '<div style="font-size:0.82rem; font-weight:700; color:#E9E8E1; letter-spacing:-0.01em;">' + escapeHtml(label) + '</div>'
                     +    medianHeader
                     +    colHeader
                     +    rows
