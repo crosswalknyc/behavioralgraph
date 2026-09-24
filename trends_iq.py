@@ -8010,7 +8010,7 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
     return stats
 
 
-def _audit_orphan_rows(cards: dict) -> dict:
+def _audit_orphan_rows(cards: dict, stream_snap: dict = None) -> dict:
     """Count rows rendering a number that was never read for the
     service whose rail they sit on.
 
@@ -8020,12 +8020,49 @@ def _audit_orphan_rows(cards: dict) -> dict:
     was supposed to have closed them; a count in the payload makes
     the next regression visible the same night.
 
-    A row is an orphan when it carries a figure and either still
-    wears the cross-service mark or names a different service than
-    the rail it is on. Derived rails are exempt: their whole job is
-    to be computed from a parent.
+    Measured against the stored readings rather than against the
+    marks the passes leave behind, because the first version of this
+    check trusted the marks, found nothing, and the orphans were
+    still there: they do not all carry the cross-service mark.
+
+    A row is an orphan when it carries a figure, sits on a real
+    service rail, and the store holds no reading for that service.
+    The one legitimate exception is a value the coverage pass walked
+    forward from this service's OWN earlier reading, which is the
+    rule's second clause and is marked `carried_forward`. A figure
+    derived from the row's rank position is not an exception; it is
+    the thing the rule exists to stop. Derived rails are exempt:
+    their whole job is to be computed from a parent.
     """
-    out = {'rows': 0, 'by_rail': {}, 'examples': []}
+    out = {'rows': 0, 'by_rail': {}, 'by_basis': {}, 'examples': []}
+    snap_items = (stream_snap or {}).get('items') or {}
+
+    def _has_own_reading(title: str, platform: str) -> bool:
+        norm = _cp_normalize(title or '')
+        if not norm:
+            return True          # cannot judge, do not accuse
+        # Exact identity, not a substring scan. A scan matches
+        # 'Sicario' against 'Sicario: Day of the Soldado' and reports
+        # a reading this title does not have, which would let the
+        # check pass while the orphan it exists to catch is still on
+        # the board.
+        for key in (f'film:{norm}', f'tv:{norm}', f'title:{norm}',
+                    f'fast_film:{norm}', f'fast_tv:{norm}'):
+            entry = snap_items.get(key)
+            if not isinstance(entry, dict):
+                continue
+            blk = (entry.get('by_platform') or {}).get(platform)
+            if isinstance(blk, dict) and (blk.get('us_estimate') or 0):
+                return True
+        # Keys can carry a service prefix on services that publish a
+        # chart, so try those too before concluding anything.
+        for key, entry in snap_items.items():
+            if not isinstance(entry, dict) or not key.endswith(f':{norm}'):
+                continue
+            blk = (entry.get('by_platform') or {}).get(platform)
+            if isinstance(blk, dict) and (blk.get('us_estimate') or 0):
+                return True
+        return False
 
     def _check(node, path: str) -> None:
         if isinstance(node, dict):
@@ -8042,16 +8079,22 @@ def _audit_orphan_rows(cards: dict) -> dict:
             if isinstance(blk, dict) and (blk.get('us_estimate') or 0):
                 platform = _coverage_platform_for_path(path)
                 if platform and not _is_derived_rail(platform):
+                    basis = blk.get('est_basis') or 'unmarked'
                     named = blk.get('platform')
-                    if (blk.get('est_basis') == 'cross_service'
-                            or (named and named != platform)):
+                    title = _coverage_item_title(x)
+                    bad = (basis == 'cross_service'
+                           or (named and named != platform)
+                           or (basis != 'carried_forward'
+                               and not _has_own_reading(title, platform)))
+                    if bad:
                         out['rows'] += 1
                         out['by_rail'][platform] = \
                             out['by_rail'].get(platform, 0) + 1
+                        out['by_basis'][basis] = \
+                            out['by_basis'].get(basis, 0) + 1
                         if len(out['examples']) < 12:
                             out['examples'].append(
-                                (platform, _coverage_item_title(x),
-                                 named or 'unattributed',
+                                (platform, title, basis,
                                  int(blk.get('us_estimate') or 0)))
             _check(x, path)
 
@@ -8064,13 +8107,17 @@ def _audit_orphan_rows(cards: dict) -> dict:
         logger.exception("orphan audit failed (non-fatal)")
         return out
     if out['rows']:
-        for plat, title, named, val in out['examples']:
-            logger.warning("orphan row: '%s' on %s shows %s taken for %s",
-                           title, plat, f'{val:,}', named)
+        for plat, title, basis, val in out['examples']:
+            logger.warning("orphan row: '%s' on %s shows %s with no "
+                           "reading for that service (basis=%s)",
+                           title, plat, f'{val:,}', basis)
         logger.warning("orphan rows: %d row(s) render a figure never read "
-                       "for their own service (%s)", out['rows'],
+                       "for their own service; by rail %s; by basis %s",
+                       out['rows'],
                        ', '.join(f'{k}={v}'
-                                 for k, v in sorted(out['by_rail'].items())))
+                                 for k, v in sorted(out['by_rail'].items())),
+                       ', '.join(f'{k}={v}'
+                                 for k, v in sorted(out['by_basis'].items())))
     else:
         logger.info("orphan rows: none, every row shows a reading taken "
                     "for its own service")
@@ -13011,7 +13058,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         logger.warning("platform cap pass failed: %s", e)
     # Last word on provenance, measured on the tree the reader gets.
     try:
-        payload['meta']['orphan_rows'] = _audit_orphan_rows(payload['cards'])
+        payload.setdefault('meta', {})['orphan_rows'] = \
+            _audit_orphan_rows(payload['cards'], stream_estimates_snap)
     except Exception as e:
         logger.warning("orphan audit failed: %s", e)
 
