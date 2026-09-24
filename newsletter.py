@@ -788,30 +788,53 @@ def _public_issue_date(iso):
         return str(iso)[:10]
 
 
-_IMG_SRC_RE = re.compile(r"""<img[^>]+src=["']([^"']+)["']""", re.I)
+_IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
+_IMG_SRC_RE = re.compile(r"""src=["']([^"']+)["']""", re.I)
+_IMG_ALT_RE = re.compile(r"""alt=["']([^"']*)["']""", re.I)
+_IMG_WIDTH_RE = re.compile(r"""width=["']?(\d+)""", re.I)
+_LOGO_ALT_RE = re.compile(r"crosswalk|logo|wordmark", re.I)
 
 
 def _public_cover_image(cid, camp):
-    """Still from the issue. Never a leaking iframe."""
+    """Largest photo from the issue. Skip the wordmark."""
     asset_base = f"/n/asset/{cid}"
-    li = (camp or {}).get("linkedin") or {}
-    url = (li.get("image_url") or "").strip()
-    if url and not url.startswith("data:") and "{{ASSET_BASE}}" not in url:
-        return url
     try:
         html = get_campaign_html(cid) or ""
     except Exception:
         html = ""
     html = (html or "").replace("{{ASSET_BASE}}", asset_base)
-    for match in _IMG_SRC_RE.finditer(html):
-        src = (match.group(1) or "").strip()
+    best = ""
+    best_w = -1
+    fallback = ""
+    for tag in _IMG_TAG_RE.findall(html):
+        sm = _IMG_SRC_RE.search(tag)
+        if not sm:
+            continue
+        src = (sm.group(1) or "").strip().replace("{{ASSET_BASE}}", asset_base)
         if not src or src.startswith("data:"):
             continue
-        src = src.replace("{{ASSET_BASE}}", asset_base)
         if src.startswith("//"):
             src = "https:" + src
-        return src
-    return ""
+        alt_m = _IMG_ALT_RE.search(tag)
+        alt = alt_m.group(1) if alt_m else ""
+        if _LOGO_ALT_RE.search(alt):
+            continue
+        wm = _IMG_WIDTH_RE.search(tag)
+        width = int(wm.group(1)) if wm else 0
+        if width and width < 160:
+            continue
+        if not fallback:
+            fallback = src
+        if width >= best_w:
+            best_w = width
+            best = src
+    if best:
+        return best
+    li = (camp or {}).get("linkedin") or {}
+    url = (li.get("image_url") or "").strip()
+    if url and not url.startswith("data:") and "{{ASSET_BASE}}" not in url:
+        return url
+    return fallback
 
 
 def public_archive_issues(state=None):

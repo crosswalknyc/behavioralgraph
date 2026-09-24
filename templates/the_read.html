@@ -107,6 +107,7 @@
             width: min(360px, 70vw);
             background: transparent;
             border: 0;
+            border-bottom: 1px solid var(--cw-orchid);
             color: var(--cw-offwhite);
             font-family: 'Inter 18pt', sans-serif;
             font-size: 16px;
@@ -139,14 +140,8 @@
         .err { color: #E9E8E1; font-size: 14px; margin-bottom: 12px; }
         .fine { margin-top: 8px; color: #7C878A; font-size: 11px; line-height: 1.5; }
         .fine a { color: var(--cw-signal-green); text-decoration: none; }
-        .rule {
-            height: 1px;
-            background: var(--cw-orchid);
-            margin: 18px 0 0;
-            border: 0;
-        }
 
-        .archive { padding: 8px 0 72px; }
+        .archive { padding: 28px 0 72px; }
         .issue {
             display: flex;
             align-items: center;
@@ -158,9 +153,9 @@
             min-width: 0;
         }
         .plate {
-            width: 72px;
-            height: 90px;
-            flex: 0 0 72px;
+            width: 96px;
+            height: 120px;
+            flex: 0 0 96px;
             background: #070F11;
             border-radius: 6px;
             overflow: hidden;
@@ -187,7 +182,6 @@
             margin: 6px 0 4px;
             line-height: 1.15;
         }
-        .issue:first-child { border-top: 0; }
         .issue p { color: #9AA09B; font-size: 14px; max-width: 48ch; }
         .empty { color: #9AA09B; font-size: 15px; padding: 28px 0; border-top: 1px solid var(--cw-border); }
 
@@ -248,7 +242,6 @@
             </form>
             <p class="fine">Unsubscribe any time. Questions go to <a href="mailto:hello@crosswalknyc.com">hello@crosswalknyc.com</a>.</p>
         </section>
-        <hr class="rule">
 
         <section class="archive" id="issues">
             {% if issues %}
