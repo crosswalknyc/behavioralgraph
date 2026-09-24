@@ -39,6 +39,7 @@
     "derived_rails.py",
     "disambiguate_held_titles.py",
     "disneyplus.py",
+    "disneyplus_top10.py",
     "donate_cookies.py",
     "donate_storage_state.py",
     "espnplus.py",

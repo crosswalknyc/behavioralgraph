@@ -55,6 +55,13 @@ logger = logging.getLogger('local_residential_run')
 # than on Hetzner.
 RESIDENTIAL_SCRAPERS = [
     ('disneyplus',    'Disney+'),
+    # Disney+'s OWN Top 10 Movies and Top 10 Series, off the
+    # signed-in US home. MUST stay immediately after the line
+    # above: it folds the chart into the same snapshot that one
+    # rewrites from the brand hubs, so running it first would
+    # have the chart overwritten. Needs the donated session, so
+    # it belongs here rather than on Hetzner.
+    ('disneyplus_top10', 'Disney+ Top 10'),
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
     ('netflix',       'Netflix'),

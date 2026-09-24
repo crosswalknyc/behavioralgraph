@@ -7987,6 +7987,32 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('top 10 series today', 'top 10 movies today'),
         'depth': 10,
     },
+    # Disney+ publishes two, on its signed-in US home: 'Top 10 Movies
+    # in the US Today' and 'Top 10 Series in the US Today'. Separate
+    # rankings, so the top film and the top series are both #1.
+    #
+    # They were invisible while the donated session was lapsed, and
+    # the service read as chartless as a result. Signed out,
+    # disneyplus.com is a sign-in wall; signed in, its home carries
+    # fifty rails and two of them are these. Everything Disney+ was
+    # shipping before this came off the brand hub pages, which are
+    # merchandising shelves: on 2026-09-24 that put Mickey+ Shorts,
+    # Play Break and a Mickey Mouse Halloween special at the top of
+    # the rail, ordered by where a tile sat on a hub.
+    #
+    # Reads as viewing: the films chart ran Toy Story 5 at 1 with Toy
+    # Story 1 to 4 behind it at 2 to 5, which is a sequel pulling its
+    # own back catalogue up, the same shape Peacock showed with three
+    # Twilight films and Pluto TV with four John Wick films. The
+    # series chart mixes a new FX drama, an ABC procedural, Dancing
+    # with the Stars and a FOX medical show, cohering around nothing.
+    'disneyplus': {
+        'label': 'Disney+ Top 10 US Today',
+        'mode':  'collection',
+        'collections': ('top 10 movies in the us today',
+                        'top 10 series in the us today'),
+        'depth': 10,
+    },
     # Paramount+ publishes a Most Watched rail on each browse page,
     # one for shows and one for films, sixteen deep. They are separate
     # rankings so the top show never has to out-draw the top film.
