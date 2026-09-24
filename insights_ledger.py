@@ -910,9 +910,21 @@ def _dimension_ok(entry, qn):
                  if w not in _DIM_STOP and w not in subj_toks]
         if ptoks and not any(w.rstrip('s') in qn for w in ptoks):
             return False
+    # A class word the ask mentions must be part of the stored read:
+    # either the ranked dimension itself, or an attribute the table
+    # already carries (2026-09-24: "what genres ... and on which top 2
+    # platforms for each genre" names 'platform' as the per-row
+    # leaders, and the stored genre table's own question and notes
+    # name platforms too, so it is the same read). A brand ask against
+    # a category table whose stored text never mentions brands still
+    # fails here.
+    etext = None
     for c in _DIM_CLASS_WORDS:
         if c in qn and c not in dim:
-            return False
+            if etext is None:
+                etext = _entry_measure_text(entry)
+            if c not in etext:
+                return False
     # Demographic slices need the same conflict check as the class
     # words above, added 2026-09-14 alongside the 'demographics'
     # family: without it a stored gender table would satisfy an age
@@ -930,6 +942,39 @@ def _dimension_ok(entry, qn):
     return True
 
 
+# Families that describe the same read when the ask also names the
+# stored table's dimension (2026-09-24, Paramount+ genre mix): "users
+# engaging with each genre" filed as engagement, "what genres are they
+# watching" reads as viewership. Two users asking for the same genre
+# table on the same base and window must get the same answer, so the
+# two verbs are one family for replay. Purchases, search, revenue and
+# the rest stay distinct.
+_FAMILY_COMPAT = {
+    'viewership': {'viewership', 'engagement'},
+    'engagement': {'engagement', 'viewership'},
+}
+_YEAR_RX = re.compile(r'\b(20[1-3]\d)\b')
+
+
+def _family_compat(fam):
+    return _FAMILY_COMPAT.get(fam) or {fam}
+
+
+def _years_in(qn):
+    return {int(y) for y in _YEAR_RX.findall(qn or '')}
+
+
+def _window_covers(entry, years):
+    """The stored window spans every year the ask names. Entries with
+    no dated window ('any') never bind a dated ask."""
+    ws, we = str(entry.get('ws') or ''), str(entry.get('we') or '')
+    try:
+        y0, y1 = int(ws[:4]), int(we[:4])
+    except ValueError:
+        return False
+    return all(y0 <= y <= y1 for y in years)
+
+
 def find_semantic(entries, question):
     """Meaning-level replay candidate: the best stored read whose
     (family, cohort, slice dimension) matches the ask. Overlapping
@@ -939,14 +984,21 @@ def find_semantic(entries, question):
     fam = family_from_question(question)
     qn = normalize_question(question)
     qsig = cohort_signature(question)
+    q_years = _years_in(qn)
     best, best_dist, best_rank = None, None, None
     for e in reversed(entries):   # newest first; ties keep the newest
         if not isinstance(e, dict) or not e.get('reply'):
             continue
         if e.get('route') == ANCHOR_ROUTE:
             continue
+        # Same base, same window, same answer (Jenna 2026-09-24): an
+        # ask that names a year only replays a read whose window
+        # covers that year. An ask that names no window is
+        # unconstrained, as before.
+        if q_years and not _window_covers(e, q_years):
+            continue
         if fam:
-            if e.get('family') != fam:
+            if e.get('family') not in _family_compat(fam):
                 continue
         else:
             # No family verb in the ask ("top toy categories for
