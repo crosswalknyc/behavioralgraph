@@ -77,31 +77,40 @@ FONT_NUMERIC = "Helvetica Neue"
 #  Number / money formatting helpers
 # ─────────────────────────────────────────────────────────────────────
 def fmt_money(n: Any) -> str:
+    """Exact dollars, never $12K / $1.2M abbreviations (Jenna
+    2026-09-23: 'dont round on that page when making decks'). Cents
+    print only when they are real."""
     try:
         n = float(n or 0)
     except (TypeError, ValueError):
         return "$0"
-    if abs(n) >= 1_000_000_000:
-        return f"${n/1_000_000_000:.2f}B"
-    if abs(n) >= 1_000_000:
-        return f"${n/1_000_000:.2f}M"
-    if abs(n) >= 1_000:
-        return f"${n/1_000:.0f}K"
-    return f"${n:,.0f}"
+    if abs(n - round(n)) >= 0.005:
+        return f"${n:,.2f}"
+    return f"${round(n):,.0f}"
 
 
 def fmt_num(n: Any) -> str:
+    """Exact comma-separated counts, never 19K / 2.4M abbreviations
+    (same 2026-09-23 mandate). Large values auto-shrink at the render
+    site via _stat_font instead of abbreviating here."""
     try:
         n = float(n or 0)
     except (TypeError, ValueError):
         return "0"
-    if abs(n) >= 1_000_000_000:
-        return f"{n/1_000_000_000:.2f}B"
-    if abs(n) >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
-    if abs(n) >= 1_000:
-        return f"{n/1_000:.0f}K"
-    return f"{int(n):,}"
+    return f"{int(round(n)):,}"
+
+
+def _stat_font(txt: Any, base: int) -> int:
+    """Length-aware font size for giant stat renders so exact numbers
+    ('$19,234,567') never overflow a tile that was sized for '$19M'."""
+    ln = len(str(txt))
+    if ln <= 8:
+        return base
+    if ln <= 11:
+        return max(10, int(base * 0.76))
+    if ln <= 14:
+        return max(10, int(base * 0.60))
+    return max(10, int(base * 0.48))
 
 
 def fmt_pct(n: Any, decimals: int = 1) -> str:
@@ -529,9 +538,11 @@ def _derive_context(data: dict, image_url: Optional[str],
     end     = data.get("end_date")   or ""
     win     = f"{start} → {end}" if start and end else ""
 
+    # Always project up (Jenna 2026-09-23): the raw observed n never
+    # prints on a client-facing surface; the projected universe is the
+    # only sample figure a reader sees.
     src = (
         f"Source: Crosswalk BehaviorGraph · 30M+ opted-in U.S. consumer panel · "
-        f"observed sample n={int(data.get('audience_size') or 0):,} · "
         f"projected universe n={int(data.get('projected_audience_size') or 0):,} · "
         f"window {win} · "
         f"attribution {int(data.get('attribution_window_days') or 0)}d"
@@ -837,12 +848,14 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
               spacing=0.95, font=FONT_DISPLAY)
     # Dashes in the body copy get normalized to commas so they don't
     # regress the item-20 dash cleanup (C11).
+    # Generic across every dataset (a Wheel of Fortune cohort name was
+    # hardcoded here until 2026-09-23 and leaked onto other brands'
+    # decks), and projected up: no raw panelist count in client copy.
     body = (
         "Crosswalk's BehaviorGraph draws on a 30M+ opted-in U.S. consumer "
-        "panel. For this partnership we observed a sample of "
-        f"{fmt_num(ctx.panel_size)} panelists, the Wheel of Fortune "
-        "Next Day Air viewer cohort, and projected their behavior to a "
-        f"{fmt_num(ctx.audience_proj)}-consumer U.S. viewing audience "
+        "panel. For this partnership we measured the audience across the "
+        "pre, event, and post windows and projected every count in this "
+        f"deck to its {fmt_num(ctx.audience_proj)}-consumer U.S. audience "
         "universe. Every observation reflects real behavior: which sites "
         "they visited, which platforms they spent time on, and which "
         "brand touchpoints appeared in their sessions before, during, "
@@ -870,7 +883,8 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
         f"{_fmt_date(post_p.get('end')   or '')}"
     ) if pre_p and post_p else (ctx.campaign_window or "0")
     stats = [
-        ("Panel sample", f"{fmt_num(ctx.panel_size)}", "Observed viewer cohort"),
+        ("Projected sample", f"{fmt_num(ctx.audience_proj)}",
+         "U.S. audience universe"),
         ("Window",       window_val,                    "Pre, event, post windows"),
         ("Attribution",  f"{ctx.attribution_d}d",       "Post-event window"),
     ]
@@ -929,8 +943,8 @@ def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     tiles = [
         (fmt_num(ctx.audience_proj),
          "U.S. CONSUMER AUDIENCE",
-         f"Projected from {fmt_num(ctx.target_size)} observed panelists "
-         f"(30M+ Crosswalk panel)."),
+         "The partnership's audience universe, projected from the "
+         "30M+ Crosswalk panel."),
         (fmt_num(ctx.post_users_proj),
          f"POST-CAMPAIGN {ctx.brand.upper()} CONSUMERS",
          f"{fmt_pct(ctx.post_pen)} of the observed cohort had a brand "
@@ -950,7 +964,7 @@ def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
                   fill=None, line=MUTED_DK, line_w=0.5)
         _add_text(s, x + Inches(0.25), y + Inches(0.25),
                   tile_w - Inches(0.5), Inches(1.4),
-                  num, size=54, bold=True, color=ACCENT,
+                  num, size=_stat_font(num, 54), bold=True, color=ACCENT,
                   font=FONT_NUMERIC, spacing=0.95)
         _add_text(s, x + Inches(0.25), y + Inches(1.7),
                   tile_w - Inches(0.5), Inches(0.4),
@@ -998,18 +1012,19 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
     # (fixes C2: prior copy said "in the year before campaign launch"
     # which mislabels the trailing pre-period as a 12-month window).
     #
-    # Additionally shows the RAW INCIDENCE line ("2.4M of 10.0M
-    # panelists") directly under the projected-consumer count so
-    # the numerator and denominator behind the pre/post % are
-    # visible on the slide, not reverse-engineered. Answers Liz's
-    # July 27 v2 C1 disclosure ask and the standing "supply the
-    # raw engager counts" request.
+    # The numerator-and-denominator disclosure line (Liz July 27 v2
+    # C1) stays, but PROJECTED UP per Jenna 2026-09-23 ("make sure it
+    # is always projecting up"): raw panelist counts never print on a
+    # client-facing slide. Both sides of the ratio are stated at the
+    # U.S. audience universe, so the percentage still audits directly.
     pre_p  = ctx.data.get("pre_period")  or {}
     post_p = ctx.data.get("post_period") or {}
     pre_label = _period_label(pre_p, fallback="in the pre-window")
     post_label = _period_label(post_p, fallback=f"in the {ctx.attribution_d}-day post-window")
-    pre_incidence  = f"{fmt_num(ctx.pre_users)} of {fmt_num(ctx.panel_size)} panelists (incidence rate)"
-    post_incidence = f"{fmt_num(ctx.post_users)} of {fmt_num(ctx.panel_size)} panelists (incidence rate)"
+    pre_incidence  = (f"of the {fmt_num(ctx.audience_proj)}-consumer "
+                      "audience universe (incidence rate)")
+    post_incidence = (f"of the {fmt_num(ctx.audience_proj)}-consumer "
+                      "audience universe (incidence rate)")
     _add_text(s, Inches(0.9), plate_y + Inches(1.85), plate_w - Inches(0.5),
               Inches(0.35),
               f"{fmt_num(ctx.pre_users_proj)} U.S. consumers projected",
@@ -1116,7 +1131,9 @@ def _mcnemar_summary(ctx: DeckCtx) -> str:
     else:
         sig = bool(diag.get("significant"))
 
-    parts = [f"Panel n={fmt_num(n_panel)}"]
+    # No raw panel n on the strip (always project up, 2026-09-23);
+    # the z/CI math still runs on the observed base internally.
+    parts = []
     if delta_pp is not None:
         parts.append(f"Δ={float(delta_pp):+.2f}pp")
     if z is not None:
@@ -1129,7 +1146,9 @@ def _mcnemar_summary(ctx: DeckCtx) -> str:
         if p is None and z is not None:
             p = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
         if p is not None:
-            parts.append(f"p={float(p):.3f}")
+            # "p=0.000" reads as a bug; print the conventional floor.
+            parts.append("p<0.001" if float(p) < 0.0005
+                         else f"p={float(p):.3f}")
     if ci:
         try:
             lo, hi = float(ci[0]), float(ci[1])
@@ -1152,10 +1171,11 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
               "Total Brand Value Observed.",
               size=44, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
-    # The big number
+    # The big number - exact dollars, size stepping down for long values
+    hero_txt = fmt_money(ctx.total_value)
     _add_text(s, Inches(0.6), Inches(2.5), Inches(12), Inches(2.0),
-              fmt_money(ctx.total_value),
-              size=150, bold=True, color=FG_DARK,
+              hero_txt,
+              size=_stat_font(hero_txt, 150), bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.85, align="left")
     # "Attributable to Partnership" subtotal.
     # 2026-09-01 house standard: BLV + CV × min(1.0, max(0.0,
@@ -2006,18 +2026,23 @@ def _sig_floor_line(ctx: DeckCtx) -> str:
         floor_val = None
     floor_txt = (f"approximately {floor_val:.2f}pp"
                  if floor_val is not None else "computed per payload")
-    n_txt = f"{n_panel:,}" if n_panel else "the observed cohort"
+    # Display projects up (2026-09-23): the cohort is named by its
+    # projected universe; the large/small branch still keys on the
+    # observed base because that is the statistical property.
+    proj = int(ctx.audience_proj or 0)
+    n_txt = (f"{proj:,} projected U.S. consumers" if proj
+             else "this audience universe")
     if n_panel and n_panel >= 1_000_000:
         # Large-panel language: p-value collapses, drop from slide.
         return (
-            f"On the observed cohort of {n_txt} panelists, the detection "
+            f"On the cohort behind this read ({n_txt}), the detection "
             f"floor is {floor_txt}; p-values are omitted on client-facing "
             "slides because they collapse to zero for anything above the "
             "floor and add no decision-relevant information."
         )
     # Smaller-panel language: p-value stays on slide 4.
     return (
-        f"On the observed cohort of {n_txt} panelists, the detection "
+        f"On the cohort behind this read ({n_txt}), the detection "
         f"floor is {floor_txt}; p-values are reported on slide 4 alongside "
         "the point estimate and 95% CI because they remain decision "
         "relevant at this cohort size."
@@ -2038,20 +2063,18 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "Crosswalk BehaviorGraph: a 30M+ opted-in U.S. consumer panel. "
          "Every observation in this deck reflects real behavioral signal "
          "(visits, engagements, brand touchpoints); no surveys, no "
-         f"self-report. Observed sample: {fmt_num(ctx.panel_size)} "
-         "panelists (the viewer cohort for this integration)."),
+         "self-report. The read covers the partnership's audience cohort "
+         "across the pre, event, and post windows."),
         ("INCIDENCE RATES",
          "All pre and post penetration percentages are incidence rates: "
-         "the count of unique brand engagers observed in the window "
-         f"divided by the {fmt_num(ctx.panel_size)}-panelist sample. "
-         "Raw numerator and denominator are printed on slide 4 alongside "
-         "each percentage so the rate can be audited directly."),
+         "unique brand engagers in the window divided by the audience "
+         "base, with both sides stated as projected U.S. consumers on "
+         "slide 4 so each percentage can be audited directly."),
         ("PROJECTION",
-         f"The observed {fmt_num(ctx.panel_size)}-panelist sample is "
-         f"projected to a {fmt_num(ctx.audience_proj)}-consumer U.S. "
-         "viewing audience universe using a calibrated cohort weight. "
-         "Numbers labeled 'projected' or 'U.S. consumers' have been "
-         "weight-extrapolated."),
+         f"Every count in this deck is stated at the partnership's "
+         f"{fmt_num(ctx.audience_proj)}-consumer U.S. audience universe, "
+         "scaled with a calibrated cohort weight. Numbers labeled "
+         "'projected' or 'U.S. consumers' are that universe."),
         ("ATTRIBUTION",
          f"Brand touchpoints are counted within {ctx.attribution_d} days "
          "of campaign end: long enough to capture delayed brand "
