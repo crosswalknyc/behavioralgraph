@@ -6984,6 +6984,62 @@ def _coverage_platform_for_path(path: str) -> str:
     return ''
 
 
+def _coverage_is_service_rail(path: str) -> bool:
+    """True when the list at `path` renders ONE service's number.
+
+    Both resolvers are consulted: `_carry_platform_for_path` names the
+    streaming and FAST rails, `_coverage_platform_for_path` the chart
+    panels (music, podcasts, books, Libby, comics, Wattpad, gaming).
+    A row on a service rail shows a reading for that service, or its
+    own service-scoped last reading, or nothing. Never a figure
+    derived from where it sits in a list."""
+    return bool(_carry_platform_for_path(path)
+                or _coverage_platform_for_path(path))
+
+
+def _strip_rank_tier_from_service_rails(cards: dict) -> list:
+    """Post-walk invariant for the coverage pass.
+
+    Walks the finished payload and REMOVES any `us_streams` block that
+    the coverage pass stamped with `est_basis='rank_tier'` on a
+    service rail, returning `[(path, title)]` for every block removed.
+    `_ensure_full_audience_coverage` cannot produce such a block today
+    (the stamp is gated on the same resolvers this walks), so a
+    non-empty return means a later change reopened the branch; the
+    caller logs it as an error and the row renders blank, which is
+    the honest state. Tests assert the list is empty."""
+    removed: list = []
+
+    def _walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if not path and k in _COVERAGE_SKIP_CARD_KEYS:
+                    continue
+                _walk(v, f'{path}.{k}' if path else k)
+            return
+        if not isinstance(node, list):
+            return
+        rows = [x for x in node
+                if isinstance(x, dict) and _coverage_item_title(x)]
+        if rows:
+            if not _coverage_is_service_rail(path):
+                return
+            for it in rows:
+                blk = it.get('us_streams')
+                if (isinstance(blk, dict)
+                        and blk.get('est_basis') == 'rank_tier'
+                        and blk.get('no_prior_reading')):
+                    it.pop('us_streams', None)
+                    removed.append((path, _coverage_item_title(it)))
+            return
+        for x in node:
+            if isinstance(x, (dict, list)):
+                _walk(x, path)
+
+    _walk(cards or {}, '')
+    return removed
+
+
 def _coverage_jitter(title: str, kind: str, base: float) -> int:
     """Deterministic per-title jitter: +-12% of base, salted by
     (title|kind), last digit forced to 1-9 so no value reads as a
@@ -7393,8 +7449,9 @@ def _ensure_full_audience_coverage(cards: dict,
     A row still missing one after all annotators ran takes its OWN most
     recent measured value, walked to today. Only a row with no history
     anywhere falls through to the rank tier, and that case is marked in
-    the payload. Returns per-basis counts. Best-effort: never raises
-    into compute_view."""
+    the payload. On a service rail (`_coverage_is_service_rail`) there
+    is no rank tier: the row is left blank. Returns per-basis counts.
+    Best-effort: never raises into compute_view."""
     dist = _coverage_baselines_from_estimates(stream_snap)
     outlet_med, reader_global_med = _coverage_reader_baselines(headline_snap)
     # The day being VIEWED, which on a historic read is not today.
@@ -7508,13 +7565,30 @@ def _ensure_full_audience_coverage(cards: dict,
         #
         # Panels that are not service-scoped keep the tier: there is
         # no service to be wrong about there.
-        if slug:
+        #
+        # 2026-09-24 audit: `slug` alone only names the streaming and
+        # FAST rails (`_CARRY_PATH_PLATFORM_PREFIXES`). The music,
+        # podcast, book, Libby, comics, Wattpad and gaming panels are
+        # service rails too (Spotify, Apple Comics, Wattpad, Steam);
+        # `_coverage_platform_for_path` knows their service key, and
+        # with only the `slug` test the tier was still firing on
+        # them: 17 of 40 rows on `books_trending.wattpad_fantasy` and
+        # 19 of 100 on `comics_trending.apple_comics` after the
+        # 2026-09-24 gate. Same forbidden basis, different rail. So
+        # the test is the service key from EITHER resolver, and the
+        # tier is reached only when neither names a service.
+        platform = _coverage_platform_for_path(path)
+        if slug or platform:
             counts['withheld_service'] = counts.get(
                 'withheld_service', 0) + 1
             return
+        # By construction, not a service rail. `_assert_no_rank_tier_on_
+        # service_rails` re-checks the finished payload below so a
+        # future resolver change cannot quietly reopen this branch.
+        assert not _coverage_is_service_rail(path), path
 
         base = _coverage_pick_from_dist(dist, kind, rank_pos, list_len,
-                                         _coverage_platform_for_path(path))
+                                         platform)
         val = _coverage_jitter(title, kind, base)
         it['us_streams'] = {
             'us_estimate':      val,
@@ -7568,6 +7642,26 @@ def _ensure_full_audience_coverage(cards: dict,
         _walk(cards or {}, '')
     except Exception:
         logger.exception("audience coverage pass failed (non-fatal)")
+    # Invariant: no service rail carries a rank-tier figure. The stamp
+    # above is gated on the same resolvers this check walks, so today
+    # it removes nothing. If it ever removes something, a change
+    # upstream reopened the branch; the rows go blank (the honest
+    # state) and the log says so, loudly, instead of the board quietly
+    # ranking a browse page again.
+    try:
+        leaked = _strip_rank_tier_from_service_rails(cards or {})
+    except Exception:
+        logger.exception("rank-tier service-rail check failed (non-fatal)")
+        leaked = []
+    if leaked:
+        counts['rank_tier'] = max(0, counts['rank_tier'] - len(leaked))
+        counts['withheld_service'] = counts.get(
+            'withheld_service', 0) + len(leaked)
+        logger.error(
+            "audience coverage: %d service row(s) reached the rank tier, "
+            "which must be unreachable on a service rail; the figures "
+            "were removed and the rows render blank. First: %s",
+            len(leaked), leaked[:5])
     if counts.get('withheld_service'):
         logger.info(
             "audience coverage: %d service row(s) had no reading of "

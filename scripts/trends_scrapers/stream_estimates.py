@@ -168,6 +168,74 @@ _MAX_STREAMING_ITEMS = 600   # 2026-09-22: was 560 earlier the same
                              # others, so the old cap would have begun
                              # truncating the tail of the union rather
                              # than absorbing it.
+
+# -------------------------------------------------------------------------
+# Streaming collection depth (2026-09-24). OFF by default.
+#
+# The dashboard renders up to 200 titles per platform rail
+# (`trends_iq` slices `items[:200]`), but `_collect_streaming` has only
+# ever handed the first 40 rows of each rail to the research step.
+# Anything past position 40 has no reading for its own service, and
+# since the 2026-09-23 provenance fix stopped rows borrowing another
+# service's number, those rows render blank (28 of 5,438 on the
+# 2026-09-24 board, growing with every catalog rail that ships deep).
+#
+# Collecting what the rail renders is the fix, and it is also an
+# ongoing cost: measured on the 2026-09-24 snapshots it adds ~650
+# unique titles a night (696 (title, service) rows past position 40
+# across Paramount+ 160, AMC+ 160, Peacock 159, MovieSphere+ 108,
+# Lionsgate+ 89, Prime Video 20), every one of them at page position
+# > 20 and therefore on the Haiku lane. That decision is Jenna's, so
+# the depth sits behind ONE switch and ships OFF:
+#
+#     STREAM_ESTIMATES_FULL_RAIL_DEPTH=1
+#
+# in `/root/finished_codes/.env.trends_scrapers` on the build box (env
+# on the engine host only, never a request field on any dashboard or
+# partner surface, per `no-external-overrides.mdc`). Flipping it needs
+# no code change. When ON:
+#   * every rail is read to `_STREAMING_RAIL_DEPTH` (what renders)
+#   * the union cap widens to `_MAX_STREAMING_ITEMS_FULL_DEPTH` so the
+#     deeper union is not truncated back to the old size
+#   * the new rows ride the same nightly lane as everything else,
+#     which is the discounted Message Batches lane (`run_all` passes
+#     `batch_mode=True`; the coverage gate batches at >= 400 items),
+#     at Haiku (rank > 20) with no web_search (streaming kinds are
+#     `_WELL_ANCHORED_KINDS`).
+# The population is per (title, service): a title already priced for
+# one service still needs its own reading for each deeper rail it
+# sits on, and the collector carries every rail it charts on into the
+# same request via `chart_labels`, so that reading is produced without
+# a second request.
+# -------------------------------------------------------------------------
+_STREAMING_HEAD_DEFAULT         = 40    # rows per rail handed to research today
+_STREAMING_RAIL_DEPTH           = 200   # rows per rail the dashboard renders
+_MAX_STREAMING_ITEMS_FULL_DEPTH = 1_600 # union cap at full depth (1,085
+                                        # unique titles on 2026-09-24
+                                        # snapshots; room for two more
+                                        # 200-row rails)
+_FULL_RAIL_DEPTH_ENV = 'STREAM_ESTIMATES_FULL_RAIL_DEPTH'
+
+
+def _streaming_full_depth_enabled() -> bool:
+    """True iff the operator has switched on full-rail-depth streaming
+    collection. Read at call time (not import time) so a run picks up
+    the box env without a restart of anything."""
+    return (os.environ.get(_FULL_RAIL_DEPTH_ENV, '').strip().lower()
+            in ('1', 'true', 'yes', 'on'))
+
+
+def _streaming_head_cap() -> int:
+    """Rows per streaming rail handed to the research step."""
+    return (_STREAMING_RAIL_DEPTH if _streaming_full_depth_enabled()
+            else _STREAMING_HEAD_DEFAULT)
+
+
+def _streaming_union_cap() -> int:
+    """Cap on the cross-platform union of streaming titles."""
+    return (_MAX_STREAMING_ITEMS_FULL_DEPTH if _streaming_full_depth_enabled()
+            else _MAX_STREAMING_ITEMS)
+
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
 # Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
@@ -627,11 +695,23 @@ _GAMING_SLUGS = (
 )
 
 
-def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
+def _collect_streaming(max_items: Optional[int] = None) -> list[dict]:
     """Union top titles across the 6 streaming platform snapshots,
     keyed by normalized title. Preserves film/tv distinction (from
     `category_display`) so 'Barbie' the film and 'Barbie' the show
-    don't collide."""
+    don't collide.
+
+    `max_items` defaults to the union cap for the configured depth
+    (`_streaming_union_cap`); the per-rail head is
+    `_streaming_head_cap`. Both follow the single
+    `STREAM_ESTIMATES_FULL_RAIL_DEPTH` switch, OFF by default."""
+    if max_items is None:
+        max_items = _streaming_union_cap()
+    head_n = _streaming_head_cap()
+    logger.info("stream_estimates: streaming collection depth %d rows "
+                "per rail, union cap %d (%s=%s)", head_n, max_items,
+                _FULL_RAIL_DEPTH_ENV,
+                'on' if _streaming_full_depth_enabled() else 'off')
     per: dict[str, dict] = {}
     for slug, label in _STREAMING_SLUGS:
         snap = _read_snapshot(slug)
@@ -657,23 +737,26 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
         # Bumped 2026-08-20 from 30 to 40 per bucket so the full
         # dashboard rail (up to 20 films + 20 tv shown per platform,
         # plus the historic "sustained" second-page rows) is covered.
-        # Was 15 -> 30 (2026-08-05) -> 40 (2026-08-20).
+        # Was 15 -> 30 (2026-08-05) -> 40 (2026-08-20). Since
+        # 2026-09-24 the 40 is `_STREAMING_HEAD_DEFAULT`, and the
+        # `STREAM_ESTIMATES_FULL_RAIL_DEPTH` switch (OFF) raises it to
+        # the 200 rows the rail renders; see the depth block above.
         # Which of these titles does the service itself rank, and at
         # what position? Everything else on the page is a listing.
         pub_index = published_chart_index(slug, snap)
         pub_label = published_chart_label(slug)
 
         for kind, items in buckets:
-            # 40 rows off the top of the page, plus any charted title
-            # sitting below that line. A service is free to rank a
-            # title that its own storefront lists deep (Lionsgate+
+            # `head_n` rows off the top of the page, plus any charted
+            # title sitting below that line. A service is free to rank
+            # a title that its own storefront lists deep (Lionsgate+
             # puts Top 10 members at page slots 12, 13 and 16), and
             # dropping one for want of page prominence would leave a
             # hole in the chart we just promised to mirror.
-            head = items[:40]
+            head = items[:head_n]
             if pub_index:
                 head = head + [
-                    x for x in items[40:]
+                    x for x in items[head_n:]
                     if isinstance(x, dict) and published_rank_for(
                         pub_index,
                         'film' if str(x.get('category_display') or ''
