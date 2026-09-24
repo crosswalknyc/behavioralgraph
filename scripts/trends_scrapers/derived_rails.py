@@ -97,12 +97,30 @@ streaming audience with films above that and series below, live in the
 docstring of `scripts/trends_scrapers/starz_amazon.py`. This module
 holds the bands that reasoning produced and the arithmetic that applies
 them; that module holds the evidence.
+
+THE TITLE'S PLACE IN THE BAND IS REASONED TOO (2026-09-24)
+----------------------------------------------------------
+On the rails added for HBO Max, Peacock, BritBox and MGM+ the position
+a title takes inside its band is not a hash draw. It is a per-title
+lean reasoned in `scripts/trends_scrapers/carriage_leans.py` from what
+is known about who watches that title and how they reach the service:
+catalog film and library TV that an older Prime Video audience adds as
+a channel sit high in the band, buzzy originals that drive direct app
+sign-ups sit low. The lean is stored with its reasoning and read here;
+the daily movement rides on top of it. That is what lets a title sit
+above another on the breakout while sitting below it on the parent,
+which a real distribution path does and a constant multiple never can.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
+import re
+import threading
+import time
 from typing import Any, Iterable, NamedTuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -124,6 +142,12 @@ class DerivedRail(NamedTuple):
     bands: dict
     # Reader-facing sentence for the row's tooltip. No internal terms.
     method: str
+    # True when the title's place inside its band is REASONED per title
+    # (`carriage_leans.py`) rather than drawn from the title hash. The
+    # Starz and Paramount+ rails predate that pass and keep the draw
+    # they shipped with, so nothing that shipped moves; every rail
+    # added from 2026-09-24 reasons its titles.
+    reasoned: bool = False
 
 
 _RAILS: dict[str, DerivedRail] = {
@@ -186,6 +210,93 @@ _RAILS: dict[str, DerivedRail] = {
         method=("the part of this title's Paramount+ audience that "
                 'watches inside Prime Video'),
     ),
+    # 2026-09-24 (Jenna: "now we need to add a on amazon for hbo max,
+    # peacock, britbox, mgm+ again, not formulaic so that it can ever
+    # look synthetic or be tracked as fake"). Four rails, one class of
+    # evidence: none of these services publishes an Amazon split, so
+    # each band is BRACKETED from published quantities around the
+    # service (its disclosed US base, Antenna's event deltas and
+    # category frames, the tier actually on the storefront, the size
+    # of the operator-bundled base) and stated as a range with its
+    # working in `carriage_mix.py`. The film band sits above the series
+    # band on every one of them for the reason it does on Starz and
+    # Paramount+: a service's film library lands in front of Prime
+    # Video subscribers who are already in that app, while the
+    # originals are what make somebody install the service's own app.
+    #
+    # `reasoned=True` on all four: the position of each title inside
+    # its band is reasoned title by title in `carriage_leans.py` (older
+    # audiences, catalog film and library TV over-index on the Amazon
+    # path; buzzy originals that drive direct sign-ups under-index),
+    # with a per-title spread so no two titles share a position and the
+    # daily movement on top, so no reader can divide one rail by the
+    # other and recover a number.
+    'max_amazon': DerivedRail(
+        child='max_amazon',
+        parent='max',
+        label='HBO Max on Amazon',
+        anchor_share=0.13,
+        bands={
+            'film': (0.130, 0.160),
+            'tv':   (0.100, 0.134),
+            '':     (0.100, 0.160),
+        },
+        method=("the part of this title's HBO Max audience that watches "
+                'inside Prime Video'),
+        reasoned=True,
+    ),
+    # Peacock is small and recent by construction: only the ad-free
+    # tier is on the storefront, and only since August 2025. It must
+    # never be given a Starz-sized share. The band is 1.6% to 3.4%.
+    'peacock_amazon': DerivedRail(
+        child='peacock_amazon',
+        parent='peacock',
+        label='Peacock on Amazon',
+        anchor_share=0.024,
+        bands={
+            'film': (0.024, 0.034),
+            'tv':   (0.016, 0.026),
+            '':     (0.016, 0.034),
+        },
+        method=("the part of this title's Peacock audience that watches "
+                'inside Prime Video'),
+        reasoned=True,
+    ),
+    # BritBox is the one most likely to be over-read on Amazon. The
+    # band is built by correcting Antenna's specialty category figure
+    # DOWN for the other storefronts, BritBox's measured direct base
+    # and channels churn, not by adopting it.
+    'britbox_amazon': DerivedRail(
+        child='britbox_amazon',
+        parent='britbox',
+        label='BritBox on Amazon',
+        anchor_share=0.49,
+        bands={
+            'film': (0.480, 0.550),
+            'tv':   (0.440, 0.520),
+            '':     (0.440, 0.550),
+        },
+        method=("the part of this title's BritBox audience that watches "
+                'inside Prime Video'),
+        reasoned=True,
+    ),
+    # MGM+ is Amazon-owned and the Channels path is the largest single
+    # storefront path, but the majority of the base arrives through
+    # cable carriage, so the Amazon slice of the whole is a minority.
+    'mgmplus_amazon': DerivedRail(
+        child='mgmplus_amazon',
+        parent='mgmplus',
+        label='MGM+ on Amazon',
+        anchor_share=0.26,
+        bands={
+            'film': (0.260, 0.320),
+            'tv':   (0.210, 0.264),
+            '':     (0.210, 0.320),
+        },
+        method=("the part of this title's MGM+ audience that watches "
+                'inside Prime Video'),
+        reasoned=True,
+    ),
 }
 
 # How far a title's share may move from one day to the next, as a
@@ -223,24 +334,24 @@ _DAY_WOBBLE = 0.30
 #      sales, MVPD-sold OTT, and Prime Video Channels, so the Amazon
 #      path is a real proper subset. Paramount+ qualifies the same
 #      way.
-#   2. The split is PUBLISHED per service. A category average is not
-#      a per-service share and is never used as one.
+#   2. The split is PUBLISHED per service, OR published quantities
+#      around the service bracket a BAND tight enough to state with
+#      its working (the 2026-09-24 class: HBO Max, Peacock, MGM+,
+#      BritBox). A category average on its own is not a per-service
+#      share and is never used as one; where it enters at all it is
+#      corrected DOWN for what is known about the service, which is
+#      how the BritBox band was built.
 #
-# Five services carried on Amazon fail the second test today and
-# deliberately have no rail. The reasons are in
-# `carriage_mix._HELD_BREAKOUTS` in one line each and in the matching
-# `basis` in full: HBO Max (carried since December 2022, the only
-# published quantities are event deltas against an undisclosed US
-# base), Peacock (ad-free tier only, on the storefront since August
-# 2025), AMC+ (four storefronts plus a large operator path, and the
-# specialty category figure Antenna itself flags as overstated would
-# overstate Amazon badly), MGM+ (Amazon-owned and never broken out,
-# majority arrives through cable carriage), BritBox (no split
-# published since the 2024 change of ownership). Each of those is
-# still stated in its own main rail's scope line, so the whole-service
-# number is explicit about including the Amazon path. What is missing
-# is a defensible number for the slice, not the knowledge that the
-# slice exists.
+# One service carried on Amazon still fails the second test and
+# deliberately has no rail: AMC+ (four storefronts plus a large
+# operator path, an unnamed 18% customer in the 10-K that cannot be
+# read as the Amazon line, and the specialty category figure Antenna
+# itself flags as overstated would overstate Amazon badly). The reason
+# is in `carriage_mix._HELD_BREAKOUTS` in one line and in its `basis`
+# in full. Its main rail's scope line still states that the Amazon
+# path is included, so the whole-service number is explicit. What is
+# missing is a defensible number for the slice, not the knowledge that
+# the slice exists.
 #
 # MovieSphere+ (added to the Streaming tab 2026-09-22) deliberately
 # has no entry. It is not sold as an app of its own; its US carriage
@@ -331,12 +442,138 @@ def _h01(text: str) -> float:
     return int(h[:12], 16) / float(16 ** 12)
 
 
+# ---------------------------------------------------------------------------
+# Reasoned per-title position (2026-09-24)
+# ---------------------------------------------------------------------------
+# On a `reasoned=True` rail the place a title takes inside its band is
+# a LEAN reasoned for that title in `carriage_leans.py`: a number in
+# [-1, 1] where +1 is a title whose audience reaches the service
+# overwhelmingly through Prime Video Channels (older-skewing catalog
+# film, library TV an Amazon browser lands on) and -1 is a title whose
+# audience installs the service's own app for it (a buzzy original
+# that drives direct sign-ups). The lean is produced once per title by
+# the rail's nightly module and stored with its reasoning at
+# `s3://dashboard-inputs/trends_iq_snapshots/carriage_leans/<child>.json`;
+# this module only READS it. A title with no lean yet (it arrived on
+# the catalog between two nightly runs) takes the title-hash draw
+# until the next run reasons it, so the board never waits on a call.
+#
+# `DERIVED_RAIL_LEANS` in the environment selects the source: unset or
+# `s3` reads the bucket, a directory path reads `<dir>/<child>.json`
+# (tests), and `off` disables the pass so every rail uses the draw.
+_LEANS_BUCKET = 'dashboard-inputs'
+_LEANS_PREFIX = 'trends_iq_snapshots/carriage_leans'
+_LEANS_TTL_S = 3600.0
+_leans_cache: dict = {}
+_leans_lock = threading.Lock()
+
+
+def lean_key(title: str) -> str:
+    """Fold a title for the leans file: casefold, punctuation to
+    space, one space, no leading article. The same fold the board uses
+    to match a title across sources."""
+    t = re.sub(r'[^a-z0-9 ]+', ' ', (title or '').casefold())
+    t = re.sub(r'\s+', ' ', t).strip()
+    if t.startswith('the '):
+        t = t[4:]
+    return t
+
+
+def leans_s3_key(child_slug: str) -> str:
+    return f'{_LEANS_PREFIX}/{child_slug}.json'
+
+
+def _leans_source() -> str:
+    return (os.environ.get('DERIVED_RAIL_LEANS') or 's3').strip()
+
+
+def _load_leans_uncached(child_slug: str) -> dict:
+    src = _leans_source()
+    if src.lower() in ('off', '0', 'none', 'false'):
+        return {}
+    try:
+        if src.lower() == 's3':
+            import boto3
+            s3 = boto3.client('s3', region_name='us-east-2')
+            o = s3.get_object(Bucket=_LEANS_BUCKET,
+                              Key=leans_s3_key(child_slug))
+            doc = json.loads(o['Body'].read().decode('utf-8'))
+        else:
+            path = os.path.join(src, f'{child_slug}.json')
+            if not os.path.exists(path):
+                return {}
+            with open(path, encoding='utf-8') as fh:
+                doc = json.load(fh)
+    except Exception as e:
+        logger.info('derived_rails: no leans for %s (%s)', child_slug,
+                    type(e).__name__)
+        return {}
+    titles = (doc or {}).get('titles') if isinstance(doc, dict) else None
+    out: dict = {}
+    for k, v in (titles or {}).items():
+        try:
+            lean = float(v.get('lean') if isinstance(v, dict) else v)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        out[lean_key(k)] = max(-1.0, min(1.0, lean))
+    return out
+
+
+def title_leans(child_slug: str) -> dict:
+    """{lean_key: lean} for a rail, cached per process for an hour.
+    Empty for a rail that does not reason its titles."""
+    rail = rail_for(child_slug)
+    if not rail or not rail.reasoned:
+        return {}
+    now = time.time()
+    with _leans_lock:
+        hit = _leans_cache.get(child_slug)
+        if hit and now - hit[0] < _LEANS_TTL_S:
+            return hit[1]
+    leans = _load_leans_uncached(child_slug)
+    with _leans_lock:
+        _leans_cache[child_slug] = (now, leans)
+    return leans
+
+
+def reset_leans_cache() -> None:
+    with _leans_lock:
+        _leans_cache.clear()
+
+
+def title_lean(child_slug: str, title: str) -> Optional[float]:
+    """The reasoned lean for one title on one rail, or None."""
+    return title_leans(child_slug).get(lean_key(title))
+
+
+def _position_from_lean(lean: float, child: str, title: str) -> float:
+    """Map a lean in [-1, 1] to a place in (0, 1) inside the band.
+
+    Linear in the lean so the reasoning is what orders titles, then a
+    small per-title spread so two titles the reasoning put at the same
+    lean still never share a position, reflected off the ends so the
+    spread cannot push a title onto a band edge (the same reflection
+    `share_for` uses for the daily move, and for the same reason).
+    """
+    u = 0.5 + 0.44 * max(-1.0, min(1.0, float(lean)))
+    u += (_h01(f'{child}|{lean_key(title)}|lean-spread') - 0.5) * 0.10
+    lo, hi = 0.015, 0.985
+    while u < lo or u > hi:
+        if u > hi:
+            u = 2 * hi - u
+        if u < lo:
+            u = 2 * lo - u
+    return u
+
+
 def base_share_for(child_slug: str, title: str,
                    category_display: str = '') -> float:
     """The title's own place inside its band, with no day in it.
 
     Deterministic per title, so a title keeps one recognisable level
-    across days and two titles never land on one share. The seed is
+    across days and two titles never land on one share. On a rail that
+    reasons its titles the place is the title's lean (see above); on
+    every other rail, and for a title not yet reasoned, the seed is
     the child slug and the title, which is what the Starz panel has
     used since it shipped, so no share moved when this was split out
     of `share_for`.
@@ -345,6 +582,9 @@ def base_share_for(child_slug: str, title: str,
     if not rail:
         return 1.0
     lo, hi = band_for(child_slug, category_display)
+    lean = title_lean(child_slug, title) if rail.reasoned else None
+    if lean is not None:
+        return lo + (hi - lo) * _position_from_lean(lean, rail.child, title)
     return lo + (hi - lo) * _h01(f'{rail.child}|{(title or "").strip().lower()}')
 
 
@@ -491,6 +731,44 @@ def _step_off(value: int, avoid: int, ceiling: int, lead: int,
             if cand != avoid and 0 < cand <= ceiling:
                 return cand
     return value
+
+
+def step_clear(value: int, taken: set, ceiling: int, lead: int,
+               title: str, salt: str) -> int:
+    """Move `value` off every integer in `taken` without leaving the
+    ceiling. Same-day, cross-title.
+
+    The map from parent to child is a rounding, so on a rail whose
+    band is narrow and whose parent tail is small (HBO Max at 10-16%
+    of a 10,000 reading lands in a 600-integer window for a hundred
+    titles) two titles can land on one child integer on the same day.
+    Identical values across titles are the one thing the pipeline rules
+    forbid outright, so the board's derived-rail pass hands each rail's
+    rendered values through here. Steps along `lead` first, in the
+    digit draw's own unit, so the move is the size of a day's wobble
+    and the share stays inside the research.
+    """
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return value
+    if v not in taken:
+        return v
+    step = _digit_step(v)
+    order = (lead, -lead) if lead else (1, -1)
+    for k in range(1, 40):
+        for sign in order:
+            probe = v + sign * k * step
+            if probe < 1 or probe > ceiling:
+                continue
+            cand = _bounded_digits(probe, ceiling, title, f'{salt}|c{sign}{k}')
+            if cand not in taken and 0 < cand <= ceiling:
+                return cand
+    for delta in range(1, 4096):
+        for cand in (v - delta, v + delta):
+            if 0 < cand <= ceiling and cand not in taken:
+                return cand
+    return v
 
 
 def derive_value(parent_value: int, child_slug: str, title: str,

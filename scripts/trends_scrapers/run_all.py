@@ -194,6 +194,22 @@ SCRAPERS = [
     # catalog rather than yesterday's.
     ('paramountplus_amazon', 'scripts.trends_scrapers.paramountplus_amazon',
      'Paramount+ on Amazon', 'streaming'),
+    # HBO Max, Peacock, BritBox and MGM+ on Amazon (2026-09-24, Jenna).
+    # Same shared mirror as the two above: each republishes its
+    # parent's `latest/<parent>.json` under its own slug, and first
+    # reasons a band position for any title on the catalog that has
+    # none yet (`carriage_leans.py`, one compact call per rail, only
+    # for new titles). Read S3 only, so they run here. Peacock's
+    # parent runs earlier in this list; the other three parents are
+    # scraped residentially and land in S3 before the daily batch.
+    ('max_amazon',     'scripts.trends_scrapers.max_amazon',
+     'HBO Max on Amazon', 'streaming'),
+    ('peacock_amazon', 'scripts.trends_scrapers.peacock_amazon',
+     'Peacock on Amazon', 'streaming'),
+    ('britbox_amazon', 'scripts.trends_scrapers.britbox_amazon',
+     'BritBox on Amazon', 'streaming'),
+    ('mgmplus_amazon', 'scripts.trends_scrapers.mgmplus_amazon',
+     'MGM+ on Amazon', 'streaming'),
     # Streaming depth extender (2026-09-09, Jenna: every list carries
     # 100+ items where the source has them). JustWatch top-100 films +
     # top-100 shows per platform for the residential-scraped streamers

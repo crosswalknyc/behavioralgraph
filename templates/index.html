@@ -68356,10 +68356,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // paramountplus for the same reason: one is the whole service
         // across every distribution path, the other the slice of it
         // carried through Prime Video Channels, and they only make
-        // sense read as a pair. Anything not listed here falls through
-        // in payload order, which is how both of these ended up after
-        // AMC+.
-        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'paramountplus_amazon', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz', 'starz_amazon', 'amcplus'];
+        // sense read as a pair. 2026-09-24: max_amazon, peacock_amazon,
+        // britbox_amazon and mgmplus_amazon follow the same convention,
+        // each directly after its parent. Anything not listed here
+        // falls through in payload order, which is how the first two
+        // breakouts ended up after AMC+ before they were listed.
+        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'max_amazon', 'primevideo', 'paramountplus', 'paramountplus_amazon', 'peacock', 'peacock_amazon', 'espnplus', 'britbox', 'britbox_amazon', 'mgmplus', 'mgmplus_amazon', 'starz', 'starz_amazon', 'amcplus'];
 
         function renderTIQStreaming(streaming) {
             var allKeys = Object.keys(streaming || {});

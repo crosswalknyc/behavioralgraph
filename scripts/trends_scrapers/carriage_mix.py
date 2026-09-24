@@ -27,12 +27,15 @@ number is supposed to cover before it reasons.
 
 WHAT IS AND IS NOT CLAIMED
 --------------------------
-`amazon_share` is filled in ONLY where a published per-service figure
-exists or can be derived from one. Where a service is demonstrably
-carried on Amazon but nobody publishes its split, the field is None
-and `basis` says so in words. That is the standing posture in
+`amazon_share` is filled in where a published per-service figure
+exists (Starz, Paramount+) or where published quantities around the
+service bracket a BAND tight enough to state with its working (HBO
+Max, Peacock, MGM+, BritBox, added 2026-09-24; the `basis` on each
+opens with the band and then shows the bracket). Where a service is
+carried on Amazon and neither holds, the field is None and `basis`
+says so in words (AMC+). That is the standing posture in
 `.cursor/rules/trends-rankers-never-clickstream.mdc`: a reasoned
-estimate anchored to a published figure is the product, a split we
+estimate anchored to published figures is the product, a split we
 invented because it seemed plausible is not.
 
 Never read off a clickstream. Everything here is public reporting.
@@ -240,8 +243,21 @@ _MIX: dict = {
     ),
 
     # ---------------------------------------------------------------
-    # Carried on Amazon, split NOT published. Stated in the main
-    # rail's scope, never broken out. See `_HELD_BREAKOUTS` below.
+    # Carried on Amazon with NO published per-service split, but with
+    # enough published bounds to state a BAND (Jenna 2026-09-24: "now
+    # we need to add a on amazon for hbo max, peacock, britbox, mgm+").
+    #
+    # These four are a different class of evidence from Starz and
+    # Paramount+. Nobody publishes their Amazon share, so each band is
+    # bracketed from published quantities around it: the service's own
+    # disclosed US base, Antenna's published event deltas and category
+    # frames, the tier that is actually on the storefront, and the size
+    # of the operator-bundled base that widens the denominator. The
+    # band is deliberately stated as a range with its working, and the
+    # per-title position inside it is reasoned title by title
+    # (`carriage_leans.py`), never drawn from a constant. `amazon_share`
+    # is the centre of the band and is context for the prompt only; the
+    # rendered number always comes from the band.
     # ---------------------------------------------------------------
     'max': ServiceCarriage(
         slug='max', label='HBO Max',
@@ -249,22 +265,35 @@ _MIX: dict = {
                'the Apple and Google app stores',
                'operator bundles including Charter Spectrum',
                'Xfinity packages'),
-        amazon_share=None, on_amazon=True, breakout=False,
-        basis=('Carriage is certain and the size of it is not. HBO Max is '
-               'one of the seven premium services Antenna lists on Amazon '
-               'Channels, having left the storefront in 2021 and returned '
-               'in December 2022. The published quantities are all event '
-               'deltas against an undisclosed US base: Antenna put the '
-               '2021 exit at about 5.1M subscribers lost, with fewer than '
-               'one in ten resubscribing in the following eight months; '
-               'the December 2022 return drove about 3M sign-ups in its '
-               'first three months, and Amazon counted about 2.3M over '
-               'the following year. Warner Bros. Discovery reports global '
-               'subscribers and does not break out a US distribution mix, '
-               'and Antenna has published no per-service split for HBO '
-               'Max the way it has for Paramount+. So the main rail says '
-               'the Amazon path is there and material, and no breakout '
-               'rail ships until a share is published.'),
+        amazon_share=0.13, on_amazon=True, breakout=True,
+        basis=('BAND 0.100 to 0.160 of the HBO Max US streaming audience, '
+               'centre 0.13. Carriage is certain and the size of it is '
+               'bracketed rather than published. HBO Max is one of the '
+               'seven premium services Antenna lists on Amazon Channels, '
+               'having left the storefront in September 2021 and '
+               'returned in December 2022. Published quantities, all '
+               'Antenna: the 2021 exit cost about 5.1M subscribers; the '
+               'return drove about 3M sign-ups in its first three months '
+               'and Amazon counted about 2.3M more over the following '
+               'year; Prime Video Channels ran 24-25% of all US premium '
+               'SVOD gross adds through 2025; and HBO Max stood at 27.1M '
+               'paying US subscribers in January 2026 (Antenna via THR, '
+               '2026-03-03). Three-plus years of Amazon gross adds at '
+               'roughly that pace, run through a channels retention '
+               'curve that is steeper than direct, leave a standing '
+               'Amazon-sold base near 3.5-4.5M, which is 13-17% of the '
+               'paying base Antenna counts. Two things pull that down: '
+               'the operator-bundled base (Charter Spectrum TV Select '
+               'and Xfinity carry the ad tier for linear customers) sits '
+               'outside Antenna\'s frame and widens the denominator, and '
+               'Amazon-sold subscriptions churn faster and watch lighter '
+               'than direct ones, so an audience share reads under a '
+               'subscription share. Nothing published pulls it above the '
+               'top of the band. Per title: the Warner Bros. film library '
+               'and classic HBO series (The Sopranos, The Wire) reach '
+               'Prime Video subscribers who are already in that app and '
+               'over-index; the flagship HBO originals that drive people '
+               'to install the HBO Max app under-index.'),
     ),
     'peacock': ServiceCarriage(
         slug='peacock', label='Peacock',
@@ -273,21 +302,41 @@ _MIX: dict = {
                'Prime Video Channels (the ad-free tier only, and only '
                'since August 2025)',
                'Xfinity and Charter Spectrum packages'),
-        amazon_share=None, on_amazon=True, breakout=False,
-        basis=('Peacock launched in 2020 without Amazon and only reached '
-               'Prime Video Channels on 2025-08-28, when Comcast and '
-               'Amazon announced a package of agreements putting Peacock '
-               'Premium Plus, the ad-free tier, on the storefront at '
-               '$16.99 a month. Comcast reported 41M Peacock subscribers '
-               'that quarter with about 80% of them on the ad-supported '
-               'Premium tier, so the tier that is on Amazon at all is '
-               'roughly a fifth of the base. The last published mix, '
-               'Antenna Q1 2025, predates the deal: 55% direct with '
-               'iTunes the largest third party at 18%. A share this new '
-               'and this narrow is not researchable to a defensible '
-               'number, so the main rail names the path and no breakout '
-               'ships.'),
+        amazon_share=0.024, on_amazon=True, breakout=True,
+        basis=('BAND 0.016 to 0.034 of the Peacock US streaming audience, '
+               'centre 0.024. Small and recent by construction. Peacock '
+               'launched in 2020 without Amazon and only reached Prime '
+               'Video Channels on 2025-08-28, when Comcast and Amazon '
+               'put Peacock Premium Plus, the ad-free tier, on the '
+               'storefront at $16.99 a month. Comcast reported 41M '
+               'Peacock subscribers that quarter with about 80% on the '
+               'ad-supported Premium tier, so the tier that is on Amazon '
+               'at all is roughly 8M accounts, a fifth of the base. The '
+               'last published mix, Antenna Q1 2025, predates the deal: '
+               '55% direct with iTunes the largest third party at 18%, '
+               'and nobody has published a post-launch Peacock split. '
+               'Bounding it: Prime Video Channels takes about a quarter '
+               'of premium SVOD gross adds (Antenna), so a year of '
+               'Premium Plus gross adds at that share, put through a '
+               'channels retention curve, leaves a standing Amazon-sold '
+               'base of roughly 0.7-1.2M, which is 1.7-3.0% of 41M. '
+               'Ad-free subscribers paying the top price are heavier '
+               'viewers than the bundled and ad-tier base, which lifts '
+               'the audience share a little above the subscription '
+               'share; the Xfinity and Spectrum bundled base widens the '
+               'denominator and pulls the other way. That brackets 1.6% '
+               'to 3.4%, and it must never be given a Starz-sized share. '
+               'Per title: the Universal pay-one film window and library '
+               'TV reach Prime Video subscribers already in that app and '
+               'over-index; the Peacock originals, Bravo and NBC '
+               'next-day shows that people install the Peacock app for '
+               'under-index.'),
     ),
+    # ---------------------------------------------------------------
+    # Carried on Amazon, split NOT published and no bound tight enough
+    # for a band. Stated in the main rail's scope, never broken out.
+    # See `_HELD_BREAKOUTS` below.
+    # ---------------------------------------------------------------
     'amcplus': ServiceCarriage(
         slug='amcplus', label='AMC+',
         paths=('the AMC+ app and site', 'Prime Video Channels',
@@ -325,34 +374,76 @@ _MIX: dict = {
         paths=('the MGM+ app and site', 'Prime Video Channels',
                'Apple TV Channels', 'The Roku Channel',
                'YouTube Primetime Channels', 'cable and satellite carriage'),
-        amazon_share=None, on_amazon=True, breakout=False,
-        basis=('Amazon owns MGM+ outright through the MGM acquisition, '
-               'which makes the Prime Video Channels path the natural '
-               'one and also means Amazon publishes nothing about it: '
-               'MGM+ is inside Amazon results and is never broken out. '
-               'The majority of the subscriber base arrives through '
-               'cable-bundle carriage rather than any storefront. '
+        amazon_share=0.26, on_amazon=True, breakout=True,
+        basis=('BAND 0.210 to 0.320 of the MGM+ US streaming audience, '
+               'centre 0.26. Amazon owns MGM+ outright through the MGM '
+               'acquisition, which makes the Prime Video Channels path '
+               'the natural one and also means Amazon publishes nothing '
+               'about it: MGM+ is inside Amazon results and is never '
+               'broken out. The bracket comes from the shape of the base '
+               'rather than a split. The main rail anchors MGM+ at about '
+               '4.0-4.8M US subscribers with the majority arriving '
+               'through cable-bundle carriage and a minority sold '
+               'direct-to-consumer, so the whole storefront-and-app '
+               'slice is roughly 1.5-2.1M accounts. Within that slice '
+               'Amazon is the largest single path by a distance: it '
+               'owns the service, merchandises it to the whole Prime '
+               'base, runs it through the storefront promotions, and '
                'Antenna lists MGM+ on Amazon Channels, The Roku Channel '
-               'and YouTube Primetime, and names it among the leaders on '
-               'the latter two, so the channels volume is spread. No '
-               'per-service split is published. Held.'),
+               'and YouTube Primetime and names it among the leaders on '
+               'the latter two, so the rest of the channels volume is '
+               'spread across three smaller storefronts and the app. '
+               'Amazon at 55-65% of the direct-to-consumer slice is '
+               '0.9-1.3M accounts, 20-28% of subscribers. Bundled cable '
+               'subscribers engage far less than people who chose and '
+               'paid for the channel, so the audience share sits above '
+               'the subscription share, which is what lifts the top of '
+               'the band to 0.32; the operator base being the majority '
+               'is what holds the bottom at 0.21. Per title: the MGM and '
+               'partner film library that Prime Video browsers land on '
+               'over-indexes; the MGM+ originals (FROM, Godfather of '
+               'Harlem, Billy the Kid) that make somebody open the MGM+ '
+               'app under-index.'),
     ),
     'britbox': ServiceCarriage(
         slug='britbox', label='BritBox',
         paths=('the BritBox app and site', 'Prime Video Channels',
                'The Roku Channel', 'Apple TV Channels',
                'the Apple and Google app stores'),
-        amazon_share=None, on_amazon=True, breakout=False,
-        basis=('BritBox International passed 3.75M subscribers across the '
-               'US, Canada, Australia and Scandinavia at the 2024 sale of '
-               "ITV's half to BBC Studios, and reported 3.8M shortly "
-               'after. Neither owner has published a distribution split '
-               'since, and BBC Studios does not file one. Antenna lists '
-               'BritBox on Amazon Channels and The Roku Channel and is '
-               'one of only three specialty services whose direct '
-               'subscriptions Antenna measures at all, which means the '
-               'category two-in-three Amazon figure is understated for '
-               'the category and still not a BritBox number. Held.'),
+        amazon_share=0.49, on_amazon=True, breakout=True,
+        basis=('BAND 0.440 to 0.550 of the BritBox US streaming audience, '
+               'centre 0.49. This is the service most likely to be '
+               'over-read on Amazon, so the band is built by correcting '
+               'the category figure DOWN rather than adopting it. '
+               'BritBox International passed 3.75M subscribers across '
+               'the US, Canada, Australia and Scandinavia at the 2024 '
+               "sale of ITV's half to BBC Studios and reported 3.8M "
+               'shortly after; neither owner has published a '
+               'distribution split since. The published frame is '
+               "Antenna's specialty category: two of every three "
+               'specialty subscriptions it measures come through Amazon '
+               'Channels, and Amazon took 67% of specialty gross adds in '
+               'Q2 2026. Antenna itself says that figure overstates '
+               'Amazon because specialty direct is measured only for '
+               'Acorn TV, BET+ and BritBox, and BritBox is the case '
+               'where direct IS measured and is real: it launched as a '
+               'direct-marketed BBC and ITV service with an app on every '
+               'device and a Starz bundle sold on its own billing. Three '
+               'other storefronts take their share of the channels '
+               'volume (The Roku Channel alone was 13% of specialty '
+               'gross adds in Q2 2026 and Apple TV Channels and YouTube '
+               'Primetime both carry it), and Amazon-sold subscriptions '
+               'churn faster than direct ones, so a base share reads '
+               'under a gross-add share. Starting from two-in-three, '
+               'removing the other storefronts, restoring a measured '
+               'direct base and applying the churn correction brackets '
+               'Amazon at 44% to 55% of the BritBox US audience. Per '
+               'title: the long-running mysteries and classic dramas '
+               '(Midsomer Murders, Vera, Doctor Who back catalog) that '
+               'an older audience adds through Prime rather than by '
+               'installing an app over-index; the new BritBox originals '
+               'and same-day ITV premieres that BritBox markets direct '
+               'under-index.'),
     ),
 
     # ---------------------------------------------------------------
@@ -393,15 +484,17 @@ _MIX: dict = {
 # registry so a later reader can see the decision without reading
 # every `basis` in full, and so a future run can check whether the
 # reason still holds.
+#
+# 2026-09-24: HBO Max, Peacock, MGM+ and BritBox left this list when
+# Jenna asked for their breakouts. None of the four has a published
+# split, so each carries a BAND bracketed from published quantities
+# around it (see the `basis` on each), not a point. AMC+ stays held:
+# four storefronts plus a large operator path, an unnamed 18% customer
+# in the 10-K that cannot be read as the Amazon line, and no bound
+# tight enough to state a band that would not be a guess.
 _HELD_BREAKOUTS = {
-    'max':      'carried since December 2022, no published share',
-    'peacock':  'ad-free tier only, on the storefront since August 2025, '
-                'no published share',
     'amcplus':  'carried on four storefronts plus operators, no published '
                 'share, and the category figure would overstate Amazon',
-    'mgmplus':  'Amazon-owned and never broken out, majority arrives '
-                'through cable carriage',
-    'britbox':  'no published split since the 2024 change of ownership',
 }
 
 

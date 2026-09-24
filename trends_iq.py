@@ -412,6 +412,21 @@ STREAMING_PLATFORMS = [
     # for every service is in
     # `scripts/trends_scrapers/carriage_mix.py`.
     ('paramountplus_amazon', 'Paramount+ on Amazon', False),
+    # 2026-09-24 (Jenna): HBO Max, Peacock, BritBox and MGM+ as they
+    # are carried on Amazon Prime Video Channels. Same arrangement as
+    # the two pairs above: each mirrors its parent's catalog because it
+    # is the same entitlement, and its audience is the Prime-Video-
+    # carried share of the parent's, computed from the parent at
+    # render time and always strictly under it. None of the four has a
+    # published split; each carries a researched BAND with its working
+    # in `scripts/trends_scrapers/carriage_mix.py`, and the place each
+    # title takes inside the band is reasoned per title in
+    # `scripts/trends_scrapers/carriage_leans.py`. The parent panels
+    # stay the whole service and the pairs are never added together.
+    ('max_amazon',     'HBO Max on Amazon', False),
+    ('peacock_amazon', 'Peacock on Amazon', False),
+    ('britbox_amazon', 'BritBox on Amazon', False),
+    ('mgmplus_amazon', 'MGM+ on Amazon',    False),
 ]
 
 # 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
@@ -4109,6 +4124,34 @@ _AUDIENCE_NOUN_BY_KIND_PLATFORM = {
     ('film', 'paramountplus_amazon'):  'US views on Paramount+ through Prime Video Channels',
     ('tv', 'paramountplus_amazon'):    'US views on Paramount+ through Prime Video Channels',
     ('title', 'paramountplus_amazon'): 'US views on Paramount+ through Prime Video Channels',
+    # 2026-09-24: the same pairs for HBO Max, Peacock, BritBox and
+    # MGM+, under the same rule. Each main rail is every path into the
+    # service and each Amazon rail is the slice watched inside Prime
+    # Video, so both halves of every pair say which inline.
+    ('film', 'max'):               'US views on HBO Max, every distribution path',
+    ('tv', 'max'):                 'US views on HBO Max, every distribution path',
+    ('title', 'max'):              'US views on HBO Max, every distribution path',
+    ('film', 'max_amazon'):        'US views on HBO Max through Prime Video Channels',
+    ('tv', 'max_amazon'):          'US views on HBO Max through Prime Video Channels',
+    ('title', 'max_amazon'):       'US views on HBO Max through Prime Video Channels',
+    ('film', 'peacock'):           'US views on Peacock, every distribution path',
+    ('tv', 'peacock'):             'US views on Peacock, every distribution path',
+    ('title', 'peacock'):          'US views on Peacock, every distribution path',
+    ('film', 'peacock_amazon'):    'US views on Peacock through Prime Video Channels',
+    ('tv', 'peacock_amazon'):      'US views on Peacock through Prime Video Channels',
+    ('title', 'peacock_amazon'):   'US views on Peacock through Prime Video Channels',
+    ('film', 'britbox'):           'US views on BritBox, every distribution path',
+    ('tv', 'britbox'):             'US views on BritBox, every distribution path',
+    ('title', 'britbox'):          'US views on BritBox, every distribution path',
+    ('film', 'britbox_amazon'):    'US views on BritBox through Prime Video Channels',
+    ('tv', 'britbox_amazon'):      'US views on BritBox through Prime Video Channels',
+    ('title', 'britbox_amazon'):   'US views on BritBox through Prime Video Channels',
+    ('film', 'mgmplus'):           'US views on MGM+, every distribution path',
+    ('tv', 'mgmplus'):             'US views on MGM+, every distribution path',
+    ('title', 'mgmplus'):          'US views on MGM+, every distribution path',
+    ('film', 'mgmplus_amazon'):    'US views on MGM+ through Prime Video Channels',
+    ('tv', 'mgmplus_amazon'):      'US views on MGM+ through Prime Video Channels',
+    ('title', 'mgmplus_amazon'):   'US views on MGM+ through Prime Video Channels',
     # Prime Video's own rail is the storefront's OWN licensed catalog.
     # The hundred-plus subscriptions sold inside the Prime Video app
     # belong to the service that was subscribed to, and saying so on
@@ -4435,6 +4478,13 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'amcplus':       'amcplus',
     'moviesphereplus': 'moviesphereplus',
     'lionsgateplus':   'lionsgateplus',
+    # 2026-09-24: four more derived rails. Each resolves through its
+    # parent's key and is computed down to the Prime-Video-carried
+    # share of it in `_rederive_derived_rails`.
+    'max_amazon':      'max',
+    'peacock_amazon':  'peacock',
+    'britbox_amazon':  'britbox',
+    'mgmplus_amazon':  'mgmplus',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
@@ -8377,6 +8427,69 @@ def _derived_rail_parent_index(panels: dict, parent_slug: str) -> dict:
     return out
 
 
+def _clear_derived_rail_collisions(child_slug: str, stamped: list,
+                                   dr) -> int:
+    """No two titles on one derived rail render the same integer on
+    the same day.
+
+    The parent-to-child map is a rounding, and on a rail whose band is
+    narrow and whose parent tail is small, two titles can land on one
+    child integer (HBO Max on Amazon, 2026-09-24: three titles at
+    1,199 in the depth tail). Walk the rail in render order, and where
+    a value has already been taken on this rail today, step it off in
+    the digit draw's own unit, inside the ceiling, strictly under the
+    parent and off the previous day's value. Deterministic in render
+    order, so a re-render gives the same answer. Returns rows moved.
+    """
+    taken: set = set()
+    moved = 0
+    for row, parent_blk in stamped:
+        blk = row.get('us_streams')
+        if not isinstance(blk, dict):
+            continue
+        try:
+            value = int(float(blk.get('us_estimate') or 0))
+            parent_cur = int(float(parent_blk.get('us_estimate') or 0))
+        except (TypeError, ValueError):
+            continue
+        if value <= 0 or parent_cur <= 0:
+            continue
+        if value not in taken:
+            taken.add(value)
+            continue
+        title = (row.get('title') or '').strip()
+        cat = row.get('category_display') or ''
+        ceiling = dr.child_ceiling(parent_cur, child_slug, cat)
+        prev = blk.get('prev_estimate')
+        avoid = set(taken)
+        if prev:
+            avoid.add(int(prev))
+        avoid.add(parent_cur)
+        lead = 1 if blk.get('direction') == 'up' else (
+            -1 if blk.get('direction') == 'down' else 0)
+        new = dr.step_clear(value, avoid, min(ceiling, parent_cur - 1),
+                            lead, title, f'{child_slug}|same-day')
+        if new == value or new <= 0 or new >= parent_cur or new in taken:
+            taken.add(value)
+            continue
+        blk['us_estimate'] = new
+        for src, dst in (('us_estimate_low', 'us_estimate_low'),
+                          ('us_estimate_high', 'us_estimate_high')):
+            scaled = dr.scale_companion(parent_blk.get(src), parent_cur, new)
+            if scaled:
+                blk[dst] = scaled
+        if prev:
+            direction, delta = _direction_from_prev(new, int(prev))
+            blk['direction'] = direction
+            blk['delta_pct'] = delta
+        taken.add(new)
+        moved += 1
+    if moved:
+        logger.info('derived rails: %s moved %d row(s) off a same-day '
+                    'value already rendered on the rail', child_slug, moved)
+    return moved
+
+
 def _rederive_derived_rails(cards: dict) -> dict:
     """Recompute every derived rail from its parent rail. Best-effort:
     never raises into compute_view."""
@@ -8403,6 +8516,7 @@ def _rederive_derived_rails(cards: dict) -> dict:
         # The same row object appears in `items` and in `films` / `tv`,
         # so derive once per object and let both views see it.
         seen: set = set()
+        stamped: list = []
         for bucket in ('items', 'films', 'tv'):
             for row in panel.get(bucket) or []:
                 if not isinstance(row, dict) or id(row) in seen:
@@ -8416,6 +8530,10 @@ def _rederive_derived_rails(cards: dict) -> dict:
                     continue
                 disposition = _stamp_derived_rail_block(row, child_slug, blk)
                 stats[disposition] = stats.get(disposition, 0) + 1
+                if disposition != 'no_parent':
+                    stamped.append((row, blk))
+        stats['collided'] = stats.get('collided', 0) + \
+            _clear_derived_rail_collisions(child_slug, stamped, dr)
 
     if stats['checked']:
         logger.info(
@@ -11079,6 +11197,13 @@ def _norm_stream_title(title: str) -> str:
 # pulled once for `starz` extends both without a second query.
 _STREAM_DEPTH_ALIAS = {
     'starz_amazon': 'starz',
+    # 2026-09-24: the same for the HBO Max, BritBox and MGM+ breakouts,
+    # whose parents are depth-extended. Peacock's parent snapshot is
+    # already the full JustWatch zipper, so its breakout mirrors that
+    # and needs no depth alias.
+    'max_amazon':     'max',
+    'britbox_amazon': 'britbox',
+    'mgmplus_amazon': 'mgmplus',
 }
 
 

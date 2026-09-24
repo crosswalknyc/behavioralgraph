@@ -40,6 +40,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
+# The reasoned per-title position (`carriage_leans.py`) is exercised
+# in `test_carriage_leans.py`. Here it is switched off so every rail
+# takes the title-hash draw and the byte-identical check below holds
+# for the rails that shipped on it.
+os.environ['DERIVED_RAIL_LEANS'] = 'off'
+
 from scripts.trends_scrapers import carriage_mix as cm    # noqa: E402
 from scripts.trends_scrapers import derived_rails as dr   # noqa: E402
 from scripts.trends_scrapers import stream_estimates as se  # noqa: E402
@@ -248,7 +254,9 @@ def main() -> int:
     dashed = []
     for name in ('carriage_mix.py', 'derived_rails.py',
                  'derived_rail_mirror.py', 'paramountplus_amazon.py',
-                 'disambiguate_held_titles.py'):
+                 'disambiguate_held_titles.py', 'carriage_leans.py',
+                 'max_amazon.py', 'peacock_amazon.py', 'britbox_amazon.py',
+                 'mgmplus_amazon.py'):
         with open(os.path.join(here, name), encoding='utf-8') as fh:
             if '\u2014' in fh.read():
                 dashed.append(name)

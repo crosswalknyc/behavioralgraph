@@ -3096,6 +3096,62 @@ _STREAMING_PLATFORMS_META = [
          'that watches inside Prime Video rather than in the '
          'Paramount+ app or another storefront.'
      )},
+    # 2026-09-24 (Jenna): four more Amazon-carried rails, HBO Max,
+    # Peacock, BritBox and MGM+. Same arrangement as the two above:
+    # `derived_from` keeps each out of the research prompt and out of
+    # the stored blocks, because its number is the parent's number
+    # apportioned to the Prime-Video-carried share of that title in
+    # `trends_iq._rederive_derived_rails`. Each ceiling is the parent's
+    # weekly top slot times the top of its researched band (0.160,
+    # 0.034, 0.550, 0.320), which is the most the rail can reach once
+    # its parent is inside its own cap; `registered_ceiling_check`
+    # reports if the two ever stop agreeing. Bands and their working
+    # live in `carriage_mix.py`; the registry in `derived_rails.py`.
+    {'key': 'max_amazon',
+     'label': 'HBO Max on Amazon',
+     'ceiling': 3_360_000,
+     'derived_from': 'max',
+     'anchors': (
+         'HBO Max sold through Amazon Prime Video Channels. Same '
+         'catalog and same entitlement as HBO Max; what differs is the '
+         'audience, which is the share of HBO Max US streaming that '
+         'watches inside Prime Video rather than in the HBO Max app, an '
+         'operator package or another storefront.'
+     )},
+    {'key': 'peacock_amazon',
+     'label': 'Peacock on Amazon',
+     'ceiling': 408_000,
+     'derived_from': 'peacock',
+     'anchors': (
+         'Peacock sold through Amazon Prime Video Channels (the ad-free '
+         'tier, on the storefront since August 2025). Same catalog and '
+         'same entitlement as Peacock; what differs is the audience, '
+         'which is the small share of Peacock US streaming that watches '
+         'inside Prime Video rather than in the Peacock app or an '
+         'operator package.'
+     )},
+    {'key': 'britbox_amazon',
+     'label': 'BritBox on Amazon',
+     'ceiling': 825_000,
+     'derived_from': 'britbox',
+     'anchors': (
+         'BritBox sold through Amazon Prime Video Channels. Same '
+         'catalog and same entitlement as BritBox; what differs is the '
+         'audience, which is the share of BritBox US streaming that '
+         'watches inside Prime Video rather than in the BritBox app or '
+         'another storefront.'
+     )},
+    {'key': 'mgmplus_amazon',
+     'label': 'MGM+ on Amazon',
+     'ceiling': 640_000,
+     'derived_from': 'mgmplus',
+     'anchors': (
+         'MGM+ sold through Amazon Prime Video Channels. Same catalog '
+         'and same entitlement as MGM+; what differs is the audience, '
+         'which is the share of MGM+ US streaming that watches inside '
+         'Prime Video rather than through cable carriage, the MGM+ app '
+         'or another storefront.'
+     )},
 ]
 
 
