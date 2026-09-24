@@ -57579,6 +57579,10 @@ _PM_BASE_GENERIC_TOKENS = {
     'consumer', 'customers', 'customer', 'avid', 'casual', 'movie',
     'show', 'subscribers', 'members', 'users', 'potential',
     'prospective', 'purchasers', 'purchaser',
+    # 2026-09-24 (PA-09 vs Florida Gubernatorial): audience nouns that
+    # let unrelated electorates / cohorts partial-match on the noun
+    # alone carry no identity.
+    'voters', 'voter', 'listeners', 'listener', 'readers', 'reader',
 }
 
 
@@ -57638,12 +57642,33 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         if pk:
             page_base = {'subject': nm or pk, 's3_key': pk,
                          'source': 'page'}
-    if page_base is not None and not prefer_catalog:
-        return page_base
 
     def _tokens(s):
         return [w for w in _normalize_for_match(s).split()
                 if w not in _PM_BASE_GENERIC_TOKENS]
+
+    # Subject-conflict guard (2026-09-24, the PA-09 hold): an ask that
+    # NAMES ITS OWN SUBJECT must never silently ride the open page as
+    # its base. 'what are congressional district pa 09 voters googling'
+    # asked while 2026 Florida Gubernatorial Voters was open bound the
+    # Florida file, generated a Pennsylvania read off it, and the
+    # verify pass then held the read for contradicting Florida's rows.
+    # The guard fires only when the router extracted a subject hint
+    # with distinctive tokens (2+) sharing NOTHING with the page
+    # subject - pronoun asks ('what are they googling', 'analyze
+    # this') carry no hint and keep the page base exactly as before.
+    if page_base is not None and not prefer_catalog:
+        _hint_d = set(_tokens(subject_hint))
+        _page_d = set(_tokens(page_base.get('subject')))
+        if (len(_hint_d) >= 2 and _page_d
+                and not (_hint_d & _page_d)):
+            print(f"[pm-base] ask names its own subject "
+                  f"({' '.join(sorted(_hint_d))[:60]}) with no overlap "
+                  f"to the open page ({page_base.get('subject')!r}); "
+                  f"page base skipped")
+            page_base = None
+    if page_base is not None and not prefer_catalog:
+        return page_base
 
     q_tokens = set(_normalize_for_match(text).split())
     hint_tokens = set(_normalize_for_match(subject_hint).split())
