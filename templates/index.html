@@ -35745,6 +35745,68 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // hides bare fn declarations from inline handlers.
             window._iiqMTACoefToggle = _iiqMTACoefToggle;
 
+            // Sorting for the touchpoint table is written here rather than
+            // through the shared sortable-table helper, because this card
+            // splits its rows into a visible set and a hidden remainder
+            // behind a Show all button. A re-sort has to refill both
+            // without disturbing which of the two is currently on screen,
+            // so it rewrites the two row nodes in place and leaves their
+            // display alone.
+            window._iiqCoefTbl = window._iiqCoefTbl || {};
+            var _IIQ_COEF_COLS = [
+                { key: 'touchpoint', label: 'Touchpoint', align: 'left', text: true,
+                  tip: 'The asset, keyword, or surface that appeared in the exposure log. Line 1 is the asset title. Line 2 is the channel and the phase (T-N is N weeks before opening).',
+                  val: function(r) { return String(r.asset_title || ''); } },
+                { key: 'lift', label: 'Lift shape', align: 'center',
+                  tip: 'Visual size of the touchpoint effect on conversion. Bar to the right is a lift, bar to the left is a drag. Length is proportional to the coefficient magnitude.',
+                  val: function(r) { return Number(r.coefficient) || 0; } },
+                { key: 'or', label: 'Odds ratio (95% CI)', align: 'right',
+                  tip: 'The lift as an odds ratio. 1.00 is no effect. 1.10 means an exposed viewer is 10 percent more likely to convert than a matched control. The 95 percent CI is the range we would defend.',
+                  val: function(r) { var v = Number(r.odds_ratio); return isFinite(v) ? v : 0; } },
+                { key: 'strength', label: 'Read strength', align: 'right',
+                  tip: 'How much weight to put on this row. Strong is a tight CI clear of 1.00. Moderate is one-sided but narrow. Weak is small or the CI straddles 1.00.',
+                  val: function(r) { return ({ strong: 3, moderate: 2, weak: 1 })[String(r.significance || '').toLowerCase()] || 0; } }
+            ];
+            function _iiqCoefHeadCells(rootId, sortable) {
+                var t = window._iiqCoefTbl[rootId];
+                return _IIQ_COEF_COLS.map(function(c) {
+                    var on = !!(t && t.col === c.key);
+                    return '<div'
+                         + (sortable ? ' onclick="window._iiqCoefSort(\'' + rootId + '\',\'' + c.key + '\')"' : '')
+                         + ' style="text-align:' + c.align + ';' + (on ? ' color:#C7F23E;' : '')
+                         + (sortable ? ' cursor:pointer; user-select:none;' : '') + '"'
+                         + ' title="' + escapeHtml(c.tip) + '">'
+                         + escapeHtml(c.label) + (on ? (t.dir > 0 ? ' \u2191' : ' \u2193') : '')
+                         + '</div>';
+                }).join('');
+            }
+            window._iiqCoefSort = function(rootId, key) {
+                var t = window._iiqCoefTbl[rootId];
+                if (!t) return;
+                var c = null;
+                for (var i = 0; i < _IIQ_COEF_COLS.length; i++) {
+                    if (_IIQ_COEF_COLS[i].key === key) c = _IIQ_COEF_COLS[i];
+                }
+                if (!c) return;
+                // Same header again reverses. A new one opens the way that
+                // column reads best: strongest lift first for a number,
+                // A to Z for the touchpoint name.
+                if (t.col === key) t.dir = -t.dir;
+                else { t.col = key; t.dir = c.text ? 1 : -1; }
+                var dir = t.dir;
+                t.view = t.view.slice().sort(function(a, b) {
+                    var av = c.val(a), bv = c.val(b);
+                    if (c.text) return String(av).localeCompare(String(bv)) * dir;
+                    return (av - bv) * dir;
+                });
+                var head  = document.getElementById(rootId + '_head');
+                var top   = document.getElementById(rootId + '_top');
+                var extra = document.getElementById(rootId + '_extra');
+                if (head)  head.innerHTML  = _iiqCoefHeadCells(rootId, true);
+                if (top)   top.innerHTML   = t.view.slice(0, t.limit).map(t.render).join('');
+                if (extra) extra.innerHTML = t.view.slice(t.limit).map(t.render).join('');
+            };
+
             function _iiqMTARenderCoefficientCard(d) {
                 var tps = (d.touchpoints || []).slice();
                 if (!tps.length) return '';
@@ -35814,18 +35876,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>'
                     );
                 }
+                var rootId = 'iiqMTACoefChart_' + Math.floor(Math.random() * 1e9);
+                // GOAT is frozen, so its headers stay plain text
+                // (.cursor/rules/goat-is-frozen.mdc). The slug is read off
+                // the payload being drawn rather than from the loaded
+                // title's config, which on a title switch can still be the
+                // previous title's.
+                var coefSortable = String(d.campaign_slug || '') !== 'goat';
+                if (coefSortable) {
+                    window._iiqCoefTbl[rootId] = { view: tps.slice(), render: _renderCoefRow,
+                                                   limit: visLimit, col: '', dir: -1 };
+                }
                 var visible = tps.slice(0, visLimit);
                 var extra = tps.slice(visLimit);
                 var barRowsTop = visible.map(_renderCoefRow).join('');
                 var barRowsExtra = extra.map(_renderCoefRow).join('');
                 var chartHead =
-                    '<div style="display:grid; grid-template-columns: 240px 1fr 240px 100px; gap:0.9rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
-                  + '  <div title="The asset, keyword, or surface that appeared in the exposure log. Line 1 is the asset title. Line 2 is the channel and the phase (T-N is N weeks before opening).">Touchpoint</div>'
-                  + '  <div style="text-align:center;" title="Visual size of the touchpoint effect on conversion. Bar to the right is a lift, bar to the left is a drag. Length is proportional to the coefficient magnitude.">Lift shape</div>'
-                  + '  <div style="text-align:right;" title="The lift as an odds ratio. 1.00 is no effect. 1.10 means an exposed viewer is 10 percent more likely to convert than a matched control. The 95 percent CI is the range we would defend.">Odds ratio (95% CI)</div>'
-                  + '  <div style="text-align:right;" title="How much weight to put on this row. Strong is a tight CI clear of 1.00. Moderate is one-sided but narrow. Weak is small or the CI straddles 1.00.">Read strength</div>'
+                    '<div id="' + rootId + '_head" style="display:grid; grid-template-columns: 240px 1fr 240px 100px; gap:0.9rem; padding: 0 0 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color: var(--text-secondary);">'
+                  +      _iiqCoefHeadCells(rootId, coefSortable)
                   + '</div>';
-                var rootId = 'iiqMTACoefChart_' + Math.floor(Math.random() * 1e9);
                 var showAllLabel = 'Show all ' + tps.length + ' touchpoints';
                 var toggleBtn = (extra.length > 0) ?
                     '<div style="margin-top:0.9rem; text-align:center;">'
