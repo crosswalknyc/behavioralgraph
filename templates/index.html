@@ -42624,7 +42624,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var minDate = allDates[0];
                 var _q2Slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var _q2AsOfKey = '_iiqQ2AsOf_' + _q2Slug;
-                var asOf = window[_q2AsOfKey] || maxDate;
+                // The rewind scrubber is retired (Jenna 2026-09-23); the view
+                // always reads through the latest date in the data.
+                var asOf = maxDate;
                 if (asOf < minDate) asOf = minDate;
                 if (asOf > maxDate) asOf = maxDate;
                 var asOfTs = new Date(asOf + 'T23:59:59Z').getTime();
@@ -42871,15 +42873,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (_assetTypesList.length) {
                     html += iiqAssetFilterBarHtml(_assetTypesList);
                 }
-                html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.75rem;">'
-                    +     '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem; margin-bottom:0.4rem;">'
-                    +       '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Campaign rewind</div>'
-                    +       '<div style="font-size:0.72rem; color: var(--text-secondary); flex:1; min-width:200px;">Scrub through the campaign to see how views, downstream funnel, and the top assets looked at any point in time.</div>'
-                    +       '<input type="date" value="' + asOf + '" min="' + minDate + '" max="' + maxDate + '" oninput="window.iiqQ2SetAsOf(this.value)" style="background:rgba(255,255,255,0.06); color:#e2e8f0; border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:0.3rem 0.45rem; font-size:0.78rem; color-scheme: dark;" />'
-                    +     '</div>'
-                    +     '<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">' + presets.map(_presetBtn).join('') + '</div>'
-                    +     '<div style="margin-top:0.5rem; font-size:0.72rem; color: var(--text-secondary);">Showing data through <span style="color:#22d3ee; font-weight:600;">' + escapeHtml(asOf) + '</span> &middot; <span style="color:#e2e8f0;">' + contextLbl + '</span></div>'
-                    +   '</div>';
+                // Campaign rewind card retired (Jenna 2026-09-23). The presets,
+                // context label and iiqQ2SetAsOf stay defined for the asset
+                // detail modal's point-in-time reads.
 
                 // Row 1: combined "Paid vs. Organic summary" card (donut +
                 // who-won bars + per-source conversion-rate context) next
