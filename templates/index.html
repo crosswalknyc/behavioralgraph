@@ -129044,11 +129044,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var root = document.getElementById('intentIQView');
             var wrap = root && root.querySelector('.aiq-wrap');
             if (!wrap) return;
+            // Hold the reader's place: switching tabs part-way down the
+            // page used to throw them back up to the banner. The tab rail
+            // is the anchor rather than the raw scroll offset, because the
+            // stat strip above it carries a different set of figures per
+            // tab and can wrap to a different height, which would slide
+            // the page under them by that difference. A rail that is not
+            // on screen means the call did not come from a click on it,
+            // so that case still opens the new tab from the top.
+            var tabsEl = wrap.querySelector('.aiq-tabs');
+            var railTop = null;
+            if (tabsEl) {
+                var before = tabsEl.getBoundingClientRect().top - root.getBoundingClientRect().top;
+                // Any part of the rail on screen means the reader is
+                // looking at it. Test the whole band rather than the top
+                // edge: a rail scrolled flush to the top of the scrollport
+                // measures a hair above it on a fractional device pixel,
+                // and that is the commonest case there is.
+                if (before + tabsEl.offsetHeight > 0 && before < root.clientHeight) railTop = before;
+            }
             wrap.setAttribute('data-aiq-active', id);
             wrap.removeAttribute('data-aiq-want');
             try { localStorage.setItem(_aiqLastTabKey(), id); } catch (e) { }
             _aiqShell();
-            root.scrollTop = 0;
+            if (railTop === null) { root.scrollTop = 0; return; }
+            // A shorter panel cannot hold the offset; the browser clamps
+            // to the end of the new content, which is the right answer.
+            var after = tabsEl.getBoundingClientRect().top - root.getBoundingClientRect().top;
+            root.scrollTop += (after - railTop);
         }
         window._aiqGo = _aiqGo;
 
