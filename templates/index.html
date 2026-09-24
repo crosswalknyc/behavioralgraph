@@ -32999,7 +32999,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <details class="iiq-help-details" id="iiqAssetsHowToRead">
                         <summary>How to read this</summary>
                         <div class="iiq-help-body">
-                            <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign. Click any column header to sort; click again to flip the order. Use this to drill into which specific posts moved the needle. Talent and Daily activity roll these same assets up by creator and by day.</div>
+                            <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign. Click any column header to sort; click again to flip the order. Use this to drill into which specific posts moved the needle.</div>
                             <div id="iiqAssetsMetricsCaption" style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.35rem; opacity:0.85;">
                                 <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views - high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption. <span style="color:#a5b4fc;"><strong>Info-seek %</strong></span> = share of viewers who then searched the title / visited IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days. <span style="color:#fbbf24;"><strong>Ticketing %</strong></span> = share who then visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days.
                             </div>
@@ -127907,7 +127907,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // nest and forks sections are retired, 2026-09-23) and its
         // audience picker moves into the controls bar.
         var _AIQ_TABS = [
-            { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true },
+            // Daily activity leads on brand landings (Jenna 2026-09-23). It
+            // lists every in-flight asset with the same columns the
+            // Performance scoreboard carried, so Performance is only
+            // offered when q2 is switched off for the title.
+            { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
+            { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true, supersededBy: 'q_q2' },
             { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Performance', ids: ['iiqAssetTableSection'] },
             { id: 'surfaces',    label: 'Surfaces',    heads: ['where they went'] },
@@ -127915,7 +127920,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                                                'touchpoint contribution to '] },
             { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
             { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] },
-            { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'q_q3',           label: 'Intent',          panel: 'drawer', sub: 'questions', q: 'q3',           legacyOnly: true },
             { id: 'q_q4',           label: 'Talent',          panel: 'drawer', sub: 'questions', q: 'q4',           legacyOnly: true },
             { id: 'q_demographics', label: 'Demographics',    panel: 'drawer', sub: 'questions', q: 'demographics', legacyOnly: true },
@@ -128661,6 +128665,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (t.panel !== 'drawer' || !_aiqDrawerTabLive(t)) return;
                         if (_aiqIsStale(document.getElementById('iiqPanel-' + t.sub))) return;
                         claimed[t.id] = true;
+                    });
+                    _AIQ_TABS.forEach(function (t) {
+                        if (t.supersededBy && claimed[t.supersededBy]) delete claimed[t.id];
                     });
                 }
             }
