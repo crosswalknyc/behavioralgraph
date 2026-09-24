@@ -77391,6 +77391,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     lines = [SYNTH_CHAT_CALM_MSG];
                 }
                 synthChatPushTurn('agent', lines.join('\n'));
+                if (cur === 'complete' && data.pending_question) {
+                    var _pqr = String(data.pending_question);
+                    synthChatPushTurn('agent',
+                        'Now answering your original question.');
+                    setTimeout(function() {
+                        try { synthChatChipSend(_pqr); } catch (_) {}
+                    }, 600);
+                }
                 try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
             } catch (e) {
                 console.error('[brief-chat] status check failed', e);
@@ -82186,6 +82194,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             _pmBuildIndicatorHide();
                         }
                         synthChatPushTurn('agent', msg);
+                        if (cur === 'complete' && data.pending_question) {
+                            // Build-first follow-through (2026-09-24):
+                            // the run was approved to answer a stashed
+                            // question; ask it now against the fresh
+                            // base. Server pops the stash, so this
+                            // fires exactly once.
+                            var _pq = String(data.pending_question);
+                            synthChatPushTurn('agent',
+                                'Now answering your original question.');
+                            setTimeout(function() {
+                                try { synthChatChipSend(_pq); } catch (_) {}
+                            }, 600);
+                        }
                         if (cur === 'complete' || cur === 'error' || cur === 'failed') {
                             clearInterval(synthChatPollTimer);
                             synthChatPollTimer = null;

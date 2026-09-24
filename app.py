@@ -56696,7 +56696,22 @@ def api_synth_chat_status(run_id):
                 tb='(run failure reported by the engine status feed)')
             doc = dict(doc)
             doc['error'] = ''
-        return jsonify({'success': True, 'status': doc})
+        payload = {'success': True, 'status': doc}
+        # Build-first follow-through (2026-09-24 Jenna): a completed
+        # run whose subject matches a stashed question hands the
+        # question back so the chat re-asks it automatically against
+        # the fresh base. One-shot: the pop clears the stash entry.
+        try:
+            if str(doc.get('status') or '').strip().lower() == 'complete':
+                _pq_user = (user.get('username') or user.get('email')
+                            or '')
+                _pq = _pm_pop_pending_question(
+                    _pq_user, str(doc.get('subject') or ''))
+                if _pq:
+                    payload['pending_question'] = _pq
+        except Exception:
+            traceback.print_exc()
+        return jsonify(payload)
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/status', e)
@@ -57610,6 +57625,93 @@ def _pm_short_name_identity(toks, raw_text):
         return False
 
 
+_PM_PENDING_Q_S3_KEY = 'system/pm_pending_questions.json'
+_PM_REPORT_ASK_RE = re.compile(
+    r'\b(report|deck|one.?pager|write.?up|whitepaper|whitesheet'
+    r'|full (analysis|read)|research (report|read))\b', re.I)
+
+
+def _pm_looks_report_ask(text):
+    """True when the ask wants a put-together deliverable (keeps the
+    2026-09-14 priced research-report flow); False for plain questions,
+    which take the 2026-09-24 build-first flow."""
+    return bool(_PM_REPORT_ASK_RE.search(str(text or '')))
+
+
+def _pm_pending_q_tokens(s):
+    return {w for w in _normalize_for_match(s).split()
+            if w and w not in _PM_BASE_GENERIC_TOKENS}
+
+
+def _pm_stash_pending_question(username, subject, question):
+    """Remember the question that triggered a build-first offer so the
+    completed run can answer it automatically (2026-09-24 Jenna). Kept
+    per user, newest first, capped at 5, 48h expiry."""
+    uname = str(username or '').strip().lower()
+    if not uname or not subject or not question:
+        return
+    import time as _t
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        now = _t.time()
+        lst = [e for e in (doc.get(uname) or [])
+               if isinstance(e, dict)
+               and now - float(e.get('ts') or 0) < 48 * 3600]
+        lst = [e for e in lst
+               if str(e.get('question') or '') != str(question)]
+        lst.insert(0, {'subject': str(subject)[:160],
+                       'question': str(question)[:500], 'ts': now})
+        doc[uname] = lst[:5]
+        return doc
+    try:
+        _s3_json_cas_update(S3_BUCKET, _PM_PENDING_Q_S3_KEY, _mut,
+                            default=dict,
+                            log_name='pm_pending_questions')
+    except Exception:
+        traceback.print_exc()
+
+
+def _pm_pop_pending_question(username, completed_subject):
+    """The stashed question whose subject matches the completed build
+    (distinctive-token overlap), removed from the stash (one-shot).
+    Returns '' when nothing matches."""
+    uname = str(username or '').strip().lower()
+    if not uname or not completed_subject:
+        return ''
+    done_t = _pm_pending_q_tokens(completed_subject)
+    if not done_t:
+        return ''
+    popped = {'q': ''}
+
+    def _mut(doc):
+        doc = doc if isinstance(doc, dict) else {}
+        lst = [e for e in (doc.get(uname) or []) if isinstance(e, dict)]
+        keep = []
+        for e in lst:
+            if popped['q']:
+                keep.append(e)
+                continue
+            et = _pm_pending_q_tokens(e.get('subject'))
+            ov = len(et & done_t)
+            if et and (ov >= 2 or ov * 2 >= len(et)):
+                popped['q'] = str(e.get('question') or '')
+                continue
+            keep.append(e)
+        if keep:
+            doc[uname] = keep
+        else:
+            doc.pop(uname, None)
+        return doc
+    try:
+        _s3_json_cas_update(S3_BUCKET, _PM_PENDING_Q_S3_KEY, _mut,
+                            default=dict,
+                            log_name='pm_pending_questions')
+    except Exception:
+        traceback.print_exc()
+    return popped['q']
+
+
 def _pm_generation_base(subject_hint, text, ctx=None,
                         prefer_catalog=False):
     """Resolve the base that authorizes a generated read.
@@ -58245,6 +58347,44 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             traceback.print_exc()
     panel_charge = None
     if not base:
+        # BUILD-FIRST (2026-09-24 Jenna, the PA-09 ask, verbatim: "in
+        # this case it would just be prometheus metered rate since
+        # it's asking for this but would also tell the user that
+        # prometheus needs an initial data cut to get started will
+        # they approve the run ... then after they say yes you would
+        # build the profile and synth the data").
+        #
+        # A QUESTION about a never-pulled subject meters like any chat
+        # answer, tells the reader an initial data cut is needed, and
+        # offers the run. The original question is stashed; when the
+        # approved build completes, the status poll hands it back and
+        # the chat re-asks it automatically against the fresh base.
+        # Report-shaped asks ("put together a report on X") keep the
+        # priced research-report flow below.
+        _bf_subj = (subj_hint or pma.guess_subject_from_text(text)
+                    or '').strip()
+        if (_bf_subj and not isinstance(panel_confirm, dict)
+                and not _pm_looks_report_ask(text)):
+            try:
+                _pm_meter_answer('build_first_prompt', _pm_ppu)
+            except Exception:
+                pass
+            try:
+                _pm_stash_pending_question(
+                    (_pm_user or ''), _bf_subj, text)
+            except Exception:
+                traceback.print_exc()
+            _pm_ask_hint(outcome='build_first_offer', subject=_bf_subj)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': (f"I can answer that, but Prometheus needs an "
+                          f"initial data cut of {_bf_subj} to get "
+                          f"started. Approve the run of {_bf_subj} and "
+                          f"I'll build the profile, then answer your "
+                          f"question the moment it lands."),
+                'followups': [f'Run a profile on {_bf_subj}',
+                              'Not now'],
+                'offer_deck': False, 'deck_angle': None})
         # PANEL RESEARCH REPORT (2026-09-14, Jenna, verbatim: "before
         # it puts together any report outside of a simple analysis of
         # what already exists it should charge them. if they request
