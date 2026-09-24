@@ -735,15 +735,29 @@ def strip_subject_from_wrong_category(df, subject, brand_category=None, verbose=
     return df, len(drop_idx)
 
 
+def _fold_us_uk_spelling(norm: str) -> str:
+    """Fold British spellings onto American inside an alnum-normalized
+    uppercase string, so 'AMCTHEATRES' and 'AMCTHEATERS' read as one
+    identity (2026-09-24 Jenna, the AMC Theaters double-row: the
+    subject self-pin at 100 AND the hostmap-canonical 'AMC Theatres'
+    at 52.96 shipped side by side because the two spellings normalize
+    differently). Small deliberate pair set - venue/brand vocabulary
+    only."""
+    return (norm.replace('THEATRE', 'THEATER')
+                .replace('CENTRE', 'CENTER'))
+
+
 def strip_url_encoded_subject_dupes(df, subject, verbose=True):
-    """Remove rows whose Value is a URL-encoded or hyphenated variant of
-    `subject` (e.g. "HILARY%20DUFF", "HILARY-DUFF" when subject is
-    "HILARY DUFF"). Keeps the canonical row whose Value == subject."""
+    """Remove rows whose Value is a URL-encoded, hyphenated, or US/UK
+    spelling variant of `subject` (e.g. "HILARY%20DUFF", "HILARY-DUFF"
+    when subject is "HILARY DUFF"; "AMC THEATRES" when subject is
+    "AMC THEATERS"). Keeps the canonical row whose Value == subject."""
     if df is None or len(df) == 0 or not subject:
         return df, 0
     subj_norm = ''.join(c for c in subject.upper() if c.isalnum())
     if not subj_norm:
         return df, 0
+    subj_fold = _fold_us_uk_spelling(subj_norm)
 
     drop_idx = []
     for idx, r in df.iterrows():
@@ -753,10 +767,17 @@ def strip_url_encoded_subject_dupes(df, subject, verbose=True):
         n = _normalize_url_encoded(val)
         if n == subj_norm and ('%' in val or '-' in val):
             drop_idx.append(idx)
+        elif n != subj_norm and _fold_us_uk_spelling(n) == subj_fold:
+            # US/UK spelling variant of the subject itself: the
+            # spelling-folded identities match while the raw norms
+            # differ. The subject's exact row (the self-pin) was kept
+            # by the early continue above; this variant is a dupe.
+            drop_idx.append(idx)
 
     if drop_idx:
         if verbose:
-            print(f"   🧹 stripped {len(drop_idx)} URL-encoded dupes of '{subject}'")
+            print(f"   🧹 stripped {len(drop_idx)} URL-encoded/spelling "
+                  f"dupes of '{subject}'")
         df = df.drop(index=drop_idx).reset_index(drop=True)
     return df, len(drop_idx)
 
