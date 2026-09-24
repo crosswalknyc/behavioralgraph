@@ -1060,12 +1060,18 @@ def depin_round_brand_bps(df, subject, verbose=True):
         ).hexdigest(), 16)
 
         if strict_round:
-            # ±0.0099pp drift (existing logic)
+            # ±0.0099pp drift (existing logic). NOTE 2026-09-24: a bad
+            # edit once dedented this block so the else below paired
+            # with the inner 2dp recheck - every strict-round value
+            # then rode the look-round shift, whose 0.15-0.45 steps
+            # are exact hundredths and re-land an X.0000 base right
+            # back on a 2dp boundary ('54.84'). Caught by the nightly
+            # cut-path gate test.
             u = ((h % 1801) - 900) / 100000.0
-        new_v = max(0.0001, old_bp + u)
-        new_v = round(new_v, 4)
-        if abs(new_v * 100 - round(new_v * 100)) < 1e-4:
-            new_v = round(new_v + 0.0017, 4)
+            new_v = max(0.0001, old_bp + u)
+            new_v = round(new_v, 4)
+            if abs(new_v * 100 - round(new_v * 100)) < 1e-4:
+                new_v = round(new_v + 0.0017, 4)
             fixed_strict += 1
         else:
             # look-round: shift by 0.15-0.45 pp (deterministic sign) so the

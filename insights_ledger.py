@@ -733,10 +733,23 @@ _ASK_FAMILY_RULES = (
                    'spending on', 'spend on', 'order')),
     ('subscribers', ('subscri', 'signup', 'sign up', 'churn')),
     ('search', ('search', 'quer', 'demand')),
-    ('viewership', ('watching', 'watch next', 'streaming', 'binge',
-                    'tune', 'viewing')),
-    ('revenue', ('revenue', 'arpu')),
+    # Engagement sits ABOVE viewership so 'how many people follow her'
+    # binds engagement before the viewership size-phrasing net below
+    # can claim it (2026-09-24 reorder).
     ('engagement', ('engagement', 'session', 'follow')),
+    # 'watch' matches watched/watching/watches as a substring - the
+    # 2026-09-21 vocabulary rework narrowed this to 'watching' and
+    # broke replay grouping on the most common ask shape there is
+    # ('how many people watched X', caught by the 2026-09-24 nightly).
+    # 'audience size' + 'how many people' land here too: on the
+    # subject-bearing views these are viewership-size asks, and the
+    # earlier families (purchases/subscribers/search/engagement) win
+    # first-match for 'how many people bought/subscribed/searched/
+    # follow'. Bare 'view' stays out (review, interview, overview).
+    ('viewership', ('watch', 'streaming', 'binge', 'tune', 'viewing',
+                    'viewers', 'viewership', 'audience size',
+                    'how many people')),
+    ('revenue', ('revenue', 'arpu')),
     # 2026-09-14: week 2026-W37 classified ZERO of 38 asks, so replay
     # could not fire on anything and every repeat ask paid for a full
     # read. The seven families above cover behaviour verbs but nothing

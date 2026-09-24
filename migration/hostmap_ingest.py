@@ -1631,6 +1631,11 @@ def _confirmation_page(state, side_results, dry_run: bool) -> str:
 
     if dry_run:
         title = "Dry run complete"
+        # The dry-run page must say so plainly (2026-09-24 nightly:
+        # 'dry-run approve reports without writing' regressed when the
+        # tri-state page rebuild dropped this line).
+        sections.insert(0, "<p><b>This was a dry run. No changes "
+                           "were made.</b></p>")
     elif total_inserted:
         title = ("Mapping approved" if len(side_results) == 1
                  else "Mapping approved (both sections)")
