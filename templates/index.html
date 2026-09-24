@@ -35348,6 +35348,67 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             //   7. Leaks           - what a brand pixel cannot see
             // Numbers are rendered as-is from the payload; no re-rounding.
             // ------------------------------------------------------------
+            // A sortable table for the reads on this card. A header click
+            // re-sorts in place and rewrites only the table's own node, so
+            // the section keeps its identity and stays in whatever panel
+            // the tab shell has seated it. The column spec holds live
+            // formatting functions, so it lives in memory and only the
+            // table id travels through the onclick attribute.
+            window._iiqTbl = window._iiqTbl || {};
+            function _iiqTblHtml(id) {
+                var t = window._iiqTbl[id];
+                if (!t) return '';
+                var grid = 'display:grid; grid-template-columns:' + t.grid + '; gap:0.6rem;';
+                var html = '<div style="' + grid + ' padding:0 0 0.4rem 0; margin-bottom:0.15rem; border-bottom:1px solid rgba(255,255,255,0.10);">';
+                t.cols.forEach(function(c, i) {
+                    var on = (t.col === i);
+                    var sortable = !!c.key;
+                    html += '<div'
+                         +  (sortable ? ' onclick="window._iiqTblSort(\'' + id + '\',' + i + ')" title="Sort by ' + escapeHtml(c.label || '') + '"' : '')
+                         +  ' style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em; line-height:1.3;'
+                         +  ' text-align:' + (c.align || 'left') + '; color:' + (on ? '#C7F23E' : '#7C878A') + ';'
+                         +  (sortable ? ' cursor:pointer; user-select:none;' : '') + '">'
+                         +  escapeHtml(c.label || '') + (on ? (t.dir > 0 ? ' \u2191' : ' \u2193') : '')
+                         +  '</div>';
+                });
+                html += '</div>';
+                html += t.view.map(function(r) {
+                    return '<div style="' + grid + ' align-items:' + t.valign + '; padding:' + t.pad + ';'
+                         + (t.rule ? ' border-bottom:1px solid rgba(255,255,255,0.05);' : '') + '">'
+                         + t.cols.map(function(c) { return c.cell(r); }).join('')
+                         + '</div>';
+                }).join('');
+                return html;
+            }
+            window._iiqTblSort = function(id, ci) {
+                var t = window._iiqTbl[id];
+                if (!t) return;
+                var c = t.cols[ci];
+                if (!c || !c.key) return;
+                // Same header again reverses. A new one opens the way that
+                // column reads best: biggest first for a count, first to
+                // last for a label or an ordered band.
+                if (t.col === ci) t.dir = -t.dir;
+                else { t.col = ci; t.dir = (c.text || c.asc) ? 1 : -1; }
+                var dir = t.dir;
+                t.view = t.rows.slice().sort(function(a, b) {
+                    var av = c.key(a), bv = c.key(b);
+                    if (c.text) return String(av).localeCompare(String(bv)) * dir;
+                    return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
+                });
+                var host = document.getElementById(id);
+                if (host) host.innerHTML = _iiqTblHtml(id);
+            };
+            function _iiqSortableTable(id, spec) {
+                window._iiqTbl[id] = {
+                    cols: spec.cols, rows: spec.rows, view: spec.rows.slice(),
+                    grid: spec.grid, valign: spec.valign || 'center',
+                    pad: spec.pad || '0.32rem 0', rule: !!spec.rule,
+                    col: -1, dir: 1
+                };
+                return '<div id="' + id + '">' + _iiqTblHtml(id) + '</div>';
+            }
+
             // The four shapes every converting account falls into. Built
             // on its own because it has two possible homes: the Paths card,
             // and the top of Digital Journey where a landing has one. The
@@ -35359,16 +35420,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!archetypes.length) return '';
                 pageNoun = pageNoun || 'bottom funnel destination';
                 ofNoun = ofNoun || pageNoun;
-                var archRows = archetypes.map(function(a) {
-                    return (
-                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 150px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
-                      + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
-                      + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
-                      + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
-                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of ' + escapeHtml(ofNoun) + '</div>'
-                      + '</div>'
-                    );
-                }).join('');
+                // The noun reads once, in the header, rather than on the
+                // end of all four percentages where it wrapped every row.
+                var archRows = _iiqSortableTable('iiqArchTable', {
+                    grid: '200px 1fr 110px 150px',
+                    valign: 'start', pad: '0.55rem 0', rule: true,
+                    rows: archetypes.map(function(a, i) {
+                        return { archetype: String(a.archetype || ''), description: String(a.description || ''),
+                                 us_accounts: Number(a.us_accounts) || 0, pct: Number(a.pct) || 0, ord: i };
+                    }),
+                    cols: [
+                        { label: 'Shape', text: true, key: function(r) { return r.archetype; },
+                          cell: function(r) { return '<div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(r.archetype) + '</div>'; } },
+                        { label: 'What they did',
+                          cell: function(r) { return '<div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(r.description) + '</div>'; } },
+                        { label: 'US accounts', align: 'right', key: function(r) { return r.us_accounts; },
+                          cell: function(r) { return '<div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'; } },
+                        { label: '% of ' + ofNoun, align: 'right', key: function(r) { return r.pct; },
+                          cell: function(r) { return '<div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + r.pct.toFixed(1) + '%</div>'; } }
+                    ]
+                });
                 // Bottom margin as well as top: this slab reads under the
                 // journey heading on a landing with a Journey view, where
                 // it needs air beneath it as much as above.
@@ -35564,17 +35635,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var ttcMax = 0;
                 for (var iT = 0; iT < ttc.length; iT++) if (Number(ttc[iT].pct || 0) > ttcMax) ttcMax = Number(ttc[iT].pct);
                 if (ttcMax < 0.01) ttcMax = 100;
-                var ttcRows = ttc.map(function(r) {
-                    var w = (Number(r.pct || 0) / Math.max(0.01, ttcMax)) * 100;
-                    return (
-                        '<div style="display:grid; grid-template-columns: 160px 1fr 110px 70px; gap:0.6rem; align-items:center; padding:0.32rem 0;">'
-                      + '  <div style="font-size:0.76rem; color: var(--text-primary); white-space:nowrap;">' + escapeHtml(r.bucket || '') + '</div>'
-                      + '  <div><div style="width:' + w.toFixed(2) + '%; height:10px; background:#C7F23E; border-radius:9999px; opacity:0.85;"></div></div>'
-                      + '  <div style="font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'
-                      + '  <div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(r.pct || 0).toFixed(1) + '%</div>'
-                      + '</div>'
-                    );
-                }).join('');
+                // Window sorts back to the order the bands actually run in
+                // rather than alphabetically, which would put 15+ days
+                // first and read as nonsense.
+                var ttcRows = _iiqSortableTable('iiqTtcTable', {
+                    grid: '160px 1fr 110px 70px',
+                    rows: ttc.map(function(r, i) {
+                        return { bucket: String(r.bucket || ''), us_accounts: Number(r.us_accounts) || 0,
+                                 pct: Number(r.pct) || 0, ord: i };
+                    }),
+                    cols: [
+                        { label: 'Window', asc: true, key: function(r) { return r.ord; },
+                          cell: function(r) { return '<div style="font-size:0.76rem; color: var(--text-primary); white-space:nowrap;">' + escapeHtml(r.bucket) + '</div>'; } },
+                        { label: '',
+                          cell: function(r) { return '<div><div style="width:' + ((r.pct / Math.max(0.01, ttcMax)) * 100).toFixed(2) + '%; height:10px; background:#C7F23E; border-radius:9999px; opacity:0.85;"></div></div>'; } },
+                        { label: 'US accounts', align: 'right', key: function(r) { return r.us_accounts; },
+                          cell: function(r) { return '<div style="font-size:0.75rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(r.us_accounts) + '</div>'; } },
+                        { label: 'Share', align: 'right', key: function(r) { return r.pct; },
+                          cell: function(r) { return '<div style="font-size:0.72rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + r.pct.toFixed(1) + '%</div>'; } }
+                    ]
+                });
                 var ttcToNoun = 'bottom funnel destination';
                 var archPageNoun = 'bottom funnel destination';
                 var archOfNoun = 'bottom funnel destination';
