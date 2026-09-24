@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ subject }} | The Read</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Medium.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Bold.ttf') }}") format('truetype'); }
+
+        :root {
+            --cw-graphite: #0C1618;
+            --cw-slate: #15252A;
+            --cw-offwhite: #E9E8E1;
+            --cw-signal-green: #C7F23E;
+            --cw-border: #27393D;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cw-graphite);
+            color: var(--cw-offwhite);
+            display: flex;
+            flex-direction: column;
+        }
+        .bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 24px;
+            background: var(--cw-graphite);
+            border-bottom: 1px solid var(--cw-border);
+        }
+        .bar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+        }
+        .bar img { height: 22px; width: auto; display: block; }
+        .meta { min-width: 0; }
+        .meta .k {
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #7C878A;
+        }
+        .meta .t {
+            font-size: 14px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 52vw;
+        }
+        .bar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .bar a {
+            color: #9AA09B;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .bar a:hover { color: var(--cw-offwhite); }
+        .bar a.primary {
+            background: var(--cw-signal-green);
+            color: var(--cw-graphite);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+        }
+        iframe.issue {
+            flex: 1;
+            width: 100%;
+            border: 0;
+            background: #E9E8E1;
+        }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <div class="bar-left">
+            <a href="/the-read">
+                <img src="{{ url_for('static', filename='crosswalk-logo-brand-white.png') }}"
+                     alt="Crosswalk"
+                     onerror="this.onerror=null;this.src='{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}';">
+            </a>
+            <div class="meta">
+                <div class="k">The Read{% if sent_label %} · {{ sent_label }}{% endif %}</div>
+                <div class="t">{{ subject }}</div>
+            </div>
+        </div>
+        <div class="bar-right">
+            {% if download_url %}<a href="{{ download_url }}">Download</a>{% endif %}
+            <a href="/the-read">All issues</a>
+            <a class="primary" href="/the-read">Sign up</a>
+        </div>
+    </div>
+    <iframe class="issue" src="{{ read_url }}" title="{{ subject }}"></iframe>
+</body>
+</html>

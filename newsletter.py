@@ -24,9 +24,9 @@ from email.mime.text import MIMEText
 from functools import wraps
 from html import escape, unescape
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
-from flask import Blueprint, Response, jsonify, redirect, request, session
+from flask import Blueprint, Response, jsonify, redirect, render_template, request, session
 
 import newsletter_linkedin as nli
 
@@ -776,6 +776,90 @@ def _upsert_subscriber(st, email, name="", company="", list_ids=None, tags=None,
     if cur.get("status") == "unsubscribed":
         return False
     return True
+
+
+def _public_issue_date(iso):
+    if not iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return f"{dt.strftime('%B')} {dt.day}, {dt.year}"
+    except Exception:
+        return str(iso)[:10]
+
+
+def public_archive_issues(state=None):
+    """Sent letters only, newest first. Drafts stay off the public page."""
+    state = load_state_raw() if state is None else state
+    issues = []
+    for camp in state.get("campaigns") or []:
+        if _effective_status(camp) != "sent":
+            continue
+        cid = camp.get("id")
+        if not cid:
+            continue
+        dl = _campaign_download(camp)
+        issues.append({
+            "id": cid,
+            "name": camp.get("name") or "The Read",
+            "subject": camp.get("subject") or camp.get("name") or "The Read",
+            "preheader": camp.get("preheader") or "",
+            "sent_at": camp.get("sent_at") or "",
+            "sent_label": _public_issue_date(camp.get("sent_at")),
+            "url": f"/the-read/{cid}",
+            "read_url": f"/n/r/{cid}",
+            "download_url": f"/n/d/{cid}" if dl.get("enabled") else "",
+        })
+    issues.sort(key=lambda row: row.get("sent_at") or "", reverse=True)
+    return issues
+
+
+def subscribe_to_the_read(email, name="", company=""):
+    """Public signup. Adds to The Read. Brings an unsubscribed address back."""
+    email = _valid_email(email)
+    if not email:
+        return False, "That email is not valid."
+    name = (name or "").strip()[:80]
+    company = (company or "").strip()[:80]
+
+    def mutate(st):
+        existing = {
+            _valid_email(s.get("email")): s
+            for s in (st.get("subscribers") or [])
+        }
+        cur = existing.get(email)
+        if not cur:
+            _upsert_subscriber(
+                st, email, name=name, company=company,
+                list_ids=["the-read"], tags=["website"], source="website",
+            )
+            return st
+        lists = list(cur.get("list_ids") or [])
+        if "the-read" not in lists:
+            lists.append("the-read")
+        cur["list_ids"] = lists
+        if name and not cur.get("name"):
+            cur["name"] = name
+        if company and not cur.get("company"):
+            cur["company"] = company
+        tags = _normalize_tags(cur.get("tags") or [])
+        if "website" not in {t.lower() for t in tags}:
+            tags.append("website")
+        cur["tags"] = tags
+        if cur.get("status") == "unsubscribed":
+            cur["status"] = "subscribed"
+            cur["unsubscribed_at"] = None
+        return st
+
+    _cas_update_state(mutate)
+    return True, "You're on The Read."
+
+
+def _cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
 
 
 def record_download_lead(cid, email, name="", company="", paid=False, amount_cents=0, session_id=""):
@@ -3407,6 +3491,89 @@ color:#5C6560;">Crosswalk / The Read</div>
 <span style="color:{tone};">&#9679;</span> {escape(_company_address())}
 </p>
 </div></body></html>"""
+
+
+@newsletter_bp.route("/the-read")
+@newsletter_bp.route("/n")
+@newsletter_bp.route("/newsletter")
+def public_the_read():
+    state = load_state_raw()
+    return render_template(
+        "the_read.html",
+        issues=public_archive_issues(state),
+        notice=(request.args.get("ok") == "1"),
+        error=(request.args.get("err") or "").strip(),
+        address=_company_address(),
+    )
+
+
+@newsletter_bp.route("/the-read/<cid>")
+def public_the_read_issue(cid):
+    cid = re.sub(r"[^A-Za-z0-9._-]", "", cid or "")
+    state = load_state_raw()
+    camp = _campaign(state, cid)
+    if not camp or _effective_status(camp) != "sent":
+        return render_template(
+            "the_read.html",
+            issues=public_archive_issues(state),
+            notice=False,
+            error="That issue is not available.",
+            address=_company_address(),
+        ), 404
+    html = _preview_html(cid)
+    if not (html or "").strip():
+        return render_template(
+            "the_read.html",
+            issues=public_archive_issues(state),
+            notice=False,
+            error="That issue is not available.",
+            address=_company_address(),
+        ), 404
+    dl = _campaign_download(camp)
+    return render_template(
+        "the_read_issue.html",
+        campaign=camp,
+        subject=camp.get("subject") or camp.get("name") or "The Read",
+        sent_label=_public_issue_date(camp.get("sent_at")),
+        read_url=f"/n/r/{cid}",
+        download_url=f"/n/d/{cid}" if dl.get("enabled") else "",
+        address=_company_address(),
+    )
+
+
+@newsletter_bp.route("/n/archive.json")
+def public_archive_json():
+    issues = public_archive_issues()
+    return _cors(jsonify({"success": True, "issues": issues}))
+
+
+@newsletter_bp.route("/n/signup", methods=["POST", "OPTIONS"])
+def public_signup():
+    if request.method == "OPTIONS":
+        return _cors(Response("", status=204))
+    body = request.get_json(silent=True) or {}
+    honeypot = (
+        (request.form.get("company_url") or "")
+        + (request.form.get("website") or "")
+        + (body.get("company_url") or "")
+        + (body.get("website") or "")
+    ).strip()
+    wants_json = request.is_json or "application/json" in (request.headers.get("Accept") or "")
+    if honeypot:
+        if wants_json:
+            return _cors(jsonify({"success": True, "message": "You're on The Read."}))
+        return redirect("/the-read?ok=1")
+    email = request.form.get("email") or body.get("email") or ""
+    name = request.form.get("name") or body.get("name") or ""
+    company = request.form.get("company") or body.get("company") or ""
+    ok, msg = subscribe_to_the_read(email, name=name, company=company)
+    if wants_json:
+        if not ok:
+            return _cors(jsonify({"success": False, "error": msg})), 400
+        return _cors(jsonify({"success": True, "message": msg}))
+    if not ok:
+        return redirect("/the-read?err=" + quote(msg or "Try again."))
+    return redirect("/the-read?ok=1")
 
 
 def register_newsletter_blueprint(app):

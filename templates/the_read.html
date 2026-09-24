@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Read | Crosswalk</title>
+    <meta name="description" content="The Read is the Crosswalk letter. Sign up, then read every issue that has gone out.">
+    <link rel="canonical" href="https://dashboard.crosswalknyc.com/the-read">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=2">
+    <meta property="og:title" content="The Read | Crosswalk">
+    <meta property="og:description" content="What we saw in the panel. Sign up, or read the issues that already went out.">
+    <meta property="og:url" content="https://dashboard.crosswalknyc.com/the-read">
+    <style>
+        @font-face { font-family: 'Inter 18pt'; font-weight: 300; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Light.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 400; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Regular.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 500; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Medium.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 700; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Bold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 800; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-ExtraBold.ttf') }}") format('truetype'); }
+        @font-face { font-family: 'Inter 18pt'; font-weight: 900; font-style: normal; font-display: swap;
+            src: url("{{ url_for('static', filename='fonts/Inter_18pt-Black.ttf') }}") format('truetype'); }
+
+        :root {
+            --cw-graphite: #0C1618;
+            --cw-slate: #15252A;
+            --cw-offwhite: #E9E8E1;
+            --cw-signal-green: #C7F23E;
+            --cw-signal-olive: #5E7E12;
+            --cw-orchid: #E682FF;
+            --cw-amethyst: #8E3FA8;
+            --cw-cobalt: #3358FF;
+            --cw-dusk: #B7B3D8;
+            --cw-pavement: #3B3D38;
+            --cw-olive-small: #547110;
+            --cw-border: #27393D;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cw-graphite);
+            color: var(--cw-offwhite);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wrap {
+            width: min(1200px, calc(100% - 80px));
+            margin: 0 auto;
+        }
+
+        header.top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 0 0;
+        }
+        header.top img {
+            height: 28px;
+            width: auto;
+            display: block;
+        }
+        header.top a.ghost {
+            color: #9AA09B;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        header.top a.ghost:hover { color: var(--cw-offwhite); }
+
+        .hero {
+            padding: 56px 0 8px;
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 48px;
+            align-items: start;
+        }
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            font-weight: 500;
+            color: #9AA09B;
+            margin-bottom: 16px;
+        }
+        .eyebrow::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--cw-signal-green);
+        }
+        .eyebrow .num { color: #7C878A; margin-right: 0.2em; }
+
+        h1 {
+            font-size: 44px;
+            line-height: 1.08;
+            letter-spacing: -0.02em;
+            font-weight: 800;
+            max-width: 16ch;
+        }
+        .lead {
+            color: #9AA09B;
+            font-size: 16px;
+            line-height: 1.5;
+            margin-top: 16px;
+            max-width: 42ch;
+        }
+
+        .signup {
+            background: var(--cw-slate);
+            border: 1px solid var(--cw-border);
+            border-radius: 12px;
+            padding: 28px 26px;
+        }
+        .signup h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+        .signup p {
+            color: #9AA09B;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            color: #7C878A;
+            margin: 0 0 6px;
+        }
+        input[type="email"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 14px;
+            background: #0C1618;
+            border: 1px solid var(--cw-border);
+            border-radius: 6px;
+            color: var(--cw-offwhite);
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 14px;
+            outline: 0;
+            margin-bottom: 14px;
+        }
+        input:focus {
+            border-color: var(--cw-cobalt);
+            box-shadow: 0 0 0 3px rgba(51, 88, 255, 0.18);
+        }
+        input::placeholder { color: #7C878A; }
+        .hp {
+            position: absolute;
+            left: -9999px;
+            height: 0;
+            overflow: hidden;
+        }
+        button.btn,
+        a.btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px 16px;
+            font-family: 'Inter 18pt', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            background: var(--cw-signal-green);
+            color: var(--cw-graphite);
+        }
+        button.btn:hover,
+        a.btn:hover { filter: brightness(1.06); }
+        .ok {
+            background: rgba(199, 242, 62, 0.10);
+            border: 1px solid rgba(199, 242, 62, 0.35);
+            color: var(--cw-signal-green);
+            padding: 12px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        .err {
+            background: rgba(142, 63, 168, 0.12);
+            border: 1px solid var(--cw-amethyst);
+            color: #E9E8E1;
+            padding: 12px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        .fine {
+            margin-top: 14px;
+            color: #7C878A;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        .fine a { color: var(--cw-signal-green); text-decoration: none; }
+
+        .archive { padding: 56px 0 80px; }
+        .archive-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+        .archive-head h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .archive-head span { color: #7C878A; font-size: 13px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: var(--cw-slate);
+            border: 1px solid var(--cw-border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 280px;
+            text-decoration: none;
+            color: inherit;
+        }
+        .card:hover { border-color: #3A5056; }
+        .preview {
+            height: 168px;
+            background: #070F11;
+            border-bottom: 1px solid var(--cw-border);
+            overflow: hidden;
+            position: relative;
+        }
+        .preview iframe {
+            width: 600px;
+            height: 800px;
+            transform: scale(0.28);
+            transform-origin: top left;
+            border: 0;
+            pointer-events: none;
+            background: #070F11;
+        }
+        .card-body { padding: 16px 16px 18px; flex: 1; display: flex; flex-direction: column; }
+        .when {
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #7C878A;
+            font-weight: 600;
+        }
+        .card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+            margin: 8px 0 6px;
+            line-height: 1.25;
+        }
+        .card p {
+            color: #9AA09B;
+            font-size: 13px;
+            line-height: 1.45;
+            flex: 1;
+        }
+        .empty {
+            color: #9AA09B;
+            font-size: 15px;
+            padding: 28px 0;
+        }
+
+        footer.foot {
+            border-top: 1px solid var(--cw-border);
+            padding: 22px 0 36px;
+            color: #7C878A;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        footer.foot a { color: #9AA09B; text-decoration: none; margin-right: 14px; }
+        footer.foot a:hover { color: var(--cw-offwhite); }
+
+        @media (max-width: 900px) {
+            .wrap { width: calc(100% - 40px); }
+            .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 36px; }
+            h1 { font-size: 34px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header class="top">
+            <a href="/the-read">
+                <img src="{{ url_for('static', filename='crosswalk-logo-brand-white.png') }}"
+                     alt="Crosswalk"
+                     onerror="this.onerror=null;this.src='{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}';">
+            </a>
+            <a class="ghost" href="/login">Sign in</a>
+        </header>
+
+        <section class="hero">
+            <div>
+                <div class="eyebrow"><span class="num">01</span>The Read</div>
+                <h1>The letter from Crosswalk.</h1>
+                <p class="lead">What we saw in the panel. Issues as they went out. Sign up and the next one lands in your inbox.</p>
+            </div>
+            <div class="signup">
+                {% if notice %}
+                <div class="ok">You're on The Read. The next issue comes to this inbox.</div>
+                {% endif %}
+                {% if error %}
+                <div class="err">{{ error }}</div>
+                {% endif %}
+                <h2>Get the next issue.</h2>
+                <p>One letter. Same address, once.</p>
+                <form method="post" action="/n/signup">
+                    <label for="email">Email</label>
+                    <input id="email" type="email" name="email" required placeholder="you@company.com" autocomplete="email">
+                    <label for="name">Name (optional)</label>
+                    <input id="name" type="text" name="name" placeholder="Your name" autocomplete="name">
+                    <input class="hp" type="text" name="company_url" tabindex="-1" autocomplete="off">
+                    <button class="btn" type="submit">Sign up</button>
+                </form>
+                <p class="fine">Unsubscribe any time from the letter. Questions go to <a href="mailto:hello@crosswalknyc.com">hello@crosswalknyc.com</a>.</p>
+            </div>
+        </section>
+
+        <section class="archive" id="issues">
+            <div class="archive-head">
+                <div class="eyebrow" style="margin:0"><span class="num">02</span>Past issues</div>
+                <span>{{ issues|length }} {{ 'issue' if issues|length == 1 else 'issues' }}</span>
+            </div>
+            {% if issues %}
+            <div class="grid">
+                {% for issue in issues %}
+                <a class="card" href="{{ issue.url }}">
+                    <div class="preview">
+                        <iframe src="{{ issue.read_url }}" loading="lazy" tabindex="-1" title="{{ issue.subject }}"></iframe>
+                    </div>
+                    <div class="card-body">
+                        <div class="when">{{ issue.sent_label or 'Sent' }}</div>
+                        <h3>{{ issue.subject }}</h3>
+                        {% if issue.preheader %}<p>{{ issue.preheader }}</p>{% endif %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty">No issues have gone out yet. Sign up and you will get the first one.</div>
+            {% endif %}
+        </section>
+
+        <footer class="foot">
+            <div>
+                <a href="/login">Dashboard</a>
+                <a href="/terms">Terms</a>
+                <a href="/privacy">Privacy</a>
+                <a href="mailto:hello@crosswalknyc.com">Contact</a>
+            </div>
+            <div>{{ address }}</div>
+        </footer>
+    </div>
+</body>
+</html>
