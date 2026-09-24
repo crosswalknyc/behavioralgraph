@@ -334,6 +334,10 @@ def site_signup():
             success_url=success_url,
             cancel_url=cancel_url,
             username=username,
+            product_name="Crosswalk dashboard opening balance",
+            product_description=(
+                "$5,000.00 prepaid balance for Prometheus reports. "
+                "Tops up $5,000 when the balance reaches $500."),
             metadata={
                 "subject_kind": "user",
                 "subject_key": username,

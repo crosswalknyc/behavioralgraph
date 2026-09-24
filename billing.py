@@ -432,7 +432,9 @@ def persist_card_from_charge(*, customer_id: str = "",
 def create_checkout_session(customer_id: str, amount_usd: float,
                             success_url: str, cancel_url: str,
                             username: str,
-                            metadata: Optional[dict] = None) -> dict:
+                            metadata: Optional[dict] = None,
+                            product_name: str = "Crosswalk wallet top-up",
+                            product_description: str = "") -> dict:
     """Create a hosted Checkout Session for a prepay top-up.
 
     The user clicks "Add Funds" -> we call this -> we redirect to
@@ -463,10 +465,11 @@ def create_checkout_session(customer_id: str, amount_usd: float,
             "price_data": {
                 "currency": "usd",
                 "product_data": {
-                    "name": "Crosswalk wallet top-up",
+                    "name": product_name,
                     "description": (
-                        f"Add ${amount_usd:,.2f} to your Crosswalk "
-                        f"dashboard wallet."),
+                        product_description
+                        or f"Add ${amount_usd:,.2f} to your Crosswalk "
+                           f"dashboard wallet."),
                 },
                 "unit_amount": cents,
             },
