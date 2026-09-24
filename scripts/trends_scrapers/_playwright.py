@@ -49,9 +49,72 @@ from __future__ import annotations
 
 import logging
 import random
+import subprocess
+import sys
+from pathlib import Path
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Self-healing sessions
+# ────────────────────────────────────────────────────────────────────
+# A session-gated platform's donated session dies on its own clock,
+# not ours. HBO Max's lives about a day from the moment it was issued,
+# so a donation made at 08:00 from a token issued the previous morning
+# is dead by noon, and until now the rail simply froze until somebody
+# ran a login by hand. When the pre-flight refuses a page, and this is
+# the operator Mac with the platform's credentials in the Keychain,
+# `render_pages` signs in again, re-donates, and retries ONCE. On
+# Hetzner there is no Keychain, so the refusal stands as before and
+# the scraper publishes nothing rather than a plan picker.
+_HEAL_TIMEOUT_S = 900
+
+
+def _self_heal_session(domain: str) -> bool:
+    """Re-issue `domain`'s session from the Keychain. Mac only.
+
+    Runs the auto-login in a subprocess rather than in-process: it
+    opens its own Playwright, and a second `sync_playwright()` inside
+    a running one raises. Returns True when a fresh, verified session
+    was donated. Never raises.
+    """
+    if sys.platform != 'darwin':
+        return False
+    try:
+        from . import trends_login_store as store
+        if not store.has_credentials(domain):
+            logger.info("playwright[%s]: no stored credentials, cannot "
+                        "re-issue the session here", domain)
+            return False
+    except Exception as e:
+        logger.info("playwright[%s]: credential store unavailable: %s",
+                    domain, e)
+        return False
+
+    repo_root = Path(__file__).resolve().parents[2]
+    cmd = [sys.executable, '-m', 'scripts.trends_scrapers.trends_auto_login',
+           '--no-refresh', '--no-email', domain]
+    logger.warning("playwright[%s]: session refused; signing in again from "
+                   "the Keychain and re-donating", domain)
+    try:
+        proc = subprocess.run(cmd, cwd=str(repo_root), capture_output=True,
+                              text=True, timeout=_HEAL_TIMEOUT_S)
+    except Exception as e:
+        logger.warning("playwright[%s]: re-login did not run: %s", domain, e)
+        return False
+    tail = '\n'.join((proc.stdout or '').strip().splitlines()[-6:])
+    logger.info("playwright[%s]: re-login rc=%d\n%s", domain,
+                proc.returncode, tail)
+    if proc.returncode != 0:
+        return False
+    try:
+        from ._base import forget_donations
+        forget_donations(domain)
+    except Exception:
+        pass
+    return True
 
 
 UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
@@ -124,7 +187,8 @@ def render_pages(pages: list[tuple[str, str]], *,
                  hydration_wait_ms: int = 10000,
                  use_proxy: bool = False,
                  assert_signed_in: Optional[str] = None,
-                 page_hook: Optional[Callable] = None
+                 page_hook: Optional[Callable] = None,
+                 _heal_attempted: bool = False
                  ) -> list[tuple[str, str]]:
     """Render each `(label, url)` and return list of `(label, html)`.
 
@@ -184,6 +248,10 @@ def render_pages(pages: list[tuple[str, str]], *,
                          "configured; falling back to direct")
 
     results: list[tuple[str, str]] = []
+    # Set when the pre-flight refuses the session and a re-login is
+    # worth trying. Acted on AFTER the `with` below has closed, because
+    # the heal opens its own Playwright and the retry opens another.
+    heal_error: Optional[Exception] = None
     with sp() as pw:
         try:
             browser, channel = _launch_browser(pw, prefer_chrome=True,
@@ -268,13 +336,30 @@ def render_pages(pages: list[tuple[str, str]], *,
         # passes, so it runs before the homepage warm-up and raises
         # straight out of render_pages.
         if assert_signed_in:
-            from ._auth_guard import prove_signed_in
-            evidence = prove_signed_in(page, assert_signed_in,
-                                       source=f'{assert_signed_in} pre-flight')
-            logger.info("playwright[%s]: session proven (%s)",
-                        assert_signed_in, evidence)
+            from ._auth_guard import AuthWallError, prove_signed_in
+            try:
+                evidence = prove_signed_in(
+                    page, assert_signed_in,
+                    source=f'{assert_signed_in} pre-flight')
+                logger.info("playwright[%s]: session proven (%s)",
+                            assert_signed_in, evidence)
+            except AuthWallError as e:
+                if _heal_attempted:
+                    try:
+                        ctx.close()
+                        browser.close()
+                    except Exception:
+                        pass
+                    raise
+                heal_error = e
 
-        if homepage:
+        if heal_error is not None:
+            try:
+                ctx.close()
+                browser.close()
+            except Exception:
+                pass
+        elif homepage:
             try:
                 page.goto(homepage, wait_until='domcontentloaded',
                            timeout=timeout_ms)
@@ -283,7 +368,7 @@ def render_pages(pages: list[tuple[str, str]], *,
                 logger.info("playwright homepage warmup failed for %s: %s",
                              homepage, e)
 
-        for label, url in pages:
+        for label, url in ([] if heal_error is not None else pages):
             try:
                 page.goto(url, wait_until='domcontentloaded',
                            timeout=timeout_ms)
@@ -353,4 +438,15 @@ def render_pages(pages: list[tuple[str, str]], *,
             browser.close()
         except Exception:
             pass
+
+    if heal_error is not None:
+        if _self_heal_session(assert_signed_in):
+            return render_pages(
+                pages, homepage=homepage, cookie_domain=cookie_domain,
+                wait_ms=wait_ms, scroll_ms=scroll_ms, timeout_ms=timeout_ms,
+                wait_selectors=wait_selectors,
+                hydration_wait_ms=hydration_wait_ms, use_proxy=use_proxy,
+                assert_signed_in=assert_signed_in, page_hook=page_hook,
+                _heal_attempted=True)
+        raise heal_error
     return results

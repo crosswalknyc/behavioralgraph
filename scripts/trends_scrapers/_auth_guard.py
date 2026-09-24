@@ -107,6 +107,14 @@ _SITES: dict[str, dict[str, Any]] = {
         # never donated. See `_belongs_to_platform`.
         'hosts': ['hbomax.com', 'play.hbomax.com', 'auth.hbomax.com',
                   'www.hbomax.com', 'api.hbomax.com'],
+        # The household chooser at play.hbomax.com/profile-picker.
+        # Measured 2026-09-24: every profile tile carries this
+        # data-testid, its accessible name is the profile name
+        # wrapped in Unicode isolates, and clicking a tile does NOT
+        # navigate. The app has to be asked for /home afterwards.
+        'chooser_tiles': '[data-testid="edit_avatar_selection_button"]',
+        'profile_name': 'jenna',
+        'home_url': 'https://play.hbomax.com/home',
         'signed_in': ['continue watching', 'keep watching', 'my list',
                       'because you watched', 'jump back in', 'top 10',
                       'trending now'],
@@ -266,7 +274,7 @@ _SIGNED_OUT_URL_MARKERS = (
 # Music; Hulu, Netflix, Disney+ and Peacock all have their own.
 _INTERSTITIAL_URL_MARKERS = (
     '/profiles', 'who-is-listening', '/select-profile', '/whoswatching',
-    '/identity/who',
+    '/identity/who', '/profile-picker',
 )
 
 # Text form of the same chooser.
@@ -521,6 +529,59 @@ _CHOOSER_SKIP_LABELS = {
 }
 
 
+def _home_url(domain: str) -> Optional[str]:
+    spec = site_spec(domain)
+    if not spec:
+        return None
+    return spec.get('home_url') or spec.get('app_url')
+
+
+def _dismiss_tile_chooser(page, domain: str, spec: dict, *,
+                          settle_ms: int) -> tuple[bool, str]:
+    """Pick a profile on a chooser that exposes its tiles by selector.
+
+    Registered per site (`chooser_tiles`, `profile_name`, `home_url`).
+    The accessible name of each tile is read with the isolates
+    stripped, the preferred profile is picked by name, and the app is
+    then sent to its home route explicitly, because on HBO Max the
+    click itself does not navigate.
+    """
+    sel = spec['chooser_tiles']
+    want = (spec.get('profile_name') or '').strip().lower()
+    try:
+        labels = page.evaluate("""(sel) => Array.from(
+            document.querySelectorAll(sel)).map(el => (
+                el.getAttribute('aria-label') || el.innerText || ''
+            ).replace(/[\\u2066-\\u2069\\u200e\\u200f\\u061c]/g, '').trim())
+        """, sel) or []
+    except Exception as e:
+        return False, f'could not read the chooser tiles: {e}'
+    if not labels:
+        return False, f'no chooser tiles matched {sel!r}'
+
+    order: list[int] = []
+    if want:
+        order += [i for i, t in enumerate(labels) if t.lower() == want]
+        order += [i for i, t in enumerate(labels)
+                  if want in t.lower() and i not in order]
+    order += [i for i, t in enumerate(labels)
+              if i not in order and t.lower() not in _CHOOSER_SKIP_LABELS]
+
+    for i in order[:4]:
+        try:
+            page.locator(sel).nth(i).click(timeout=5000)
+            page.wait_for_timeout(max(1500, settle_ms // 3))
+            page.goto(_home_url(domain), wait_until='domcontentloaded',
+                      timeout=60000)
+            page.wait_for_timeout(settle_ms)
+            verdict, _detail = _judge_page(page, domain)
+            if verdict != 'interstitial':
+                return True, f'picked profile {labels[i]!r}'
+        except Exception:
+            continue
+    return False, f'could not clear the chooser (tiles {labels[:4]})'
+
+
 def dismiss_profile_chooser(page, domain: str, *,
                             settle_ms: int = 7000) -> tuple[bool, str]:
     """Pick the first real profile so the app renders. Never raises."""
@@ -530,6 +591,14 @@ def dismiss_profile_chooser(page, domain: str, *,
             return dismiss_profile_picker(page, settle_ms=settle_ms)
         except Exception as e:
             return False, f'amazon-music chooser helper failed: {e}'
+
+    spec = site_spec(domain) or {}
+    if spec.get('chooser_tiles'):
+        try:
+            return _dismiss_tile_chooser(page, domain, spec,
+                                         settle_ms=settle_ms)
+        except Exception as e:
+            return False, f'tile chooser failed: {e}'
 
     try:
         labels = page.evaluate("""() => {
@@ -564,7 +633,10 @@ def dismiss_profile_chooser(page, domain: str, *,
                 continue
             loc.first.click(timeout=5000)
             page.wait_for_timeout(settle_ms)
-            verdict, _detail = _judge(page, domain)
+            # Was `_judge`, a name this module never defined. The
+            # NameError was swallowed by the except below, so no
+            # generic chooser was ever reported as cleared.
+            verdict, _detail = _judge_page(page, domain)
             if verdict != 'interstitial':
                 return True, f'picked profile {label!r}'
         except Exception:

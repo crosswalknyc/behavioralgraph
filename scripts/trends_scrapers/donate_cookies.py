@@ -48,7 +48,16 @@ dedicated Chrome profile, and no password is ever typed or stored:
     # Which platforms are actually signed in right now?
     python3 scripts/trends_scrapers/donate_cookies.py --verify
 
-See donate_storage_state.py for the engine behind those three.
+    # Sign in from the macOS Keychain with no one at the keyboard and
+    # donate the full session. What the nightly runs for HBO Max.
+    python3 scripts/trends_scrapers/donate_cookies.py --auto-login hbomax.com
+
+See donate_storage_state.py for the engine behind the first three and
+trends_auto_login.py for the fourth. All four decide "signed in" the
+same way: `_auth_guard.classify_auth` on the platform's app page, the
+same check every scraper runs before it reads anything and `--verify`
+runs on the donation afterwards. Nothing in here trusts "a profile
+exists" or "cookies are present" as evidence of a session.
 
 After a successful donation the script automatically refreshes the
 data for whatever the donated domain feeds: residential-only scrapers
@@ -458,6 +467,10 @@ def main() -> int:
                      help='With --auto-login: open a visible browser so you '
                           'can finish any 2FA / CAPTCHA once; the persistent '
                           'profile keeps the session afterward.')
+    ap.add_argument('--fresh', action='store_true',
+                     help='With --auto-login: sign in again even if the '
+                          'profile still proves signed in, so the donated '
+                          'session starts a new lifetime.')
     args = ap.parse_args()
 
     # Full-session paths. Delegated in-process (not over a subprocess)
@@ -493,6 +506,8 @@ def main() -> int:
             cmd.append('--dry-run')
         if args.no_refresh:
             cmd.append('--no-refresh')
+        if args.fresh:
+            cmd.append('--fresh')
         cmd += args.domains
         return subprocess.run(
             cmd, cwd=str(Path(__file__).resolve().parents[2])).returncode

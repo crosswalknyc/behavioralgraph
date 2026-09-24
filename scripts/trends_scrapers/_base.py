@@ -481,6 +481,18 @@ def load_donated_storage_state(
     return state
 
 
+def forget_donations(domain: str) -> None:
+    """Drop the per-process caches for `domain` so the next read hits S3.
+
+    Needed after a session is re-issued mid-run: `render_pages` heals a
+    dead session by signing in again and re-donating, and the retry
+    that follows has to see the new donation rather than the cached
+    dead one.
+    """
+    _COOKIE_CACHE.pop(domain, None)
+    _STORAGE_STATE_CACHE.pop(domain, None)
+
+
 def storage_state_status(domain: str) -> dict:
     """Freshness and shape of the storage-state donation for `domain`.
 

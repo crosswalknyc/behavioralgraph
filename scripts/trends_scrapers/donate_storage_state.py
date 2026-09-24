@@ -453,16 +453,29 @@ def chrome_cookies_for(domains: list[str]) -> list[dict]:
 # ────────────────────────────────────────────────────────────────────
 # Capture from a real Chrome that is already open
 # ────────────────────────────────────────────────────────────────────
-# Relaunching the scraping profile under Playwright is not free. It
-# boots a second copy of every app in that profile, and an app that
-# boots runs its token refresh. Where a refresh token is single-use,
-# a relaunch that the platform then rejects can consume the token and
-# leave the profile signed out in REAL Chrome afterwards, which is a
-# plausible reading of what happened to HBO Max on 2026-09-23.
+# WHY A SESSION SIGNED INTO BY HAND DID NOT SURVIVE A PLAYWRIGHT
+# RELAUNCH OF THE SAME PROFILE (resolved 2026-09-24)
 #
-# Attaching to a browser that is already open avoids all of that. It
-# also removes every automation-launch difference in one go, since
-# the browser was started by hand with no automation flags at all.
+# On 2026-09-23 HBO Max was signed into in a real Chrome window opened
+# on the scraping profile, and a Playwright launch of that same
+# profile minutes later was signed out. The two browsers do not share
+# a cookie jar even though they share a directory: Playwright starts
+# Chrome with `--use-mock-keychain` and `--password-store=basic`
+# (see `driver/package/lib/server/chromium/chromiumSwitches.js`), so
+# a cookie a hand-started Chrome encrypted against the real macOS
+# Keychain key is unreadable to the Playwright-launched one, and the
+# reverse. HBO Max's whole session is one cookie (`st` on
+# `.api.hbomax.com`), so it vanished. localStorage and IndexedDB are
+# not encrypted, which is why those halves came across and the cookie
+# half did not.
+#
+# Consequence: the scraping profile must only ever be opened by
+# Playwright. A hand-started Chrome on it can donate over CDP (this
+# section), because the live browser decrypts its own cookies and the
+# JSON storage state carries them in the clear, but it cannot leave a
+# session behind for the next Playwright launch. The Keychain-backed
+# auto-login (`trends_auto_login`) signs in inside Playwright, which is
+# what makes the profile's session durable.
 #
 # Start one the same way `start_chrome_for_cookie_export.command`
 # does, pointed at the scraping profile:
@@ -549,7 +562,8 @@ def run_from_live_chrome(domains: list[str], *, cdp_url: Optional[str] = None,
             except Exception as e:
                 results[domain] = ('unknown', f'{type(e).__name__}: {e}')
 
-        rc = _capture_and_upload(ctx, known, dry_run=dry_run, results=results)
+        rc = _capture_and_upload(ctx, known, dry_run=dry_run, results=results,
+                                 pw=pw)
 
         for page in opened:
             try:
@@ -561,6 +575,86 @@ def run_from_live_chrome(domains: list[str], *, cdp_url: Optional[str] = None,
     finally:
         if owns_pw and manager is not None:
             manager.__exit__(None, None, None)
+
+
+def capture_state_for(ctx, domain: str) -> dict:
+    """Capture this context's session and narrow it to one platform.
+
+    Touches every host the platform owns first, because
+    `storage_state` only reports origins a page has visited (see
+    `_touch_origins`). Returns `{'cookies': [], 'origins': []}` when
+    nothing could be read, never raises.
+    """
+    touched = _touch_origins(ctx, domain)
+    try:
+        full = ctx.storage_state(indexed_db=True)
+    except TypeError:
+        full = ctx.storage_state()
+    except Exception as e:
+        logger.info('could not read the session for %s: %s', domain, e)
+        full = {}
+    finally:
+        for page in touched:
+            try:
+                page.close()
+            except Exception:
+                pass
+    return filter_state_for_domain(full or {}, domain)
+
+
+def state_survives(pw, domain: str, state: dict, *,
+                   browser=None) -> tuple[bool, str]:
+    """Restore `state` into a fresh context and judge the app page.
+
+    THE one question every consumer asks. `--verify` asks it of the
+    S3 donation, a scraper asks it of the same donation through
+    `render_pages`, and the capture side asks it here BEFORE
+    uploading. Same restore, same URL, same `settle_and_judge`, same
+    verdict, so the path that decides whether to sign in can never be
+    more optimistic than the path that checks afterwards.
+
+    `browser` lets a caller share one headless launch across several
+    platforms. Never raises: anything that cannot be checked reads as
+    not surviving, which errs toward a sign-in rather than a stale
+    rail.
+    """
+    if not (state.get('cookies') or state.get('origins')):
+        return False, 'nothing to donate for this platform'
+    own = browser is None
+    if own:
+        try:
+            browser = pw.chromium.launch(
+                channel='chrome', headless=True,
+                args=['--headless=new', '--no-sandbox',
+                      '--disable-blink-features=AutomationControlled'])
+        except Exception as e:
+            return False, f'could not open a check browser: {e}'
+    check = None
+    try:
+        check = browser.new_context(
+            storage_state=state, user_agent=UA,
+            viewport={'width': 1440, 'height': 900},
+            locale='en-US', timezone_id='America/New_York',
+            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'})
+        page = check.new_page()
+        _try_stealth(page)
+        page.goto(guard.app_url(domain),
+                  wait_until='domcontentloaded', timeout=60000)
+        verdict, detail = _settle(page, domain)
+        return verdict == 'signed_in', detail
+    except Exception as e:
+        return False, f'{type(e).__name__}: {e}'
+    finally:
+        if check is not None:
+            try:
+                check.close()
+            except Exception:
+                pass
+        if own:
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 def confirm_donations_survive(pw, ctx, domains: list[str]
@@ -577,11 +671,6 @@ def confirm_donations_survive(pw, ctx, domains: list[str]
     which errs toward offering a sign-in tab rather than skipping one.
     """
     out: dict[str, tuple[bool, str]] = {}
-    try:
-        full = ctx.storage_state(indexed_db=True)
-    except Exception as e:
-        return {d: (False, f'could not read the session: {e}') for d in domains}
-
     browser = None
     try:
         browser = pw.chromium.launch(
@@ -593,31 +682,8 @@ def confirm_donations_survive(pw, ctx, domains: list[str]
                 for d in domains}
 
     for domain in domains:
-        state = filter_state_for_domain(full, domain)
-        if not (state.get('cookies') or state.get('origins')):
-            out[domain] = (False, 'nothing to donate for this platform')
-            continue
-        check = None
-        try:
-            check = browser.new_context(
-                storage_state=state, user_agent=UA,
-                viewport={'width': 1440, 'height': 900},
-                locale='en-US', timezone_id='America/New_York',
-                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'})
-            page = check.new_page()
-            _try_stealth(page)
-            page.goto(guard.app_url(domain),
-                      wait_until='domcontentloaded', timeout=60000)
-            verdict, detail = _settle(page, domain)
-            out[domain] = (verdict == 'signed_in', detail)
-        except Exception as e:
-            out[domain] = (False, f'{type(e).__name__}: {e}')
-        finally:
-            if check is not None:
-                try:
-                    check.close()
-                except Exception:
-                    pass
+        state = capture_state_for(ctx, domain)
+        out[domain] = state_survives(pw, domain, state, browser=browser)
     try:
         browser.close()
     except Exception:
@@ -781,7 +847,7 @@ def run_login(domains: list[str], *, dry_run: bool = False,
 
         print()
         rc = _capture_and_upload(ctx, list(pages), dry_run=dry_run,
-                                 results=results)
+                                 results=results, pw=pw)
         try:
             ctx.close()
         except Exception:
@@ -840,26 +906,37 @@ def run_recapture(domains: list[str], *, dry_run: bool = False,
             print(f'Could not open the Chrome profile: {e}')
             return 3
 
-        if sys.platform == 'darwin':
-            try:
-                ctx.add_cookies(chrome_cookies_for(known))
-            except Exception as e:
-                logger.info('could not carry cookies across: %s', e)
+        def judge_all(targets: list[str]) -> None:
+            for domain in targets:
+                try:
+                    page = ctx.new_page()
+                    _try_stealth(page)
+                    page.goto(guard.app_url(domain),
+                              wait_until='domcontentloaded', timeout=60000)
+                    results[domain] = _settle(page, domain)
+                except Exception as e:
+                    results[domain] = ('unknown', f'{type(e).__name__}: {e}')
 
-        opened: list[str] = []
-        for domain in known:
-            try:
-                page = ctx.new_page()
-                _try_stealth(page)
-                page.goto(guard.app_url(domain),
-                          wait_until='domcontentloaded', timeout=60000)
-                results[domain] = _settle(page, domain)
-                opened.append(domain)
-            except Exception as e:
-                results[domain] = ('unknown', f'{type(e).__name__}: {e}')
-                opened.append(domain)
+        # The profile's OWN session first. A platform the Keychain
+        # auto-login signed into minutes ago holds a fresher token than
+        # everyday Chrome does, and `add_cookies` replaces by name, so
+        # layering Chrome's jar on top unconditionally would overwrite
+        # a live HBO Max `st` with a stale one and sign the profile
+        # out. Chrome's cookies are only carried across for platforms
+        # the profile cannot prove on its own.
+        judge_all(known)
+        opened: list[str] = list(known)
+        if sys.platform == 'darwin':
+            fallback = [d for d in known
+                        if results.get(d, ('unknown', ''))[0] != 'signed_in']
+            if fallback:
+                try:
+                    ctx.add_cookies(chrome_cookies_for(fallback))
+                    judge_all(fallback)
+                except Exception as e:
+                    logger.info('could not carry cookies across: %s', e)
         rc = _capture_and_upload(ctx, opened, dry_run=dry_run,
-                                 results=results)
+                                 results=results, pw=pw)
         try:
             ctx.close()
         except Exception:
@@ -902,8 +979,17 @@ def _touch_origins(ctx, domain: str) -> list:
 
 
 def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
-                        results: dict[str, tuple[str, str]]) -> int:
-    """Capture once, narrow per platform, upload the proven ones."""
+                        results: dict[str, tuple[str, str]],
+                        pw=None) -> int:
+    """Capture once, narrow per platform, upload the proven ones.
+
+    With `pw` given, every platform that judged signed in is ALSO
+    restored into a fresh context and judged again before its upload
+    (`state_survives`). That is the question `--verify` asks after the
+    fact, asked before the write, so a capture that looked signed in
+    but does not survive restoration is held rather than overwriting
+    a good donation with a dead one.
+    """
     # Register every host before the capture, or its storage is
     # invisible to `storage_state`. Held open until after the call.
     touched: list = []
@@ -929,6 +1015,16 @@ def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
             except Exception:
                 pass
 
+    check_browser = None
+    if pw is not None:
+        try:
+            check_browser = pw.chromium.launch(
+                channel='chrome', headless=True,
+                args=['--headless=new', '--no-sandbox',
+                      '--disable-blink-features=AutomationControlled'])
+        except Exception as e:
+            logger.info('could not open a check browser: %s', e)
+
     print()
     print(f'{"platform":<18s} {"status":<14s} session')
     print('-' * 68)
@@ -943,6 +1039,14 @@ def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
             held += 1
             print(f'{label:<18s} {"NOT SIGNED IN":<14s} {detail[:90]}')
             continue
+        if check_browser is not None:
+            ok, why = state_survives(pw, domain, state, browser=check_browser)
+            if not ok:
+                held += 1
+                print(f'{label:<18s} {"NOT SIGNED IN":<14s} the profile '
+                      f'looked signed in but the captured session does '
+                      f'not survive restoration: {why[:60]}')
+                continue
         try:
             uri = upload_storage_state(domain, state, verdict=verdict,
                                        detail=detail, dry_run=dry_run)
@@ -953,6 +1057,12 @@ def _capture_and_upload(ctx, domains: list[str], *, dry_run: bool,
         donated += 1
         print(f'{label:<18s} {"signed in":<14s} {summary}')
         logger.info('donated %s session to %s', domain, uri)
+
+    if check_browser is not None:
+        try:
+            check_browser.close()
+        except Exception:
+            pass
 
     print()
     print(f'{donated} platform(s) donated, {held} still need a sign-in.')
