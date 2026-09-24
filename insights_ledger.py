@@ -800,6 +800,53 @@ _DIM_CLASS_WORDS = ('brand', 'retailer', 'store', 'platform', 'market',
 # _dimension_ok so a stored gender table never serves an age ask.
 _DIM_SLICE_WORDS = ('gender', 'age', 'ages', 'income', 'ethnicity',
                     'education', 'household', 'parental', 'marital')
+# Measure classes (2026-09-24, the BET replay defect): what the table
+# COUNTS, as distinct from what it is sliced by. "Pull the % of total
+# time spent on each streaming platform" replayed the stored "top shows
+# by streaming platform" table because both carry 'streaming platform'
+# and both fold to the viewership family. A time-split ask and a title
+# ranking are different reads even on the same dimension, so an ask
+# that names a measure class only replays an entry that carries the
+# same class somewhere in its dimension, share basis, metric labels
+# or original question. Word-boundary patterns; 'show' must not hide
+# inside 'showroom' and 'time' must not hide inside 'sometimes'.
+_MEASURE_CLASSES = (
+    ('time', re.compile(
+        r'\b(?:time (?:spent|split|share|on|per)|'
+        r'share of (?:total |their |the )?(?:\w+ )?time|'
+        r'(?:total|watch|viewing|streaming|listening|screen|play|'
+        r'session|social|app) time|hours|minutes|dwell)\b')),
+    ('titles', re.compile(
+        r'\b(?:shows?|titles?|series|programs?|programming|episodes?|'
+        r'films?|movies?)\b')),
+)
+_DIM_SPLIT_RX = re.compile(r'\s+(?:by|per|across)\s+')
+
+
+def _entry_measure_text(entry):
+    """Every stored string that says what the entry counts."""
+    bd = entry.get('breakdown') or {}
+    bits = [bd.get('dimension'), bd.get('share_basis'), entry.get('q'),
+            entry.get('question')]
+    for m in (entry.get('metrics') or []):
+        if isinstance(m, dict):
+            bits.extend((m.get('label'), m.get('definition')))
+    return normalize_question(' '.join(str(b) for b in bits if b))
+
+
+def _measure_ok(entry, qn):
+    """The ask and the stored read count the same thing. Only asks
+    that name a measure class are constrained; a class-free ask
+    ("what toy categories are they buying") passes as before."""
+    etext = None
+    for _name, rx in _MEASURE_CLASSES:
+        if not rx.search(qn):
+            continue
+        if etext is None:
+            etext = ' ' + _entry_measure_text(entry) + ' '
+        if not rx.search(etext):
+            return False
+    return True
 
 
 def cohort_signature(text):
@@ -832,6 +879,8 @@ def _dimension_ok(entry, qn):
     category' table serves toy-category asks; it never serves a
     'brand' or 'retailer' ask, and a categories ask never replays a
     read that has no table."""
+    if not _measure_ok(entry, qn):
+        return False
     bd = entry.get('breakdown') or {}
     dim = normalize_subject(bd.get('dimension') or '')
     if not (bd.get('rows') or []):
@@ -853,6 +902,14 @@ def _dimension_ok(entry, qn):
              if w not in _DIM_STOP and w not in subj_toks]
     if dtoks and not any(w.rstrip('s') in qn for w in dtoks):
         return False
+    # A two-axis table ("Show by streaming platform") only serves an
+    # ask that names BOTH axes (2026-09-24). A platform-split ask
+    # matched the platform axis alone and replayed a title ranking.
+    for part in _DIM_SPLIT_RX.split(dim):
+        ptoks = [w for w in part.split()
+                 if w not in _DIM_STOP and w not in subj_toks]
+        if ptoks and not any(w.rstrip('s') in qn for w in ptoks):
+            return False
     for c in _DIM_CLASS_WORDS:
         if c in qn and c not in dim:
             return False

@@ -40,6 +40,21 @@ DEMO_COLS = {
     'RELATIONSHIP STATUS', 'SEXUAL ORIENTATION', 'SEXUAL_ORIENTATION',
 }
 
+# Sections where "share of time / share of activity across X" is a
+# natural ask (2026-09-24, BET: "% of total time spent on each
+# streaming platform"). Their digest rows carry the profile's own
+# Category Share so the split is read straight off the section
+# instead of being reasoned from penetrations, and the answer can
+# never be swapped for a title ranking that shares the same words.
+SHARE_SECTIONS = {
+    'STREAMING/PLATFORM', 'STREAMING PLATFORM', 'STREAMING VIDEO',
+    'STREAMING MUSIC', 'STREAMING/MUSIC', 'SOCIAL MEDIA',
+    'SEARCH ENGINE/AI', 'SEARCH ENGINE', 'VIRTUAL MVPD/FAST',
+    'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD', 'FAST PLATFORM',
+    'FAST CHANNEL', 'APP/PLATFORM', 'APP/PLATFORM USAGE', 'GAMES',
+    'PODCAST', 'MEDIA', 'BROADCAST/CABLE',
+}
+
 _digest_cache = {}       # {s3_key: (etag+norms_ver, built_ts, digest_str, meta)}
 _genpop_cache = {'ts': 0.0, 'map': None, 'etag': None}
 _norms_cache = {'ts': 0.0, 'etag': None, 'data': None}
@@ -263,10 +278,15 @@ def _norm_lookup(norms, group, catU, brand_norm, min_n=5):
     return None, None
 
 
-def _fmt_row(brand, bp, gp_bp):
+def _fmt_row(brand, bp, gp_bp, share=None):
     s = f"{brand} {bp:.1f}"
+    bits = []
     if gp_bp is not None and gp_bp >= 0.01:
-        s += f" (idx {round(bp / gp_bp * 100)})"
+        bits.append(f"idx {round(bp / gp_bp * 100)}")
+    if share is not None:
+        bits.append(f"share {share:.1f}")
+    if bits:
+        s += " (" + ", ".join(bits) + ")"
     return s
 
 
@@ -294,16 +314,25 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
 
     demo_lines, cat_lines = [], []
     demo_rows_all, beh_rows_all = [], []
+    share_c = _fuzzy_col(df, 'category share')
+    share_sections_seen = False
     for cat, grp in df.groupby('Column', sort=False):
         catU = _norm_cat(cat)
         if catU in METADATA_COLS:
             continue
         rows = []
+        share_by_brand = {}
+        want_share = share_c is not None and catU in SHARE_SECTIONS
         for _, row in grp.iterrows():
             v = _parse_bp(row.get(bp_c))
             if v is None:
                 continue
-            rows.append((str(row.get('Value') or ''), v))
+            b = str(row.get('Value') or '')
+            rows.append((b, v))
+            if want_share:
+                sv = _parse_bp(row.get(share_c))
+                if sv is not None:
+                    share_by_brand[b] = sv
         if not rows:
             continue
         rows.sort(key=lambda r: -r[1])
@@ -320,9 +349,21 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
         for b, v in free:
             if len(shown) < max_rows:
                 gp = genpop_map.get((catU, _norm_brand(b)))
-                shown.append(_fmt_row(b, v, gp))
+                shown.append(_fmt_row(b, v, gp, share_by_brand.get(b)))
         if not shown:
             continue
+        # The subject's own row (BET+ on the BET profile) sits at 100
+        # penetration and is dropped from the ranking above, but it
+        # still holds a real share of the section's activity. Surface
+        # that share so a split across the section sums to 100.
+        if want_share and shown:
+            share_sections_seen = True
+            for b, v in rows:
+                if v >= 99.99 or _norm_brand(b) == subj_norm:
+                    sv = share_by_brand.get(b)
+                    if sv is not None:
+                        shown.insert(0, f"{b} (own service, share {sv:.1f})")
+                    break
         suffix = f" [{len(rows)} rows]" if len(rows) > max_rows else ""
         # Deterministic category math (2026-08-21): leader, median row,
         # concentration (leader's share of the top-5 total), and the
@@ -359,7 +400,13 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
     lines.extend(demo_lines)
     lines.append("BEHAVIORAL CATEGORIES (top rows, % penetration of this "
                  "audience; idx = index vs US gen pop, 100 = average; "
-                 "'math:' block = full-category calculations):")
+                 "'math:' block = full-category calculations"
+                 + ("; 'share' = this row's share of the section's total "
+                    "activity, the section's shares sum to 100 - a 'share "
+                    "of time' or 'split across platforms' ask is answered "
+                    "from these share figures, never from a title list"
+                    if share_sections_seen else "")
+                 + "):")
     lines.extend(cat_lines)
     # PEER NORMS is the rarity evidence; truncation must never eat it,
     # so cap the category body first and append the peer section after.
@@ -3228,6 +3275,7 @@ BREAKDOWN ASKS (the asked dimension IS the answer)
 - When MEASUREMENT REQUESTED carries a breakdown line ("in terms of toy categories", "by category", "which categories"), the PRIMARY deliverable is the ranked breakdown along that dimension: fill the "breakdown" object with one row per category, shares of the cohort's purchase (or activity) signals that sum to 100, ranked largest first. Cohort context (cohort share, projected people) shrinks to at most 2 metrics; never lead with headline stats when a breakdown was asked for.
 - Cover the WHOLE dimension with the established taxonomy for the domain. Toy categories: Action Figures & Playsets, Preschool Toys, Arts & Crafts, Dolls & Dollhouses, Stuffed Animals & Plush Toys, Outdoor Toys, Games & Puzzles, Minis & Surprise Toys, Learning & STEAM Toys, Kids Electronics, Cars Drones & RC Vehicles, Kids Bikes & Ride Ons, Pretend Play. Other domains use their equivalent standard category sets.
 - Each row may carry a penetration_pct (share of the cohort with a purchase signal in that category) and a short note naming the leading brands inside it. Shares are messy (never land on a clean .0 or .5); the mix must fit the cohort's age and the subject's franchise reality.
+- A SPLIT ACROSS A PROFILE SECTION ("% of total time spent on each streaming platform", "share of streaming time by service", "how their social time splits", "search engine share") is answered FROM THAT SECTION of the FIRST-PARTY PROFILE ROWS: one breakdown row per platform in the section, share_pct = the row's 'share' figure (the section's shares already sum to 100), penetration_pct = the row's penetration, dimension named for the section ("Streaming platform"). The subject's own service row carries its share too. Never answer a platform split with a list of shows or titles, and never answer a top-titles ask with a platform split: the dimension the user named is the dimension you rank.
 
 WHAT NOT TO DO
 - If the behavior asked about has no digital trace (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio), return action=decline with decline_reason=not_digital. Never produce a number for those.
