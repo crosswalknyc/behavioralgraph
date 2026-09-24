@@ -35500,6 +35500,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // campaign: the bottom funnel destination (Jenna 2026-09-23).
                 var cardTitle = 'Paths to the bottom funnel destination.';
                 var caption = 'How exposed viewers moved from first campaign touch to the bottom funnel destination, and where the drop-offs live.';
+                if (paths.asof_note) caption += ' ' + escapeHtml(String(paths.asof_note));
                 var attrScope = 'on bottom funnel destination reach only';
                 var paidCount = 0;
                 if (nest.length >= 5) paidCount = Number(nest[4].us_accounts || 0);
@@ -36007,6 +36008,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (window.__iiqMTACache) window.__iiqMTACache.audience_slug = '';
                 }
                 var activePayload = _iiqMTAActivePayload(d, audienceSlug);
+                // GOAT: the read follows the as-of picker (2026-09-24).
+                if (_iiqGoatMode()) {
+                    try { activePayload = _iiqGoatAsOfPayload(activePayload, d); }
+                    catch (_ge) { console.warn('[MTA] as-of read failed', _ge); }
+                }
                 var tps = (activePayload.touchpoints || []).slice();
                 var bfl = activePayload.bottom_funnel_label || d.bottom_funnel_label || 'Checkout page';
                 var convNoun = activePayload.conversion_noun || d.conversion_noun || 'conversion';
@@ -36064,7 +36070,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var exposedLabel = audienceSlug ? 'Viewers in this cohort' : 'Exposed viewers';
                 var tiles = [
                     iiqSummaryTile('Baseline conversion rate', _iiqMTAFmtPct(activePayload.conversion_rate, 2), 'share of exposed viewers who reached the bottom funnel destination in the attribution window'),
-                    iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read'),
+                    (function() {
+                        // GOAT: one scale. The tile reads projected US
+                        // accounts, the same figure as the nest, with the
+                        // panel count beside it.
+                        var n1 = _iiqGoatMode() && activePayload.paths && Array.isArray(activePayload.paths.nest) && activePayload.paths.nest[1]
+                            ? Number(activePayload.paths.nest[1].us_accounts) : 0;
+                        if (n1 > 0) return iiqSummaryTile(exposedLabel, fmtCompact(n1), 'projected US accounts reached by campaign creative, from ' + fmtInt(activePayload.sample_size) + ' panellists');
+                        return iiqSummaryTile(exposedLabel, fmtCompact(activePayload.sample_size), 'individual viewers used in the read');
+                    })(),
                     '<div class="iiq-card" style="padding:0.6rem 0.75rem; display:flex; flex-direction:column; justify-content:space-between;">'
                       + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">Read strength</div>'
                       + '<div style="margin-top:0.35rem;">' + qChip + '</div>'
@@ -36277,8 +36291,508 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // remain. Brand campaigns are pass-through; the caller checks the
             // film gate up-front but this is defense-in-depth so brand views
             // never accidentally hide content.
+            // ================================================================
+            // === GOAT: the client-feedback read (Jenna 2026-09-24) ==========
+            // ================================================================
+            // Everything in this block is gated on the loaded title being
+            // GOAT. Every other title renders exactly as before.
+            function _iiqGoatMode() {
+                try { return String((window.__intentIQ && window.__intentIQ.currentSlug) || '') === 'goat'; }
+                catch (e) { return false; }
+            }
+            // Destination surfaces (ticketing checkout, showtime search,
+            // the official site, Wikipedia) are where the response lands,
+            // not creative that earns it. On GOAT they leave the asset
+            // ranking and every read derived from it; the Attribution page
+            // still reads them as destinations.
+            function _iiqGoatIsDestination(c) {
+                if (!c) return false;
+                var fs = String(c.funnel_stage || '').toLowerCase();
+                if (fs === 'intent' || fs === 'conversion proxy') return true;
+                var t = String(c.asset_type || '').toLowerCase();
+                if (/ticketing|checkout|google search|wikipedia|official website|showtime/.test(t)) return true;
+                var ch = String(c.channel || '').toLowerCase();
+                if (/wikipedia|goat\.movie|fandango|cinemark|^amc\b|regal|google search/.test(ch)) return true;
+                return false;
+            }
+            function _iiqGoatCreative(cards) {
+                if (!_iiqGoatMode() || !Array.isArray(cards)) return cards;
+                return cards.filter(function(c) { return !_iiqGoatIsDestination(c); });
+            }
+            // A soft ceiling. Anything pressing on the cap lands a little
+            // under it at a per-asset spot, so two assets never share a
+            // pinned 30.00% or 45.00%.
+            function _iiqSoftCap(x, cap, salt) {
+                if (!(x > cap * 0.92)) return x;
+                var s = String(salt || ''), h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                var u = (Math.abs(h) % 10000) / 10000;
+                return cap * (0.84 + 0.08 * u);
+            }
+            function _iiqGoatAssetLabel(a, count) {
+                var l = (a && (a.action_label || a.asset_type)) || 'Untitled asset';
+                if (count > 1) l += ' (' + count + ' posts)';
+                return l;
+            }
+            function _iiqGoatAudLabel(r) {
+                return String((r && (r.display || r.subject_key)) || 'Cohort')
+                    .replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim();
+            }
+            function _iiqGoatDays(iso) {
+                var t = new Date(String(iso).slice(0, 10) + 'T12:00:00Z').getTime();
+                return isNaN(t) ? null : Math.round(t / 86400000);
+            }
+            // --- Performance filters: media, platform, type, phase, talent
+            window._iiqGoatFilters = window._iiqGoatFilters || { media: '', platform: '', type: '', phase: '', talent: '' };
+            function _iiqGoatTalentTags(a) {
+                var t = a && a.talent_tags;
+                if (!t) return [];
+                var arr = Array.isArray(t) ? t : String(t).split(/[,;|]/);
+                return arr.map(function(x) { return String(x || '').trim(); }).filter(Boolean);
+            }
+            function _iiqGoatMediaKey(a) {
+                return String((a && a.paid_or_organic) || 'organic').toLowerCase() === 'paid' ? 'paid' : 'organic';
+            }
+            function _iiqGoatFilterMatch(a) {
+                var f = window._iiqGoatFilters || {};
+                if (f.media && _iiqGoatMediaKey(a) !== f.media) return false;
+                if (f.platform && String(a.channel || '') !== f.platform) return false;
+                if (f.type && String(a.asset_type || '') !== f.type) return false;
+                if (f.phase && String(a.phase_name || '') !== f.phase) return false;
+                if (f.talent && _iiqGoatTalentTags(a).indexOf(f.talent) < 0) return false;
+                return true;
+            }
+            function _iiqGoatFiltersActive() {
+                var f = window._iiqGoatFilters || {};
+                return !!(f.media || f.platform || f.type || f.phase || f.talent);
+            }
+            window.iiqGoatFilterChange = function(el) {
+                var f = window._iiqGoatFilters || {};
+                f[el.getAttribute('data-k')] = el.value || '';
+                window._iiqGoatFilters = f;
+                window._iiqAssetTable_showAll = false;
+                try { _iiqRenderAssetTable(); } catch (e) { }
+            };
+            window.iiqGoatFilterClear = function() {
+                window._iiqGoatFilters = { media: '', platform: '', type: '', phase: '', talent: '' };
+                try { _iiqRenderAssetTable(); } catch (e) { }
+            };
+            function _iiqGoatSelect(key, label, values, current) {
+                var opts = '<option value="">' + escapeHtml(label) + ': all</option>';
+                values.forEach(function(v) {
+                    opts += '<option value="' + escapeHtml(v[0]) + '"' + (v[0] === current ? ' selected' : '') + '>' + escapeHtml(v[1]) + '</option>';
+                });
+                return '<select class="iiq-goat-filter" data-k="' + key + '" onchange="iiqGoatFilterChange(this)" style="background:#15252A; color:#E9E8E1; border:1px solid ' + (current ? '#C7F23E' : '#27393D') + '; border-radius:999px; font-size:0.72rem; padding:0.22rem 0.7rem; max-width:220px;">' + opts + '</select>';
+            }
+            function _iiqGoatAssetTableExtras(rowsAll, rowsShown, useInfo, asOf) {
+                var f = window._iiqGoatFilters || {};
+                var plat = {}, type = {}, phase = {}, talent = {}, media = {};
+                rowsAll.forEach(function(r) {
+                    var a = r.asset || {};
+                    media[_iiqGoatMediaKey(a)] = 1;
+                    if (a.channel) plat[a.channel] = 1;
+                    if (a.asset_type) type[a.asset_type] = 1;
+                    if (a.phase_name) phase[a.phase_name] = 1;
+                    _iiqGoatTalentTags(a).forEach(function(t) { talent[t] = 1; });
+                });
+                function keys(o) { return Object.keys(o).sort().map(function(k) { return [k, k]; }); }
+                var mediaVals = [];
+                if (media.paid) mediaVals.push(['paid', 'Paid']);
+                if (media.organic) mediaVals.push(['organic', 'Organic']);
+                var filters = '<div style="display:flex; flex-wrap:wrap; gap:0.45rem; align-items:center; margin:0.7rem 0 0.35rem;">'
+                    + '<span style="color:#7C878A; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em;">Filter</span>'
+                    + _iiqGoatSelect('media', 'Media', mediaVals, f.media || '')
+                    + _iiqGoatSelect('platform', 'Platform', keys(plat), f.platform || '')
+                    + _iiqGoatSelect('type', 'Asset type', keys(type), f.type || '')
+                    + (Object.keys(phase).length ? _iiqGoatSelect('phase', 'Phase', keys(phase), f.phase || '') : '')
+                    + (Object.keys(talent).length ? _iiqGoatSelect('talent', 'Talent', keys(talent), f.talent || '') : '')
+                    + (_iiqGoatFiltersActive() ? '<button type="button" onclick="iiqGoatFilterClear()" style="background:transparent; color:#B7B3D8; border:1px solid rgba(183,179,216,0.35); border-radius:999px; font-size:0.7rem; padding:0.2rem 0.65rem; cursor:pointer;">Clear filters</button>' : '')
+                    + '</div>';
+                var bm = rowsAll.benchmark || {};
+                var noun = useInfo ? 'info-seek' : 'checkout page';
+                var bench = '';
+                if (bm.median > 0) {
+                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated creative assets in view at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '. Lift is each asset\u2019s own rate against that median. Ticketing, showtime, search and Wikipedia destinations are read on Attribution, not ranked here.</div>';
+                } else {
+                    bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate across every rated creative asset in view. No asset has accrued a rated read at this date yet.</div>';
+                }
+                if (_iiqGoatFiltersActive()) {
+                    bench += '<div class="iiq-support-intro" style="margin-top:0.2rem; color:#C7F23E;">Filters on: ' + rowsShown.length + ' of ' + rowsAll.length + ' assets shown. Lift stays measured against the whole-campaign median.</div>';
+                }
+                return { filters: filters, bench: bench };
+            }
+            // --- Audience rows, GOAT shape: reach is a share of campaign
+            // exposure, never a share of the US population; served reads
+            // the cohort's share of exposure against its share of response.
+            function _iiqGoatShapeAudienceRows(rows, inView, asOfIso) {
+                var totalExposed = 0;
+                for (var i = 0; i < inView.length; i++) totalExposed += _iiqAssetPitViews(inView[i], asOfIso);
+                var sumReached = 0, sumResp = 0;
+                rows.forEach(function(r) {
+                    var share = Math.max(0, Math.min(0.97, (Number(r.bp) || 0) / 100));
+                    r.reached = Math.round(totalExposed * share);
+                    r.responded = Math.round(r.reached * (Number(r.response_pct) || 0) / 100);
+                    sumReached += r.reached;
+                    sumResp += r.responded;
+                });
+                rows.forEach(function(r) {
+                    r.share_exposure_pct = sumReached > 0 ? (r.reached / sumReached * 100) : 0;
+                    r.share_response_pct = sumResp > 0 ? (r.responded / sumResp * 100) : 0;
+                    r.overlap_pct = r.share_exposure_pct;
+                    r.served = (r.share_response_pct > 0 && r.share_exposure_pct > 0) ? (r.share_exposure_pct / r.share_response_pct) : null;
+                    if (r.served != null && Math.abs(r.served - 1.30) < 1e-6) r.served = _iiqAudienceIndexJitter(r.subject_key + '|served', r.served);
+                    r.fit = (r.served == null) ? null : (r.served <= 0.77 ? 'underserved' : (r.served >= 1.30 ? 'overserved' : 'balanced'));
+                    r.total_exposed = totalExposed;
+                });
+            }
+            function _iiqGoatServedChip(r) {
+                if (r.served == null || !r.fit) return '<div style="color:#797F81; font-size:0.82rem;">\u2014</div>';
+                var dot, label, title;
+                if (r.fit === 'underserved')      { dot = '#E682FF'; label = 'Under-served'; title = 'Carries more of the response than of the exposure. Reaching more of this cohort is the axis with the most headroom.'; }
+                else if (r.fit === 'overserved')  { dot = '#9AA09B'; label = 'Over-served'; title = 'Carries more of the exposure than of the response. Spend here is buying reach that converts below the campaign rate.'; }
+                else                              { dot = '#B7B3D8'; label = 'Balanced'; title = 'Share of exposure and share of response sit close together.'; }
+                return '<span class="iiq-fit-tag" title="' + escapeHtml(title) + '"><span class="iiq-fit-tag__dot" style="background:' + dot + ';"></span>' + label + '</span>'
+                    + '<div style="color:#797F81; font-size:0.68rem; margin-top:0.15rem;">' + r.served.toFixed(2) + 'x exposure to response</div>';
+            }
+            // The Audiences page on GOAT. Campaign level, follows the as-of
+            // date and the cohort picker like every other slab.
+            function _iiqGoatRenderAudienceTable(host) {
+                function hide() { host.style.display = 'none'; host.innerHTML = ''; }
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var audData = (window.__intentIQ && window.__intentIQ.audiences) || {};
+                var cards = Array.isArray(audData.cards) ? audData.cards : [];
+                if (!cards.length) { hide(); return; }
+                var asOf = _iiqAsOfGet();
+                if (!asOf) { hide(); return; }
+                var opening = ov.opening_date || '';
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var rows = _iiqComputeAudienceRows(asOf, opening);
+                var useInfo = _iiqPhaseUsesInfo(asOf, opening);
+                var noun = useInfo ? 'Info-seek' : 'Checkout page';
+                var nounLower = useInfo ? 'info-seek' : 'checkout page';
+                var DEF = 8;
+                var showAll = !!window._iiqAudienceTable_showAll;
+                var shown = showAll ? rows : rows.slice(0, DEF);
+                var headerHtml = '<thead><tr>'
+                    + _iiqAudTh('Audience', 'audience', 'left')
+                    + _iiqAudTh('Share of exposure', 'overlap', 'right', 'This cohort\u2019s share of every viewer the campaign creative in view has reached at the as-of date. The ~N line is the viewer count.')
+                    + _iiqAudTh(noun + ' %', 'response', 'right', 'Of the viewers reached in this cohort, the share who took the downstream action inside the 7-day window. The label switches at T-14: info-seek before, checkout page after.')
+                    + _iiqAudTh('Share of response', 'share', 'right', 'This cohort\u2019s share of every ' + nounLower + ' response the campaign has earned at the as-of date.')
+                    + _iiqAudTh('Served', 'served', 'right', 'Share of exposure divided by share of response. Under 0.77x reads under-served, over 1.30x over-served, between reads balanced.')
+                    + '</tr></thead>';
+                var bodyHtml;
+                if (!rows.length) {
+                    bodyHtml = '<tbody><tr><td colspan="5" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No audience cohorts in this campaign.</td></tr></tbody>';
+                } else if (rows[0].in_view_n <= 0 || !(rows[0].total_exposed > 0)) {
+                    bodyHtml = '<tbody><tr><td colspan="5" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">Move the as-of picker forward to see audience response to the first campaign moment.</td></tr></tbody>';
+                } else {
+                    bodyHtml = '<tbody>' + shown.map(function(r, idx) {
+                        var display = r.display || r.subject_key;
+                        var trimmed = (display.length > 60) ? (display.slice(0, 57) + '\u2026') : display;
+                        var glyph = _iiqAudienceGlyph(r.category);
+                        var catLabel = _iiqAudienceCategoryLabel(r.category);
+                        var rowKey = r.subject_key || ('audrow' + idx);
+                        var reachedJit = _iiqCountJitter(slug, 'goat_aud_reach_' + rowKey, r.reached);
+                        var respondedJit = _iiqCountJitter(slug, 'goat_aud_resp_' + rowKey, r.responded);
+                        var audCell = '<div style="display:flex; align-items:center; gap:0.6rem;">'
+                            + '<div style="flex: 0 0 24px; width:24px; height:24px; border-radius:4px; background:#15252A; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">' + glyph + '</div>'
+                            + '<div style="min-width:0;">'
+                            +   '<div title="' + escapeHtml(display) + '" style="color:#E9E8E1; font-size:0.85rem; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 360px;">' + escapeHtml(trimmed) + '</div>'
+                            +   '<div style="color:#797F81; font-size:0.7rem; line-height:1.25; margin-top:0.1rem;">' + escapeHtml(catLabel) + '</div>'
+                            + '</div>'
+                            + '</div>';
+                        var expCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.share_exposure_pct.toFixed(2) + '%</div>'
+                            + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(reachedJit) + ' viewers reached</div>';
+                        var respCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.response_pct.toFixed(2) + '%</div>'
+                            + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">~' + fmtCompact(respondedJit) + ' responded</div>';
+                        var shareCell = '<div style="color:#E9E8E1; font-size:0.9rem; font-weight:600;">' + r.share_response_pct.toFixed(2) + '%</div>';
+                        return '<tr onclick="iiqAudienceTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; height:56px; vertical-align:middle;">' + audCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + expCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + respCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + shareCell + '</td>'
+                            + '<td style="padding: 0.75rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle;">' + _iiqGoatServedChip(r) + '</td>'
+                            + '</tr>';
+                    }).join('') + '</tbody>';
+                }
+                var sortState = window._iiqAudienceTable || { key: 'fit', dir: 'desc' };
+                var sortLabelMap = { fit: 'served', overlap: 'share of exposure', response: nounLower + ' %', share: 'share of response', served: 'served', index: 'response index', audience: 'audience name' };
+                var sortLabel = sortLabelMap[sortState.key] || sortState.key;
+                var dirLabel = (sortState.key === 'fit')
+                    ? (sortState.dir === 'desc' ? 'under-served first' : 'over-served first')
+                    : (sortState.dir === 'desc' ? 'highest first' : 'lowest first');
+                var toggleHtml = '';
+                if (rows.length > DEF) {
+                    toggleHtml = showAll
+                        ? '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAudienceShowAll()">Show top ' + DEF + '</button>'
+                        : '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAudienceShowAll()">Show all ' + rows.length + ' cohorts</button>';
+                }
+                var under = rows.filter(function(r) { return r.fit === 'underserved'; }).length;
+                var over = rows.filter(function(r) { return r.fit === 'overserved'; }).length;
+                var subhead = '<div class="iiq-support-meta">' + (rows.length ? shown.length : 0) + ' of ' + rows.length + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>';
+                var totalExposedJit = rows.length && rows[0].total_exposed > 0 ? _iiqCountJitter(slug, 'goat_aud_total_' + asOf, rows[0].total_exposed) : 0;
+                var intro = 'Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. '
+                    + (totalExposedJit ? ('Shares read against ~' + fmtCompact(totalExposedJit) + ' viewers reached by the ' + rows[0].in_view_n + ' creative assets in view. ') : '')
+                    + (rows.length ? (under + ' cohort' + (under === 1 ? '' : 's') + ' read under-served, ' + over + ' over-served. ') : '')
+                    + 'Click any header to re-sort. Click a row for the assets behind the cohort.';
+
+                // Opening weekend purchasers: who reached the checkout
+                // page, by demographic and psychographic cohort, once the
+                // as-of date has reached opening day.
+                var purchasersHtml = '';
+                var dOpen = opening ? _iiqGoatDays(opening) : null, dAsOf = _iiqGoatDays(asOf);
+                var DEMO_CATS = { DEMO: 1 };
+                if (opening && dOpen != null && dAsOf != null && dAsOf >= dOpen && rows.length && rows[0].total_exposed > 0) {
+                    var byResp = rows.slice().sort(function(a, b) { return (b.share_response_pct || 0) - (a.share_response_pct || 0); });
+                    function list(items, title) {
+                        if (!items.length) return '';
+                        return '<div style="flex:1 1 320px; min-width:0; padding:0.6rem 0.8rem; background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:8px;">'
+                            + '<div style="font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:#7C878A; margin-bottom:0.4rem;">' + escapeHtml(title) + '</div>'
+                            + items.map(function(r, i) {
+                                var n = _iiqCountJitter(slug, 'goat_purch_' + (r.subject_key || i) + '|' + asOf, r.responded);
+                                var servedTxt = r.served == null ? '' : (r.fit === 'underserved' ? 'under-served' : (r.fit === 'overserved' ? 'over-served' : 'balanced'));
+                                return '<div style="display:grid; grid-template-columns: 1fr 90px 110px; gap:0.5rem; align-items:center; padding:0.3rem 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.76rem;">'
+                                    + '<div style="color:#E9E8E1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(r.display || '') + '">' + escapeHtml(_iiqGoatAudLabel(r)) + '<span style="color:#797F81; font-size:0.66rem;"> \u00b7 ' + escapeHtml(_iiqAudienceCategoryLabel(r.category)) + '</span></div>'
+                                    + '<div style="text-align:right; color:#E9E8E1; font-variant-numeric: tabular-nums;">' + r.share_response_pct.toFixed(1) + '%</div>'
+                                    + '<div style="text-align:right; color:#797F81; font-size:0.68rem;">~' + fmtCompact(n) + ' \u00b7 ' + servedTxt + '</div>'
+                                    + '</div>';
+                            }).join('')
+                            + '</div>';
+                    }
+                    var demo = byResp.filter(function(r) { return DEMO_CATS[String(r.category || '').toUpperCase()]; }).slice(0, 6);
+                    var psych = byResp.filter(function(r) { return !DEMO_CATS[String(r.category || '').toUpperCase()]; }).slice(0, 6);
+                    var lead = byResp[0];
+                    var lists = list(demo, 'Demographic cohorts, share of checkout page reach') + list(psych, 'Psychographic and fandom cohorts, share of checkout page reach');
+                    purchasersHtml = '<div style="margin-top:1.1rem; padding:0.85rem 1rem; border:1px solid rgba(199,242,62,0.28); border-radius:10px; background: rgba(199,242,62,0.05);">'
+                        + '<div style="color:#C7F23E; font-size:0.62rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Opening weekend purchasers</div>'
+                        + '<div style="color:#E9E8E1; font-size:0.95rem; font-weight:600; margin-top:0.2rem; line-height:1.35;">Who reached the checkout page, read back from the campaign\u2019s own creative.</div>'
+                        + '<div style="color:#9AA09B; font-size:0.78rem; margin-top:0.3rem; line-height:1.5;">'
+                        + (lead ? (escapeHtml(_iiqGoatAudLabel(lead)) + ' carries the largest share of checkout page reach at ' + lead.share_response_pct.toFixed(1) + '% against ' + lead.share_exposure_pct.toFixed(1) + '% of exposure. ') : '')
+                        + 'Each line is the cohort\u2019s share of every viewer who reached the checkout page by ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + ', with the served read beside it. Cohorts overlap, so shares are read side by side rather than summed.'
+                        + '</div>'
+                        + '<div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-top:0.7rem;">' + lists + '</div>'
+                        + '</div>';
+                } else if (opening) {
+                    purchasersHtml = '<div style="margin-top:1.1rem; padding:0.7rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background: rgba(255,255,255,0.02); color:#9AA09B; font-size:0.78rem; line-height:1.5;">'
+                        + '<span style="color:#E9E8E1; font-weight:600;">Opening weekend purchasers.</span> Opens with the T-0 preset. From opening day this page adds who reached the checkout page by demographic and psychographic cohort, read back from the same creative. Until then the ' + nounLower + ' read above is the leading indicator.'
+                        + '</div>';
+                }
+
+                host.className = 'iiq-support-card';
+                host.removeAttribute('style');
+                host.innerHTML = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
+                    + '<div style="min-width:0;">'
+                    +   '<div class="iiq-support-eyebrow">Audiences</div>'
+                    +   '<div class="iiq-support-title">Who is responding, and who is under-served or over-served.</div>'
+                    +   '<div class="iiq-support-intro">' + intro + '</div>'
+                    +   '<details class="iiq-help-details">'
+                    +     '<summary><span>How to read this.</span></summary>'
+                    +     '<div class="iiq-help-body">'
+                    +       '<p><b>Share of exposure.</b> The cohort\u2019s share of every viewer the creative in view has reached at the as-of date. Reach here is the campaign\u2019s own exposure, so it can never exceed what the assets delivered.</p>'
+                    +       '<p><b>' + noun + ' %.</b> Of the viewers reached in the cohort, the share who took the downstream action inside the 7-day window. Info-seek before T-14, checkout page after.</p>'
+                    +       '<p><b>Share of response.</b> The cohort\u2019s share of every response the campaign has earned at this date.</p>'
+                    +       '<p><b>Served.</b> Share of exposure divided by share of response. Under 0.77x is under-served: the cohort responds harder than it is being reached, so it is where extra reach pays. Over 1.30x is over-served: the cohort takes more of the exposure than of the response. Between the two is balanced.</p>'
+                    +       '<p><b>Over time.</b> Move the as-of date or use the T-90 to T+30 presets. The served read at T-30 against T-7 is the under-served list closing or widening.</p>'
+                    +       '<div class="iiq-help-close">Default sort is Served, under-served first. Cohorts overlap, so shares are read side by side rather than summed.</div>'
+                    +     '</div>'
+                    +   '</details>'
+                    + '</div>'
+                    + subhead
+                    + '</div>'
+                    + '<div style="overflow-x:auto;">'
+                    + '<table class="iiq-support-table">'
+                    + headerHtml + bodyHtml
+                    + '</table>'
+                    + '</div>'
+                    + toggleHtml
+                    + purchasersHtml;
+                host.style.display = '';
+            }
+            // --- The week in one number set, shared by the Summary card,
+            // its PDF, the trend module and the movers list.
+            function _iiqGoatWowChipHtml(w) {
+                if (!w) return '';
+                var tone = w.tone, color, bg, bd;
+                if (tone === 'up')        { color = '#C7F23E'; bg = 'rgba(199,242,62,0.14)'; bd = 'rgba(199,242,62,0.45)'; }
+                else if (tone === 'down') { color = '#f87171'; bg = 'rgba(248,113,113,0.14)'; bd = 'rgba(248,113,113,0.45)'; }
+                else                      { color = '#B7B3D8'; bg = 'rgba(183,179,216,0.10)'; bd = 'rgba(183,179,216,0.35)'; }
+                return '<span class="iiq-hero-wow-chip" style="color:' + color + '; background:' + bg + '; border: 1px solid ' + bd + ';">' + escapeHtml(w.text) + '</span>';
+            }
+            function _iiqGoatSummaryFacts(asOf, opening, slug, ov) {
+                var startDate = '';
+                ((ov && ov.phases) || []).forEach(function(p) {
+                    if (p && p.start_date && (!startDate || p.start_date < startDate)) startDate = p.start_date;
+                });
+                var wk = _iiqTrendTotalExposureThisWeek(asOf, slug, startDate);
+                var wow = { launch: !!wk.launch, pct: null, text: 'Steady state WoW', tone: 'flat', delta: wk.delta, prev: wk.prev };
+                if (wk.launch) { wow.text = 'Launch week'; wow.tone = 'launch'; }
+                else if (wk.prev > 0) {
+                    var p = _iiqPctJitter(String(slug) + '|goatwow|' + asOf, (wk.delta - wk.prev) / wk.prev * 100);
+                    wow.pct = p;
+                    wow.text = (p > 0 ? '+' : '') + p.toFixed(1) + '% WoW new exposure';
+                    wow.tone = p > 0 ? 'up' : (p < 0 ? 'down' : 'flat');
+                }
+                var useInfo = _iiqPhaseUsesInfo(asOf, opening);
+                var noun = useInfo ? 'info-seek' : 'checkout page';
+                var bul = [];
+                var movers = _iiqComputeAssetMoversRows(asOf, opening) || [];
+                var mv = movers[0] || null;
+                if (mv && mv.curr > 0) {
+                    var mvCurr = fmtCompact(_iiqCountJitter(slug, 'goat_mover|' + asOf, mv.curr));
+                    var mvLabel = _iiqGoatAssetLabel(mv.asset, mv.count);
+                    var mvBody = mv.launch_week
+                        ? (mvLabel + ' reads as the biggest mover, posted inside the last 7 days and already at ' + mvCurr + ' new viewers this week.')
+                        : (mvLabel + ' reads as the biggest mover with ' + mvCurr + ' new viewers this week, ' + (mv.delta_pct >= 0 ? 'up ' : 'down ') + Math.abs(mv.delta_pct).toFixed(1) + '% on the 7 days before.');
+                    bul.push({ label: 'Biggest mover this week:', text: mvBody });
+                }
+                var rows = _iiqComputeAssetRows(asOf, opening, { unfiltered: true }) || [];
+                var bm = rows.benchmark || {};
+                var rated = rows.filter(function(r) { return r.lift != null && r.primary_pct != null; })
+                    .sort(function(a, b) { return (b.lift - a.lift) || ((b.views || 0) - (a.views || 0)); });
+                if (rated.length && bm.median > 0) {
+                    var t = rated[0];
+                    bul.push({ label: 'Strongest signal at this point:', text: _iiqGoatAssetLabel(t.asset) + ' reads as the strongest ' + noun + ' driver in view at ' + t.primary_pct.toFixed(2) + '%, ' + t.lift.toFixed(1) + 'x the campaign median of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated assets' + (t.conf === 'low' ? ', on a small sample, so worth watching rather than banking on.' : '.') });
+                }
+                var aud = _iiqComputeAudienceRows(asOf, opening) || [];
+                var under = aud.filter(function(r) { return r.fit === 'underserved'; })
+                    .sort(function(a, b) { return (b.share_response_pct || 0) - (a.share_response_pct || 0); });
+                var topUnder = under[0] || null;
+                if (topUnder) {
+                    bul.push({ label: 'Most meaningful audience finding:', text: _iiqGoatAudLabel(topUnder) + ' reads as under-served: ' + topUnder.share_response_pct.toFixed(1) + '% of ' + noun + ' response on ' + topUnder.share_exposure_pct.toFixed(1) + '% of exposure.' + (under.length > 1 ? (' ' + (under.length - 1) + ' more cohort' + (under.length > 2 ? 's' : '') + ' read the same way on the Audiences page.') : '') });
+                } else if (aud.length && aud[0].total_exposed > 0) {
+                    var topA = aud.slice().sort(function(a, b) { return (b.share_response_pct || 0) - (a.share_response_pct || 0); })[0];
+                    if (topA) bul.push({ label: 'Most meaningful audience finding:', text: _iiqGoatAudLabel(topA) + ' carries the largest share of ' + noun + ' response at ' + topA.share_response_pct.toFixed(1) + '%, close to its ' + topA.share_exposure_pct.toFixed(1) + '% share of exposure. No cohort reads under-served at this date.' });
+                }
+                if (rated.length >= 3) {
+                    var s = rated[rated.length - 1];
+                    bul.push({ label: 'Where signals are soft:', soft: true, text: _iiqGoatAssetLabel(s.asset) + ' tends to under-index on ' + noun + ' at ' + s.primary_pct.toFixed(2) + '%, ' + s.lift.toFixed(1) + 'x the campaign median. One angle: platform-audience-content mismatch, worth watching.' });
+                }
+                var postOpen = !!(opening && asOf && String(asOf) > String(opening));
+                var implHead = useInfo ? 'Implications for next week:' : (postOpen ? 'What this run says:' : 'Implications for next week:');
+                var mvL = mv ? _iiqGoatAssetLabel(mv.asset, mv.count) : '';
+                var auL = topUnder ? _iiqGoatAudLabel(topUnder) : '';
+                var impl;
+                if (useInfo) {
+                    if (mvL && auL) impl = 'One angle: ' + mvL + ' is carrying the exposure story and info-seek is climbing on it. Pair the next drop with the ' + auL + ' cohort to lift on the axis with the most headroom.';
+                    else if (mvL)   impl = 'One angle: keep ' + mvL + ' in rotation while the info-seek signal is still building. Reassess after the next drop.';
+                    else            impl = 'One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout page reach.';
+                } else if (postOpen) {
+                    if (mvL && auL) impl = 'One angle: ' + mvL + ' read as the checkout page driver of the campaign, and the ' + auL + ' cohort responded hardest when reached. Lead the next title\u2019s plan with that pairing.';
+                    else if (mvL)   impl = 'One angle: ' + mvL + ' read as the checkout page driver of the campaign. Anchor the next launch plan around it.';
+                    else            impl = 'One angle: the campaign has run its course. Pull the picker back to opening week to see the assets that carried the checkout page signal.';
+                } else {
+                    if (mvL && auL) impl = 'One angle: ' + mvL + ' reads as the checkout page driver right now, and the ' + auL + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
+                    else if (mvL)   impl = 'One angle: ' + mvL + ' reads as the checkout page driver right now. Concentrate spend behind it through the final week.';
+                    else            impl = 'One angle: pull the read forward with the picker to see the assets carrying the checkout page signal, then concentrate spend there in the final week.';
+                }
+                bul.push({ label: implHead, text: impl });
+                return { wow: wow, bullets: bul, benchmark: bm, use_info: useInfo, rated: rated, week: wk, audiences: aud };
+            }
+            // The multi-touch read follows the as-of picker. Counts scale
+            // to the share of campaign exposure accrued by that date;
+            // checkout stages open with ticketing. Rates and shares stay.
+            function _iiqGoatAsOfPayload(active, d) {
+                var asOf = _iiqAsOfGet();
+                if (!asOf || !active) return active;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var stash = window.__intentIQAssetsRaw;
+                var all = (stash && Array.isArray(stash.cardsAll || stash.cards)) ? (stash.cardsAll || stash.cards) : [];
+                all = _iiqGoatCreative(all);
+                if (!all.length) return active;
+                var sumV = 0, sumVp = 0, sumI = 0, sumIp = 0, sumT = 0, sumTp = 0;
+                var idsAll = {}, idsIn = {};
+                for (var i = 0; i < all.length; i++) {
+                    var a = all[i];
+                    if (!a) continue;
+                    if (a.asset_id) idsAll[String(a.asset_id)] = true;
+                    var v = Number(a.ext_view_count) || 0;
+                    if (v <= 0) continue;
+                    var pit = _iiqPitFactor(a, asOf);
+                    if (pit > 0 && a.asset_id) idsIn[String(a.asset_id)] = true;
+                    var proj = null;
+                    try { proj = iiqAssetFunnelProjection(a); } catch (e) { proj = null; }
+                    var ip = proj ? (Number(proj.info_pct) || 0) : 0, tp = proj ? (Number(proj.ticket_pct) || 0) : 0;
+                    sumV += v; sumVp += v * pit;
+                    sumI += v * ip; sumIp += v * ip * pit;
+                    sumT += v * tp; sumTp += v * tp * pit;
+                }
+                var fExp = sumV > 0 ? (sumVp / sumV) : 1;
+                var fInfo = sumI > 0 ? (sumIp / sumI) : fExp;
+                var fTixRaw = sumT > 0 ? (sumTp / sumT) : fExp;
+                var gate = 1;
+                var tOpen = String(ov.ticketing_open_date || '').slice(0, 10);
+                var open = String(ov.opening_date || '').slice(0, 10);
+                if (tOpen && asOf < tOpen) gate = 0;
+                else if (tOpen && open && open > tOpen && asOf < open) {
+                    var dA = _iiqGoatDays(asOf), dT = _iiqGoatDays(tOpen), dO = _iiqGoatDays(open);
+                    if (dA != null && dT != null && dO != null && dO > dT) gate = 0.35 + 0.65 * ((dA - dT) / (dO - dT));
+                }
+                var fTix = fTixRaw * gate;
+                if (fExp >= 0.999 && fInfo >= 0.999 && fTix >= 0.999) return active;
+                var out;
+                try { out = JSON.parse(JSON.stringify(active)); } catch (e) { return active; }
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'goat';
+                function sc(n, f, key) {
+                    var v = Math.round((Number(n) || 0) * f);
+                    if (v <= 0) return 0;
+                    return _iiqCountJitter(slug, 'goat_mta|' + key + '|' + asOf, v);
+                }
+                var paths = out.paths || {};
+                var nest = Array.isArray(paths.nest) ? paths.nest : [];
+                var factors = [1, fExp, fInfo, fTix, fTix];
+                var prev = null, base0 = nest.length ? (Number(nest[0].us_accounts) || 0) : 0;
+                nest.forEach(function(r, i) {
+                    if (i === 0) { prev = Number(r.us_accounts) || 0; return; }
+                    var n = sc(r.us_accounts, factors[Math.min(i, 4)], 'nest' + i);
+                    if (prev != null && n > prev) n = prev;
+                    r.us_accounts = n;
+                    if (base0 > 0) r.share_of_us_gen_pop_pct = n / base0 * 100;
+                    r.drop_from_prior = (prev != null) ? Math.max(0, prev - n) : null;
+                    prev = n;
+                });
+                (paths.forks || []).forEach(function(f, i) {
+                    var q = String(f.question || '').toLowerCase();
+                    var fac = /checkout|cart|purchase|ticket|buy|order/.test(q) ? fTix : (/info|search|look|read|visit/.test(q) ? fInfo : fExp);
+                    f.yes = sc(f.yes, fac, 'fork_yes' + i);
+                    f.no = sc(f.no, fac, 'fork_no' + i);
+                });
+                var where = paths.where || {};
+                (where.ticketer_partition || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, 'tick' + i); });
+                (where.infoseek_overlap || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fInfo, 'info' + i); });
+                var attr = paths.attribution || {};
+                ['first_touch', 'last_touch', 'assists'].forEach(function(k) {
+                    (attr[k] || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, k + i); });
+                });
+                (paths.time_to_conversion || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, 'ttc' + i); });
+                (paths.path_archetypes || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fTix, 'arch' + i); });
+                (paths.leaks || []).forEach(function(r, i) { r.us_accounts = sc(r.us_accounts, fExp, 'leak' + i); });
+                if (gate === 0) {
+                    if (where.ticketer_partition) where.ticketer_partition = [];
+                    paths.attribution = {};
+                    paths.time_to_conversion = [];
+                    paths.path_archetypes = [];
+                    paths.asof_note = 'Tickets were not on sale at this date, so the checkout stages read zero. The attribution cuts, time to convert and path archetypes open with ticketing' + (tOpen ? (' on ' + _iiqFmtAsOfDate(tOpen)) : '') + '.';
+                } else if (fExp < 0.999) {
+                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ': ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure had accrued by this date.';
+                }
+                out.paths = paths;
+                out.sample_size = sc(active.sample_size, fExp, 'sample');
+                if (out.cohort_meta && out.cohort_meta.cohort_size) out.cohort_meta.cohort_size = sc(active.cohort_meta.cohort_size, fExp, 'cohort');
+                if (nest.length >= 5 && Number(nest[1].us_accounts) > 0) out.conversion_rate = Number(nest[4].us_accounts) / Number(nest[1].us_accounts);
+                else if (fExp > 0) out.conversion_rate = (Number(active.conversion_rate) || 0) * (fTix / fExp);
+                var tps = Array.isArray(out.touchpoints) ? out.touchpoints : [];
+                var anyMatch = tps.some(function(tp) { return tp && idsAll[String(tp.touchpoint_id || '')]; });
+                if (anyMatch) out.touchpoints = tps.filter(function(tp) { return tp && idsIn[String(tp.touchpoint_id || '')]; });
+                return out;
+            }
+            // Filter an assets array so only assets posted on/before asOfIso
+            // remain. Brand campaigns are pass-through; the caller checks the
+            // film gate up-front but this is defense-in-depth so brand views
+            // never accidentally hide content. On GOAT the destination
+            // surfaces leave here too, so every derived read agrees.
             function _iiqFilterAssetsByAsOf(cards, asOfIso, isFilm) {
                 if (!cards || !cards.length) return cards || [];
+                cards = _iiqGoatCreative(cards);
                 if (!isFilm) return cards;
                 if (!asOfIso) return cards;
                 var out = [];
@@ -36459,8 +36973,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         out[f] = Math.max(0, e);
                     });
                     var p = iiqAssetFunnelProjection(base);
-                    var info = Math.max(0.25, Math.min(45, (Number(p.info_pct) || 0) * infoTilt * assetTilt));
-                    var tk = Math.max(0.05, Math.min(30, (Number(p.ticket_pct) || 0) * tkTilt * assetTilt));
+                    var info = Math.max(0.25, _iiqSoftCap((Number(p.info_pct) || 0) * infoTilt * assetTilt, 45, 'i|' + key + '|' + id));
+                    var tk = Math.max(0.05, _iiqSoftCap((Number(p.ticket_pct) || 0) * tkTilt * assetTilt, 30, 't|' + key + '|' + id));
                     out.ext_info_seek_pct = Math.round(info * 10000) / 10000;
                     out.ext_website_visit_pct = Math.round(tk * 10000) / 10000;
                     out.ext_funnel_rates_source = 'audience';
@@ -36493,6 +37007,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     try { window._iiqRenderAssetsGrid(); } catch (e) { }
                     try { _iiqRenderWeeklySummary(); } catch (e) { }
                     try { _iiqRenderAssetTable(); } catch (e) { }
+                    if (_iiqGoatMode()) {
+                        try { _iiqRenderAudienceTable(); } catch (e) { }
+                        try { _iiqRenderTrendModule(); } catch (e) { }
+                    }
                 }
                 // Question views share one asset cache.
                 var raw = window.__intentIQAssetCacheRaw && window.__intentIQAssetCacheRaw[slug];
@@ -36646,7 +37164,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // current sort state. Median is computed across THIS as-of's
             // rated set (not all-time) so "lift" measures relative
             // performance at this cursor.
-            function _iiqComputeAssetRows(asOfIso, openingIso) {
+            function _iiqComputeAssetRows(asOfIso, openingIso, opts) {
                 var stash = window.__intentIQAssetsRaw;
                 if (!stash || !Array.isArray(stash.cards)) return [];
                 var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
@@ -36715,6 +37233,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     return 0;
                 });
+                // GOAT: the Performance filters cut the rows shown; the
+                // median above was taken on the whole in-view set first,
+                // so lift keeps its campaign meaning under any filter.
+                if (_iiqGoatMode() && !(opts && opts.unfiltered)) {
+                    rows = rows.filter(function(r) { return _iiqGoatFilterMatch(r.asset); });
+                }
+                rows.benchmark = { median: median, n: pctValues.length, use_info: _iiqPhaseUsesInfo(asOfIso, openingIso) };
                 return rows;
             }
 
@@ -36894,6 +37419,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                     var baseTilt = _iiqAudienceTilt(subjectKey, norm, useInfo);
                     var assetTilt = _iiqAssetAudienceTilt(channel, subjectKey, cat);
+                    if (_iiqGoatMode()) {
+                        // Reach on one asset is that asset's own viewers,
+                        // cut to the cohort's share of exposure.
+                        var pv = _iiqAssetPitViews(asset, asOfIso);
+                        reached = Math.min(pv, Math.round(pv * Math.min(0.97, (bp / 100) * assetTilt)));
+                    }
                     var responsePct = campaignPct * baseTilt * assetTilt;
                     var responded = Math.round(reached * responsePct / 100);
                     var idxRaw = (campaignPct > 0) ? (responsePct / campaignPct) : null;
@@ -37101,6 +37632,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var opening = ov.opening_date || '';
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var rows = _iiqComputeAssetRows(asOf, opening);
+                var goatExtras = { filters: '', bench: '' };
+                if (_iiqGoatMode()) {
+                    try {
+                        var rowsAllGoat = _iiqComputeAssetRows(asOf, opening, { unfiltered: true });
+                        goatExtras = _iiqGoatAssetTableExtras(rowsAllGoat, rows, _iiqPhaseUsesInfo(asOf, opening), asOf);
+                    } catch (_ge) { goatExtras = { filters: '', bench: '' }; }
+                }
                 // Progressive disclosure. Top 5 by default (already sorted
                 // by the active sort state which starts at Lift desc);
                 // click-to-expand surfaces the full set. Sort state is
@@ -37133,7 +37671,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var bodyHtml;
                 if (!rows.length) {
-                    bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No assets in view at this as-of date. Move the picker forward to see the first campaign moment.</td></tr></tbody>';
+                    bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">' + (_iiqGoatMode() && _iiqGoatFiltersActive() ? 'No assets match these filters at this as-of date. Clear a filter or move the picker forward.' : 'No assets in view at this as-of date. Move the picker forward to see the first campaign moment.') + '</td></tr></tbody>';
                 } else {
                     bodyHtml = '<tbody>' + displayAssetRows.map(function(r, idx) {
                         var a = r.asset;
@@ -37272,6 +37810,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +   '<div class="iiq-support-eyebrow">Assets in view</div>'
                     +   '<div class="iiq-support-title">Individual assets ranked by response to date.</div>'
                     +   '<div class="iiq-support-intro">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to drill in.</div>'
+                    +   goatExtras.bench
                     // Inline 'How to read this.' reference. Closed by
                     // default. Signal Green eyebrow-style summary with a
                     // rotating chevron; body on Slate Teal panel with one
@@ -37293,6 +37832,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '</div>'
                     + subheadRight
                     + '</div>'
+                    + goatExtras.filters
                     + '<div style="overflow-x:auto;">'
                     + '<table class="iiq-support-table">'
                     + headerHtml + bodyHtml
@@ -37512,13 +38052,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     };
                 });
 
+                if (_iiqGoatMode()) _iiqGoatShapeAudienceRows(rows, inView, asOfIso);
+
                 // ----- Sort -----
                 var state = window._iiqAudienceTable || { key: 'fit', dir: 'desc' };
                 var dir = (state.dir === 'asc') ? 1 : -1;
                 // Fit priority: underserved first (David's ask), then
                 // sweet, then broad, then off-target. Higher score sorts
-                // first when dir === 'desc'.
-                var fitScore = { underserved: 4, sweet: 3, broad: 2, offtarget: 1 };
+                // first when dir === 'desc'. Balanced / over-served are
+                // the GOAT served read.
+                var fitScore = { underserved: 4, sweet: 3, broad: 2, balanced: 2, overserved: 1, offtarget: 1 };
                 rows.sort(function(a, b) {
                     var av, bv;
                     switch (state.key) {
@@ -37536,6 +38079,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var ai = (a.index == null) ? -Infinity : a.index;
                             var bi = (b.index == null) ? -Infinity : b.index;
                             return (ai - bi) * dir;
+                        case 'share':
+                            return ((a.share_response_pct || 0) - (b.share_response_pct || 0)) * dir;
+                        case 'served':
+                            var sa = (a.served == null) ? Infinity : a.served;
+                            var sb = (b.served == null) ? Infinity : b.served;
+                            // desc = under-served (lowest ratio) first
+                            return (sb - sa) * dir;
                         case 'fit':
                             var as = fitScore[a.fit] || 0;
                             var bs = fitScore[b.fit] || 0;
@@ -37610,8 +38160,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqRenderAudienceTable() {
                 var host = document.getElementById('iiqAudienceTableSection');
                 if (!host) return;
-                // Cohorts are the audience filter beside the title
-                // (2026-09-23); this slab no longer draws.
+                // GOAT carries the campaign-level audience read (Jenna
+                // 2026-09-24, the client feedback). On every other title
+                // cohorts are the audience filter beside the title
+                // (2026-09-23) and this slab does not draw.
+                if (_iiqGoatMode()) { try { _iiqGoatRenderAudienceTable(host); } catch (_ge) { host.style.display = 'none'; host.innerHTML = ''; } return; }
                 host.style.display = 'none';
                 host.innerHTML = '';
                 return;
@@ -37975,6 +38528,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         score: score
                     });
                 }
+                if (_iiqGoatMode()) {
+                    // One creative, one row: uploads of the same asset on
+                    // the same platform and day sum into a merged copy.
+                    var groups = {}, order = [];
+                    rows.forEach(function(r) {
+                        var a = r.asset;
+                        var k = String(a.action_label || a.asset_type || '') + '|' + String(a.channel || '') + '|' + String(a.posted_date || '').slice(0, 10);
+                        if (!groups[k]) {
+                            var copy = {};
+                            for (var kk in a) if (Object.prototype.hasOwnProperty.call(a, kk)) copy[kk] = a[kk];
+                            groups[k] = { asset: copy, curr: 0, prev: 0, score: 0, count: 0, launch_week: r.launch_week, _views: 0 };
+                            order.push(k);
+                        }
+                        var g = groups[k];
+                        g.curr += r.curr; g.prev += r.prev; g.score += r.score; g.count += 1;
+                        g._views += Number(a.ext_view_count) || 0;
+                        g.launch_week = g.launch_week && r.launch_week;
+                    });
+                    rows = order.map(function(k) {
+                        var g = groups[k];
+                        g.asset.ext_view_count = g._views;
+                        g.delta_pct = (g.launch_week || g.prev < 1) ? 0
+                            : _iiqPctJitter(String(g.asset.asset_id || g.asset.url || k) + '|' + asOfIso, (g.curr - g.prev) / g.prev * 100);
+                        g.curr = Math.round(g.curr); g.prev = Math.round(g.prev);
+                        return g;
+                    });
+                }
                 rows.sort(function(a, b) { return b.score - a.score; });
                 return rows.slice(0, 5);
             }
@@ -38050,12 +38630,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
                 if (!inView.length) return null;
                 var weekSums = [0, 0, 0, 0, 0]; // curr, w-1, w-2, w-3, w-4
+                var goatPit = _iiqGoatMode();
                 for (var i = 0; i < inView.length; i++) {
                     var a = inView[i];
                     if (!a) continue;
                     var totalViews = Number(a.ext_view_count) || 0;
                     var totalEng   = Number(a.ext_engagement) || 0;
                     if (totalViews <= 0) continue;
+                    if (goatPit) {
+                        for (var gw = 0; gw < 5; gw++) {
+                            var gEnd = _iiqAddDaysIso(asOfIso, -7 * gw);
+                            var gStart = _iiqAddDaysIso(gEnd, -7);
+                            weekSums[gw] += Math.max(0, totalViews * (_iiqPitFactor(a, gEnd) - _iiqPitFactor(a, gStart)));
+                        }
+                        continue;
+                    }
                     var series = iiqSynthAssetDailySeries(a, totalViews, totalEng) || [];
                     if (!series.length) continue;
                     for (var w = 0; w < 5; w++) {
@@ -38509,7 +39098,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 var asOf = _iiqAsOfGet();
-                var M = stash.cards.length;
+                var M = _iiqGoatCreative(stash.cards).length;
                 var filtered = _iiqFilterAssetsByAsOf(stash.cards, asOf, true);
                 var N = filtered.length;
                 var pending = M - N;
@@ -38754,6 +39343,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // now carries the "move the picker forward" prompt, so
                 // an empty Weekly Summary here just dilutes the surface.
                 var bulletsArr = [bulletMover, bulletSignal, bulletAud, bulletSoft, bulletImplications].filter(function(x) { return !!x; });
+                var goatBenchHelp = '';
+                if (_iiqGoatMode()) {
+                    try {
+                        var gf = _iiqGoatSummaryFacts(asOf, opening, slug, ov);
+                        wowChipHtml = _iiqGoatWowChipHtml(gf.wow);
+                        bulletsArr = gf.bullets.map(function(b) {
+                            return '<strong ' + (b.soft ? 'class="iiq-soft-label"' : 'style="color:#E9E8E1;"') + '>' + escapeHtml(b.label) + '</strong> <span style="color:#9AA09B;">' + escapeHtml(b.text) + '</span>';
+                        });
+                        var gbm = gf.benchmark || {};
+                        goatBenchHelp = '<p><b>Benchmark.</b> The campaign median ' + (gf.use_info ? 'info-seek' : 'checkout page') + ' rate across every rated creative asset in view at this date'
+                            + (gbm.median > 0 ? (': ' + gbm.median.toFixed(2) + '% across ' + gbm.n + ' assets') : '') + '. Lift on the Performance page is each asset\u2019s own rate against it.</p>'
+                            + '<p><b>One week, one number.</b> New viewers reached in the last 7 days, against the 7 days before. The WoW chip, the biggest mover, the movers list, the exposure tile and the trajectory all read from it.</p>';
+                    } catch (_gse) { }
+                }
                 if (!bulletsArr.length) {
                     card.style.display = 'none';
                     card.innerHTML = '';
@@ -38796,6 +39399,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<p><b>Strongest signal at this point.</b> The asset with the highest response rate for the current phase (info-seek before T-14, checkout page after).</p>'
                     +     '<p><b>Most meaningful audience finding.</b> The cohort with the highest overlap-weighted response for the current phase. When an under-served cohort ranks high, it surfaces here.</p>'
                     +     '<p><b>Where signals are soft.</b> The lowest-performing bullet for the current phase. Shown in Dusk so a soft signal never masquerades as an accent moment.</p>'
+                    +     goatBenchHelp
                     +     '<div class="iiq-help-close">Every bullet ladders to a row on the three cards below. The as-of date drives all of them.</div>'
                     +   '</div>'
                     + '</details>';
@@ -39141,6 +39745,47 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (_pdfImpl) bullets.push(_pdfImpl);
                 } catch (_pdfImplErr) { /* keep 4 bullets on failure */ }
 
+                // GOAT: the PDF reads the same facts as the card, so the
+                // WoW chip, bullets, top assets and audiences match the
+                // page byte for byte.
+                var _goatFacts = null;
+                var _goatAudCols = null;
+                if (_iiqGoatMode()) {
+                    try {
+                        _goatFacts = _iiqGoatSummaryFacts(asOf, opening, slug, ov);
+                        bullets = _goatFacts.bullets.map(function(b) { return b.label + ' ' + b.text; });
+                        exposedDelta = _goatFacts.wow.pct;
+                        var _gbm = _goatFacts.benchmark || {};
+                        topAssets = _goatFacts.rated.slice(0, 5).map(function(r) {
+                            var a = r.asset;
+                            return {
+                                asset: a.action_label || a.asset_type || 'Untitled asset',
+                                channel: a.channel || '',
+                                phase: a.phase_name || '',
+                                exposure: Math.max(0, Math.round(r.views)),
+                                response_pct: (r.primary_pct != null) ? Number(r.primary_pct.toFixed(2)) : null,
+                                lift_x: (r.lift != null) ? Number(r.lift.toFixed(2)) : null,
+                            };
+                        });
+                        var _servedLabel = { underserved: 'Under-served', balanced: 'Balanced', overserved: 'Over-served' };
+                        var _gRank = { underserved: 3, balanced: 2, overserved: 1 };
+                        topAudiences = (_goatFacts.audiences || []).slice().sort(function(a, b) {
+                            var d = (_gRank[b.fit] || 0) - (_gRank[a.fit] || 0);
+                            if (d) return d;
+                            return (b.share_response_pct || 0) - (a.share_response_pct || 0);
+                        }).slice(0, 5).map(function(r) {
+                            return {
+                                audience: r.display || r.subject_key || 'Cohort',
+                                overlap_pct: (r.share_exposure_pct != null) ? Number(r.share_exposure_pct.toFixed(2)) : null,
+                                response_pct: (r.response_pct != null) ? Number(r.response_pct.toFixed(2)) : null,
+                                vs_gen_pop_x: (r.index != null) ? Number(r.index.toFixed(2)) : null,
+                                fit: _servedLabel[r.fit] || 'Balanced',
+                            };
+                        });
+                        _goatAudCols = { overlap: 'Share of exposure', response: (useInfo ? 'Info-seek' : 'Checkout page'), index: 'Response index', fit: 'Served' };
+                    } catch (_gpe) { _goatFacts = null; _goatAudCols = null; }
+                }
+
                 // Theme mirrors the on-screen dashboard so the downloaded
                 // PDF reads as a continuation of the surface the user is
                 // looking at. Dashboard defaults to dark; if the user has
@@ -39176,7 +39821,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         response_metric_label: responseLabel,
                         sample_size: sampleSize,
                     },
+                    audience_cols: _goatAudCols || undefined,
                     wow_chip: (function() {
+                        if (_goatFacts) return { text: _goatFacts.wow.text, tone: _goatFacts.wow.tone };
                         // Mirrors the on-screen chip: "Launch week" pill
                         // when the prior 7-day window predates the campaign
                         // (no comparable exposure to compare against), or
@@ -39292,6 +39939,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { _iiqRenderAssetTable(); } catch (_e) {}
                 try { _iiqRenderAudienceTable(); } catch (_e) {}
                 try { _iiqRenderTrendModule(); } catch (_e) {}
+                // GOAT: Attribution, Timing and the rail read the same
+                // date as every other slab.
+                if (_iiqGoatMode()) {
+                    try {
+                        var _c = window.__iiqMTACache;
+                        var _s = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                        if (_c && _c.data && _c.slug === _s) _iiqMTARender(_c.data);
+                    } catch (_e) {}
+                }
             };
             // Click handler for the preset buttons: writes the picker,
             // then routes through iiqOnAsOfChange so every downstream
@@ -128411,6 +129067,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true, supersededBy: 'q_q2' },
             { id: 'assets',      label: 'Performance', ids: ['iiqAssetTableSection'] },
+            // The campaign-level audience read. The slab only draws on
+            // GOAT (Jenna 2026-09-24), so the tab only appears there.
+            { id: 'audiences',   label: 'Audiences',   ids: ['iiqAudienceTableSection'] },
             // Surface and Leaks have no tab of their own. Where the
             // cohort landed is what the attribution cuts are dividing up,
             // and where a single-surface tag would go dark is the same
@@ -128891,6 +129550,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                           ['Assets in view', 'assets'], ['Read strength', 'strength']],
             assets:      [['Assets in view', 'assets'], ['Best response', 'bestResponse'],
                           ['Best lift', 'bestLift'], ['Exposed viewers', 'exposed'], ['Read strength', 'strength']],
+            audiences:   [['Assets in view', 'assets'], ['Exposed viewers', 'exposed'],
+                          ['Baseline conversion', 'baseline'], ['Read strength', 'strength']],
             attribution: [['Baseline conversion', 'baseline'], ['Panellists in read', 'panellists'],
                           ['Sufficiency', 'sufficiency'], ['Read strength', 'strength']],
             timing:      [['Exposed viewers', 'exposed'], ['Baseline conversion', 'baseline'],

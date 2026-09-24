@@ -98,6 +98,10 @@ FIT_TINTS_LIGHT = {
     "underserved": (HexColor("#F4E1F9"),        AMETHYST),
     "broad":       (HexColor("#E8E7F1"),        HexColor("#6C6A80")),
     "offtarget":   (HexColor("#E5E4DE"),        HexColor("#797F81")),
+    # Served read (share of exposure against share of response); the
+    # GOAT audience page ships these three in place of the Fit quadrant.
+    "balanced":    (HexColor("#E8E7F1"),        HexColor("#6C6A80")),
+    "overserved":  (HexColor("#E5E4DE"),        HexColor("#797F81")),
 }
 # Fit dot color on DARK surfaces (dot + label, like the dashboard tag)
 FIT_DOTS_DARK = {
@@ -105,6 +109,8 @@ FIT_DOTS_DARK = {
     "underserved": ORCHID,
     "broad":       DUSK,
     "offtarget":   HexColor("#5C6466"),
+    "balanced":    DUSK,
+    "overserved":  HexColor("#9AA09B"),
 }
 
 # Delta chip colors (WoW up / down)
@@ -267,6 +273,10 @@ def _fit_key(label: str) -> str:
         return "sweet"
     if k == "broad":
         return "broad"
+    if k == "balanced":
+        return "balanced"
+    if k == "overserved":
+        return "overserved"
     return "offtarget"
 
 
@@ -590,6 +600,10 @@ def _extract(payload: dict) -> dict:
         "bullets":        [_sanitize(b) for b in (payload.get("bullets") or []) if b],
         "top_assets":     payload.get("top_assets") or [],
         "top_audiences":  payload.get("top_audiences") or [],
+        # Optional header labels for the audience table. The dashboard
+        # sends them when its audience page carries a different read
+        # (GOAT: share of exposure / share of response / served).
+        "audience_cols":  payload.get("audience_cols") or {},
         "hero_bytes":     payload.get("hero_image_bytes"),
     }
 
@@ -835,7 +849,7 @@ def _build_dark_pdf(payload: dict) -> bytes:
                      "Audiences responding, and audiences responding but under-served.")
         cursor -= title_h
         _aud_table_dark(c, ff, cursor, d["top_audiences"][:rows_u],
-                        row_h, head_h)
+                        row_h, head_h, cols=d["audience_cols"])
         cursor -= head_h + row_h * rows_u + 0.22 * inch
 
     # -- Footer --------------------------------------------------------
@@ -928,7 +942,8 @@ def _asset_table_dark(c, ff, cursor, rows, row_h, head_h):
                    MARGIN + CONTENT_W - 0.22 * inch, ry)
 
 
-def _aud_table_dark(c, ff, cursor, rows, row_h, head_h):
+def _aud_table_dark(c, ff, cursor, rows, row_h, head_h, cols=None):
+    cols = cols or {}
     col_aud_w  = 2.55 * inch
     col_over_w = 1.00 * inch
     col_resp_w = 1.00 * inch
@@ -943,10 +958,13 @@ def _aud_table_dark(c, ff, cursor, rows, row_h, head_h):
     c.setFont(_font(ff, "-Bold"), 7.5)
     head_y = cursor - 0.20 * inch
     c.drawString(col_aud_x, head_y, "AUDIENCE")
-    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y, "OVERLAP")
-    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
-    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y, "VS GENPOP")
-    c.drawString(col_fit_x, head_y, "FIT")
+    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("overlap") or "OVERLAP").upper())
+    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("response") or "RESPONSE").upper())
+    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("index") or "VS GENPOP").upper())
+    c.drawString(col_fit_x, head_y, _sanitize(cols.get("fit") or "FIT").upper())
 
     c.setStrokeColor(SLATE_BORDER)
     c.setLineWidth(0.4)
@@ -1206,7 +1224,7 @@ def _build_light_pdf(payload: dict) -> bytes:
                      "Audiences responding, and audiences responding but under-served.")
         cursor -= title_h
         _aud_table_light(c, ff, cursor, d["top_audiences"][:rows_u],
-                         row_h, head_h)
+                         row_h, head_h, cols=d["audience_cols"])
         cursor -= head_h + row_h * rows_u + 0.22 * inch
 
     _footer_light(c, ff, d["week_end"])
@@ -1293,7 +1311,8 @@ def _asset_table_light(c, ff, cursor, rows, row_h, head_h):
                    MARGIN + CONTENT_W - 0.20 * inch, ry)
 
 
-def _aud_table_light(c, ff, cursor, rows, row_h, head_h):
+def _aud_table_light(c, ff, cursor, rows, row_h, head_h, cols=None):
+    cols = cols or {}
     col_aud_w  = 2.55 * inch
     col_over_w = 1.05 * inch
     col_resp_w = 1.05 * inch
@@ -1308,10 +1327,13 @@ def _aud_table_light(c, ff, cursor, rows, row_h, head_h):
     c.setFont(_font(ff, "-Bold"), 7.5)
     head_y = cursor - 0.18 * inch
     c.drawString(col_aud_x, head_y, "AUDIENCE")
-    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y, "OVERLAP")
-    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y, "RESPONSE")
-    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y, "VS GENPOP")
-    c.drawString(col_fit_x, head_y, "FIT")
+    c.drawRightString(col_over_x + col_over_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("overlap") or "OVERLAP").upper())
+    c.drawRightString(col_resp_x + col_resp_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("response") or "RESPONSE").upper())
+    c.drawRightString(col_idx_x + col_idx_w - 0.10 * inch, head_y,
+                      _sanitize(cols.get("index") or "VS GENPOP").upper())
+    c.drawString(col_fit_x, head_y, _sanitize(cols.get("fit") or "FIT").upper())
 
     c.setStrokeColor(LIGHT_CARD_STROKE)
     c.setLineWidth(0.4)
