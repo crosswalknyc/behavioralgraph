@@ -148,6 +148,24 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;
   }
+  .ar-row {
+    display: flex; align-items: flex-start; gap: 0.7rem;
+    margin: 0 0 1.5rem; padding: 0.85rem 1rem;
+    background: rgba(233, 232, 225, 0.05);
+    border-radius: 10px;
+  }
+  .ar-row input[type="checkbox"] {
+    margin-top: 0.2rem; width: 16px; height: 16px;
+    accent-color: var(--signal); flex: 0 0 auto;
+  }
+  .ar-row label {
+    font-size: 0.86rem; line-height: 1.45; color: var(--offwhite);
+    cursor: pointer;
+  }
+  .ar-row .hint {
+    display: block; margin-top: 0.25rem;
+    font-size: 0.74rem; line-height: 1.45; color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -185,6 +203,15 @@
       <button type="button" data-v="15000">$15,000</button>
     </div>
   {% endif %}
+
+  <div class="ar-row">
+    <input type="checkbox" id="arOn" checked>
+    <label for="arOn">Automatically add $5,000 when the balance
+      drops below $500.
+      <span class="hint">The card you use is saved on this account.
+        You can uncheck this, or turn it off later in the account.</span>
+    </label>
+  </div>
 
   <button class="pay" id="payBtn">Continue to secure payment</button>
   <div class="err" id="err"></div>
@@ -272,6 +299,8 @@
       }
       body.amount_usd = v;
     }
+    var arEl = document.getElementById('arOn');
+    body.enable_auto_reload = !arEl || !!arEl.checked;
     payBtn.disabled = true;
     payBtn.textContent = 'One moment...';
 

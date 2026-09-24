@@ -462,9 +462,10 @@
       <h2>Auto-reload</h2>
       <p style="color: var(--body-dark); font-size: 14px;
                 margin: 0 0 20px 0;">
-        Automatically add funds to your wallet when the balance drops
-        below a threshold you choose. Requires a card on file.
-        Auto-reload purchases are prepaid and non-refundable.
+        On by default: when the balance drops below $500 we add
+        $5,000. You can turn this off or change the amounts.
+        Requires a card on file. Auto-reload purchases are prepaid
+        and non-refundable.
       </p>
       <div class="form-row">
         <label>Enable auto-reload</label>
@@ -843,7 +844,7 @@
       $('ar-threshold').value = s.auto_reload_threshold_usd
         || defs.threshold_usd || 500;
       $('ar-amount').value = s.auto_reload_amount_usd
-        || defs.amount_usd || 1000;
+        || defs.amount_usd || 5000;
       if (!s.has_card_on_file) {
         $('ar-enabled').disabled = true;
         $('ar-enabled-hint').textContent = 'Add a card first.';
@@ -1038,7 +1039,7 @@
     $('btn-save-autoreload').addEventListener('click', async () => {
       const enabled = $('ar-enabled').checked;
       const threshold = Number($('ar-threshold').value || 500);
-      const amount = Number($('ar-amount').value || 1000);
+      const amount = Number($('ar-amount').value || 5000);
       if (enabled && (!currentState || !currentState.has_card_on_file)) {
         showBanner('error',
           'Add a card on file before enabling auto-reload.');

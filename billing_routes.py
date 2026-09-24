@@ -2567,6 +2567,14 @@ def _write_saved_card(rec: dict, display: dict) -> bool:
     return True
 
 
+def _apply_topup_auto_reload(rec: dict, md) -> None:
+    import wallet  # type: ignore
+    flag = wallet.parse_auto_reload_flag(md)
+    if flag is None:
+        return
+    wallet.apply_auto_reload_preference(rec, flag)
+
+
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
     md = obj.get("metadata") or {}
@@ -2605,6 +2613,7 @@ def _handle_checkout_session_completed(event: dict):
 
     def _apply(rec):
         _write_saved_card(rec, card_display)
+        _apply_topup_auto_reload(rec, md)
         if _already_credited(rec, refs):
             credited["skipped"] = True
             credited["new_balance"] = float(
@@ -2709,6 +2718,7 @@ def _handle_payment_intent_succeeded(event: dict):
 
     def _apply(rec):
         _write_saved_card(rec, card_display)
+        _apply_topup_auto_reload(rec, md)
         if _already_credited(rec, refs):
             credited["skipped"] = True
             credited["new_balance"] = float(
@@ -3393,12 +3403,16 @@ def public_pay_checkout(token):
     subject_kind = str(rec.get("subject_kind") or "user")
     subject_key = str(rec.get("subject_key") or "")
 
+    body = request.get_json(silent=True) or {}
+    enable_ar = True
+    if "enable_auto_reload" in body:
+        enable_ar = bool(body.get("enable_auto_reload"))
+
     # Amount: locked links ignore the body entirely.
     preset = rec.get("amount_usd")
     if rec.get("amount_locked") and preset:
         amt = float(preset)
     else:
-        body = request.get_json(silent=True) or {}
         raw = body.get("amount_usd")
         if raw in (None, "", 0, "0"):
             amt = float(preset) if preset else 0.0
@@ -3462,6 +3476,7 @@ def public_pay_checkout(token):
                 "payment_link_token": tok[:64],
                 "source": "admin_payment_link",
                 "description": "Wallet top-up",
+                "enable_auto_reload": "1" if enable_ar else "0",
             },
         )
     except billing.BillingError:
@@ -3487,12 +3502,14 @@ def public_pay_success(token):
         headline="Thank you. Your payment went through.",
         subline=("The funds are on their way to "
                  f"{rec.get('display_name')}'s account. "
-                 "The card used on this payment is saved so the "
-                 "account can reload automatically."
+                 "The card is saved on the account. Auto-reload "
+                 "adds $5,000 when the balance drops below $500 "
+                 "unless you turned that off."
                  if rec and rec.get("display_name") else
                  "The funds are on their way to the account. "
-                 "The card used on this payment is saved so the "
-                 "account can reload automatically."),
+                 "The card is saved on the account. Auto-reload "
+                 "adds $5,000 when the balance drops below $500 "
+                 "unless you turned that off."),
         token="")
 
 

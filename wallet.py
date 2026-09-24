@@ -1604,15 +1604,67 @@ def admits_wallet_ui(user: dict) -> bool:
 def billing_mode(user: dict) -> str:
     """One of 'prepay_only', 'auto_reload', 'monthly_invoice'.
 
-    Default 'prepay_only' - no card on file, user must top up
-    manually before every empty-wallet event.
+    Jenna 2026-09-23: paying accounts with a card default to
+    auto-reload ($5,000 when the balance drops below $500). An
+    explicit prepay_only or monthly_invoice choice always wins.
     """
     if not user:
         return "prepay_only"
     m = str(user.get("billing_mode") or "").strip().lower()
     if m in ("prepay_only", "auto_reload", "monthly_invoice"):
         return m
+    if is_paying_customer(user) and has_card_on_file(user):
+        return "auto_reload"
     return "prepay_only"
+
+
+def apply_auto_reload_preference(rec: dict, enabled: bool) -> None:
+    """Turn auto-reload on or off on a billed subject.
+
+    On: billing_mode=auto_reload, fill missing threshold ($500) and
+    lift any add amount below the $5,000 floor. Off: prepay_only.
+    monthly_invoice is left alone. Always marks paying_customer.
+    """
+    if not isinstance(rec, dict):
+        return
+    rec["paying_customer"] = True
+    mode = str(rec.get("billing_mode") or "").strip().lower()
+    if mode == "monthly_invoice":
+        return
+    if enabled:
+        rec["billing_mode"] = "auto_reload"
+        try:
+            thr = float(rec.get("auto_reload_threshold_usd"))
+        except (TypeError, ValueError):
+            thr = -1.0
+        if thr < 0:
+            rec["auto_reload_threshold_usd"] = 500.0
+        try:
+            amt = float(rec.get("auto_reload_amount_usd"))
+        except (TypeError, ValueError):
+            amt = 0.0
+        if amt < TOP_UP_MIN_USD:
+            rec["auto_reload_amount_usd"] = float(TOP_UP_MIN_USD)
+    else:
+        rec["billing_mode"] = "prepay_only"
+
+
+def parse_auto_reload_flag(md) -> object:
+    """Payment-link checkout sends enable_auto_reload=1|0.
+
+    Returns True / False / None. None means leave the existing
+    preference alone (logged-in wallet top-up with no checkbox).
+    A payment link with no flag defaults ON.
+    """
+    md = md if isinstance(md, dict) else {}
+    raw = str(md.get("enable_auto_reload") or "").strip().lower()
+    if raw in ("0", "false", "off", "no"):
+        return False
+    if raw in ("1", "true", "on", "yes"):
+        return True
+    if str(md.get("source") or "") == "admin_payment_link":
+        return True
+    return None
 
 
 def auto_reload_threshold(user: dict) -> float:
@@ -2192,10 +2244,17 @@ def ensure_company_record(users_data: dict, company_name: str,
     if rec.get("paying_customer") is None:
         rec["paying_customer"] = True
     if created or not str(rec.get("billing_mode") or "").strip():
-        rec["billing_mode"] = rec.get("billing_mode") or "prepay_only"
+        rec["billing_mode"] = rec.get("billing_mode") or "auto_reload"
         if rec.get("billing_mode") not in (
                 "prepay_only", "auto_reload", "monthly_invoice"):
-            rec["billing_mode"] = "prepay_only"
+            rec["billing_mode"] = "auto_reload"
+        if rec.get("billing_mode") == "auto_reload":
+            if not isinstance(rec.get("auto_reload_threshold_usd"),
+                              (int, float)):
+                rec["auto_reload_threshold_usd"] = 500.0
+            if not isinstance(rec.get("auto_reload_amount_usd"),
+                              (int, float)):
+                rec["auto_reload_amount_usd"] = float(TOP_UP_MIN_USD)
     if seed_user and isinstance(seed_user, dict):
         email = str(seed_user.get("email") or "").strip()
         if email and not str(rec.get("billing_email") or "").strip():
@@ -3098,7 +3157,9 @@ __all__ = [
     "top_up_pack_sizes", "top_up_min_custom",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
-    "billing_mode", "auto_reload_threshold", "auto_reload_amount",
+    "billing_mode", "apply_auto_reload_preference",
+    "parse_auto_reload_flag",
+    "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
