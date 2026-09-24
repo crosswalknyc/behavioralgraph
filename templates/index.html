@@ -127208,13 +127208,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             // ---- head ----
             var hero = document.getElementById('bpiqHeroValue');
-            var heroTxt = hero ? (hero.innerText || '') : '';
+            var heroTxt = hero ? (hero.textContent || '').replace(/\s+/g, ' ') : '';
             var total = (heroTxt.match(/\$[\d.,]+[KMB]?/) || [null])[0];
             var parts = [];
             ['Earned media', 'Brand engagement', 'Brand lift'].forEach(function (name) {
-                var re = new RegExp(name.replace(/ /g, '\\s+') + '\\s*\\n\\s*(\\$[\\d.,]+[KMB]?)', 'i');
+                // The label runs straight into its figure in textContent, and
+                // the summing line above it ("earned media + brand
+                // engagement + ...") carries the same words, so the figure
+                // has to follow immediately for the match to count.
+                var re = new RegExp(name.replace(/ /g, '\\s*') + '\\s*(\\$[\\d.,]+\\s*[KMB]?)', 'i');
                 var m = heroTxt.match(re);
-                if (m) parts.push({ name: name, raw: m[1], v: _bpMoney(m[1]) });
+                if (m) parts.push({ name: name, raw: m[1].replace(/\s+/g, ''), v: _bpMoney(m[1]) });
             });
             parts.sort(function (a, b) { return (b.v || 0) - (a.v || 0); });
             var tot = _bpMoney(total) || parts.reduce(function (s, p) { return s + (p.v || 0); }, 0);
