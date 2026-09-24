@@ -32203,12 +32203,18 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-phase-dates { font-size: 0.78rem; color: var(--text-secondary); text-align: right; }
             #intentIQView .iiq-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.85rem; }
             /* Assets page: one horizontal row per asset. */
-            #intentIQView #iiqAssetGrid.iiq-asset-rows { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.02); }
+            #intentIQView #iiqAssetGrid.iiq-asset-rows { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: clip; background: rgba(255,255,255,0.02); }
             #intentIQView .iiq-asset-row { display: grid; grid-template-columns: minmax(240px, 2.4fr) minmax(120px, 1.2fr) 0.8fr 0.7fr 0.8fr 0.8fr 56px; gap: 0.8rem; align-items: center; padding: 0.6rem 0.9rem 0.6rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06); border-left: 3px solid transparent; transition: background 0.15s ease, box-shadow 0.4s ease, transform 0.2s ease; }
             #intentIQView .iiq-asset-row:last-child { border-bottom: 0; }
             #intentIQView .iiq-asset-row:hover { background: rgba(255,255,255,0.035); }
             #intentIQView .iiq-asset-row.is-head { font-size: 0.6rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); padding-top: 0.5rem; padding-bottom: 0.5rem; background: rgba(255,255,255,0.03); }
             #intentIQView .iiq-asset-row.is-head:hover { background: rgba(255,255,255,0.03); }
+            /* Headers stay pinned while the ~100-row lists scroll (Jenna 2026-09-23). */
+            #intentIQView .iiq-asset-row.is-head, #intentIQView .iiq-q2-asset-head { position: sticky; top: 0; z-index: 4; }
+            #intentIQView .iiq-asset-row.is-head, #intentIQView .iiq-asset-row.is-head:hover { background: #17282D; }
+            #intentIQView .iiq-q2-asset-head { background: #111F22; margin-top: -0.3rem; padding-top: 0.6rem !important; }
+            body[data-theme="light"] #intentIQView .iiq-asset-row.is-head { background: #DDDCD5; }
+            body[data-theme="light"] #intentIQView .iiq-q2-asset-head { background: #E9E8E1; }
             #intentIQView .iiq-asset-row.is-head > div[data-sort] { cursor: pointer; user-select: none; color: inherit; white-space: nowrap; transition: color 0.12s ease-out; }
             #intentIQView .iiq-asset-row.is-head > div[data-sort]:hover { color: #E9E8E1; }
             #intentIQView .iiq-asset-row.is-head > div[data-sort].on { color: #C7F23E; }
@@ -43057,9 +43063,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 +  '</div>';
                         }
                         var barColHeaderStyle = barColColor ? 'color:' + barColColor + ';' : '';
-                        var headerHtml = '<div style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
+                        var headerHtml = '<div class="iiq-q2-asset-head" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
                             + _hdr('asset',  'Asset', 'left',  null)
-                            + '<div style="' + barColHeaderStyle + '">' + barColLabel + '</div>'
+                            + '<div style="' + barColHeaderStyle + '" title="Bar length = ' + barColLabel + ' relative to the top asset. Click a numeric header to switch the bar metric.">' + barColLabel + ' bar</div>'
                             + _hdr('views',  'Views',       'right', null)
                             + _hdr('eng',    'Eng',         'right', null)
                             + _hdr('info',   'Info-seek %', 'right', '#a5b4fc')
