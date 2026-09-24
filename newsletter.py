@@ -799,6 +799,8 @@ def public_archive_issues(state=None):
         if not cid:
             continue
         dl = _campaign_download(camp)
+        li = camp.get("linkedin") or {}
+        image_url = (li.get("image_url") or "").strip()
         issues.append({
             "id": cid,
             "name": camp.get("name") or "The Read",
@@ -808,6 +810,7 @@ def public_archive_issues(state=None):
             "sent_label": _public_issue_date(camp.get("sent_at")),
             "url": f"/the-read/{cid}",
             "read_url": f"/n/r/{cid}",
+            "image_url": image_url,
             "download_url": f"/n/d/{cid}" if dl.get("enabled") else "",
         })
     issues.sort(key=lambda row: row.get("sent_at") or "", reverse=True)
