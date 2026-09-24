@@ -62,6 +62,15 @@ RESIDENTIAL_SCRAPERS = [
     # have the chart overwritten. Needs the donated session, so
     # it belongs here rather than on Hetzner.
     ('disneyplus_top10', 'Disney+ Top 10'),
+    # Peacock's OWN Top 10 TV and Top 10 Movies, off its
+    # signed-in home. Needs the donated session, so it runs here
+    # rather than beside `peacock` on the build box, which pulls
+    # the catalog from JustWatch and needs no session. That
+    # splits the pair across two machines: this normally runs
+    # hours after the nightly, which is the order the merge
+    # wants. If it ever runs first, Peacock renders that day
+    # with no chart rather than a wrong one.
+    ('peacock_top10', 'Peacock Top 10'),
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
     ('netflix',       'Netflix'),

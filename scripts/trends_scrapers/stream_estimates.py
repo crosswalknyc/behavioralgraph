@@ -8043,6 +8043,34 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('top 10 series today', 'top 10 movies today'),
         'depth': 10,
     },
+    # Peacock publishes two, on its signed-in home. Separate rankings,
+    # so the top show and the top film are both #1.
+    #
+    # Matched on the rail's CMS slug, /watch/home/top-10-tv and
+    # /watch/home/top-10-movies, because nothing on the page says
+    # 'Top 10' in words: the rails render as 'TV Shows Today' and
+    # 'Movies Today' with the numerals as artwork. Searching the
+    # markup for 'Top 10' or 'Most Popular' returns nothing useful.
+    # The page config carries `"top10Rail": true` beside them, which
+    # is a second, independent confirmation the feature is on.
+    #
+    # Reads as viewing: the films chart holds three Twilight titles
+    # and two Trolls entries, the franchise-cluster shape Disney+
+    # showed with five Toy Story films and Pluto TV with four John
+    # Wick films, spread across 1988 to 2023. The TV chart runs an
+    # NBC competition, three Bravo reality franchises, a sitcom, a
+    # Telemundo narco drama and a workplace comedy, which coheres
+    # around nothing at all.
+    #
+    # 'Trending Now' is a different rail on the same page and stays
+    # out: a promotional mix, distinct from these, and we have the
+    # real chart.
+    'peacock': {
+        'label': 'Peacock Top 10 Today',
+        'mode':  'collection',
+        'collections': ('top 10 tv today', 'top 10 movies today'),
+        'depth': 10,
+    },
     # Disney+ publishes two, on its signed-in US home: 'Top 10 Movies
     # in the US Today' and 'Top 10 Series in the US Today'. Separate
     # rankings, so the top film and the top series are both #1.

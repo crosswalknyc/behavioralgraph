@@ -210,6 +210,64 @@ def _previous() -> dict:
         return {}
 
 
+# The chart is folded into Peacock's OWN snapshot as well as this one,
+# because everything downstream reads a service's chart out of the
+# snapshot named after the service.
+#
+# `peacock` rewrites that file from JustWatch on the nightly run, and
+# unlike Disney+ the two do not live on the same machine: the JustWatch
+# pull needs no session and runs on the build box, while this needs the
+# donated session and runs from the operator's laptop, which is
+# normally some hours later. So the ordering holds in practice but is
+# not enforced by a list the way Disney+'s and Paramount+'s are.
+#
+# The failure that leaves is benign and worth stating: if the JustWatch
+# pull ever lands AFTER this one, Peacock renders that day with no
+# chart, which is what it did before any of this existed. It does not
+# render a wrong chart. The merge is idempotent, so the next run puts
+# it back.
+_MERGE_KEY = 'trends_iq_snapshots/latest/peacock.json'
+
+
+def _merge_into_service_snapshot(rows: list[dict]) -> None:
+    """Put the chart at the top of `peacock.json`."""
+    if not rows:
+        return
+    try:
+        import boto3
+        s3 = boto3.client('s3', region_name='us-east-2')
+        snap = json.loads(s3.get_object(
+            Bucket=_S3_BUCKET, Key=_MERGE_KEY)['Body'].read())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("peacock_top10: could not read %s to merge into "
+                       "(%s); the chart is still in its own snapshot",
+                       _MERGE_KEY, e)
+        return
+
+    charts = {r['collection'] for r in rows}
+    prior = snap.get('national') or []
+    keep = [r for r in prior
+            if isinstance(r, dict)
+            and (r.get('collection') or '') not in charts]
+    charted = {(r['title'] or '').strip().lower() for r in rows}
+    keep = [r for r in keep
+            if (r.get('title') or '').strip().lower() not in charted]
+
+    snap['national'] = rows + keep
+    snap['chart_rails'] = sorted(charts)
+    snap['chart_merged_at'] = datetime.now(timezone.utc).isoformat()
+    try:
+        s3.put_object(Bucket=_S3_BUCKET, Key=_MERGE_KEY,
+                      Body=json.dumps(snap, ensure_ascii=False)
+                      .encode('utf-8'),
+                      ContentType='application/json')
+        logger.info("peacock_top10: merged %d chart row(s) into %s "
+                    "(%d catalog rows kept of %d)", len(rows), _MERGE_KEY,
+                    len(keep), len(prior))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("peacock_top10: merge write failed (%s)", e)
+
+
 def fetch() -> dict[str, Any]:
     from ._playwright import render_pages
 
@@ -229,6 +287,7 @@ def fetch() -> dict[str, Any]:
     rows = _rows_from(acc)
     now = datetime.now(timezone.utc).isoformat()
     if len(rows) >= _MIN_HEALTHY:
+        _merge_into_service_snapshot(rows)
         return {'national': rows, 'chart_captured_at': now,
                 'chart_rails': [CHART_SLUGS[s][0] for s in acc],
                 'chart_positions': len(rows)}
