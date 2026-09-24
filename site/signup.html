@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crosswalk | Sign up</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="signup">
+  <div class="left glow">
+    <div>
+      <div class="eyebrow"><span class="n">01</span> Sign up</div>
+      <h1 class="h-l">Create your dashboard and ask your first question.</h1>
+      <p class="lead" style="margin-top:18px">Your account opens with Prometheus and a $5,000 balance. Ask anything about any audience. Each report you pull draws from the balance, and the file is yours in the dashboard.</p>
+      <div class="panel" style="margin-top:26px;padding:16px 18px;border-color:var(--green)">
+        <div class="eyebrow" style="margin-bottom:8px"><span class="n">Your first question</span></div>
+        <div id="q" style="font-size:17px;font-weight:600">Who watches Landman, and what do they buy?</div>
+      </div>
+    </div>
+    <div class="ledger">
+      <div class="li"><b>Profile IQ</b><span class="p">$300</span></div>
+      <div class="li"><b>Ranker IQ</b><span class="p">$300</span></div>
+      <div class="li"><b>Subscriber IQ</b><span class="p">$500</span></div>
+      <div class="li"><b>Digital Journey IQ</b><span class="p">$500</span></div>
+      <div class="li"><b>Fin IQ</b><span class="p">$500</span></div>
+      <div class="li"><b>Trends IQ</b><span class="p">Included</span></div>
+      <div class="li"><b>Chat with Prometheus</b><span class="p">about $0.15 to $0.84 per question</span></div>
+      <div class="li" style="padding-top:10px;border-top:1px solid var(--rule-d)"><b>Top up</b><span class="p">$5,000 when the balance reaches $500</span></div>
+    </div>
+  </div>
+  <div class="right light">
+    <div class="steps-bar"><span class="on">1 Account</span><span>2 Opening balance</span><span>3 Ask Prometheus</span></div>
+    <div id="notice" class="fieldset" style="display:none;border-color:var(--amethyst)"><p class="body" id="noticeText"></p></div>
+    <form id="signupForm" novalidate>
+      <div class="fieldset">
+        <h3>Account</h3>
+        <div class="form">
+          <div class="grid-2">
+            <div><label for="fn">First name</label><input id="fn" name="first_name" type="text" autocomplete="given-name" required></div>
+            <div><label for="ln">Last name</label><input id="ln" name="last_name" type="text" autocomplete="family-name" required></div>
+          </div>
+          <div><label for="we">Work email</label><input id="we" name="email" type="email" autocomplete="email" placeholder="name@company.com" required></div>
+          <div class="grid-2">
+            <div><label for="co">Company</label><input id="co" name="company" type="text" autocomplete="organization" required></div>
+            <div><label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="new-password" placeholder="At least 12 characters" minlength="12" required></div>
+          </div>
+        </div>
+      </div>
+      <div class="fieldset">
+        <h3>Opening balance</h3>
+        <div class="total" style="border-top:0;margin-top:0;padding-top:0"><span class="body">Charged on the next screen</span><span class="amt">$5,000.00</span></div>
+        <p class="fine">Prepaid, not a fee. Every dollar is a report your team pulls or will pull. You enter the card on a secure payment page. It stays on file, and when the balance reaches $500 it tops up with another $5,000. Change or stop top-ups any time from the dashboard. Usage statement downloadable anytime.</p>
+      </div>
+      <p id="err" class="fine" style="display:none;color:var(--amethyst);font-size:13px"></p>
+      <button class="btn btn-olive" type="submit" id="go" style="width:100%;min-height:48px">Continue to payment</button>
+      <p class="fine">By continuing you agree to the <a href="terms-of-use.html" style="color:var(--olive-sm);text-decoration:underline">Terms of Use</a> and <a href="privacy-policy-1.html" style="color:var(--olive-sm);text-decoration:underline">Privacy Policy</a>. Already have an account? <a href="/login" style="color:var(--olive-sm);text-decoration:underline">Log in</a>.</p>
+    </form>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var q = params.get('q') || '';
+  var qEl = document.getElementById('q');
+  if (q) qEl.textContent = q;
+  if (params.get('cancelled') === '1') {
+    document.getElementById('notice').style.display = 'block';
+    document.getElementById('noticeText').textContent = 'Payment was not completed. Your account details are saved. Enter the same email and password to continue to payment.';
+  }
+  var form = document.getElementById('signupForm');
+  var err = document.getElementById('err');
+  var go = document.getElementById('go');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.style.display = 'none';
+    var body = {
+      first_name: form.first_name.value.trim(),
+      last_name: form.last_name.value.trim(),
+      email: form.email.value.trim(),
+      company: form.company.value.trim(),
+      password: form.password.value,
+      question: q || qEl.textContent,
+      came_from: document.referrer || 'site/signup'
+    };
+    if (!body.first_name || !body.last_name || !body.email || !body.company) {
+      err.textContent = 'Fill in every field.'; err.style.display = 'block'; return;
+    }
+    if (body.password.length < 12) {
+      err.textContent = 'Choose a password of at least 12 characters.'; err.style.display = 'block'; return;
+    }
+    go.disabled = true; go.textContent = 'One moment';
+    fetch('/site/api/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body), credentials: 'same-origin'
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (res.ok && res.d.url) { location.href = res.d.url; return; }
+        var d = res.d || {};
+        if (d.error === 'account_exists') {
+          err.innerHTML = (d.message || 'You already have an account.') + ' <a href="' + (d.login_url || '/login') + '" style="text-decoration:underline">Log in</a>.';
+        } else if (d.error === 'payments_unavailable' || d.error === 'unavailable') {
+          err.textContent = 'Payments are unavailable right now. Nothing was charged. Email hello@crosswalknyc.com and we will set you up.';
+        } else {
+          err.textContent = d.error || 'Something went wrong. Nothing was charged.';
+        }
+        err.style.display = 'block';
+        go.disabled = false; go.textContent = 'Continue to payment';
+      })
+      .catch(function () {
+        err.textContent = 'Could not reach the server. Nothing was charged. Try again.';
+        err.style.display = 'block';
+        go.disabled = false; go.textContent = 'Continue to payment';
+      });
+  });
+})();
+</script>
+</body>
+</html>

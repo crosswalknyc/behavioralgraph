@@ -285,6 +285,15 @@ try:
 except Exception as _newsletter_import_err:
     print(f"⚠️ Newsletter blueprint not registered: {_newsletter_import_err}")
 
+# Public site + self-serve Prometheus signup (Jenna 2026-09-24). Serves
+# the marketing site at /site and the $5,000 opening-balance signup
+# that the site's Ask box leads into. See bg-webapp/site_signup.py.
+try:
+    from site_signup import register_site_blueprint
+    register_site_blueprint(app)
+except Exception as _site_import_err:
+    print(f"⚠️ Site blueprint not registered: {_site_import_err}")
+
 # Global error handler for API routes - ensures JSON responses.
 # The partner surface (/api/v1/*) gets a fixed generic message with no
 # exception detail (2026-08-28 client finding #12: error paths must be
@@ -3743,6 +3752,18 @@ def login_page():
         
         if not verify_password(user['password_hash'], password):
             return jsonify({'success': False, 'error': 'Invalid username or password'})
+
+        # Self-serve signup that never finished the opening balance
+        # (site_signup.py). Send them back to finish, do not open a
+        # dashboard with nothing in it.
+        if str(user.get('signup_status') or '') == 'pending_payment':
+            return jsonify({
+                'success': False,
+                'error': ('Your account is waiting on the $5,000 opening '
+                          'balance. Finish signing up at '
+                          'dashboard.crosswalknyc.com/site/signup.html '
+                          'with this email and password.'),
+            })
         
         # Update last login
         user['last_login'] = datetime.now().isoformat()
@@ -10021,6 +10042,13 @@ def index():
                            company=company,
                            user_email=email,
                            cloaked_from=session.get('cloaked_from'),
+                           # Self-serve Prometheus plan (2026-09-24):
+                           # the dashboard opens Prometheus on load and
+                           # drops the disabled products from SELECT
+                           # PRODUCT so the user sees only what they have.
+                           self_serve_plan=bool(
+                               user and str(user.get('plan') or '')
+                               == 'prometheus_self_serve'),
                            is_dev_env=IS_DEV_ENV)
 
 
@@ -56386,6 +56414,13 @@ def api_synth_chat_approve():
     # pre-signed URL right here so the dashboard can offer a download.
     if decision == 'existing_match':
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
+        # Explicit-list users (self-serve Prometheus plan) must be able
+        # to open the file they just asked for. '*' users are a no-op.
+        try:
+            from site_signup import grant_runs_to_user as _grant_runs
+            _grant_runs(session.get('username'), [ex_key])
+        except Exception:
+            traceback.print_exc()
         return jsonify({
             'success': True,
             'decision': 'existing_match',
@@ -56729,6 +56764,19 @@ def api_synth_chat_status(run_id):
             doc = dict(doc)
             doc['error'] = ''
         payload = {'success': True, 'status': doc}
+        # A finished Prometheus pull belongs to the user who pulled it.
+        # Explicit-list users (self-serve Prometheus plan) get the TU
+        # and Avid keys appended to allowed_runs; '*' users are a no-op.
+        try:
+            if str(doc.get('status') or '').strip().lower() == 'complete':
+                from site_signup import grant_runs_to_user as _grant_runs
+                _grant_runs(session.get('username'), [
+                    doc.get('tu_s3_key') or doc.get('s3_key')
+                    or doc.get('output_key'),
+                    doc.get('avid_s3_key'),
+                ])
+        except Exception:
+            traceback.print_exc()
         # Build-first follow-through (2026-09-24 Jenna): a completed
         # run whose subject matches a stashed question hands the
         # question back so the chat re-asks it automatically against

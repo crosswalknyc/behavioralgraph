@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crosswalk | Ask any audience question in plain English.</title>
+<meta name="description" content="Prometheus answers from 30 million opted-in people and their entire digital life. Who they are, what they watch, what they buy, where they signed up, and what they did yesterday.">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+<style>
+  .hero { padding: 104px 0 88px; text-align: center; }
+  .hero .orb { display: grid; width: 72px; height: 72px; font-size: 26px; margin: 0 auto 22px; box-shadow: 0 0 60px rgba(142,63,168,0.45); }
+  .hero .h-xl { max-width: 14ch; margin: 0 auto; }
+  .hero .lead { margin: 22px auto 0; text-align: center; }
+  .askbox { max-width: 760px; margin: 40px auto 0; display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 8px 8px 22px; border-radius: 999px; background: var(--slate); border: 1px solid var(--green); box-shadow: 0 0 40px rgba(199,242,62,0.14); text-align: left; }
+  .askbox input { background: transparent; border: 0; color: var(--off); font-size: 17px; outline: 0; width: 100%; }
+  .askbox input::placeholder { color: var(--t3-d); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+  .chips a { font-size: 13px; color: var(--t2-d); border: 1px solid var(--rule-d); border-radius: 999px; padding: 7px 14px; }
+  .chips a:hover { color: var(--off); border-color: var(--t2-d); }
+  .answer .wrap { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 56px; align-items: center; }
+  .answer .q { font-size: 15px; color: var(--t2-l); padding: 12px 18px; border-radius: 999px; border: 1px solid var(--rule-l); display: inline-block; margin-bottom: 22px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); }
+  .steps > div { padding-top: 18px; border-top: 1px solid var(--rule-d); position: relative; }
+  .steps .n { font-size: 30px; font-weight: 300; color: var(--green); margin-bottom: 10px; }
+  .steps h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .steps p { font-size: 15px; color: var(--t2-d); max-width: 40ch; }
+  .rep { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gutter); }
+  .rep a { display: block; padding: 22px; border-radius: 12px; background: var(--white); border: 1px solid var(--rule-l); }
+  .rep a:hover { border-color: var(--olive); }
+  .rep .q { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--olive); }
+  .rep strong { display: block; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 6px; }
+  .rep span { font-size: 14px; color: var(--t2-l); line-height: 1.5; }
+  .panel-band { position: relative; overflow: hidden; min-height: 520px; display: flex; align-items: flex-end; }
+  .panel-band .copy { max-width: 40rem; padding: 96px 0 88px; }
+  .proof .wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: center; }
+  .close { text-align: center; }
+  .close .askbox { margin-top: 30px; }
+  @media (max-width: 1023px) { .answer .wrap, .proof .wrap, .steps, .rep { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="band dark glow hero">
+  <div class="wrap">
+    <div class="orb">///</div>
+    <div class="eyebrow" style="margin-bottom:22px"><span class="n">01</span> Prometheus</div>
+    <h1 class="h-xl">Ask any audience question in plain English.</h1>
+    <p class="lead">Prometheus answers from 30 million opted-in people and their entire digital life. Who they are, what they watch, what they buy, where they signed up, and what they did yesterday.</p>
+    <form class="askbox" action="signup.html" method="get">
+      <input type="text" name="q" placeholder="Who watches Landman, and what do they buy?">
+      <button class="btn btn-green" type="submit">Ask</button>
+    </form>
+    <div class="chips">
+      <a href="signup.html?q=Which+titles+bring+Paramount++new+subscribers?">Which titles bring Paramount+ new subscribers?</a>
+      <a href="signup.html?q=Who+are+Reba+McEntire%27s+fans?">Who are Reba McEntire's fans?</a>
+      <a href="signup.html?q=Where+do+Dallas+Cowboys+fans+shop?">Where do Dallas Cowboys fans shop?</a>
+      <a href="signup.html?q=What+did+people+do+on+Chime+last+week?">What did people do on Chime last week?</a>
+    </div>
+  </div>
+</section>
+
+<section class="dark" style="padding:44px 0 52px;border-top:1px solid var(--rule-d)">
+  <div class="wrap stats">
+    <div class="stat"><div class="lab">Panel</div><div class="fig acc">30M</div><div class="sub">Opted-in people worldwide.</div></div>
+    <div class="stat"><div class="lab">United States</div><div class="fig">10M</div><div class="sub">US panelists, projected to the US population.</div></div>
+    <div class="stat"><div class="lab">Depth</div><div class="fig">35+</div><div class="sub">Behavioral categories on every file.</div></div>
+    <div class="stat"><div class="lab">Freshness</div><div class="fig">T+1</div><div class="sub">Yesterday's behavior is on the file today.</div></div>
+  </div>
+</section>
+
+<section class="band light answer" id="proof">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="n">02</span> The answer</div>
+      <div class="q">Who are Reba McEntire's fans?</div>
+      <h2 class="h-l">You get a file, not a paragraph.</h2>
+      <p class="lead" style="margin-top:16px">The answer comes back as a Profile IQ: audience size, the demographic shape, and every brand, platform, and title the audience over-indexes on, with the base stated.</p>
+      <p class="so-what"><b>What this means.</b> The question took ten seconds to type. The answer is the same file our analysts would build by hand.</p>
+    </div>
+    <div class="dash">
+      <div class="dash-top">
+        <span class="logo-pill"><img src="assets/logos/crosswalk-logo-black.png" alt=""></span>
+        <span class="pill">Profile IQ</span>
+      </div>
+      <div class="dash-tabs">
+        <span class="on">01 Insights</span><span>02 Demographics</span><span>03 Behavioral</span><span>04 Interests</span><span>05 Location</span>
+      </div>
+      <div class="dash-body">
+        <div>
+          <div class="eyebrow"><span class="n">Actor</span> Trailing 12 months</div>
+          <div class="subj">Reba<br>McEntire.</div>
+          <div class="read">Leans older and female.</div>
+          <div class="stats">
+            <div class="stat"><div class="lab">US audience</div><div class="fig acc">90,271,230</div></div>
+            <div class="stat"><div class="lab">Female</div><div class="fig">58.3%</div></div>
+            <div class="stat"><div class="lab">Under 35</div><div class="fig">20.6%</div></div>
+          </div>
+        </div>
+        <div class="dash-side">
+          <div class="lab">Where they shop, index vs US</div>
+          <div class="bars">
+            <div class="bar top"><span class="name">Tractor Supply</span><div class="track"><div class="fill" style="width:92%"></div></div><span class="val">412</span></div>
+            <div class="bar"><span class="name">Bass Pro Shops</span><div class="track"><div class="fill" style="width:71%"></div></div><span class="val">318</span></div>
+            <div class="bar"><span class="name">Hobby Lobby</span><div class="track"><div class="fill" style="width:58%"></div></div><span class="val">261</span></div>
+            <div class="bar"><span class="name">Kohl's</span><div class="track"><div class="fill" style="width:44%"></div></div><span class="val">197</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-foot"><span class="prom"><span class="orb">///</span> Ask Prometheus</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band dark" id="company">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">03</span> How it works</div>
+    <h2 class="h-l" style="max-width:20ch;margin-bottom:44px">Three steps from a question to a file you can send.</h2>
+    <div class="steps">
+      <div><div class="n">01</div><h3>You ask.</h3><p>Type the question the way you would say it in a meeting. A title, a talent, a brand, a team, or a campaign.</p></div>
+      <div><div class="n">02</div><h3>We count.</h3><p>Prometheus reads the behavior of 30 million opted-in people, their entire digital life, and compares the audience to the US population.</p></div>
+      <div><div class="n">03</div><h3>You get the file.</h3><p>A finished read with penetration, index, projected counts, and ranked brands. Downloadable, and it lands in your dashboard.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="dark panel-band" id="panel">
+  <img class="photo" src="assets/images/panelist.jpg" alt="">
+  <div class="wash"></div>
+  <div class="wrap over">
+    <div class="copy">
+      <div class="eyebrow"><span class="n">04</span> The panel</div>
+      <h2 class="h-l">30 million people chose to be counted.</h2>
+      <p class="lead" style="margin-top:16px">Each person installed our software and agreed to it. They can leave at any time. Prometheus never answers about one person. It answers about the group.</p>
+      <div style="display:flex;gap:10px;margin-top:26px;flex-wrap:wrap">
+        <a class="btn btn-green" href="panel.html">How the panel works</a>
+        <a class="btn btn-ghost" href="panel.html#track">What we track</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band light" id="products">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">05</span> Reports</div>
+    <h2 class="h-l" style="max-width:20ch;margin-bottom:40px">Six reports, one for each kind of question.</h2>
+    <div class="rep">
+      <a href="profile-iq.html"><div class="q">Who is this audience?</div><strong>Profile IQ</strong><span>Who engages with a title, talent, brand, or team, and what they already buy, watch, and use.</span></a>
+      <a href="subscriber-iq.html"><div class="q">Who signed up, and why?</div><strong>Subscriber IQ</strong><span>Signups, cancels, and switches between services, tied to the titles that moved them.</span></a>
+      <a href="digital-journey-iq.html"><div class="q">How did they get there?</div><strong>Digital Journey IQ</strong><span>The path from the first search to the purchase, subscription, or cancel, in order.</span></a>
+      <a href="trends-iq.html"><div class="q">What moved yesterday?</div><strong>Trends IQ</strong><span>Search, streaming, social, retail, and gaming, ranked day over day.</span></a>
+      <a href="ranker-iq.html"><div class="q">Who is on top?</div><strong>Ranker IQ</strong><span>Talent and brands stacked in one category, with the gap to the next name.</span></a>
+      <a href="fin-iq.html"><div class="q">What is the consumer doing on this name?</div><strong>Fin IQ</strong><span>Tickers and platforms read through consumer behavior, for the desk.</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="band dark proof">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="n">06</span> A sample read</div>
+      <h2 class="h-l">Invader Zim fans shop at Spencer's Gifts 6.8x more than most people.</h2>
+      <p class="lead" style="margin-top:16px">Index, where 100 is the US general population. Invader Zim audience, trailing 12 months.</p>
+      <p class="so-what"><b>What this means.</b> A cartoon that ended in 2002 still points to four live retail partners.</p>
+    </div>
+    <div class="panel panel-pad">
+      <div class="bars">
+        <div class="bar top"><span class="name">Spencer's Gifts</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="val">683</span></div>
+        <div class="bar"><span class="name">Redbubble</span><div class="track"><div class="fill" style="width:74%"></div></div><span class="val">507</span></div>
+        <div class="bar"><span class="name">Hot Topic</span><div class="track"><div class="fill" style="width:38%"></div></div><span class="val">260</span></div>
+        <div class="bar"><span class="name">Depop</span><div class="track"><div class="fill" style="width:30%"></div></div><span class="val">203</span></div>
+        <div class="bar"><span class="name">US general population</span><div class="track"><div class="fill" style="width:15%;background:var(--pavement)"></div></div><span class="val">100</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band light tight">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">07</span> Who asks</div>
+    <h2 class="h-m" style="margin-bottom:28px">The questions clients bring us most often.</h2>
+    <dl class="asks">
+      <div class="row"><dt>Media</dt><dd>Which titles bring in subscribers, and which ones just get watched?</dd></div>
+      <div class="row"><dt>Brands</dt><dd>Who is already in this audience, and what do they buy today?</dd></div>
+      <div class="row"><dt>Finance</dt><dd>What are people doing on this platform before the market prices it?</dd></div>
+      <div class="row"><dt>Sports</dt><dd>What do these fans watch and buy when they are not in the building?</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band dark glow close" id="access">
+  <div class="wrap">
+    <div class="eyebrow"><span class="n">08</span> Sign up</div>
+    <h2 class="h-l" style="max-width:16ch;margin:0 auto">Ask your first question and get the answer today.</h2>
+    <p class="lead" style="margin:16px auto 0;text-align:center">Sign up for the dashboard with a $5,000 opening balance. Ask Prometheus anything. You pay only for the reports you pull.</p>
+    <form class="askbox" action="signup.html" method="get" style="margin-left:auto;margin-right:auto">
+      <input type="text" name="q" placeholder="Type your first question">
+      <button class="btn btn-green" type="submit">Sign up and ask</button>
+    </form>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+</body>
+</html>

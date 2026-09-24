@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /site/
+Disallow: /site/signup.html
+Disallow: /site/welcome.html

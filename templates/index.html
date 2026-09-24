@@ -18837,6 +18837,26 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     </style>
 </head>
 <body{% if username %} data-username="{{ username }}"{% endif %}>
+<script>
+    // Self-serve Prometheus plan (2026-09-24). Set before any module
+    // script runs so the Prometheus launcher init can read it.
+    window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
+    if (window.CW_SELF_SERVE_PLAN) {
+        document.addEventListener('DOMContentLoaded', function () {
+            var dd = document.getElementById('viewNavDropdown');
+            if (!dd) return;
+            Array.prototype.slice.call(dd.options).forEach(function (o) {
+                if (o.disabled) o.parentNode.removeChild(o);
+            });
+            Array.prototype.slice.call(dd.querySelectorAll('optgroup')).forEach(function (g) {
+                if (!g.querySelector('option')) g.parentNode.removeChild(g);
+            });
+            if (typeof window.rebuildViewNavCustomPanel === 'function') {
+                try { window.rebuildViewNavCustomPanel(); } catch (_) {}
+            }
+        });
+    }
+</script>
     <script>
         /* Mirror data-theme onto <body> as soon as it exists (CSS overrides
            are scoped to body[data-theme="light"]). The pre-render script
@@ -76615,6 +76635,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 try { open = localStorage.getItem(OKEY); } catch (_) {}
                 if (open === '1') { window.prometheusExpand(); }
                 else { l.classList.add('pm-on'); _applyPos(l, LKEY); }
+                // Self-serve Prometheus plan (2026-09-24): Prometheus is
+                // the only product, so it opens on every load, and the
+                // question carried over from the public site is placed
+                // in the composer.
+                if (window.CW_SELF_SERVE_PLAN) {
+                    window.prometheusExpand();
+                    try {
+                        var _ask = new URLSearchParams(location.search).get('ask');
+                        if (_ask) {
+                            var _in = _el('synthChatInput');
+                            if (_in && !_in.value) { _in.value = _ask; _in.focus(); }
+                        }
+                    } catch (_) {}
+                }
                 // Reposition on every window resize so the widget and
                 // launcher track their anchor as the window grows or
                 // shrinks (fractional anchoring above).

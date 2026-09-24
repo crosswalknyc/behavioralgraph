@@ -2439,6 +2439,12 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
                 card_last4=card_last4,
                 kind=kind,
             )
+        # A self-serve signup's opening balance already emails the
+        # team from site_signup.activate_after_payment (with the
+        # signup details). Skip the generic top-up notice so the four
+        # recipients get one email, not two.
+        if str((metadata or {}).get("source") or "") == "self_serve_signup":
+            return
         send_topup_internal_notice(
             buyer_username=info["buyer_username"],
             buyer_email=info["buyer_email"],
@@ -2652,6 +2658,22 @@ def _handle_checkout_session_completed(event: dict):
         return
     print(f"[billing] webhook credited ${amt:.2f} to "
           f"{subject_kind}:{subject_key} (session={ref})")
+
+    # Self-serve signup (Jenna 2026-09-24): the opening balance just
+    # landed, so the account goes live and jenna@ / liz@ / jessie@ /
+    # czarina@ hear about it. Fail-safe: never blocks the credit.
+    if (str(md.get("source") or "") == "self_serve_signup"
+            and subject_kind == "user"):
+        try:
+            from site_signup import activate_after_payment
+            _b, _l = _card_brand_last4_for_subject(
+                credited["rec_snapshot"] or subject)
+            activate_after_payment(
+                subject_key, md, amt, credited["new_balance"],
+                card_brand=_b, card_last4=_l)
+        except Exception as e:
+            print(f"[billing] self-serve activation failed "
+                  f"(non-fatal): {e}")
 
     # Buyer receipt + internal notice (Jenna 2026-09-09). Fire and
     # forget: SES failures print but never bubble up to Stripe.

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crosswalk | Welcome</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+<link rel="stylesheet" href="assets/css/crosswalk.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<section class="band dark glow" style="min-height:calc(100vh - 64px);display:flex;align-items:center;text-align:center">
+  <div class="wrap">
+    <div class="orb" style="display:grid;width:72px;height:72px;font-size:26px;margin:0 auto 22px;box-shadow:0 0 60px rgba(142,63,168,0.45)">///</div>
+    <div class="eyebrow" style="margin-bottom:22px"><span class="n">03</span> <span id="eb">Confirming your payment</span></div>
+    <h1 class="h-xl" id="h" style="max-width:14ch;margin:0 auto">One moment while we confirm your opening balance.</h1>
+    <p class="lead" id="p" style="margin:22px auto 0;text-align:center">This usually takes a few seconds.</p>
+    <div id="ask" style="margin-top:30px;display:none">
+      <form class="askbox" id="askForm" style="margin:0 auto;width:100%">
+        <input type="text" id="askIn" placeholder="Who watches Landman, and what do they buy?">
+        <button class="btn btn-green" type="submit">Ask Prometheus</button>
+      </form>
+    </div>
+    <div id="login" style="margin-top:30px;display:none"><a class="btn btn-green" href="/login">Log in to the dashboard</a></div>
+    <div class="stats" id="stats" style="max-width:760px;margin:56px auto 0;padding-top:24px;border-top:1px solid var(--rule-d);grid-template-columns:repeat(3,1fr);visibility:hidden">
+      <div class="stat"><div class="lab">Balance</div><div class="fig acc" id="bal">$5,000.00</div></div>
+      <div class="stat"><div class="lab">Reports pulled</div><div class="fig">0</div></div>
+      <div class="stat"><div class="lab">Next top-up at</div><div class="fig">$500</div></div>
+    </div>
+  </div>
+</section>
+
+<div id="foot"></div>
+<script src="assets/js/crosswalk.js"></script>
+<script>
+(function () {
+  var sid = new URLSearchParams(location.search).get('sid') || '';
+  var tries = 0;
+  function money(v) { return '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function done(d) {
+    document.getElementById('eb').textContent = 'You are in';
+    document.getElementById('h').textContent = 'Your balance is ' + money(d.balance_usd) + '. Ask your first question.';
+    document.getElementById('p').textContent = 'Prometheus is open. Each report draws from the balance and lands in your library. A receipt is on its way to your inbox.';
+    document.getElementById('bal').textContent = money(d.balance_usd);
+    document.getElementById('stats').style.visibility = 'visible';
+    var q = d.first_question || '';
+    if (d.logged_in) {
+      var box = document.getElementById('ask'); box.style.display = 'block';
+      var inp = document.getElementById('askIn'); if (q) inp.value = q;
+      document.getElementById('askForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        location.href = '/?ask=' + encodeURIComponent(inp.value || q);
+      });
+    } else {
+      document.getElementById('login').style.display = 'block';
+    }
+  }
+  function waiting() {
+    document.getElementById('eb').textContent = 'Almost there';
+    document.getElementById('h').textContent = 'Your payment is in. We are opening your account.';
+    document.getElementById('p').textContent = 'If this page does not update in a minute, log in with the email and password you chose. Your balance will be there.';
+    document.getElementById('login').style.display = 'block';
+  }
+  function poll() {
+    if (!sid) { waiting(); return; }
+    fetch('/site/api/signup/status?sid=' + encodeURIComponent(sid), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.paid) { done(d); return; }
+        tries += 1;
+        if (tries > 45) { waiting(); return; }
+        setTimeout(poll, 2000);
+      })
+      .catch(function () { tries += 1; if (tries > 45) { waiting(); return; } setTimeout(poll, 3000); });
+  }
+  poll();
+})();
+</script>
+</body>
+</html>
