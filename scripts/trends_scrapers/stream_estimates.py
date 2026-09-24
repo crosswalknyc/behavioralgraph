@@ -6562,6 +6562,74 @@ def _platform_daily_cap_for(slug: str) -> int:
     return 0
 
 
+def _write_platform_reading(researched: dict, row: dict, slug: str,
+                             new_value: int, salt: str,
+                             target_date_iso: str = '') -> bool:
+    """Give a rail row a reading for THIS service, creating whatever
+    is missing: the per-platform block, or the item itself.
+
+    `_set_platform_reading` can only move a number that already
+    exists, so a row with no block for this service, or no item at
+    all, had nowhere to put one and stayed blank no matter how many
+    times the sizing pass ran. Those two cases are most of the blank
+    cells on the board.
+
+    Returns True when the row now carries a figure.
+    """
+    new_value = max(1, int(new_value or 0))
+    if new_value <= 0:
+        return False
+    state = row.get('_state') or 'priced'
+    if state == 'priced' and isinstance(row.get('_item'), dict):
+        return _set_platform_reading(row['_item'], slug, new_value,
+                                     row.get('_key') or '', salt)
+
+    it = row.get('_item')
+    if not isinstance(it, dict):
+        # No item at all. Build the smallest one the store accepts, so
+        # the title exists to be read tomorrow as well as tonight.
+        it = {'title': row.get('title') or '',
+              'kind':  row.get('kind') or 'title',
+              'by_platform': {}}
+        if target_date_iso:
+            it['as_of_date'] = target_date_iso
+        key = row.get('_key')
+        if not key:
+            return False
+        researched[key] = it
+        row['_item'] = it
+
+    blk = _sanitize_platform_block(
+        row.get('kind') or 'title', slug,
+        {'us_estimate': new_value,
+         'us_estimate_low':  int(new_value * 0.78),
+         'us_estimate_high': int(new_value * 1.32),
+         'confidence': 'medium',
+         'note': 'sized with this service\'s catalog, below its '
+                 'published chart'},
+        title=row.get('title') or '')
+    if not isinstance(blk, dict) or not blk.get('us_estimate'):
+        return False
+    if target_date_iso:
+        blk.setdefault('as_of_date', target_date_iso)
+    bp = it.setdefault('by_platform', {})
+    if not isinstance(bp, dict):
+        bp = {}
+        it['by_platform'] = bp
+    bp[slug] = blk
+    row['_blk'] = blk
+    # The aggregate is the sum of the platform mids, so a block
+    # appearing adds its own value to it rather than replacing it.
+    for f, v in (('us_estimate', blk.get('us_estimate')),
+                 ('us_estimate_low', blk.get('us_estimate_low')),
+                 ('us_estimate_high', blk.get('us_estimate_high'))):
+        try:
+            it[f] = int(it.get(f) or 0) + int(v or 0)
+        except (TypeError, ValueError):
+            pass
+    return True
+
+
 def _set_platform_reading(it: dict, slug: str, new_value: int,
                            item_key: str, salt: str) -> bool:
     """Write one platform's reading and let the item's aggregate
@@ -6774,14 +6842,20 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
                 tail = _rail_tail_rows(researched, slug, snap,
                                         depth_sources, index)
                 over = [t for t in tail
-                        if (t['_blk'].get('us_estimate') or 0)
+                        if ((t['_blk'] or {}).get('us_estimate') or 0)
                         >= chart_floor]
-                if over:
+                blank = [t for t in tail if t.get('_state') != 'priced']
+                # Sizing runs for either reason. A rail can be
+                # perfectly contained and still be missing cells, and
+                # waiting for a breach to fix a blank is why the blank
+                # rows outlived several passes over these rails.
+                if over or blank:
                     logger.info(
                         "chart sets: %s catalog has %d of %d title(s) "
                         "reading at or above its own chart floor of "
-                        "%d; sizing the catalog as a set", slug,
-                        len(over), len(tail), chart_floor)
+                        "%d, and %d with no reading for this service "
+                        "at all; sizing the catalog as a set", slug,
+                        len(over), len(tail), chart_floor, len(blank))
                     try:
                         sized = _csr.reason_catalog_tail(
                             client, slug=slug,
@@ -6795,18 +6869,25 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
                             "chart sets: %s catalog sizing failed "
                             "(non-fatal)", slug)
                         sized = {}
-                    moved = 0
+                    moved = created = 0
                     for t in tail:
                         v = sized.get(t['title'])
-                        if isinstance(v, int) and v > 0 and \
-                                _set_platform_reading(
-                                    t['_item'], slug, v, t['_key'],
-                                    f'{target_date_iso}|catalog|{slug}'):
+                        if not (isinstance(v, int) and v > 0):
+                            continue
+                        was_blank = t.get('_state') != 'priced'
+                        if _write_platform_reading(
+                                researched, t, slug, v,
+                                f'{target_date_iso}|catalog|{slug}',
+                                target_date_iso=target_date_iso):
                             moved += 1
+                            if was_blank:
+                                created += 1
                     out['titles'] += moved
                     logger.info(
-                        "chart sets: %s catalog re-levelled %d title(s)",
-                        slug, moved)
+                        "chart sets: %s catalog re-levelled %d title(s), "
+                        "%d of which had no reading for this service "
+                        "before and would have rendered blank",
+                        slug, moved, created)
     return out
 
 
@@ -6829,17 +6910,36 @@ def _rail_tail_rows(researched: dict, slug: str, snap: dict,
             return
         key = f'{prefix}{kind}:{norm}'
         it = researched.get(key) or researched.get(f'{prefix}title:{norm}')
+        blk = (it.get('by_platform') or {}).get(slug) \
+            if isinstance(it, dict) else None
         if not isinstance(it, dict):
-            return
-        blk = (it.get('by_platform') or {}).get(slug)
-        if not isinstance(blk, dict) or not blk.get('us_estimate'):
-            return
-        out.append({'title': title, '_item': it, '_blk': blk,
+            # Nothing has ever been collected for this title. It still
+            # renders on the rail, so it still belongs to the set being
+            # sized; it just needs an item made for it first.
+            state = 'absent'
+        elif not isinstance(blk, dict) or not blk.get('us_estimate'):
+            # Collected, but never priced for THIS service.
+            state = 'unpriced'
+        else:
+            state = 'priced'
+        out.append({'title': title, 'kind': kind, '_state': state,
+                    '_item': it if isinstance(it, dict) else None,
+                    '_blk': blk if isinstance(blk, dict) else None,
                     '_key': key})
 
     for title, kind in _published_rail_rows(slug, snap, depth_sources):
         _push(title, kind)
-    out.sort(key=lambda t: -(t['_blk'].get('us_estimate') or 0))
+    # Priced rows first, tallest to shortest, then the rows with no
+    # number yet.
+    #
+    # This used to drop the last two states on the floor, which is
+    # what a blank cell on the board actually is: the row renders, the
+    # sizing pass never sees it, and nothing ever gives it a figure.
+    # Dead Mail sat at the bottom of Lionsgate+ that way. Carrying
+    # them through means the set being reasoned about is the set the
+    # reader is looking at.
+    out.sort(key=lambda t: (t['_state'] != 'priced',
+                            -((t['_blk'] or {}).get('us_estimate') or 0)))
     return out
 
 

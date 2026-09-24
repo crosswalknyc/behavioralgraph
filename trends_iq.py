@@ -7817,7 +7817,8 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
     `asof` is the day being VIEWED. Every block this pass rewrites is
     stamped with it, so a historic read does not come back wearing
     today's date."""
-    stats = {'checked': 0, 'corrected': 0, 'by_source': {}, 'rows': []}
+    stats = {'checked': 0, 'corrected': 0, 'withheld': 0,
+             'by_source': {}, 'rows': []}
     dist = _coverage_baselines_from_estimates(stream_snap)
     today_iso = asof or _today_iso()
     # One title on one rail is one number, decided once and applied to
@@ -7876,6 +7877,19 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
 
         cached = decided.get((platform, _cp_normalize(title)))
         if cached is None:
+            # Nothing was ever read for this title on this service, so
+            # there is no number this row is entitled to show.
+            #
+            # Returning here is what put Sicario's Prime Video reading
+            # on HBO Max: the pass found the row, agreed it was
+            # foreign, could not find a replacement, and left the
+            # foreign number sitting there. "Correct it if I can,
+            # otherwise leave it" is not the rule. The rule is a
+            # reading for this service, its own last reading, or
+            # nothing, and an empty cell is the honest third option.
+            it.pop('us_streams', None)
+            stats['checked'] += 1
+            stats['withheld'] = stats.get('withheld', 0) + 1
             return
         val, prev_val, prev_day, direction, delta, source, method = cached
 
@@ -7930,19 +7944,17 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
                 method = ("this title's own most recent reading on this "
                           'service, moved to today')
             else:
-                base = _coverage_pick_from_dist(dist, kind, rank_pos,
-                                                 list_len, platform)
-                val = _coverage_jitter(title, f'{kind}|{platform}', base)
-                # `_coverage_jitter` still forces a 1-9 last digit,
-                # which is the ban the 2026-09-09 amendment retired
-                # because a corpus with no zeros is its own tell. Re-
-                # draw the trailing digits naturally, as every other
-                # count on the board does.
-                val = _natural_digits_for(val, title, f'{platform}|{kind}')
-                prev_val, prev_day = 0, ''
-                direction, delta = 'new', 0.0
-                source = 'rail_tier'
-                method = 'first reading for this title on this service'
+                # No reading for this service, ever. There is nothing
+                # left that is allowed to fill the cell.
+                #
+                # This used to reach for a figure derived from the
+                # row's place on the rail. A position is not a
+                # reading: it says a title sits 14th, not how many
+                # people watched it, and dressing one up as the other
+                # is how a service rail ends up describing its own
+                # ordering back to itself. The row gets nothing, and
+                # `_fix` blanks it.
+                continue
             if val > 0:
                 decided[(platform, _cp_normalize(title))] = (
                     val, prev_val, prev_day, direction, delta, source,
@@ -7980,6 +7992,11 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
                     _walk(node, root, fn)
     except Exception:
         logger.exception("service provenance pass failed (non-fatal)")
+    if stats.get('withheld'):
+        logger.info("service provenance: %d row(s) had no reading of "
+                    "their own for their service and were emptied "
+                    "rather than left showing another service's",
+                    stats['withheld'])
     if stats['corrected']:
         for path, title, plat, was, now, src in stats['rows'][:20]:
             logger.info("service provenance: %s '%s' on %s %s -> %s (%s)",
@@ -7991,6 +8008,73 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict,
                     ', '.join(f'{k}={v}'
                               for k, v in sorted(stats['by_source'].items())))
     return stats
+
+
+def _audit_orphan_rows(cards: dict) -> dict:
+    """Count rows rendering a number that was never read for the
+    service whose rail they sit on.
+
+    This runs LAST, on the tree the reader actually gets, because
+    every earlier pass believed it had already handled this. Twenty
+    one of these were found by hand the morning after the pass that
+    was supposed to have closed them; a count in the payload makes
+    the next regression visible the same night.
+
+    A row is an orphan when it carries a figure and either still
+    wears the cross-service mark or names a different service than
+    the rail it is on. Derived rails are exempt: their whole job is
+    to be computed from a parent.
+    """
+    out = {'rows': 0, 'by_rail': {}, 'examples': []}
+
+    def _check(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, (dict, list)):
+                    _check(v, f'{path}.{k}' if path else k)
+            return
+        if not isinstance(node, list):
+            return
+        for x in node:
+            if not isinstance(x, dict):
+                continue
+            blk = x.get('us_streams')
+            if isinstance(blk, dict) and (blk.get('us_estimate') or 0):
+                platform = _coverage_platform_for_path(path)
+                if platform and not _is_derived_rail(platform):
+                    named = blk.get('platform')
+                    if (blk.get('est_basis') == 'cross_service'
+                            or (named and named != platform)):
+                        out['rows'] += 1
+                        out['by_rail'][platform] = \
+                            out['by_rail'].get(platform, 0) + 1
+                        if len(out['examples']) < 12:
+                            out['examples'].append(
+                                (platform, _coverage_item_title(x),
+                                 named or 'unattributed',
+                                 int(blk.get('us_estimate') or 0)))
+            _check(x, path)
+
+    try:
+        for root in _CAP_PASS_ROOTS:
+            node = (cards or {}).get(root)
+            if isinstance(node, (dict, list)):
+                _check(node, root)
+    except Exception:
+        logger.exception("orphan audit failed (non-fatal)")
+        return out
+    if out['rows']:
+        for plat, title, named, val in out['examples']:
+            logger.warning("orphan row: '%s' on %s shows %s taken for %s",
+                           title, plat, f'{val:,}', named)
+        logger.warning("orphan rows: %d row(s) render a figure never read "
+                       "for their own service (%s)", out['rows'],
+                       ', '.join(f'{k}={v}'
+                                 for k, v in sorted(out['by_rail'].items())))
+    else:
+        logger.info("orphan rows: none, every row shows a reading taken "
+                    "for its own service")
+    return out
 
 
 def _enforce_platform_caps(cards: dict,
@@ -12925,6 +13009,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         _enforce_platform_caps(payload['cards'], asof=asof)
     except Exception as e:
         logger.warning("platform cap pass failed: %s", e)
+    # Last word on provenance, measured on the tree the reader gets.
+    try:
+        payload['meta']['orphan_rows'] = _audit_orphan_rows(payload['cards'])
+    except Exception as e:
+        logger.warning("orphan audit failed: %s", e)
 
     # A rail that is one distribution path through another rail's
     # service is recomputed from that rail here, after everything that
