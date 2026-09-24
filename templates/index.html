@@ -21800,7 +21800,11 @@ https://www.instagram.com/p/..."></textarea>
         }
         #prometheusWidget {
             position: fixed; right: 22px; bottom: 22px; width: 480px;
-            height: min(680px, calc(100vh - 120px));
+            /* 2026-09-24 (Jenna: 'make the prometheus window taller.
+               it's too short so you cant see anything'): the default
+               fills the viewport minus a slim margin, capped at 880px
+               on very tall screens. */
+            height: min(880px, calc(100vh - 90px));
             /* The drag-resize handles cap at 94% of the viewport in either
                direction, so the ceiling here has to match. It used to
                reserve 420px of height, which on a normal screen left the
@@ -75708,8 +75712,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) {}
                 try {
                     var s = JSON.parse(localStorage.getItem(SKEY) || 'null');
-                    if (s && s.w >= 360 && s.h >= 440) {
-                        w.style.width = s.w + 'px'; w.style.height = s.h + 'px';
+                    if (s && s.w >= 360) {
+                        w.style.width = s.w + 'px';
+                        // Saved heights under 620px are stale short
+                        // drags from the pre-2026-09-24 default; the
+                        // window opens at the taller default instead.
+                        // A fresh drag-resize still saves and restores.
+                        if (s.h >= 620) w.style.height = s.h + 'px';
                     }
                 } catch (_) {}
                 _applyPos(l, LKEY);
