@@ -46124,34 +46124,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // still applies to these rows if it was set on another
                 // view; its chips live on the four views that have them.
 
-                // Channel + paid/organic filters.
-                html += '<div class="iiq-card" style="padding:0.55rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem;">';
-                html +=   '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600;">Cut by</div>';
-                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
-                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Platform</label>';
-                html +=     '<select onchange="window.iiqJrnSetChannel(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
-                html +=       '<option value=""' + (!chanSel ? ' selected' : '') + '>All platforms</option>';
+                // Channel + paid/organic filters. Built here, where the
+                // counts are, but emitted under the asset picker so the two
+                // control rows sit together. On an empty result it goes out
+                // right away: cutting to nothing must not take away the
+                // control that undoes it.
+                var cutByHtml = '';
+                cutByHtml += '<div class="iiq-card" style="padding:0.55rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem;">';
+                cutByHtml +=   '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600;">Cut by</div>';
+                cutByHtml +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                cutByHtml +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Platform</label>';
+                cutByHtml +=     '<select onchange="window.iiqJrnSetChannel(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                cutByHtml +=       '<option value=""' + (!chanSel ? ' selected' : '') + '>All platforms</option>';
                 channels.forEach(function(ch) {
-                    html += '<option value="' + escapeHtml(ch) + '"' + (chanSel === ch ? ' selected' : '') + '>' + escapeHtml(ch) + '</option>';
+                    cutByHtml += '<option value="' + escapeHtml(ch) + '"' + (chanSel === ch ? ' selected' : '') + '>' + escapeHtml(ch) + '</option>';
                 });
-                html +=     '</select>';
-                html +=   '</div>';
-                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
-                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
+                cutByHtml +=     '</select>';
+                cutByHtml +=   '</div>';
+                cutByHtml +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                cutByHtml +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
                 var _iiqJrnHasEarned = iiqHasEarned(assetsAll);
-                html +=     '<select onchange="window.iiqJrnSetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
-                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>' + (_iiqJrnHasEarned ? 'Paid + Organic + Earned' : 'Paid + Organic') + '</option>';
-                html +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
-                html +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
+                cutByHtml +=     '<select onchange="window.iiqJrnSetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                cutByHtml +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>' + (_iiqJrnHasEarned ? 'Paid + Organic + Earned' : 'Paid + Organic') + '</option>';
+                cutByHtml +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
+                cutByHtml +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
                 if (_iiqJrnHasEarned) {
-                    html +=   '<option value="earned"' + (paidSel === 'earned' ? ' selected' : '') + '>Earned</option>';
+                    cutByHtml +=   '<option value="earned"' + (paidSel === 'earned' ? ' selected' : '') + '>Earned</option>';
                 }
-                html +=     '</select>';
-                html +=   '</div>';
-                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); margin-left:auto;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
-                html += '</div>';
+                cutByHtml +=     '</select>';
+                cutByHtml +=   '</div>';
+                cutByHtml +=   '<div style="font-size:0.7rem; color: var(--text-secondary); margin-left:auto;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
+                cutByHtml += '</div>';
 
                 if (!rows.length) {
+                    html += cutByHtml;
                     html += '<div class="iiq-empty">No assets match the current filters. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset(); window.iiqJrnSetChannel(\'\'); window.iiqJrnSetPaid(\'\');" style="color:#22d3ee;">Reset filters</a>.</div>';
                     return html;
                 }
@@ -46213,6 +46219,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html +=     '</select>';
                 html +=   '</div>';
                 html += '</div>';
+
+                html += cutByHtml;
 
                 // ===== Per-asset BEFORE + AFTER detail =====
                 if (pickedPhase) {
