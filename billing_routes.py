@@ -2391,6 +2391,48 @@ def _stamp_related_stripe_ids(txn: dict, refs, *, primary: str):
             txn["stripe_checkout_session"] = r
 
 
+def _card_from_stripe_object(obj: dict, rec: dict) -> dict:
+    """Resolve the card used on a Checkout / PaymentIntent.
+
+    Checkout.session.completed sends payment_intent as a STRING id.
+    persist_card_from_charge retrieves it, attaches the PM as the
+    customer default, and returns {id, last4, brand}. Never raises.
+    """
+    obj = obj if isinstance(obj, dict) else {}
+    rec = rec if isinstance(rec, dict) else {}
+    try:
+        import billing  # type: ignore
+        oid = str(obj.get("id") or "")
+        return billing.persist_card_from_charge(
+            customer_id=str(
+                obj.get("customer")
+                or rec.get("stripe_customer_id") or ""),
+            payment_method=obj.get("payment_method"),
+            payment_intent=(
+                obj if oid.startswith("pi_")
+                else obj.get("payment_intent")),
+            checkout_session_id=oid if oid.startswith("cs_") else "",
+        ) or {}
+    except Exception as e:
+        print(f"[billing] card persist skipped (non-fatal): {e}")
+        return {}
+
+
+def _write_saved_card(rec: dict, display: dict) -> bool:
+    """Stamp brand / last4 / pm id onto the billed subject."""
+    if not isinstance(rec, dict):
+        return False
+    pm_id = str((display or {}).get("id") or "").strip()
+    if not pm_id:
+        return False
+    rec["stripe_payment_method_id"] = pm_id
+    rec["stripe_payment_method_last4"] = str(
+        display.get("last4") or "")
+    rec["stripe_payment_method_brand"] = str(
+        display.get("brand") or "")
+    return True
+
+
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
     md = obj.get("metadata") or {}
@@ -2422,17 +2464,13 @@ def _handle_checkout_session_completed(event: dict):
     # report the fresh balance (not a stale pre-mutation read).
     credited = {"new_balance": 0.0, "rec_snapshot": None, "skipped": False}
 
+    # Resolve the card OUTSIDE the CAS mutator (Stripe retrieve can
+    # be slow). Write the ids inside _apply so a skipped-duplicate
+    # still saves the card when the first event only landed dollars.
+    card_display = _card_from_stripe_object(obj, subject)
+
     def _apply(rec):
-        # If a card was captured in this checkout, persist the id so
-        # future auto-reload works without a separate SetupIntent
-        # (this is why we set setup_future_usage='off_session' when
-        # creating the session). Do this even when the dollars already
-        # landed via payment_intent.succeeded.
-        pi = obj.get("payment_intent")
-        if isinstance(pi, dict) and pi.get("payment_method"):
-            pm_id = str(pi.get("payment_method") or "")
-            if pm_id and not rec.get("stripe_payment_method_id"):
-                rec["stripe_payment_method_id"] = pm_id
+        _write_saved_card(rec, card_display)
         if _already_credited(rec, refs):
             credited["skipped"] = True
             credited["new_balance"] = float(
@@ -2530,7 +2568,13 @@ def _handle_payment_intent_succeeded(event: dict):
     # Post-mutation snapshot for the receipt email (fresh balance).
     credited = {"new_balance": 0.0, "rec_snapshot": None, "skipped": False}
 
+    # Same card persist as checkout.session.completed. A PI that
+    # lands first (before the session event) must still save the
+    # card on the billed subject so auto-reload can fire.
+    card_display = _card_from_stripe_object(obj, subject)
+
     def _apply(rec):
+        _write_saved_card(rec, card_display)
         if _already_credited(rec, refs):
             credited["skipped"] = True
             credited["new_balance"] = float(
@@ -3308,9 +3352,13 @@ def public_pay_success(token):
         "pay_link.html", ok=False, paid=True,
         headline="Thank you. Your payment went through.",
         subline=("The funds are on their way to "
-                 f"{rec.get('display_name')}'s account."
+                 f"{rec.get('display_name')}'s account. "
+                 "The card used on this payment is saved so the "
+                 "account can reload automatically."
                  if rec and rec.get("display_name") else
-                 "The funds are on their way to the account."),
+                 "The funds are on their way to the account. "
+                 "The card used on this payment is saved so the "
+                 "account can reload automatically."),
         token="")
 
 

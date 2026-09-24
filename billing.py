@@ -29,6 +29,7 @@ Public surface:
   refund_payment(payment_intent_id, amount_usd=None, reason='')
                         -> {id, status, amount_refunded_usd}
   detach_payment_method(payment_method_id) -> {id, detached}
+  persist_card_from_charge(...) -> {id, last4, brand}
   verify_webhook(payload_bytes, signature_header) -> event_dict
 
 None of these touch users.json directly. Callers wire them into
@@ -287,6 +288,142 @@ def detach_payment_method(payment_method_id: str) -> dict:
     return {"id": pm.id, "detached": True}
 
 
+def _stripe_id(val) -> str:
+    """id from a Stripe object, expanded dict, or bare string."""
+    if isinstance(val, dict):
+        return str(val.get("id") or "").strip()
+    if val is None:
+        return ""
+    oid = getattr(val, "id", None)
+    if oid:
+        return str(oid).strip()
+    return str(val).strip()
+
+
+def _card_display_from_pm(pm) -> dict:
+    """{id, last4, brand} from a PaymentMethod object or dict."""
+    if pm is None:
+        return {}
+    pm_id = _stripe_id(pm)
+    if not pm_id:
+        return {}
+    card = getattr(pm, "card", None)
+    if card is None and isinstance(pm, dict):
+        card = pm.get("card")
+    last4 = ""
+    brand = ""
+    if card is not None:
+        if isinstance(card, dict):
+            last4 = str(card.get("last4") or "")
+            brand = str(card.get("brand") or "")
+        else:
+            last4 = str(getattr(card, "last4", "") or "")
+            brand = str(getattr(card, "brand", "") or "")
+    return {"id": pm_id, "last4": last4, "brand": brand}
+
+
+def persist_card_from_charge(*, customer_id: str = "",
+                             payment_method=None,
+                             payment_intent=None,
+                             checkout_session_id: str = "") -> dict:
+    """Attach the card used on a Checkout / PaymentIntent to the
+    Stripe customer and return {id, last4, brand}.
+
+    Hosted Checkout (Add Funds + admin payment links) fires
+    checkout.session.completed with payment_intent as a STRING id,
+    not an expanded object. The webhook used to only read a dict,
+    so the card never landed on the billed subject and auto-reload
+    could not fire. This helper retrieves the PI (and the session
+    if needed), attaches the PaymentMethod as the customer default,
+    and returns display fields.
+
+    Fail-safe: returns {} on any Stripe / config miss so a webhook
+    can still credit dollars even if card persist fails.
+    """
+    if not is_enabled():
+        return {}
+    try:
+        s = _stripe()
+    except BillingDisabled:
+        return {}
+    try:
+        pm_id = _stripe_id(payment_method)
+        pi_id = _stripe_id(payment_intent)
+        cs_id = str(checkout_session_id or "").strip()
+        cus_id = _stripe_id(customer_id)
+        display: dict = {}
+
+        if not pm_id and isinstance(payment_intent, dict):
+            pm_id = _stripe_id(payment_intent.get("payment_method"))
+            if not cus_id:
+                cus_id = _stripe_id(payment_intent.get("customer"))
+
+        if not pm_id and pi_id:
+            pi = s.PaymentIntent.retrieve(
+                pi_id, expand=["payment_method"])
+            pm_obj = getattr(pi, "payment_method", None)
+            if isinstance(pm_obj, str):
+                pm_id = pm_obj.strip()
+            else:
+                display = _card_display_from_pm(pm_obj)
+                pm_id = display.get("id") or ""
+            if not cus_id:
+                cus_id = _stripe_id(getattr(pi, "customer", None))
+
+        if not pm_id and cs_id:
+            sess = s.checkout.Session.retrieve(
+                cs_id, expand=["payment_intent.payment_method"])
+            if not cus_id:
+                cus_id = _stripe_id(getattr(sess, "customer", None))
+            pi = getattr(sess, "payment_intent", None)
+            if isinstance(pi, str):
+                pi_id = pi.strip()
+            elif pi is not None:
+                pm_obj = getattr(pi, "payment_method", None)
+                if isinstance(pm_obj, str):
+                    pm_id = pm_obj.strip()
+                else:
+                    display = _card_display_from_pm(pm_obj)
+                    pm_id = display.get("id") or ""
+                if not cus_id:
+                    cus_id = _stripe_id(getattr(pi, "customer", None))
+
+        if not pm_id and cus_id:
+            listed = s.PaymentMethod.list(
+                customer=cus_id, type="card", limit=1)
+            data = list(getattr(listed, "data", None) or [])
+            if data:
+                display = _card_display_from_pm(data[0])
+                pm_id = display.get("id") or ""
+
+        if not pm_id:
+            return {}
+
+        if cus_id:
+            try:
+                attached = attach_payment_method(cus_id, pm_id)
+                if attached.get("id"):
+                    return {
+                        "id": attached["id"],
+                        "last4": attached.get("last4") or "",
+                        "brand": attached.get("brand") or "",
+                    }
+            except Exception:
+                # Already attached, or Stripe refused a re-attach.
+                # Still return display from a retrieve.
+                pass
+
+        if display.get("id") == pm_id and (
+                display.get("last4") or display.get("brand")):
+            return display
+        pm = s.PaymentMethod.retrieve(pm_id)
+        return _card_display_from_pm(pm)
+    except Exception as e:
+        print(f"[billing] persist_card_from_charge failed "
+              f"(non-fatal): {e}")
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # One-time prepay top-up (Checkout Session)
 # ---------------------------------------------------------------------------
@@ -337,10 +474,15 @@ def create_checkout_session(customer_id: str, amount_usd: float,
         success_url=success_url,
         cancel_url=cancel_url,
         metadata=md,
-        payment_intent_data={"metadata": md},
-        # Save the card in this checkout to the customer so future
-        # auto-reload works without a separate SetupIntent step.
-        # Applies only when the checkout mode == 'payment'.
+        # Save the card on this customer so auto-reload can charge
+        # it later without a separate SetupIntent. Checkout webhooks
+        # send payment_intent as a STRING id, so persist_card_from_charge
+        # retrieves the PI and writes brand / last4 onto the billed
+        # subject. Both knobs must agree: off_session.
+        payment_intent_data={
+            "metadata": md,
+            "setup_future_usage": "off_session",
+        },
         payment_method_options={
             "card": {"setup_future_usage": "off_session"},
         },
