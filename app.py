@@ -3884,6 +3884,38 @@ def caa_budget_page():
     resp.headers.update(headers)
     return resp
 
+
+@app.route('/wbd', methods=['GET', 'POST'])
+@app.route('/wbd/', methods=['GET', 'POST'])
+def wbd_budget_page():
+    """Password-gated WBD annual-value model. No dashboard login required."""
+    import wbd_gate as _wbd
+    headers = {'X-Robots-Tag': 'noindex, nofollow, noarchive'}
+    if request.method == 'POST':
+        if _wbd.password_ok(request.form.get('password') or ''):
+            resp = redirect('/wbd')
+            resp.set_cookie(
+                _wbd.COOKIE_NAME,
+                _wbd.cookie_token(app.secret_key),
+                max_age=_wbd.COOKIE_MAX_AGE,
+                httponly=True,
+                secure=bool(request.is_secure),
+                samesite='Lax',
+                path='/wbd',
+            )
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(render_template('wbd_gate.html', error=True), 401)
+        resp.headers.update(headers)
+        return resp
+    if _wbd.cookie_ok(request.cookies.get(_wbd.COOKIE_NAME), app.secret_key):
+        resp = make_response(render_template('wbd_budget.html'), 200)
+        resp.headers.update(headers)
+        return resp
+    resp = make_response(render_template('wbd_gate.html', error=False), 200)
+    resp.headers.update(headers)
+    return resp
+
 # ============================================================================
 # DESKTOP APP DOWNLOAD
 # ----------------------------------------------------------------------------
