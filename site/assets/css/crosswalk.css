@@ -403,13 +403,15 @@ h1, h2, h3, p { margin: 0; }
 .dash-tabs span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3-d); padding: 10px 0 9px; border-bottom: 2px solid transparent; }
 .dash-tabs span.on { color: var(--off); border-bottom-color: var(--green); }
 .dash-body { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; padding: 22px 18px 20px; }
+.dash-body > div { min-width: 0; }
 .dash-body .eyebrow { margin-bottom: 14px; font-size: 10px; }
 .dash-body .subj { font-size: 40px; font-weight: 800; letter-spacing: -0.035em; line-height: 0.95; }
 .dash-body .read { color: var(--green); font-weight: 700; font-size: 17px; margin: 18px 0 22px; letter-spacing: -0.01em; }
-.dash-body .stats { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.dash-body .stats { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 14px; }
+.dash-body .stat .fig { white-space: nowrap; }
 .dash-body .stat .lab { font-size: 9px; margin-bottom: 6px; }
-.dash-body .stat .fig { font-size: 26px; }
-.dash-side { border-radius: 10px; background: var(--graphite); border: 1px solid var(--rule-d); padding: 16px; }
+.dash-body .stat .fig { font-size: 24px; letter-spacing: -0.03em; }
+.dash-side { min-width: 0; overflow: hidden; border-radius: 10px; background: var(--graphite); border: 1px solid var(--rule-d); padding: 16px; }
 .dash-side .bar { grid-template-columns: 92px 1fr 44px; font-size: 12px; gap: 10px; }
 .dash-side .bar .track { height: 8px; }
 .dash-side .rank .r { grid-template-columns: 22px 1fr auto; font-size: 12px; padding: 7px 0; }

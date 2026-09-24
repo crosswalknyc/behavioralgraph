@@ -31,6 +31,9 @@ PAGES = {
     "profile-iq.html": "profile-iq.html",
     "subscriber-iq.html": "subscriber-iq.html",
     "digital-journey-iq.html": "digital-journey-iq.html",
+    "attribution-iq.html": "attribution-iq.html",
+    "brand-partnership-iq.html": "brand-partnership-iq.html",
+    "flywheel-iq.html": "flywheel-iq.html",
     "trends-iq.html": "trends-iq.html",
     "ranker-iq.html": "ranker-iq.html",
     "fin-iq.html": "fin-iq.html",
@@ -55,7 +58,7 @@ IMAGES = ["panelist.jpg", "hero.jpg", "about.jpg"]
 META = {
     "index.html": ("Crosswalk | Ask any audience question in plain English.",
                    "Prometheus answers from 30 million opted-in people and their entire digital life. Who they are, what they watch, what they buy, where they signed up, and what they did yesterday."),
-    "products.html": ("Crosswalk | Products", "Six reports, one for each kind of question. Profile IQ, Subscriber IQ, Digital Journey IQ, Trends IQ, Ranker IQ, Fin IQ."),
+    "products.html": ("Crosswalk | Products", "Nine reports, one for each kind of question. Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ."),
     "panel.html": ("Crosswalk | The panel", "30 million people chose to be counted. How the opted-in panel works and what clients receive."),
     "company.html": ("Crosswalk | Company", "Crosswalk Technologies, Inc. Who we work with, how we write the numbers, The Read, and how to reach us."),
 }
@@ -107,11 +110,12 @@ SIGNUP_HTML = """<!DOCTYPE html>
     </div>
     <div class="ledger">
       <div class="li"><b>Profile IQ</b><span class="p">$300</span></div>
-      <div class="li"><b>Ranker IQ</b><span class="p">$300</span></div>
+      <div class="li"><b>Flywheel IQ</b><span class="p">$300</span></div>
       <div class="li"><b>Subscriber IQ</b><span class="p">$500</span></div>
       <div class="li"><b>Digital Journey IQ</b><span class="p">$500</span></div>
-      <div class="li"><b>Fin IQ</b><span class="p">$500</span></div>
-      <div class="li"><b>Trends IQ</b><span class="p">Included</span></div>
+      <div class="li"><b>Brand Partnership IQ</b><span class="p">$500</span></div>
+      <div class="li"><b>Attribution IQ</b><span class="p">$500 setup, $100 per day in flight</span></div>
+      <div class="li"><b>Trends IQ, Rankers IQ, Fin IQ</b><span class="p">Included</span></div>
       <div class="li"><b>Chat with Prometheus</b><span class="p">about $0.15 to $0.84 per question</span></div>
       <div class="li" style="padding-top:10px;border-top:1px solid var(--rule-d)"><b>Top up</b><span class="p">$5,000 when the balance reaches $500</span></div>
     </div>
