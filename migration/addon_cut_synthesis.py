@@ -177,6 +177,61 @@ def _norm_bucket(pin_category: str, label) -> str:
     return s.upper()
 
 
+def _resolve_location_buckets(df_source, cut_def: dict) -> dict:
+    """DMA pin labels resolve against the parent's ACTUAL market rows
+    (2026-09-24 Jenna: 'tighten it up so that it realizes the dma name
+    match against orlando').
+
+    A cut asked as 'Orlando Fl' must bind the parent's row 'Orlando
+    Daytona Beach Melbourne Fl' - market rows carry the full Nielsen
+    DMA name while asks carry the city + state. Resolution per
+    requested bucket:
+      1. exact uppercase match (unchanged fast path);
+      2. token containment: every requested token appears in exactly
+         ONE market row's token set.
+    Zero matches or an ambiguous containment RAISES loudly - a silent
+    no-match shipped the chiropractic package without its Orlando cut
+    on 2026-09-23. Non-LOCATION cuts pass through untouched."""
+    try:
+        if str(cut_def.get("pin_category") or "").strip().upper() \
+                != "LOCATION":
+            return cut_def
+        buckets = [str(b).strip() for b in
+                   (cut_def.get("pin_buckets") or []) if str(b).strip()]
+        if not buckets:
+            return cut_def
+        cats = df_source["Column"].astype(str).str.upper().str.strip()
+        rows = [str(v).strip() for v in
+                df_source[cats == "LOCATION"]["Value"].astype(str)
+                .tolist() if str(v).strip()]
+    except Exception:
+        return cut_def
+    row_toks = {r: set(r.upper().replace("-", " ").split())
+                for r in rows}
+    resolved = []
+    for want in buckets:
+        wu = want.upper()
+        exact = [r for r in rows if r.upper() == wu]
+        if exact:
+            resolved.append(exact[0])
+            continue
+        wt = set(wu.replace("-", " ").split())
+        hits = [r for r, ts in row_toks.items() if wt and wt <= ts]
+        if len(hits) == 1:
+            print(f"[addon-cut] LOCATION pin {want!r} resolved to "
+                  f"parent market row {hits[0]!r}")
+            resolved.append(hits[0])
+            continue
+        raise RuntimeError(
+            f"LOCATION pin {want!r} matches {len(hits)} market rows on "
+            f"the parent"
+            + (f" ({', '.join(hits[:4])})" if hits else "")
+            + "; name the market the way the file carries it")
+    out = dict(cut_def)
+    out["pin_buckets"] = resolved
+    return out
+
+
 def _pin_shares_from_source(df_source, pin_category: str,
                             pin_buckets: list) -> tuple:
     """Returns (cohort_fraction, {bucket_label: source_bp}).
@@ -562,6 +617,363 @@ def _promote_unpinned_pin_cut(df_source, cut_def: dict) -> tuple:
                       f"{cat} pin {row_lbl!r}")
 
 
+# =============================================================================
+# Behavioral cut ceilings (Jenna 2026-09-08)
+#
+# Verbatim: "and it would need to ensure the sample size never
+# outnumbers the number of followers does that make sense" plus "and
+# external like you cant say 6m for instagram cut but the actual
+# account only has 5m followwers it cant be make sense".
+#
+# Two invariants that MUST both hold for a behavioral cut sized off a
+# specific brand / platform (e.g. "TikTok users", "Instagram viewers",
+# "Costco members"):
+#
+#   1. INTERNAL: the cut's people count can't exceed the parent's own
+#      audience for that brand. If the parent reads 48% Instagram,
+#      max cohort_fraction is 0.48 (48% of the parent).
+#
+#   2. EXTERNAL: the cut's US projection can't exceed the brand's
+#      real-world US audience. Instagram creator with 5M followers
+#      can't have a 6M-projection Instagram cut. Instagram platform
+#      with ~130M US MAU can't have a 200M-projection cut of a
+#      100M-parent.
+#
+# Internal is deterministic (read the parent's own BP for the matched
+# row). External is a small Claude web_search call, fail-safe: if it
+# fails or the brand can't be identified, only the internal ceiling
+# applies. The final cohort_fraction is MIN of (Phase 1 reasoned,
+# internal ceiling, external ceiling), with a subject-salted downward
+# jitter so we sit strictly under the ceiling (no rule-1 pinning).
+# =============================================================================
+def _flat_norm(s) -> str:
+    """Alphanumeric-only casefolded normalizer for brand matching."""
+    return re.sub(r"[^a-z0-9]", "", str(s or "").casefold())
+
+
+def _extract_brand_from_behavioral_label(cut_def: dict) -> str:
+    """Return the brand token(s) from a behavioral cut label, or ''.
+
+    Strips leading determiners ('the'), behavioral nouns ('users',
+    'viewers', 'fans', ...), and joining prepositions ('who', 'that',
+    'of', ...). Leftover content-bearing tokens are joined with a
+    space and returned. Empty string when nothing looks like a brand
+    (e.g. label was pure behavior words like 'Avid Fans').
+
+    Examples:
+        'TikTok users'                 -> 'tiktok'
+        'Instagram Viewers'            -> 'instagram'
+        'Costco members'               -> 'costco'
+        'Netflix Subscribers'          -> 'netflix'
+        'People who use TikTok'        -> 'tiktok'
+        'Nike shoppers'                -> 'nike'
+        'Digital Purchasers'           -> 'digital purchasers'  # no
+                                        # brand; internal lookup will
+                                        # miss and skip the ceiling
+    """
+    label = str(cut_def.get("name_label")
+                or cut_def.get("label") or "").strip()
+    if not label:
+        return ""
+    _STOP = {
+        "the", "a", "an", "of", "for", "on", "in", "at", "to", "by",
+        "and", "or", "who", "that", "which", "with", "using",
+        "people", "audience", "audiences", "cohort", "cohorts",
+        "cut", "cuts", "cutting", "segment", "segments",
+        "just", "only",
+        # common activity verbs used in "who X <brand>" phrasing.
+        # These normalize "People who use TikTok" -> "tiktok".
+        "use", "uses", "used",
+        "watch", "watches", "watched",
+        "stream", "streams", "streamed",
+        "shop", "shops", "shopped",
+        "buy", "buys", "bought",
+        "listen", "listens", "listened",
+        "rent", "rents", "rented",
+        "read", "reads",
+        "drive", "drives", "drove",
+        "own", "owns", "owned",
+        "subscribe", "subscribes", "subscribed",
+        "follow", "follows", "followed",
+        "attend", "attends", "attended",
+        "visit", "visits", "visited",
+    }
+    toks = [t for t in re.split(r"[^a-z0-9]+", label.casefold()) if t]
+    kept = [t for t in toks
+            if t not in _STOP and t not in _BEHAVIORAL_LABEL_WORDS]
+    return " ".join(kept).strip()
+
+
+def _find_parent_brand_ceiling(df_source, brand_query: str,
+                               subject: str) -> tuple:
+    """(ceiling_cf, canonical_brand, category, matched_bp) from parent.
+
+    Case + punctuation insensitive match of `brand_query` against
+    every brand row in df_source (Column != BRAND INPUT / SAMPLE SIZE
+    / SUBJECT / BRAND CATEGORY / demo categories). When the brand
+    appears in multiple categories (rule 3b mirrors, or SPORTS TEAM +
+    league), the highest BP is authoritative - a lower mirror value
+    is a data drift, not a real second cap.
+
+    ceiling_cf = matched_bp / 100 (cohort_fraction upper bound).
+    Returns (None, '', '', 0.0) when no match.
+    """
+    if not brand_query:
+        return None, "", "", 0.0
+    q_flat = _flat_norm(brand_query)
+    if len(q_flat) < 3:
+        return None, "", "", 0.0
+
+    cat_col, val_col = "Column", "Value"
+    try:
+        bp_col, _, _, _ = _detect_cols(df_source)
+    except Exception:
+        return None, "", "", 0.0
+
+    _SKIP_CATS = {
+        "", "BRAND INPUT", "SAMPLE SIZE", "SUBJECT", "BRAND CATEGORY",
+        "INPUT_METADATA", "GENDER", "AGE", "ETHNICITY", "EDUCATION",
+        "INCOME", "OCCUPATION", "PARENTAL STATUS", "PARENTAL_STATUS",
+        "RELATIONSHIP", "SEXUAL ORIENTATION", "SEXUAL_ORIENTATION",
+        "LOCATION", "AVID FAN",
+    }
+    subj_flat = _flat_norm(subject)
+
+    best = (0.0, "", "", "")  # (bp, canonical_value, category, flat)
+    cats_upper = df_source[cat_col].astype(str).str.upper().str.strip()
+    for idx, r in df_source.iterrows():
+        cat = str(cats_upper.iat[df_source.index.get_loc(idx)]).strip()
+        if cat in _SKIP_CATS:
+            continue
+        val = str(r.get(val_col, "")).strip()
+        if not val:
+            continue
+        val_flat = _flat_norm(val)
+        if not val_flat:
+            continue
+        # Don't let the subject's own row (100% self-pin) satisfy the
+        # ceiling - that's not a brand overlap, that's the parent
+        # itself, and a 1.00 cf gives no ceiling protection.
+        if val_flat == subj_flat:
+            continue
+        if val_flat == q_flat or q_flat in val_flat or val_flat in q_flat:
+            v = _fbp(r.get(bp_col, 0))
+            if v is None or v <= 0:
+                continue
+            # Prefer strict exact match; substring hits require the
+            # query to be at least 4 chars to avoid short-token noise
+            # (e.g. 'nba' matching 'nbacareers').
+            exact = (val_flat == q_flat)
+            if not exact and len(q_flat) < 4:
+                continue
+            score = float(v)
+            if score > best[0]:
+                best = (score, val, cat, val_flat)
+
+    if best[0] <= 0:
+        return None, "", "", 0.0
+    bp, val, cat, _ = best
+    # cohort_fraction ceiling from parent's BP (clamped to a floor of
+    # 0.005 so a laughably low-BP brand doesn't zero the cut - the
+    # phase 1 fraction still applies as an upper bound anyway).
+    cf = max(0.005, min(1.0, bp / 100.0))
+    return cf, val, cat, bp
+
+
+# Cache researched US audience counts across a single process so a
+# batch of cuts against the same brand doesn't refire the web_search
+# call. Keyed by lowercased brand.
+_EXTERNAL_BRAND_CACHE: dict = {}
+
+
+def _research_brand_us_audience(brand: str, subject: str,
+                                cut_label: str) -> tuple:
+    """(us_audience_count, source_note) from one Claude web_search
+    call, or (None, '') on any failure.
+
+    Asks for the plausible US audience count for the brand in the
+    trailing 12 months (the standing date window). For platforms this
+    reads as US MAU / reach; for creator accounts / brand accounts on
+    a platform, this reads as the account's US follower count.
+    Approved sources match the vetting framework
+    (crosswalk-audience-vetting-framework.mdc): SEC filings, earnings
+    reports, Pew, Nielsen, Statista, eMarketer, YouGov, Sensor Tower /
+    data.ai. Never-use: annual store visits, cable/satellite reach,
+    total-brand-reach figures that mix offline.
+
+    FAIL-SAFE: any exception (missing claude_client, missing tool,
+    empty response, parse error, non-numeric value) returns (None, '')
+    and the caller applies only the internal ceiling. NEVER raises.
+    """
+    if not brand:
+        return None, ""
+    key = brand.strip().lower()
+    if key in _EXTERNAL_BRAND_CACHE:
+        return _EXTERNAL_BRAND_CACHE[key]
+
+    # Opt-out env for hermetic tests / offline dev laptops. Mirrors
+    # the pattern in hostmap_gap_mapping and genpop_research_*.
+    if os.environ.get("ADDON_CUT_EXTERNAL_CEILING", "").strip() == "0":
+        _EXTERNAL_BRAND_CACHE[key] = (None, "")
+        return None, ""
+
+    try:
+        from claude_client import claude_messages  # type: ignore
+    except Exception:
+        try:
+            from migration.claude_client import claude_messages  # type: ignore # noqa
+        except Exception:
+            _EXTERNAL_BRAND_CACHE[key] = (None, "")
+            return None, ""
+
+    WEB_SEARCH_TOOL = {
+        "type": "web_search_20260209",
+        "name": "web_search",
+        "max_uses": 8,
+    }
+    WEB_SEARCH_TOOL_LEGACY = {
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": 8,
+    }
+
+    system = (
+        "You are a market-research specialist calibrating a US "
+        "audience ceiling. For the given BRAND, return the plausible "
+        "US audience count in the trailing 12 months. For platforms "
+        "return US MAU or US penetration count. For a specific "
+        "creator / talent / brand account, return the account's US "
+        "follower count. For a retail brand return active US "
+        "shoppers. Approved sources ONLY: SEC filings and earnings, "
+        "Pew, Nielsen, Statista, eMarketer, YouGov, Sensor Tower / "
+        "data.ai. Never-use: annual store visits, cable/satellite "
+        "reach, total-brand-reach that mixes offline. If the brand "
+        "is ambiguous or the value cannot be researched, return "
+        "null. STRICT JSON only, no prose."
+    )
+    user = (
+        f"BRAND: {brand}\n"
+        f"PARENT SUBJECT: {subject}\n"
+        f"CUT LABEL: {cut_label}\n\n"
+        "Return the US audience count as an integer count of PEOPLE "
+        "(not accounts, not households).\n\n"
+        "Return STRICT JSON only:\n"
+        "{\n"
+        '  "brand": "...",\n'
+        '  "us_audience_count": 129000000,\n'
+        '  "metric_class": "us_users_mau" | "us_penetration_reach" | '
+        '"us_subscribers" | "us_followers" | "us_active_shoppers" | '
+        '"proxy",\n'
+        '  "source_note": "one short sentence naming the source"\n'
+        "}\n"
+        "Return us_audience_count: null when the brand cannot be "
+        "grounded in an approved source."
+    )
+    obj = None
+    for attempt, tool in enumerate(
+            (WEB_SEARCH_TOOL, WEB_SEARCH_TOOL_LEGACY)):
+        try:
+            resp = claude_messages(
+                system=system, user=user, max_tokens=1500,
+                temperature=0.2, tools=[tool],
+            )
+            if not resp:
+                continue
+            obj = _extract_json_block(resp)
+            if isinstance(obj, dict):
+                break
+        except Exception:
+            continue
+    if not isinstance(obj, dict):
+        _EXTERNAL_BRAND_CACHE[key] = (None, "")
+        return None, ""
+    val = obj.get("us_audience_count")
+    try:
+        n = int(float(val))
+    except (TypeError, ValueError):
+        _EXTERNAL_BRAND_CACHE[key] = (None, "")
+        return None, ""
+    if n <= 0 or n > 340_000_000:
+        _EXTERNAL_BRAND_CACHE[key] = (None, "")
+        return None, ""
+    src = str(obj.get("source_note") or "").strip()
+    _EXTERNAL_BRAND_CACHE[key] = (n, src)
+    return n, src
+
+
+def _apply_behavioral_ceilings(cf: float, df_source, cut_def: dict,
+                               subject: str, old_sample: float,
+                               old_uspop: float) -> tuple:
+    """Apply the (INTERNAL, EXTERNAL) ceilings to a phase-1 cohort
+    fraction. Returns (adjusted_cf, notes_dict). Never raises. Both
+    ceilings are additive: whichever binds harder wins; when neither
+    can be computed the phase-1 value passes through unchanged.
+    """
+    notes = {"phase1_cf": cf, "internal_ceiling": None,
+             "external_ceiling": None, "final_cf": cf,
+             "brand": "", "brand_source": "", "note": ""}
+    brand_query = _extract_brand_from_behavioral_label(cut_def)
+    if not brand_query:
+        notes["note"] = "no brand token in label; ceilings skipped"
+        return cf, notes
+
+    # --- Internal ceiling (deterministic) ---
+    try:
+        int_cf, canonical, category, matched_bp = \
+            _find_parent_brand_ceiling(df_source, brand_query, subject)
+    except Exception as e:
+        int_cf, canonical, category, matched_bp = None, "", "", 0.0
+        notes["note"] = f"internal ceiling failed: {e}"
+    notes["brand"] = canonical or brand_query
+    if int_cf is not None:
+        notes["internal_ceiling"] = int_cf
+        notes["brand_source"] = f"{category} @ {matched_bp:.4f}%"
+
+    # --- External ceiling (research, fail-safe) ---
+    ext_cf = None
+    ext_note = ""
+    if old_uspop and old_uspop > 0:
+        try:
+            us_n, src = _research_brand_us_audience(
+                canonical or brand_query, subject,
+                str(cut_def.get("label") or ""))
+        except Exception as e:
+            us_n, src = None, f"failed: {e}"
+        if us_n and us_n > 0:
+            # cohort_fraction ceiling from external: the cut's US
+            # projection can't exceed us_n. new_uspop = cf * old_uspop
+            # (approx, since new_uspop scales linearly with new_sample
+            # and new_sample = cf * old_sample). So cf <= us_n /
+            # old_uspop.
+            ext_cf = max(0.005, min(1.0, us_n / float(old_uspop)))
+            ext_note = src
+    notes["external_ceiling"] = ext_cf
+    notes["external_source"] = ext_note
+
+    # Apply the tighter of the two ceilings.
+    candidates = [cf]
+    if int_cf is not None:
+        candidates.append(int_cf)
+    if ext_cf is not None:
+        candidates.append(ext_cf)
+    tight = min(candidates)
+
+    # Sit strictly under the ceiling with a subject-salted downward
+    # jitter (no rule-1 pinning; if two cuts on different subjects
+    # happen to hit the same ceiling brand they don't 4dp-collide).
+    if tight < cf:
+        salt = f"{subject}|{cut_def.get('label', '')}|behavioral_ceiling"
+        # jitter in [0.90, 0.99] of the ceiling
+        u = _seed_jitter(salt, 0.09)  # in [-0.045, +0.045]
+        final = tight * (0.945 + u)
+        final = max(0.005, min(tight, final))
+    else:
+        final = cf
+
+    notes["final_cf"] = final
+    return final, notes
+
+
 def _cohort_desc(cut_def: dict) -> str:
     return str(cut_def.get("cohort_description")
                or cut_def.get("label") or "behavioral cohort").strip()
@@ -608,6 +1020,21 @@ def reason_addon_audience(snap: dict, cut_def: dict,
             "category incidence - applied to THIS parent's demo mix. "
             "This number sizes the deliverable, so reason carefully "
             "and avoid round guesses.\n"
+            "   HARD INVARIANTS this fraction must respect:\n"
+            "   (a) INTERNAL CEILING: if the cut is defined by a "
+            "specific brand or platform (e.g. 'TikTok users', "
+            "'Instagram viewers', 'Costco members'), cohort_fraction "
+            "cannot exceed the parent's own Brand Penetration for "
+            "that brand. If the parent reads 48% Instagram, the "
+            "'Instagram users' cut cannot exceed 0.48.\n"
+            "   (b) EXTERNAL CEILING: cohort_fraction times the "
+            "parent's US Gen Pop Projection cannot exceed the "
+            "brand's real-world US audience. A creator with 5M US "
+            "followers cannot have a 6M-projection 'Instagram cut'. "
+            "A platform with 130M US MAU cannot produce a "
+            "200M-projection cut of a 100M-parent.\n"
+            "   Take the MIN of your grounded estimate and both "
+            "ceilings.\n"
             "2. How each demographic category realistically shifts "
             "inside this behavioral sub-cohort vs the parent.\n"
             "3. A 2-4 sentence persona: who these people are, how "
@@ -832,6 +1259,109 @@ def reason_category_rows_addon(subject: str, audience: dict,
                 continue
             decisions[lbl] = max(0.0001, min(99.49, round(float(nv), 4)))
     return decisions
+
+
+# =============================================================================
+# Defining-brand pin for behavioral cuts (Jenna 2026-09-08)
+# =============================================================================
+def _find_defining_brand_rows(df, brand_query: str, subject: str):
+    """Return every (idx, category, value) triple in df matching
+    brand_query, case + punctuation insensitive.
+
+    Mirrors the matching logic in _find_parent_brand_ceiling but
+    returns EVERY match rather than just the highest-BP one, so a
+    brand that lives across rule-3b mirrors (MOST PURCHASED BRANDS +
+    CPG, APP/PLATFORM + SOCIAL MEDIA companions where the hostmap
+    seats a brand in both, etc.) all pin together at 100.
+
+    Excludes demo, subject, metadata, and AVID FAN rows.  Returns []
+    when brand_query is empty, too short, or nothing matches.
+    """
+    if not brand_query:
+        return []
+    q_flat = _flat_norm(brand_query)
+    if len(q_flat) < 3:
+        return []
+    _SKIP_CATS = {
+        "", "BRAND INPUT", "SAMPLE SIZE", "SUBJECT", "BRAND CATEGORY",
+        "INPUT_METADATA", "GENDER", "AGE", "ETHNICITY", "EDUCATION",
+        "INCOME", "OCCUPATION", "PARENTAL STATUS", "PARENTAL_STATUS",
+        "RELATIONSHIP", "SEXUAL ORIENTATION", "SEXUAL_ORIENTATION",
+        "LOCATION", "AVID FAN",
+    }
+    subj_flat = _flat_norm(subject)
+    matches = []
+    cats_upper = df["Column"].astype(str).str.upper().str.strip()
+    for idx in df.index:
+        cat = cats_upper.at[idx]
+        if cat in _SKIP_CATS:
+            continue
+        val = str(df.at[idx, "Value"]).strip()
+        if not val:
+            continue
+        val_flat = _flat_norm(val)
+        if not val_flat or val_flat == subj_flat:
+            continue
+        exact = (val_flat == q_flat)
+        if not exact:
+            # Same substring rule as _find_parent_brand_ceiling: >= 4
+            # chars for substring matches to avoid short-token noise.
+            if len(q_flat) < 4:
+                continue
+            if q_flat not in val_flat and val_flat not in q_flat:
+                continue
+        matches.append((idx, cat, val))
+    return matches
+
+
+def _pin_defining_brand_to_100(df, cut_def, subject, new_sample,
+                                new_uspop, bp_col, cs_col, raw_col,
+                                proj_col):
+    """Pin the defining brand of a behavioral cut to exactly 100 in
+    every category it appears.
+
+    Jenna 2026-09-08 (verbatim): "this isn't a win. it needs to be
+    100% not 99.anything Heavy Social Users Female-Skewed -
+    Instagram Users.csv - Instagram BP 99.4938%, YouTube 96.16%,
+    TikTok 68.42%". A cohort defined by "X users" IS 100% X by
+    construction. Reasoned 99.something leaks the fact that the
+    engine got there by row-by-row lift rather than by identity.
+
+    Fail-safe skip conditions:
+      - No brand token extractable from the cut label (generic
+        behavioral like "Digital Purchasers", "Gift Givers").
+      - No matching row exists in df (brand not in parent's grid).
+
+    On a match, sets BP=100.0000 (%-suffixed string, matching the
+    transform's own format) and Category Share=100.0000. Raw and
+    Proj are pinned to the cohort's sample_size / us_pop so the
+    row reads as the entire audience. Gen Pop Penetration and
+    Index vs Gen Pop are blanked (NaN -> empty cell) since a
+    self-pin row has no meaningful gen-pop comparison.
+
+    Returns (n_pinned_rows, brand_canonical).
+    """
+    brand = _extract_brand_from_behavioral_label(cut_def)
+    if not brand:
+        return 0, ""
+    rows = _find_defining_brand_rows(df, brand, subject)
+    if not rows:
+        return 0, brand
+    for idx, _cat, _val in rows:
+        # Format-match the transform: BP is written as "100.0000%"
+        # (percent-suffixed string, same as line ~1466 in the row
+        # transform), CS is written as a plain float (same as the
+        # CS recompute at line ~1562).
+        df.at[idx, bp_col] = "100.0000%"
+        df.at[idx, cs_col] = 100.0000
+        df.at[idx, raw_col] = float(new_sample)
+        df.at[idx, proj_col] = float(new_uspop)
+        # A self-pin row has no gen-pop-index meaning (the cohort IS
+        # the audience). Blank both columns when they exist.
+        for _blank_col in ("Gen Pop Penetration", "Index vs Gen Pop"):
+            if _blank_col in df.columns:
+                df.at[idx, _blank_col] = float("nan")
+    return len(rows), brand
 
 
 # =============================================================================
@@ -1189,6 +1719,28 @@ def apply_addon_cut_transform(df, cut_def: dict, audience: dict,
             if v is not None:
                 df.at[i, cs_col] = round(v / bp_sum * 100.0, 4)
 
+    # Defining-brand pin for behavioral cuts (Jenna 2026-09-08). Runs
+    # AFTER the Category Share recompute so the pin isn't overwritten,
+    # and gated on `not pins` because pinned dimensions (age / gender
+    # / geo / compound) size deterministically off the parent - their
+    # bucket handling is already correct and no brand identity pin is
+    # implied. enforce_no_collisions (Phase 4 in synthesize_addon_cut)
+    # skips rows at exactly 100 so the pin survives collision fixup.
+    n_defining_pin = 0
+    defining_brand = ""
+    if not pins:
+        try:
+            n_defining_pin, defining_brand = _pin_defining_brand_to_100(
+                df, cut_def, subject, new_sample, new_uspop,
+                bp_col, cs_col, raw_col, proj_col,
+            )
+        except Exception as _pin_err:
+            # Never let a pin failure kill the transform. The row-by-row
+            # reasoning still landed a valid frame; a 99.something on
+            # the defining brand is a display defect, not a data
+            # integrity one.
+            print(f"    defining-brand pin skipped ({_pin_err})")
+
     return df, {
         "new_sample_size": new_sample,
         "new_us_pop": new_uspop,
@@ -1198,6 +1750,8 @@ def apply_addon_cut_transform(df, cut_def: dict, audience: dict,
         "n_no_claude_jitter_rows": n_unchanged,
         "n_subject_pin_rows": n_subject_pin,
         "n_location_dropped": len(drop_idx),
+        "n_defining_brand_pin_rows": n_defining_pin,
+        "defining_brand": defining_brand,
     }
 
 
@@ -1345,6 +1899,9 @@ def synthesize_demo_cut(
     cut_def, promo_note = _promote_unpinned_pin_cut(df_source, cut_def)
     if promo_note:
         print(f"[addon-cut] {promo_note}")
+    # DMA labels bind to the parent's real market rows (city + state
+    # asks resolve to the full Nielsen name; no-match raises loudly).
+    cut_def = _resolve_location_buckets(df_source, cut_def)
     behavioral = _is_behavioral_cut(cut_def)
     print(f"[addon-cut] subject={subject!r} cut={cut_def.get('label')!r} "
           + (f"behavioral={_cohort_desc(cut_def)!r} " if behavioral else
@@ -1359,6 +1916,86 @@ def synthesize_demo_cut(
         audience = reason_addon_audience(snap, cut_def, source_label)
         cf = float(audience.get("cohort_fraction") or 0.0)
         cf = max(0.005, min(0.75, cf if cf > 0 else 0.25))
+
+        # 2026-09-08 (Jenna): behavioral cuts sized off a specific
+        # brand / platform must respect two invariants:
+        #   1. INTERNAL: cf <= parent's own BP for the matched brand.
+        #      If the parent reads 48% Instagram, the "Instagram
+        #      users" cut can't exceed 48% of the parent.
+        #   2. EXTERNAL: new_uspop <= real-world US audience for the
+        #      brand. A 5M-follower creator's Instagram cut can't
+        #      project 6M people.
+        # Both fail-safe: no brand token in label OR no parent match
+        # OR external research fails means the phase-1 cf passes
+        # through. See _apply_behavioral_ceilings.
+        try:
+            _bp_col_src, _, _raw_col_src, _proj_col_src = \
+                _detect_cols(df_source)
+            _cats_upper = (df_source["Column"].astype(str)
+                           .str.upper().str.strip())
+            _ss_mask = _cats_upper == "SAMPLE SIZE"
+            _old_sample = 0.0
+            _old_uspop = 0.0
+            if _ss_mask.any():
+                _ss_row = df_source[_ss_mask].iloc[0]
+                try:
+                    _old_sample = float(str(_ss_row[_raw_col_src])
+                                        .replace(",", ""))
+                except Exception:
+                    _old_sample = 0.0
+                try:
+                    _old_uspop = float(str(_ss_row[_proj_col_src])
+                                       .replace(",", ""))
+                except Exception:
+                    _old_uspop = 0.0
+        except Exception:
+            _old_sample, _old_uspop = 0.0, 0.0
+        try:
+            cf_new, ceiling_notes = _apply_behavioral_ceilings(
+                cf, df_source, cut_def, subject,
+                _old_sample, _old_uspop)
+        except Exception as e:
+            print(f"[addon-cut]    ceiling application failed "
+                  f"(fail-safe pass-through): {e}")
+            cf_new, ceiling_notes = cf, {}
+        if ceiling_notes:
+            audience["ceiling_notes"] = ceiling_notes
+            if cf_new < cf - 1e-9:
+                brand = ceiling_notes.get("brand") or "?"
+                int_c = ceiling_notes.get("internal_ceiling")
+                ext_c = ceiling_notes.get("external_ceiling")
+                src = ceiling_notes.get("brand_source") or ""
+                ext_src = ceiling_notes.get("external_source") or ""
+                bits = [f"phase1={cf:.4f}"]
+                if int_c is not None:
+                    bits.append(f"internal={int_c:.4f} "
+                                f"[{src}]" if src
+                                else f"internal={int_c:.4f}")
+                if ext_c is not None:
+                    bits.append(f"external={ext_c:.4f}"
+                                + (f" [{ext_src}]" if ext_src else ""))
+                bits.append(f"final={cf_new:.4f}")
+                print(f"[addon-cut]    brand ceiling applied for "
+                      f"{brand!r}: " + " | ".join(bits))
+            else:
+                nb = ceiling_notes.get("brand") or ""
+                nn = ceiling_notes.get("note") or ""
+                if nb:
+                    int_c = ceiling_notes.get("internal_ceiling")
+                    ext_c = ceiling_notes.get("external_ceiling")
+                    print(f"[addon-cut]    brand ceiling check for "
+                          f"{nb!r}: phase1 already tightest "
+                          f"(internal="
+                          f"{'n/a' if int_c is None else f'{int_c:.4f}'}, "
+                          f"external="
+                          f"{'n/a' if ext_c is None else f'{ext_c:.4f}'})"
+                          )
+                elif nn:
+                    # Non-brand behavioral (e.g. Digital Purchasers),
+                    # ceiling path deliberately skipped.
+                    pass
+        cf = cf_new
+
         audience["cohort_fraction"] = cf
         audience["deterministic_cf"] = False
         print(f"[addon-cut]    reasoned cohort_fraction={cf:.4f} "
@@ -1455,6 +2092,16 @@ def synthesize_demo_cut(
     df_cut, stats = apply_addon_cut_transform(
         df_source, cut_def, audience, cat_decisions, subject, pin_shares)
     print(f"[addon-cut]    {stats}")
+    # Log the defining-brand pin outcome. On a match it reads
+    # "defining-brand pin: 'Instagram' -> 100.0000 in 1 row(s)".
+    # On a skip (generic behavioral / no parent match / non-behavioral
+    # cut) it stays silent - the stats dict already carries
+    # n_defining_brand_pin_rows for diagnostics.
+    _n_dpin = int(stats.get("n_defining_brand_pin_rows") or 0)
+    if _n_dpin > 0:
+        print(f"[addon-cut]    defining-brand pin: "
+              f"{stats.get('defining_brand')!r} -> 100.0000 in "
+              f"{_n_dpin} row(s)")
 
     # Phase 3b (2026-08-24 Furious audit D1): non-pinned demo categories
     # stay anchored to the parent's shape. The Millennials cut and Los
