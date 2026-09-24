@@ -69,6 +69,7 @@
     "netflix.py",
     "paramountplus.py",
     "paramountplus_amazon.py",
+    "paramountplus_top.py",
     "peacock.py",
     "peacock_top10.py",
     "philo_free.py",

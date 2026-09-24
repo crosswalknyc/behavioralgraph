@@ -154,6 +154,13 @@ SCRAPERS = [
     # - so they run fine from Hetzner's datacenter IP. No residential
     # hop, no donated session, no cookie-donation domain.
     ('paramountplus', 'scripts.trends_scrapers.paramountplus', 'Paramount+', 'streaming'),
+    # Paramount+'s OWN Most Watched rails, for shows and for films.
+    # The line above fills the catalog from JustWatch, which carries no
+    # Paramount+ ranking at all. MUST stay immediately after it: this
+    # folds the chart into the same snapshot the line above rewrites
+    # each night, so running it first would have the chart overwritten.
+    # No session needed; the rails are on the public browse pages.
+    ('paramountplus_top', 'scripts.trends_scrapers.paramountplus_top', 'Paramount+ Most Watched', 'streaming'),
     ('peacock',       'scripts.trends_scrapers.peacock',       'Peacock',    'streaming'),
     # AMC+ (2026-09-14). Same JustWatch path as Paramount+ / Peacock,
     # single package `acp`. The Apple TV channel package `aat` is a

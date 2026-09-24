@@ -7904,6 +7904,27 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('top 10 series today', 'top 10 movies today'),
         'depth': 10,
     },
+    # Paramount+ publishes a Most Watched rail on each browse page,
+    # one for shows and one for films, sixteen deep. They are separate
+    # rankings so the top show never has to out-draw the top film.
+    #
+    # Read as viewing rather than merchandising because neither
+    # coheres: the shows rail mixes animation, a 2025 prestige drama, a
+    # procedural, a 1996 sitcom and two reality franchises, and the
+    # films rail puts four PAW Patrol titles in its top ten beside
+    # horror and comedy. Both differ from the openly editorial rails
+    # next to them, 'Recently Added', 'Hot Right Now' and 'Top
+    # Searched'. A kids franchise stacking four entries in a ten-slot
+    # shelf is not something a merchandiser does.
+    #
+    # 'Top Searched' stays out on purpose. Search is intent, not
+    # viewing, and it is a different chart of a different behaviour.
+    'paramountplus': {
+        'label': 'Paramount+ Most Watched',
+        'mode':  'collection',
+        'collections': ('most watched shows', 'most watched movies'),
+        'depth': 16,
+    },
     # Tubi publishes sixty titles at tubitv.com/category/most_popular,
     # anonymously, and that page is what a viewer sees in the app.
     # Every Tubi row used to carry a JustWatch cross-service position
