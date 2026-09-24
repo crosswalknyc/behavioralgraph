@@ -41367,7 +41367,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
                 q1: { short: 'Funnel Levels',    title: 'Content Engagement by Funnel Level',                               intro: 'Each funnel level compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a funnel level is high reach / low conversion, low reach / high conversion, or both.' },
-                q2: { short: 'Paid / Organic / Earned', title: 'Paid vs Organic vs Earned Performance', intro: 'Cumulative view growth by day, split three ways: paid activations, organic first-party posts, and earned media pickups. Top-performing in-flight assets at the bottom.' },
+                q2: { short: 'Paid / Organic / Earned', title: 'Paid vs Organic vs Earned Performance', intro: 'Cumulative view growth by day, split three ways: paid activations, organic first-party posts, and earned media pickups. Every in-flight asset is listed at the bottom with its link.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-talent view + engagement totals across the campaign (cast, creators, athletes, influencers, hosts). Identifies which talent are doing disproportionate lift.' },
@@ -43132,13 +43132,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 +  '</div>';
                         }
                         var barColHeaderStyle = barColColor ? 'color:' + barColColor + ';' : '';
-                        var headerHtml = '<div class="iiq-q2-asset-head" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
+                        var headerHtml = '<div class="iiq-q2-asset-head" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px 52px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
                             + _hdr('asset',  'Asset', 'left',  null)
                             + '<div style="' + barColHeaderStyle + '" title="Bar length = ' + barColLabel + ' relative to the top asset. Click a numeric header to switch the bar metric.">' + barColLabel + ' bar</div>'
                             + _hdr('views',  'Views',       'right', null)
                             + _hdr('eng',    'Eng',         'right', null)
                             + _hdr('info',   'Info-seek %', 'right', '#a5b4fc')
                             + _hdr('ticket', 'Ticketing %', 'right', '#fbbf24')
+                            + '<div style="text-align:right;" title="Open the post in a new tab">Link</div>'
                             + '</div>';
                         var rowsHtml = top.map(function(o) {
                             var b = o.b;
@@ -43151,13 +43152,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var pct = maxBar > 0 ? Math.min(100, barValue / maxBar * 100) : 0;
                             var proj  = iiqAssetFunnelProjection(src);
                             var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
-                            return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
+                            return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px 52px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
                                 +   '<div style="font-size:0.78rem; color:#e2e8f0; line-height:1.3; overflow-wrap:anywhere;">' + escapeHtml(label) + '</div>'
                                 +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + barColor + ';"></div></div>'
                                 +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(2) + '%</div>'
                                 +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(2) + '%</div>'
+                                +   (src.url
+                                        ? '<div style="text-align:right;"><a href="' + escapeHtml(src.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="' + escapeHtml(src.url) + '" style="font-size:0.72rem; color:#C7F23E; text-decoration:underline; text-underline-offset:2px;">Open</a></div>'
+                                        : '<div></div>')
                                 + '</div>';
                         }).join('');
                         return headerHtml + rowsHtml;
@@ -46293,7 +46297,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (qid === 'q2' && _iiqSubTerm['q2_title'] == null
                         && typeof _aiqAllOrganic === 'function' && _aiqAllOrganic()) {
                         _iiqTitle = 'Daily activity';
-                        _iiqIntro = 'Cumulative view growth by day across every placement, with the downstream funnel and the top in-flight assets. Every placement in this campaign is organic, so there is no paid comparison to draw.';
+                        _iiqIntro = 'Cumulative view growth by day across every placement, with the downstream funnel and every in-flight asset listed below with its link. Every placement in this campaign is organic, so there is no paid comparison to draw.';
                     }
                     document.getElementById('iiqQTitle').innerHTML =
                         '<h4 style="margin:0;">' + escapeHtml(_iiqTitle) + '</h4>'
