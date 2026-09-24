@@ -1685,6 +1685,10 @@ def admin_companies_billing():
             # Company sticker for every full Profile IQ pull. 0 / missing
             # uses the global $300. Kartel is $275.
             "profile_pull_usd": float(c.get("profile_pull_usd") or 0.0),
+            # Per-tool stickers. Kartel Brand Partnership IQ is $475.
+            "brand_partnership_iq_usd": float(
+                ((c.get("tool_price_overrides") or {})
+                 .get("brand_partnership_iq") or 0.0) or 0.0),
         })
     rows.sort(key=lambda r: (
         not r["paying_customer"],
@@ -1760,6 +1764,23 @@ def admin_company_billing_config(company_name):
                 c["profile_pull_usd"] = round(pp, 2)
             else:
                 c.pop("profile_pull_usd", None)
+        if "brand_partnership_iq_usd" in body:
+            try:
+                bp = float(body.get("brand_partnership_iq_usd") or 0)
+            except (TypeError, ValueError):
+                bp = 0.0
+            ov = c.get("tool_price_overrides")
+            if not isinstance(ov, dict):
+                ov = {}
+            if bp > 0:
+                ov["brand_partnership_iq"] = round(bp, 2)
+                c["tool_price_overrides"] = ov
+            else:
+                ov.pop("brand_partnership_iq", None)
+                if ov:
+                    c["tool_price_overrides"] = ov
+                else:
+                    c.pop("tool_price_overrides", None)
         return True
 
     ok, msg = _mutate_target_company(company_name, _apply)
