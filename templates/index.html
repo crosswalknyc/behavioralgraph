@@ -32262,6 +32262,30 @@ https://www.instagram.com/p/..."></textarea>
                                      header visible (no hint), body
                                      visible with all sub-tabs live. */
             #intentIQView .iiq-explore-drawer { margin: 0.15rem 0 0.85rem; }
+            /* Daily activity lens switch */
+            #intentIQView .iiq-q2-lens { display: flex; gap: 0; width: max-content; margin: 0 0 0.85rem;
+                border: 1px solid var(--aiq-rule); border-radius: 2px; overflow: hidden; }
+            #intentIQView .iiq-q2-lens button { background: transparent; border: 0;
+                border-right: 1px solid var(--aiq-rule); color: #7C878A; font-size: 0.58rem;
+                font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+                padding: 0.5rem 0.95rem; cursor: pointer; }
+            #intentIQView .iiq-q2-lens button:last-child { border-right: 0; }
+            #intentIQView .iiq-q2-lens button:hover { color: #B8BEB9; }
+            #intentIQView .iiq-q2-lens button.is-on { background: #C7F23E; color: #0C1618; }
+            #intentIQView .iiq-q2-rank { font-size: 0.68rem; color: #3B4A4E; font-weight: 700;
+                font-variant-numeric: tabular-nums; }
+            #intentIQView .iiq-q2-name { font-size: 0.86rem; font-weight: 500; letter-spacing: -.005em; }
+            #intentIQView .iiq-q2-sub { font-size: 0.66rem; color: #7C878A; margin-top: 0.1rem; font-weight: 300; }
+            #intentIQView .iiq-q2-bar { height: 7px; background: var(--aiq-hair); position: relative; }
+            #intentIQView .iiq-q2-bar i { position: absolute; top: 0; bottom: 0; left: 0;
+                background: #C7F23E; display: block; }
+            #intentIQView .iiq-q2-rollup tbody tr:hover td { background: rgba(255,255,255,0.02) !important; }
+            #intentIQView .iiq-q2-drill { font-size: 0.68rem; color: #9AA09B; padding: 0 0 0.7rem;
+                display: flex; align-items: center; gap: 0.7rem; }
+            #intentIQView .iiq-q2-drill button { background: transparent; border: 1px solid var(--aiq-rule);
+                border-radius: 2px; color: #7C878A; font-size: 0.55rem; font-weight: 700;
+                letter-spacing: .13em; text-transform: uppercase; padding: 0.3rem 0.6rem; cursor: pointer; }
+            #intentIQView .iiq-q2-drill button:hover { border-color: #C7F23E; color: #C7F23E; }
             #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-header,
             #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-divider,
             #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-hint { display: none; }
@@ -42969,6 +42993,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // in place (no full Q2 re-render needed).
                     window._iiqQ2AssetsBarMetric = 'views';
 
+                    // A placement's creator comes off talent_tags and its
+                    // platform off channel, both of which the payload already
+                    // carries, so neither is parsed out of the display label.
+                    function _iiqQ2DimKey(b, dim) {
+                        if (!b) return '';
+                        if (dim === 'platform') return String(b.channel || '').trim();
+                        var t = b.talent_tags;
+                        if (Array.isArray(t) && t.length) return String(t[0] || '').trim();
+                        return '';
+                    }
+                    window._iiqQ2DimKey = _iiqQ2DimKey;
+                    // Creator only leads where the placements name one.
+                    function _iiqQ2DefaultLens() {
+                        var rows = window.__intentIQQ2Best || [];
+                        for (var i = 0; i < rows.length; i++) {
+                            if (_iiqQ2DimKey(rows[i], 'creator')) return 'creator';
+                        }
+                        for (var j = 0; j < rows.length; j++) {
+                            if (_iiqQ2DimKey(rows[j], 'platform')) return 'platform';
+                        }
+                        return 'placement';
+                    }
+                    function _iiqQ2LensButtons() {
+                        var rows = window.__intentIQQ2Best || [];
+                        var hasCreator = false, hasPlatform = false;
+                        rows.forEach(function (b) {
+                            if (_iiqQ2DimKey(b, 'creator')) hasCreator = true;
+                            if (_iiqQ2DimKey(b, 'platform')) hasPlatform = true;
+                        });
+                        var lens = window._iiqQ2Lens || _iiqQ2DefaultLens();
+                        var defs = [];
+                        if (hasCreator) defs.push(['creator', 'Creator']);
+                        if (hasPlatform) defs.push(['platform', 'Platform']);
+                        defs.push(['placement', 'Placement']);
+                        if (defs.length < 2) return '';
+                        return defs.map(function (d) {
+                            return '<button type="button" data-q2lens="' + d[0] + '"'
+                                 + (d[0] === lens ? ' class="is-on"' : '')
+                                 + ' onclick="iiqQ2SetLens(\'' + d[0] + '\')">' + d[1] + '</button>';
+                        }).join('');
+                    }
+
                     // Point-in-time decay model for per-asset metrics.
                     // YouTube / social videos accumulate the bulk of their
                     // views in the first ~7-14 days after posting. We use
@@ -43009,6 +43075,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                     _pit_factor:       f
                                 };
                             });
+                        // Drilled in from a rollup row: same rows, one key.
+                        var _lf = window._iiqQ2LensFilter;
+                        if (_lf && _lf.dim && _lf.key) {
+                            rowsAll = rowsAll.filter(function (b) {
+                                return _iiqQ2DimKey(b.src || b, _lf.dim) === _lf.key;
+                            });
+                        }
                         var slugLocal = window.__intentIQQ2Slug || '';
                         var s = window._iiqQ2AssetsSort;
                         var barMetric = window._iiqQ2AssetsBarMetric || 'views';
@@ -43106,7 +43179,113 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                     };
 
-                    var q2AssetTableHtml = window._iiqRenderQ2AssetTable();
+                    // ---- lenses -------------------------------------
+                    // The same placements, rolled up the way you need to
+                    // read them. Creator answers who carried it, platform
+                    // answers where it worked, placement is the full list.
+                    window._iiqQ2Rollup = function (dim) {
+                        var rowsRaw = window.__intentIQQ2Best || [];
+                        var acc = {};
+                        rowsRaw.forEach(function (b) {
+                            if (b.posted_date && String(b.posted_date).slice(0, 10) > asOf) return;
+                            var key = _iiqQ2DimKey(b, dim);
+                            if (!key) return;
+                            var f = _assetPitFactor(b, asOf);
+                            var v = (Number(b.views_total) || 0) * f;
+                            var e = (Number(b.engagement_total) || 0) * f;
+                            var r = iiqAssetFunnelProjection(b) || {};
+                            var a = acc[key] || (acc[key] = {
+                                key: key, views: 0, eng: 0, n: 0,
+                                infoW: 0, actW: 0, others: {}
+                            });
+                            a.views += v; a.eng += e; a.n += 1;
+                            a.infoW += v * (Number(r.info_pct) || 0);
+                            a.actW += v * (Number(r.ticket_pct) || 0);
+                            var other = _iiqQ2DimKey(b, dim === 'creator' ? 'platform' : 'creator');
+                            if (other) a.others[other] = 1;
+                        });
+                        return Object.keys(acc).map(function (k) {
+                            var a = acc[k];
+                            a.info = a.views > 0 ? a.infoW / a.views : 0;
+                            a.act = a.views > 0 ? a.actW / a.views : 0;
+                            a.otherN = Object.keys(a.others).length;
+                            return a;
+                        }).sort(function (x, y) { return y.views - x.views; });
+                    };
+                    window.iiqQ2SetLens = function (lens) {
+                        window._iiqQ2Lens = lens;
+                        window._iiqQ2LensFilter = null;
+                        var host = document.getElementById('iiqQ2AssetTable');
+                        if (host) host.innerHTML = window._iiqQ2RenderLens();
+                        var sw = document.getElementById('iiqQ2LensSwitch');
+                        if (sw) {
+                            Array.prototype.forEach.call(sw.querySelectorAll('[data-q2lens]'), function (b) {
+                                b.classList.toggle('is-on', b.getAttribute('data-q2lens') === lens);
+                            });
+                        }
+                    };
+                    window.iiqQ2DrillTo = function (dim, key) {
+                        window._iiqQ2LensFilter = { dim: dim, key: key };
+                        window._iiqQ2Lens = 'placement';
+                        var host = document.getElementById('iiqQ2AssetTable');
+                        if (host) host.innerHTML = window._iiqQ2RenderLens();
+                        var sw = document.getElementById('iiqQ2LensSwitch');
+                        if (sw) {
+                            Array.prototype.forEach.call(sw.querySelectorAll('[data-q2lens]'), function (b) {
+                                b.classList.toggle('is-on', b.getAttribute('data-q2lens') === 'placement');
+                            });
+                        }
+                    };
+                    window._iiqQ2RenderLens = function () {
+                        var lens = window._iiqQ2Lens || _iiqQ2DefaultLens();
+                        window._iiqQ2Lens = lens;
+                        if (lens === 'placement') {
+                            var back = '';
+                            var lf = window._iiqQ2LensFilter;
+                            if (lf && lf.key) {
+                                back = '<div class="iiq-q2-drill">Showing <b>' + escapeHtml(lf.key)
+                                     + '</b> only <button type="button" onclick="iiqQ2SetLens(\'' + lf.dim
+                                     + '\')">Back to all ' + escapeHtml(lf.dim) + 's</button></div>';
+                            }
+                            return back + window._iiqRenderQ2AssetTable();
+                        }
+                        var rows = window._iiqQ2Rollup(lens);
+                        if (!rows.length) return '<div class="iiq-empty">Nothing posted on or before ' + escapeHtml(asOf) + ' yet.</div>';
+                        var max = rows[0].views || 1;
+                        var otherLabel = (lens === 'creator') ? 'Platforms' : 'Creators';
+                        var h = '<table class="iiq-support-table iiq-q2-rollup"><thead><tr>'
+                              + '<th style="width:26px"></th>'
+                              + '<th>' + (lens === 'creator' ? 'Creator' : 'Platform') + '</th>'
+                              + '<th style="width:240px">Views</th>'
+                              + '<th style="text-align:right">Views</th>'
+                              + '<th style="text-align:right">Placements</th>'
+                              + '<th style="text-align:right">Views / post</th>'
+                              + '<th style="text-align:right">Eng rate</th>'
+                              + '<th style="text-align:right">Info-seek %</th>'
+                              + '<th style="text-align:right">Action page %</th>'
+                              + '</tr></thead><tbody>';
+                        rows.forEach(function (r, i) {
+                            var pct = Math.max(0.6, (r.views / max) * 100);
+                            var per = r.n > 0 ? Math.round(r.views / r.n) : 0;
+                            var engRate = r.views > 0 ? (r.eng / r.views) * 100 : 0;
+                            h += '<tr onclick="iiqQ2DrillTo(\'' + lens + '\', ' + JSON.stringify(r.key).replace(/"/g, '&quot;') + ')" style="cursor:pointer">'
+                               + '<td class="iiq-q2-rank">' + ('0' + (i + 1)).slice(-2) + '</td>'
+                               + '<td><div class="iiq-q2-name">' + escapeHtml(r.key) + '</div>'
+                               +   '<div class="iiq-q2-sub">' + r.n + ' placement' + (r.n === 1 ? '' : 's')
+                               +   (r.otherN ? ' \u00b7 ' + r.otherN + ' ' + otherLabel.toLowerCase().replace(/s$/, '') + (r.otherN === 1 ? '' : 's') : '')
+                               +   '</div></td>'
+                               + '<td><div class="iiq-q2-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div></td>'
+                               + '<td style="text-align:right"><b>' + fmtCompact(Math.round(r.views)) + '</b></td>'
+                               + '<td style="text-align:right">' + r.n + '</td>'
+                               + '<td style="text-align:right">' + Number(per).toLocaleString() + '</td>'
+                               + '<td style="text-align:right">' + engRate.toFixed(1) + '%</td>'
+                               + '<td style="text-align:right">' + r.info.toFixed(2) + '%</td>'
+                               + '<td style="text-align:right">' + r.act.toFixed(2) + '%</td>'
+                               + '</tr>';
+                        });
+                        return h + '</tbody></table>';
+                    };
+                    var q2AssetTableHtml = window._iiqQ2RenderLens();
                     html += '<div class="iiq-card" style="padding:0.85rem;">';
                     html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; margin-bottom:0.45rem;">';
                     html +=     '<div style="display:flex; align-items:baseline; gap:0.5rem;">';
@@ -43115,6 +43294,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     html +=     '</div>';
                     html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">views / eng reflect post-decay accumulation as of this date \u00b7 click any row for the full daily curve</div>';
                     html +=   '</div>';
+                    html +=   '<div id="iiqQ2LensSwitch" class="iiq-q2-lens">' + _iiqQ2LensButtons() + '</div>';
                     html +=   '<div id="iiqQ2AssetTable">' + q2AssetTableHtml + '</div>';
                     html += '</div>';
                 }
