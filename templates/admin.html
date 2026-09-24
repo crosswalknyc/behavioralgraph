@@ -13915,12 +13915,31 @@
         let _intentRunIsAll    = true;
 
         async function loadIntentIqTitlesForAdmin(force = false) {
-            if (window._intentAdminTitles && !force) return window._intentAdminTitles;
+            // Only a NON-EMPTY list is a valid cache (2026-09-24 Jenna:
+            // 'right now none populate'). The old check treated [] as
+            // cached truth, so one transient failure - a deploy blip,
+            // an expired session beat - emptied the picker for every
+            // user modal until a full page reload. Empty or failed
+            // loads now retry on the next open, with a cache-buster
+            // like the Journey IQ picker uses.
+            if (Array.isArray(window._intentAdminTitles)
+                    && window._intentAdminTitles.length && !force) {
+                return window._intentAdminTitles;
+            }
             try {
-                const resp = await fetch('/api/intent/titles/admin', { credentials: 'same-origin' });
+                const resp = await fetch(
+                    '/api/intent/titles/admin?_=' + Date.now(),
+                    { credentials: 'same-origin' });
                 const data = await resp.json();
-                window._intentAdminTitles = (data.titles || []);
+                if (data && data.success === false && data.error) {
+                    window._intentAdminTitlesError = String(data.error);
+                } else {
+                    window._intentAdminTitlesError = '';
+                }
+                window._intentAdminTitles = (data && data.titles) || [];
             } catch (e) {
+                window._intentAdminTitlesError =
+                    'Could not load the title list. Reopen the user to retry.';
                 window._intentAdminTitles = [];
             }
             return window._intentAdminTitles;
@@ -13966,7 +13985,10 @@
 
             const titles = window._intentAdminTitles || [];
             if (titles.length === 0) {
-                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Attribution IQ titles found.</p>';
+                const why = window._intentAdminTitlesError
+                    ? ' (' + window._intentAdminTitlesError + ')'
+                    : '';
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Attribution IQ titles found' + why + ' <a href="#" onclick="loadIntentIqTitlesForAdmin(true).then(function(){_renderIntentIqRunsList();});return false;" style="color:var(--accent-purple,#7c3aed);">Retry</a></p>';
                 if (countEl) countEl.textContent = '';
                 return;
             }
