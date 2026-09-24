@@ -32262,6 +32262,32 @@ https://www.instagram.com/p/..."></textarea>
                                      header visible (no hint), body
                                      visible with all sub-tabs live. */
             #intentIQView .iiq-explore-drawer { margin: 0.15rem 0 0.85rem; }
+            /* Daily activity: the filters sit in the chart's dead space.
+               The plot is drawn at a fixed 640px inside a 1108px card, so
+               the right of the card was empty while the chips ran as a
+               full-width strip above it. Below 980px the two stack again,
+               because the plot cannot shrink to share the row. */
+            /* The two grid properties are set on the element in
+               _aiqQ2FilterIntoChart: the rule matched here but the columns
+               kept resolving to one track, and the stack threshold wants
+               the card's width rather than the viewport's anyway. */
+            #intentIQView .aiq-q2-side { min-width: 0; }
+            #intentIQView .aiq-q2-side.is-beside { border-left: 1px solid var(--aiq-hair);
+                padding-left: 1.3rem; }
+            #intentIQView .aiq-q2-side.is-below { border-top: 1px solid var(--aiq-hair);
+                padding-top: 0.9rem; margin-top: 0.2rem; }
+            #intentIQView .aiq-q2-side > .iiq-card { background: transparent !important;
+                border: 0 !important; padding: 0 !important; margin: 0 !important; }
+            #intentIQView .aiq-q2-side .aiq-q2-chipgrid { display: grid !important;
+                grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 0.55rem; }
+            /* In a 286px column the label and its hint cannot share a line. */
+            #intentIQView .aiq-q2-side .iiq-card > div:first-child { display: block !important; }
+            #intentIQView .aiq-q2-side .iiq-card > div:first-child > * { display: block;
+                margin: 0 0 0.2rem; }
+            #intentIQView .aiq-q2-side .iiq-card > div:first-child > *:last-child {
+                font-size: 0.66rem; line-height: 1.45; margin: 0; }
+            #intentIQView .aiq-q2-side .aiq-q2-chipgrid > * { width: 100%; text-align: center;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             /* Daily activity lens switch */
             #intentIQView .iiq-q2-lens { display: flex; gap: 0; width: max-content; margin: 0 0 0.85rem;
                 border: 1px solid var(--aiq-rule); border-radius: 2px; overflow: hidden; }
@@ -128960,6 +128986,66 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         window._aiqGo = _aiqGo;
 
+        // The chart is drawn at a fixed width inside a much wider card, so
+        // the right of the card is dead space. The asset filters move into
+        // it as a two-up grid rather than running full-width above the
+        // chart. The chart is not touched.
+        function _aiqQ2FilterIntoChart() {
+            var body = document.getElementById('iiqQBody');
+            if (!body) return;
+            var cards = body.querySelectorAll(':scope > .iiq-card');
+            var filterCard = null, chartCard = null;
+            for (var i = 0; i < cards.length; i++) {
+                var t = (cards[i].textContent || '').replace(/\s+/g, ' ').trim();
+                if (!filterCard && t.indexOf('Filter assets') === 0) filterCard = cards[i];
+            }
+            var kids = body.children;
+            for (var j = 0; j < kids.length; j++) {
+                var kt = (kids[j].textContent || '').replace(/\s+/g, ' ');
+                if (kt.indexOf('Daily activity - views') !== -1) { chartCard = kids[j]; break; }
+            }
+            if (!chartCard) return;
+            var side = chartCard.querySelector(':scope > .aiq-q2-side');
+            if (!side) {
+                // Everything already in the card becomes the left column.
+                var left = document.createElement('div');
+                left.className = 'aiq-q2-main';
+                left.style.minWidth = '0';
+                while (chartCard.firstChild) left.appendChild(chartCard.firstChild);
+                side = document.createElement('div');
+                side.className = 'aiq-q2-side';
+                chartCard.appendChild(left);
+                chartCard.appendChild(side);
+                chartCard.classList.add('aiq-q2-chartgrid');
+            }
+            if (filterCard && filterCard.parentElement !== side) side.appendChild(filterCard);
+            // The plot is drawn at a fixed width, so it cannot give ground.
+            // Sit the filters beside it only where both still fit.
+            var SIDE_W = 286, GAP = 24;
+            var plot = chartCard.querySelector('svg, canvas');
+            var plotW = plot ? plot.getBoundingClientRect().width : 640;
+            var cardW = chartCard.getBoundingClientRect().width;
+            var beside = cardW >= (plotW + SIDE_W + GAP + 8);
+            chartCard.style.display = 'grid';
+            chartCard.style.gridTemplateColumns = beside
+                ? ('minmax(0,1fr) ' + SIDE_W + 'px') : 'minmax(0,1fr)';
+            chartCard.style.columnGap = GAP + 'px';
+            chartCard.style.alignItems = 'start';
+            side.classList.toggle('is-beside', beside);
+            side.classList.toggle('is-below', !beside);
+            // The chips run as a wrapping flex row; in a 286px column they
+            // read better two-up on a fixed grid.
+            if (filterCard) {
+                var rows = filterCard.querySelectorAll('div');
+                for (var k = 0; k < rows.length; k++) {
+                    var r = rows[k];
+                    if (r.children.length < 3) continue;
+                    if (getComputedStyle(r).display !== 'flex') continue;
+                    r.classList.add('aiq-q2-chipgrid');
+                }
+            }
+        }
+
         // A rail holding one tab is chrome with nothing to switch between.
         function _aiqTabRail() {
             var root = document.getElementById('intentIQView');
@@ -128983,7 +129069,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         _aiqWrap(); _aiqRepalette(); _aiqStripEmoji();
                         _aiqChips(); _aiqOrphanBoxes();
                         _aiqFlattenPanels(); _aiqWindowChips(); _aiqTabRail();
-                        _aiqShell(); _aiqLedger();
+                        _aiqShell(); _aiqLedger(); _aiqQ2FilterIntoChart();
                     } catch (e) { }
                 }, 120);
             }
