@@ -4368,8 +4368,17 @@
                              stop wallet routing entirely. -->
                         <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.75rem; background: rgba(0, 200, 220, 0.06); border-left: 3px solid var(--accent-cyan); border-radius: 4px; margin-top: 0.35rem; font-size: 0.72rem; color: var(--text-secondary);">
                             <span style="font-size: 0.85rem; line-height: 1;">💳</span>
-                            <span>Turning this on automatically enables wallet billing for this user. Set balance, unlimited access, or a top-up amount on the <a href="#" onclick="event.preventDefault(); openUserBillingFromModal();" style="color: var(--accent-cyan); text-decoration: underline;">Billing tab</a>.</span>
+                            <span>Turning this on automatically enables wallet billing for this user. Set balance or a top-up amount on the <a href="#" onclick="event.preventDefault(); openUserBillingFromModal();" style="color: var(--accent-cyan); text-decoration: underline;">Billing tab</a>.</span>
                         </div>
+                        <!-- Unlimited access, right here in the user modal
+                             (Jenna 2026-09-24): saving this checkbox IS the
+                             wallet's unlimited switch (the never-charged
+                             credits sentinel the billing page reads), so
+                             there is no separate Billing-tab step. -->
+                        <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.45rem; padding: 0.45rem 0.75rem; background: rgba(166, 226, 46, 0.06); border-left: 3px solid var(--accent-green); border-radius: 4px; font-size: 0.75rem;">
+                            <input type="checkbox" id="userUnlimitedAccess" onchange="syncUserUnlimitedAccess(this.checked)">
+                            <span><strong>Unlimited access</strong> - this user is never charged. Saving sets the same switch in their wallet; unchecking returns them to metered billing.</span>
+                        </label>
                         <!-- Prometheus access tier (2026-08-26, Jenna): two
                              options. "Pulls only" = Profile IQ + Subscriber IQ
                              builds; "Full" = analysis and everything else.
@@ -10359,6 +10368,8 @@
             // input itself is hidden (see legacyCreditsConsultingWrap).
             document.getElementById('newCredits').value = '0';
             document.getElementById('unlimitedCredits').checked = false;
+            var _uuaNew = document.getElementById('userUnlimitedAccess');
+            if (_uuaNew) _uuaNew.checked = false;
             const _openRecur = document.getElementById('creditsRecurringMonthly');
             if (_openRecur) { _openRecur.checked = false; _openRecur.disabled = false; }
             const _openRecurRow = document.getElementById('creditsRecurringMonthsRow');
@@ -10611,6 +10622,8 @@
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : (user.credits ?? 0);
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
+            var _uua = document.getElementById('userUnlimitedAccess');
+            if (_uua) _uua.checked = user.credits === -1;
             // Recurring / month is a NEW-schedule flow — never prefilled from
             // the user record (existing schedules live under the Time Tracking
             // tab's Recurring Grants manager). Reset every time we open edit.
@@ -12131,6 +12144,23 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
             });
+        }
+
+        // Visible unlimited-access proxy in the user modal (Jenna
+        // 2026-09-24): drives the same credits sentinel the wallet /
+        // billing page reads, so saving the user IS the wallet switch.
+        // Uncheck follows the billing page's semantics (credits -> 0,
+        // metered billing resumes), NOT the legacy toggle's demo '5'.
+        function syncUserUnlimitedAccess(on) {
+            const legacy = document.getElementById('unlimitedCredits');
+            if (legacy) legacy.checked = !!on;
+            const input = document.getElementById('newCredits');
+            if (input) {
+                input.value = on ? '-1' : '0';
+                input.disabled = !!on;
+            }
+            const recur = document.getElementById('creditsRecurringMonthly');
+            if (recur && on) { recur.checked = false; }
         }
 
         function toggleUnlimited() {
