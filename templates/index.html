@@ -128082,29 +128082,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // already live in Surfaces / Attribution / Timing / Leaks (the
         // nest and forks sections are retired, 2026-09-23) and its
         // audience picker moves into the controls bar.
+        // Rail order, Jenna 2026-09-23: Daily activity, Attribution,
+        // Timing, Surface, Journey, Talent, Demographics, ROI. The rail
+        // follows this array, so the order lives here. Entries the list
+        // does not name sit below it; each only appears on a title that
+        // carries its slab, so none of them can disturb the order where
+        // the named ones apply.
         var _AIQ_TABS = [
-            // Daily activity leads on brand landings (Jenna 2026-09-23). It
-            // lists every in-flight asset with the same columns the
-            // Performance scoreboard carried, so Performance is only
-            // offered when q2 is switched off for the title.
+            // Summary leads on a film landing that has a weekly summary
+            // card. Brand landings have none, so it does not show there.
+            { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
+            // Daily activity leads on brand landings. It lists every
+            // in-flight asset with the same columns the Performance
+            // scoreboard carried, so Performance is only offered when q2
+            // is switched off for the title.
             { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true, supersededBy: 'q_q2' },
-            { id: 'summary',     label: 'Summary',     ids: ['iiqWeeklySummaryCard'] },
             { id: 'assets',      label: 'Performance', ids: ['iiqAssetTableSection'] },
-            { id: 'surfaces',    label: 'Surfaces',    heads: ['where they went'] },
+            // Leaks has no tab of its own: where a single-surface tag
+            // would go dark is the same subject as attribution, so the
+            // slab rides here rather than being dropped.
             { id: 'attribution', label: 'Attribution', heads: ['attribution on bottom funnel destination reach only',
-                                                               'touchpoint contribution to '] },
+                                                               'touchpoint contribution to ',
+                                                               'leaks the pixel cannot see'] },
             { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
-            { id: 'leaks',       label: 'Leaks',       heads: ['leaks the pixel cannot see'] },
-            { id: 'q_q3',           label: 'Intent',          panel: 'drawer', sub: 'questions', q: 'q3',           legacyOnly: true },
+            { id: 'surfaces',    label: 'Surface',     heads: ['where they went'] },
+            { id: 'q_journey',      label: 'Journey',         panel: 'drawer', sub: 'questions', q: 'journey',      legacyOnly: true },
             { id: 'q_q4',           label: 'Talent',          panel: 'drawer', sub: 'questions', q: 'q4',           legacyOnly: true },
             { id: 'q_demographics', label: 'Demographics',    panel: 'drawer', sub: 'questions', q: 'demographics', legacyOnly: true },
-            { id: 'q_journey',      label: 'Journey',         panel: 'drawer', sub: 'questions', q: 'journey',      legacyOnly: true },
-            { id: 'l_conversion',   label: 'Conversion',      panel: 'drawer', sub: 'conversion', legacyOnly: true },
             // ROI values every piece of content and the campaign as a
             // whole. It lives in its own panel on every landing (brand
             // and film), gated by the title's roi flag.
-            { id: 'roi',            label: 'ROI',             ids: ['iiqPanel-roi'], gate: 'roi' }
+            { id: 'roi',            label: 'ROI',             ids: ['iiqPanel-roi'], gate: 'roi' },
+            // Not named in the rail order. Present only where a title
+            // enables them, and they trail so they never reorder it.
+            { id: 'q_q3',           label: 'Intent',          panel: 'drawer', sub: 'questions', q: 'q3',           legacyOnly: true },
+            { id: 'l_conversion',   label: 'Conversion',      panel: 'drawer', sub: 'conversion', legacyOnly: true }
         ];
         // The ROI slab renders on demand; ask once per loaded title.
         function _aiqEnsureROI() {
