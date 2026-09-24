@@ -80,6 +80,12 @@ RESIDENTIAL_SCRAPERS = [
     # residential IP with the same cookies, Playwright gets a full
     # 60-title homepage back on first try.
     ('hulu',          'Hulu'),
+    # Hulu's OWN 'Popular' rails, one per hub. The line above is
+    # a catalog pull and carries no Hulu ranking. MUST stay
+    # immediately after it: the charts are folded into the same
+    # snapshot that one rewrites. The home 'Trending' rail is
+    # deliberately not read; see hulu_popular.py.
+    ('hulu_popular',  'Hulu Popular'),
     # BritBox + MGM+ (2026-08-20): premium British / MGM library
     # streamers. Both WAF-block Hetzner's datacenter IP. BritBox
     # runs plain curl_cffi against /us/home with a donated bbuser

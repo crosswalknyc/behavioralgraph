@@ -441,6 +441,52 @@ def test_a_blank_collection_is_not_a_chart():
           f'among them')
 
 
+def test_a_one_word_collection_is_not_a_chart():
+    """A collection has to be specific enough to name a chart.
+
+    Live defect, Hulu, 2026-09-24. The collection match is loose in
+    both directions, so a collection sitting INSIDE a chart name
+    matched it. Hulu's hub scraper labels its catalog rows 'movies',
+    'movies' is inside 'popular movies', and fourteen catalog films
+    read as charted. The board grew a third group Hulu never
+    published, for the second time in a day and by a different route
+    than the blank-collection case.
+
+    The fix keeps the loose direction that matters, a pattern
+    appearing inside a DECORATED collection ('Top 10 in the US
+    Trending'), and requires two words the other way.
+    """
+    try:
+        from . import stream_estimates as se
+    except ImportError:
+        from scripts.trends_scrapers import stream_estimates as se
+
+    snap = {'national': [
+        {'title': 'Lanterns', 'collection': 'Popular Movies',
+         'category_display': 'Film'},
+        {'title': 'Zamboni', 'collection': 'movies',
+         'category_display': 'Film'},
+        {'title': 'Quokka', 'collection': 'tv', 'category_display': 'TV'},
+    ]}
+    idx = se.published_chart_index('hulu', snap)
+    assert any('lanterns' in k for k in idx), \
+        'the real chart row was dropped'
+    for stray in ('zamboni', 'quokka'):
+        assert not any(stray in k for k in idx), (
+            f'{stray!r} sits in a one-word collection and must not be '
+            f'charted')
+
+    # The loose direction still has to work, or a reworded rail
+    # silently disappears.
+    dec = {'national': [
+        {'title': 'Bridgerton', 'collection': 'Top 10 in the US Trending',
+         'category_display': 'TV'}]}
+    di = se.published_chart_index('primevideo', dec)
+    assert any('bridgerton' in k for k in di), \
+        'a decorated collection name stopped matching its chart'
+    print('  one-word collections rejected, decorated names still match')
+
+
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_the_tail_but_still_orders_the_chart,
              test_no_ladder, test_last_digits_stay_natural,
@@ -449,7 +495,8 @@ def main() -> int:
              test_nothing_lands_over_the_ceiling,
              test_descends_even_when_the_ceiling_binds,
              test_number_one_is_lifted_over_number_two,
-             test_a_blank_collection_is_not_a_chart]
+             test_a_blank_collection_is_not_a_chart,
+             test_a_one_word_collection_is_not_a_chart]
     bad = 0
     for t in tests:
         print(t.__name__)

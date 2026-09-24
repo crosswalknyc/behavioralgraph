@@ -8043,6 +8043,30 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('top 10 series today', 'top 10 movies today'),
         'depth': 10,
     },
+    # Hulu publishes a 'Popular' rail on each hub, fifteen deep, and
+    # those two are the charts. Separate rankings.
+    #
+    # Hulu's signed-in HOME also carries a rail headed 'Trending' and
+    # it is deliberately absent. Measured 2026-09-23 it was half
+    # ID-style true crime on a page that also renders 'Because You
+    # Watched', which is a personalised page showing a genre-clustered
+    # shelf. The rails here are named by WHERE they are and by an
+    # EXACT heading, never by a pattern: 'Popular Sitcom', 'Popular
+    # TV' on the home page and 'Trending' all fail that test on
+    # purpose. Hulu gives its rails no stable slug, so page plus exact
+    # heading is the strongest identifier available.
+    #
+    # Read as viewing: the TV chart runs Mormon Wives, a new FX drama,
+    # two adult-animation staples, Dancing with the Stars, 20/20 and
+    # SVU; the films chart spans a 2025 thriller, Coraline, Pineapple
+    # Express, 9 to 5 and Inglourious Basterds. Neither coheres around
+    # genre, era or launch.
+    'hulu': {
+        'label': 'Hulu Popular',
+        'mode':  'collection',
+        'collections': ('popular tv', 'popular movies'),
+        'depth': 15,
+    },
     # Starz publishes one, on its movies page, and dates it: 'STARZ
     # Top 10 Movies Today', with a '#1 Movie on STARZ Today' card
     # beside it. Anonymous, no session.
@@ -8240,6 +8264,37 @@ _AUDITED_NO_CHART = {
 }
 
 
+def _collection_matches(coll_n: str, pats: list) -> bool:
+    """Is this row's collection one of the charts we declared?
+
+    Matched loosely in one direction and tightly in the other, and the
+    asymmetry is the whole point.
+
+    LOOSE where the collection is LONGER than the pattern. A storefront
+    decorates its own rail name and the decoration is not part of the
+    chart: Prime Video's heading reads 'Top 10 in the US Trending'
+    because the trending icon's label runs onto the end of it. So a
+    pattern appearing inside the collection is a match, which is what
+    keeps a chart from silently vanishing the day the wording moves.
+
+    TIGHT the other way. A collection appearing inside the PATTERN is
+    only a match when the collection is at least two words. Hulu's hub
+    scraper labels its catalog rows 'movies', and 'movies' sits inside
+    'popular movies', so every catalog film on Hulu read as charted
+    and the board grew a third group of fourteen rows that Hulu never
+    published. One-word collections are exactly what a hub or browse
+    scraper writes, and they are never specific enough to name a
+    chart.
+    """
+    for p in pats:
+        pn = p.replace('.', '')
+        if pn in coll_n:
+            return True
+        if coll_n in pn and len(coll_n.split()) >= 2:
+            return True
+    return False
+
+
 def published_chart_snapshot(slug: str) -> str:
     """Which snapshot file holds this service's chart.
 
@@ -8413,8 +8468,7 @@ def published_chart_index(slug: str,
             # invented a chart the service never published.
             if not coll_n:
                 continue
-            if not any(p.replace('.', '') in coll_n
-                       or coll_n in p.replace('.', '') for p in pats):
+            if not _collection_matches(coll_n, pats):
                 continue
             pos = seen_per_collection.get(coll, 0) + 1
             seen_per_collection[coll] = pos
