@@ -46048,9 +46048,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     html += _iiqJrnRenderDetail(pickedAsset);
                 }
 
-                // ===== Aggregate roll-up across all filtered assets =====
-                html += _iiqJrnRenderAggregate(rows, aggAfter, totalV);
-
                 return html;
             }
 
@@ -46112,8 +46109,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             // Render a campaign-rollup detail card in the same shape as the
             // per-asset detail, but with BEFORE / AFTER computed across every
-            // asset in the phase. View-weighted; matches the aggregate math
-            // used by _iiqJrnRenderAggregate but scoped to a single phase.
+            // asset in the phase. View-weighted, scoped to a single phase.
             function _iiqJrnRenderPhaseDetail(phaseName, phaseAssets) {
                 var totalV = 0, totalE = 0;
                 var beforeAgg = {};
@@ -46215,80 +46211,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 afterBuckets.forEach(function(b) {
                     if (b.pct < 0.05) return;
                     html += _iiqJrnRow({ label: b.label, pct: b.pct, color: b.color }, b.color, totalV);
-                });
-                html +=     '</div>';
-                html +=   '</div>';
-                html += '</div>';
-                return html;
-            }
-
-            function _iiqJrnRenderAggregate(rows, aggAfter, totalV) {
-                // BEFORE roll-up: view-weight every asset's before mix.
-                var beforeAgg = {};
-                rows.forEach(function(a) {
-                    var v = Number(a.ext_view_count) || 0;
-                    if (v <= 0) return;
-                    var bf = iiqAssetBeforeFunnel(a);
-                    bf.forEach(function(b) {
-                        if (!beforeAgg[b.label]) beforeAgg[b.label] = { total: 0, source_type: b.source_type };
-                        beforeAgg[b.label].total += v * b.pct / 100;
-                    });
-                });
-                var beforeRows = Object.keys(beforeAgg).map(function(k) {
-                    return { label: k, source_type: beforeAgg[k].source_type, pct: totalV > 0 ? (beforeAgg[k].total / totalV * 100) : 0 };
-                }).sort(function(a,b){ return b.pct - a.pct; }).slice(0, 12);
-
-                var _iiqAggOv    = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var _iiqAggTerm  = _iiqAggOv.terminology || {};
-                var _iiqAggInfoLabel = _iiqAggTerm.journey_info_bucket_label       || 'Info-seeking';
-                var _iiqAggConvLabel = _iiqAggTerm.journey_conversion_bucket_label || 'Ticketing site visit';
-                var _iiqAggInfoSub   = _iiqAggTerm.journey_info_sub_label          || 'Google / IMDB / Rotten Tomatoes / Letterboxd / official site';
-                var _iiqAggConvSub   = _iiqAggTerm.journey_conversion_sub_label    || 'Fandango / AMC / Regal / Cinemark / Atom / theater chain direct';
-                var _iiqAggSupp      = !!_iiqAggTerm.suppress_film_behaviors;
-                var afterBuckets = [
-                    { label: _iiqAggInfoLabel,                     pct: totalV > 0 ? aggAfter.info    / totalV * 100 : 0, color: '#a5b4fc', sub: _iiqAggInfoSub },
-                    { label: _iiqAggConvLabel,                     pct: totalV > 0 ? aggAfter.ticket  / totalV * 100 : 0, color: '#fbbf24', sub: _iiqAggConvSub },
-                    { label: 'Shared / forwarded the asset',       pct: totalV > 0 ? aggAfter.shared  / totalV * 100 : 0, color: '#22d3ee', sub: 'Re-shared to social' }
-                ];
-                if (!_iiqAggSupp) {
-                    afterBuckets.push({ label: 'Watched the trailer next',   pct: totalV > 0 ? aggAfter.trailer / totalV * 100 : 0, color: '#22c55e', sub: 'Pulled up the trailer within 7 days' });
-                    afterBuckets.push({ label: 'Searched "where to stream"', pct: totalV > 0 ? aggAfter.stream  / totalV * 100 : 0, color: '#a855f7', sub: 'PVOD / SVOD / streaming-availability search' });
-                }
-                afterBuckets.push({ label: 'No measurable downstream action', pct: totalV > 0 ? aggAfter.nothing / totalV * 100 : 0, color: '#64748b', sub: 'Viewed and moved on within the 7-day window' });
-
-                var html = '<div class="iiq-card" style="padding:0.85rem;">';
-                html +=   '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600; margin-bottom:0.5rem;">Aggregate journey across all ' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
-                html +=   '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">';
-
-                // BEFORE aggregate
-                html +=     '<div>';
-                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">BEFORE: top referrer sources</div>';
-                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">View-weighted across all filtered assets. <span style="color:#22d3ee;">Cyan</span> = paid placement; <span style="color:#22c55e;">green</span> = organic referrer.</div>';
-                beforeRows.forEach(function(b) {
-                    var people = Math.round(totalV * b.pct / 100);
-                    var color = (b.source_type === 'paid') ? '#22d3ee' : '#22c55e';
-                    html += '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; align-items:center; padding:0.25rem 0;">'
-                          +    '<div style="font-size:0.72rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(b.label) + '">' + escapeHtml(b.label) + '</div>'
-                          +    '<div style="background: rgba(255,255,255,0.06); height:12px; border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + Math.min(100, b.pct).toFixed(1) + '%; background:' + color + ';"></div></div>'
-                          +    '<div style="font-size:0.7rem; color:#fff; text-align:right; font-variant-numeric: tabular-nums;">' + b.pct.toFixed(1) + '%</div>'
-                          +    '<div style="font-size:0.68rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(people) + '</div>'
-                          +  '</div>';
-                });
-                html +=     '</div>';
-
-                // AFTER aggregate
-                html +=     '<div>';
-                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">AFTER: where viewers went next</div>';
-                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">View-weighted across all filtered assets, in the 7-day window after viewing.</div>';
-                afterBuckets.forEach(function(b) {
-                    if (b.pct < 0.05) return;
-                    var people = Math.round(totalV * b.pct / 100);
-                    html += '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; align-items:center; padding:0.25rem 0;" title="' + escapeHtml(b.sub) + '">'
-                          +    '<div style="font-size:0.72rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(b.label) + '</div>'
-                          +    '<div style="background: rgba(255,255,255,0.06); height:12px; border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + Math.min(100, b.pct).toFixed(1) + '%; background:' + b.color + ';"></div></div>'
-                          +    '<div style="font-size:0.7rem; color:#fff; text-align:right; font-variant-numeric: tabular-nums;">' + b.pct.toFixed(1) + '%</div>'
-                          +    '<div style="font-size:0.68rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(people) + '</div>'
-                          +  '</div>';
                 });
                 html +=     '</div>';
                 html +=   '</div>';
