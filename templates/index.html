@@ -28623,6 +28623,14 @@ https://www.instagram.com/p/..."></textarea>
             --border-color: var(--cw-border, #2C4148);
             --bp-rule: var(--cw-border, #2C4148);
             --bp-hair: #22343A;
+            /* The renderers reach for these by name rather than writing a
+               literal, so redefining them is what actually moves the ink. */
+            --text-primary: #E9E8E1;
+            --text-secondary: #9AA09B;
+            --text-muted: #7C878A;
+            --accent-cyan: #B7B3D8;
+            --accent-orange: #E682FF;
+            --accent-green: #C7F23E;
             text-transform: none;
             letter-spacing: 0;
         }
@@ -28633,6 +28641,8 @@ https://www.instagram.com/p/..."></textarea>
             background: #E9E8E1 !important; color: #0C1618;
             --bg-card: #FFFFFF; --bg-input: #FFFFFF; --border-color: #C9C6BA;
             --bp-rule: #C9C6BA; --bp-hair: #DAD8CE;
+            --text-primary: #0C1618; --text-secondary: #5C6560; --text-muted: #888C89;
+            --accent-cyan: #8E3FA8; --accent-orange: #8E3FA8; --accent-green: #5E7E12;
         }
         /* The drawer is out of flow, so the content takes the full width. */
         #ecommerceIQView .dashboard-layout {
@@ -127371,12 +127381,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             var titleEl = document.getElementById('bpiqDashTitle');
             var name = titleEl ? (titleEl.textContent || '').trim() : '';
-            var headerRow = attic.querySelector('div');
+            // The window metadata is its own leaf. Taking the header row
+            // wholesale swallows the export menu's labels with it.
             var meta = '';
-            Array.prototype.forEach.call(attic.children, function (c) {
-                var t = (c.innerText || '');
-                if (/campaign:/i.test(t)) { meta = t.replace(/\s+/g, ' ').trim(); }
-            });
+            var cands = attic.querySelectorAll('div,span,p');
+            for (var mi = 0; mi < cands.length; mi++) {
+                var ce = cands[mi];
+                if (ce.children.length) continue;
+                var ct = (ce.textContent || '').replace(/\s+/g, ' ').trim();
+                if (/^campaign:/i.test(ct)) { meta = ct; break; }
+            }
             var img = document.getElementById('bpiqProfileImage');
             var imgUrl = '';
             if (img) {
