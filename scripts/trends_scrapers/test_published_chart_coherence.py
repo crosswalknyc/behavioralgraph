@@ -243,11 +243,83 @@ def test_published_scale_is_physical_and_ordered():
     print('  scale ordered by today, every share physically possible')
 
 
+def test_nothing_lands_over_the_ceiling():
+    """No reading this pass writes may exceed the platform's cap.
+
+    Live defect, Tubi, 2026-09-23. The pass clamped the top of the
+    chart to the daily cap and then re-applied natural last digits,
+    which rounded it 18 UP, to 857,160 against a cap of 857,142. The
+    render clamps anything over the cap and substitutes the title's
+    own last reading, so the board showed #1 at 175,919 under a #2 of
+    857,110: an inversion at the very top of the rail, produced by the
+    pass that exists to remove inversions.
+
+    Scoped to what this pass WRITES. Rows that arrive over the cap are
+    the previous pass's job (`_reclamp_carried_to_platform_ceiling`
+    runs on both sides of this one), so the rail is seeded under the
+    cap and the question is whether the pass pushes anything through
+    it. The top row sits exactly ON the cap, which is where the
+    rounding bit.
+    """
+    over = 0
+    checked = 0
+    for seed in range(60):
+        rows = _rail(seed, 0.35)
+        ceiling = max(r['v'] for r in rows)
+        C.reconcile_rail(rows, salt=f'cap{seed}',
+                         get_value=lambda r: r['v'],
+                         set_value=lambda r, v: r.__setitem__('v', v),
+                         ceiling=ceiling)
+        for r in rows:
+            checked += 1
+            if r['v'] > ceiling:
+                over += 1
+    assert over == 0, (
+        f'{over} of {checked} reading(s) left above the platform '
+        f'ceiling; the render will replace every one of them')
+    print(f'  {checked} readings, none above the ceiling')
+
+
+def test_descends_even_when_the_ceiling_binds():
+    """A chart whose top wants more than the platform allows still
+    has to read downwards.
+
+    Live defect, Tubi, 2026-09-23. Positions 1, 2 and 3 all reasoned
+    above the 857,142 daily cap, each was clamped to the cap on its
+    own, and the per-title last digit then decided the order: the rail
+    shipped 857,105 / 857,110 / 857,118, ascending, at the top of the
+    page. Clamping row by row throws the ordering away exactly when
+    the chart is most visible.
+    """
+    bad = 0
+    rails = 0
+    for seed in range(60):
+        rows = _rail(seed, 0.30)
+        pub = [r for r in rows if r.get('published_rank')]
+        # A cap most of the published block wants to exceed, which is
+        # the condition that produced the defect.
+        ceiling = int(sorted((r['v'] for r in pub), reverse=True)[
+            min(3, len(pub) - 1)])
+        C.reconcile_rail(rows, salt=f'bind{seed}',
+                         get_value=lambda r: r['v'],
+                         set_value=lambda r, v: r.__setitem__('v', v),
+                         ceiling=ceiling)
+        rails += 1
+        seq = [r['v'] for r in sorted(pub, key=lambda x: x['published_rank'])]
+        bad += sum(1 for i in range(1, len(seq)) if seq[i] >= seq[i - 1])
+    assert bad == 0, (
+        f'{bad} position pair(s) not descending across {rails} rails '
+        f'whose ceiling binds on the top of the chart')
+    print(f'  {rails} ceiling-bound rails, every published block descends')
+
+
 def main() -> int:
     tests = [test_descends_and_contains, test_holds_rather_than_forcing,
              test_no_ladder, test_last_digits_stay_natural,
              test_unpublished_titles_are_bracketed,
-             test_published_scale_is_physical_and_ordered]
+             test_published_scale_is_physical_and_ordered,
+             test_nothing_lands_over_the_ceiling,
+             test_descends_even_when_the_ceiling_binds]
     bad = 0
     for t in tests:
         print(t.__name__)

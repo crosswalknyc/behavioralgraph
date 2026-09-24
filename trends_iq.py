@@ -11241,6 +11241,74 @@ API_LINEUP_SOURCES = (
 _FAST_CHANNEL_RENDER_CEILING = 1_500
 
 
+def _fast_published_chart_snapshot(slug: str,
+                                   asof: Optional[str]) -> Optional[dict]:
+    """This FAST platform's own chart snapshot, or None.
+
+    A platform's chart lives in its own file rather than inside the
+    shared `fast_channels.json`, because that file is the JustWatch
+    feed and mixing the two would make them indistinguishable later.
+    Best-effort: a platform with no chart, or a chart that could not be
+    read this morning, simply returns None and the rail renders off the
+    catalog exactly as it did before.
+    """
+    try:
+        from scripts.trends_scrapers.stream_estimates import (
+            has_published_chart, published_chart_snapshot)
+    except Exception:
+        return None
+    try:
+        if not has_published_chart(slug):
+            return None
+        source = published_chart_snapshot(slug)
+        snap = _read_snapshot(source, asof) if asof else _read_snapshot(source)
+        return snap if (snap or {}).get('national') else None
+    except Exception:
+        logger.exception("fast published chart read failed for %s "
+                         "(non-fatal)", slug)
+        return None
+
+
+def _merge_published_chart_rows(items: list, chart_snap: dict) -> list:
+    """Fold the platform's charted titles into its catalog list.
+
+    Rows already present keep their catalog entry, so posters and
+    metadata the feed carries are not lost. Charted titles the feed
+    does not have are appended as rows of their own; they carry the
+    title, kind and link the platform published, and the poster
+    enricher fills the artwork in downstream.
+
+    Order is not decided here. `_stamp_published_ranks` marks these
+    rows and the re-seat puts them in the platform's order.
+    """
+    have = {(_cp_normalize(str(r.get('title') or '')),
+             str(r.get('category_display') or '').strip().lower())
+            for r in items if isinstance(r, dict)}
+    have_titles = {_cp_normalize(str(r.get('title') or ''))
+                   for r in items if isinstance(r, dict)}
+    out = list(items)
+    for r in (chart_snap.get('national') or []):
+        if not isinstance(r, dict):
+            continue
+        title = str(r.get('title') or '').strip()
+        norm = _cp_normalize(title)
+        if not norm:
+            continue
+        cat = str(r.get('category_display') or '').strip()
+        if (norm, cat.lower()) in have or norm in have_titles:
+            continue
+        have.add((norm, cat.lower()))
+        have_titles.add(norm)
+        out.append({
+            'title':            title,
+            'category_display': cat,
+            'url':              r.get('url') or '',
+            'image':            r.get('image') or '',
+            'from_published_chart': True,
+        })
+    return out
+
+
 def _fetch_fast_trending(state: Optional[str], lookback_days: int,
                           keywords: Optional[list[str]] = None,
                           asof: Optional[str] = None) -> dict:
@@ -11298,6 +11366,19 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
     for slug, label, _default_avail in FAST_PLATFORMS:
         block = sources.get(slug) or {}
         items = list(block.get('items') or [])
+
+        # Where the platform publishes its own chart, that chart owns
+        # which titles are on the rail, not just their order. The list
+        # above is JustWatch's popularity pool for the platform, and on
+        # Tubi 37 of its own 60 most popular titles are missing from it
+        # entirely, Everybody Hates Chris among them. Annotating the
+        # pool would leave those 37 off the page no matter how well the
+        # values were reasoned, so the chart's rows are folded in
+        # first. A platform with no chart is untouched.
+        chart_snap = _fast_published_chart_snapshot(slug, asof)
+        if chart_snap:
+            items = _merge_published_chart_rows(items, chart_snap)
+
         # Bucket rank stamped by the scraper is already correct;
         # do a defensive re-rank in case an upstream dedupe pass ever
         # touches the list.
@@ -11315,6 +11396,12 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             r['bucket_rank'] = i
         for i, r in enumerate(tv, 1):
             r['bucket_rank'] = i
+
+        # Mark the rows the platform itself ranks. `_reseat_ranks_by_
+        # value` seats those in the platform's order and never moves
+        # them; everything below is ordered by the audience it renders.
+        if chart_snap:
+            _stamp_published_ranks(slug, chart_snap, items, films, tv)
 
         # Channel lineup for this platform: the WHOLE lineup. The
         # ranker orders the full field by viewers downstream in

@@ -120,16 +120,33 @@ _MAX_HYDRATE_SELECTORS = [
 _ISOLATES = '\u2066\u2067\u2068\u2069\u200e\u200f\u061c'
 _ISOLATE_RE = re.compile(f'[{_ISOLATES}]')
 
-# Headings whose rail is a chart, best first. HBO Max does not label
-# the rail "Top 10" today; the TV chart is headed "Popular TV" and its
-# contents were confirmed by hand against the app on 2026-09-23. The
-# "top 10" spellings stay ahead of it so that if HBO Max goes back to
-# naming it outright, that wins without a code change.
+# Headings whose rail is a chart, best first.
+#
+# HBO Max names both of its charts outright, in the aria-label of the
+# rail's H2: "Top 10 Series Today" and "Top 10 Movies Today". That was
+# read off the live signed-in home on 2026-09-24 and the series rail
+# matches, position for position, what the app shows on screen.
+#
+# The CMS names that sit in those same headings' textContent are
+# "Popular TV" and "Fresh Starts". They are kept at the END of this
+# list, as a fallback for a layout that stops labelling its headings,
+# and deliberately below every published spelling so they can never
+# outrank the real name. A rail called "Fresh Starts" is exactly the
+# kind of thing that should NOT be believed on its name alone, which
+# is why it only counts when the accessible name is missing entirely.
 _CHART_HEADINGS = (
+    'top 10 series today', 'top 10 movies today',
     'top 10 in the u.s. today', 'top 10 today', 'top 10 series',
-    'top 10 shows', 'top 10 tv', 'top 10', 'popular tv',
-    'popular series', 'popular shows',
+    'top 10 movies', 'top 10 shows', 'top 10 tv', 'top 10',
+    'popular tv', 'popular series', 'popular shows', 'fresh starts',
 )
+
+# HBO Max publishes TWO charts and they are independent of each other:
+# its top series and its top film are both #1 and neither outranks the
+# other. Both ship, each tagged with its own name, the same way
+# Netflix's films and series do.
+_SERIES_CHART = 'top 10 series today'
+_MOVIES_CHART = 'top 10 movies today'
 
 _RAIL_RE = re.compile(
     r'<rail\s+name="([^"]*)">(.*?)</rail>', re.DOTALL | re.IGNORECASE)
@@ -192,14 +209,30 @@ _COLLECT_JS = r"""() => {
   }
   if (!tiles.length) return [];
 
-  // Pass B: headings, by position. textContent, never innerText.
+  // Pass B: headings, by position. The ACCESSIBLE NAME first, then
+  // textContent, and never innerText.
+  //
+  // The two are different things on this page and only one of them is
+  // the chart's name. The rail the app renders as "TOP 10 SERIES
+  // TODAY" has textContent "Popular TV"; the one it renders as "TOP 10
+  // MOVIES TODAY" has textContent "Fresh Starts". Those are internal
+  // CMS names that survive into the DOM, and "Fresh Starts" describes
+  // none of what is in it (The Revenant, Beetlejuice, Miss
+  // Congeniality). The aria-label on the same H2 is the published
+  // name, so it is what identifies the rail.
+  //
+  // Reading it is also cheaper than the fallback: an attribute read
+  // cannot force the reflow that lets these virtual lists recycle
+  // mid-walk. textContent stays as the fallback for a layout that
+  // stops labelling its headings.
   const heads = [];
   for (let i = 0; i < nodes.length; i++) {
     const el = nodes[i];
     const isHead = /^H[1-4]$/.test(el.tagName)
         || el.getAttribute('role') === 'heading';
     if (!isHead) continue;
-    const t = strip(el.textContent || '').trim();
+    const t = strip(el.getAttribute('aria-label') || '').trim()
+        || strip(el.textContent || '').trim();
     if (t) heads.push({i: i, text: t});
   }
 
@@ -254,9 +287,19 @@ def collect_chart_rails(page, label: str) -> str:
             rails.setdefault(r.get('heading') or '', {}).setdefault(
                 rank, (title, r.get('href') or ''))
 
+    def complete_charts() -> int:
+        return sum(1 for k, v in rails.items()
+                   if len(v) >= 10 and _is_chart_heading(k))
+
     def complete() -> bool:
-        return any(len(v) >= 10 and _is_chart_heading(k)
-                   for k, v in rails.items())
+        # BOTH charts, not the first one. Stopping at the first
+        # complete rail is why an earlier run shipped the series chart
+        # alone: 'Top 10 Series Today' renders well above 'Top 10
+        # Movies Today', so the walk ended before the film chart had
+        # entered the DOM at all. The scroll below also stops at the
+        # foot of the page, so a service that publishes only one chart
+        # does not pay for this.
+        return complete_charts() >= 2
 
     # Scrolling alone is what works. The ranked rails sit below the
     # fold and render all ten tiles once they come into view, so
@@ -270,6 +313,8 @@ def collect_chart_rails(page, label: str) -> str:
     # all. Measured 2026-09-23: scroll plus click found nothing;
     # scroll alone found both rails complete.
     harvest()
+    stuck = 0
+    last_y = -1
     for _ in range(_RAIL_PASSES):
         if complete():
             break
@@ -279,6 +324,16 @@ def collect_chart_rails(page, label: str) -> str:
             break
         page.wait_for_timeout(1100)
         harvest()
+        # Stop at the foot of the page rather than burning the whole
+        # budget on a service that publishes one chart, or none.
+        try:
+            y = page.evaluate('() => Math.round(window.scrollY)')
+        except Exception:
+            y = last_y
+        stuck = stuck + 1 if y == last_y else 0
+        last_y = y
+        if stuck >= 2:
+            break
 
     # Only if a chart rail is on screen but short do we advance it by
     # hand, and only then, when the rail is the thing in view.
@@ -324,18 +379,24 @@ def _chart_rank(heading: str) -> int:
     return len(_CHART_HEADINGS)
 
 
-def extract_chart(html: str) -> tuple[str, list[dict]]:
-    """Return `(rail_name, rows)` for the chart rail, or `('', [])`.
+def extract_charts(html: str) -> list[tuple[str, list[dict]]]:
+    """Every chart rail on the page, best-named first.
 
     Only a rail whose heading names a chart is eligible. A page full
     of ranked tiles that belong to a merchandising rail yields
     nothing, which is the point: ten clean rows from the wrong rail
     is the failure this function exists to prevent.
+
+    Returns a list rather than one rail because HBO Max publishes a
+    series chart AND a film chart, and they are separate rankings.
+    Collapsing them into one would ask which of two different #1s
+    outranks the other, a question neither chart answers.
     """
-    best_name, best_rows, best_score = '', [], None
+    out: list[tuple[tuple, str, list[dict]]] = []
+    seen_names: set = set()
     for m in _RAIL_RE.finditer(html or ''):
         name = unescape(m.group(1))
-        if not _is_chart_heading(name):
+        if not _is_chart_heading(name) or name in seen_names:
             continue
         rows = []
         for r in _ROW_RE.finditer(m.group(2)):
@@ -353,11 +414,17 @@ def extract_chart(html: str) -> tuple[str, list[dict]]:
             })
         if not rows:
             continue
+        seen_names.add(name)
         rows.sort(key=lambda x: x['rank'])
-        score = (_chart_rank(name), -len(rows))
-        if best_score is None or score < best_score:
-            best_name, best_rows, best_score = name, rows, score
-    return best_name, best_rows
+        out.append(((_chart_rank(name), -len(rows)), name, rows))
+    out.sort(key=lambda t: t[0])
+    return [(name, rows) for _score, name, rows in out]
+
+
+def extract_chart(html: str) -> tuple[str, list[dict]]:
+    """The single best chart rail. Kept for callers that want one."""
+    charts = extract_charts(html)
+    return charts[0] if charts else ('', [])
 
 
 def _classify_from_path(path: str) -> str:
@@ -416,18 +483,23 @@ def fetch() -> dict[str, Any]:
     # while HBO Max itself had it at 1. Ordering downstream is the
     # ranking agent's business; which titles the platform charts, and
     # in what order, is this scraper's, and the platform says so.
-    rail_name, chart = '', []
+    charts: list[tuple[str, list[dict]]] = []
     for _label, html in rendered:
-        rail_name, chart = extract_chart(html)
-        if chart:
+        charts = extract_charts(html)
+        if charts:
             break
 
-    if chart:
-        logger.info("max: chart rail %r -> %s", rail_name,
-                    ', '.join(f"{c['rank']} {c['title']}" for c in chart))
-        return {'national': chart,
-                'chart_rail': rail_name,
-                'chart_positions': len(chart)}
+    if charts:
+        rows: list[dict] = []
+        for name, chart in charts:
+            logger.info("max: chart rail %r -> %s", name,
+                        ', '.join(f"{c['rank']} {c['title']}"
+                                  for c in chart))
+            rows.extend(chart)
+        return {'national': rows,
+                'chart_rail': charts[0][0],
+                'chart_rails': [n for n, _ in charts],
+                'chart_positions': len(rows)}
 
     # The pre-flight already proved the session, so reaching here
     # means the ranked rail did not render or is no longer named

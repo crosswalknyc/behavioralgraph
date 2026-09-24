@@ -101,6 +101,32 @@ def _natural(value: int, key: str, salt: str) -> int:
         return max(1, int(value))
 
 
+def _natural_under(value: int, limit: Optional[int], key: str,
+                   salt: str) -> int:
+    """Natural last digits, but never above `limit`.
+
+    Re-applying the digit can round a value UP, and a value one unit
+    over its platform's daily cap is not a rounding detail: the render
+    clamps anything above the cap and replaces it with the title's own
+    last reading, which is usually far lower and much older. That is
+    how a Tubi chart measured clean here arrived on the board with its
+    #1 reading 175,919 against a #2 of 857,110, an inversion at the
+    very top of the rail, from an 18-unit overshoot.
+
+    So walk down until it fits, keeping the digit natural rather than
+    truncating to a flat number, which would plant a round value at
+    exactly the cap on every rail that reaches it.
+    """
+    iv = _natural(value, key, salt)
+    if not limit or iv <= limit:
+        return iv
+    for guard in range(24):
+        iv = _natural(max(1, limit - guard), key, f'{salt}|cap{guard}')
+        if iv <= limit:
+            return iv
+    return max(1, limit - 1)
+
+
 def _pava(values: list[float], weights: Optional[list[float]] = None
           ) -> list[float]:
     """Pool adjacent violators: the closest non-increasing sequence.
@@ -317,15 +343,33 @@ def reconcile_rail(rows: list[dict], *, salt: str,
     # re-applied. An earlier draft measured the breach against the
     # pre-rounding value and left a handful of tail rows one or two
     # above the chart, which is the whole defect in miniature.
+    # The ceiling CASCADES down the positions rather than being applied
+    # to each independently. Clamping row by row puts every position
+    # that wants more than the cap at exactly the cap, and the natural
+    # last digit then decides their order: Tubi's top three came out at
+    # 857,105 / 857,110 / 857,118, ascending, because all three wanted
+    # the cap and the digit draw is per-title. A chart whose top is
+    # against its platform's ceiling still has to descend, so each
+    # position's real bound is the lower of the platform cap and a step
+    # below whatever the position above it actually committed to.
+    _h01, _ = _lazy()
     moved = 0
-    for r, before, after in zip(pub, pub_vals, adj):
-        if ceiling:
-            after = min(after, float(ceiling))
-        iv = _natural(int(round(after)), str(r.get('title') or ''),
-                      f'{salt}|pub')
+    prev_committed: Optional[float] = None
+    for i, (r, before, after) in enumerate(zip(pub, pub_vals, adj)):
+        limit = float(ceiling) if ceiling else None
+        if prev_committed is not None:
+            sep = _SEP_MIN + _h01(f'{salt}|capsep|{i}') * (_SEP_MAX - _SEP_MIN)
+            step = prev_committed * (1.0 - sep)
+            limit = step if limit is None else min(limit, step)
+        if limit is not None:
+            after = min(after, limit)
+        iv = _natural_under(int(round(after)),
+                            int(limit) if limit is not None else None,
+                            str(r.get('title') or ''), f'{salt}|pub')
         if iv != int(before):
             set_value(r, iv)
             moved += 1
+        prev_committed = float(get_value(r) or iv)
 
     cap = int(get_value(pub[-1]) or 0)
     breach = [r for r in tail if (get_value(r) or 0) >= cap] if cap else []
@@ -359,19 +403,11 @@ def reconcile_rail(rows: list[dict], *, salt: str,
             want = max(1.0, head - span * frac * wob)
             if ceiling:
                 want = min(want, float(ceiling))
-            iv = _natural(int(round(want)), str(r.get('title') or ''),
-                          f'{salt}|tail')
-            # Natural last digits can round a value back over the cap.
-            # Walk it down, keeping the digit natural, rather than
-            # truncating to a flat number.
-            guard = 0
-            while iv >= cap and guard < 24:
-                iv = _natural(max(1, cap - 1 - guard),
-                              str(r.get('title') or ''),
-                              f'{salt}|tail|{guard}')
-                guard += 1
-            if iv >= cap:
-                iv = max(1, cap - 1)
+            # Under BOTH bounds: the chart floor it must not reach, and
+            # the platform ceiling it must not exceed.
+            limit = min(cap - 1, int(ceiling)) if ceiling else cap - 1
+            iv = _natural_under(int(round(want)), max(1, limit),
+                                str(r.get('title') or ''), f'{salt}|tail')
             if iv != (get_value(r) or 0):
                 set_value(r, iv)
                 moved += 1

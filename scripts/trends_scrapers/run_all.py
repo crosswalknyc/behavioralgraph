@@ -90,6 +90,17 @@ SCRAPERS = [
     # comes from JustWatch's public GraphQL - no cookies, no
     # datacenter-IP blocking.
     ('fast_channels',      'scripts.trends_scrapers.fast_channels',      'FAST channels',        'fast'),
+    # Tubi's OWN Most Popular chart (2026-09-23). The line above is
+    # JustWatch's cross-service popularity pool, which is a third
+    # party's ranking of a Tubi title and not Tubi's; this is the
+    # sixty-title list Tubi publishes itself, anonymously, and it is
+    # what a viewer sees in the app. It owns which titles are on the
+    # rail as well as their order: 37 of its 60 are absent from the
+    # JustWatch pool entirely. Runs right after fast_channels so the
+    # capture lands at a consistent point each night, which matters
+    # because Tubi recomputes the chart through the day and the first
+    # healthy capture of each UTC day is the one that gets pinned.
+    ('tubi_popular',       'scripts.trends_scrapers.tubi_popular',       'Tubi Most Popular',    'fast'),
     # Vizio WatchFree+ and MyFree DIRECTV (2026-09-22, Jenna: "for FAST
     # Vizio, DirecTV, and LG be included"). Neither has a JustWatch
     # package, so neither has a titles catalogue; both ship the Channel

@@ -770,33 +770,120 @@ def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
     for slug, label in _FAST_SLUGS:
         platform_block = sources.get(slug) or {}
         items = platform_block.get('items') or []
-        # Top-100 per platform: the FAST tab renders the full 100-row
-        # top-list per platform, so we research every row to guarantee
-        # every visible chip has a number. Cross-platform dedup
-        # collapses the 400 gross to ~250-300 unique after the incremental
-        # `as_of_date == today` gate in `fetch()` skips items already
-        # covered by an earlier intra-day run.
-        for i, it in enumerate(items[:100]):
-            title = (it.get('title') or '').strip()
-            if not _cp_normalize(title):
-                continue
-            cat = (it.get('category_display') or '').lower()
-            item_kind = 'fast_film' if cat == 'film' else 'fast_tv'
-            key = f'{item_kind}:{_cp_normalize(title)}'
-            rank = int(it.get('rank') or (i + 1))
+
+        # The platform's OWN chart, where it publishes one. It lives in
+        # its own snapshot (see `published_chart_snapshot`) because the
+        # file above is JustWatch's cross-service popularity pool, and
+        # a position drawn from that pool is not the platform's
+        # ranking no matter how the label reads.
+        pub_index: dict = {}
+        pub_label = None
+        chart_rows: list[dict] = []
+        if has_published_chart(slug):
+            chart_snap = _read_snapshot(published_chart_snapshot(slug))
+            if chart_snap:
+                pub_index = published_chart_index(slug, chart_snap)
+                pub_label = published_chart_label(slug)
+                chart_rows = [r for r in (chart_snap.get('national') or [])
+                              if isinstance(r, dict)]
+
+        # Artwork and the JustWatch link, for charted titles that the
+        # catalog feed also happens to carry.
+        art: dict[str, dict] = {}
+        for it in items:
+            n = _cp_normalize((it.get('title') or '').strip())
+            if n and n not in art:
+                art[n] = it
+
+        def _kind_of(cat_display: str) -> tuple[str, str]:
+            """(bare kind for the chart index, item kind for the store)."""
+            cat = (cat_display or '').strip().lower()
+            if cat.startswith(('film', 'movie')):
+                return 'film', 'fast_film'
+            return 'tv', 'fast_tv'
+
+        def _add(title: str, cat_display: str, rank: int,
+                 src: dict, charted: bool) -> None:
+            norm = _cp_normalize(title)
+            if not norm:
+                return
+            bare_kind, item_kind = _kind_of(cat_display)
+            key = f'{item_kind}:{norm}'
+            extra = art.get(norm) or {}
             e = per.setdefault(key, {
                 'kind':          item_kind,
                 'display_title': title,
                 'artist':        '',
                 'best_rank':     rank,
                 'chart_labels':  [],
-                'image':         it.get('image'),
-                'url':           it.get('url'),
+                'image':         src.get('image') or extra.get('image'),
+                'url':           src.get('url') or extra.get('url'),
             })
-            e['chart_labels'].append(f'{label} #{rank}')
+            if not e.get('image'):
+                e['image'] = extra.get('image')
+            hit = published_rank_for(pub_index, bare_kind, title) \
+                if pub_index else None
+            if charted and hit:
+                pos, chart_name, group = hit
+                e['published_rank'] = pos
+                e['published_chart'] = chart_name
+                e['published_group'] = group
+                lab = f'{chart_name} #{pos}'
+                if lab not in e['chart_labels']:
+                    e['chart_labels'].append(lab)
+                if pos < e['best_rank']:
+                    e['best_rank'] = pos
+                return
+            if hit:
+                # Already seated off the chart on an earlier pass; the
+                # catalog listing adds nothing.
+                return
+            # No published position, so none is claimed. The rank this
+            # row arrived with is JustWatch's cross-service popularity
+            # order, which is a third party's ranking of the title and
+            # not this platform's. Saying '{platform} #3' turned that
+            # into a position the platform never gave, the research
+            # step reasoned a tier from it, and the tier became the
+            # value. Same failure the streaming rails had, same answer.
+            if pub_label:
+                lab = (f'{label} catalog listing, not on the '
+                       f'{pub_label} it publishes, so no position is '
+                       f'claimed for it')
+            else:
+                lab = (f'{label} catalog listing; this service '
+                       f'publishes no ranked chart, so no ordering '
+                       f'signal exists and listing position carries '
+                       f'none')
+            if lab not in e['chart_labels']:
+                e['chart_labels'].append(lab)
             if rank < e['best_rank']:
                 e['best_rank'] = rank
-    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+        # The chart owns membership, so it is read FIRST and in full.
+        # On Tubi 37 of its own 60 most popular titles are absent from
+        # the JustWatch feed entirely, Everybody Hates Chris among
+        # them, which is why they could never reach the board however
+        # the values were reasoned. Annotating the feed would not have
+        # fixed that; the chart has to be able to add rows.
+        for r in chart_rows:
+            _add((r.get('title') or '').strip(),
+                 r.get('category_display') or '',
+                 int(r.get('rank') or 0) or 1, r, True)
+
+        # Then the catalog. Top-100 per platform: the FAST tab renders
+        # the full 100-row top-list per platform, so we research every
+        # row to guarantee every visible chip has a number.
+        for i, it in enumerate(items[:100]):
+            _add((it.get('title') or '').strip(),
+                 it.get('category_display') or '',
+                 int(it.get('rank') or (i + 1)), it, False)
+
+    # A title the platform ranks itself sorts ahead of one it does not,
+    # so the collection cap spends its budget on the charted rows
+    # first. Page position breaks ties within each group.
+    return sorted(per.values(),
+                  key=lambda e: (0 if e.get('published_rank') else 1,
+                                 e['best_rank']))[:max_items]
 
 
 def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
@@ -2519,11 +2606,34 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'max',
      'label': 'HBO Max',
-     'ceiling': 12_000_000,
+     'ceiling': 21_000_000,
      'anchors': (
-         'Nielsen: Max #1 (House of the Dragon, White Lotus): 3-7M '
-         'US households/week. Long tail 0.5-2M. Max/HBO combined = '
-         '~8-10% of US streaming minutes.'
+         'Nielsen The Gauge (May 2026) puts Warner Bros. Discovery '
+         'streaming, which is HBO Max plus discovery+, at 1.5% of all '
+         'US TV viewing, against Netflix 8.0%, Prime Video 4.5% and '
+         'Peacock 1.8%. WBD passed 140M global streaming subscribers '
+         'in Q1 2026 and no longer breaks out a US number; the US is '
+         'roughly 40-45% of that base. WBD does not report per-title '
+         'audiences, but Nielsen measured The Pitt at 5.7 billion '
+         'viewing minutes in March 2026, the second most-streamed '
+         'title in the US that month. '
+         'DERIVED DAILY ENVELOPE: US TV viewing runs on the order of '
+         '1.2B hours a day, so 1.5% is about 18M hours/day for WBD '
+         'streaming, and at ~2 viewing hours per daily active that is '
+         'roughly 8-10M US DAILY viewers across the service. Against '
+         'that, a typical #1 on the daily chart reads about 400K to '
+         '1.2M US daily viewers. The Pitt level, 5.7B minutes over 31 '
+         'days being ~3.1M hours/day and so ~3-3.7M daily viewers, is '
+         'a once-a-year peak for a flagship in its finale month, not '
+         'a normal top slot. The ceiling here (21,000,000 WEEKLY, '
+         'which the render divides by seven) encodes that peak and is '
+         'a hard cap, never a target: do not size an ordinary daily '
+         '#1 anywhere near it. '
+         'HBO Max publishes two charts, Top 10 Series Today and Top '
+         '10 Movies Today. They are independent, so the top series '
+         'and the top film are both #1 and neither outranks the '
+         'other. Series carry the service: a top film here reads well '
+         'below a top series, typically a third to a half of it.'
      )},
     {'key': 'primevideo',
      'label': 'Prime Video',
@@ -2931,12 +3041,29 @@ _FAST_PLATFORMS_META = [
      'label': 'Tubi',
      'ceiling': 6_000_000,
      'anchors': (
-         'Fox Corp. reports Tubi ~97M MAU (Q1 2026). Nielsen FAST '
-         'Gauge: Tubi = ~2.0-2.4% of total US TV usage. Top licensed '
-         'catalog (Sons of Anarchy, The Bear reruns, WWE Speed) hits '
-         '3-5M weekly viewers. Tubi Originals reach 1-3M. Middle of '
-         'top-100 typically 200K-800K. Anchor: Fox Q2 2026 earnings '
-         'call + Antenna FAST engagement reports.'
+         'Tubi announced 110M monthly active users on 2026-08-06, up '
+         '14% YoY, and Fox Corp. FY2026 10-K reports over 13 billion '
+         'hours of total view time for the year with a record 3.4 '
+         'billion in Q4. Nielsen The Gauge put Tubi at ~2.2% of all US '
+         'TV viewing across FY2026, an all-time-high 2.3% in April '
+         '2026 and 2.0% in July 2026 (Nielsen adjusted its Tubi '
+         'measurement parameters in June 2026). Nearly 60% of the '
+         'audience is Gen Z or Millennial. '
+         'DERIVED DAILY ENVELOPE: 3.4B hours over the 92 days of Q4 is '
+         '~37M hours/day worldwide; the US is the large majority of a '
+         'service sold in the US plus select international markets, '
+         'and at ~1.5-2.5 viewing hours per daily active that puts US '
+         'DAILY actives on the order of 13-18M people. The catalog is '
+         '375,000+ movies and episodes, so no single title holds much '
+         'of that: the #1 on any given day reads in the mid hundreds '
+         'of thousands of US daily viewers, and the ceiling here '
+         '(6,000,000 WEEKLY, which the render divides by seven) is a '
+         'hard cap rather than a typical value. '
+         'Tubi publishes its own 60-title Most Popular chart, so a '
+         'charted row is sized to its published position and the '
+         'catalog below it is sized under the chart floor. Do not '
+         'reason from a top-100 listing position: only the published '
+         'chart carries an ordering signal.'
      )},
     {'key': 'pluto',
      'label': 'Pluto TV',
@@ -6523,17 +6650,17 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
 
     depth_sources = (_read_snapshot('streaming_depth') or {}).get(
         'sources') or {}
-    for slug, label in _STREAMING_SLUGS:
-        if not has_published_chart(slug):
-            continue
-        snap = _read_snapshot(slug)
+    for slug, label in _charted_slugs():
+        snap = _read_snapshot(published_chart_snapshot(slug))
         if not snap:
             continue
         index = published_chart_index(slug, snap)
         if not index:
             continue
-        meta = next((p for p in _STREAMING_PLATFORMS_META
-                     if p['key'] == slug), None)
+        prefix = published_chart_key_prefix(slug)
+        meta = next((p for p in tuple(_STREAMING_PLATFORMS_META)
+                     + tuple(_FAST_PLATFORMS_META)
+                     if p.get('key') == slug), None)
         ceiling = _platform_daily_cap_for(slug)
         anchors = (meta or {}).get('anchors') or ''
 
@@ -6561,7 +6688,7 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             group = hit[2] if len(hit) > 2 else ''
             row = {'title': title, 'published_rank': hit[0],
                    'kind': kind, 'category': r.get('category_display') or '',
-                   '_item_key': f'{kind}:{norm}'}
+                   '_item_key': f'{prefix}{kind}:{norm}'}
             for f in ('weekly_views', 'weekly_hours_viewed',
                       'weeks_in_top10'):
                 if r.get(f):
@@ -6691,6 +6818,7 @@ def _rail_tail_rows(researched: dict, slug: str, snap: dict,
     snapshot plus the depth extension, minus anything the service
     charts."""
     out, seen = [], set()
+    prefix = published_chart_key_prefix(slug)
 
     def _push(title: str, kind: str) -> None:
         norm = _cp_normalize(title or '')
@@ -6699,8 +6827,8 @@ def _rail_tail_rows(researched: dict, slug: str, snap: dict,
         seen.add((kind, norm))
         if published_rank_for(index, kind, title):
             return
-        key = f'{kind}:{norm}'
-        it = researched.get(key) or researched.get(f'title:{norm}')
+        key = f'{prefix}{kind}:{norm}'
+        it = researched.get(key) or researched.get(f'{prefix}title:{norm}')
         if not isinstance(it, dict):
             return
         blk = (it.get('by_platform') or {}).get(slug)
@@ -6709,18 +6837,8 @@ def _rail_tail_rows(researched: dict, slug: str, snap: dict,
         out.append({'title': title, '_item': it, '_blk': blk,
                     '_key': key})
 
-    if slug == 'netflix':
-        for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
-            for r in (snap.get(lk) or []):
-                _push(str(r.get('title') or ''), kind)
-    for r in (snap.get('national') or []):
-        cat = str(r.get('category_display') or '').strip().lower()
-        _push(str(r.get('title') or ''),
-              'film' if cat.startswith(('film', 'movie')) else 'tv')
-    dblk = depth_sources.get(slug) or {}
-    for lk, kind in (('films', 'film'), ('tv', 'tv')):
-        for r in (dblk.get(lk) or []):
-            _push(str(r.get('title') or ''), kind)
+    for title, kind in _published_rail_rows(slug, snap, depth_sources):
+        _push(title, kind)
     out.sort(key=lambda t: -(t['_blk'].get('us_estimate') or 0))
     return out
 
@@ -6760,29 +6878,28 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
     depth_sources = (_read_snapshot('streaming_depth') or {}).get(
         'sources') or {}
 
-    for slug, _label in _STREAMING_SLUGS:
-        if not has_published_chart(slug):
-            continue
-        snap = _read_snapshot(slug)
+    for slug, _label in _charted_slugs():
+        snap = _read_snapshot(published_chart_snapshot(slug))
         if not snap:
             continue
         ceiling = _platform_daily_cap_for(slug) or None
         index = published_chart_index(slug, snap)
         if not index:
             continue
+        prefix = published_chart_key_prefix(slug)
 
         # The titles on the rail, in render order, with the same
         # film/tv split the page uses.
         by_kind: dict[str, list[dict]] = {'film': [], 'tv': []}
         seen: set[tuple] = set()
 
-        def _push(title: str, kind: str) -> None:
+        def _push(title: str, kind: str, _prefix=prefix) -> None:
             norm = _cp_normalize(title or '')
             if not norm or (kind, norm) in seen:
                 return
             seen.add((kind, norm))
-            it = researched.get(f'{kind}:{norm}') or researched.get(
-                f'title:{norm}')
+            it = researched.get(f'{_prefix}{kind}:{norm}') or \
+                researched.get(f'{_prefix}title:{norm}')
             if not isinstance(it, dict):
                 return
             blk = (it.get('by_platform') or {}).get(slug)
@@ -6792,25 +6909,16 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             if not isinstance(v, int) or v <= 0:
                 return
             row = {'title': title, '_item': it, '_blk': blk,
-                   '_key': f'{kind}:{norm}'}
+                   '_key': f'{_prefix}{kind}:{norm}'}
             hit = published_rank_for(index, kind, title)
             if hit:
                 row['published_rank'] = hit[0]
                 row['_group'] = hit[2] if len(hit) > 2 else ''
             by_kind[kind].append(row)
 
-        if slug == 'netflix':
-            for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
-                for r in (snap.get(lk) or []):
-                    _push(str(r.get('title') or ''), kind)
-        for r in (snap.get('national') or []):
-            cat = str(r.get('category_display') or '').strip().lower()
-            _push(str(r.get('title') or ''),
-                  'film' if cat.startswith(('film', 'movie')) else 'tv')
-        dblk = depth_sources.get(slug) or {}
-        for lk, kind in (('films', 'film'), ('tv', 'tv')):
-            for r in (dblk.get(lk) or []):
-                _push(str(r.get('title') or ''), kind)
+        for _title, _kind in _published_rail_rows(slug, snap,
+                                                  depth_sources):
+            _push(_title, _kind)
 
         def _get(r):
             return r['_blk'].get('us_estimate')
@@ -7439,6 +7547,24 @@ def fetch(only: Optional[set[str]] = None,
         logger.exception("stream_estimates: published-chart coherence "
                           "failed (non-fatal)")
 
+    # And again on the other side of it. A reading over its platform's
+    # daily cap is not a rounding detail: the render clamps anything
+    # above the cap and substitutes the title's own last reading, which
+    # is older and usually much lower, so a single unit of overshoot at
+    # position 1 puts the whole rail out of order on the page. That is
+    # what happened to Tubi on 2026-09-23, where #1 shipped 18 over and
+    # arrived on the board reading 175,919 beneath a #2 of 857,110.
+    # The pass above no longer writes over a ceiling; this catches
+    # anything it declined to touch, and a rail it held.
+    try:
+        _nc2 = _reclamp_carried_to_platform_ceiling(researched)
+        if _nc2:
+            logger.info("stream_estimates: %d reading(s) put back under "
+                         "their platform ceiling after coherence", _nc2)
+    except Exception:
+        logger.exception("stream_estimates: post-coherence ceiling "
+                          "re-check failed (non-fatal)")
+
     # No item repeats a reading it already holds inside its own
     # trailing 60 days (Jenna 2026-09-15). The walk above only ever
     # compared against yesterday, so a value was free to land back on
@@ -7640,7 +7766,189 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
                         'top 10 tv shows in the us'),
         'depth': 10,
     },
+    # HBO Max publishes two, in the aria-label of each rail's H2:
+    # 'Top 10 Series Today' and 'Top 10 Movies Today'. They are
+    # independent rankings, so they are two collections here and the
+    # top series never has to out-draw the top film.
+    #
+    # Read the accessible name, not the heading text. The same H2s
+    # carry CMS names in their textContent ('Popular TV' for the
+    # series chart, 'Fresh Starts' for the films), and 'Fresh Starts'
+    # describes nothing that is in it. A reader who trusted the
+    # visible text would call the film chart editorial and drop it.
+    #
+    # Confirmed against the app on 2026-09-24: the series rail reads
+    # Lanterns, 90 Day: The Last Resort, Halloween Baking
+    # Championship, 90 Day Fiance, Youth, President Curtis, in that
+    # order, which is what HBO Max itself shows. Our board had
+    # Lanterns at 4, under Friends, because nothing here claimed a
+    # published chart for this service and the rail was ordered by
+    # value alone.
+    'max': {
+        'label': 'HBO Max Top 10 Today',
+        'mode':  'collection',
+        'collections': ('top 10 series today', 'top 10 movies today'),
+        'depth': 10,
+    },
+    # Tubi publishes sixty titles at tubitv.com/category/most_popular,
+    # anonymously, and that page is what a viewer sees in the app.
+    # Every Tubi row used to carry a JustWatch cross-service position
+    # rendered as 'Tubi #3', which is a third party's ranking wearing
+    # Tubi's name; this is Tubi's own. Read as viewing rather than
+    # merchandising because it does not cohere: one capture holds a
+    # 1999 cartoon, a 2026 Tubi original, a Scooby-Doo series and a
+    # daytime court show, while the shelves beside it (Only Free on
+    # Tubi, Cult Classics, Black Storytelling) each hold together on
+    # an obvious theme and share none of its ordering.
+    #
+    # Its chart lives in its OWN snapshot rather than the shared
+    # fast_channels.json, because that file is the JustWatch feed and
+    # mixing a platform's own chart into it would make the two
+    # indistinguishable a year from now. `snapshot` names the file;
+    # `key_prefix` is what `_collect_fast` keys FAST items with, so a
+    # lookup finds `fast_tv:...` rather than `tv:...`.
+    'tubi': {
+        'label': 'Tubi Most Popular',
+        'mode':  'collection',
+        'collections': ('most popular',),
+        'depth': 60,
+        'snapshot': 'tubi_popular',
+        'key_prefix': 'fast_',
+    },
 }
+
+
+# Rails that were LOOKED AT and deliberately left out, so nobody has to
+# re-derive the reasoning and nobody "fixes" the omission by adding one
+# back. Audited 2026-09-23 by rendering each site live. A rail named
+# Most Popular is only a chart if it reflects viewing; several of these
+# are merchandising, and shipping a curated shelf as a ranking is the
+# same defect as the JustWatch positions, just better disguised.
+#
+#   xumo / 'Most Popular' (free movies)
+#       Seven of nine were sci-fi or horror, on a page that also
+#       carries 'Stellar Sci-Fi', 'Fall Frights' and "Editor's Picks".
+#       It coheres around a genre. That is a shelf.
+#   hulu / 'Trending' (hub home)
+#       Half the rail was ID-style true crime, on a personalised page
+#       that also renders 'Because You Watched'. Hulu's hub 'Popular'
+#       rails are the honest ones; the home rail is not.
+#   mgmplus / 'Trending Movies'
+#       Clusters on 2025-26 releases, which is recency, and overlaps
+#       four titles with the openly editorial 'Must Watch' beside it.
+#   starz / 'Popular' (series)
+#       Almost entirely the Power universe and Outlander. That is an
+#       Originals shelf. Starz's MOVIES Top 10 is real and is wired.
+#   peacock / 'Trending Now'
+#       A promotional mix distinct from the Top 10 rails, which are
+#       the real chart and are wired instead.
+#   roku, britbox, amcplus, moviesphereplus
+#       Audited and publish no ranked list at all. Editorial rails
+#       only ('NEW THIS MONTH', 'Must-watch Essentials', 'HIT SHOWS
+#       ON AMC+'). Chartless is the correct answer for them.
+#   disneyplus, espnplus
+#       Unresolved, not chartless. The donated session verifies as
+#       signed in but every render redirects to the login wall, so
+#       the question could not be answered. Re-probe both together
+#       once that is fixed.
+_AUDITED_NO_CHART = {
+    'xumo':            "'Most Popular' coheres on genre; merchandising",
+    'hulu_home':       "'Trending' is personalised and genre-clustered",
+    'mgmplus':         "'Trending Movies' clusters on recency",
+    'starz_series':    "'Popular' is an Originals shelf",
+    'peacock_trending': "'Trending Now' is promotional, not the Top 10",
+    'roku':            'publishes no ranked list',
+    'britbox':         'publishes no ranked list',
+    'amcplus':         'publishes no ranked list',
+    'moviesphereplus': 'publishes no ranked list',
+    'disneyplus':      'UNRESOLVED: session redirects to login',
+    'espnplus':        'UNRESOLVED: session redirects to login',
+}
+
+
+def published_chart_snapshot(slug: str) -> str:
+    """Which snapshot file holds this service's chart.
+
+    Defaults to the service's own snapshot, which is how every
+    streaming platform arrives. A FAST platform names a separate file
+    because the shared `fast_channels.json` is the JustWatch feed, not
+    the platform's own page.
+    """
+    spec = _PUBLISHED_CHARTS.get(slug) or {}
+    return spec.get('snapshot') or slug
+
+
+def published_chart_key_prefix(slug: str) -> str:
+    """Prefix the estimates store keys this service's items under.
+
+    Streaming items are `film:` / `tv:`; FAST items are `fast_film:` /
+    `fast_tv:` so an ad-supported reading never collides with the paid
+    one for the same title.
+    """
+    spec = _PUBLISHED_CHARTS.get(slug) or {}
+    return spec.get('key_prefix') or ''
+
+
+def _charted_slugs() -> list[tuple[str, str]]:
+    """Every service that publishes a chart, streaming and FAST alike.
+
+    The two reasoning passes below used to walk `_STREAMING_SLUGS`
+    only, which was right while every published chart belonged to a
+    subscription service. A free ad-supported platform publishes one
+    too, and a chart nobody re-levels is a chart the board renders out
+    of order, so both passes read this instead.
+    """
+    return [(slug, label)
+            for slug, label in tuple(_STREAMING_SLUGS) + tuple(_FAST_SLUGS)
+            if has_published_chart(slug)]
+
+
+def _published_rail_rows(slug: str, snap: dict,
+                         depth_sources: dict) -> list[tuple[str, str]]:
+    """The titles on this service's rail, in render order, as
+    `(title, kind)` with kind in {'film', 'tv'}.
+
+    This is the population the reader actually sees, which is what the
+    coherence pass has to be scoped to. Reconciling against every title
+    ever collected for a service tests containment against rows nobody
+    is looking at.
+
+    A FAST platform's rail is its catalog feed plus its own chart; a
+    streaming platform's is its snapshot plus the depth extension.
+    """
+    rows: list[tuple[str, str]] = []
+
+    def _kind(cat: str) -> str:
+        c = (cat or '').strip().lower()
+        return 'film' if c.startswith(('film', 'movie')) else 'tv'
+
+    if published_chart_key_prefix(slug) == 'fast_':
+        fast = _read_snapshot('fast_channels') or {}
+        block = ((fast.get('sources') or {}).get(slug) or {})
+        for r in (block.get('items') or [])[:100]:
+            if isinstance(r, dict):
+                rows.append((str(r.get('title') or ''),
+                             _kind(r.get('category_display') or '')))
+        for r in (snap.get('national') or []):
+            if isinstance(r, dict):
+                rows.append((str(r.get('title') or ''),
+                             _kind(r.get('category_display') or '')))
+        return rows
+
+    if slug == 'netflix':
+        for lk, kind in (('us_films', 'film'), ('us_tv', 'tv')):
+            for r in (snap.get(lk) or []):
+                rows.append((str(r.get('title') or ''), kind))
+    for r in (snap.get('national') or []):
+        if isinstance(r, dict):
+            rows.append((str(r.get('title') or ''),
+                         _kind(r.get('category_display') or '')))
+    dblk = depth_sources.get(slug) or {}
+    for lk, kind in (('films', 'film'), ('tv', 'tv')):
+        for r in (dblk.get(lk) or []):
+            if isinstance(r, dict):
+                rows.append((str(r.get('title') or ''), kind))
+    return rows
 
 
 def has_published_chart(slug: str) -> bool:
