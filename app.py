@@ -3916,6 +3916,16 @@ def wbd_budget_page():
     resp.headers.update(headers)
     return resp
 
+
+@app.route('/pricing', methods=['GET'])
+@app.route('/pricing/', methods=['GET'])
+def pricing_page():
+    """Public Prometheus model. No dashboard login and no password."""
+    headers = {'X-Robots-Tag': 'noindex, nofollow, noarchive'}
+    resp = make_response(render_template('pricing.html'), 200)
+    resp.headers.update(headers)
+    return resp
+
 # ============================================================================
 # DESKTOP APP DOWNLOAD
 # ----------------------------------------------------------------------------

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Crosswalk Behavioral Intelligence Engine with Prometheus: Prometheus model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#0C1618; --raised:#15252A; --text:#E9E8E1; --body:#9AA09B; --muted:#7C878A;
+  --accent:#C7F23E; --border:#27393D; --track:#3B3D38; --bar:#E9E8E1; --second:#E682FF;
+  --focus:#3358FF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --page:#E9E8E1; --raised:#E1E0D7; --text:#0C1618; --body:#5C6560; --muted:#666966;
+    --accent:#547110; --border:#C9C6BA; --track:#C9C6BA; --bar:#0C1618; --second:#8E3FA8;
+  }
+}
+:root[data-theme="light"]{
+  --page:#E9E8E1; --raised:#E1E0D7; --text:#0C1618; --body:#5C6560; --muted:#666966;
+  --accent:#547110; --border:#C9C6BA; --track:#C9C6BA; --bar:#0C1618; --second:#8E3FA8;
+}
+:root[data-theme="dark"]{
+  --page:#0C1618; --raised:#15252A; --text:#E9E8E1; --body:#9AA09B; --muted:#7C878A;
+  --accent:#C7F23E; --border:#27393D; --track:#3B3D38; --bar:#E9E8E1; --second:#E682FF;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--page);color:var(--text);
+  font-family:"Inter",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-variation-settings:"opsz" 18;font-size:16px;line-height:1.45;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto;padding:0 40px}
+@media (max-width:767px){.wrap{padding:0 20px}}
+
+header.top{display:flex;justify-content:space-between;align-items:center;padding:28px 0 0}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--body)}
+.eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.logo{height:18px;width:auto}
+.logo-dark{display:block}.logo-light{display:none}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .logo-dark{display:none}:root:not([data-theme="dark"]) .logo-light{display:block}}
+:root[data-theme="light"] .logo-dark{display:none}:root[data-theme="light"] .logo-light{display:block}
+
+.hero{padding:64px 0 56px}
+h1{font-size:clamp(32px,5vw,52px);font-weight:700;line-height:1.1;margin:0 0 20px;max-width:24ch;letter-spacing:-0.01em}
+.offer{font-size:clamp(20px,2.4vw,26px);font-weight:700;line-height:1.3;color:var(--accent);max-width:48ch;margin:0 0 18px}
+.lede{color:var(--body);font-size:18px;max-width:62ch;margin:0}
+.lede2{margin-top:12px}
+
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:48px}
+@media (max-width:767px){.compare{grid-template-columns:1fr}}
+.deal{background:var(--raised);border-radius:14px;padding:28px;min-width:0}
+.deal .fig{overflow-wrap:anywhere}
+.deal .label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--body);margin-bottom:14px}
+.deal .fig{font-size:clamp(40px,6vw,64px);font-weight:700;line-height:1}
+.deal .fig small{font-size:18px;font-weight:400;color:var(--body);margin-left:.5em}
+.deal.pick .fig{color:var(--text)}
+.deal p{color:var(--body);margin:14px 0 0;max-width:46ch}
+.included{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-size:13px;padding:5px 10px;border-radius:4px;border:1px solid var(--border);color:var(--text)}
+
+section.band{padding:56px 0;border-top:1px solid var(--border)}
+h2{font-size:clamp(24px,3vw,34px);font-weight:700;line-height:1.15;margin:0 0 10px;max-width:24ch}
+.sub{color:var(--body);margin:0 0 32px;max-width:66ch}
+
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+.preset{font:inherit;font-size:14px;font-weight:500;height:34px;padding:0 16px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
+.preset:hover{background:var(--raised)}
+.preset[aria-pressed="true"]{background:var(--text);color:var(--page);border-color:var(--text)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.planner{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:32px;align-items:start}
+@media (max-width:959px){.planner{grid-template-columns:1fr}}
+.inputs{background:var(--raised);border-radius:14px;padding:8px 24px}
+.row{display:grid;grid-template-columns:1fr auto;gap:6px 16px;padding:18px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.row .name{font-weight:700;font-size:15px}
+.row .price{color:var(--muted);font-size:13px}
+.row .desc{grid-column:1/-1;color:var(--body);font-size:13px;margin-top:-2px}
+.row .line{grid-column:1/-1;display:flex;align-items:center;gap:14px}
+.row input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.num{width:78px;font:inherit;font-size:15px;font-weight:700;text-align:right;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text)}
+.row .sum{min-width:84px;text-align:right;font-weight:500}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;grid-column:1/-1}
+@media (max-width:600px){.split{grid-template-columns:1fr}}
+.split label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+.split .line{display:flex;gap:10px;align-items:center}
+
+.results{position:sticky;top:calc(env(safe-area-inset-top,0px) + 20px)}
+.total{padding-bottom:22px;border-bottom:1px solid var(--border)}
+.total .label{font-size:14px;color:var(--body)}
+.total .fig{font-size:clamp(44px,6vw,72px);font-weight:700;line-height:1.05;color:var(--accent)}
+.total .note{font-size:15px;color:var(--body);margin-top:6px}
+.bars{padding:24px 0;border-bottom:1px solid var(--border)}
+.bar-row{margin-bottom:18px}
+.bar-row:last-child{margin-bottom:0}
+.bar-head{display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px}
+.bar-head b{font-weight:700}
+.track{height:12px;border-radius:999px;background:var(--track);overflow:hidden;display:flex}
+.seg{height:100%;transition:width 320ms cubic-bezier(.16,1,.3,1)}
+.seg.lic{background:var(--bar)}
+.seg.met{background:var(--accent)}
+.legend{display:flex;gap:18px;margin-top:14px;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:20px 24px;padding-top:24px}
+.stat .v{font-size:26px;font-weight:700;line-height:1.1}
+.stat .k{font-size:13px;color:var(--body);margin-top:4px}
+.verdict{margin-top:24px;font-size:15px;color:var(--text);max-width:52ch}
+@media (prefers-reduced-motion: reduce){.seg{transition:none}}
+
+.practices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 48px}
+@media (max-width:767px){.practices{grid-template-columns:1fr}}
+.practice{padding:22px 0;border-top:1px solid var(--border)}
+.practice h3{font-size:17px;font-weight:700;margin:0 0 6px}
+.practice p{color:var(--body);margin:0;max-width:56ch;font-size:15px}
+
+footer{padding:32px 0 48px;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.fine{font-size:13px;color:var(--muted);max-width:80ch;margin:28px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Prometheus model</div>
+    <img class="logo logo-dark" alt="Crosswalk" src="data:image/png;base64,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">
+    <img class="logo logo-light" alt="Crosswalk" src="data:image/png;base64,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">
+  </header>
+
+  <section class="hero">
+    <h1>The Crosswalk Behavioral Intelligence Engine, with Prometheus as your AI agent.</h1>
+    <p class="offer">Prometheus is metered. You pay only for the reports your team pulls, so spend follows your slate instead of an upfront commitment.</p>
+
+    <div class="compare">
+      <div class="deal">
+        <div class="label">Prometheus AI agent, metered</div>
+        <div class="fig">$300<small>to $500 per report</small></div>
+        <p>Your team pulls a report when a title, audience, or campaign needs one. Each pull draws on a prepaid balance, and every charge is downloadable from the dashboard.</p>
+        <div class="included">
+          <span class="chip">Profile IQ $300</span><span class="chip">Flywheel $300</span><span class="chip">Digital Journey IQ $500</span><span class="chip">Subscriber Acquisition $500</span><span class="chip">Brand Partnership $500</span><span class="chip">Attribution IQ $500 plus $100 per day of in‑flight updates</span>
+        </div>
+      </div>
+      <div class="deal">
+        <div class="label">Prepaid balance</div>
+        <div class="fig">$5,000<small>opening balance</small></div>
+        <p>When the balance reaches $500, it tops up with another $5,000. Chat with Prometheus is billed on usage: about $0.15 for a quick lookup and $0.84 for a detailed analysis.</p>
+        <div class="included">
+          <span class="chip">Top-up at $500 remaining</span><span class="chip">Usage statement downloadable anytime</span><span class="chip">Charged only for what you pull</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="planner-h">
+    <h2 id="planner-h">Model your Prometheus spend before you commit a dollar of it.</h2>
+    <p class="sub">Set how many reports your team expects to pull and over how many months. The model shows Prometheus spend, the monthly run rate, and how often the prepaid balance tops up.</p>
+
+    <div class="presets" role="group" aria-label="Scenarios">
+      <button class="preset" data-p="light" aria-pressed="false">Light</button>
+      <button class="preset" data-p="hundred" aria-pressed="true">Planned</button>
+      <button class="preset" data-p="active" aria-pressed="false">Active</button>
+    </div>
+
+    <div class="planner">
+      <div class="inputs" id="inputs"></div>
+
+      <div class="results" aria-live="polite">
+        <div class="total">
+          <div class="label" id="totalLabel">Prometheus spend</div>
+          <div class="fig" id="total">$0</div>
+          <div class="note" id="totalNote"></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="v" id="sMonth"></div><div class="k">Average Prometheus spend per month</div></div>
+          <div class="stat"><div class="v" id="sPulls"></div><div class="k">Reports pulled</div></div>
+          <div class="stat"><div class="v" id="sTop"></div><div class="k">Prepaid charges, $5,000 each</div></div>
+          <div class="stat"><div class="v" id="sBal"></div><div class="k" id="sBalK">Prepaid balance remaining</div></div>
+        </div>
+        <p class="verdict" id="verdict"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="bp-h">
+    <h2 id="bp-h">How to budget Prometheus.</h2>
+    <p class="sub">Size the report line from your planned slate, then keep it on track.</p>
+    <div class="practices">
+      <div class="practice"><h3>Budget chat by the question, not the token.</h3><p>Chat is billed on the text Prometheus reads and writes: $10.50 per million tokens read, $52.50 per million written, plus $0.021 per search. A million tokens is about 750,000 words. In practice a quick lookup runs about $0.15 and a detailed analysis about $0.84.</p></div>
+      <div class="practice"><h3>Size the report line from your planned slate.</h3><p>Start with the titles, audiences, and talent you expect to study. One Profile IQ at $300 is the base: 100 profiles is $30,000.</p></div>
+      <div class="practice"><h3>Pull campaign reports only when a campaign is live.</h3><p>Brand Partnership, Digital Journey IQ, and Subscriber Acquisition are $500 each and belong to a specific title or campaign. No title needs every report type.</p></div>
+      <div class="practice"><h3>Treat the balance as cash flow, not a fee.</h3><p>The $5,000 opening balance, the $5,000 top-up at $500 remaining, and the usage statement are one mechanism. Every dollar charged is a dollar of reports your team pulled or will pull.</p></div>
+      <div class="practice"><h3>Set the in-flight window before an Attribution IQ campaign starts.</h3><p>Days of in-flight updates are the lever: $500 to set up plus $100 per day. A 14-day window is $1,900, a 30-day window is $3,500. Decide the window with the team running the campaign.</p></div>
+      <div class="practice"><h3>Name one owner for the usage statement.</h3><p>Charges are downloadable from the dashboard at any time. One person reviewing it keeps spend matched to the plan and catches duplicate pulls early.</p></div>
+      <div class="practice"><h3>Start a fresh chat for a new topic.</h3><p>Prometheus rereads the conversation on every turn, so long threads cost a little more per question. Chat is a small line next to report pulls, and a new thread for each title or campaign keeps it that way.</p></div>
+      <div class="practice"><h3>Review the run rate daily, weekly, and quarterly.</h3><p>Check daily charges in the usage statement, compare weekly totals with the plan in this model, and each quarter resize the report line for the months ahead as titles and campaigns come in.</p></div>
+    </div>
+    <p class="fine">Prometheus prices as of September 2026. Chat costs use typical token counts for planning; actual charges appear in the dashboard usage statement. This model is illustrative and does not amend any agreement.</p>
+  </section>
+
+  <footer><span>Crosswalk / Behavioral Intelligence Engine</span><span>Confidential</span></footer>
+</div>
+
+<script>
+(function(){
+  var TOPUP=5000, FLOOR=500;
+  var QUICK=5000*10.5/1e6+1000*52.5/1e6+2*0.021, DEEP=50000*10.5/1e6+4000*52.5/1e6+5*0.021;
+  var items=[
+    {k:"months",name:"Months in your plan",price:0,desc:"The period you are budgeting for. Chat usage scales with it.",max:36,min:1,term:true},
+    {k:"profile",name:"Profile IQ",price:300,unit:"report",desc:"One per title, audience, or talent profiled.",max:300},
+    {k:"brand",name:"Brand Partnership",price:500,unit:"report",desc:"Pulled for a live brand integration or partnership.",max:100},
+    {k:"journey",name:"Digital Journey IQ",price:500,unit:"report",desc:"Path from exposure to purchase for a campaign or title.",max:60},
+    {k:"subs",name:"Subscriber Acquisition",price:500,unit:"report",desc:"Subscriptions driven by a title or franchise.",max:60},
+    {k:"fly",name:"Flywheel",price:300,unit:"report",desc:"How engagement carries across platforms.",max:60},
+    {k:"attr",name:"Attribution IQ",price:500,unit:"campaign",desc:"$500 per campaign to set up, plus $100 per day of in-flight updates.",max:40,days:true},
+    {k:"chatq",name:"Quick chat lookups",price:QUICK,desc:"Per month across the team. A short question and answer: about 5,000 tokens read, 1,000 written, 2 searches.",max:2000,chat:true},
+    {k:"chatd",name:"Detailed chat analyses",price:DEEP,desc:"Per month across the team. A longer analysis: about 50,000 tokens read, 4,000 written, 5 searches.",max:500,chat:true}
+  ];
+  var presets={
+    light:{months:12,profile:30,brand:5,journey:5,subs:5,fly:0,attr:2,days:14,chatq:100,chatd:10},
+    hundred:{months:12,profile:60,brand:10,journey:10,subs:10,fly:5,attr:4,days:14,chatq:200,chatd:20},
+    active:{months:12,profile:120,brand:20,journey:20,subs:20,fly:10,attr:8,days:21,chatq:300,chatd:40}
+  };
+  var state=Object.assign({},presets.hundred);
+  var fmt=function(n){return "$"+Math.round(n).toLocaleString("en-US")};
+  var box=document.getElementById("inputs");
+
+  items.forEach(function(it){
+    var r=document.createElement("div"); r.className="row";
+    var priceTxt = it.term ? "" : it.chat ? "About $"+it.price.toFixed(2)+" each" : "$"+it.price+" per "+it.unit;
+    var html='<div class="name">'+it.name+'</div><div class="price">'+priceTxt+'</div><div class="desc">'+it.desc+'</div>';
+    if(it.days){
+      html+='<div class="split"><div><label for="n-attr">Campaigns</label><div class="line"><input type="range" id="r-attr" min="0" max="'+it.max+'" aria-label="Attribution IQ campaigns"><input class="num" type="number" id="n-attr" min="0" max="'+it.max+'"></div></div>'+
+            '<div><label for="n-days">Days of in-flight updates per campaign</label><div class="line"><input type="range" id="r-days" min="1" max="90" aria-label="Days of in-flight updates per campaign"><input class="num" type="number" id="n-days" min="1" max="90"></div></div></div>'+
+            '<div class="line"><span style="flex:1"></span><span class="sum" id="sum-attr"></span></div>';
+    } else {
+      html+='<div class="line"><input type="range" id="r-'+it.k+'" min="'+(it.min||0)+'" max="'+it.max+'" aria-label="'+it.name+'"><input class="num" type="number" id="n-'+it.k+'" min="'+(it.min||0)+'" max="'+it.max+'" aria-label="'+it.name+' count"><span class="sum" id="sum-'+it.k+'"></span></div>';
+    }
+    r.innerHTML=html; box.appendChild(r);
+  });
+
+  function bind(key,max,min){
+    var rr=document.getElementById("r-"+key), nn=document.getElementById("n-"+key);
+    function set(v){v=Math.max(min,Math.min(max,parseInt(v,10)||min));state[key]=v;clearPreset();render();}
+    rr.addEventListener("input",function(){set(rr.value)});
+    nn.addEventListener("change",function(){set(nn.value)});
+  }
+  items.forEach(function(it){bind(it.k,it.max,it.min||0)});
+  bind("days",90,1);
+
+  function clearPreset(){document.querySelectorAll(".preset").forEach(function(b){b.setAttribute("aria-pressed","false")})}
+  document.querySelectorAll(".preset").forEach(function(b){
+    b.addEventListener("click",function(){
+      var m=state.months; state=Object.assign({},presets[b.dataset.p]); state.months=m;
+      document.querySelectorAll(".preset").forEach(function(x){x.setAttribute("aria-pressed",String(x===b))});
+      render();
+    });
+  });
+
+  function render(){
+    var met=0, M=state.months, pulls=0;
+    items.forEach(function(it){
+      var cost;
+      if(it.term){ document.getElementById("sum-"+it.k).textContent=M+(M===1?" month":" months"); return; }
+      if(it.days){ cost=state.attr*(500+100*state.days); pulls+=state.attr; }
+      else if(it.chat) cost=state[it.k]*M*it.price;
+      else { cost=state[it.k]*it.price; pulls+=state[it.k]; }
+      met+=cost;
+      document.getElementById("sum-"+it.k).textContent=fmt(cost);
+    });
+    ["months","profile","brand","journey","subs","fly","attr","chatq","chatd","days"].forEach(function(k){
+      document.getElementById("r-"+k).value=state[k];
+      document.getElementById("n-"+k).value=state[k];
+    });
+    var tops = met>=TOPUP-FLOOR ? Math.floor((met-(TOPUP-FLOOR))/TOPUP)+1 : 0;
+    var charges=1+tops, cash=charges*TOPUP, bal=cash-met;
+    document.getElementById("totalLabel").textContent="Prometheus spend over "+M+(M===1?" month":" months");
+    document.getElementById("total").textContent=fmt(met);
+    document.getElementById("totalNote").textContent="Reports plus chat, charged against the prepaid balance";
+    document.getElementById("sMonth").textContent=fmt(met/M);
+    document.getElementById("sPulls").textContent=pulls.toLocaleString("en-US");
+    document.getElementById("sTop").textContent=String(charges);
+    document.getElementById("sBal").textContent=fmt(bal);
+    document.getElementById("sBalK").textContent="Prepaid balance remaining at month "+M;
+    var v="Budget "+fmt(met)+" for Prometheus over "+M+(M===1?" month":" months")+", about "+fmt(met/M)+" a month. The prepaid balance is charged "+charges+(charges===1?" time":" times")+", $5,000 each. Each additional Profile IQ adds $300.";
+    document.getElementById("verdict").textContent=v;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
