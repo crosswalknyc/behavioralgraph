@@ -43004,15 +43004,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         return '';
                     }
                     window._iiqQ2DimKey = _iiqQ2DimKey;
-                    // Creator only leads where the placements name one.
+                    // Every placement leads (Jenna 2026-09-24: all the links,
+                    // not a roll-up). Creator / Platform stay one click away.
                     function _iiqQ2DefaultLens() {
-                        var rows = window.__intentIQQ2Best || [];
-                        for (var i = 0; i < rows.length; i++) {
-                            if (_iiqQ2DimKey(rows[i], 'creator')) return 'creator';
-                        }
-                        for (var j = 0; j < rows.length; j++) {
-                            if (_iiqQ2DimKey(rows[j], 'platform')) return 'platform';
-                        }
                         return 'placement';
                     }
                     function _iiqQ2LensButtons() {
@@ -43023,10 +43017,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             if (_iiqQ2DimKey(b, 'platform')) hasPlatform = true;
                         });
                         var lens = window._iiqQ2Lens || _iiqQ2DefaultLens();
-                        var defs = [];
-                        if (hasCreator) defs.push(['creator', 'Creator']);
-                        if (hasPlatform) defs.push(['platform', 'Platform']);
-                        defs.push(['placement', 'Placement']);
+                        var defs = [['placement', 'All placements']];
+                        if (hasCreator) defs.push(['creator', 'By creator']);
+                        if (hasPlatform) defs.push(['platform', 'By platform']);
                         if (defs.length < 2) return '';
                         return defs.map(function (d) {
                             return '<button type="button" data-q2lens="' + d[0] + '"'
