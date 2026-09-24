@@ -70,6 +70,7 @@
     "paramountplus.py",
     "paramountplus_amazon.py",
     "peacock.py",
+    "peacock_top10.py",
     "philo_free.py",
     "plex_live.py",
     "podcast_charts.py",
