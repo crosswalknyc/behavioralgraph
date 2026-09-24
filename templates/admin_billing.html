@@ -733,9 +733,15 @@
       </div>
 
       <div class="card" style="padding: 16px;">
-        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
-          Transaction history (last 50)
-        </h3>
+        <div style="display:flex; justify-content:space-between;
+                    align-items:center; gap:12px; margin: 0 0 12px 0;">
+          <h3 style="margin: 0; font-size: 16px;">
+            Transaction history (last 50)
+          </h3>
+          <button type="button" class="secondary" id="m-txn-csv">
+            Download CSV
+          </button>
+        </div>
         <div id="m-txns"></div>
       </div>
     </div>
@@ -1433,6 +1439,14 @@
       }
     }
     $('m-adj-add').addEventListener('click', () => adjust(1));
+    $('m-txn-csv').addEventListener('click', () => {
+      const key = currentSubjectKey || '';
+      if (!key) return;
+      const kind = currentSubjectKind === 'company' ? 'company' : 'user';
+      window.location = '/api/admin/transaction-history?kind='
+        + encodeURIComponent(kind)
+        + '&key=' + encodeURIComponent(key);
+    });
     $('m-adj-sub').addEventListener('click', () => adjust(-1));
 
     $('m-charge-btn').addEventListener('click', async () => {

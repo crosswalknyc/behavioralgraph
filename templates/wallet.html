@@ -515,7 +515,19 @@
     </div>
 
     <div class="card">
-      <h2>Recent transactions</h2>
+      <div style="display:flex; justify-content:space-between;
+                  align-items:center; gap:12px; flex-wrap:wrap;">
+        <h2 style="margin:0;">Recent transactions</h2>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="secondary-btn" id="txn-csv-self">
+            Download my history
+          </button>
+          <button type="button" class="secondary-btn" id="txn-csv-company"
+                  style="display:none;">
+            Download company history
+          </button>
+        </div>
+      </div>
       <div id="txn-body">
         <div class="empty">No transactions yet.</div>
       </div>
@@ -771,6 +783,16 @@
 
       // Transactions
       renderTxns(s.transactions || []);
+      const coBtn = $('txn-csv-company');
+      if (coBtn) {
+        if (s.billed_via_company && s.viewer_is_billing_admin) {
+          const nm = s.company_name || 'company';
+          coBtn.textContent = 'Download ' + nm + ' history';
+          coBtn.style.display = '';
+        } else {
+          coBtn.style.display = 'none';
+        }
+      }
     }
 
     function renderStats(stats) {
@@ -1071,6 +1093,19 @@
     $('custom-amount').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') $('custom-submit').click();
     });
+
+    const selfCsv = $('txn-csv-self');
+    if (selfCsv) {
+      selfCsv.addEventListener('click', () => {
+        window.location = '/api/wallet/transactions.csv?scope=self';
+      });
+    }
+    const coCsv = $('txn-csv-company');
+    if (coCsv) {
+      coCsv.addEventListener('click', () => {
+        window.location = '/api/wallet/transactions.csv?scope=company';
+      });
+    }
 
     loadState();
   </script>

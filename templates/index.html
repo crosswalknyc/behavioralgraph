@@ -19349,7 +19349,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                 <div id="creditUsageDetail" style="display: none; margin-top: 0.5rem; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color); max-height: 240px; overflow-y: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">What each credit was used for</span>
-                        <button type="button" class="module-btn csv-btn has-tooltip" data-tooltip="Export usage history to CSV" onclick="event.stopPropagation(); exportCreditUsageCSV();" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Export CSV</button>
+                        <button type="button" class="module-btn csv-btn has-tooltip" data-tooltip="Download transaction history as CSV" onclick="event.stopPropagation(); downloadTxnHistory('self');" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download CSV</button>
                     </div>
                     <div id="creditUsageList" style="font-size: 0.8rem;"></div>
                 </div>
@@ -19357,6 +19357,10 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <span class="credits-info-label">Account</span>
                     <span class="credits-info-value">{{ username }}</span>
                 </div>
+            </div>
+            <div id="creditsExportRow" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin: 0.85rem 0 0.35rem 0;">
+                <button type="button" class="module-btn csv-btn" id="creditsExportSelfBtn" onclick="downloadTxnHistory('self')" style="padding:0.45rem 0.8rem; font-size:0.85rem;">Download my history</button>
+                <button type="button" class="module-btn csv-btn" id="creditsExportCompanyBtn" onclick="downloadTxnHistory('company')" style="padding:0.45rem 0.8rem; font-size:0.85rem;{% if not company_billing_admin|default(false) %} display:none;{% endif %}">Download {{ company or 'company' }} history</button>
             </div>
             
             <div id="creditsRequestSection">
@@ -179481,6 +179485,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         usedEl.textContent = data.credits_used;
                     }
                     try { applyCreditsSurface(data); } catch (_) {}
+                    const coBtn = document.getElementById('creditsExportCompanyBtn');
+                    if (coBtn) {
+                        if (data.can_export_company) {
+                            const nm = String(data.company_name || '').trim() || 'company';
+                            coBtn.textContent = 'Download ' + nm + ' history';
+                            coBtn.style.display = '';
+                        } else {
+                            coBtn.style.display = 'none';
+                        }
+                    }
                 })
                 .catch(() => {});
         }
@@ -179530,35 +179544,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 chevron.textContent = '▾';
             }
         }
+        function downloadTxnHistory(scope) {
+            const s = (scope === 'company') ? 'company' : 'self';
+            window.location = '/api/wallet/transactions.csv?scope=' + encodeURIComponent(s);
+        }
         function exportCreditUsageCSV() {
-            const doExport = (rows) => {
-                const headers = ['Date', 'Pull Type', 'Description', 'Credits Used', 'Job ID'];
-                const csvRows = [headers.join(',')];
-                (rows || []).forEach(row => {
-                    const d = row.used_at ? new Date(row.used_at) : null;
-                    const dateStr = d ? d.toISOString() : '';
-                    const pullType = (row.pull_type || 'Profile Analysis').replace(/"/g, '""');
-                    const desc = (row.description || '').replace(/"/g, '""');
-                    const creditsUsed = row.credits_used != null ? row.credits_used : 1;
-                    const jobId = (row.job_id || '').replace(/"/g, '""');
-                    csvRows.push(`"${dateStr}","${pullType}","${desc}","${creditsUsed}","${jobId}"`);
-                });
-                const csv = csvRows.join('\n');
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'credit_usage_history.csv';
-                a.click();
-                URL.revokeObjectURL(a.href);
-            };
-            if (creditUsageCache) {
-                doExport(creditUsageCache);
-            } else {
-                fetch('/api/credit-usage').then(r => r.json()).then(data => {
-                    creditUsageCache = data.usage || [];
-                    doExport(creditUsageCache);
-                }).catch(() => doExport([]));
-            }
+            downloadTxnHistory('self');
         }
         
         // ============================================================================

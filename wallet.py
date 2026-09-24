@@ -2342,6 +2342,217 @@ def collect_usage_ledger_rows(data, company_f="", user_f=""):
     return rows, sorted(companies), user_list
 
 
+_TXN_KIND_LABELS = {
+    "deduct": "Usage",
+    "topup": "Top-up",
+    "auto_reload": "Auto-reload",
+    "refund": "Refund",
+    "adjustment": "Adjustment",
+    "monthly_access": "Monthly access",
+}
+
+
+def user_can_export_company_history(user) -> bool:
+    """True when this user may download the shared company wallet.
+
+    Jenna 2026-09-23: credits click downloads their own history, and
+    the organization history if they have company wallet privileges.
+    That privilege is `company_billing_admin` plus a company name.
+    """
+    if not isinstance(user, dict):
+        return False
+    if not bool(user.get("company_billing_admin")):
+        return False
+    return bool(str(user.get("company") or "").strip())
+
+
+def _history_identities(username, user) -> set:
+    toks = {str(username or "").strip().lower()}
+    if isinstance(user, dict):
+        toks.add(str(user.get("email") or "").strip().lower())
+        toks.add(str(user.get("username") or "").strip().lower())
+    toks.discard("")
+    return toks
+
+
+def _history_row(*, used_at="", kind="", company="", username="",
+                 email="", description="", pull_type="", credits=0,
+                 usd=0.0, balance_after="", job_id=""):
+    try:
+        usd_n = round(float(usd or 0), 2)
+    except (TypeError, ValueError):
+        usd_n = 0.0
+    try:
+        cred_n = int(credits or 0)
+    except (TypeError, ValueError):
+        cred_n = 0
+    return {
+        "used_at": str(used_at or "")[:19].replace("T", " "),
+        "kind": kind or "Usage",
+        "company": company or "",
+        "username": username or "",
+        "email": email or "",
+        "description": description or "",
+        "pull_type": pull_type or "",
+        "credits": cred_n,
+        "usd": usd_n,
+        "balance_after": balance_after if balance_after != "" else "",
+        "job_id": job_id or "",
+    }
+
+
+def _rows_from_credit_history(hist, *, company, username, email):
+    out = []
+    for h in hist or []:
+        if not isinstance(h, dict):
+            continue
+        usd = h.get("wallet_charged_usd")
+        try:
+            usd_n = -abs(float(usd or 0))
+        except (TypeError, ValueError):
+            usd_n = 0.0
+        out.append(_history_row(
+            used_at=h.get("used_at") or "",
+            kind="Usage",
+            company=company,
+            username=username,
+            email=email,
+            description=h.get("description") or "",
+            pull_type=h.get("pull_type") or h.get("wallet_tool_key") or "",
+            credits=h.get("credits_used") or 0,
+            usd=usd_n,
+            job_id=h.get("job_id") or "",
+        ))
+    return out
+
+
+def _rows_from_wallet_txns(txns, *, company, default_username="",
+                           email="", identities=None, usage_only=False):
+    out = []
+    identities = identities or set()
+    for t in txns or []:
+        if not isinstance(t, dict):
+            continue
+        kind = str(t.get("kind") or "").strip().lower()
+        if usage_only and kind != "deduct":
+            continue
+        via = str(t.get("billed_via_username") or "").strip()
+        if identities:
+            via_l = via.lower()
+            if via_l and via_l not in identities:
+                continue
+            if not via_l and kind == "deduct":
+                continue
+        try:
+            usd_n = round(float(t.get("amount_usd") or 0), 2)
+        except (TypeError, ValueError):
+            usd_n = 0.0
+        bal = t.get("balance_after_usd")
+        bal_s = ""
+        if bal is not None and bal != "":
+            try:
+                bal_s = f"{float(bal):.2f}"
+            except (TypeError, ValueError):
+                bal_s = ""
+        out.append(_history_row(
+            used_at=t.get("ts") or "",
+            kind=_TXN_KIND_LABELS.get(kind, kind or "Usage"),
+            company=company,
+            username=via or default_username,
+            email=email if (via or default_username) else "",
+            description=t.get("description") or "",
+            pull_type=t.get("tool") or t.get("tool_key") or "",
+            credits=0,
+            usd=usd_n,
+            balance_after=bal_s,
+            job_id=t.get("job_id") or "",
+        ))
+    return out
+
+
+def collect_transaction_history(data, username="", scope="self",
+                                company_name=""):
+    """Full downloadable ledger for one person or one company wallet.
+
+    `self` is that user's credit log plus any company usage billed
+    through them. Top-ups stay on the company file.
+
+    `company` is every wallet movement on the shared company record
+    plus every member's credit log. Caller must have already checked
+    `user_can_export_company_history` (or admin).
+    """
+    data = data or {}
+    users = data.get("users") or {}
+    companies_map = data.get("companies") or {}
+    scope = str(scope or "self").strip().lower()
+    username = str(username or "").strip()
+    user = users.get(username) if username else {}
+    if not isinstance(user, dict):
+        user = {}
+    company = (str(company_name or "").strip()
+               or str(user.get("company") or "").strip())
+    rows = []
+    if scope == "company":
+        if not company:
+            return []
+        crec = companies_map.get(company)
+        if isinstance(crec, dict):
+            rows.extend(_rows_from_wallet_txns(
+                crec.get("wallet_transactions"),
+                company=company,
+            ))
+        for uname, u in company_members(company, data):
+            rows.extend(_rows_from_credit_history(
+                u.get("credit_usage_history"),
+                company=company,
+                username=uname,
+                email=str(u.get("email") or ""),
+            ))
+    else:
+        email = str(user.get("email") or "")
+        company = str(user.get("company") or "").strip()
+        rows.extend(_rows_from_credit_history(
+            user.get("credit_usage_history"),
+            company=company,
+            username=username,
+            email=email,
+        ))
+        source = str(user.get("billing_source") or "").strip().lower()
+        if source != "company":
+            rows.extend(_rows_from_wallet_txns(
+                user.get("wallet_transactions"),
+                company=company,
+                default_username=username,
+                email=email,
+            ))
+        elif company:
+            crec = companies_map.get(company)
+            if isinstance(crec, dict):
+                rows.extend(_rows_from_wallet_txns(
+                    crec.get("wallet_transactions"),
+                    company=company,
+                    default_username=username,
+                    email=email,
+                    identities=_history_identities(username, user),
+                    usage_only=True,
+                ))
+    seen = set()
+    out = []
+    for row in rows:
+        key = (
+            (row.get("username") or "").lower(),
+            norm_usage_desc(row.get("description")),
+            str(row.get("job_id") or ""),
+            str(row.get("kind") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    out.sort(key=lambda r: r.get("used_at") or "", reverse=True)
+    return out
+
+
 def lookup_user(users_data: dict, key: str):
     """Resolve a user record from a subject_key that may be the
     users.json dict key, an email, or a username field.
@@ -2877,6 +3088,7 @@ __all__ = [
     "resolve_billing_subject", "ensure_company_record",
     "admin_billing_row_for_user",
     "norm_usage_desc", "collect_usage_ledger_rows",
+    "user_can_export_company_history", "collect_transaction_history",
     "lookup_user", "company_billing_admins",
     "company_members", "iter_paying_subjects",
     "user_can_spend_from_company", "user_spend_scope_summary",

@@ -44,7 +44,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 
-from flask import (Blueprint, jsonify, redirect, render_template,
+from flask import (Blueprint, Response, jsonify, redirect, render_template,
                    request, session, url_for)
 
 
@@ -267,6 +267,109 @@ def wallet_state():
             else {"routed_to_company": False}),
     }
     return jsonify(payload)
+
+
+def _txn_history_csv_response(rows, filename):
+    """UTF-8 CSV download of collect_transaction_history rows."""
+    import csv
+    import io
+    import re
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Date (UTC)", "Type", "Company", "User", "Email",
+        "Description", "Pull Type", "Credits", "USD",
+        "Balance After", "Job ID",
+    ])
+    for r in rows or []:
+        try:
+            usd = f"{float(r.get('usd') or 0):.2f}"
+        except (TypeError, ValueError):
+            usd = "0.00"
+        w.writerow([
+            r.get("used_at") or "",
+            r.get("kind") or "",
+            r.get("company") or "",
+            r.get("username") or "",
+            r.get("email") or "",
+            r.get("description") or "",
+            r.get("pull_type") or "",
+            r.get("credits") or 0,
+            usd,
+            r.get("balance_after") or "",
+            r.get("job_id") or "",
+        ])
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(filename or "history"))
+    safe = (safe.strip("_") or "history")[:80]
+    return Response(
+        buf.getvalue().encode("utf-8-sig"),
+        headers={
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition":
+                f'attachment; filename="{safe}.csv"',
+        },
+    )
+
+
+@billing_bp.route("/api/wallet/transactions.csv", methods=["GET"])
+def wallet_transactions_csv():
+    """User-facing CSV of their own history, or the company wallet
+    when they are the company billing admin.
+
+    ?scope=self (default) | company
+    """
+    ctx = _resolve_caller_billing_subject()
+    if not ctx:
+        return jsonify({"error": "not_logged_in"}), 401
+    import wallet  # type: ignore
+    scope = str(request.args.get("scope") or "self").strip().lower()
+    if scope not in ("self", "company"):
+        scope = "self"
+    if scope == "company":
+        if not wallet.user_can_export_company_history(ctx["user"]):
+            return jsonify({"error": "not_company_admin"}), 403
+    rows = wallet.collect_transaction_history(
+        ctx["users_data"],
+        username=ctx["uname"],
+        scope=scope,
+        company_name=(
+            ctx["company_name"]
+            or str((ctx["user"] or {}).get("company") or "")
+        ) if scope == "company" else "",
+    )
+    if scope == "company":
+        label = ctx["company_name"] or "company"
+    else:
+        label = ctx["uname"] or "me"
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return _txn_history_csv_response(
+        rows, f"Crosswalk_Wallet_{label}_{day}")
+
+
+@billing_bp.route("/api/admin/transaction-history", methods=["GET"])
+def admin_transaction_history():
+    """Admin CSV of one user or one company wallet."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    from app import load_users  # type: ignore
+    kind = str(request.args.get("kind") or "user").strip().lower()
+    key = str(request.args.get("key") or "").strip()
+    if not key:
+        return jsonify({"error": "missing_key"}), 400
+    data = load_users() or {}
+    if kind == "company":
+        rows = wallet.collect_transaction_history(
+            data, username="", scope="company", company_name=key)
+        label = key
+    else:
+        rows = wallet.collect_transaction_history(
+            data, username=key, scope="self")
+        label = key
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return _txn_history_csv_response(
+        rows, f"Crosswalk_Wallet_{label}_{day}")
 
 
 # ---------------------------------------------------------------------------

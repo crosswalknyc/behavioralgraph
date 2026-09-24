@@ -9363,6 +9363,11 @@ def get_credit_usage():
     uname = session.get('username') or ''
     _, credits_left = check_user_credits(uname)
     snap = _caller_wallet_snapshot(uname)
+    try:
+        import wallet as _w_hist
+        can_export_company = _w_hist.user_can_export_company_history(user)
+    except Exception:
+        can_export_company = bool(user.get('company_billing_admin'))
     return jsonify({
         'success': True,
         'usage': history,
@@ -9372,6 +9377,7 @@ def get_credit_usage():
         'paying_customer': snap['paying_customer'],
         'billed_via_company': snap['billed_via_company'],
         'company_name': snap['company_name'],
+        'can_export_company': can_export_company,
     })
 
 
@@ -9930,6 +9936,8 @@ def index():
                            paying_customer=_wallet_snap.get('paying_customer', False),
                            billed_via_company=_wallet_snap.get('billed_via_company', False),
                            wallet_company_name=_wallet_snap.get('company_name', ''),
+                           company_billing_admin=bool(
+                               user.get('company_billing_admin')) if user else False,
                            profile_picture=profile_picture,
                            default_profile_photo=load_default_profile_photo() or '',
                            company_logo=company_logo,
