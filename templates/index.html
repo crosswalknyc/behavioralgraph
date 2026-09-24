@@ -30304,6 +30304,15 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-refresh-btn.is-spinning .tiq-refresh-icon { animation: tiqSpin 0.8s linear infinite; }
             #trendsIQView .tiq-loading-overlay { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1rem; background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.28); border-radius: 8px; color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.85rem; }
             #trendsIQView .tiq-spinner { width: 16px; height: 16px; border: 2px solid rgba(124, 58, 237, 0.35); border-top-color: #7c3aed; border-radius: 50%; animation: tiqSpin 0.8s linear infinite; }
+            /* Trends / Rankers boot loader (2026-09-24, Jenna): the same
+               screen the main dashboard boots with, scoped inside the
+               Trends panel instead of fixed over the page. Reuses the
+               .app-boot-* classes so the two never drift apart. */
+            #trendsIQView .tiq-boot { align-items: center; justify-content: center; min-height: 460px; padding: 48px 16px; margin-bottom: 1rem; background: radial-gradient(ellipse 54% 42% at 50% 38%, #15252A 0%, rgba(21,37,42,0) 70%), #0C1618; }
+            body[data-theme="light"] #trendsIQView .tiq-boot { background: radial-gradient(ellipse 54% 42% at 50% 38%, #FFFFFF 0%, rgba(233,232,225,0) 70%), #E9E8E1; }
+            #trendsIQView .tiq-boot .app-boot-title { font-size: 34px; }
+            #trendsIQView .tiq-boot .app-boot-mark { width: 72px; height: 72px; margin-bottom: 20px; box-shadow: 0 14px 40px rgba(51, 88, 255, 0.26); }
+            #trendsIQView .tiq-boot .app-boot-progress { margin-bottom: 32px; }
             @keyframes tiqSpin { to { transform: rotate(360deg); } }
             #trendsIQView .tiq-tabstrip { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.35rem; }
             #trendsIQView .tiq-tab { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px 6px 0 0; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; user-select: none; transition: all 140ms ease; }
@@ -31300,7 +31309,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div class="tiq-meta">
-                <span id="trendsIQMeta">Fetching ...</span>
+                <span id="trendsIQMeta"></span>
                 <span class="tiq-meta-right">
                     <span id="trendsIQUpdatedAt"></span>
                     <button type="button" id="trendsIQExportAllBtn"
@@ -31321,9 +31330,25 @@ https://www.instagram.com/p/..."></textarea>
                     </button>
                 </span>
             </div>
-            <div id="trendsIQLoading" class="tiq-loading-overlay" style="display: none;">
-                <div class="tiq-spinner"></div>
-                <div>Stand by ...</div>
+            <div id="trendsIQLoading" class="tiq-boot" style="display: none;" role="status" aria-live="polite" aria-label="Loading Trends and Rankers">
+                <div class="app-boot-card">
+                    <div class="app-boot-mark" aria-hidden="true">
+                        <svg width="30" height="30" viewBox="0 0 64 64"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+                    </div>
+                    <div class="app-boot-word">Crosswalk</div>
+                    <div class="app-boot-title" id="tiqBootTitle">Loading Trends.</div>
+                    <div class="app-boot-sub" id="tiqBootSub">Reading today's charts on every service&hellip;</div>
+                    <div class="app-boot-progress">
+                        <div class="app-boot-progress-track"><div class="app-boot-progress-fill" id="tiqBootProgressFill"></div></div>
+                        <div class="app-boot-progress-pct" id="tiqBootProgressPct">0%</div>
+                    </div>
+                    <ul class="app-boot-steps" id="tiqBootSteps">
+                        <li data-tiq-step="streaming"><span class="app-boot-step-icon">01</span><span>Streaming charts</span></li>
+                        <li data-tiq-step="fast"><span class="app-boot-step-icon">02</span><span>FAST channels</span></li>
+                        <li data-tiq-step="audio"><span class="app-boot-step-icon">03</span><span>Music and podcasts</span></li>
+                        <li data-tiq-step="headlines"><span class="app-boot-step-icon">04</span><span>Headlines and searches</span></li>
+                    </ul>
+                </div>
             </div>
             <div id="trendsIQTabStrip" class="tiq-tabstrip" style="display: none;"></div>
             <div id="trendsIQPanels"></div>
@@ -62525,6 +62550,56 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
         }
 
+        // Trends / Rankers boot loader. Mirrors the main dashboard's
+        // app-boot screen. The view is a single fetch, so progress is
+        // paced rather than measured: steps advance on a schedule tuned
+        // to the typical cached (~3s) and cold (~60-90s) load, the bar
+        // eases toward 88% and holds until the payload lands, then snaps
+        // to 100% as the card hides.
+        var _tiqBoot = { timer: null, t0: 0 };
+        var _TIQ_BOOT_STEPS = ['streaming', 'fast', 'audio', 'headlines'];
+        var _TIQ_BOOT_SUBS = {
+            streaming: "Reading today's charts on every service\u2026",
+            fast:      'Lining up the FAST channel rankers\u2026',
+            audio:     'Pulling music and podcast charts\u2026',
+            headlines: 'Ranking headlines and trending searches\u2026'
+        };
+        function _tiqBootSetStep(idx) {
+            var lis = document.querySelectorAll('#tiqBootSteps li');
+            lis.forEach(function (li, i) {
+                li.classList.remove('step-active', 'step-done');
+                if (i < idx) li.classList.add('step-done');
+                else if (i === idx) li.classList.add('step-active');
+            });
+            var key = _TIQ_BOOT_STEPS[Math.min(idx, _TIQ_BOOT_STEPS.length - 1)];
+            var sub = document.getElementById('tiqBootSub');
+            if (sub && _TIQ_BOOT_SUBS[key]) sub.textContent = _TIQ_BOOT_SUBS[key];
+        }
+        function _tiqBootSetPct(pct) {
+            pct = Math.max(0, Math.min(100, Math.round(pct)));
+            var f = document.getElementById('tiqBootProgressFill');
+            var p = document.getElementById('tiqBootProgressPct');
+            if (f) f.style.width = pct + '%';
+            if (p) p.textContent = pct + '%';
+        }
+        function _tiqBootStart() {
+            if (_tiqBoot.timer) clearInterval(_tiqBoot.timer);
+            _tiqBoot.t0 = Date.now();
+            _tiqBootSetStep(0);
+            _tiqBootSetPct(0);
+            _tiqBoot.timer = setInterval(function () {
+                var s = (Date.now() - _tiqBoot.t0) / 1000;
+                var pct = 88 * (1 - Math.exp(-s / 14));
+                _tiqBootSetPct(pct);
+                var idx = s < 2 ? 0 : s < 6 ? 1 : s < 14 ? 2 : 3;
+                _tiqBootSetStep(idx);
+            }, 220);
+        }
+        function _tiqBootFinish() {
+            if (_tiqBoot.timer) { clearInterval(_tiqBoot.timer); _tiqBoot.timer = null; }
+            _tiqBootSetStep(_TIQ_BOOT_STEPS.length);
+            _tiqBootSetPct(100);
+        }
         async function applyTrendsIQFilters(opts) {
             opts = opts || {};
             var forceRefresh = !!opts.forceRefresh;
@@ -62592,9 +62667,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (lbl) lbl.textContent = 'Refreshing...';
             }
             document.getElementById('trendsIQLoading').style.display = 'flex';
+            _tiqBootStart();
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
-            document.getElementById('trendsIQMeta').textContent = 'Fetching ...';
+            document.getElementById('trendsIQMeta').textContent = '';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
@@ -62635,6 +62711,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }, 15000);
                 }
             } finally {
+                _tiqBootFinish();
                 document.getElementById('trendsIQLoading').style.display = 'none';
                 window.__trendsIQ.inFlight = null;
                 if (refreshBtn) {
