@@ -35368,49 +35368,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
                      + '</section>';
             }
-            // Does this landing have a Digital Journey view to carry it?
-            // The question only reaches the reader when its parent tab is
-            // on too, so both are checked. False keeps the slab in Paths.
-            function _iiqJourneyCarriesArchetypes() {
-                try {
-                    if (typeof window._iiqTabEnabled !== 'function') return false;
-                    if (typeof window._iiqQidEnabled !== 'function') return false;
-                    return !!(window._iiqTabEnabled('questions') && window._iiqQidEnabled('journey'));
-                } catch (e) { return false; }
-            }
-            // Digital Journey has no use for the multi-touch payload other
-            // than this, so the slab loads on its own and the page never
-            // waits on it. A landing with no multi-touch read leaves the
-            // slot empty rather than showing an error the reader cannot act
-            // on. Any audience already picked on Multi-touch carries over.
-            window._iiqFillJourneyArchetypes = function() {
-                var host = document.getElementById('iiqJourneyArchetypes');
-                if (!host) return;
-                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
-                if (!slug) return;
-                var paint = function(d) {
-                    if (!d) return;
-                    if (((window.__intentIQ && window.__intentIQ.currentSlug) || '') !== slug) return;
-                    var c = window.__iiqMTACache || {};
-                    var aud = (c.slug === slug) ? (c.audience_slug || '') : '';
-                    var active = _iiqMTAActivePayload(d, aud) || {};
-                    host.innerHTML = _iiqArchetypesSection((active.paths || {}).path_archetypes, true);
-                };
-                var cache = window.__iiqMTACache || {};
-                if (cache.slug === slug && cache.data) { paint(cache.data); return; }
-                fetch('/api/intent/' + slug + '/mta', { credentials: 'same-origin' })
-                    .then(function(r) { return r.ok ? r.json() : null; })
-                    .then(function(d) {
-                        if (!d || !d.success) return;
-                        var cur = window.__iiqMTACache || {};
-                        if (cur.slug !== slug || !cur.data) {
-                            window.__iiqMTACache = { slug: slug, audience_slug: '', data: d, ts: Date.now() };
-                        }
-                        paint(d);
-                    })
-                    .catch(function() { });
-            };
-
             function _iiqMTARenderPathsCard(d) {
                 var paths = d.paths || {};
                 var titleType = String(d.title_type || 'film').toLowerCase();
@@ -35618,12 +35575,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + '  <div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + ttcRows + '</div>'
                   + '</section>' : '';
 
-                // Section 6: path archetypes. Where the landing carries a
-                // Digital Journey view the slab reads at the top of that
-                // instead: the four shapes are what the per-asset journeys
-                // there are made of. Landings with no Journey view (GOAT,
-                // Hades) keep it here, which is its only other home.
-                var archSection = _iiqJourneyCarriesArchetypes() ? '' : _iiqArchetypesSection(archetypes);
+                // Section 6: path archetypes. Always built. Where it READS
+                // is _aiqPlaceArchetypes's call: the top of Digital Journey
+                // on a landing that has one, Timing on a landing that does
+                // not. That has to be decided by the tab shell rather than
+                // here, because this card renders when the multi-touch
+                // payload lands, which can beat the new title's own config
+                // into place.
+                var archSection = _iiqArchetypesSection(archetypes);
 
                 // Section 7: leaks (the hero). Signal Green callouts.
                 var leakRows = leaks.map(function(L) {
@@ -46448,10 +46407,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var body = document.getElementById('iiqQBody');
                 if (IIQ_QCACHE[qid]) {
                     body.innerHTML = IIQ_QCACHE[qid];
-                    // The cached string carries an empty archetypes slot.
-                    if (qid === 'journey' && typeof window._iiqFillJourneyArchetypes === 'function') {
-                        window._iiqFillJourneyArchetypes();
-                    }
                     return;
                 }
                 // The Audiences sub-tab reads from data already cached by
@@ -46489,10 +46444,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         try {
                             var dataObj = { _assets: assets || [] };
                             IIQ_QDATA.journey = dataObj;
-                            var html = '<div id="iiqJourneyArchetypes"></div>' + iiqRenderJourney(dataObj);
+                            var html = iiqRenderJourney(dataObj);
                             IIQ_QCACHE.journey = html;
                             body.innerHTML = html;
-                            if (typeof window._iiqFillJourneyArchetypes === 'function') window._iiqFillJourneyArchetypes();
                         } catch (err) {
                             body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
                         }
@@ -128282,7 +128236,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                                                'attribution on bottom funnel destination reach only',
                                                                'touchpoint contribution to ',
                                                                'leaks the pixel cannot see'] },
-            { id: 'timing',      label: 'Timing',      heads: ['time to convert', 'path archetypes'] },
+            // Path archetypes is deliberately not claimed by head here:
+            // where it belongs depends on whether the landing carries a
+            // Digital Journey view, so _aiqPlaceArchetypes seats it and
+            // claims for it.
+            { id: 'timing',      label: 'Timing',      heads: ['time to convert'] },
             { id: 'q_journey',      label: 'Journey',         panel: 'drawer', sub: 'questions', q: 'journey',      legacyOnly: true },
             { id: 'q_q4',           label: 'Talent',          panel: 'drawer', sub: 'questions', q: 'q4',           legacyOnly: true },
             { id: 'q_demographics', label: 'Demographics',    panel: 'drawer', sub: 'questions', q: 'demographics', legacyOnly: true },
@@ -128489,6 +128447,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var prevSlug = wrap.getAttribute('data-aiq-slug');
             if (prevSlug !== null && prevSlug === (slug || '')) return;
             wrap.setAttribute('data-aiq-slug', slug || '');
+            // The archetypes slab parks between the journey heading and
+            // its body rather than directly in a panel, so the sweep below
+            // cannot see it. It retires with everything else.
+            var qStale = document.getElementById('iiqPanel-questions');
+            if (qStale) Array.prototype.slice.call(qStale.children).forEach(function (c) {
+                if (c.tagName === 'SECTION') c.remove();
+            });
             var kids = wrap.querySelectorAll('.aiq-panel > *');
             for (var i = 0; i < kids.length; i++) {
                 var k = kids[i];
@@ -128970,6 +128935,53 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         window._aiqTitleLibrary = _aiqTitleLibrary;
 
+        // Path archetypes is the shape of the journey, so on a landing
+        // that carries a Digital Journey view the slab reads at the top of
+        // it: the four shapes are what the per-asset journeys below are
+        // made of. It cannot sit inside iiqQBody, because moving between
+        // drawer views rewrites that node wholesale and the slab would go
+        // with it. It parks between the journey heading and the body
+        // instead, and shows only while Journey is the tab on screen. A
+        // landing with no Journey view (GOAT, Hades) keeps it on Timing,
+        // which is where it claims.
+        function _aiqArchetypeSections(wrap) {
+            var out = [], secs = wrap.querySelectorAll('section');
+            for (var i = 0; i < secs.length; i++) {
+                var h = secs[i].querySelector(':scope > h5');
+                if (h && _aiqNorm(h.textContent).indexOf('path archetypes') === 0) out.push(secs[i]);
+            }
+            return out;
+        }
+        function _aiqPlaceArchetypes(wrap, panels, claimed) {
+            var found = _aiqArchetypeSections(wrap);
+            if (!found.length) return;
+            var qHost = document.getElementById('iiqPanel-questions');
+            var qBody = document.getElementById('iiqQBody');
+            var toJourney = !!(claimed['q_journey'] && qHost && qBody && qBody.parentElement === qHost);
+            var host = toJourney ? qHost : panels.querySelector('[data-aiq-panel="timing"]');
+            if (!host) return;
+            found.forEach(function (sec) {
+                // Already seated. A fresh render arrives somewhere else and
+                // retires the copy this left behind, the same way the panel
+                // loop handles its own sections. That is also what clears a
+                // slab a mid-title-change render seated in the wrong home.
+                if (sec.parentElement === host) return;
+                _aiqArchetypeSections(wrap).forEach(function (old) {
+                    if (old !== sec && (old.parentElement === host || old.parentElement === qHost)) old.remove();
+                });
+                if (toJourney) host.insertBefore(sec, qBody);
+                else host.appendChild(sec);
+            });
+            if (!toJourney) claimed.timing = true;
+        }
+        function _aiqShowArchetypes(active) {
+            var qHost = document.getElementById('iiqPanel-questions');
+            if (!qHost) return;
+            Array.prototype.forEach.call(qHost.children, function (c) {
+                if (c.tagName === 'SECTION') c.style.display = (active === 'q_journey') ? '' : 'none';
+            });
+        }
+
         function _aiqShell() {
             var root = document.getElementById('intentIQView');
             if (!root) return;
@@ -129073,6 +129085,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 claimed[tid] = true;
             }
+            _aiqPlaceArchetypes(wrap, panels, claimed);
             // Whatever is left of the drawer is chrome we have replaced
             // (film campaigns on the new landing only).
             var drawer = document.getElementById('iiqExploreDrawer');
@@ -129123,6 +129136,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
             if (legacy && activeTab && activeTab.panel === 'drawer') _aiqSyncDrawer(activeTab);
             if (activeTab && activeTab.id === 'roi') _aiqEnsureROI();
+            _aiqShowArchetypes(active);
             _aiqRail(wrap, active);
         }
         function _aiqGo(id) {
