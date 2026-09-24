@@ -45556,63 +45556,32 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
                 html += '</div>';
 
-                // ===== Asset picker (campaign-rollup pills + top-8 asset pills + full dropdown) =====
-                var topAssets = topByViews.slice(0, 8);
+                // ===== Asset picker: one dropdown (Jenna 2026-09-23), pills retired =====
                 html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
-                html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem; margin-bottom:0.45rem;">';
+                html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem;">';
                 html +=     '<div style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Pick an asset to inspect</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1 1 180px; min-width:0;">' + (phaseNames.length ? 'Campaign rollups + top-8 by views shown as pills' : 'Top 8 by views shown as pills') + ' \u2014 use the dropdown for any of the ' + rows.length + ' matching.</div>';
-                html +=     '<select onchange="window.iiqJrnPickAsset(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px; max-width:420px;">';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">' + rows.length + ' matching</div>';
+                html +=     '<select onchange="window.iiqJrnPickAsset(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.25rem 0.45rem; border-radius:4px; flex:1 1 320px; min-width:0; max-width:640px;">';
                 if (phaseNames.length) {
                     html += '<optgroup label="Campaign roll-ups (all assets combined)">';
                     phaseNames.forEach(function(pn) {
                         var val = '__PHASE__' + pn;
                         var isSel = (pickedPhase === pn);
-                        html += '<option value="' + escapeHtml(val) + '"' + (isSel ? ' selected' : '') + '>All \u2014 ' + escapeHtml(pn) + ' (' + phaseCountsRaw[pn] + ' assets \u00b7 ' + fmtCompact(phaseViewsRaw[pn]) + ' views)</option>';
+                        var rollLabel = (phaseNames.length === 1) ? 'All campaigns' : ('All - ' + pn);
+                        html += '<option value="' + escapeHtml(val) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(rollLabel) + ' (' + phaseCountsRaw[pn] + ' assets \u00b7 ' + fmtCompact(phaseViewsRaw[pn]) + ' views)</option>';
                     });
                     html += '</optgroup>';
                     html += '<optgroup label="Individual assets">';
                 }
-                rows.slice(0, 250).forEach(function(a) {
+                rows.forEach(function(a) {
                     var v = Number(a.ext_view_count) || 0;
                     var lab = (a.action_label || a.asset_type || ('Asset #' + a.asset_id));
+                    if (lab.length > 96) lab = lab.slice(0, 93) + '...';
                     var isSel = !pickedPhase && pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
-                    html += '<option value="' + escapeHtml(String(a.asset_id || '')) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(lab) + ' \u2014 ' + fmtCompact(v) + ' views</option>';
+                    html += '<option value="' + escapeHtml(String(a.asset_id || '')) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(lab) + ' (' + fmtCompact(v) + ' views)</option>';
                 });
                 if (phaseNames.length) html += '</optgroup>';
                 html +=     '</select>';
-                html +=   '</div>';
-                // Campaign-rollup pills row (larger + distinct color per phase).
-                if (phaseNames.length) {
-                    html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; padding-bottom:0.5rem; margin-bottom:0.5rem; border-bottom:1px dashed rgba(255,255,255,0.08);">';
-                    phaseNames.forEach(function(pn) {
-                        var on   = (pickedPhase === pn);
-                        var accent = phaseColorByName[pn] || '#34d399';
-                        var bg   = on ? 'rgba(52,211,153,0.22)' : 'rgba(52,211,153,0.06)';
-                        var bd   = on ? '1px solid ' + accent : '1px solid rgba(52,211,153,0.28)';
-                        var col  = on ? '#f0fdf4' : '#a7f3d0';
-                        // Use the phase's own color if present
-                        if (phaseColorByName[pn]) {
-                            bg = on ? (phaseColorByName[pn] + '33') : (phaseColorByName[pn] + '14');
-                            bd = '1px solid ' + phaseColorByName[pn] + (on ? '' : '55');
-                            col = on ? '#ffffff' : phaseColorByName[pn];
-                        }
-                        var tip = 'Combined BEFORE + AFTER across all ' + phaseCountsRaw[pn] + ' assets in the ' + pn + ' campaign (' + fmtCompact(phaseViewsRaw[pn]) + ' views).';
-                        var val = '__PHASE__' + pn;
-                        html += '<button type="button" onclick="window.iiqJrnPickAsset(\'' + escapeHtml(val) + '\')" title="' + escapeHtml(tip) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.75rem; font-weight:600; padding:0.32rem 0.75rem; border-radius:16px; cursor:pointer; white-space:nowrap;">All \u2014 ' + escapeHtml(pn) + ' \u00b7 <span style="opacity:0.75; font-weight:400;">' + phaseCountsRaw[pn] + ' assets</span></button>';
-                    });
-                    html += '</div>';
-                }
-                html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">';
-                topAssets.forEach(function(a) {
-                    var on  = !pickedPhase && pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
-                    var bg  = on ? 'rgba(34,211,238,0.22)' : 'rgba(148,163,184,0.08)';
-                    var bd  = on ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(148,163,184,0.22)';
-                    var col = on ? '#67e8f9' : '#cbd5e1';
-                    var lab = (a.action_label || a.asset_type || ('Asset #' + a.asset_id));
-                    var tip = lab + ' \u2014 ' + fmtCompact(a.ext_view_count) + ' views';
-                    html += '<button type="button" onclick="window.iiqJrnPickAsset(\'' + escapeHtml(String(a.asset_id || '')) + '\')" title="' + escapeHtml(tip) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.72rem; padding:0.25rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap; max-width:240px; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(lab) + '</button>';
-                });
                 html +=   '</div>';
                 html += '</div>';
 
