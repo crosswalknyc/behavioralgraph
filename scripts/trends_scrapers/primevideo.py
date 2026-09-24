@@ -83,7 +83,11 @@ PRIME_URLS = [
     ('Storefront',  'https://www.amazon.com/gp/video/storefront'),
     ('Explore',     'https://www.amazon.com/gp/video/explore'),
     ('TV',          'https://www.amazon.com/gp/video/tv'),
-    ('Movies',      'https://www.amazon.com/gp/video/movies'),
+    # /gp/video/movies renders nothing: measured 2026-09-24 it returns
+    # a page with zero carousels while the storefront route below
+    # returns 150. It had been in this list returning nothing for
+    # however long the route has been dead.
+    ('Movies',      'https://www.amazon.com/gp/video/storefront/movies'),
 ]
 
 
@@ -108,9 +112,24 @@ _HYDRATION_BLOB_RE = re.compile(
 # so a 'Top 10 for you' personalised rail never qualifies.
 _TOP10_RE = re.compile(r'\btop\s*10\b.*\bin\s+the\s+u\.?s\.?\b', re.I)
 
+# 'Top 10 with subscriptions' has no US marker in its name but is the
+# same kind of thing: what people are WATCHING, on the add-on channels
+# rather than on Prime itself.
+_TOP10_SUBS_RE = re.compile(r'\btop\s*10\b.*\bwith\s+subscriptions\b', re.I)
+
+# 'Top 10 purchases in the US' is NOT a viewing chart. It ranks what
+# people BOUGHT, which is a different behaviour and a different
+# population, and averaging it into a viewing rail would make both
+# meaningless. It matches the pattern above word for word, so it has
+# to be excluded by name.
+_TOP10_PURCHASES_RE = re.compile(r'\bpurchase', re.I)
+
 
 def _is_published_chart_rail(rail: str) -> bool:
-    return bool(_TOP10_RE.search(rail or ''))
+    r = rail or ''
+    if _TOP10_PURCHASES_RE.search(r):
+        return False
+    return bool(_TOP10_RE.search(r) or _TOP10_SUBS_RE.search(r))
 
 
 def _classify_entity(entity_type: str) -> str:
@@ -246,21 +265,198 @@ def _extract_from_dom(html: str, limit: int = 20) -> list[dict]:
     return out
 
 
+# ────────────────────────────────────────────────────────────────────
+# The Top 10 rails are not in the hydration blob
+# ────────────────────────────────────────────────────────────────────
+# Measured 2026-09-24 on a signed-in storefront: the blob carries
+# SEVEN containers, all above the fold (Carousel Title, On now, Fan
+# favorites, Top-rated movies, Action and adventure movies, Featured
+# Originals and Exclusives, Your live and upcoming events). The Top 10
+# rails render further down and arrive later, so a reader that only
+# parses the blob finds no chart and correctly reports that it found
+# none. That is why the declaration in `_PUBLISHED_CHARTS` had nothing
+# to read: the chart was never collected, not mis-matched.
+#
+# So the page is scrolled and the rails are read from the DOM. Rail
+# identity comes from `[data-testid="carousel-title"]`, not from the
+# heading's text: the H2's textContent is the rail name with the
+# trending icon's label run onto the end of it ('Top 10 in the US
+# Trending'), which is the same lesson HBO Max taught, where the
+# visible heading and the published name were different strings.
+#
+# Charts are read from the STOREFRONT only. The movies storefront
+# carries a rail named 'Top 10 in the US' as well, so reading both
+# pages would put twenty rows in one collection and number them 1 to
+# 20. One page, one chart.
+_CHART_PAGES = frozenset({'Storefront'})
+
+# A page that only ever shows one kind tells us the kind of anything on
+# it. Used as the LAST resort for a chart row that carries no badge and
+# is not in the hydration blob, so the row still keys to the right half
+# of the estimates store instead of landing in a third key space of its
+# own where nothing downstream will find it again.
+_PAGE_KIND = {'TV': 'TV', 'Movies': 'Film'}
+
+_RAILS_JS = r"""() => {
+  const clean = s => (s || '').replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (const el of document.querySelectorAll('[data-testid="carousel-title"]')) {
+    const name = clean(el.textContent || '');
+    if (!name) continue;
+    let node = el, n = 0;
+    for (let i = 0; i < 8 && node.parentElement; i++) {
+      node = node.parentElement;
+      n = node.querySelectorAll('a[href*="/gp/video/detail/"]').length;
+      if (n >= 3) break;
+    }
+    if (n < 3) continue;
+    const rows = [];
+    for (const a of node.querySelectorAll('a[href*="/gp/video/detail/"]')) {
+      const title = clean(a.textContent || '');
+      if (!title) continue;
+      const card = a.closest('article,[data-testid="card"]') || a.parentElement;
+      rows.push({title: title,
+                 href: (a.getAttribute('href') || '').split('?')[0],
+                 badge: clean((card || {}).textContent || '').slice(0, 120)});
+    }
+    if (rows.length) out.push({rail: name, rows: rows});
+  }
+  return JSON.stringify(out);
+}"""
+
+
+def _collect_rails(page, label: str) -> str:
+    """Scroll the page, then hand back the DOM rails alongside its HTML.
+
+    The HTML still goes through the hydration parser for the catalog,
+    so this only ADDS the charts. A page that never reveals one yields
+    an empty list and the pull is unchanged.
+    """
+    for _ in range(18):
+        try:
+            page.mouse.wheel(0, 1200)
+        except Exception:
+            break
+        page.wait_for_timeout(900)
+    try:
+        rails = page.evaluate(_RAILS_JS)
+    except Exception as e:  # noqa: BLE001
+        logger.info("primevideo %s: rail read failed (%s)", label, e)
+        rails = '[]'
+    return json.dumps({'rails': rails, 'html': page.content()})
+
+
+def _kind_from_badge(badge: str) -> str:
+    """Prime marks a card NEW MOVIE / NEW SERIES / NEW SEASON.
+
+    Only the badge is read here. Guessing from a title is how a film
+    and a series that share a name end up as one row.
+    """
+    b = (badge or '').upper()
+    if 'MOVIE' in b:
+        return 'Film'
+    if 'SERIES' in b or 'SEASON' in b or 'EPISODE' in b:
+        return 'TV'
+    return ''
+
+
+def _chart_rows_from_rails(rails_json: str, label: str,
+                           kind_by_title: dict) -> list[dict]:
+    """The chart rails on one page, in the order Amazon renders them."""
+    try:
+        rails = json.loads(rails_json or '[]')
+    except (TypeError, json.JSONDecodeError):
+        return []
+    out: list[dict] = []
+    for rail in rails:
+        name = (rail.get('rail') or '').strip()
+        if not _is_published_chart_rail(name):
+            continue
+        for i, row in enumerate(rail.get('rows') or [], 1):
+            title = (row.get('title') or '').strip()
+            if not (2 <= len(title) <= 220):
+                continue
+            href = row.get('href') or ''
+            kind = (_kind_from_badge(row.get('badge') or '')
+                    or kind_by_title.get(title.lower(), ''))
+            out.append({
+                'rank':             i,
+                'title':            title,
+                'url':              (f'https://www.amazon.com{href}'
+                                     if href.startswith('/')
+                                     else 'https://www.amazon.com/'),
+                'category_display': kind,
+                'collection':       name,
+            })
+        logger.info("primevideo %s: chart rail %r -> %d row(s)",
+                    label, name, len(rail.get('rows') or []))
+    return out
+
+
 def fetch() -> dict[str, Any]:
     rendered = render_pages(PRIME_URLS,
                              homepage='https://www.amazon.com/',
                              cookie_domain='amazon.com',
                              wait_selectors=_PRIME_HYDRATE_SELECTORS,
                              hydration_wait_ms=10000,
-                             assert_signed_in='amazon.com')
+                             assert_signed_in='amazon.com',
+                             page_hook=_collect_rails)
+
+    # Unpack the hook's record back into (label, rails, html).
+    pages: list[tuple[str, str, str]] = []
+    for label, payload in rendered:
+        try:
+            d = json.loads(payload)
+            pages.append((label, d.get('rails') or '[]', d.get('html') or ''))
+        except (TypeError, json.JSONDecodeError):
+            pages.append((label, '[]', payload))
+
+    # Film or TV for every title the hydration blob knows about, so a
+    # chart row with no badge can still be keyed to the right kind.
+    kind_by_title: dict[str, str] = {}
+    hydrated: list[tuple[str, list[dict]]] = []
+    for label, _rails, html in pages:
+        items = _extract_prime_hydration(html)
+        if not items:
+            items = _extract_from_dom(html, limit=25)
+        hydrated.append((label, items))
+        for it in items:
+            k = it.get('category_display')
+            if k:
+                kind_by_title.setdefault(it['title'].lower(), k)
+
+    # Then the single-kind pages, which settle anything the blob and
+    # the badges between them could not.
+    for label, rails, _html in pages:
+        page_kind = _PAGE_KIND.get(label)
+        if not page_kind:
+            continue
+        try:
+            for rail in json.loads(rails or '[]'):
+                for row in rail.get('rows') or []:
+                    t = (row.get('title') or '').strip().lower()
+                    if t:
+                        kind_by_title.setdefault(t, page_kind)
+        except (TypeError, json.JSONDecodeError):
+            continue
 
     charted: list[dict] = []
     rest: list[dict] = []
     seen: set[str] = set()
-    for label, html in rendered:
-        items = _extract_prime_hydration(html)
-        if not items:
-            items = _extract_from_dom(html, limit=25)
+
+    # The charts first, so a charted title is never dropped later as a
+    # duplicate of the same title sitting in a promotional rail.
+    for label, rails, _html in pages:
+        if label not in _CHART_PAGES:
+            continue
+        for it in _chart_rows_from_rails(rails, label, kind_by_title):
+            key = it['title'].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            charted.append(it)
+
+    for (label, items), (_l, _r, html) in zip(hydrated, pages):
         n_chart = 0
         for it in items:
             key = it['title'].lower()

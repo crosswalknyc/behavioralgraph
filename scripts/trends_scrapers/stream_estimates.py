@@ -7858,12 +7858,26 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
     # scraper change that collects them, so the day those collections
     # land in the snapshot they are treated as the chart rather than
     # as another promotional rail.
+    # Prime Video's headline chart, read off its storefront. Two
+    # independent rankings: what people watch on Prime itself, and
+    # what they watch on the add-on channels.
+    #
+    # 'Top 10 purchases in the US' is deliberately NOT here. It ranks
+    # what people bought, not what they watched, and those are
+    # different behaviours over different populations; blending them
+    # would leave neither number meaning anything. `primevideo.py`
+    # also excludes it by name so it can never arrive as a chart.
+    #
+    # The kind-specific spellings are gone too. The movies storefront
+    # carries a rail named 'Top 10 in the US' of its own, so matching
+    # on the name across pages put twenty rows in one collection and
+    # numbered them 1 to 20. The scraper reads charts from the main
+    # storefront only.
     'primevideo': {
         'label': 'Prime Video Top 10 US',
         'mode':  'collection',
         'collections': ('top 10 in the us',
-                        'top 10 movies in the us',
-                        'top 10 tv shows in the us'),
+                        'top 10 with subscriptions'),
         'depth': 10,
     },
     # HBO Max publishes two, in the aria-label of each rail's H2:
