@@ -36707,18 +36707,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var implHead = useInfo ? 'Implications for next week:' : (postOpen ? 'What this run says:' : 'Implications for next week:');
                 var mvL = mv ? _iiqGoatAssetLabel(mv.asset, mv.count) : '';
                 var auL = topUnder ? _iiqGoatAudLabel(topUnder) : '';
+                var sgL = (rated.length && bm.median > 0) ? _iiqGoatAssetLabel(rated[0].asset) : '';
                 var impl;
                 if (useInfo) {
-                    if (mvL && auL) impl = 'One angle: ' + mvL + ' is carrying the exposure story and info-seek is climbing on it. Pair the next drop with the ' + auL + ' cohort to lift on the axis with the most headroom.';
+                    if (mvL && auL) impl = 'One angle: ' + mvL + ' is carrying the exposure and info-seek is climbing on it. Pair the next drop with the ' + auL + ' cohort to lift on the axis with the most headroom.';
                     else if (mvL)   impl = 'One angle: keep ' + mvL + ' in rotation while the info-seek signal is still building. Reassess after the next drop.';
                     else            impl = 'One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout page reach.';
                 } else if (postOpen) {
-                    if (mvL && auL) impl = 'One angle: ' + mvL + ' read as the checkout page driver of the campaign, and the ' + auL + ' cohort responded hardest when reached. Lead the next title\u2019s plan with that pairing.';
-                    else if (mvL)   impl = 'One angle: ' + mvL + ' read as the checkout page driver of the campaign. Anchor the next launch plan around it.';
+                    if (sgL && auL) impl = 'One angle: ' + sgL + ' read as the checkout page driver of the campaign' + (mvL && mvL !== sgL ? (', ' + mvL + ' carried the exposure') : '') + ', and the ' + auL + ' cohort responded hardest when reached. Lead the next title\u2019s plan with that pairing.';
+                    else if (sgL)   impl = 'One angle: ' + sgL + ' read as the checkout page driver of the campaign' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carried the exposure') : '') + '. Anchor the next launch plan around it.';
                     else            impl = 'One angle: the campaign has run its course. Pull the picker back to opening week to see the assets that carried the checkout page signal.';
                 } else {
-                    if (mvL && auL) impl = 'One angle: ' + mvL + ' reads as the checkout page driver right now, and the ' + auL + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
-                    else if (mvL)   impl = 'One angle: ' + mvL + ' reads as the checkout page driver right now. Concentrate spend behind it through the final week.';
+                    if (sgL && auL) impl = 'One angle: ' + sgL + ' reads as the checkout page driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + ', and the ' + auL + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
+                    else if (sgL)   impl = 'One angle: ' + sgL + ' reads as the checkout page driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + '. Concentrate spend behind it through the final week.';
                     else            impl = 'One angle: pull the read forward with the picker to see the assets carrying the checkout page signal, then concentrate spend there in the final week.';
                 }
                 bul.push({ label: implHead, text: impl });
