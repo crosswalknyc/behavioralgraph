@@ -77,10 +77,12 @@ _LOCAL_PRICING_MIRROR = os.path.join(
 # by Jenna 2026-09-08.
 DEFAULT_PRICING = {
     "per_tool_usd": {
-        # Standard IQ pulls
-        "profile_iq_build": 500.0,
+        # Standard IQ pulls (dashboard). API keys below stay on the
+        # partner sticker. Kartel overrides via profile_pull_usd /
+        # tool_price_overrides on the company record.
+        "profile_iq_build": 300.0,
         "profile_iq_derived_cut": 100.0,
-        "subscriber_iq_build": 1000.0,
+        "subscriber_iq_build": 500.0,
         # Prometheus research report (2026-09-14 Jenna): the put-
         # together read on a subject with no base anywhere, and the
         # catch-all price for report asks with no other set price.
@@ -116,9 +118,10 @@ DEFAULT_PRICING = {
         "impact_iq": 0.0,
         "trends_iq": 0.0,
         "sentiment_iq": 0.0,
-        # 2026-09-16 (Jenna): Brand Partnership Valuation is $1,000
-        # per pull. Digital Journey is $500 (2026-09-18).
-        "brand_partnership_iq": 1000.0,
+        # 2026-09-23 (Jenna): dashboard Brand Partnership is $500.
+        # Kartel keeps $475 via company tool_price_overrides.
+        # Digital Journey is $500 (2026-09-18).
+        "brand_partnership_iq": 500.0,
         "journey_iq": 500.0,
         # 2026-09-18 (Jenna): Flywheel report is $300 per pull.
         "flywheel_iq": 300.0,
@@ -389,11 +392,11 @@ MODULE_CATALOG = [
     # hidden. Session-metered rows (Prometheus) render a metered note
     # in place of the per-pull input.
     ("profile_iq_build",           "Profile IQ - Full Build",
-     "pulls", 5, 500.0, "has_profile_iq_access"),
+     "pulls", 5, 300.0, "has_profile_iq_access"),
     ("profile_iq_derived_cut",     "Profile IQ - Derived Cut",
      "pulls", 3, 100.0, "has_profile_iq_access"),
     ("subscriber_iq_build",        "Subscriber IQ - Pull",
-     "pulls", 10, 1000.0, "has_subscriber_iq_access"),
+     "pulls", 10, 500.0, "has_subscriber_iq_access"),
     # 2026-09-14 (Jenna, verbatim: "before it puts together any report
     # outside of a simple analysis of what already exists it should
     # charge them. if they request something that doesnt have a set
@@ -453,15 +456,15 @@ MODULE_CATALOG = [
     ("flywheel_conversion",        "Flywheel Conversion",
      "modules", 25, 0.0, None),  # access_flag retired 2026-09-09
     ("brand_partnership_iq",       "Brand Partnership IQ",
-     "modules", 15, 0.0, "has_brand_partnership_iq_access"),
+     "modules", 15, 500.0, "has_brand_partnership_iq_access"),
     ("journey_iq",                 "Digital Journey IQ",
-     "modules", 10, 0.0, "has_journey_iq_access"),
+     "modules", 10, 500.0, "has_journey_iq_access"),
     ("flywheel_iq",                "Flywheel IQ",
-     "modules", 5, 0.0, "has_flywheel_iq_access"),
+     "modules", 5, 300.0, "has_flywheel_iq_access"),
     ("attribution_iq_setup",       "Attribution IQ - Tracking Setup",
-     "modules", 5, 0.0, "has_intent_iq_access"),
+     "modules", 5, 500.0, "has_intent_iq_access"),
     ("attribution_iq_daily",       "Attribution IQ - Daily Refresh",
-     "modules", 1, 0.0, "has_intent_iq_access"),
+     "modules", 1, 100.0, "has_intent_iq_access"),
     ("share_of_time",              "Share of Time - View",
      "modules", 0, 0.0, "has_share_of_time_access"),
     ("share_of_time_run",          "Share of Time - Run",

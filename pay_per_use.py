@@ -112,13 +112,28 @@ def analysis_allowed(user) -> bool:
 
 
 def billing_active(user) -> bool:
-    """True when this user's analysis calls are billed pay-as-you-go:
-    pulls_only tier with the opt-in flag set. Full-tier users are
-    subscribed; their calls are never billed per use."""
-    if (user or {}).get('role') == 'super_admin':
+    """True when this user's Prometheus calls are billed.
+
+    Jenna 2026-09-23: every Prometheus session is metered (tokens at
+    the 2.10x markup, $0.021 per search), including full-tier
+    dashboard users and Kartel. Unlimited accounts and super_admin
+    stay unbilled. pulls_only without the opt-in cannot run analysis,
+    so they never reach a billable call.
+    """
+    u = user or {}
+    if u.get('role') == 'super_admin':
         return False
-    tier, ppu = resolve_access(user)
-    return tier == ACCESS_PULLS_ONLY and ppu
+    if u.get('unlimited'):
+        return False
+    try:
+        import wallet as _w
+        if _w.is_unlimited(u):
+            return False
+    except Exception:
+        pass
+    if not analysis_allowed(u):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------

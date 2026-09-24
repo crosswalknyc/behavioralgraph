@@ -57490,11 +57490,12 @@ def _pm_usage_extras(user):
     """Attribution extras for a pay-as-you-go user's model calls.
 
 
-    Returns None for subscribed (full-tier) users so their usage
-    records stay exactly as before. For a pulls_only user who opted
-    in: username, email, the active session id (30-minute idle
-    window), and a per-request id so one ask that fans out into
-    several model calls still counts as one ask on the bill."""
+    Returns None when billing_active is false (unlimited, super_admin,
+    or pulls_only without the opt-in). Everyone else, including
+    full-tier dashboard users and Kartel, gets username, email, the
+    active session id (30-minute idle window), and a per-request id
+    so one ask that fans out into several model calls still counts
+    as one ask on the bill."""
     import pay_per_use as ppu
     try:
         if not ppu.billing_active(user):
@@ -59688,10 +59689,11 @@ def api_synth_chat_analyze():
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That valuation needs '
-                          f'{_PM_BPIQ_CREDITS} credits and your '
-                          'account cannot cover it right now. Add '
-                          'funds or ask your admin, and I will run '
-                          'it the moment you are set.'),
+                          + _pm_tool_price_label(
+                              'brand_partnership_iq', '$500')
+                          + ' and your account cannot cover it '
+                          'right now. Add funds or ask your admin, '
+                          'and I will run it the moment you are set.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
         _bpiq_job = uuid.uuid4().hex[:12]
@@ -60530,8 +60532,10 @@ def _pm_bpiq_confirm_reply(parsed):
         f"- Baseline window: {pre}\n"
         f"- Post window: {post}\n"
         f"- Audience: {aud}\n\n"
-        f"It prices at {_PM_BPIQ_CREDITS} credits and lands in the "
-        f"Brand Partnership tab when finished. Run it?")
+        f"It prices at "
+        f"{_pm_tool_price_label('brand_partnership_iq', '$500')}"
+        f" and lands in the Brand Partnership tab when finished. "
+        f"Run it?")
 
 
 def _pm_run_bpiq_job(job_id, username, inputs, extras):
@@ -60630,7 +60634,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
 # Digital Journey via Prometheus (Jenna 2026-09-16): the "Pull a
 # Digital Journey" chip walks the user through the playbook inputs
 # (subject, platform, conversion event, window, TAM), charges the
-# $1,000 Digital Journey pull, and builds the research-anchored journey
+# $500 Digital Journey pull, and builds the research-anchored journey
 # on a background thread. The finished run lands in the Journey IQ
 # store and renders in the Digital Journey tab exactly like the Luxury
 # Fragrance on TikTok Shop read.
@@ -60784,15 +60788,35 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 # Method: the revised acquired/reactivated playbook. The nest starts
 # at the captured users (the people who did the thing the ask wants
 # to capture) - never at US gen pop.
-def _pm_tool_price_label(tool_key, fallback):
+def _pm_tool_price_label(tool_key, fallback, username=None):
     """Live per-pull price from the billing panel (system/pricing.json
     via wallet.tool_price_usd), so chat copy never drifts from what
-    admins set. Falls back to the last known label on any failure."""
+    admins set. Pass username so a company sticker (Kartel $475 BPIQ)
+    prints the number that will be charged. Falls back to the last
+    known label on any failure."""
     try:
         import wallet as _w
-        v = float(_w.tool_price_usd(tool_key) or 0)
+        subject = None
+        uname = (username or '').strip()
+        if not uname:
+            try:
+                uname = (session.get('username') or '').strip()
+            except Exception:
+                uname = ''
+        if uname:
+            try:
+                data = load_users()
+                user = (data.get('users') or {}).get(uname) or {}
+                if user:
+                    subject, _k, _n = _w.resolve_billing_subject(
+                        user, data)
+            except Exception:
+                subject = None
+        v = float(_w.tool_price_usd(tool_key, subject=subject) or 0)
         if v > 0:
-            return f'${v:,.0f}'
+            if abs(v - round(v)) < 0.009:
+                return f'${v:,.0f}'
+            return f'${v:,.2f}'
     except Exception:
         pass
     return fallback

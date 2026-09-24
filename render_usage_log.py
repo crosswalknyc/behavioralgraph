@@ -56,6 +56,13 @@ CALLS_PREFIX = 'system/usage/render_calls/'
 PPU_MARKUP = 2.10
 PPU_CALLS_PREFIX = 'system/usage/ppu_calls/'
 
+# Anthropic web_search is $10 per 1,000 searches ($0.01 each). The
+# published Prometheus meter is that cost x 2.10 = $0.021 per search
+# (Jenna 2026-09-23: "$10.50 / $52.50 per million in/out, plus $0.021
+# per search"). Token billed rates are cost x markup on the model
+# sheet; search rides the same multiplier.
+WEB_SEARCH_USD = 0.01
+
 
 def _current_ppu_markup() -> float:
     """Effective Prometheus markup at CALL TIME. Reads
@@ -149,8 +156,46 @@ def _usage_field(usage: Any, name: str) -> int:
         return 0
 
 
+def _web_search_count(usage: Any) -> int:
+    """Anthropic web_search rounds on a usage object or dict."""
+    if usage is None:
+        return 0
+    stu = None
+    if isinstance(usage, dict):
+        stu = usage.get('server_tool_use')
+        if isinstance(stu, dict):
+            try:
+                return int(stu.get('web_search_requests') or 0)
+            except (TypeError, ValueError):
+                return 0
+        try:
+            return int(usage.get('web_search_requests') or 0)
+        except (TypeError, ValueError):
+            return 0
+    stu = getattr(usage, 'server_tool_use', None)
+    if stu is not None:
+        if isinstance(stu, dict):
+            try:
+                return int(stu.get('web_search_requests') or 0)
+            except (TypeError, ValueError):
+                return 0
+        try:
+            return int(getattr(stu, 'web_search_requests', 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+    try:
+        return int(getattr(usage, 'web_search_requests', 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def cost_usd(model: str, usage: Any) -> float:
-    """Dollar cost of one call from its usage object (or dict)."""
+    """Dollar cost of one call from its usage object (or dict).
+
+    Tokens use the Anthropic sheet. Each web_search round is $0.01
+    (our cost); billed_usd later applies the Prometheus markup so
+    the customer sees $0.021 per search at the default 2.10x.
+    """
     p = _prices_for(model)
     in_tok = _usage_field(usage, 'input_tokens')
     out_tok = _usage_field(usage, 'output_tokens')
@@ -158,7 +203,8 @@ def cost_usd(model: str, usage: Any) -> float:
     cw_tok = _usage_field(usage, 'cache_creation_input_tokens')
     total = (in_tok * p['input'] + out_tok * p['output']
              + cr_tok * p['cache_read'] + cw_tok * p['cache_write'])
-    return round(total / 1_000_000, 6)
+    searches = _web_search_count(usage)
+    return round(total / 1_000_000 + searches * WEB_SEARCH_USD, 6)
 
 
 def _put_record(record: dict) -> None:
@@ -205,7 +251,8 @@ def record_call(surface: str, origin: str, model: str,
         out_tok = _usage_field(usage, 'output_tokens')
         cr_tok = _usage_field(usage, 'cache_read_input_tokens')
         cw_tok = _usage_field(usage, 'cache_creation_input_tokens')
-        if not (in_tok or out_tok or cr_tok or cw_tok):
+        searches = _web_search_count(usage)
+        if not (in_tok or out_tok or cr_tok or cw_tok or searches):
             return
         cost = cost_usd(model, usage)
         # Read admin-configured markup at write time (30s cached), so
@@ -221,6 +268,7 @@ def record_call(surface: str, origin: str, model: str,
             'output_tokens': out_tok,
             'cache_read_input_tokens': cr_tok,
             'cache_creation_input_tokens': cw_tok,
+            'web_search_requests': searches,
             'cost_usd': cost,
             'billed_usd': round(cost * markup, 6),
             'markup_applied': round(markup, 4),
