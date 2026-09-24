@@ -1245,6 +1245,14 @@ def get_demographics(title_slug: str) -> dict:
     all_camp = demos.get("all_campaigns") or None
     if all_camp:
         _annotate_medians(all_camp)
+    # Per-creator + per-link cuts (2026-09-23). Older snapshots lack
+    # them; the frontend dropdown just shows All campaigns + phases.
+    creators = demos.get("creators") or []
+    for c in creators:
+        _annotate_medians(c)
+    link_cuts = demos.get("assets") or []
+    for a in link_cuts:
+        _annotate_medians(a)
 
     return {
         "success":         True,
@@ -1254,6 +1262,8 @@ def get_demographics(title_slug: str) -> dict:
         "categories":      categories,
         "category_labels": category_labels,
         "phases":          phases,
+        "creators":        creators,
+        "assets":          link_cuts,
         "all_campaigns":   all_camp,
         "gen_pop":         {
             "demographics":  gen_pop.get("demographics") or {},

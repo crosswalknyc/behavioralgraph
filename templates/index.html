@@ -39417,21 +39417,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
                 var phases = d.phases || [];
                 var all = d.all_campaigns || null;
+                var creators = d.creators || [];
+                var links = d.assets || [];
 
-                // Pill options: "All" first, then one per phase.
+                // Dropdown options (Jenna 2026-09-23): All campaigns first,
+                // then campaign phases (only when there is more than one),
+                // then every creator, then every link. Each option carries
+                // its own cut so picking one is a rerender, not a fetch.
                 var pickOptions = [];
                 if (all) {
-                    pickOptions.push({ key: '__all__', label: 'All campaigns',
+                    pickOptions.push({ key: '__all__', label: 'All campaigns', group: '',
                                         asset_count: all.asset_count,
                                         view_count:  all.view_count,
+                                        median_age: all.median_age, median_income: all.median_income,
                                         demographics: all.demographics });
                 }
-                phases.forEach(function(p) {
-                    pickOptions.push({ key: p.phase_name,
-                                        label: p.phase_name,
-                                        asset_count: p.asset_count,
-                                        view_count:  p.view_count,
-                                        demographics: p.demographics });
+                if (phases.length > 1) {
+                    phases.forEach(function(p) {
+                        pickOptions.push({ key: p.phase_name,
+                                            label: p.phase_name, group: 'Campaigns',
+                                            asset_count: p.asset_count,
+                                            view_count:  p.view_count,
+                                            median_age: p.median_age, median_income: p.median_income,
+                                            demographics: p.demographics });
+                    });
+                }
+                creators.forEach(function(c) {
+                    pickOptions.push({ key: 'creator:' + c.creator,
+                                        label: c.creator, group: 'Creators',
+                                        asset_count: c.asset_count,
+                                        view_count:  c.view_count,
+                                        median_age: c.median_age, median_income: c.median_income,
+                                        demographics: c.demographics });
+                });
+                links.forEach(function(a) {
+                    var lbl = a.label || a.asset_id;
+                    pickOptions.push({ key: 'asset:' + a.asset_id,
+                                        label: lbl, group: 'Links',
+                                        url: a.url || '', channel: a.channel || '',
+                                        creator: a.creator || '', posted_date: a.posted_date || '',
+                                        asset_count: 1,
+                                        view_count:  a.view_count,
+                                        median_age: a.median_age, median_income: a.median_income,
+                                        demographics: a.demographics });
                 });
 
                 var pickedKey = window._iiqDemoState[slug] || (pickOptions.length ? pickOptions[0].key : null);
@@ -39441,28 +39469,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return '<div class="iiq-empty">No demographic data.</div>';
                 }
 
-                var pills = pickOptions.map(function(o) {
-                    var active = o.key === picked.key;
-                    // "All campaigns" is the SUM of view counts across every
-                    // phase. Because the same person can engage with more
-                    // than one phase (a Chime member who watched Welcome to
-                    // 30 AND Chime Prime AND Mama I Made It gets counted
-                    // in each), that number is a DUPLICATED audience --
-                    // not a deduped unique-viewer count. Flag it inline
-                    // so the user reads it correctly (Jenna 2026-08-13).
-                    var dupeChip = (o.key === '__all__')
-                        ? ' <span title="Same person may engage with multiple phases; counted once per phase, not deduped across phases." style="color:#fbbf24; opacity:0.85; font-size:0.66rem; margin-left:0.25rem; font-style:italic;">(Duplicated Audience)</span>'
-                        : '';
-                    return '<button onclick="iiqDemoSetPhase(' + JSON.stringify(o.key).replace(/"/g, '&quot;') + ')" style="'
-                        +    'background:' + (active ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.04)') + ';'
-                        +    'color:' + (active ? '#fff' : '#cbd5e1') + ';'
-                        +    'border: 1px solid ' + (active ? 'rgba(59,130,246,0.55)' : 'rgba(255,255,255,0.08)') + ';'
-                        +    'padding: 0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.76rem; margin-right:0.4rem; margin-bottom:0.4rem;">'
-                        +    escapeHtml(o.label)
-                        +    ' <span style="opacity:0.65; font-size:0.68rem; margin-left:0.2rem;">(' + fmtCompact(o.view_count || 0) + ' views)</span>'
-                        +    dupeChip
-                        +  '</button>';
-                }).join('');
+                // One dropdown. Options are grouped (Campaigns / Creators /
+                // Links) and every option carries its view count so the
+                // reader can see the weight of the cut before picking it.
+                function _demoOptTag(o) {
+                    var sel = (o.key === picked.key) ? ' selected' : '';
+                    var lbl = o.label;
+                    if (lbl.length > 96) lbl = lbl.slice(0, 93) + '...';
+                    return '<option value="' + escapeHtml(o.key) + '"' + sel + '>'
+                        + escapeHtml(lbl) + ' (' + fmtCompact(o.view_count || 0) + ' views)</option>';
+                }
+                var pickHtml = '';
+                var groupOrder = ['', 'Campaigns', 'Creators', 'Links'];
+                groupOrder.forEach(function(g) {
+                    var opts = pickOptions.filter(function(o) { return (o.group || '') === g; });
+                    if (!opts.length) return;
+                    if (!g) { pickHtml += opts.map(_demoOptTag).join(''); return; }
+                    pickHtml += '<optgroup label="' + escapeHtml(g) + '">' + opts.map(_demoOptTag).join('') + '</optgroup>';
+                });
+                var pills = ''
+                    + '<div style="display:inline-flex; align-items:center; gap:0.45rem; padding:0.3rem 0.55rem; background: rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.22); border-radius:6px; max-width:100%;">'
+                    +   '<span style="font-size:0.7rem; color:#93c5fd; letter-spacing:0.04em; text-transform:uppercase; font-weight:600; white-space:nowrap;">Show</span>'
+                    +   '<select onchange="iiqDemoSetPhase(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(59,130,246,0.35); border-radius:4px; padding:0.25rem 0.4rem; font-size:0.74rem; max-width:560px;">'
+                    +     pickHtml
+                    +   '</select>'
+                    + '</div>';
+                // Which link, who posted it, where. Only when a single link
+                // is picked.
+                var linkMeta = '';
+                if (picked.url || picked.creator) {
+                    linkMeta = '<div style="margin-top:0.45rem; font-size:0.72rem; color: var(--text-secondary); line-height:1.4; overflow-wrap:anywhere;">'
+                        + (picked.creator ? '<span style="color:#e2e8f0;">' + escapeHtml(picked.creator) + '</span>' : '')
+                        + (picked.channel ? ' \u00b7 ' + escapeHtml(picked.channel) : '')
+                        + (picked.posted_date ? ' \u00b7 posted ' + escapeHtml(picked.posted_date) : '')
+                        + (picked.url ? ' \u00b7 <a href="' + escapeHtml(picked.url) + '" target="_blank" rel="noopener" style="color:#93c5fd;">' + escapeHtml(picked.url) + '</a>' : '')
+                        + '</div>';
+                }
 
                 // Method badge retired: how the demographic read was produced
                 // is internal and never surfaces on the dashboard.
@@ -39554,12 +39596,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '</div>'
                     +     '<div style="font-size:0.72rem; color: var(--text-secondary);">'
                     +       fmtCompact(picked.view_count || 0) + ' views \u00b7 '
-                    +       fmtCompact(picked.asset_count || 0) + ' assets'
+                    +       fmtCompact(picked.asset_count || 0) + (picked.asset_count === 1 ? ' link' : ' links')
                     +     '</div>'
                     +     methodTag
                     +     compareUi
                     +   '</div>'
                     +   '<div style="margin-top:0.55rem;">' + pills + '</div>'
+                    +   linkMeta
                     + '</div>'
                     + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 0.75rem;">'
                     +   cards

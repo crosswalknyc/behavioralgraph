@@ -560,14 +560,79 @@ def _view_weighted_merge(dists: List[Dict[str, Dict[str, float]]],
 # Top-level entry point
 # ---------------------------------------------------------------------------
 
+def _reconcile_to_anchor(dists: List[Dict[str, Dict[str, float]]],
+                         weights: List[float],
+                         anchor: Dict[str, Dict[str, float]],
+                         rounds: int = 12) -> None:
+    """Rescale per-asset distributions IN PLACE so their view-weighted
+    merge lands on `anchor` (the campaign-level read that already ships
+    as All campaigns). Iterative proportional fitting: per bucket, scale
+    every asset by anchor / merged, renormalize each asset's category to
+    100, repeat. Per-asset shape (which links skew younger, which skew
+    female) survives; only the level moves. Buckets the anchor lacks
+    are left alone."""
+    if not dists or not anchor:
+        return
+    for _ in range(rounds):
+        merged = _view_weighted_merge(dists, weights)
+        moved = 0.0
+        for cat, buckets in DEMO_SCHEMA.items():
+            a_cat = anchor.get(cat) or {}
+            m_cat = merged.get(cat) or {}
+            factors = {}
+            for b in buckets:
+                a_v = float(a_cat.get(b, 0.0) or 0.0)
+                m_v = float(m_cat.get(b, 0.0) or 0.0)
+                if a_v <= 0 or m_v <= 0:
+                    continue
+                factors[b] = a_v / m_v
+                moved = max(moved, abs(factors[b] - 1.0))
+            if not factors:
+                continue
+            for d in dists:
+                per_cat = d.get(cat)
+                if not per_cat:
+                    continue
+                for b, f in factors.items():
+                    if b in per_cat:
+                        per_cat[b] = float(per_cat[b] or 0.0) * f
+                tot = sum(float(per_cat.get(b, 0.0) or 0.0) for b in buckets) or 1.0
+                for b in buckets:
+                    if b in per_cat:
+                        per_cat[b] = float(per_cat[b] or 0.0) / tot * 100.0
+        if moved < 0.0005:
+            break
+
+
+def _asset_creator(asset: dict) -> str:
+    tags = asset.get("talent_tags") or []
+    for t in tags:
+        t = str(t or "").strip()
+        if t:
+            return t
+    return ""
+
+
 def build_campaign_demographics(snapshot: dict, *,
                                   claude_fn: Optional[Callable] = None,
                                   progress: Optional[Callable] = None,
-                                  batch_size: int = 6) -> dict:
+                                  batch_size: int = 6,
+                                  anchor_all_campaigns: Optional[Dict[str, Dict[str, float]]] = None) -> dict:
     """Return a demographics dict of the form:
       {
         "generated_at_utc":  "...",
         "method":            "claude" | "fallback_deterministic" | "mixed",
+        "creators": [        # one per talent tag, view-weighted (2026-09-23)
+          {"creator": "Leigh McGowan (Politics Girl)", "asset_count": 14,
+           "view_count": 5400000, "demographics": {...}},
+          ...
+        ],
+        "assets": [          # one per link, view-desc (2026-09-23)
+          {"asset_id": "...", "label": "...", "creator": "...", "channel": "...",
+           "url": "...", "phase_name": "...", "asset_count": 1,
+           "view_count": 2017800, "demographics": {...}},
+          ...
+        ],
         "phases": [
           {
             "phase_name":   "Welcome to 30",
@@ -613,6 +678,10 @@ def build_campaign_demographics(snapshot: dict, *,
     phase_records = []
     all_asset_dists: List[Dict[str, Dict[str, float]]] = []
     all_asset_weights: List[float] = []
+    # Parallel to all_asset_dists: the asset each distribution belongs
+    # to, so per-creator and per-link cuts can be built after the
+    # (optional) anchor reconciliation.
+    all_asset_refs: List[dict] = []
 
     total_batches = sum(math.ceil(len(v) / batch_size) for v in by_phase.values())
     batch_i = 0
@@ -643,33 +712,82 @@ def build_campaign_demographics(snapshot: dict, *,
                 # over-index on Black + Hispanic (see helper for the
                 # Census-grounded shift + hard over-index floor).
                 apply_age_ethnicity_coherence(d)
+                # Snap each asset to the canonical schema now so every
+                # downstream cut (phase, creator, link, all) merges the
+                # same normalized shape.
+                d = {cat: normalize_distribution(cat, d.get(cat) or {}) for cat in DEMO_SCHEMA}
                 phase_asset_dists.append(d)
                 phase_asset_weights.append(w)
                 all_asset_dists.append(d)
                 all_asset_weights.append(w)
+                all_asset_refs.append(a)
 
             batch_i += 1
             if progress:
                 progress(batch_i, total_batches, phase_name, len(chunk))
 
-        raw_phase_dist = _view_weighted_merge(phase_asset_dists, phase_asset_weights)
-        normalized = {
-            cat: normalize_distribution(cat, raw_phase_dist.get(cat) or {})
-            for cat in DEMO_SCHEMA
-        }
+    # Anchor: when the campaign-level read already ships (a researched
+    # All-campaigns cut on the snapshot), the per-asset reads are
+    # levelled so their view-weighted merge lands on it. Shape per link
+    # survives; the campaign total does not move.
+    if anchor_all_campaigns:
+        _reconcile_to_anchor(all_asset_dists, all_asset_weights, anchor_all_campaigns)
+
+    def _cut(dists, weights):
+        raw = _view_weighted_merge(dists, weights)
+        return {cat: normalize_distribution(cat, raw.get(cat) or {}) for cat in DEMO_SCHEMA}
+
+    # Per-phase rollups (from the possibly reconciled per-asset reads).
+    for phase_name, ph_assets in by_phase.items():
+        idx = [i for i, a in enumerate(all_asset_refs) if (a.get("phase_name") or "(Uncategorized)") == phase_name]
         phase_records.append({
             "phase_name":   phase_name,
             "asset_count":  len(ph_assets),
             "view_count":   int(sum(int(a.get("ext_view_count") or 0) for a in ph_assets)),
-            "demographics": normalized,
+            "demographics": _cut([all_asset_dists[i] for i in idx], [all_asset_weights[i] for i in idx]),
         })
 
+    # Per-creator rollups (talent tag; an asset with two tags counts in both).
+    by_creator: Dict[str, List[int]] = defaultdict(list)
+    for i, a in enumerate(all_asset_refs):
+        for t in (a.get("talent_tags") or []):
+            t = str(t or "").strip()
+            if t:
+                by_creator[t].append(i)
+    creator_records = []
+    for creator, idx in by_creator.items():
+        creator_records.append({
+            "creator":      creator,
+            "asset_count":  len(idx),
+            "view_count":   int(sum(all_asset_weights[i] for i in idx)),
+            "demographics": _cut([all_asset_dists[i] for i in idx], [all_asset_weights[i] for i in idx]),
+        })
+    creator_records.sort(key=lambda r: -r["view_count"])
+
+    # Per-link records.
+    asset_records = []
+    for i, a in enumerate(all_asset_refs):
+        asset_records.append({
+            "asset_id":     a.get("asset_id") or a.get("url") or f"asset_{i}",
+            "label":        a.get("action_label") or a.get("asset_type") or "(untitled)",
+            "creator":      _asset_creator(a),
+            "channel":      a.get("channel") or "",
+            "asset_type":   a.get("asset_type") or "",
+            "url":          a.get("url") or "",
+            "phase_name":   a.get("phase_name") or "",
+            "posted_date":  a.get("posted_date") or "",
+            "asset_count":  1,
+            "view_count":   int(all_asset_weights[i]),
+            "demographics": {cat: {b: round(float(v), 2) for b, v in (all_asset_dists[i].get(cat) or {}).items()}
+                             for cat in DEMO_SCHEMA},
+        })
+    asset_records.sort(key=lambda r: -r["view_count"])
+
     # All-campaigns rollup
-    all_raw = _view_weighted_merge(all_asset_dists, all_asset_weights)
-    all_normalized = {
-        cat: normalize_distribution(cat, all_raw.get(cat) or {})
-        for cat in DEMO_SCHEMA
-    }
+    all_normalized = _cut(all_asset_dists, all_asset_weights)
+    if anchor_all_campaigns:
+        # The anchor IS the campaign read; ship it byte-for-byte.
+        all_normalized = {cat: dict(anchor_all_campaigns.get(cat) or all_normalized[cat]) for cat in DEMO_SCHEMA}
     all_record = {
         "asset_count":  len(assets_with_views),
         "view_count":   int(sum(int(a.get("ext_view_count") or 0) for a in assets_with_views)),
@@ -683,6 +801,8 @@ def build_campaign_demographics(snapshot: dict, *,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "method":           method,
         "phases":           phase_records,
+        "creators":         creator_records,
+        "assets":           asset_records,
         "all_campaigns":    all_record,
     }
 
