@@ -793,18 +793,21 @@ _IMG_SRC_RE = re.compile(r"""<img[^>]+src=["']([^"']+)["']""", re.I)
 
 def _public_cover_image(cid, camp):
     """Still from the issue. Never a leaking iframe."""
+    asset_base = f"/n/asset/{cid}"
     li = (camp or {}).get("linkedin") or {}
     url = (li.get("image_url") or "").strip()
-    if url and not url.startswith("data:"):
+    if url and not url.startswith("data:") and "{{ASSET_BASE}}" not in url:
         return url
     try:
         html = get_campaign_html(cid) or ""
     except Exception:
         html = ""
+    html = (html or "").replace("{{ASSET_BASE}}", asset_base)
     for match in _IMG_SRC_RE.finditer(html):
         src = (match.group(1) or "").strip()
         if not src or src.startswith("data:"):
             continue
+        src = src.replace("{{ASSET_BASE}}", asset_base)
         if src.startswith("//"):
             src = "https:" + src
         return src

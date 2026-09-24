@@ -30,6 +30,7 @@
             --cw-slate: #15252A;
             --cw-offwhite: #E9E8E1;
             --cw-signal-green: #C7F23E;
+            --cw-orchid: #E682FF;
             --cw-border: #27393D;
         }
 
@@ -87,7 +88,7 @@
             max-width: 42ch;
         }
 
-        .signup { margin: 28px 0 8px; }
+        .signup { margin: 20px 0 0; }
         .signup form {
             position: relative;
             display: flex;
@@ -106,7 +107,6 @@
             width: min(360px, 70vw);
             background: transparent;
             border: 0;
-            border-bottom: 1px solid var(--cw-offwhite);
             color: var(--cw-offwhite);
             font-family: 'Inter 18pt', sans-serif;
             font-size: 16px;
@@ -137,15 +137,21 @@
             margin-bottom: 12px;
         }
         .err { color: #E9E8E1; font-size: 14px; margin-bottom: 12px; }
-        .fine { margin-top: 12px; color: #7C878A; font-size: 11px; line-height: 1.5; }
+        .fine { margin-top: 8px; color: #7C878A; font-size: 11px; line-height: 1.5; }
         .fine a { color: var(--cw-signal-green); text-decoration: none; }
+        .rule {
+            height: 1px;
+            background: var(--cw-orchid);
+            margin: 18px 0 0;
+            border: 0;
+        }
 
-        .archive { padding: 48px 0 72px; }
+        .archive { padding: 8px 0 72px; }
         .issue {
             display: flex;
             align-items: center;
             gap: 20px;
-            padding: 20px 0;
+            padding: 16px 0;
             border-top: 1px solid var(--cw-border);
             text-decoration: none;
             color: inherit;
@@ -181,6 +187,7 @@
             margin: 6px 0 4px;
             line-height: 1.15;
         }
+        .issue:first-child { border-top: 0; }
         .issue p { color: #9AA09B; font-size: 14px; max-width: 48ch; }
         .empty { color: #9AA09B; font-size: 15px; padding: 28px 0; border-top: 1px solid var(--cw-border); }
 
@@ -241,6 +248,7 @@
             </form>
             <p class="fine">Unsubscribe any time. Questions go to <a href="mailto:hello@crosswalknyc.com">hello@crosswalknyc.com</a>.</p>
         </section>
+        <hr class="rule">
 
         <section class="archive" id="issues">
             {% if issues %}
