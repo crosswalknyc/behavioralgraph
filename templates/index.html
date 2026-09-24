@@ -35351,24 +35351,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // The four shapes every converting account falls into. Built
             // on its own because it has two possible homes: the Paths card,
             // and the top of Digital Journey where a landing has one. The
-            // brand-label sweep watches the whole view, so "% of checkout"
-            // still becomes the campaign's own wording in either place.
-            function _iiqArchetypesSection(archetypes, atTop) {
+            // caller passes the nouns rather than letting the brand-label
+            // sweep rewrite them, because that map only carries the
+            // capitalised spelling and these read mid-sentence.
+            function _iiqArchetypesSection(archetypes, pageNoun, ofNoun) {
                 archetypes = archetypes || [];
                 if (!archetypes.length) return '';
+                pageNoun = pageNoun || 'bottom funnel destination';
+                ofNoun = ofNoun || pageNoun;
                 var archRows = archetypes.map(function(a) {
                     return (
-                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 80px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
+                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 150px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
                       + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
                       + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
                       + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
-                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of checkout</div>'
+                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of ' + escapeHtml(ofNoun) + '</div>'
                       + '</div>'
                     );
                 }).join('');
-                return '<section style="margin:' + (atTop ? '0 0 1.35rem' : '1.1rem 0 0') + ';">'
+                // Bottom margin as well as top: this slab reads under the
+                // journey heading on a landing with a Journey view, where
+                // it needs air beneath it as much as above.
+                return '<section style="margin:1.1rem 0 1.35rem;">'
                      + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Path archetypes.</h5>'
-                     + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the checkout page falls into one of these four shapes.</div>'
+                     + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the ' + escapeHtml(pageNoun) + ' falls into one of these four shapes.</div>'
                      + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
                      + '</section>';
             }
@@ -35586,7 +35592,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // here, because this card renders when the multi-touch
                 // payload lands, which can beat the new title's own config
                 // into place.
-                var archSection = _iiqArchetypesSection(archetypes);
+                var archSection = _iiqArchetypesSection(archetypes, archPageNoun, archOfNoun);
 
                 // Section 7: leaks (the hero). Signal Green callouts.
                 var leakRows = leaks.map(function(L) {
