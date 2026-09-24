@@ -39926,11 +39926,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // phase's share; "vs Gen Pop" is the pp delta chip
                 // column; "Viewers" is the campaign's projected count
                 // in that bucket (share * phase view total).
+                // Most categories have no Gen Pop baseline, and labelling
+                // an empty column reads as a column that failed to load.
+                var anyDelta = entries.some(function(e) {
+                    var g = Number(gpDist[e.bucket]);
+                    if (isFinite(g) && g > 0) return true;
+                    var c = Number(cmpDist[e.bucket]);
+                    return isFinite(c) && c > 0;
+                });
                 var colHeader = '<div style="' + _IIQ_DEMO_GRID + ' align-items:end; font-size:0.56rem; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em; padding-bottom:0.3rem;">'
                     +  '<div></div>'
                     +  '<div></div>'
                     +  '<div style="text-align:right;">Cohort</div>'
-                    +  '<div style="text-align:right;">vs Gen Pop</div>'
+                    +  '<div style="text-align:right;">' + (anyDelta ? 'vs Gen Pop' : '') + '</div>'
                     +  '<div style="text-align:right;">Viewers</div>'
                     +  '</div>';
                 return '<div style="background:#15252A; border:1px solid #2C4148; border-radius:10px; padding:1rem 1.15rem 1.1rem;">'
