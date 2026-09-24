@@ -128607,7 +128607,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // stays hidden in the DOM: the renderers, the banner, and the compare
         // picker all still read it; a drawer pick sets its value and fires
         // the same change handler the dropdown used.
-        var _aiqLibGroupsOpen = { film: true, brand: true, other: true };
+        // Groups open closed (Jenna 2026-09-24). Searching still forces
+        // them open so a needle can never hide behind a shut group.
+        var _aiqLibGroupsOpen = { film: false, brand: false, other: false };
         function _aiqLibHeaderBottom() {
             var h = document.querySelector('.container > header, header');
             var b = h ? Math.round(h.getBoundingClientRect().bottom) : 0;
