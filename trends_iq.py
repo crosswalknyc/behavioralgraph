@@ -795,6 +795,29 @@ def _folder_for_measured_day(measured: str) -> str:
         return measured
 
 
+def _window_has_any_measurement(end_measured: str, lookback: int) -> bool:
+    """True when any day in the window actually measured something.
+
+    Keyed on the window rather than the end day so the range picker
+    keeps working across a gap: a week that ends on a day nothing
+    measured still has six days that did, and those are real. Only a
+    window with nothing in it anywhere is genuinely empty.
+
+    False means nothing was ever measured there, which is a different
+    thing from a read that failed.
+    """
+    try:
+        from scripts.trends_scrapers.measurement_calendar import (
+            folder_for, window_folders)
+        if folder_for(end_measured):
+            return True
+        return bool(window_folders(end_measured, max(int(lookback or 1), 1)))
+    except Exception:
+        # The calendar being unavailable must not be read as "no
+        # data": say yes and let the ordinary fallback run.
+        return True
+
+
 def _latest_measured_day() -> Optional[str]:
     """The newest day anything actually measured.
 
@@ -7285,11 +7308,19 @@ def _carry_find_prior_reader(title: str) -> Optional[tuple]:
 
 
 def _carry_walk_to_today(prev_value: int, kind: str, title: str,
-                          resolved_key: str, prev_day_iso: str) -> int:
-    """Walk a carried value to today through the shared per-item
-    rhythm, so the row reads as its own number for today rather than a
-    repeat of an older one. Falls back to the carried value untouched
-    if the walk is unavailable."""
+                          resolved_key: str, prev_day_iso: str,
+                          target_day_iso: Optional[str] = None) -> int:
+    """Walk a carried value to the day being VIEWED through the shared
+    per-item rhythm, so the row reads as its own number for that day
+    rather than a repeat of an older one.
+
+    `target_day_iso` is the historic date when one was requested. It
+    used to be today unconditionally, which meant a historic read
+    walked a row forward to the present and stamped it with the
+    present, so a date in August rendered numbers for late September
+    under an August label. Falls back to the carried value untouched
+    if the walk is unavailable.
+    """
     try:
         from scripts.trends_scrapers.carry_forward import (
             walk_value, load_rhythm_profiles)
@@ -7300,9 +7331,19 @@ def _carry_walk_to_today(prev_value: int, kind: str, title: str,
     except (TypeError, ValueError):
         prev_day = date.today() - timedelta(days=1)
     try:
+        target = date.today()
+        if target_day_iso:
+            try:
+                target = date.fromisoformat(str(target_day_iso)[:10])
+            except (TypeError, ValueError):
+                target = date.today()
+        if prev_day >= target:
+            # Nothing to walk: the carried reading is already at or
+            # past the day being viewed.
+            return int(prev_value)
         profile = (load_rhythm_profiles() or {}).get(resolved_key)
         walked = walk_value(int(prev_value), f'{kind}|{title}|',
-                             date.today(), prev_date=prev_day,
+                             target, prev_date=prev_day,
                              profile=profile)
         return walked if walked > 0 else int(prev_value)
     except Exception:
@@ -7345,7 +7386,8 @@ def _fused_row_is_film_only(row: dict) -> bool:
 
 def _ensure_full_audience_coverage(cards: dict,
                                     stream_snap: dict,
-                                    headline_snap: dict) -> dict:
+                                    headline_snap: dict,
+                                    asof: Optional[str] = None) -> dict:
     """Give every rendered non-Film row an audience value.
 
     A row still missing one after all annotators ran takes its OWN most
@@ -7355,7 +7397,11 @@ def _ensure_full_audience_coverage(cards: dict,
     into compute_view."""
     dist = _coverage_baselines_from_estimates(stream_snap)
     outlet_med, reader_global_med = _coverage_reader_baselines(headline_snap)
-    today_iso = _today_iso()
+    # The day being VIEWED, which on a historic read is not today.
+    # Every value this pass produces is stamped and walked to it, so
+    # a date in the past stops rendering the present under its own
+    # label.
+    today_iso = asof or _today_iso()
     counts = {'carried_forward': 0, 'rank_tier': 0,
               'withheld_service': 0}
 
@@ -7372,7 +7418,8 @@ def _ensure_full_audience_coverage(cards: dict,
                 prev_val, prev_day = prior
                 val = _carry_walk_to_today(prev_val, 'headline', title,
                                             _headline_lookup_key(title),
-                                            prev_day)
+                                            prev_day,
+                                            target_day_iso=today_iso)
                 direction, delta = _direction_from_prev(val, prev_val)
                 it['us_readers'] = {
                     'us_estimate':      val,
@@ -7420,7 +7467,8 @@ def _ensure_full_audience_coverage(cards: dict,
         if prior:
             prev_val, prev_day, resolved_key = prior
             val = _carry_walk_to_today(prev_val, kind, title,
-                                        resolved_key, prev_day)
+                                        resolved_key, prev_day,
+                                        target_day_iso=today_iso)
             direction, delta = _direction_from_prev(val, prev_val)
             it['us_streams'] = {
                 'us_estimate':      val,
@@ -7761,12 +7809,17 @@ def _prior_is_usable(dist: dict, prev_val: int, kind: str,
     return True
 
 
-def _enforce_service_provenance(cards: dict, stream_snap: dict) -> dict:
+def _enforce_service_provenance(cards: dict, stream_snap: dict,
+                                 asof: Optional[str] = None) -> dict:
     """Take every streaming / FAST row off a number researched for a
-    different service. Best-effort: never raises into compute_view."""
+    different service. Best-effort: never raises into compute_view.
+
+    `asof` is the day being VIEWED. Every block this pass rewrites is
+    stamped with it, so a historic read does not come back wearing
+    today's date."""
     stats = {'checked': 0, 'corrected': 0, 'by_source': {}, 'rows': []}
     dist = _coverage_baselines_from_estimates(stream_snap)
-    today_iso = _today_iso()
+    today_iso = asof or _today_iso()
     # One title on one rail is one number, decided once and applied to
     # every copy of the row.
     #
@@ -7940,11 +7993,15 @@ def _enforce_service_provenance(cards: dict, stream_snap: dict) -> dict:
     return stats
 
 
-def _enforce_platform_caps(cards: dict) -> dict:
+def _enforce_platform_caps(cards: dict,
+                            asof: Optional[str] = None) -> dict:
     """Bring any row rendering above its own service's published cap
-    back inside it. Best-effort: never raises into compute_view."""
+    back inside it. Best-effort: never raises into compute_view.
+
+    `asof` is the day being VIEWED, so a corrected block on a historic
+    read is stamped with that day rather than today."""
     stats = {'checked': 0, 'corrected': 0, 'by_source': {}, 'rows': []}
-    today_iso = _today_iso()
+    today_iso = asof or _today_iso()
 
     def _fix(it: dict, path: str) -> None:
         blk = it.get('us_streams')
@@ -12366,11 +12423,34 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # without trend fields, and entries severed from their own history
     # by a title-spelling flip). Falls back to the plain latest/ read
     # only when no dated snapshot was reachable at all.
+    _no_measurement_asof = None
     stream_estimates_snap = _accumulate_stream_estimates_over_window(
         int(lookback_days or 1), asof=asof,
         today_snap=results.get('stream_estimates'))
     if not stream_estimates_snap:
-        stream_estimates_snap = results.get('stream_estimates') or {}
+        # Falling back to `latest` is right when a read failed and
+        # wrong when the date simply has no measurement: a request
+        # for a day nothing was measured on then renders TODAY'S
+        # numbers under that day's label, which is the most
+        # convincing way to be wrong there is.
+        #
+        # The measurement calendar can tell the two apart. A date
+        # with no folder behind it was never measured and gets
+        # nothing. A date that has one and still came back empty is
+        # a read that failed, and that keeps the fallback, because
+        # turning a transient failure into a permanent-looking gap
+        # is its own defect.
+        if asof and not _window_has_any_measurement(asof,
+                                                    int(lookback_days or 1)):
+            logger.info(
+                "trends_iq: nothing was measured in the %s day(s) ending "
+                "%s, so the view renders without audience figures rather "
+                "than showing another day's under its label",
+                lookback_days, asof)
+            stream_estimates_snap = {}
+            _no_measurement_asof = asof
+        else:
+            stream_estimates_snap = results.get('stream_estimates') or {}
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
@@ -12795,12 +12875,31 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # blank. The nightly coverage gate replaces baselines with fully
     # researched values on its next run. Runs BEFORE the lens stamp so
     # baseline rows pick up per-lens figures too.
-    try:
-        _ensure_full_audience_coverage(payload['cards'],
-                                        stream_estimates_snap,
-                                        headline_estimates_snap)
-    except Exception as e:
-        logger.warning("audience coverage pass failed: %s", e)
+    # The coverage guarantee exists so a day we DID measure never
+    # renders a blank cell. On a day nothing was measured there is
+    # nothing to guarantee, and letting it run there invents a value
+    # for every row out of other days' history and stamps it with the
+    # requested date, which reads exactly like a real measurement.
+    # An empty day should look empty.
+    if _no_measurement_asof:
+        logger.info(
+            "trends_iq: skipping the coverage pass for %s, since a day "
+            "with no measurement has nothing to fill in",
+            _no_measurement_asof)
+    else:
+        try:
+            _ensure_full_audience_coverage(payload['cards'],
+                                            stream_estimates_snap,
+                                            headline_estimates_snap,
+                                            asof=asof)
+        except Exception as e:
+            logger.warning("audience coverage pass failed: %s", e)
+
+    # Say it in the payload as well as the log, so a caller can tell
+    # an empty day from a broken one without reading server output.
+    if _no_measurement_asof:
+        payload.setdefault('meta', {})['no_measurement_for_asof'] = \
+            _no_measurement_asof
 
     # No row may render a reading taken for a different service. Runs
     # before the cap pass so a corrected value is still held to its own
@@ -12814,7 +12913,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
 
     try:
         _enforce_service_provenance(payload['cards'],
-                                     stream_estimates_snap)
+                                     stream_estimates_snap, asof=asof)
     except Exception as e:
         logger.warning("service provenance pass failed: %s", e)
 
@@ -12823,7 +12922,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # checked too, and before the rank pass, so a corrected row is
     # ordered on the number it ends up showing.
     try:
-        _enforce_platform_caps(payload['cards'])
+        _enforce_platform_caps(payload['cards'], asof=asof)
     except Exception as e:
         logger.warning("platform cap pass failed: %s", e)
 
