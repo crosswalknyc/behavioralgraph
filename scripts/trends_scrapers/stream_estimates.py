@@ -7925,7 +7925,14 @@ def _published_rail_rows(slug: str, snap: dict,
     if published_chart_key_prefix(slug) == 'fast_':
         fast = _read_snapshot('fast_channels') or {}
         block = ((fast.get('sources') or {}).get(slug) or {})
-        for r in (block.get('items') or [])[:100]:
+        # The WHOLE catalogue, not the slice we research. `_collect_fast`
+        # stops at 100 because that is how many rows it pays to reason
+        # about; the rail renders every row the feed carries, which on
+        # Tubi is 198. Truncating here left rows 101 and beyond
+        # invisible to containment while the board showed them, so
+        # Shaun the Sheep sat at 378,555 on a chart whose last
+        # published position reads 46,811.
+        for r in (block.get('items') or []):
             if isinstance(r, dict):
                 rows.append((str(r.get('title') or ''),
                              _kind(r.get('category_display') or '')))

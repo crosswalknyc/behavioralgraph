@@ -233,7 +233,41 @@ def _solve_descending(orig: list[float], target: list[float],
             moved = sum(1 for o, v in zip(orig, out)
                         if abs(v - o) > max(1.0, o * 0.0005))
             return out, moved
-    return None, 0
+
+    # Neither attempt could descend inside the budget. The budget does
+    # not get to decide the order.
+    #
+    # Both attempts above walk DOWN from position 1 and cap every value
+    # at its own +/-35% box, so a number 1 that was reasoned too low has
+    # no way to be lifted over number 2 and the whole rail comes back
+    # infeasible. Held, the block then ships in whatever order it
+    # already had: HBO Max rendered Lanterns, the title HBO Max itself
+    # ranks first, at our position 5 on 629,386 while 1000-lb Sisters
+    # led on 1.62M. A chart that reads 1, 2, 3 down the page beside
+    # numbers that do not is the whole defect this module exists to
+    # remove, and holding produces it rather than preventing it.
+    #
+    # Jenna 2026-09-24, verbatim: "our audience number SHOULD descend
+    # in a way that when sorted our ranks are the same".
+    #
+    # So the last attempt walks UP from the foot of the chart instead,
+    # keeping each position's floor and lifting whatever has to be
+    # lifted to clear the position below it. The upper budget is the
+    # only thing relaxed, and the caller is told it happened, because a
+    # block that needs this was reasoned against an anchor its own
+    # order contradicts and should be reasoned again. It ships in the
+    # right order in the meantime.
+    out = [0.0] * n
+    for i in range(n - 1, -1, -1):
+        want = max(lo[i], target[i] if target[i] > 0 else lo[i])
+        if i < n - 1:
+            # Strictly above the position below, by the drawn step.
+            floor_from_below = out[i + 1] / max(1e-9, 1.0 - steps[i + 1])
+            want = max(want, floor_from_below)
+        out[i] = max(1.0, want)
+    moved = sum(1 for o, v in zip(orig, out)
+                if abs(v - o) > max(1.0, o * 0.0005))
+    return out, moved
 
 
 def count_inversions(values: list[int]) -> int:
@@ -312,30 +346,30 @@ def reconcile_rail(rows: list[dict], *, salt: str,
 
     adj, _n_moved = _solve_descending(
         pub_vals, _pava(pub_vals), pub_keys, salt)
-    if adj is None:
-        report['held'] = True
-        report['reason'] = (
-            f'this rail cannot descend across its {len(pub)} published '
-            f'positions without moving a reading more than '
-            f'{int(_MAX_MOVE_FRACTION * 100)}% from the one reasoned '
-            f'for it, so the block was reasoned against a different '
-            f'anchor than its order implies and needs reasoning again')
-        return report
 
-    # Boundary: nothing the service left off its chart may out-draw
-    # the title it ranks last.
-    cap = adj[-1] if adj else None
-    breach = [r for r in tail if cap and (get_value(r) or 0) >= cap]
-    report['boundary_before'] = (
-        (int(cap), int(get_value(tail[0]))) if (cap and tail) else None)
-    if cap and tail and len(breach) > len(tail) * _MAX_TAIL_BREACH_SHARE:
-        report['held'] = True
+    # The published block always comes out ordered now, so there is no
+    # infeasible case left to hold on. What there is instead is a block
+    # that could only be ordered by moving a reading further than the
+    # budget allows, which is worth saying out loud: it means the chart
+    # and the numbers were reasoned against different anchors. The rail
+    # still ships in the service's order.
+    over = [(pub_keys[i], int(pub_vals[i]), int(adj[i]))
+            for i in range(len(adj))
+            if pub_vals[i] > 0
+            and adj[i] > pub_vals[i] * (1.0 + _MAX_MOVE_FRACTION) * 1.0005]
+    if over:
+        report['budget_exceeded'] = over
         report['reason'] = (
-            f'{len(breach)} of {len(tail)} unranked titles read above '
-            f'the chart\'s last position, so the two blocks sit on '
-            f'different scales and the levels need reasoning again '
-            f'rather than reconciling here')
-        return report
+            f'{len(over)} published position(s) had to move further '
+            f'than {int(_MAX_MOVE_FRACTION * 100)}% to descend, the '
+            f'largest being {over[0][0]!r} from {over[0][1]:,} to '
+            f'{over[0][2]:,}; the order is the service\'s and ships, '
+            f'but this block needs reasoning again against the anchor '
+            f'its own chart implies')
+
+    report['boundary_before'] = (
+        (int(adj[-1]), int(get_value(tail[0])))
+        if (adj and tail) else None)
 
     # Commit the published block first, because the cap the tail has
     # to sit under is the number that actually ships at the last
@@ -371,6 +405,15 @@ def reconcile_rail(rows: list[dict], *, salt: str,
             moved += 1
         prev_committed = float(get_value(r) or iv)
 
+    # Only NOW is the tail considered, and only the tail can be held.
+    #
+    # The two-scale check used to run before the block was committed
+    # and returned out of the whole function, so a rail whose CATALOG
+    # was on a different scale also shipped its CHART in whatever order
+    # it happened to arrive in. Those are two different problems and
+    # only one of them is a judgement call: what the service ranks
+    # first reads highest, whatever its catalog is doing. The block is
+    # committed above and stays committed.
     cap = int(get_value(pub[-1]) or 0)
     breach = [r for r in tail if (get_value(r) or 0) >= cap] if cap else []
     if cap and tail and len(breach) > len(tail) * _MAX_TAIL_BREACH_SHARE:
@@ -378,9 +421,12 @@ def reconcile_rail(rows: list[dict], *, salt: str,
         report['reason'] = (
             f'{len(breach)} of {len(tail)} unranked titles read above '
             f"the chart's last position, so the two blocks sit on "
-            f'different scales and the levels need reasoning again '
-            f'rather than reconciling here')
+            f'different scales and the catalog levels need reasoning '
+            f'again rather than reconciling here. The published block '
+            f'was ordered and committed regardless')
         report['moved'] = moved
+        final_pub = [get_value(r) for r in pub]
+        report['inversions_after'] = count_inversions(final_pub)
         return report
 
     _h01, _ = _lazy()

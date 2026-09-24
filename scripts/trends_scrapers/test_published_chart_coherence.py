@@ -84,20 +84,39 @@ def test_descends_and_contains():
     print('  descent + containment: OK')
 
 
-def test_holds_rather_than_forcing():
-    """Two blocks on different scales are reported, not squeezed."""
+def test_holds_the_tail_but_still_orders_the_chart():
+    """A catalog on a different scale is reported, not squeezed. The
+    published block is ordered anyway.
+
+    These are two different problems and only one of them is a
+    judgement call. Whether a catalog that reads above its own chart
+    should be crushed to fit is genuinely arguable, and the answer
+    here is no: say so and leave it. What the service ranks first
+    reading highest is not arguable, and an earlier version of this
+    pass returned out of the whole function on the tail condition, so
+    a rail with an awkward catalog ALSO shipped its chart in whatever
+    order the numbers happened to arrive in.
+    """
     rows = [{'title': f'pub {i}', 'v': v, 'published_rank': i + 1}
             for i, v in enumerate([21_576, 19_254, 6_998, 6_554, 6_033,
                                    3_465, 3_173, 2_009, 1_768, 1_310])]
-    rows += [{'title': f'tail {i}', 'v': v} for i, v in
-             enumerate([21_004, 16_938, 11_582, 10_847, 9_372, 8_518,
-                        8_484, 7_987, 7_421, 6_288, 5_905, 5_670])]
-    before = [r['v'] for r in rows]
+    tail = [{'title': f'tail {i}', 'v': v} for i, v in
+            enumerate([21_004, 16_938, 11_582, 10_847, 9_372, 8_518,
+                       8_484, 7_987, 7_421, 6_288, 5_905, 5_670])]
+    rows += tail
+    tail_before = [r['v'] for r in tail]
     rep = _run(rows, 'lionsgateplus|held')
-    assert rep['held'], 'a rail on two scales must hold'
-    assert [r['v'] for r in rows] == before, 'a held rail must not move'
+    assert rep['held'], 'a catalog on two scales must hold'
+    assert [r['v'] for r in tail] == tail_before, \
+        'a held catalog must not move'
     assert 'reasoning again' in rep['reason']
-    print('  holds a two-scale rail without touching it:', rep['reason'][:60])
+    pub = sorted([r for r in rows if r.get('published_rank')],
+                 key=lambda r: r['published_rank'])
+    seq = [r['v'] for r in pub]
+    inv = [i for i in range(1, len(seq)) if seq[i] >= seq[i - 1]]
+    assert not inv, 'the published block shipped out of order on a ' \
+                    'rail whose TAIL was the problem'
+    print('  holds the catalog, orders the chart:', rep['reason'][:52])
 
 
 def test_no_ladder():
@@ -313,13 +332,84 @@ def test_descends_even_when_the_ceiling_binds():
     print(f'  {rails} ceiling-bound rails, every published block descends')
 
 
+def test_number_one_is_lifted_over_number_two():
+    """The title a service ranks first must read highest, however far
+    under its neighbour it arrived.
+
+    Live defect, HBO Max, 2026-09-24. HBO Max ranks Lanterns first.
+    Our reading for it was 629,386 while 1000-lb Sisters, their number
+    2, read 1.62M. Every other position was already in the right order,
+    so the rail rendered their 2 through 9 as our 1 through 4 and 6
+    through 9, with their number 1 sitting at our 5.
+
+    The cause was an asymmetry at the top of the chart. Every other
+    position is bracketed by a neighbour on each side, but position 1
+    has only a lower bound, and the solver walked DOWN from it capping
+    each value inside its own move budget. A number 1 that arrived too
+    low therefore could not be lifted, the rail came back infeasible,
+    and holding it shipped the block in exactly the wrong order.
+
+    Jenna's bar, verbatim: "if lanterns is no 1 on hbo it should be no
+    1 with us".
+    """
+    rows = [
+        {'title': 'Lanterns', 'v': 629_386, 'published_rank': 1},
+        {'title': '1000-lb Sisters', 'v': 1_619_993, 'published_rank': 2},
+        {'title': 'Youth', 'v': 1_285_026, 'published_rank': 3},
+        {'title': 'A Killer Story', 'v': 892_053, 'published_rank': 4},
+        {'title': 'Stuart Fails', 'v': 713_979, 'published_rank': 5},
+        {'title': '1000-lb Roomies', 'v': 583_023, 'published_rank': 6},
+        {'title': '90 Day Last Resort', 'v': 440_976, 'published_rank': 7},
+        {'title': 'President Curtis', 'v': 327_099, 'published_rank': 8},
+        {'title': 'Halloween Baking', 'v': 268_015, 'published_rank': 9},
+        {'title': 'Toxic', 'v': 218_994, 'published_rank': 10},
+        # The real rail's catalog: 182 rows of which only two breach,
+        # so the tail reconciles rather than holding. A two-row tail
+        # that both breach is a different case and is covered above.
+        {'title': 'Banshee', 'v': 228_522},
+        {'title': 'Sicario', 'v': 282_785},
+    ] + [{'title': f'catalog {i}', 'v': 200_000 - i * 900}
+         for i in range(40)]
+    rep = C.reconcile_rail(rows, salt='hbomax|series|2026-09-24',
+                           get_value=lambda r: r['v'],
+                           set_value=lambda r, v: r.__setitem__('v', v),
+                           ceiling=3_000_000)
+    pub = sorted([r for r in rows if r.get('published_rank')],
+                 key=lambda r: r['published_rank'])
+    seq = [r['v'] for r in pub]
+    assert not rep.get('held'), f'rail was held: {rep.get("reason")}'
+    inv = [i for i in range(1, len(seq)) if seq[i] >= seq[i - 1]]
+    assert not inv, f'{len(inv)} inversion(s) left in the published block'
+
+    # The acceptance test Jenna actually applies: sort our numbers and
+    # the service's own order has to come back.
+    ours = [r['title'] for r in sorted(pub, key=lambda r: -r['v'])]
+    theirs = [r['title'] for r in pub]
+    assert ours == theirs, (
+        f'sorting our numbers does not reproduce their order\n'
+        f'  ours  : {ours}\n  theirs: {theirs}')
+    assert pub[0]['title'] == 'Lanterns' and pub[0]['v'] == max(seq), (
+        'their number 1 does not carry the largest reading on the rail')
+
+    # Containment still holds at the other edge: nothing they left off
+    # the chart may out-draw the title they rank last.
+    floor = seq[-1]
+    over = [r['title'] for r in rows
+            if not r.get('published_rank') and r['v'] >= floor]
+    assert not over, f'uncharted rows above the chart floor: {over}'
+    print(f"  Lanterns lifted {629_386:,} -> {pub[0]['v']:,}, leads the "
+          f"rail, order reproduced, {len(rows) - len(pub)} tail rows "
+          f"contained")
+
+
 def main() -> int:
-    tests = [test_descends_and_contains, test_holds_rather_than_forcing,
+    tests = [test_descends_and_contains, test_holds_the_tail_but_still_orders_the_chart,
              test_no_ladder, test_last_digits_stay_natural,
              test_unpublished_titles_are_bracketed,
              test_published_scale_is_physical_and_ordered,
              test_nothing_lands_over_the_ceiling,
-             test_descends_even_when_the_ceiling_binds]
+             test_descends_even_when_the_ceiling_binds,
+             test_number_one_is_lifted_over_number_two]
     bad = 0
     for t in tests:
         print(t.__name__)
