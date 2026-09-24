@@ -31345,7 +31345,7 @@ https://www.instagram.com/p/..."></textarea>
                         <li data-tiq-step="streaming"><span class="app-boot-step-icon">01</span><span>Streaming charts</span></li>
                         <li data-tiq-step="fast"><span class="app-boot-step-icon">02</span><span>FAST channels</span></li>
                         <li data-tiq-step="audio"><span class="app-boot-step-icon">03</span><span>Music and podcasts</span></li>
-                        <li data-tiq-step="headlines"><span class="app-boot-step-icon">04</span><span>Headlines and searches</span></li>
+                        <li data-tiq-step="gaming"><span class="app-boot-step-icon">04</span><span>Gaming</span></li>
                     </ul>
                 </div>
             </div>
@@ -62570,12 +62570,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // eases toward 88% and holds until the payload lands, then snaps
         // to 100% as the card hides.
         var _tiqBoot = { timer: null, t0: 0 };
-        var _TIQ_BOOT_STEPS = ['streaming', 'fast', 'audio', 'headlines'];
+        var _TIQ_BOOT_STEPS = ['streaming', 'fast', 'audio', 'gaming'];
         var _TIQ_BOOT_SUBS = {
             streaming: "Reading today's charts on every service\u2026",
             fast:      'Lining up the FAST channel rankers\u2026',
             audio:     'Pulling music and podcast charts\u2026',
-            headlines: 'Ranking headlines and trending searches\u2026'
+            gaming:    'Ranking what people are playing\u2026'
         };
         function _tiqBootSetStep(idx) {
             var lis = document.querySelectorAll('#tiqBootSteps li');
