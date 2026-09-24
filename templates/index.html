@@ -32681,7 +32681,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView *:not(code):not(pre):not(.mono) {
             font-family: 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         }
-        #intentIQView .aiq-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 2.25rem;
+        #intentIQView .aiq-wrap { width: 100%; max-width: 1180px; margin: 0; padding: 0 2.25rem;
             flex: 0 0 auto; }
 
         /* Masthead */
@@ -128725,24 +128725,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
             // The title box in the controls row shows the current title and
             // opens the drawer; the dropdown it stands in for is hidden by CSS.
+            // The title box opened the library drawer, which is what the
+            // rail on the left edge already does, so the controls row
+            // held a second door to one room. The box goes; the hidden
+            // select stays, because the load path reads it. The banner
+            // names the title, so nothing is lost by dropping the field.
             if (sel) {
                 var box = sel.parentElement;
-                var btn = box && box.querySelector('.aiq-title-btn');
-                if (box && !btn) {
-                    btn = document.createElement('button');
-                    btn.type = 'button'; btn.className = 'aiq-title-btn';
-                    btn.setAttribute('aria-haspopup', 'dialog'); btn.title = 'Change title';
-                    btn.innerHTML = '<span class="aiq-title-btn-name"></span><span class="aiq-title-btn-cta">Change</span>';
-                    btn.addEventListener('click', function (e) { e.preventDefault(); _aiqLibraryOpen(true); });
-                    box.appendChild(btn);
-                }
-                if (btn) {
-                    var curT = null;
-                    for (var c = 0; c < titles.length; c++) { if (titles[c] && titles[c].title_slug === cur) { curT = titles[c]; break; } }
-                    var nm = curT ? (curT.display_name || curT.title_slug) : (titles.length ? 'Select a title' : 'Loading titles');
-                    var nameEl = btn.querySelector('.aiq-title-btn-name');
-                    if (nameEl && nameEl.textContent !== nm) nameEl.textContent = nm;
-                }
+                var stale = box && box.querySelector('.aiq-title-btn');
+                if (stale) stale.remove();
+                if (box && box.style.display !== 'none') box.style.display = 'none';
             }
             var tree = document.getElementById('aiqLibraryTree');
             if (!tree) return;
