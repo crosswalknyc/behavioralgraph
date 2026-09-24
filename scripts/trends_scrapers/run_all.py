@@ -101,6 +101,11 @@ SCRAPERS = [
     # because Tubi recomputes the chart through the day and the first
     # healthy capture of each UTC day is the one that gets pinned.
     ('tubi_popular',       'scripts.trends_scrapers.tubi_popular',       'Tubi Most Popular',    'fast'),
+    # Pluto TV's OWN Most Popular Movies and Top TV Series, for
+    # the same reason: the JustWatch feed carries no Pluto
+    # ranking. Anonymous, and pinned to the first healthy
+    # capture of each UTC day the way Tubi is.
+    ('pluto_popular',      'scripts.trends_scrapers.pluto_popular',      'Pluto TV Most Popular','fast'),
     # Vizio WatchFree+ and MyFree DIRECTV (2026-09-22, Jenna: "for FAST
     # Vizio, DirecTV, and LG be included"). Neither has a JustWatch
     # package, so neither has a titles catalogue; both ship the Channel

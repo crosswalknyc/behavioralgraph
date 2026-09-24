@@ -8136,6 +8136,34 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('most watched shows', 'most watched movies'),
         'depth': 16,
     },
+    # Pluto TV publishes two, anonymously: 'Most Popular Movies' on
+    # its movies page and 'Top TV Series' on its shows page. Separate
+    # rankings. Same defect and same fix as Tubi: every Pluto row used
+    # to carry a JustWatch cross-service position rendered as 'Pluto
+    # TV #3', which is a third party's ranking wearing Pluto's name.
+    #
+    # Matched on each rail's category UUID rather than its heading
+    # (see `pluto_popular.py`), and read from its own snapshot for the
+    # same reason Tubi's is: `fast_channels.json` is the shared
+    # JustWatch feed and mixing a platform's own chart into it would
+    # make the two indistinguishable a year from now.
+    #
+    # Reads as viewing: the films chart holds four John Wick titles
+    # beside Friday, Just Go with It and Ferris Bueller's Day Off, a
+    # franchise cluster inside a spread of decades and genres, and
+    # those John Wick titles are absent from Pluto's own 'First Time
+    # on Pluto TV' and 'Recent Releases' rails, so they are not a
+    # new-arrival push. The series chart runs Gunsmoke, Jane the
+    # Virgin, The Andy Griffith Show and The 100 together, which
+    # coheres around neither era nor genre.
+    'pluto': {
+        'label': 'Pluto TV Most Popular',
+        'mode':  'collection',
+        'collections': ('most popular movies', 'top tv series'),
+        'depth': 20,
+        'snapshot': 'pluto_popular',
+        'key_prefix': 'fast_',
+    },
     # Tubi publishes sixty titles at tubitv.com/category/most_popular,
     # anonymously, and that page is what a viewer sees in the app.
     # Every Tubi row used to carry a JustWatch cross-service position

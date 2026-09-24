@@ -80,6 +80,7 @@
     "peacock_top10.py",
     "philo_free.py",
     "plex_live.py",
+    "pluto_popular.py",
     "podcast_charts.py",
     "price_service_provenance.py",
     "primevideo.py",
