@@ -35,6 +35,11 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html {
+            background: var(--cw-graphite);
+            color-scheme: dark;
+            overflow-x: hidden;
+        }
         body {
             font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--cw-graphite);
@@ -43,6 +48,7 @@
             font-size: 14px;
             line-height: 1.45;
             -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
         }
 
         .page { width: min(920px, calc(100% - 64px)); margin: 0 auto; padding: 48px 0 0; }
@@ -78,7 +84,7 @@
             font-size: 18px;
             line-height: 1.45;
             color: #9AA09B;
-            max-width: 34ch;
+            max-width: 42ch;
         }
 
         .signup { margin: 28px 0 8px; }
@@ -134,61 +140,48 @@
         .fine { margin-top: 12px; color: #7C878A; font-size: 11px; line-height: 1.5; }
         .fine a { color: var(--cw-signal-green); text-decoration: none; }
 
-        .archive { padding: 40px 0 72px; }
+        .archive { padding: 48px 0 72px; }
         .issue {
-            display: grid;
-            grid-template-columns: 200px 1fr;
-            gap: 28px;
-            align-items: start;
-            padding: 28px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px 0;
             border-top: 1px solid var(--cw-border);
             text-decoration: none;
             color: inherit;
-        }
-        .issue.feat {
-            grid-template-columns: 280px 1fr;
-            border-top-color: var(--cw-signal-green);
+            min-width: 0;
         }
         .plate {
-            height: 240px;
+            width: 72px;
+            height: 90px;
+            flex: 0 0 72px;
             background: #070F11;
-            border-radius: 8px;
+            border-radius: 6px;
             overflow: hidden;
             position: relative;
+            isolation: isolate;
+            contain: paint;
         }
-        .issue.feat .plate { height: 320px; }
         .plate img {
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: block;
         }
-        .plate iframe {
-            width: 720px;
-            height: 960px;
-            transform: scale(0.28);
-            transform-origin: top left;
-            border: 0;
-            pointer-events: none;
-            background: #070F11;
-        }
-        .plate::after { content: ''; position: absolute; inset: 0; }
         .n {
-            font-size: 12px;
-            letter-spacing: 0.16em;
+            font-size: 11px;
+            letter-spacing: 0.14em;
             text-transform: uppercase;
             color: #7C878A;
         }
-        .issue.feat .n { color: var(--cw-signal-green); }
         .issue h2 {
-            font-size: 28px;
+            font-size: 22px;
             font-weight: 700;
             letter-spacing: -0.025em;
-            margin: 8px 0;
-            line-height: 1.1;
+            margin: 6px 0 4px;
+            line-height: 1.15;
         }
-        .issue.feat h2 { font-size: 40px; font-weight: 800; }
-        .issue p { color: #9AA09B; font-size: 15px; max-width: 48ch; }
+        .issue p { color: #9AA09B; font-size: 14px; max-width: 48ch; }
         .empty { color: #9AA09B; font-size: 15px; padding: 28px 0; border-top: 1px solid var(--cw-border); }
 
         footer.foot {
@@ -209,9 +202,8 @@
             h1 { font-size: 64px; margin-top: 32px; }
             .signup form { flex-direction: column; align-items: stretch; }
             input[type="email"] { width: 100%; }
-            .issue, .issue.feat { grid-template-columns: 1fr; gap: 16px; }
-            .plate, .issue.feat .plate { height: 200px; }
-            .issue h2, .issue.feat h2 { font-size: 26px; }
+            .issue { gap: 14px; }
+            .issue h2 { font-size: 18px; }
         }
     </style>
 </head>
@@ -253,14 +245,12 @@
         <section class="archive" id="issues">
             {% if issues %}
                 {% for issue in issues %}
-                <a class="issue{% if loop.first %} feat{% endif %}" href="{{ issue.url }}">
+                <a class="issue" href="{{ issue.url }}">
+                    {% if issue.image_url %}
                     <div class="plate">
-                        {% if issue.image_url %}
                         <img src="{{ issue.image_url }}" alt="">
-                        {% else %}
-                        <iframe src="{{ issue.read_url }}" loading="lazy" tabindex="-1" title="{{ issue.subject }}"></iframe>
-                        {% endif %}
                     </div>
+                    {% endif %}
                     <div>
                         <div class="n">{{ '%02d' % loop.index }}{% if issue.sent_label %}  ·  {{ issue.sent_label }}{% endif %}</div>
                         <h2>{{ issue.subject }}</h2>
