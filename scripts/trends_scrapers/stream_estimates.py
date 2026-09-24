@@ -8043,6 +8043,24 @@ _PUBLISHED_CHARTS: dict[str, dict] = {
         'collections': ('top 10 series today', 'top 10 movies today'),
         'depth': 10,
     },
+    # Starz publishes one, on its movies page, and dates it: 'STARZ
+    # Top 10 Movies Today', with a '#1 Movie on STARZ Today' card
+    # beside it. Anonymous, no session.
+    #
+    # FILMS ONLY, on purpose. The series page carries a rail headed
+    # 'Popular' and it is deliberately not wired: it is almost
+    # entirely the Power universe and Outlander, which is an Originals
+    # shelf cohering around exactly what a premium service
+    # merchandises hardest. The films chart coheres around nothing,
+    # running Starz originals beside catalog films from 1994 to 2025
+    # across four genres, which is what makes it readable as viewing.
+    # Same call as Xumo's 'Most Popular' and Hulu's home 'Trending'.
+    'starz': {
+        'label': 'Starz Top 10 Movies Today',
+        'mode':  'collection',
+        'collections': ('starz top 10 movies today',),
+        'depth': 10,
+    },
     # Peacock publishes two, on its signed-in home. Separate rankings,
     # so the top show and the top film are both #1.
     #

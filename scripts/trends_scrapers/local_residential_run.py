@@ -92,6 +92,12 @@ RESIDENTIAL_SCRAPERS = [
     # /us/en/movies + /us/en/series. Runs residentially because
     # starz.com's Akamai config fingerprints Hetzner's datacenter IP.
     ('starz',         'Starz'),
+    # Starz's OWN Top 10 Movies Today. The line above is a browse
+    # listing off __NEXT_DATA__ and carries no ranking. MUST stay
+    # immediately after it: the chart is folded into the same
+    # snapshot that one rewrites. No session needed, but it runs
+    # here because starz.com fingerprints the build box's IP.
+    ('starz_top10',   'Starz Top 10'),
     # Starz on Amazon (2026-09-15): the Prime Video Channels panel
     # carries the same catalog, so it mirrors the snapshot the line
     # above just wrote. Only reads S3 and needs no residential IP; it

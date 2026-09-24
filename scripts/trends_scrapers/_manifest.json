@@ -94,6 +94,7 @@
     "snapshot_board_values.py",
     "starz.py",
     "starz_amazon.py",
+    "starz_top10.py",
     "steam_charts.py",
     "stream_estimates.py",
     "stream_window_index.py",
