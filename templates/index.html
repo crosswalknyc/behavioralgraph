@@ -32333,6 +32333,91 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-selector-row { display: flex; gap: 1.1rem; align-items: end; flex-wrap: wrap; }
             #intentIQView .iiq-selector-row-2 { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 0.55rem; border-top: 1px solid rgba(59,61,56,0.55); }
             #intentIQView .iiq-selector-row-2:empty { display: none; }
+
+            /* Title library: left-edge rail + slide-out drawer (the same
+               library Profile IQ and Subscriber IQ use). The native title
+               <select> stays in the DOM for the renderers but never shows. */
+            #intentIQView #iiqTitleSelect { display: none !important; }
+            #intentIQView .aiq-title-btn { display: inline-flex; align-items: center; gap: 0.6rem; min-width: 220px; max-width: 420px;
+                padding: 0.42rem 0.7rem; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+                color: #E9E8E1; font-size: 0.85rem; font-weight: 400; cursor: pointer; text-align: left; line-height: 1.25;
+                transition: border-color 0.12s ease-out, background 0.12s ease-out; }
+            #intentIQView .aiq-title-btn:hover { border-color: rgba(199,242,62,0.45); background: rgba(199,242,62,0.06); }
+            #intentIQView .aiq-title-btn:focus { outline: 2px solid #3358FF; outline-offset: 2px; }
+            #intentIQView .aiq-title-btn .aiq-title-btn-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #intentIQView .aiq-title-btn .aiq-title-btn-cta { flex: 0 0 auto; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em;
+                text-transform: uppercase; color: #C7F23E; }
+            body[data-theme="light"] #intentIQView .aiq-title-btn { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .aiq-title-btn .aiq-title-btn-cta { color: #5E7E12; }
+
+            #aiqLibraryRail { display: flex; position: fixed; left: 0; top: 190px; z-index: 2147481500; width: 36px; min-height: 168px;
+                padding: 16px 0 14px; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px;
+                background: #15252A; border: 1px solid #3B3D38; border-left: 3px solid #C7F23E; border-radius: 0 12px 12px 0;
+                color: #E9E8E1; cursor: pointer; box-shadow: 8px 12px 28px rgba(0,0,0,0.32); }
+            #aiqLibraryRail.is-hidden { display: none !important; }
+            #aiqLibraryRail:hover { width: 40px; }
+            #aiqLibraryRail .aiq-rail-dot { width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px; }
+            #aiqLibraryRail .aiq-rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600;
+                letter-spacing: 0.14em; text-transform: uppercase; color: #E9E8E1; }
+            #aiqLibraryRail .aiq-rail-chevron { color: #C7F23E; font-size: 18px; line-height: 1; font-weight: 600; }
+            body[data-theme="light"] #aiqLibraryRail { background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12; }
+            body[data-theme="light"] #aiqLibraryRail .aiq-rail-dot { background: #5E7E12; }
+            body[data-theme="light"] #aiqLibraryRail .aiq-rail-chevron { color: #5E7E12; }
+            body[data-theme="light"] #aiqLibraryRail .aiq-rail-label { color: #0C1618; }
+
+            #aiqLibraryScrim { display: none; position: fixed; left: 0; right: 0; bottom: 0; top: 121px; z-index: 2147481900; background: rgba(12,22,24,0.55); }
+            #aiqLibraryScrim.is-open { display: block; }
+
+            #aiqLibraryDrawer { position: fixed; left: 0; top: 121px; bottom: 0; width: 360px; z-index: 2147482000; display: flex; flex-direction: column;
+                background: #15252A; border-right: 1px solid #3B3D38; box-shadow: 16px 0 40px rgba(0,0,0,0.35); color: #E9E8E1;
+                transform: translateX(-110%); transition: transform 180ms ease; visibility: hidden; pointer-events: none; text-transform: none; letter-spacing: 0; }
+            #aiqLibraryDrawer.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+            body[data-theme="light"] #aiqLibraryDrawer { background: #FFFFFF; border-right-color: #C9C6BA; color: #0C1618; }
+            #aiqLibraryDrawer .aiq-lib-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 20px 20px 14px; }
+            #aiqLibraryDrawer .aiq-lib-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 500; letter-spacing: 0.18em;
+                text-transform: uppercase; color: #7C878A; }
+            #aiqLibraryDrawer .aiq-lib-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-eyebrow::before { background: #5E7E12; }
+            #aiqLibraryDrawer .aiq-lib-top h3 { margin: 8px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; color: inherit; text-transform: none; }
+            #aiqLibraryDrawer .aiq-lib-close { background: transparent; border: 0; color: #7C878A; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px; }
+            #aiqLibraryDrawer .aiq-lib-close:hover { color: #E9E8E1; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-close:hover { color: #0C1618; }
+            #aiqLibraryDrawer .aiq-lib-search { display: flex; gap: 8px; padding: 0 20px 14px; }
+            #aiqLibraryDrawer .aiq-lib-search input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px; border: 1px solid #3B3D38;
+                background: transparent; color: inherit; font-size: 12.5px; }
+            #aiqLibraryDrawer .aiq-lib-search input:focus { outline: none; border-color: #3358FF; }
+            #aiqLibraryDrawer .aiq-lib-search input::placeholder { color: #7C878A; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-search input { border-color: #C9C6BA; }
+            #aiqLibraryDrawer .aiq-lib-tree { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px 20px; }
+            #aiqLibraryDrawer .aiq-lib-group { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 4px; font-size: 13px; font-weight: 500;
+                letter-spacing: -0.01em; cursor: pointer; border-bottom: 1px solid rgba(59,61,56,0.55); border-radius: 8px 8px 0 0; }
+            #aiqLibraryDrawer .aiq-lib-group:hover { background: rgba(233,232,225,0.06); }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-group:hover { background: rgba(12,22,24,0.05); }
+            #aiqLibraryDrawer .aiq-lib-arrow { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 22px;
+                border: 1px solid #3B3D38; border-radius: 6px; background: #0C1618; color: #C7F23E; font-size: 13px; line-height: 1; transition: transform 0.2s; }
+            #aiqLibraryDrawer .aiq-lib-group.open .aiq-lib-arrow { transform: rotate(90deg); }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-arrow { border-color: #C9C6BA; background: #E9E8E1; color: #5E7E12; }
+            #aiqLibraryDrawer .aiq-lib-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; background: #B7B3D8; }
+            #aiqLibraryDrawer .aiq-lib-dot.orchid { background: #E682FF; }
+            #aiqLibraryDrawer .aiq-lib-dot.cobalt { background: #3358FF; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-dot.orchid { background: #8E3FA8; }
+            #aiqLibraryDrawer .aiq-lib-group-label { flex: 1 1 auto; }
+            #aiqLibraryDrawer .aiq-lib-count { font-size: 11px; font-weight: 400; color: #7C878A; font-variant-numeric: tabular-nums; }
+            #aiqLibraryDrawer .aiq-lib-toggle { font-size: 11px; font-weight: 500; letter-spacing: 0.04em; color: #7C878A; }
+            #aiqLibraryDrawer .aiq-lib-group:hover .aiq-lib-toggle { color: #C7F23E; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-group:hover .aiq-lib-toggle { color: #5E7E12; }
+            #aiqLibraryDrawer .aiq-lib-children { display: none; padding-left: 24px; }
+            #aiqLibraryDrawer .aiq-lib-group.open + .aiq-lib-children { display: block; }
+            #aiqLibraryDrawer .aiq-lib-item { display: flex; align-items: baseline; gap: 10px; padding: 8px 6px 8px 2px; font-size: 13px; font-weight: 400;
+                line-height: 1.35; letter-spacing: -0.01em; cursor: pointer; border-bottom: 1px solid rgba(59,61,56,0.45); border-radius: 4px; }
+            #aiqLibraryDrawer .aiq-lib-item:hover { background: rgba(233,232,225,0.05); }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-item:hover { background: rgba(12,22,24,0.04); }
+            #aiqLibraryDrawer .aiq-lib-item.on { background: rgba(199,242,62,0.08); color: #C7F23E; }
+            body[data-theme="light"] #aiqLibraryDrawer .aiq-lib-item.on { background: rgba(94,126,18,0.10); color: #5E7E12; }
+            #aiqLibraryDrawer .aiq-lib-item-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #aiqLibraryDrawer .aiq-lib-item-date { flex: 0 0 auto; font-size: 11px; color: #7C878A; font-variant-numeric: tabular-nums; white-space: nowrap; }
+            #aiqLibraryDrawer .aiq-lib-item.on .aiq-lib-item-date { color: inherit; opacity: 0.8; }
+            #aiqLibraryDrawer .aiq-lib-empty { padding: 14px 8px; font-size: 12.5px; color: #7C878A; }
             body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 label { color: #666966; }
             body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 select, body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 input { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; }
 
@@ -128247,6 +128332,203 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             rail.style.display = html ? '' : 'none';
         }
 
+        // ── Title library: left rail + slide-out drawer ──────────────
+        // Replaces the TITLE dropdown. The native <select id="iiqTitleSelect">
+        // stays hidden in the DOM: the renderers, the banner, and the compare
+        // picker all still read it; a drawer pick sets its value and fires
+        // the same change handler the dropdown used.
+        var _aiqLibGroupsOpen = { film: true, brand: true, other: true };
+        function _aiqLibHeaderBottom() {
+            var h = document.querySelector('.container > header, header');
+            var b = h ? Math.round(h.getBoundingClientRect().bottom) : 0;
+            return b > 0 ? b : 121;
+        }
+        function _aiqLibraryOpen(on) {
+            var dr = document.getElementById('aiqLibraryDrawer');
+            var sc = document.getElementById('aiqLibraryScrim');
+            var rail = document.getElementById('aiqLibraryRail');
+            if (!dr) return;
+            if (on) {
+                var top = _aiqLibHeaderBottom();
+                dr.style.top = top + 'px';
+                if (sc) sc.style.top = top + 'px';
+            }
+            dr.classList.toggle('is-open', !!on);
+            if (sc) sc.classList.toggle('is-open', !!on);
+            if (rail) rail.classList.toggle('is-hidden', !!on);
+            if (on) {
+                var q = document.getElementById('aiqLibrarySearch');
+                if (q) { try { q.focus(); } catch (e) { } }
+                var cur = dr.querySelector('.aiq-lib-item.on');
+                if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ block: 'nearest' }); } catch (e) { } }
+            }
+        }
+        window._aiqLibraryOpen = _aiqLibraryOpen;
+        function _aiqLibPick(slug) {
+            var sel = document.getElementById('iiqTitleSelect');
+            if (!sel || !slug) return;
+            if (sel.value !== slug) {
+                sel.value = slug;
+                if (typeof window.onIntentIQTitleChange === 'function') window.onIntentIQTitleChange();
+                else sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            _aiqLibraryOpen(false);
+            var root = document.getElementById('intentIQView');
+            if (root) _aiqTitleLibrary(root);
+        }
+        window._aiqLibPick = _aiqLibPick;
+        function _aiqLibToggleGroup(key) {
+            _aiqLibGroupsOpen[key] = !_aiqLibGroupsOpen[key];
+            var dr = document.getElementById('aiqLibraryDrawer');
+            var g = dr && dr.querySelector('.aiq-lib-group[data-aiq-group="' + key + '"]');
+            if (g) g.classList.toggle('open', !!_aiqLibGroupsOpen[key]);
+        }
+        window._aiqLibToggleGroup = _aiqLibToggleGroup;
+        function _aiqLibDate(iso) {
+            var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return '';
+            var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            var mi = parseInt(m[2], 10) - 1;
+            if (mi < 0 || mi > 11) return '';
+            return MON[mi] + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+        }
+        function _aiqLibFilter() {
+            var dr = document.getElementById('aiqLibraryDrawer');
+            var q = document.getElementById('aiqLibrarySearch');
+            if (!dr) return;
+            var needle = (q && q.value || '').trim().toLowerCase();
+            var items = dr.querySelectorAll('.aiq-lib-item');
+            var shown = {};
+            for (var i = 0; i < items.length; i++) {
+                var it = items[i];
+                var hit = !needle || (it.getAttribute('data-aiq-name') || '').indexOf(needle) !== -1;
+                it.style.display = hit ? '' : 'none';
+                if (hit) shown[it.getAttribute('data-aiq-group')] = (shown[it.getAttribute('data-aiq-group')] || 0) + 1;
+            }
+            var groups = dr.querySelectorAll('.aiq-lib-group');
+            for (var g = 0; g < groups.length; g++) {
+                var key = groups[g].getAttribute('data-aiq-group');
+                var n = shown[key] || 0;
+                var kids = groups[g].nextElementSibling;
+                groups[g].style.display = n ? '' : 'none';
+                if (kids) kids.style.display = n ? '' : 'none';
+                // Searching opens every group with a hit so the match is visible.
+                if (needle && n) groups[g].classList.add('open');
+                else if (!needle) groups[g].classList.toggle('open', !!_aiqLibGroupsOpen[key]);
+            }
+            var empty = dr.querySelector('.aiq-lib-empty');
+            var any = false; for (var k in shown) { if (shown[k]) { any = true; break; } }
+            if (empty) empty.style.display = any ? 'none' : '';
+        }
+        window._aiqLibFilter = _aiqLibFilter;
+        function _aiqLibEnsure(root) {
+            if (document.getElementById('aiqLibraryDrawer')) return;
+            var rail = document.createElement('button');
+            rail.type = 'button'; rail.id = 'aiqLibraryRail';
+            rail.setAttribute('aria-label', 'Open library'); rail.title = 'Open library';
+            rail.innerHTML = '<span class="aiq-rail-dot" aria-hidden="true"></span><span class="aiq-rail-label">Library</span><span class="aiq-rail-chevron" aria-hidden="true">&rsaquo;</span>';
+            var scrim = document.createElement('div');
+            scrim.id = 'aiqLibraryScrim';
+            var dr = document.createElement('aside');
+            dr.id = 'aiqLibraryDrawer';
+            dr.setAttribute('aria-label', 'Title library');
+            dr.innerHTML = '<div class="aiq-lib-top"><div><div class="aiq-lib-eyebrow">Library</div><h3>Select a title.</h3></div>'
+                + '<button type="button" class="aiq-lib-close" id="aiqLibraryClose" aria-label="Close library">&times;</button></div>'
+                + '<div class="aiq-lib-search"><input type="search" id="aiqLibrarySearch" placeholder="Search titles" autocomplete="off" oninput="_aiqLibFilter()"></div>'
+                + '<div class="aiq-lib-tree" id="aiqLibraryTree"></div>';
+            root.appendChild(rail); root.appendChild(scrim); root.appendChild(dr);
+            rail.addEventListener('click', function (e) { e.preventDefault(); _aiqLibraryOpen(true); });
+            scrim.addEventListener('click', function () { _aiqLibraryOpen(false); });
+            dr.querySelector('#aiqLibraryClose').addEventListener('click', function () { _aiqLibraryOpen(false); });
+            document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') _aiqLibraryOpen(false); });
+        }
+        function _aiqTitleLibrary(root) {
+            if (!root) return;
+            _aiqLibEnsure(root);
+            var titles = [];
+            try { titles = (window.__intentIQ && window.__intentIQ.titles) || []; } catch (e) { }
+            var sel = document.getElementById('iiqTitleSelect');
+            var cur = sel ? (sel.value || '') : '';
+            var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+            // The title box in the controls row shows the current title and
+            // opens the drawer; the dropdown it stands in for is hidden by CSS.
+            if (sel) {
+                var box = sel.parentElement;
+                var btn = box && box.querySelector('.aiq-title-btn');
+                if (box && !btn) {
+                    btn = document.createElement('button');
+                    btn.type = 'button'; btn.className = 'aiq-title-btn';
+                    btn.setAttribute('aria-haspopup', 'dialog'); btn.title = 'Change title';
+                    btn.innerHTML = '<span class="aiq-title-btn-name"></span><span class="aiq-title-btn-cta">Change</span>';
+                    btn.addEventListener('click', function (e) { e.preventDefault(); _aiqLibraryOpen(true); });
+                    box.appendChild(btn);
+                }
+                if (btn) {
+                    var curT = null;
+                    for (var c = 0; c < titles.length; c++) { if (titles[c] && titles[c].title_slug === cur) { curT = titles[c]; break; } }
+                    var nm = curT ? (curT.display_name || curT.title_slug) : (titles.length ? 'Select a title' : 'Loading titles');
+                    var nameEl = btn.querySelector('.aiq-title-btn-name');
+                    if (nameEl && nameEl.textContent !== nm) nameEl.textContent = nm;
+                }
+            }
+            var tree = document.getElementById('aiqLibraryTree');
+            if (!tree) return;
+            var sig = cur + '|' + titles.map(function (t) { return (t.title_slug || '') + ':' + (t.title_type || '') + ':' + (t.display_name || '') + ':' + (t.opening_date || ''); }).join(',');
+            if (tree.getAttribute('data-aiq-sig') === sig) return;
+            tree.setAttribute('data-aiq-sig', sig);
+            var groups = [
+                { key: 'film', label: 'Films', dot: 'orchid' },
+                { key: 'brand', label: 'Brands', dot: 'cobalt' },
+                { key: 'other', label: 'Other campaigns', dot: '' }
+            ];
+            var byGroup = { film: [], brand: [], other: [] };
+            titles.forEach(function (t) {
+                if (!t || !t.title_slug) return;
+                var tt = String(t.title_type || 'film').toLowerCase();
+                (byGroup[tt] || byGroup.other).push(t);
+            });
+            var html = '';
+            groups.forEach(function (g) {
+                var list = byGroup[g.key];
+                if (!list.length) return;
+                var open = _aiqLibGroupsOpen[g.key] !== false;
+                html += '<div class="aiq-lib-group' + (open ? ' open' : '') + '" data-aiq-group="' + g.key + '" onclick="_aiqLibToggleGroup(\'' + g.key + '\')">'
+                    + '<span class="aiq-lib-arrow" aria-hidden="true">&#9656;</span>'
+                    + '<span class="aiq-lib-dot' + (g.dot ? ' ' + g.dot : '') + '" aria-hidden="true"></span>'
+                    + '<span class="aiq-lib-group-label">' + esc(g.label) + '</span>'
+                    + '<span class="aiq-lib-count">' + list.length + '</span>'
+                    + '<span class="aiq-lib-toggle">' + (open ? 'Close' : 'Open') + '</span></div>';
+                html += '<div class="aiq-lib-children">';
+                list.forEach(function (t) {
+                    var name = t.display_name || t.title_slug;
+                    var date = _aiqLibDate(t.opening_date);
+                    html += '<div class="aiq-lib-item' + (t.title_slug === cur ? ' on' : '') + '" data-aiq-group="' + g.key + '"'
+                        + ' data-aiq-name="' + esc(String(name).toLowerCase()) + '" title="' + esc(name) + '"'
+                        + ' onclick="event.stopPropagation(); _aiqLibPick(\'' + esc(t.title_slug).replace(/'/g, "\\'") + '\')">'
+                        + '<span class="aiq-lib-item-name">' + esc(name) + '</span>'
+                        + (date ? '<span class="aiq-lib-item-date">' + esc(date) + '</span>' : '')
+                        + '</div>';
+                });
+                html += '</div>';
+            });
+            if (!html) html = '<div class="aiq-lib-empty">No campaigns yet. Use Build Attribution IQ Campaign to add one.</div>';
+            else html += '<div class="aiq-lib-empty" style="display:none">No titles match.</div>';
+            tree.innerHTML = html;
+            // The Open / Close word tracks the group state.
+            var gs = tree.querySelectorAll('.aiq-lib-group');
+            for (var i = 0; i < gs.length; i++) {
+                (function (g) {
+                    var obs = new MutationObserver(function () {
+                        var tg = g.querySelector('.aiq-lib-toggle');
+                        if (tg) tg.textContent = g.classList.contains('open') ? 'Close' : 'Open';
+                    });
+                    obs.observe(g, { attributes: true, attributeFilter: ['class'] });
+                })(gs[i]);
+            }
+            _aiqLibFilter();
+        }
+        window._aiqTitleLibrary = _aiqTitleLibrary;
+
         function _aiqShell() {
             var root = document.getElementById('intentIQView');
             if (!root) return;
@@ -128259,6 +128541,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // controls: the title / as-of bar and the audience picker
             var bar = wrap.querySelector('.iiq-selector-bar-v2') || wrap.querySelector('.iiq-selector-bar');
             if (bar && bar.parentElement !== controls) controls.appendChild(bar);
+            try { _aiqTitleLibrary(root); } catch (e) { }
 
             // Brand and legacy-landing campaigns (Chime, MyPay, Be Good
             // Influence, Dhar Mann) have no weekly-reporter slabs; their
