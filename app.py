@@ -88,7 +88,7 @@ from html import escape
 from datetime import datetime, timedelta, date
 from functools import wraps
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
 from flask_cors import CORS
 
 try:
@@ -3851,6 +3851,38 @@ def terms_page():
 def privacy_page():
     """Privacy Policy page - accessible without login"""
     return render_template('privacy.html')
+
+
+@app.route('/caa', methods=['GET', 'POST'])
+@app.route('/caa/', methods=['GET', 'POST'])
+def caa_budget_page():
+    """Password-gated CAA annual-value model. No dashboard login required."""
+    import caa_gate as _caa
+    headers = {'X-Robots-Tag': 'noindex, nofollow, noarchive'}
+    if request.method == 'POST':
+        if _caa.password_ok(request.form.get('password') or ''):
+            resp = redirect('/caa')
+            resp.set_cookie(
+                _caa.COOKIE_NAME,
+                _caa.cookie_token(app.secret_key),
+                max_age=_caa.COOKIE_MAX_AGE,
+                httponly=True,
+                secure=bool(request.is_secure),
+                samesite='Lax',
+                path='/caa',
+            )
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(render_template('caa_gate.html', error=True), 401)
+        resp.headers.update(headers)
+        return resp
+    if _caa.cookie_ok(request.cookies.get(_caa.COOKIE_NAME), app.secret_key):
+        resp = make_response(render_template('caa_budget.html'), 200)
+        resp.headers.update(headers)
+        return resp
+    resp = make_response(render_template('caa_gate.html', error=False), 200)
+    resp.headers.update(headers)
+    return resp
 
 # ============================================================================
 # DESKTOP APP DOWNLOAD
