@@ -249,7 +249,7 @@ def wallet_state():
         "stats": wallet.wallet_stats(subject),
         "auto_reload_defaults": (pricing.get("auto_reload_defaults")
                                  or {"threshold_usd": 500.0,
-                                     "amount_usd": 1000.0}),
+                                     "amount_usd": 5000.0}),
         "stripe_enabled": billing.is_enabled(),
         "stripe_publishable_key": billing.publishable_key(),
         # Company-shared wallet context (Jenna 2026-09-09).
@@ -407,7 +407,7 @@ def wallet_auto_reload():
     enabled = bool(body.get("enabled"))
     try:
         threshold = float(body.get("threshold_usd") or 500)
-        amount = float(body.get("amount_usd") or 1000)
+        amount = float(body.get("amount_usd") or wallet.TOP_UP_MIN_USD)
     except (TypeError, ValueError):
         return jsonify({"error": "invalid_amounts"}), 400
 
@@ -417,9 +417,10 @@ def wallet_auto_reload():
     if threshold < 0 or threshold > 10_000:
         return jsonify({"error": "threshold_out_of_range",
                         "min": 0, "max": 10000}), 400
-    if amount < 100 or amount > 10_000:
+    if amount < wallet.TOP_UP_MIN_USD or amount > 100_000:
         return jsonify({"error": "amount_out_of_range",
-                        "min": 100, "max": 10000}), 400
+                        "min": wallet.TOP_UP_MIN_USD,
+                        "max": 100000}), 400
 
     if enabled and not wallet.has_card_on_file(subject):
         return jsonify({"error": "no_card_on_file"}), 400
@@ -1506,6 +1507,7 @@ def admin_set_billing_mode(target_username):
     _, _, err = _require_super_admin()
     if err:
         return err
+    import wallet  # type: ignore
     body = request.get_json(silent=True) or {}
     mode = str(body.get("billing_mode") or "").strip().lower()
     if mode not in ("prepay_only", "auto_reload", "monthly_invoice"):
@@ -1519,6 +1521,8 @@ def admin_set_billing_mode(target_username):
                 try:
                     v = float(body[k])
                     if v >= 0:
+                        if k == "auto_reload_amount_usd":
+                            v = max(wallet.TOP_UP_MIN_USD, v)
                         u[k] = v
                 except (TypeError, ValueError):
                     pass
@@ -1616,6 +1620,7 @@ def admin_billing_config(target_username):
     _, _, err = _require_super_admin()
     if err:
         return err
+    import wallet  # type: ignore
     body = request.get_json(silent=True) or {}
     mode = str(body.get("billing_mode") or "prepay_only").strip().lower()
     if mode not in ("prepay_only", "auto_reload", "monthly_invoice"):
@@ -1656,6 +1661,8 @@ def admin_billing_config(target_username):
                 try:
                     v = float(body[k])
                     if v >= 0:
+                        if k == "auto_reload_amount_usd":
+                            v = max(wallet.TOP_UP_MIN_USD, v)
                         u[k] = v
                 except (TypeError, ValueError):
                     pass
@@ -1813,6 +1820,7 @@ def admin_company_billing_config(company_name):
     _, _, err = _require_super_admin()
     if err:
         return err
+    import wallet  # type: ignore
     body = request.get_json(silent=True) or {}
     mode = str(body.get("billing_mode") or "prepay_only").strip().lower()
     if mode not in ("prepay_only", "auto_reload", "monthly_invoice"):
@@ -1849,6 +1857,8 @@ def admin_company_billing_config(company_name):
                 try:
                     v = float(body[k])
                     if v >= 0:
+                        if k == "auto_reload_amount_usd":
+                            v = max(wallet.TOP_UP_MIN_USD, v)
                         c[k] = v
                 except (TypeError, ValueError):
                     pass

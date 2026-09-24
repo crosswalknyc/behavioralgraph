@@ -483,7 +483,7 @@
       <div class="form-row">
         <label>Add</label>
         <span style="font-weight: 700;">$</span>
-        <input type="number" id="ar-amount" step="10" min="100" max="10000"
+        <input type="number" id="ar-amount" step="10" min="5000" max="100000"
                style="max-width: 160px;">
         <span class="hint">to my balance</span>
       </div>
@@ -501,13 +501,13 @@
         <span style="color: var(--muted-dark); font-size: 14px;">
           Custom amount:
         </span>
-        <input id="custom-amount" type="number" step="0.01" min="100"
-               placeholder="e.g., 750.00">
+        <input id="custom-amount" type="number" step="0.01" min="5000"
+               placeholder="e.g., 7500.00">
         <button id="custom-submit">Add funds</button>
       </div>
       <p style="margin: 12px 0 0 0; color: var(--muted-dark);
                 font-size: 12px;">
-        Minimum <span id="min-custom">$100.00</span>. Payments are
+        Minimum <span id="min-custom">$5,000.00</span>. Payments are
         processed by Stripe. Cards accepted: Visa, Mastercard, Amex,
         Discover. Prepaid purchases are non-refundable. Unused funds
         have no cash value and cannot be refunded or transferred.
@@ -772,10 +772,11 @@
         }
         if (canManage) {
           $('topup-card').style.display = 'block';
-          renderPacks(s.top_up_packs_usd || []);
+          renderPacks((s.top_up_packs_usd && s.top_up_packs_usd.length)
+            ? s.top_up_packs_usd : [5000, 10000, 15000]);
           $('min-custom').textContent =
-            fmtUsd(s.top_up_min_custom_usd || 100);
-          $('custom-amount').min = s.top_up_min_custom_usd || 100;
+            fmtUsd(s.top_up_min_custom_usd || 5000);
+          $('custom-amount').min = s.top_up_min_custom_usd || 5000;
         } else {
           $('topup-card').style.display = 'none';
         }
@@ -1043,9 +1044,9 @@
           'Add a card on file before enabling auto-reload.');
         return;
       }
-      if (amount < 100 || amount > 10000) {
+      if (amount < 5000 || amount > 100000) {
         showBanner('error',
-          'Top-up amount must be between $100 and $10,000.');
+          'Add amount must be at least $5,000.');
         return;
       }
       if (threshold < 0 || threshold > 10000) {
@@ -1087,7 +1088,13 @@
 
     $('custom-submit').addEventListener('click', () => {
       const v = parseFloat($('custom-amount').value);
+      const min = parseFloat($('custom-amount').min || 5000);
       if (!v || v <= 0) return;
+      if (v < min) {
+        showBanner('error',
+          'Amount is below the minimum of ' + fmtUsd(min) + '.');
+        return;
+      }
       topUp(v);
     });
     $('custom-amount').addEventListener('keydown', (e) => {

@@ -471,15 +471,15 @@
       <div class="card">
         <h2>Top-up Packs</h2>
         <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
-          Amounts shown as quick-select buttons on the user Wallet
-          page. Custom amount is always allowed above the minimum.
+          Quick-select buttons are $5,000, $10,000, and $15,000.
+          Custom amount is allowed at $5,000 or any amount above.
         </p>
         <div id="packs-body"></div>
         <div class="kv-row" style="margin-top: 12px;">
           <label style="margin: 0;">Minimum custom amount:</label>
           <div>
-            $<input id="min-custom" type="number" step="1" min="1"
-                    style="width: 100px;">
+            $<input id="min-custom" type="number" step="1" min="5000"
+                    value="5000" readonly style="width: 100px;">
             <button id="save-packs">Save packs</button>
           </div>
         </div>
@@ -621,7 +621,7 @@
           <div class="kv-row">
             <label style="margin: 0;">Auto-reload top-up amount</label>
             <div>$<input id="m-ar-amount" type="number" step="1"
-                    min="0" style="width: 100px;"></div>
+                    min="5000" style="width: 100px;"></div>
           </div>
         </div>
         <div id="mi-fields" style="display: none;">
@@ -1042,7 +1042,8 @@
       $('m-paying').checked = !!u.paying_customer;
       $('m-mode').value = u.billing_mode || 'prepay_only';
       $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
-      $('m-ar-amount').value = u.auto_reload_amount_usd || 1000;
+      $('m-ar-amount').value = Math.max(
+        5000, Number(u.auto_reload_amount_usd || 5000));
       $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
       const ppf = $('profile-pull-fields');
       if (ppf) {
@@ -1284,7 +1285,7 @@
         auto_reload_threshold_usd:
           Number($('m-ar-threshold').value || 500),
         auto_reload_amount_usd:
-          Number($('m-ar-amount').value || 1000),
+          Math.max(5000, Number($('m-ar-amount').value || 5000)),
         monthly_invoice_limit_usd:
           Number($('m-mi-limit').value || 5000),
       };
@@ -1797,38 +1798,16 @@
         p.prometheus_markup_multiplier || 2.10);
       $('metered-answer').value = (p.metered_answer_usd || 2.10);
       renderPacks(p.top_up_packs_usd || []);
-      $('min-custom').value = p.top_up_min_custom_usd || 100;
+      $('min-custom').value = p.top_up_min_custom_usd || 5000;
       $('save-tools').addEventListener('click', saveTools);
     }
 
-    function renderPacks(packs) {
-      let html = '';
-      packs.forEach((amt, i) => {
-        html += '<div style="margin-bottom: 6px; display: flex;' +
-          ' gap: 8px; align-items: center;">' +
-          '$<input type="number" step="1" min="1" ' +
-          'value="' + amt + '" data-pack-idx="' + i +
-          '" style="width: 100px;" class="pack-input">' +
-          '<button class="secondary" onclick="removePack(' + i +
-          ')">Remove</button></div>';
-      });
-      html += '<button class="secondary" onclick="addPack()">' +
-        '+ Add pack</button>';
-      $('packs-body').innerHTML = html;
+    function renderPacks(_packs) {
+      const locked = [5000, 10000, 15000];
+      $('packs-body').innerHTML = locked.map(amt =>
+        '<div style="margin-bottom: 6px; font-weight: 600;">$' +
+        amt.toLocaleString('en-US') + '</div>').join('');
     }
-
-    window.removePack = (idx) => {
-      const inputs = document.querySelectorAll('.pack-input');
-      const arr = Array.from(inputs).map(i => Number(i.value || 0));
-      arr.splice(idx, 1);
-      renderPacks(arr);
-    };
-    window.addPack = () => {
-      const inputs = document.querySelectorAll('.pack-input');
-      const arr = Array.from(inputs).map(i => Number(i.value || 0));
-      arr.push(500);
-      renderPacks(arr);
-    };
 
     async function saveTools() {
       const rows = document.querySelectorAll(
@@ -2137,17 +2116,13 @@
         '<div class="banner success">Metered answer rate saved.</div>';
     });
     $('save-packs').addEventListener('click', async () => {
-      const inputs = document.querySelectorAll('.pack-input');
-      const arr = Array.from(inputs).map(i => Number(i.value || 0))
-                       .filter(v => v > 0);
-      const minCustom = Number($('min-custom').value || 100);
       const r = await fetch('/api/admin/pricing', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          top_up_packs_usd: arr,
-          top_up_min_custom_usd: minCustom,
+          top_up_packs_usd: [5000, 10000, 15000],
+          top_up_min_custom_usd: 5000,
         }),
       });
       if (r.ok) $('banner').innerHTML =

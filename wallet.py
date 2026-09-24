@@ -156,8 +156,10 @@ DEFAULT_PRICING = {
     # of what's here. This list lets an admin flip any OTHER tool to
     # session-metered via the /admin/billing per-row checkbox.
     "metered_tools": [],
-    "top_up_packs_usd": [250, 500, 1000, 2500],
-    "top_up_min_custom_usd": 100.0,
+    # Jenna 2026-09-23: the only preset add-funds amounts are $5k /
+    # $10k / $15k. Custom is allowed at $5k or any amount above.
+    "top_up_packs_usd": [5000.0, 10000.0, 15000.0],
+    "top_up_min_custom_usd": 5000.0,
     "prometheus_markup_multiplier": 2.10,
     # 2026-09-14 (Jenna, verbatim: "nothing should EVER be free. if it
     # doesnt have a set price it but is answerable from what's already
@@ -171,12 +173,17 @@ DEFAULT_PRICING = {
     "metered_answer_usd": 2.10,
     "auto_reload_defaults": {
         "threshold_usd": 500.0,
-        "amount_usd": 1000.0,
+        "amount_usd": 5000.0,
     },
     "monthly_invoice_defaults": {
         "limit_usd": 5000.0,
     },
 }
+
+# Locked add-funds amounts (Jenna 2026-09-23). Presets are only
+# $5,000 / $10,000 / $15,000. Custom must be $5,000 or more.
+TOP_UP_PACKS_USD = (5000.0, 10000.0, 15000.0)
+TOP_UP_MIN_USD = 5000.0
 
 
 # ---------------------------------------------------------------------------
@@ -857,12 +864,13 @@ def save_pricing(new_pricing: dict) -> dict:
                     str(x).strip().lower() for x in v
                     if isinstance(x, str) and x.strip()
                 })
-            elif k in ("top_up_packs_usd",) and isinstance(v, list):
-                merged[k] = [
-                    float(x) for x in v
-                    if isinstance(x, (int, float)) and float(x) > 0]
-            elif k in ("top_up_min_custom_usd",
-                       "prometheus_markup_multiplier",
+            elif k in ("top_up_packs_usd", "top_up_min_custom_usd"):
+                # Jenna 2026-09-23: presets and the $5k floor are
+                # locked. Admin save cannot bring back $250 packs or
+                # drop the minimum below $5,000.
+                merged["top_up_packs_usd"] = list(TOP_UP_PACKS_USD)
+                merged["top_up_min_custom_usd"] = float(TOP_UP_MIN_USD)
+            elif k in ("prometheus_markup_multiplier",
                        "metered_answer_usd") \
                     and isinstance(v, (int, float)):
                 merged[k] = float(v)
@@ -904,6 +912,8 @@ def save_pricing(new_pricing: dict) -> dict:
                                         else None),
                     })
                 merged["custom_tools"] = clean
+    merged["top_up_packs_usd"] = list(TOP_UP_PACKS_USD)
+    merged["top_up_min_custom_usd"] = float(TOP_UP_MIN_USD)
     # Write to S3
     try:
         from app import s3_client, METADATA_BUCKET  # type: ignore
@@ -1516,17 +1526,16 @@ def metered_answer_usd() -> float:
 
 
 def top_up_pack_sizes() -> list:
-    """Ordered list of USD amounts for the Buy Credits page."""
-    p = load_pricing()
-    packs = p.get("top_up_packs_usd") or []
-    return [float(x) for x in packs if float(x) > 0]
+    """Preset USD amounts on the Add funds page. Always the locked
+    $5k / $10k / $15k set so a stale pricing.json cannot bring back
+    $250 / $500 buttons."""
+    return [float(x) for x in TOP_UP_PACKS_USD]
 
 
 def top_up_min_custom() -> float:
-    """Minimum custom top-up amount (Stripe charges $0.30 flat + 2.9%,
-    so we set a floor to avoid churning tiny top-ups)."""
-    p = load_pricing()
-    return float(p.get("top_up_min_custom_usd", 100.0))
+    """Minimum amount a user can add. $5,000; nothing lower. Custom
+    amounts above $5,000 are allowed."""
+    return float(TOP_UP_MIN_USD)
 
 
 # ---------------------------------------------------------------------------
@@ -1610,7 +1619,7 @@ def auto_reload_threshold(user: dict) -> float:
     """Balance at or below which auto-reload triggers. Falls back to
     the pricing config's default."""
     if not user:
-        return top_up_min_custom()
+        return 500.0
     v = user.get("auto_reload_threshold_usd")
     if isinstance(v, (int, float)) and float(v) >= 0:
         return float(v)
@@ -1619,14 +1628,22 @@ def auto_reload_threshold(user: dict) -> float:
 
 
 def auto_reload_amount(user: dict) -> float:
-    """How much to charge on an auto-reload trigger."""
+    """How much to charge on an auto-reload trigger. Never below
+    the $5,000 add-funds floor."""
     if not user:
-        return 1000.0
+        return float(TOP_UP_MIN_USD)
     v = user.get("auto_reload_amount_usd")
-    if isinstance(v, (int, float)) and float(v) >= 0:
-        return float(v)
-    return float(load_pricing().get("auto_reload_defaults", {})
-                 .get("amount_usd", 1000.0))
+    try:
+        amt = float(v)
+    except (TypeError, ValueError):
+        amt = 0.0
+    if amt <= 0:
+        try:
+            amt = float(load_pricing().get("auto_reload_defaults", {})
+                        .get("amount_usd", TOP_UP_MIN_USD) or 0)
+        except (TypeError, ValueError):
+            amt = float(TOP_UP_MIN_USD)
+    return max(float(TOP_UP_MIN_USD), amt)
 
 
 def monthly_invoice_limit(user: dict) -> float:
