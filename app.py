@@ -49132,6 +49132,16 @@ def _save_synth_chat_history(username, history):
             Body=json.dumps(trimmed, indent=2).encode('utf-8'),
             ContentType='application/json',
         )
+        # Prometheus watch (2026-09-24, Jenna): every question a
+        # watched company (Paramount+, Sony) asks, with the answer it
+        # got, lands in Jenna's inbox. Both surfaces and the finished
+        # background reads all pass through this save. Daemon thread,
+        # never raises, never delays the save.
+        try:
+            import prometheus_watch as _pmw
+            _pmw.on_history_saved(username, trimmed, load_users)
+        except Exception:
+            traceback.print_exc()
         return True
     except Exception as e:
         print(f"[synth-chat] history save failed for {username}: {e}")
@@ -53646,6 +53656,25 @@ def _ask_mentions_subject(question, subject):
         return True
 
 
+def _pm_watch_notify(username, question, payload, subject=None):
+    """Email Jenna when a Paramount+ or Sony account just got an
+    answer. Runs off the request thread. The 'On it' placeholder is
+    skipped; the finished read calls this again with the real answer.
+    Never raises."""
+    def _run():
+        try:
+            import prometheus_watch_notify as _pwn
+            rec = (load_users() or {}).get(
+                str(username or '').strip()) or {}
+            _pwn.notify(username, rec, question, payload, subject)
+        except Exception:
+            traceback.print_exc()
+    try:
+        threading.Thread(target=_run, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _ask_logged(surface):
     """Wrap a chatbot route so every question is recorded to the ask
     log with route, outcome, and response time. Fire-and-forget."""
@@ -53709,6 +53738,9 @@ def _ask_logged(surface):
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject,
                     stages=getattr(_g, '_pm_ask_stages', None))
+                _pm_watch_notify(
+                    session.get('username') or '', question, payload,
+                    subject)
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
                 # unless the handler already recorded it with richer
@@ -59489,6 +59521,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # the thread as its calm one-liner, but carries no output
             # to email, so only a clean read fires the notify.
             _pm_append_read_to_history(pm_user, job_id, payload)
+            _pm_watch_notify(pm_user, text, payload,
+                             payload.get('profile'))
             if not held:
                 _pm_flush_notify(job_id, 'read', payload)
             else:
