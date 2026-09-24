@@ -28601,6 +28601,181 @@ https://www.instagram.com/p/..."></textarea>
             </div>
         </div><!-- End roasIQView -->
 
+        <style id="bpEditorial">
+        /* ================================================================
+           BRAND PARTNERSHIP
+           Surface ramp, the Library rail rather than a docked column, and
+           the broadsheet layout: headline and portrait left, the value
+           ledger right, the evidence underneath on a numbered nav.
+           ================================================================ */
+        #ecommerceIQView {
+            background: var(--cw-page, #111F22) !important;
+            color: #E9E8E1;
+            --bg-dark: var(--cw-page, #111F22);
+            --bg-primary: var(--cw-page, #111F22);
+            --bg-secondary: var(--cw-page, #111F22);
+            --bg-card: var(--cw-raised, #1B2E34);
+            --bg-input: var(--cw-input, #22383F);
+            --border-color: var(--cw-border, #2C4148);
+            --bp-rule: var(--cw-border, #2C4148);
+            --bp-hair: #22343A;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        #ecommerceIQView *:not(code):not(pre) {
+            font-family: 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        body[data-theme="light"] #ecommerceIQView {
+            background: #E9E8E1 !important; color: #0C1618;
+            --bg-card: #FFFFFF; --bg-input: #FFFFFF; --border-color: #C9C6BA;
+            --bp-rule: #C9C6BA; --bp-hair: #DAD8CE;
+        }
+        /* The drawer is out of flow, so the content takes the full width. */
+        #ecommerceIQView .dashboard-layout {
+            display: flex !important; flex-direction: column !important; min-height: 0 !important;
+        }
+        #ecommerceIQView .dashboard-tab-content {
+            width: 100% !important; flex: 1 1 0% !important; min-height: 0 !important;
+        }
+
+        /* ---- Library rail ---- */
+        #bpLibraryRail {
+            display: none; position: fixed; left: 0; top: 190px;
+            z-index: 2147481500; width: 36px; min-height: 168px;
+            padding: 16px 0 14px; flex-direction: column; align-items: center;
+            justify-content: flex-start; gap: 12px;
+            background: #15252A; border: 1px solid #3B3D38;
+            border-left: 3px solid #C7F23E; border-radius: 0 12px 12px 0;
+            color: #E9E8E1; cursor: pointer;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-shadow: 8px 12px 28px rgba(0, 0, 0, .32);
+        }
+        #ecommerceIQView #bpLibraryRail { display: flex; }
+        #bpLibraryRail.is-hidden { display: none !important; }
+        #bpLibraryRail:hover { width: 40px; }
+        #bpLibraryRail .bp-rail-dot { width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px; }
+        #bpLibraryRail .bp-rail-label {
+            writing-mode: vertical-rl; transform: rotate(180deg);
+            font-size: 11px; font-weight: 600; letter-spacing: .14em;
+            text-transform: uppercase; color: #E9E8E1;
+        }
+        #bpLibraryRail .bp-rail-chevron { color: #C7F23E; font-size: 18px; line-height: 1; font-weight: 600; }
+        body[data-theme="light"] #bpLibraryRail { background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12; }
+        body[data-theme="light"] #bpLibraryRail .bp-rail-dot,
+        body[data-theme="light"] #bpLibraryRail .bp-rail-chevron { background: #5E7E12; color: #5E7E12; }
+        body[data-theme="light"] #bpLibraryRail .bp-rail-label { color: #0C1618; }
+
+        #bpLibraryScrim { display: none; position: fixed; inset: 0; z-index: 2147481900;
+            background: rgba(12, 22, 24, .55); }
+        #bpLibraryScrim.is-open { display: block; }
+
+        #ecommerceIQView #bpLibraryDrawer {
+            position: fixed !important; left: 0; top: 121px; bottom: 0;
+            width: 360px !important; min-width: 360px !important; max-width: 360px !important;
+            height: auto !important; max-height: none !important;
+            z-index: 2147482000; display: flex !important; flex-direction: column;
+            background: #15252A; border: 0; border-right: 1px solid #3B3D38;
+            border-radius: 0; box-shadow: 16px 0 40px rgba(0, 0, 0, .35);
+            transform: translateX(-110%); transition: transform 180ms ease;
+            visibility: hidden; pointer-events: none;
+        }
+        #ecommerceIQView #bpLibraryDrawer.is-open {
+            transform: translateX(0); visibility: visible; pointer-events: auto;
+        }
+        body[data-theme="light"] #ecommerceIQView #bpLibraryDrawer { background: #FFFFFF; border-right-color: #C9C6BA; }
+        #ecommerceIQView .bp-lib-top { display: flex; align-items: flex-start; justify-content: space-between;
+            gap: 14px; padding: 20px 20px 14px; border: 0; }
+        .bp-lib-eyebrow { font-size: 10px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase;
+            color: #7C878A; display: flex; align-items: center; gap: 8px; }
+        .bp-lib-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; }
+        body[data-theme="light"] .bp-lib-eyebrow::before { background: #5E7E12; }
+        #ecommerceIQView .bp-lib-top h3 { margin: 8px 0 0 !important; font-size: 20px; font-weight: 800;
+            letter-spacing: -.02em; text-transform: none; color: inherit; }
+        .bp-lib-close { background: transparent; border: 0; color: #7C878A; font-size: 22px; line-height: 1;
+            cursor: pointer; padding: 0 2px; }
+        .bp-lib-close:hover { color: #E9E8E1; }
+        .bp-lib-search { display: flex; gap: 8px; padding: 0 20px 14px; }
+        #ecommerceIQView .bp-lib-search input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px;
+            border: 1px solid #3B3D38; background: transparent; color: inherit; font-size: 12.5px; }
+        .bp-lib-refresh { border: 1px solid #3B3D38; background: transparent; color: #7C878A;
+            border-radius: 8px; width: 36px; cursor: pointer; font-size: 14px; }
+        #ecommerceIQView #bpiqProfileTree { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 0 12px 18px; }
+
+        /* ---- Cover ---- */
+        #ecommerceIQView .bp-cover { max-width: 620px; margin: 0 auto; padding: 8vh 2rem 0; text-align: left; }
+        .bp-cover-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 0.66rem; font-weight: 600;
+            letter-spacing: .17em; text-transform: uppercase; color: #7C878A; }
+        .bp-cover-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #C7F23E; }
+        #ecommerceIQView .bp-cover h2 { font-size: 2.1rem; font-weight: 300; letter-spacing: -.026em;
+            line-height: 1.12; margin: 0.7rem 0 0; color: #E9E8E1; text-transform: none; }
+        #ecommerceIQView .bp-cover p { font-size: 0.95rem; line-height: 1.6; color: #9AA09B; font-weight: 300;
+            margin: 0.9rem 0 0; text-transform: none; }
+        .bp-cover-cta { margin-top: 1.5rem; background: transparent; border: 1px solid #3B4A4E;
+            border-radius: 2px; color: #E9E8E1; font-size: 0.66rem; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase; padding: 0.7rem 1.1rem; cursor: pointer; }
+        .bp-cover-cta:hover { border-color: #C7F23E; color: #C7F23E; }
+        body[data-theme="light"] #ecommerceIQView .bp-cover h2 { color: #0C1618; }
+
+        /* ---- Broadsheet head ---- */
+        #ecommerceIQView .bp-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 2.25rem 3rem;
+            flex: 0 0 auto; }
+        #ecommerceIQView .bp-top { display: grid; grid-template-columns: 1fr 320px; gap: 2.8rem;
+            padding: 1.7rem 0 1.9rem; border-bottom: 1px solid var(--bp-rule); }
+        #ecommerceIQView .bp-ident { display: grid; grid-template-columns: 132px 1fr; gap: 1.6rem; align-items: start; }
+        #ecommerceIQView .bp-art { width: 132px; aspect-ratio: 2/3; border-radius: 2px; background-size: cover;
+            background-position: center; background-color: var(--cw-raised, #1B2E34); }
+        #ecommerceIQView .bp-kick { font-size: 0.57rem; letter-spacing: .2em; font-weight: 700; color: #7C878A;
+            text-transform: uppercase; }
+        #ecommerceIQView .bp-title { font-size: 2.1rem; font-weight: 300; letter-spacing: -.028em;
+            line-height: 1.06; margin: 0.6rem 0 0; color: #E9E8E1; text-transform: none; }
+        #ecommerceIQView .bp-deck { font-size: 0.8rem; color: #9AA09B; font-weight: 300; line-height: 1.6;
+            margin-top: 0.8rem; max-width: 56ch; text-transform: none; }
+        #ecommerceIQView .bp-side { border-left: 1px solid var(--bp-hair); padding-left: 1.6rem; }
+        #ecommerceIQView .bp-sl { font-size: 0.53rem; letter-spacing: .15em; color: #7C878A; font-weight: 700;
+            text-transform: uppercase; }
+        #ecommerceIQView .bp-sv { font-size: 2.85rem; font-weight: 300; letter-spacing: -.036em; line-height: 1;
+            margin-top: 0.5rem; font-variant-numeric: tabular-nums; }
+        #ecommerceIQView .bp-part { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem;
+            padding: 0.55rem 0 0; border-top: 1px solid var(--bp-hair); align-items: baseline; margin-top: 0.7rem; }
+        #ecommerceIQView .bp-pn { font-size: 0.76rem; color: #9AA09B; font-weight: 300; }
+        #ecommerceIQView .bp-pv { font-size: 0.95rem; font-weight: 400; font-variant-numeric: tabular-nums; }
+        #ecommerceIQView .bp-pb { height: 2px; background: var(--bp-hair); margin-top: 0.45rem;
+            grid-column: 1 / -1; position: relative; }
+        #ecommerceIQView .bp-pb i { position: absolute; top: 0; bottom: 0; left: 0; background: #C7F23E; display: block; }
+        #ecommerceIQView .bp-export { background: transparent !important; border: 1px solid #3B4A4E !important;
+            border-radius: 2px !important; color: #7C878A !important; font-size: 0.6rem !important;
+            font-weight: 700 !important; letter-spacing: .14em; text-transform: uppercase;
+            padding: 0.55rem 0.85rem !important; }
+        #ecommerceIQView .bp-export:hover { border-color: #C7F23E !important; color: #C7F23E !important; }
+
+        /* ---- Section nav ---- */
+        #ecommerceIQView .bp-nav { display: flex; gap: 1.6rem; border-bottom: 1px solid var(--bp-rule);
+            margin: 0 0 1.9rem; overflow-x: auto; scrollbar-width: none; }
+        #ecommerceIQView .bp-nav::-webkit-scrollbar { display: none; }
+        #ecommerceIQView .bp-navi { background: transparent; border: 0; border-bottom: 2px solid transparent;
+            padding: 0.8rem 0; font-size: 0.57rem; letter-spacing: .14em; font-weight: 700; color: #5F6D70;
+            text-transform: uppercase; white-space: nowrap; cursor: pointer; transition: color .14s, border-color .14s; }
+        #ecommerceIQView .bp-navi:hover { color: #B8BEB9; }
+        #ecommerceIQView .bp-navi.on { color: #E9E8E1; border-bottom-color: #C7F23E; }
+        #ecommerceIQView .bp-panel { display: none; }
+        #ecommerceIQView .bp-panel.on { display: block; }
+        #ecommerceIQView .bp-attic { display: none !important; }
+
+        /* ---- Slabs ---- */
+        #ecommerceIQView .bp-secno { font-size: 0.57rem; letter-spacing: .2em; font-weight: 700; color: #3B4A4E; }
+        #ecommerceIQView h3, #ecommerceIQView h4, #ecommerceIQView h5 {
+            color: #E9E8E1; font-weight: 400; letter-spacing: -.01em; text-transform: none; }
+        #ecommerceIQView table { border-collapse: collapse; width: 100%; }
+        #ecommerceIQView th { font-size: 0.55rem !important; font-weight: 700 !important; letter-spacing: .14em;
+            text-transform: uppercase; color: #7C878A !important; text-align: left;
+            padding: 0 0.85rem 0.55rem 0 !important; border-bottom: 1px solid var(--bp-rule) !important;
+            background: transparent !important; }
+        #ecommerceIQView td { padding: 0.66rem 0.85rem 0.66rem 0 !important;
+            border-bottom: 1px solid var(--bp-hair) !important; background: transparent !important;
+            font-size: 0.8rem; vertical-align: middle; font-variant-numeric: tabular-nums; }
+        #ecommerceIQView tr { background: transparent !important; }
+        #ecommerceIQView td:last-child, #ecommerceIQView th:last-child { padding-right: 0 !important; }
+        </style>
         <!-- BRAND PARTNERSHIP VALUATION VIEW
              (Container id is `ecommerceIQView` for historical / routing-map
               reasons - `brandPartnershipIQ` resolves to this id in the
@@ -28608,13 +28783,26 @@ https://www.instagram.com/p/..."></textarea>
               only BPIQ panels render here now.) -->
         <div id="ecommerceIQView">
             <div class="dashboard-layout">
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3 id="ecomIQSidebarTitle">Brand Partnership Results</h3>
-                        <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="ecomIQSearchInput" placeholder="Search results..." class="sidebar-search has-tooltip" data-tooltip="Search results by name." onkeyup="filterEcomIQResults()" style="flex: 1;">
-                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadEcomIQProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                <!-- Library: the same left-edge rail and slide-out Profile
+                     IQ, Journey IQ and Subscriber IQ use, rather than a
+                     column permanently holding 280px of the page. -->
+                <button type="button" id="bpLibraryRail" aria-label="Open library" title="Open library">
+                    <span class="bp-rail-dot" aria-hidden="true"></span>
+                    <span class="bp-rail-label">Library</span>
+                    <span class="bp-rail-chevron" aria-hidden="true">›</span>
+                </button>
+                <div id="bpLibraryScrim"></div>
+                <div class="persistent-sidebar" id="bpLibraryDrawer" aria-label="Partnership library">
+                    <div class="sidebar-header-section bp-lib-top">
+                        <div>
+                            <div class="bp-lib-eyebrow">Library</div>
+                            <h3 id="ecomIQSidebarTitle">Brand Partnership Results</h3>
                         </div>
+                        <button type="button" id="bpLibraryClose" class="bp-lib-close" aria-label="Close library">&times;</button>
+                    </div>
+                    <div class="bp-lib-search">
+                        <input type="text" id="ecomIQSearchInput" placeholder="Search results..." class="sidebar-search has-tooltip" data-tooltip="Search results by name." onkeyup="filterEcomIQResults()">
+                        <button type="button" class="bp-lib-refresh has-tooltip" data-tooltip="Refresh result list" onclick="loadEcomIQProfiles()">↻</button>
                     </div>
                     <!-- Stub ecomIQProfileTree kept (hidden) so JS handlers
                          that target it don't null-deref after E-Commerce IQ
@@ -28631,10 +28819,14 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="ecomIQDashboardPanels" style="display: none;"></div>
                     <!-- Brand Partnership Valuation empty state -->
                     <div id="bpiqEmptyState" class="dashboard-empty-state" style="display: none;">
-                        <div class="empty-state-content">
-                            <div class="empty-state-icon">🤝</div>
-                            <h2>Select a Brand Partnership Result</h2>
-                            <p>Pick a project from the sidebar to view pre/post brand engagement, per-platform lift, and conversion lift.</p>
+                        <div class="bp-cover">
+                            <div class="bp-cover-eyebrow">Brand Partnership</div>
+                            <h2>What the partnership was worth, and how we know.</h2>
+                            <p>Every endorsement is read against a matched control set with no
+                               exposure to it, so the gap between the two is what the partnership
+                               itself delivered. Earned media, brand engagement and brand lift are
+                               priced separately.</p>
+                            <button type="button" class="bp-cover-cta" onclick="_bpLibraryOpen(true)">Open the library</button>
                         </div>
                     </div>
                     <!-- Brand Partnership Valuation panels -->
@@ -126931,6 +127123,332 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.addEventListener('DOMContentLoaded', attach);
             } else { attach(); }
         })();
+
+        // ── Brand Partnership: library drawer ───────────────
+        function _bpLibraryOpen(on) {
+            var dr = document.getElementById('bpLibraryDrawer');
+            var sc = document.getElementById('bpLibraryScrim');
+            var rail = document.getElementById('bpLibraryRail');
+            if (!dr) return;
+            dr.classList.toggle('is-open', !!on);
+            if (sc) sc.classList.toggle('is-open', !!on);
+            if (rail) rail.classList.toggle('is-hidden', !!on);
+            if (on) {
+                var q = document.getElementById('ecomIQSearchInput');
+                if (q) { try { q.focus(); } catch (_) { } }
+            }
+        }
+        window._bpLibraryOpen = _bpLibraryOpen;
+        document.addEventListener('click', function (ev) {
+            if (!ev.target.closest) return;
+            if (ev.target.closest('#bpLibraryRail')) { _bpLibraryOpen(true); return; }
+            if (ev.target.closest('#bpLibraryClose') || ev.target.closest('#bpLibraryScrim')) {
+                _bpLibraryOpen(false); return;
+            }
+            // Picking a partnership is the end of the errand, so it closes.
+            if (ev.target.closest('#bpiqProfileTree .profile-select-item') ||
+                ev.target.closest('#bpiqProfileTree .subscriber-show-item')) {
+                setTimeout(function () { _bpLibraryOpen(false); }, 40);
+            }
+        });
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape') _bpLibraryOpen(false);
+        });
+
+        // ── Brand Partnership: broadsheet shell ─────────────
+        var _BP_SECTIONS = [
+            { id: 'lift',    label: 'Lift',         match: ['target'] },
+            { id: 'yearly',  label: 'Year by year', ids: ['bpiqYearlySection'] },
+            { id: 'emv',     label: 'Earned media', ids: ['bpiqEmvCard'] },
+            { id: 'value',   label: 'Valuation',    ids: ['bpiqValuationRow'] },
+            { id: 'demos',   label: 'Demographics', match: ['demographics'] },
+            { id: 'touch',   label: 'Touchpoints',  match: ['touchpoints'] }
+        ];
+        function _bpMoney(s) {
+            var m = String(s || '').match(/\$\s*([\d.,]+)\s*([KMB]?)/i);
+            if (!m) return null;
+            var v = parseFloat(m[1].replace(/,/g, ''));
+            var u = (m[2] || '').toUpperCase();
+            if (u === 'K') v *= 1e3; else if (u === 'M') v *= 1e6; else if (u === 'B') v *= 1e9;
+            return isFinite(v) ? v : null;
+        }
+        function _bpShell() {
+            var root = document.getElementById('ecommerceIQView');
+            var panels = document.getElementById('bpiqDashboardPanels');
+            if (!root || !panels || getComputedStyle(panels).display === 'none') return;
+            var kids = Array.prototype.slice.call(panels.children).filter(function (c) {
+                return !c.classList.contains('bp-wrap') && !c.classList.contains('bp-attic');
+            });
+
+            var wrap = panels.querySelector(':scope > .bp-wrap');
+            if (!wrap) {
+                wrap = document.createElement('div');
+                wrap.className = 'bp-wrap';
+                wrap.innerHTML =
+                    '<div class="bp-top">'
+                  +   '<div class="bp-ident"><div class="bp-art"></div>'
+                  +     '<div><div class="bp-kick"></div><div class="bp-title"></div>'
+                  +     '<div class="bp-deck"></div></div></div>'
+                  +   '<div class="bp-side"><div class="bp-sl">Total brand value delivered</div>'
+                  +     '<div class="bp-sv"></div><div class="bp-parts"></div></div>'
+                  + '</div>'
+                  + '<div class="bp-nav"></div><div class="bp-panels"></div>'
+                  + '<div class="bp-attic"></div>';
+                panels.insertBefore(wrap, panels.firstChild);
+                _BP_SECTIONS.forEach(function (s) {
+                    var p = document.createElement('div');
+                    p.className = 'bp-panel';
+                    p.setAttribute('data-bp-panel', s.id);
+                    wrap.querySelector('.bp-panels').appendChild(p);
+                });
+            }
+            var attic = wrap.querySelector('.bp-attic');
+            var host = wrap.querySelector('.bp-panels');
+
+            // The header block and the hero are lifted into the broadsheet
+            // head; everything else is a slab.
+            var claimed = {};
+            kids.forEach(function (c) {
+                var txt = (c.textContent || '').replace(/\s+/g, ' ').trim();
+                var low = txt.toLowerCase();
+                if (c.id === 'bpiqHeroValue' || /campaign:\s*\d{4}-/i.test(txt)) {
+                    if (c.parentElement !== attic) attic.appendChild(c);
+                    return;
+                }
+                for (var i = 0; i < _BP_SECTIONS.length; i++) {
+                    var s = _BP_SECTIONS[i];
+                    var hit = (s.ids || []).indexOf(c.id) >= 0;
+                    if (!hit && s.match) {
+                        for (var j = 0; j < s.match.length; j++) {
+                            if (low.indexOf(s.match[j]) === 0 ||
+                                low.slice(0, 60).indexOf(s.match[j]) >= 0) { hit = true; break; }
+                        }
+                    }
+                    if (!hit) continue;
+                    var panel = host.querySelector('[data-bp-panel="' + s.id + '"]');
+                    if (panel && c.parentElement !== panel) panel.appendChild(c);
+                    claimed[s.id] = true;
+                    return;
+                }
+                // Anything unrecognised stays visible under the first slab
+                // rather than disappearing into the attic.
+                var first = host.querySelector('[data-bp-panel="lift"]');
+                if (first && c.parentElement !== first) first.appendChild(c);
+                claimed.lift = true;
+            });
+
+            // ---- head ----
+            var hero = document.getElementById('bpiqHeroValue');
+            var heroTxt = hero ? (hero.innerText || '') : '';
+            var total = (heroTxt.match(/\$[\d.,]+[KMB]?/) || [null])[0];
+            var parts = [];
+            ['Earned media', 'Brand engagement', 'Brand lift'].forEach(function (name) {
+                var re = new RegExp(name.replace(/ /g, '\\s+') + '\\s*\\n\\s*(\\$[\\d.,]+[KMB]?)', 'i');
+                var m = heroTxt.match(re);
+                if (m) parts.push({ name: name, raw: m[1], v: _bpMoney(m[1]) });
+            });
+            parts.sort(function (a, b) { return (b.v || 0) - (a.v || 0); });
+            var tot = _bpMoney(total) || parts.reduce(function (s, p) { return s + (p.v || 0); }, 0);
+
+            var titleEl = document.getElementById('bpiqDashTitle');
+            var name = titleEl ? (titleEl.textContent || '').trim() : '';
+            var headerRow = attic.querySelector('div');
+            var meta = '';
+            Array.prototype.forEach.call(attic.children, function (c) {
+                var t = (c.innerText || '');
+                if (/campaign:/i.test(t)) { meta = t.replace(/\s+/g, ' ').trim(); }
+            });
+            var img = document.getElementById('bpiqProfileImage');
+            var imgUrl = '';
+            if (img) {
+                var inner = img.querySelector('img');
+                if (inner && inner.src) imgUrl = inner.src;
+                else {
+                    var bg = getComputedStyle(img).backgroundImage;
+                    var bm = bg && bg.match(/url\(["']?([^"')]+)/);
+                    if (bm) imgUrl = bm[1];
+                }
+            }
+            var art = wrap.querySelector('.bp-art');
+            if (art) {
+                if (imgUrl) { art.style.backgroundImage = 'url("' + imgUrl + '")'; art.style.display = ''; }
+                else { art.style.display = 'none'; }
+            }
+            var kick = wrap.querySelector('.bp-kick');
+            var ttl = wrap.querySelector('.bp-title');
+            var deck = wrap.querySelector('.bp-deck');
+            if (kick && kick.textContent !== 'Brand partnership') kick.textContent = 'Brand partnership';
+            // Split "Vin Diesel x Dodge Endorsement" into name and kind.
+            var kind = '';
+            var nm = name.replace(/\s+(Endorsement|Sampling|Sponsorship|Partnership|Activation)\s*$/i,
+                function (all, k) { kind = k; return ''; }).trim();
+            if (ttl && ttl.textContent !== nm) ttl.textContent = nm;
+            if (kick && kind) kick.textContent = 'Brand partnership \u00a0/\u00a0 ' + kind;
+            if (deck) {
+                var clean = meta.replace(/^campaign:\s*/i, 'Campaign ')
+                                .replace(/\u2192/g, 'to').replace(/\s*\u00b7\s*/g, ' \u00b7 ');
+                if (deck.textContent !== clean) deck.textContent = clean;
+            }
+            var sv = wrap.querySelector('.bp-sv');
+            if (sv && total && sv.textContent !== total) sv.textContent = total;
+            var partsEl = wrap.querySelector('.bp-parts');
+            if (partsEl) {
+                var html = parts.map(function (p) {
+                    var pct = (tot > 0 && p.v != null) ? (p.v / tot) * 100 : 0;
+                    return '<div class="bp-part"><div class="bp-pn">' + p.name + '</div>'
+                         + '<div class="bp-pv">' + p.raw + '</div>'
+                         + '<div class="bp-pb"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>';
+                }).join('');
+                if (partsEl.getAttribute('data-bp-sig') !== html) {
+                    partsEl.setAttribute('data-bp-sig', html);
+                    partsEl.innerHTML = html;
+                }
+            }
+
+            // ---- nav ----
+            var live = _BP_SECTIONS.filter(function (s) { return claimed[s.id]; });
+            if (!live.length) return;
+            var nav = wrap.querySelector('.bp-nav');
+            var active = wrap.getAttribute('data-bp-active');
+            if (!active || !claimed[active]) { active = live[0].id; wrap.setAttribute('data-bp-active', active); }
+            var sig = live.map(function (s) { return s.id; }).join('|');
+            if (nav.getAttribute('data-bp-sig') !== sig) {
+                nav.setAttribute('data-bp-sig', sig);
+                nav.innerHTML = live.map(function (s, i) {
+                    var no = ('0' + (i + 1)).slice(-2);
+                    return '<button type="button" class="bp-navi" data-bp-go="' + s.id + '">'
+                         + no + ' ' + s.label + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(nav.querySelectorAll('.bp-navi'), function (b) {
+                    b.addEventListener('click', function () {
+                        wrap.setAttribute('data-bp-active', b.getAttribute('data-bp-go'));
+                        _bpShell();
+                        panels.scrollTop = 0;
+                    });
+                });
+            }
+            Array.prototype.forEach.call(nav.querySelectorAll('.bp-navi'), function (b) {
+                b.classList.toggle('on', b.getAttribute('data-bp-go') === active);
+            });
+            Array.prototype.forEach.call(host.children, function (p) {
+                p.classList.toggle('on', p.getAttribute('data-bp-panel') === active);
+            });
+        }
+        (function () {
+            var pending = 0;
+            function schedule() {
+                if (pending) return;
+                pending = setTimeout(function () {
+                    pending = 0;
+                    try { _bpRepalette(); _bpStripEmoji(); _bpShell(); _bpFlatten(); } catch (e) { }
+                }, 140);
+            }
+            function attach() {
+                var root = document.getElementById('ecommerceIQView');
+                if (!root) { setTimeout(attach, 800); return; }
+                new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
+                schedule();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attach);
+            } else { attach(); }
+        })();
+
+        // ── Brand Partnership: editorial pass ───────────────
+        // The view predates the brand system: it inherits the legacy body
+        // styling and its renderers write a rainbow of hardcoded accents.
+        // Map the old palette onto the current one in place.
+        var _BP_COLOR = {
+            'bec8e4': '9AA09B', 'e6f1ff': 'E9E8E1', '94a3b8': '7C878A', 'cbd5e1': '9AA09B',
+            'e2e8f0': '9AA09B', 'ffffff': 'E9E8E1', '9ca3af': '7C878A', '64748b': '7C878A',
+            'c4dcf2': '9AA09B', '8a9bb5': '7C878A',
+            // the whole green family resolves to Signal Green
+            '10b981': 'C7F23E', '22c55e': 'C7F23E', '4ade80': 'C7F23E', '86efac': 'C7F23E',
+            '34d399': 'C7F23E', '16a34a': 'C7F23E', 'c8e600': 'C7F23E', '84cc16': 'C7F23E',
+            // blues and cyans recede to Dusk
+            '66d9ef': 'B7B3D8', '22d3ee': 'B7B3D8', '38bdf8': 'B7B3D8', '60a5fa': 'B7B3D8',
+            '818cf8': 'B7B3D8', 'a5b4fc': 'B7B3D8', '6366f1': 'B7B3D8', '3b82f6': 'B7B3D8',
+            '5a9ad9': 'B7B3D8', '06b6d4': 'B7B3D8',
+            // ambers, oranges and reds take the second voice
+            'fd971f': 'E682FF', 'f59e0b': 'E682FF', 'fbbf24': 'E682FF', 'facc15': 'E682FF',
+            'fb923c': 'E682FF', 'ef4444': 'E682FF', 'f87171': 'E682FF', 'dc2626': 'E682FF',
+            'a78bfa': 'B7B3D8', 'c084fc': 'E682FF', '8b5cf6': '8E3FA8',
+            // legacy navy panels
+            '0a1929': '111F22', '0d2137': '1B2E34', '1e3a5f': '2C4148', '122135': '1B2E34',
+            '0d1928': '111F22', '1a2e4a': '2C4148'
+        };
+        function _bpMapCss(css) {
+            if (!css) return css;
+            css = css.replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/gi,
+                function (all, r, g, b, a) {
+                    var to = _BP_COLOR[_aiqHex(r, g, b)];
+                    if (!to) return all;
+                    var R = parseInt(to.slice(0, 2), 16), G = parseInt(to.slice(2, 4), 16),
+                        B = parseInt(to.slice(4, 6), 16);
+                    return (a === undefined) ? 'rgb(' + R + ',' + G + ',' + B + ')'
+                                             : 'rgba(' + R + ',' + G + ',' + B + ',' + a + ')';
+                });
+            css = css.replace(/#([0-9a-f]{3}|[0-9a-f]{6})\b/gi, function (all, h) {
+                if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+                var to = _BP_COLOR[h.toLowerCase()];
+                return to ? '#' + to : all;
+            });
+            return css;
+        }
+        function _bpRepalette() {
+            var root = document.getElementById('ecommerceIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('[style]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.dataset.bpc === '1') continue;
+                var css = el.getAttribute('style');
+                var next = _bpMapCss(css);
+                if (next !== css) el.setAttribute('style', next);
+                el.dataset.bpc = '1';
+            }
+        }
+        function _bpStripEmoji() {
+            var root = document.getElementById('ecommerceIQView');
+            if (!root) return;
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            var node, hits = [];
+            while ((node = walker.nextNode())) {
+                if (node.nodeValue && _SUB_PICTO.test(node.nodeValue)) hits.push(node);
+            }
+            hits.forEach(function (n) {
+                var next = n.nodeValue.replace(_SUB_PICTO, '').replace(/^\s+/, '');
+                if (next !== n.nodeValue) n.nodeValue = next;
+            });
+        }
+        // The renderers box a block and then box the blocks inside it.
+        // Section headings already mark where one read ends.
+        function _bpFlatten() {
+            var root = document.getElementById('ecommerceIQView');
+            if (!root) return;
+            var els = root.querySelectorAll('#bpiqDashboardPanels [style*="border-radius"]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.dataset.bpPanel === '1') continue;
+                var r = el.getBoundingClientRect();
+                if (r.width < 240 || r.height < 56) continue;
+                var s = getComputedStyle(el);
+                if (parseFloat(s.borderTopWidth) < 1 || parseFloat(s.borderTopLeftRadius) < 4) continue;
+                el.dataset.bpPanel = '1';
+                var bd = s.borderTopColor;
+                var accent = /199,\s*242,\s*62|230,\s*130,\s*255|94,\s*126,\s*18/.test(bd);
+                el.style.background = 'transparent';
+                el.style.borderRadius = '0';
+                el.style.border = '0';
+                if (accent) {
+                    el.style.borderLeft = '2px solid ' + bd;
+                    el.style.paddingLeft = '0.9rem';
+                } else {
+                    el.style.paddingLeft = '0';
+                    el.style.paddingRight = '0';
+                }
+            }
+        }
 
         // ── Attribution IQ editorial normalization ────────────
         // The view predates the brand system and inherits the legacy body
