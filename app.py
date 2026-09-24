@@ -57601,6 +57601,138 @@ _PM_BASE_GENERIC_TOKENS = {
 }
 
 
+# BASE CLARIFY (2026-09-24 Jenna, verbatim: 'so that this kind of
+# thing doesnt happen if someone makes a request can prometheus say
+# "did you want this on X (whatever is open on the screen) or
+# something else?"'). The rdesocio asks: six Emily in Paris messages
+# sent while the Landman profile was open, answered against Landman.
+# When an ask NAMES a subject in subject position (a profile / journey
+# / data / audience phrase) that shares no distinctive token with the
+# open page, Prometheus asks before answering. The chips ride the
+# existing memory-confirm machinery: the widget re-sends the original
+# ask with bind_subject, which lands a measured read on the picked
+# subject or the build-first offer when that subject has no base yet.
+_PM_CLARIFY_STOP_TOKENS = _PM_BASE_GENERIC_TOKENS | {
+    'this', 'that', 'these', 'those', 'their', 'them', 'they', 'it',
+    'my', 'our', 'your', 'here', 'there', 'iq', 'for', 'in', 'on',
+    'to', 'with', 'about', 'at', 'from', 'by', 'data', 'numbers',
+    'cut', 'cuts', 'file', 'view', 'page', 'one', 'same',
+    # Interrogatives / auxiliaries / ask-verbs: lead-strip fodder so
+    # 'how big is the yellowstone audience' resolves to Yellowstone,
+    # not the whole question.
+    'how', 'what', 'whats', 'who', 'whos', 'when', 'where', 'why',
+    'which', 'is', 'are', 'was', 'were', 'am', 'be', 'been', 'do',
+    'does', 'did', 'can', 'could', 'will', 'would', 'should', 'may',
+    'might', 'have', 'has', 'had', 'give', 'get', 'gets', 'tell',
+    'me', 'please', 'many', 'much', 'i', 'we', 'you', 'us', 'big',
+    'bigger', 'biggest', 'lets', 'let', 'want', 'wants', 'need',
+    'needs', 'see', 'look', 'looks', 'people', 'person', 'folks',
+    'everyone', 'anyone', 'anybody',
+    # Category / metric nouns that sit in subject position on page
+    # questions ('report on their qsr numbers') but never name a
+    # subject on their own.
+    'qsr', 'retailers', 'categories', 'category', 'brands', 'brand',
+    'spend', 'sales', 'revenue', 'churn', 'retention', 'engagement',
+    'penetration', 'reach', 'index', 'indexes', 'metrics', 'kpis',
+    'kpi', 'stats', 'breakdowns', 'summary', 'summaries', 'percent',
+    'percentages', 'share', 'shares', 'split', 'splits', 'totals',
+}
+
+_PM_CLARIFY_NAME_RES = (
+    # 'profile iq for emily in paris', 'a journey on nike',
+    # 'demographics of yellowstone'
+    re.compile(
+        r'(?:profile(?:\s+iq)?|journey|read|report|data|numbers|'
+        r'demo(?:graphic)?s|insights?|audience|breakdown)\s+'
+        r'(?:for|on|of|about)\s+([a-z0-9][a-z0-9 .&\'-]{1,60})',
+        re.IGNORECASE),
+    # 'look at emily in paris', 'pull up nike', 'switch to yellowstone'
+    re.compile(
+        r'(?:look\s+at|looking\s+at|pull\s+up|switch\s+to|show\s+me|'
+        r'open\s+up)\s+([a-z0-9][a-z0-9 .&\'-]{1,60})',
+        re.IGNORECASE),
+    # 'the yellowstone audience', 'nike buyers', 'bet viewers'
+    re.compile(
+        r'\b([a-z0-9][a-z0-9 .&\'-]{1,40}?)\s+'
+        r'(?:audience|viewers|fans|subscribers|buyers|shoppers|'
+        r'listeners|watchers)\b', re.IGNORECASE),
+)
+
+# Comparisons name a second subject on purpose ('compare this to
+# yellowstone viewers') - the page stays the base, never clarify.
+_PM_CLARIFY_COMPARE_RE = re.compile(
+    r'\b(compare[ds]?|comparison|vs\.?|versus|against|'
+    r'relative\s+to|overlap)\b', re.IGNORECASE)
+
+# Brand-metric questions about the open page ('how does mcdonalds
+# index for this audience') mention a brand, not a new subject.
+_PM_CLARIFY_METRIC_RE = re.compile(
+    r'\b(index(es|ing)?|over.?index(es|ing)?|rank(s|ed|ing)?|'
+    r'perform(s|ance|ing)?)\b', re.IGNORECASE)
+
+
+def _pm_page_clarify_subject(text, page_subject):
+    """Return the display name of a subject the ask names that is NOT
+    the open page, or '' when the ask reads as being about the page.
+
+    Fires only on subject-position phrases with at least one
+    distinctive token and zero token overlap with the page subject.
+    Pronoun asks ('who skews younger here'), brand-metric asks ('how
+    does mcdonalds index for this audience'), and comparisons keep the
+    page base untouched."""
+    t = str(text or '')
+    page = str(page_subject or '').strip()
+    if not t or not page:
+        return ''
+    if _PM_CLARIFY_COMPARE_RE.search(t):
+        return ''
+    if _PM_CLARIFY_METRIC_RE.search(t):
+        return ''
+    page_d = {w for w in _normalize_for_match(page).split()
+              if w not in _PM_CLARIFY_STOP_TOKENS}
+    if not page_d:
+        return ''
+    for rx in _PM_CLARIFY_NAME_RES:
+        m = rx.search(t)
+        if not m:
+            continue
+        # Cut at sentence boundaries and chained confirm suffixes
+        # ('... . date range: trailing 12 months is good').
+        phrase = re.split(r'[.?!;\n]|\bdate range\b|\bwindow\b',
+                          m.group(1))[0]
+        words = [w for w in re.split(r'\s+', phrase.strip()) if w]
+        while words and _normalize_for_match(words[0]) in \
+                _PM_CLARIFY_STOP_TOKENS:
+            words.pop(0)
+        while words and _normalize_for_match(words[-1]) in \
+                _PM_CLARIFY_STOP_TOKENS:
+            words.pop()
+        words = words[:6]
+        if not words:
+            continue
+        named_d = {w for w in _normalize_for_match(' '.join(words)).split()
+                   if w not in _PM_CLARIFY_STOP_TOKENS}
+        if not named_d or (named_d & page_d):
+            # Names nothing distinctive, or names the page itself.
+            continue
+        # Canonical catalog casing when the named subject already
+        # exists there (the chip then binds the catalog base and the
+        # answer lands instantly).
+        try:
+            for entry in _profile_catalog_for_chat():
+                subj = str(entry.get('subject') or '').strip()
+                toks = {w for w in _normalize_for_match(subj).split()
+                        if w not in _PM_CLARIFY_STOP_TOKENS}
+                if toks and toks == named_d:
+                    return subj
+        except Exception:
+            pass
+        return ' '.join(
+            w if _normalize_for_match(w) in _PM_CLARIFY_STOP_TOKENS
+            else (w[:1].upper() + w[1:]) for w in words)
+    return ''
+
+
 def _pm_short_name_identity(toks, raw_text):
     """Short-name subject identity (2026-09-23 Jenna, 'How many people
     have watched BET content in the last 12 months' quoted a research
@@ -60349,6 +60481,36 @@ def api_synth_chat_analyze():
                       'want included), or open a view with data on '
                       'screen, then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
+    # BASE CLARIFY (2026-09-24 Jenna): before answering against the
+    # open page, an ask that names a DIFFERENT subject gets the
+    # question instead of a guess - 'Did you want this on Landman
+    # (open on your screen) or on Emily in Paris?'. Mode chips (exec
+    # summary, personas, ...) are render-shape commands on the open
+    # view and never clarify. The chips re-run the original ask bound
+    # to the picked subject via the memory-confirm machinery; a
+    # subject with no base lands on the build-first offer.
+    _clar_page = str((ctx.get('primary') or {}).get('name') or '').strip()
+    if _clar_page and not str(body.get('mode') or '').strip():
+        _clar_named = ''
+        try:
+            _clar_named = _pm_page_clarify_subject(text, _clar_page)
+        except Exception:
+            traceback.print_exc()
+        if _clar_named:
+            _pm_ask_hint(route='base_clarify', outcome='asked_base',
+                         subject=_clar_page)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': (f'Did you want this on {_clar_page} (open on '
+                          f'your screen) or on {_clar_named}?'),
+                'followups': [f'On {_clar_page}', f'On {_clar_named}',
+                              'Something else'],
+                'offer_deck': False, 'deck_angle': None,
+                'memory_confirm': {'question': text, 'options': [
+                    {'label': f'On {_clar_page}',
+                     'subject': _clar_page},
+                    {'label': f'On {_clar_named}',
+                     'subject': _clar_named}]}})
     # 2026-09-09 Jenna: "Analyze this data" is session-metered, not
     # per-pull charged. Pay-per-use accounts bill via the session
     # close; subscribed accounts are covered by their tier. Real
