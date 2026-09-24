@@ -34822,10 +34822,80 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             //   4. Attribution     - first_touch / last_touch / assists on
             //                        the paid cohort only
             //   5. Time to convert - 5-bucket partition of paid
-            //   6. Path archetypes - 4-row shape partition of paid
+            //   6. Path archetypes - 4-row shape partition of paid, only
+            //                        on a landing with no Digital Journey
+            //                        view; where there is one it reads at
+            //                        the top of that instead
             //   7. Leaks           - what a brand pixel cannot see
             // Numbers are rendered as-is from the payload; no re-rounding.
             // ------------------------------------------------------------
+            // The four shapes every converting account falls into. Built
+            // on its own because it has two possible homes: the Paths card,
+            // and the top of Digital Journey where a landing has one. The
+            // brand-label sweep watches the whole view, so "% of checkout"
+            // still becomes the campaign's own wording in either place.
+            function _iiqArchetypesSection(archetypes, atTop) {
+                archetypes = archetypes || [];
+                if (!archetypes.length) return '';
+                var archRows = archetypes.map(function(a) {
+                    return (
+                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 80px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
+                      + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
+                      + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
+                      + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
+                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of checkout</div>'
+                      + '</div>'
+                    );
+                }).join('');
+                return '<section style="margin:' + (atTop ? '0 0 1.35rem' : '1.1rem 0 0') + ';">'
+                     + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Path archetypes.</h5>'
+                     + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the checkout page falls into one of these four shapes.</div>'
+                     + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
+                     + '</section>';
+            }
+            // Does this landing have a Digital Journey view to carry it?
+            // The question only reaches the reader when its parent tab is
+            // on too, so both are checked. False keeps the slab in Paths.
+            function _iiqJourneyCarriesArchetypes() {
+                try {
+                    if (typeof window._iiqTabEnabled !== 'function') return false;
+                    if (typeof window._iiqQidEnabled !== 'function') return false;
+                    return !!(window._iiqTabEnabled('questions') && window._iiqQidEnabled('journey'));
+                } catch (e) { return false; }
+            }
+            // Digital Journey has no use for the multi-touch payload other
+            // than this, so the slab loads on its own and the page never
+            // waits on it. A landing with no multi-touch read leaves the
+            // slot empty rather than showing an error the reader cannot act
+            // on. Any audience already picked on Multi-touch carries over.
+            window._iiqFillJourneyArchetypes = function() {
+                var host = document.getElementById('iiqJourneyArchetypes');
+                if (!host) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                if (!slug) return;
+                var paint = function(d) {
+                    if (!d) return;
+                    if (((window.__intentIQ && window.__intentIQ.currentSlug) || '') !== slug) return;
+                    var c = window.__iiqMTACache || {};
+                    var aud = (c.slug === slug) ? (c.audience_slug || '') : '';
+                    var active = _iiqMTAActivePayload(d, aud) || {};
+                    host.innerHTML = _iiqArchetypesSection((active.paths || {}).path_archetypes, true);
+                };
+                var cache = window.__iiqMTACache || {};
+                if (cache.slug === slug && cache.data) { paint(cache.data); return; }
+                fetch('/api/intent/' + slug + '/mta', { credentials: 'same-origin' })
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(d) {
+                        if (!d || !d.success) return;
+                        var cur = window.__iiqMTACache || {};
+                        if (cur.slug !== slug || !cur.data) {
+                            window.__iiqMTACache = { slug: slug, audience_slug: '', data: d, ts: Date.now() };
+                        }
+                        paint(d);
+                    })
+                    .catch(function() { });
+            };
+
             function _iiqMTARenderPathsCard(d) {
                 var paths = d.paths || {};
                 var titleType = String(d.title_type || 'film').toLowerCase();
@@ -35031,23 +35101,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   + '  <div style="padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + ttcRows + '</div>'
                   + '</section>' : '';
 
-                // Section 6: path archetypes.
-                var archRows = archetypes.map(function(a) {
-                    return (
-                        '<div style="display:grid; grid-template-columns: 200px 1fr 110px 80px; gap:0.6rem; align-items:start; padding:0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">'
-                      + '  <div style="font-size:0.78rem; font-weight:600; color: var(--text-primary);">' + escapeHtml(a.archetype || '') + '</div>'
-                      + '  <div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.45;">' + escapeHtml(a.description || '') + '</div>'
-                      + '  <div style="font-size:0.78rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-primary);">' + fmtInt(a.us_accounts) + '</div>'
-                      + '  <div style="font-size:0.7rem; text-align:right; font-variant-numeric: tabular-nums; color: var(--text-secondary);">' + Number(a.pct || 0).toFixed(1) + '% of checkout</div>'
-                      + '</div>'
-                    );
-                }).join('');
-                var archSection = archetypes.length ?
-                    '<section style="margin-top:1.1rem;">'
-                  + '  <h5 style="margin: 0 0 0.35rem 0; font-size:0.82rem; font-weight:800; color: var(--text-primary);">Path archetypes.</h5>'
-                  + '  <div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.5rem;">Every account that reached the checkout page falls into one of these four shapes.</div>'
-                  + '  <div style="padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius:8px;">' + archRows + '</div>'
-                  + '</section>' : '';
+                // Section 6: path archetypes. Where the landing carries a
+                // Digital Journey view the slab reads at the top of that
+                // instead: the four shapes are what the per-asset journeys
+                // there are made of. Landings with no Journey view (GOAT,
+                // Hades) keep it here, which is its only other home.
+                var archSection = _iiqJourneyCarriesArchetypes() ? '' : _iiqArchetypesSection(archetypes);
 
                 // Section 7: leaks (the hero). Signal Green callouts.
                 var leakRows = leaks.map(function(L) {
@@ -45352,6 +45411,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var body = document.getElementById('iiqQBody');
                 if (IIQ_QCACHE[qid]) {
                     body.innerHTML = IIQ_QCACHE[qid];
+                    // The cached string carries an empty archetypes slot.
+                    if (qid === 'journey' && typeof window._iiqFillJourneyArchetypes === 'function') {
+                        window._iiqFillJourneyArchetypes();
+                    }
                     return;
                 }
                 // The Audiences sub-tab reads from data already cached by
@@ -45389,9 +45452,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         try {
                             var dataObj = { _assets: assets || [] };
                             IIQ_QDATA.journey = dataObj;
-                            var html = iiqRenderJourney(dataObj);
+                            var html = '<div id="iiqJourneyArchetypes"></div>' + iiqRenderJourney(dataObj);
                             IIQ_QCACHE.journey = html;
                             body.innerHTML = html;
+                            if (typeof window._iiqFillJourneyArchetypes === 'function') window._iiqFillJourneyArchetypes();
                         } catch (err) {
                             body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
                         }
