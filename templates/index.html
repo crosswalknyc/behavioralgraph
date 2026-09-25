@@ -32951,6 +32951,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             line-height: 1.05; margin: 0.45rem 0 0; color: #E9E8E1; }
         #intentIQView .aiq-banner-deck { font-size: 0.79rem; color: #9AA09B; font-weight: 300;
             margin-top: 0.5rem; line-height: 1.5; }
+        /* The Digital Journey masthead, to the letter: a dot eyebrow, a
+           very large tight headline, then the read in Signal Green. The
+           variant is typographic, so no art sits behind it. GOAT keeps the
+           previous banner (.cursor/rules/goat-is-frozen.mdc). */
+        #intentIQView .aiq-banner.is-hero .aiq-banner-txt { max-width: 780px; }
+        #intentIQView .aiq-banner.is-hero .aiq-banner-title {
+            font-size: 52px; font-weight: 800; letter-spacing: -.045em;
+            line-height: .95; margin: 14px 0 0; }
+        @media (max-width: 1080px) {
+            #intentIQView .aiq-banner.is-hero .aiq-banner-title { font-size: 38px; }
+        }
+        #intentIQView .aiq-banner-lead { display: none; }
+        #intentIQView .aiq-banner.is-hero .aiq-banner-lead {
+            display: block; margin-top: 20px; font-size: 15px; font-weight: 700;
+            letter-spacing: -.01em; color: #C7F23E; }
+        #intentIQView .aiq-banner.is-hero .aiq-banner-lead:empty { display: none; }
+        #intentIQView .aiq-banner.is-hero .aiq-banner-deck {
+            margin-top: 14px; font-size: 12.5px; line-height: 1.6; max-width: 62ch; }
+        body[data-theme="light"] #intentIQView .aiq-banner.is-hero .aiq-banner-lead { color: #5E7E12; }
 
         #intentIQView .aiq-controls { display: flex; gap: 2.4rem; align-items: flex-end; flex-wrap: wrap;
             padding: 0.95rem 0 1rem; border-bottom: 1px solid var(--aiq-hair); }
@@ -129456,7 +129475,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             banner.className = 'aiq-banner is-bare';
             banner.innerHTML = '<div class="aiq-banner-img"></div><div class="aiq-banner-scrim"></div>'
                 + '<div class="aiq-banner-txt"><div class="aiq-eyebrow">Attribution IQ</div>'
-                + '<div class="aiq-banner-title"></div><div class="aiq-banner-deck"></div></div>';
+                + '<div class="aiq-banner-title"></div><div class="aiq-banner-lead"></div>'
+                + '<div class="aiq-banner-deck"></div></div>';
             var controls = document.createElement('div');
             controls.className = 'aiq-controls';
             var rail = document.createElement('div');
@@ -129530,15 +129550,42 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (na) bits.push(na[1] + ' assets in the window');
             var tEl = banner.querySelector('.aiq-banner-title');
             var dEl = banner.querySelector('.aiq-banner-deck');
-            if (tEl && tEl.textContent !== name) tEl.textContent = name;
-            var deck = bits.join(' \u00b7 ');
-            if (dEl && dEl.textContent !== deck) dEl.textContent = deck;
+            var lEl = banner.querySelector('.aiq-banner-lead');
             var slug = '';
             try { slug = (window.__intentIQ && window.__intentIQ.currentSlug) || (sel && sel.value) || ''; } catch (e) { }
+            var hero = (slug !== 'goat');
+            banner.classList.toggle('is-hero', hero);
+            if (tEl && tEl.textContent !== name) tEl.textContent = name;
+            // On the masthead the window rides in the eyebrow, next to the
+            // product name, and the deck keeps what is left.
+            var eyeEl = banner.querySelector('.aiq-eyebrow');
+            if (eyeEl) {
+                var eye = hero && bits.length ? ('Attribution IQ \u00b7 ' + bits[0]) : 'Attribution IQ';
+                if (eyeEl.textContent !== eye) eyeEl.textContent = eye;
+            }
+            var deck = (hero ? bits.slice(1) : bits).join(' \u00b7 ');
+            if (dEl && dEl.textContent !== deck) dEl.textContent = deck;
+            // The read, stated as a sentence. The rail below carries the
+            // same figure as a tile; the masthead says what it means.
+            if (lEl) {
+                var lead = '';
+                if (hero) {
+                    var base = '';
+                    try { base = (_aiqFacts() || {}).baseline || ''; } catch (e) { }
+                    if (base) {
+                        var bfl = 'bottom funnel destination';
+                        try { if (typeof window._iiqBFL === 'function') bfl = String(window._iiqBFL() || bfl); } catch (e) { }
+                        lead = base + ' of exposed viewers reached the ' + bfl.toLowerCase() + '.';
+                    }
+                }
+                if (lEl.textContent !== lead) lEl.textContent = lead;
+            }
             if (slug && banner.getAttribute('data-aiq-slug') !== slug) {
                 banner.setAttribute('data-aiq-slug', slug);
                 banner.classList.add('is-bare');
-                _aiqArtFor(slug, function (url) {
+                // The masthead is typographic. Art only rides on the
+                // previous banner, which is GOAT's.
+                if (!hero) _aiqArtFor(slug, function (url) {
                     if (banner.getAttribute('data-aiq-slug') !== slug) return;
                     banner.querySelector('.aiq-banner-img').style.backgroundImage = 'url("' + url + '")';
                     banner.classList.remove('is-bare');
