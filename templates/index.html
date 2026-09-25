@@ -22849,7 +22849,8 @@ https://www.instagram.com/p/..."></textarea>
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #dashHeroOneliner b { color: var(--piq-signal); font-weight: 700; }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-hero-kpis {
             display: grid;
-            grid-template-columns: repeat(3, auto);
+            grid-auto-flow: column;
+            grid-auto-columns: max-content;
             gap: 40px;
             width: max-content;
             margin-top: 28px;
@@ -23090,7 +23091,7 @@ https://www.instagram.com/p/..."></textarea>
                 justify-self: start;
             }
             :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .profile-title-and-toolbar-wrap { min-height: 0; }
-            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-hero-kpis { grid-template-columns: repeat(2, auto); gap: 16px 24px; }
+            :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile .piq-hero-kpis { grid-auto-flow: row; grid-template-columns: repeat(2, auto); gap: 16px 24px; }
             :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile:not([data-piq-tab="insights"]) #piqHeroCopy {
                 grid-template-columns: 1fr;
                 grid-template-areas: "name" "line" "pills";
