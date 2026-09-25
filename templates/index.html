@@ -78345,13 +78345,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     lines.push('Avid file: ' + st.avid_key);
                 }
                 if (cur === 'complete') {
-                    if (st.tu_key)   lines.push('File: ' + st.tu_key);
-                    if (st.avid_key) lines.push('Avid file: ' + st.avid_key);
+                    if (st.subiq_s3_key) {
+                        // Subscriber IQ pull (2026-09-25): the read
+                        // lives in the Subscriber IQ tab, not the
+                        // profile dropdown, and carries a download.
+                        lines = [name + ' is finished. Your Subscriber IQ read is live in the Subscriber IQ tab now.'];
+                        lines.push('File: ' + st.subiq_s3_key);
+                    } else {
+                        if (st.tu_key)   lines.push('File: ' + st.tu_key);
+                        if (st.avid_key) lines.push('Avid file: ' + st.avid_key);
+                    }
                 }
                 if (cur === 'error' || cur === 'failed') {
                     lines = [SYNTH_CHAT_CALM_MSG];
                 }
-                synthChatPushTurn('agent', lines.join('\n'));
+                if (cur === 'complete' && st.subiq_s3_key) {
+                    _synthChatPushTurnWithMeta('agent', lines.join('\n'), {
+                        run_id: runId, status: cur,
+                        link: { url: window.location.origin + '/api/download-cached/' + encodeURIComponent(st.subiq_s3_key),
+                                label: 'Download the data' } });
+                } else {
+                    synthChatPushTurn('agent', lines.join('\n'));
+                }
                 if (cur === 'complete' && data.pending_question) {
                     var _pqr = String(data.pending_question);
                     synthChatPushTurn('agent',
@@ -83145,8 +83160,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (cur === 'tu_done' && st.tu_key) msg += '\nFile: ' + st.tu_key;
                         if (cur === 'avid_done' && st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         if (cur === 'complete') {
-                            if (st.tu_key) msg += '\nFile: ' + st.tu_key;
-                            if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
+                            if (st.subiq_s3_key) {
+                                msg = subject + ' is finished. Your Subscriber IQ read is live in the Subscriber IQ tab now.'
+                                    + '\nFile: ' + st.subiq_s3_key;
+                            } else {
+                                if (st.tu_key) msg += '\nFile: ' + st.tu_key;
+                                if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
+                            }
                         }
                         if (cur === 'error' || cur === 'failed') {
                             msg = SYNTH_CHAT_CALM_MSG;
@@ -83154,7 +83174,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         if (cur === 'complete' || cur === 'error' || cur === 'failed') {
                             _pmBuildIndicatorHide();
                         }
-                        synthChatPushTurn('agent', msg);
+                        if (cur === 'complete' && st.subiq_s3_key) {
+                            _synthChatPushTurnWithMeta('agent', msg, {
+                                run_id: runId, status: cur,
+                                link: { url: window.location.origin + '/api/download-cached/' + encodeURIComponent(st.subiq_s3_key),
+                                        label: 'Download the data' } });
+                        } else {
+                            synthChatPushTurn('agent', msg);
+                        }
                         if (cur === 'complete' && data.pending_question) {
                             // Build-first follow-through (2026-09-24):
                             // the run was approved to answer a stashed
