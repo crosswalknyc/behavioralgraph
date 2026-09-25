@@ -349,6 +349,77 @@ def redirect_if_must_reset_password():
         return None
     return redirect(url_for('set_password_page'))
 
+
+_VIEW_LOCK_ALLOWED_EXACT = frozenset({
+    '/login', '/logout', '/set-password', '/api/set-password',
+    '/health', '/healthz', '/ready', '/favicon.ico',
+})
+
+
+def _path_ok_while_view_locked(path):
+    p = path or ''
+    if p in _VIEW_LOCK_ALLOWED_EXACT:
+        return True
+    return (
+        p == '/wallet' or p.startswith('/wallet/')
+        or p.startswith('/api/wallet/')
+        or p.startswith('/pay/')
+        or p.startswith('/api/pay/')
+        or p.startswith('/api/stripe/')
+        or p.startswith('/static/')
+    )
+
+
+@app.before_request
+def redirect_if_dashboard_view_locked():
+    """Card-gated seats land on /wallet. No dashboard content until
+    a card is on file and the opening top-up has landed."""
+    uname = session.get('username')
+    if not uname:
+        return None
+    if session.get('must_reset_password'):
+        return None
+    if session.get('cloaked_from'):
+        return None
+    path = request.path or ''
+    if _path_ok_while_view_locked(path):
+        return None
+    try:
+        import wallet as _wallet_lock
+        data = load_users()
+        user = (data.get('users') or {}).get(uname)
+        if not user:
+            return None
+        if _normalize_role(user.get('role', 'user')) == 'super_admin':
+            return None
+        if not _wallet_lock.dashboard_view_locked(user, data):
+            return None
+    except Exception:
+        return None
+    if path.startswith('/api/'):
+        return jsonify({
+            'error': 'card_required',
+            'redirect': '/wallet',
+        }), 403
+    return redirect('/wallet')
+
+
+def _post_auth_redirect(user, users_data=None):
+    """Where a successful login should land. Password reset first,
+    then the opening wallet page for a card-gated seat."""
+    if not user:
+        return '/'
+    if user.get('must_reset_password'):
+        return '/set-password'
+    try:
+        import wallet as _wallet_lock
+        data = users_data if users_data is not None else load_users()
+        if _wallet_lock.dashboard_view_locked(user, data):
+            return '/wallet'
+    except Exception:
+        pass
+    return '/'
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -3748,7 +3819,10 @@ def login_page():
             save_users(users_data)
             session['username'] = username
             session['role'] = _normalize_role(user.get('role', 'user'))
-            return jsonify({'success': True, 'redirect': '/'})
+            return jsonify({
+                'success': True,
+                'redirect': _post_auth_redirect(user, users_data),
+            })
         
         if not verify_password(user['password_hash'], password):
             return jsonify({'success': False, 'error': 'Invalid username or password'})
@@ -3795,8 +3869,10 @@ def login_page():
             session['must_reset_password'] = True
             return jsonify({'success': True, 'redirect': '/set-password'})
         
-        # Always redirect to dashboard, admin can access admin panel from there
-        return jsonify({'success': True, 'redirect': '/'})
+        return jsonify({
+            'success': True,
+            'redirect': _post_auth_redirect(user, users_data),
+        })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -3833,7 +3909,10 @@ def api_set_password():
         user['must_reset_password'] = False
         save_users(users_data)
         session.pop('must_reset_password', None)
-        return jsonify({'success': True, 'redirect': '/'})
+        return jsonify({
+            'success': True,
+            'redirect': _post_auth_redirect(user, users_data),
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

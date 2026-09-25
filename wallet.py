@@ -184,6 +184,10 @@ DEFAULT_PRICING = {
 # $5,000 / $10,000 / $15,000. Custom must be $5,000 or more.
 TOP_UP_PACKS_USD = (5000.0, 10000.0, 15000.0)
 TOP_UP_MIN_USD = 5000.0
+# Opening exception (Jenna 2026-09-25): a locked new seat can take a
+# one-time $500 card + top-up. Regular Add Funds stays at $5,000.
+# Admin amount-locked payment links may also mint at this floor.
+OPENING_TOPUP_MIN_USD = 500.0
 
 
 # ---------------------------------------------------------------------------
@@ -1536,6 +1540,76 @@ def top_up_min_custom() -> float:
     """Minimum amount a user can add. $5,000; nothing lower. Custom
     amounts above $5,000 are allowed."""
     return float(TOP_UP_MIN_USD)
+
+
+def opening_topup_usd(user: dict) -> float:
+    """Required first top-up for a card-gated seat. 0 when the user
+    is not on an opening lock."""
+    if not user:
+        return 0.0
+    try:
+        v = float(user.get("opening_topup_usd") or 0.0)
+    except (TypeError, ValueError):
+        v = 0.0
+    if v <= 0:
+        return 0.0
+    return round(v, 2)
+
+
+def requires_card_to_view(user: dict) -> bool:
+    """True when this seat may not see dashboard content until a
+    card is on file and the opening top-up has landed."""
+    return bool((user or {}).get("require_card_to_view"))
+
+
+def _lifetime_topups_usd(subject: dict) -> float:
+    try:
+        return float((subject or {}).get("wallet_lifetime_topups_usd") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def dashboard_view_locked(user: dict, users_data: dict = None,
+                          subject: dict = None) -> bool:
+    """True until the billing subject has a card AND lifetime
+    top-ups meet the opening amount.
+
+    Card + money live on the resolved subject (company wallet when
+    billing_source is company). Cloak / super_admin bypass belongs
+    to the request layer, not here.
+    """
+    if not requires_card_to_view(user):
+        return False
+    need = opening_topup_usd(user) or OPENING_TOPUP_MIN_USD
+    if subject is None:
+        if isinstance(users_data, dict):
+            subject, _, _ = resolve_billing_subject(user, users_data)
+        else:
+            subject = user
+    if not has_card_on_file(subject):
+        return True
+    return _lifetime_topups_usd(subject) + 1e-9 < float(need)
+
+
+def opening_checkout_allowed(amt, *, amount_locked: bool = False,
+                             user: dict = None,
+                             users_data: dict = None) -> bool:
+    """Allow a sub-$5,000 amount only for an amount-locked admin
+    payment link, or a still-locked seat's opening checkout.
+    Regular Add Funds stays at $5,000."""
+    try:
+        amt = float(amt)
+    except (TypeError, ValueError):
+        return False
+    if amt + 1e-9 < OPENING_TOPUP_MIN_USD:
+        return False
+    if amt + 1e-9 >= TOP_UP_MIN_USD:
+        return True
+    if amount_locked:
+        return True
+    if user and requires_card_to_view(user):
+        return dashboard_view_locked(user, users_data)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -3155,6 +3229,9 @@ __all__ = [
     "metered_answer_usd",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",
+    "OPENING_TOPUP_MIN_USD", "opening_topup_usd",
+    "requires_card_to_view", "dashboard_view_locked",
+    "opening_checkout_allowed",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "apply_auto_reload_preference",

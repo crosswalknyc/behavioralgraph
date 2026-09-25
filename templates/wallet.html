@@ -383,7 +383,7 @@
           <div id="user-email" class="user-email">-</div>
         </div>
       </div>
-      <a href="/">Back to dashboard</a>
+      <a href="/" id="nav-dashboard">Back to dashboard</a>
     </div>
   </header>
 
@@ -498,7 +498,7 @@
     <div id="topup-card" class="card" style="display: none;">
       <h2>Add funds</h2>
       <div id="pack-grid" class="pack-grid"></div>
-      <div class="custom-row">
+      <div class="custom-row" id="custom-row">
         <span style="color: var(--muted-dark); font-size: 14px;">
           Custom amount:
         </span>
@@ -515,7 +515,7 @@
       </p>
     </div>
 
-    <div class="card">
+    <div class="card" id="txn-card">
       <div style="display:flex; justify-content:space-between;
                   align-items:center; gap:12px; flex-wrap:wrap;">
         <h2 style="margin:0;">Recent transactions</h2>
@@ -600,6 +600,13 @@
       const s = await r.json();
       currentState = s;
       renderState(s);
+      maybeUnlockRedirect(s);
+    }
+
+    function maybeUnlockRedirect(s) {
+      if (!s || s.dashboard_locked) return;
+      if (walletFlag !== 'topup_success') return;
+      window.location.href = '/';
     }
 
     function renderState(s) {
@@ -795,6 +802,45 @@
           coBtn.style.display = 'none';
         }
       }
+      applyLockedChrome(s);
+    }
+
+    function applyLockedChrome(s) {
+      const navDash = $('nav-dashboard');
+      const customRow = $('custom-row');
+      const txnCard = $('txn-card');
+      if (!s.dashboard_locked) {
+        if (navDash) navDash.style.display = '';
+        if (customRow) customRow.style.display = '';
+        if (txnCard) txnCard.style.display = '';
+        return;
+      }
+      const need = Number(s.opening_topup_usd || 500);
+      $('wallet-page-title').textContent =
+        'Add a card to open your account';
+      $('wallet-page-subtitle').textContent =
+        'Put a card on file and add ' + fmtUsd(need) +
+        '. After that you will see everything you have access to.';
+      if (navDash) navDash.style.display = 'none';
+      if (customRow) customRow.style.display = 'none';
+      if (txnCard) txnCard.style.display = 'none';
+      const stats = $('stats-card');
+      if (stats) stats.style.display = 'none';
+      const ar = $('autoreload-card');
+      if (ar) ar.style.display = 'none';
+      const companyBanner = $('company-banner');
+      if (companyBanner) companyBanner.style.display = 'none';
+      const notice = $('disabled-notice');
+      if (notice) notice.style.display = 'none';
+      if (s.stripe_enabled) {
+        $('payment-method-card').style.display = 'block';
+        renderCardStatus(s);
+        $('topup-card').style.display = 'block';
+        renderPacks((s.top_up_packs_usd && s.top_up_packs_usd.length)
+          ? s.top_up_packs_usd : [need]);
+        $('min-custom').textContent = fmtUsd(need);
+        $('custom-amount').min = need;
+      }
     }
 
     function renderStats(stats) {
@@ -859,7 +905,8 @@
       grid.innerHTML = '';
       packs.forEach((amt, i) => {
         const btn = document.createElement('button');
-        btn.className = 'pack-btn' + (i === 1 ? ' primary' : '');
+        btn.className = 'pack-btn' + (
+          (packs.length === 1 && i === 0) || i === 1 ? ' primary' : '');
         btn.textContent = fmtUsd(amt);
         btn.onclick = () => topUp(amt);
         grid.appendChild(btn);
@@ -1116,6 +1163,16 @@
     }
 
     loadState();
+    if (walletFlag === 'topup_success') {
+      var polls = 0;
+      var poller = setInterval(function () {
+        polls += 1;
+        loadState();
+        if ((currentState && !currentState.dashboard_locked) || polls >= 15) {
+          clearInterval(poller);
+        }
+      }, 2000);
+    }
   </script>
 </body>
 </html>

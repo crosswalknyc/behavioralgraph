@@ -246,6 +246,12 @@ def wallet_state():
             "wallet_transactions", []))[:100],
         "top_up_packs_usd": wallet.top_up_pack_sizes(),
         "top_up_min_custom_usd": wallet.top_up_min_custom(),
+        "dashboard_locked": wallet.dashboard_view_locked(
+            u, ctx["users_data"], subject=subject),
+        "opening_topup_usd": (
+            wallet.opening_topup_usd(u)
+            or (wallet.OPENING_TOPUP_MIN_USD
+                if wallet.requires_card_to_view(u) else 0.0)),
         "stats": wallet.wallet_stats(subject),
         "auto_reload_defaults": (pricing.get("auto_reload_defaults")
                                  or {"threshold_usd": 500.0,
@@ -266,6 +272,11 @@ def wallet_state():
             if ctx["billed_via_company"]
             else {"routed_to_company": False}),
     }
+    if payload["dashboard_locked"]:
+        need = float(payload["opening_topup_usd"]
+                     or wallet.OPENING_TOPUP_MIN_USD)
+        payload["top_up_packs_usd"] = [need]
+        payload["top_up_min_custom_usd"] = need
     return jsonify(payload)
 
 
@@ -624,10 +635,13 @@ def create_checkout_session():
     except (TypeError, ValueError):
         return jsonify({"error": "invalid_amount"}), 400
     if amt < wallet.top_up_min_custom():
-        return jsonify({
-            "error": "below_minimum",
-            "min_usd": wallet.top_up_min_custom(),
-        }), 400
+        if not wallet.opening_checkout_allowed(
+                amt, amount_locked=False, user=ctx["user"],
+                users_data=ctx["users_data"]):
+            return jsonify({
+                "error": "below_minimum",
+                "min_usd": wallet.top_up_min_custom(),
+            }), 400
     if amt > 100_000:
         return jsonify({"error": "above_maximum"}), 400
 
@@ -3064,11 +3078,8 @@ def _resolve_target_billing_subject(target_username: str):
         return None
     subject, subject_kind, subject_key = wallet.resolve_billing_subject(
         u, data)
-    if subject_kind == "company":
-        display = subject_key
-    else:
-        display = (f"{u.get('first_name', '')} "
-                   f"{u.get('last_name', '')}").strip() or target_username
+    display = (f"{u.get('first_name', '')} "
+               f"{u.get('last_name', '')}").strip() or target_username
     return {
         "user": u,
         "uname": target_username,
@@ -3139,10 +3150,14 @@ def admin_create_payment_link(target_username):
         elif amt > payment_links.MAX_AMOUNT_USD:
             return jsonify({"error": "above_maximum"}), 400
         elif amt < wallet.top_up_min_custom():
-            return jsonify({
-                "error": "below_minimum",
-                "min_usd": wallet.top_up_min_custom(),
-            }), 400
+            locked = bool(body.get("lock_amount"))
+            if not wallet.opening_checkout_allowed(
+                    amt, amount_locked=locked, user=ctx["user"],
+                    users_data=None):
+                return jsonify({
+                    "error": "below_minimum",
+                    "min_usd": wallet.top_up_min_custom(),
+                }), 400
 
     existing = payment_links.find_reusable(
         ctx["subject_kind"], ctx["subject_key"],
@@ -3444,8 +3459,11 @@ def public_pay_checkout(token):
             except (TypeError, ValueError):
                 return jsonify({"error": "invalid_amount"}), 400
     if amt < wallet.top_up_min_custom():
-        return jsonify({"error": "below_minimum",
-                        "min_usd": wallet.top_up_min_custom()}), 400
+        if not wallet.opening_checkout_allowed(
+                amt, amount_locked=bool(rec.get("amount_locked")),
+                user=None):
+            return jsonify({"error": "below_minimum",
+                            "min_usd": wallet.top_up_min_custom()}), 400
     if amt > payment_links.MAX_AMOUNT_USD:
         return jsonify({"error": "above_maximum"}), 400
 
