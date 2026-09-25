@@ -32791,8 +32791,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         #intentIQView *:not(code):not(pre):not(.mono) {
             font-family: 'Inter 18pt', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         }
-        #intentIQView .aiq-wrap { width: 100%; max-width: 1180px; margin: 0; padding: 0 2.25rem;
-            flex: 0 0 auto; }
+        /* The view runs the full width of the window. The fixed measure
+           left most of a wide screen empty while the tables inside it
+           were cramped. GOAT keeps the measure it shipped with
+           (.cursor/rules/goat-is-frozen.mdc). */
+        #intentIQView .aiq-wrap { width: 100%; max-width: none; margin: 0; padding: 0 2.25rem;
+            flex: 1 1 auto; min-width: 0; }
+        #intentIQView .aiq-wrap[data-aiq-slug="goat"] { max-width: 1180px; flex: 0 0 auto; }
 
         /* Masthead */
         #intentIQView .iiq-header { display: block; margin: 0 0 1.6rem; padding: 2.1rem 0 1.4rem;
@@ -46934,16 +46939,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 function _pctOfV(n) { return totalV > 0 ? (n / totalV * 100) : 0; }
 
-                html += '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html +=   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets');
                 var _iiqJrnOv   = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var _iiqJrnTerm = _iiqJrnOv.terminology || {};
                 var _iiqInfoSub = _iiqJrnTerm.journey_info_sub_label       || 'Google / IMDB / RT / official';
                 var _iiqTkSub   = _iiqJrnTerm.journey_conversion_sub_label || 'Fandango / AMC / Regal / Cinemark / Atom';
-                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers - ' + _iiqInfoSub);
-                html +=   iiqSummaryTile(((typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page'), fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% - ' + _iiqTkSub);
-                html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
-                html += '</div>';
+                var tilesHtml = '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                    +   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets')
+                    +   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers - ' + _iiqInfoSub)
+                    +   iiqSummaryTile(((typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page'), fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% - ' + _iiqTkSub)
+                    +   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social')
+                    + '</div>';
+                // The section opens on a rule and its own label. Path
+                // archetypes sits above it and the page heading is well
+                // out of sight by here, so without a break the tiles read
+                // as a continuation of the table rather than a new read.
+                html += '<div style="border-top:1px solid #2C4148; margin-top:1.9rem; padding-top:1.5rem;">'
+                     +    '<div style="font-size:0.56rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em; margin-bottom:1rem;">Per-asset journey</div>';
 
                 // ===== Asset picker: one dropdown (Jenna 2026-09-23), pills retired =====
                 html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
@@ -46975,6 +46986,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 html += '</div>';
 
                 html += cutByHtml;
+                html += tilesHtml;
+                html += '</div>';
 
                 // ===== Per-asset BEFORE + AFTER detail =====
                 if (pickedPhase) {
