@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The Crosswalk bar mark on its own. currentColor so one file
+     serves every colour; the app draws it inline at most sizes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor">
+  <path d="M18.84 6.25 28.22 6.25 18.93 57.56 5.71 57.56 Z"/>
+  <path d="M33.36 6.25 42.65 6.25 38.39 57.56 25.16 57.56 Z"/>
+  <path d="M47.89 6.25 57.38 6.25 57.72 57.56 44.53 57.56 Z"/>
+</svg>
