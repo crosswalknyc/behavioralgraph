@@ -40,9 +40,17 @@ stream_estimates + headline_estimates have landed:
      math, deltas, and tomorrow's continuity guard stay coherent.
   5. Live compute_view caches are purged and the payload recomputed; the
      final coverage percentage lands in the run summary log line.
-  6. If any non-Film row is STILL missing a value after all that, an
-     email goes to jenna@ + jessie@ (never liz@) with the exact items.
-     The dashboard renders such rows neutrally (blank chip, no error).
+  6. Any non-Film row STILL blank after all that is reasoned from the
+     rows either side of it on its own list, for its own service, and
+     written so it renders today (`terminal_bracket`, Jenna
+     2026-09-25: "it should not have not found these but should have
+     figured out how to reason answers to them"). Bracketed rows are
+     counted apart from researched rows and re-enter tonight's
+     research, so a real reading replaces the bracket as soon as one
+     lands. The board is recomputed and re-tallied after the pass.
+  7. Only a row that survives even the terminal pass is emailed to
+     jenna@ + jessie@ (never liz@). That is a bug in the pass, not a
+     wait for the next run, and the email says so.
 
 CLI:
     python3 -m scripts.trends_scrapers.coverage_gate            # full run
@@ -144,6 +152,14 @@ _PER_SERVICE_BASES = _CAP_BASES + _CROSS_SERVICE_BASES
 # handful of readers a day and that is the honest reading.
 _FIRST_PARTY_BASES = ('first_party',)
 
+# A reading reasoned from the rows either side of it on its own list
+# for its own service, written by the terminal pass when research
+# returned nothing usable (`terminal_bracket`, 2026-09-25). It renders
+# today, counts apart from researched rows, and goes back into
+# tonight's research so a real reading replaces it. Honest at any
+# positive value: it sits inside two readings that already passed.
+_BRACKETED_BASES = ('bracketed',)
+
 # Rendered lists whose rows carry a first-party figure the derivation
 # reads from. A blank row here is derived, never sent to per-title web
 # research, which is the path that kept failing on them.
@@ -152,11 +168,11 @@ _FIRST_PARTY_PREFIXES = ('books_trending.wattpad', 'comics_trending')
 
 def _audience_state(it: dict) -> str:
     """'researched' | 'carried' | 'rank_tier' | 'platform_cap' |
-    'cross_service' | 'missing' for a rendered row. Sub-100 estimates
-    count as missing (credibility floor, 2026-09-09) so a degenerate
-    research value gets re-priced instead of passing, except when the
-    reading is a first-party derivation, which is honest at any
-    positive value."""
+    'cross_service' | 'bracketed' | 'missing' for a rendered row.
+    Sub-100 estimates count as missing (credibility floor, 2026-09-09)
+    so a degenerate research value gets re-priced instead of passing,
+    except when the reading is a first-party derivation or a bracket,
+    which are honest at any positive value."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
@@ -165,6 +181,8 @@ def _audience_state(it: dict) -> str:
                 basis = blk.get('est_basis')
                 if v > 0 and basis in _FIRST_PARTY_BASES:
                     return 'researched'
+                if v > 0 and basis in _BRACKETED_BASES:
+                    return 'bracketed'
                 if v >= 100:
                     if basis in _RANK_TIER_BASES:
                         return 'rank_tier'
@@ -413,10 +431,10 @@ def collect_missing(payload: dict,
         if state == 'researched':
             researched += 1
             continue
-        # A carried reading and a rank-tier one both still want
-        # pricing today; both are counted here so the gate's before
-        # figure stays comparable to its after figure.
-        if state in ('carried', 'rank_tier'):
+        # A carried reading, a rank-tier one and a bracketed one all
+        # still want pricing today; all are counted here so the gate's
+        # before figure stays comparable to its after figure.
+        if state in ('carried', 'rank_tier', 'bracketed'):
             baseline += 1
         title = _item_title(it)
         if state in ('platform_cap', 'cross_service'):
@@ -449,7 +467,7 @@ def collect_missing(payload: dict,
         # service resolves to the PARENT here, so fixing the parent
         # is what fixes the breakout; the child is never priced on
         # its own (`derived_rails`).
-        if (state == 'missing' and kind is not None
+        if (state in ('missing', 'bracketed') and kind is not None
                 and (path.startswith('streaming_trending')
                      or path.startswith('fast_trending'))
                 and _cap_platform_key(path)):
@@ -970,14 +988,22 @@ def _merge_headline_results(results: dict[str, dict]) -> int:
 
 def _send_still_missing_alert(missing_rows: list[tuple[str, str]]) -> None:
     """Best-effort SES alert listing rows that still lack a value after
-    the fallback pricing pass. Never raises."""
+    the research pass AND the terminal bracket pass. Never raises.
+
+    Reaching this means the terminal pass could not hold a bracket for
+    the row (no valued row anywhere on its list and no ceiling on file
+    for its service, or a gap too tight for two rows). That is a bug
+    in the pass to fix the same day, not a row to wait on."""
     try:
         import boto3
         body_lines = [
-            'These Trends items are still missing a US Audience value '
-            'after the nightly research pass and the follow-up pricing '
-            'pass. The dashboard shows them without an audience chip '
-            'until the next run.',
+            'These Trends items still have no US Audience value after '
+            'the research pass and the terminal bracket pass. The '
+            'bracket pass reasons a value for every blank row from the '
+            'rows either side of it on its own list, so a row reaching '
+            'this email means that pass could not hold a bracket for '
+            'it. Treat as a defect in the pass, not a wait for the '
+            'next run.',
             '',
         ]
         for path, title in missing_rows[:200]:
@@ -1127,6 +1153,48 @@ def _run_first_party(target_date_iso: str, meter: Any,
     return out
 
 
+def _tally_rendered(cards: dict) -> dict[str, Any]:
+    """Count every rendered non-Film row by how it came by its number.
+
+    Per-list as well as board-wide: a board-wide percentage says
+    something is wrong, the per-list split says where. Carried,
+    rank-tier and bracketed are counted apart from researched: a
+    carried row is a real reading of that title going slightly stale,
+    a rank-tier row is a number that says nothing about the title, a
+    bracketed row is today's reasoned answer awaiting a real reading.
+    `still_missing` is what none of those covered.
+    """
+    counts = {'total': 0, 'researched': 0, 'rendered': 0, 'carried': 0,
+              'rank_tier': 0, 'platform_cap': 0, 'cross_service': 0,
+              'bracketed': 0}
+    per_list: dict[str, dict[str, int]] = {}
+    still_missing: list[tuple[str, str]] = []
+    for path, _rank, it in _walk_rendered(cards):
+        if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
+            continue
+        if path.startswith('fused_trending') and _fused_row_is_film_only(it):
+            continue
+        counts['total'] += 1
+        bucket = per_list.setdefault(path, {'total': 0, 'carried': 0,
+                                             'rank_tier': 0,
+                                             'platform_cap': 0,
+                                             'cross_service': 0,
+                                             'bracketed': 0})
+        bucket['total'] += 1
+        state = _audience_state(it)
+        if state == 'missing':
+            still_missing.append((path, _item_title(it)))
+            continue
+        counts['rendered'] += 1
+        counts[state] += 1
+        if state != 'researched':
+            bucket[state] += 1
+    out: dict[str, Any] = dict(counts)
+    out['per_list'] = per_list
+    out['still_missing'] = still_missing
+    return out
+
+
 def run_gate(dry_run: bool = False) -> dict[str, Any]:
     """Run the full coverage gate. Returns a summary dict:
     {total, researched_before, researched_after, rendered_after_pct,
@@ -1272,55 +1340,60 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
 
     payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
                                        force_refresh=True)
-    cards2 = (payload2 or {}).get('cards') or {}
-    total2 = researched2 = rendered2 = carried2 = rank_tier2 = 0
-    capped2 = cross2 = 0
-    still_missing: list[tuple[str, str]] = []
-    # Per-list tally. A board-wide percentage says something is wrong;
-    # the per-list split says where, which is what makes the alert
-    # actionable. Carried and rank-tier are counted apart: a carried
-    # row is a real reading of that title going slightly stale, a
-    # rank-tier row is a number that says nothing about the title.
-    per_list: dict[str, dict[str, int]] = {}
-    for path, _rank, it in _walk_rendered(cards2):
-        if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
-            continue
-        if path.startswith('fused_trending') and _fused_row_is_film_only(it):
-            continue
-        total2 += 1
-        bucket = per_list.setdefault(path, {'total': 0, 'carried': 0,
-                                             'rank_tier': 0,
-                                             'platform_cap': 0,
-                                             'cross_service': 0})
-        bucket['total'] += 1
-        state = _audience_state(it)
-        if state == 'researched':
-            researched2 += 1
-            rendered2 += 1
-        elif state == 'carried':
-            rendered2 += 1
-            carried2 += 1
-            bucket['carried'] += 1
-        elif state == 'rank_tier':
-            rendered2 += 1
-            rank_tier2 += 1
-            bucket['rank_tier'] += 1
-        elif state == 'platform_cap':
-            # Still on a cap correction: the research came back with
-            # nothing usable for that service, so the seat stands and
-            # tonight's pass tries again.
-            rendered2 += 1
-            capped2 += 1
-            bucket['platform_cap'] += 1
-        elif state == 'cross_service':
-            # The row is off the other service's number either way;
-            # it is still waiting on a reading researched for its own,
-            # which tonight's pass tries again.
-            rendered2 += 1
-            cross2 += 1
-            bucket['cross_service'] += 1
-        else:
-            still_missing.append((path, _item_title(it)))
+    tally = _tally_rendered((payload2 or {}).get('cards') or {})
+    still_missing = tally['still_missing']
+
+    # Terminal pass (Jenna 2026-09-25: "it should not have not found
+    # these but should have figured out how to reason answers to
+    # them"). Whatever the research left blank is reasoned from the
+    # rows either side of it on its own list, written as a reading for
+    # its own service, and rendered today. Then the board is
+    # recomputed and re-tallied; the alert below fires only for a row
+    # that survives even this, which is a bug to fix, not a wait for
+    # the next run.
+    if still_missing:
+        try:
+            from scripts.trends_scrapers import terminal_bracket as tb
+            tb_stats = tb.fill(payload2, still_missing, target_date_iso)
+            summary['bracketed_written'] = tb_stats['written']
+            summary['bracketed_entries_created'] = tb_stats['entries_created']
+            summary['bracketed_skipped'] = tb_stats['skipped']
+            logger.info("coverage_gate: terminal pass bracketed %d of %d "
+                        "blank row(s) from their neighbours (%d new "
+                        "entries, %d skipped)", tb_stats['written'],
+                        len(still_missing), tb_stats['entries_created'],
+                        len(tb_stats['skipped']))
+            for row in tb_stats['trail']:
+                logger.info("coverage_gate bracket: %s on %s -> %s  [%s]",
+                            row['title'], row['service'] or 'list',
+                            f'{row["value"]:,}', row['path'])
+            for path, why in tb_stats['skipped']:
+                logger.warning("coverage_gate bracket skipped: %s  [%s]",
+                               why, path)
+            if tb_stats['written']:
+                try:
+                    trends_iq.invalidate_live_compute_view_caches()
+                except Exception:
+                    logger.exception("coverage_gate: cache purge after "
+                                     "bracket failed (non-fatal)")
+                payload2 = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
+                                                   force_refresh=True)
+                tally = _tally_rendered((payload2 or {}).get('cards') or {})
+                still_missing = tally['still_missing']
+        except Exception:
+            logger.exception("coverage_gate: terminal bracket pass failed "
+                             "(non-fatal)")
+
+    total2 = tally['total']
+    researched2 = tally['researched']
+    rendered2 = tally['rendered']
+    carried2 = tally['carried']
+    rank_tier2 = tally['rank_tier']
+    capped2 = tally['platform_cap']
+    cross2 = tally['cross_service']
+    bracketed2 = tally['bracketed']
+    per_list = tally['per_list']
+    summary['bracketed_after'] = bracketed2
 
     summary['researched_after_pct'] = round(
         (100.0 * researched2 / total2) if total2 else 100.0, 2)
@@ -1343,23 +1416,24 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
             'rank_tier': v['rank_tier'],
             'platform_cap': v['platform_cap'],
             'cross_service': v['cross_service'],
+            'bracketed': v['bracketed'],
             'carried_pct': round(100.0 * v['carried'] / v['total'], 2),
             'rank_tier_pct': round(100.0 * v['rank_tier'] / v['total'], 2),
         }
         for name, v in sorted(per_list.items())
         if (v['carried'] or v['rank_tier'] or v['platform_cap']
-            or v['cross_service'])
+            or v['cross_service'] or v['bracketed'])
     }
 
     logger.info("coverage_gate: FINAL coverage researched=%.2f%% "
                 "rendered=%.2f%% carried=%.2f%% rank_tier=%.2f%% "
-                "(total=%d, still_missing=%d, cap corrections %d -> %d, "
-                "spend=$%.2f)",
+                "bracketed=%d (total=%d, still_missing=%d, cap "
+                "corrections %d -> %d, spend=$%.2f)",
                 summary['researched_after_pct'],
                 summary['rendered_after_pct'],
                 summary['carried_after_pct'],
                 summary['rank_tier_after_pct'],
-                total2, len(still_missing),
+                bracketed2, total2, len(still_missing),
                 summary['capped_before'], capped2, summary['spend_usd'])
     for name, v in sorted(summary['by_list'].items(),
                           key=lambda kv: (kv[1]['rank_tier_pct'],

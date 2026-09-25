@@ -4386,11 +4386,15 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # figure for the row (Wattpad reads, Libby holds, a comics
             # volume inside its series) says so, because it is honest
             # at any positive value and the coverage passes must not
-            # read a small one as a failed research call. Only this
-            # stored basis travels; the render-side bases are stamped
+            # read a small one as a failed research call. A reading
+            # bracketed by its neighbours (`terminal_bracket`,
+            # 2026-09-25) travels for the same reason and so the gate
+            # can put it back into tonight's research. Only these two
+            # stored bases travel; the render-side bases are stamped
             # by their own passes.
             'est_basis':           (per.get('est_basis')
-                                    if per.get('est_basis') == 'first_party'
+                                    if per.get('est_basis') in ('first_party',
+                                                                'bracketed')
                                     else None),
         }
     elif platform_key and (isinstance(entry.get('by_platform'), dict)
@@ -6972,7 +6976,8 @@ def _coverage_has_audience(it: dict) -> bool:
                 v = float(blk.get('us_estimate') or 0)
                 if v >= 100:
                     return True
-                if v > 0 and blk.get('est_basis') == 'first_party':
+                if v > 0 and blk.get('est_basis') in ('first_party',
+                                                      'bracketed'):
                     return True
             except (TypeError, ValueError):
                 pass
