@@ -113,7 +113,7 @@ SIGNUP_HTML = """<!DOCTYPE html>
       <div class="li"><b>Flywheel IQ</b><span class="p">$300</span></div>
       <div class="li"><b>Subscriber IQ</b><span class="p">$500</span></div>
       <div class="li"><b>Digital Journey IQ</b><span class="p">$500</span></div>
-      <div class="li"><b>Brand Partnership IQ</b><span class="p">$500</span></div>
+      <div class="li"><b>Brand Partnership IQ</b><span class="p">$1000</span></div>
       <div class="li"><b>Attribution IQ</b><span class="p">$500 setup, $100 per day in flight</span></div>
       <div class="li"><b>Trends IQ, Rankers IQ, Fin IQ</b><span class="p">Included</span></div>
       <div class="li"><b>Chat with Prometheus</b><span class="p">about $0.15 to $0.84 per question</span></div>

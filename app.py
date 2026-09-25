@@ -51719,7 +51719,7 @@ _PM_PRICING_COPY = (
     "Profile - $300\n"
     "Subscriber Acquisition - $500\n"
     "Flywheel - $300\n"
-    "Brand Partnership - $500\n"
+    "Brand Partnership - $1000\n"
     "Add Attribution - $500 for the initial pull and $100 x day to "
     "track per campaign\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
@@ -60155,7 +60155,7 @@ def api_synth_chat_analyze():
                 'success': True, 'action': 'answer',
                 'reply': ('That valuation needs '
                           + _pm_tool_price_label(
-                              'brand_partnership_iq', '$500')
+                              'brand_partnership_iq', '$1000')
                           + ' and your account cannot cover it '
                           'right now. Add funds or ask your admin, '
                           'and I will run it the moment you are set.'),
@@ -61028,7 +61028,7 @@ def _pm_bpiq_confirm_reply(parsed):
         f"- Post window: {post}\n"
         f"- Audience: {aud}\n\n"
         f"It prices at "
-        f"{_pm_tool_price_label('brand_partnership_iq', '$500')}"
+        f"{_pm_tool_price_label('brand_partnership_iq', '$1000')}"
         f" and lands in the Brand Partnership tab when finished. "
         f"Run it?")
 
@@ -61286,7 +61286,7 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 def _pm_tool_price_label(tool_key, fallback, username=None):
     """Live per-pull price from the billing panel (system/pricing.json
     via wallet.tool_price_usd), so chat copy never drifts from what
-    admins set. Pass username so a company sticker (Kartel $475 BPIQ)
+    admins set. Pass username so a company sticker (Kartel $925 BPIQ)
     prints the number that will be charged. Falls back to the last
     known label on any failure."""
     try:

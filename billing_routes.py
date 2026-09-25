@@ -1795,7 +1795,7 @@ def admin_companies_billing():
             # Company sticker for every full Profile IQ pull. 0 / missing
             # uses the global $300. Kartel is $275.
             "profile_pull_usd": float(c.get("profile_pull_usd") or 0.0),
-            # Per-tool stickers. Kartel Brand Partnership IQ is $475.
+            # Per-tool stickers. Kartel Brand Partnership IQ is $925.
             "brand_partnership_iq_usd": float(
                 ((c.get("tool_price_overrides") or {})
                  .get("brand_partnership_iq") or 0.0) or 0.0),
