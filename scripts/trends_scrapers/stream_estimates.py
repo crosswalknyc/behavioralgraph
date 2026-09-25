@@ -6920,7 +6920,15 @@ def _fit_chart_under_cap(values: dict, slug: str, group: str,
         return False
     top = max((v for v in values.values()
                if isinstance(v, int) and v > 0), default=0)
-    if top <= 0 or top <= ceiling:
+    # A top slot AT the cap is the same wrong scale as one over it.
+    # The prompt hands the model the cap as a hard limit and the model
+    # answers with a #1 just under it: after the first fit shipped,
+    # Disney+ Films, Disney+ Series and Hulu Films all read 0.974 of
+    # the 2,142,857 cap, Pluto's two charts and Starz 0.9625 of
+    # 714,285, Peacock's two 0.9855 of 1,714,285. None was over the
+    # cap, so the fit never fired and the seats stayed. Anything that
+    # lands above the top of the headroom band is re-drawn into it.
+    if top <= 0 or top < ceiling * (_CAP_HEADROOM_MIN + _CAP_HEADROOM_SPAN):
         return False
 
     salt = f'{slug}|{group}|{target_date_iso}|capfit'
