@@ -109,6 +109,7 @@
     "streaming_weeks_index.py",
     "sweep_derived_rails.py",
     "sweep_value_distinctness.py",
+    "terminal_bracket.py",
     "test_carriage_leans.py",
     "test_carriage_model.py",
     "test_chart_rail_guard.py",
