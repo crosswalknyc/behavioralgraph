@@ -77,14 +77,14 @@ def _spc(run, hundredths):
 
 
 def txt(s, x, y, w, h, text, *, size=12, bold=False, color=GRAPHITE,
-        align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, font="Inter",
-        spc=None, light=False):
+        align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP,
+        font="Crosswalk Inter", spc=None, light=False):
     box = s.shapes.add_textbox(x, y, w, h)
     tf = box.text_frame
     tf.word_wrap = True
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     tf.vertical_anchor = anchor
-    face = "Inter Light" if light else font
+    face = "Crosswalk Inter Light" if light else font
     for i, line in enumerate(str(text).split("\n")):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = align
@@ -175,7 +175,7 @@ class _Deck:
             txt(s, M, Inches(6.620), BAND, Inches(0.28), source,
                 size=9, color=muted)
         foot = ("CONFIDENTIAL" if page == 1
-                else "CROSSWALK / BEHAVIORAL INTELLIGENCE")
+                else "CROSSWALK / BEHAVIORAL INTELLIGENCE ENGINE")
         foot_c = FOOTER if not orchid else ORCHID_FOOT
         txt(s, M, Inches(7.080), Inches(8.2), Inches(0.22),
             foot, size=8, color=foot_c, spc=160 if page == 1 else 200)
@@ -586,6 +586,40 @@ def _resolve_logos(static_dir):
     return lw, lk
 
 
+def _apply_theme_faces(pptx_path, face="Crosswalk Inter"):
+    """Set the theme's major and minor Latin faces to the Crosswalk
+    Inter family (crosswalk-design skill, 2026-09-25: 'set the theme's
+    major and minor Latin faces to Crosswalk Inter'). Rewrites the
+    saved package's theme XML in place; any placeholder text that
+    inherits from the theme then resolves to the brand face instead of
+    the python-pptx default Calibri."""
+    import io as _io
+    import re as _re
+    import zipfile as _zf
+    try:
+        with open(pptx_path, "rb") as fh:
+            blob = fh.read()
+        src = _zf.ZipFile(_io.BytesIO(blob))
+        out = _io.BytesIO()
+        with _zf.ZipFile(out, "w", _zf.ZIP_DEFLATED) as dst:
+            for item in src.infolist():
+                data = src.read(item.filename)
+                if item.filename.startswith("ppt/theme/") and \
+                        item.filename.endswith(".xml"):
+                    xml = data.decode("utf-8")
+                    xml = _re.sub(
+                        r'(<a:(?:major|minor)Font>\s*<a:latin[^>]*?typeface=")[^"]*(")',
+                        r"\g<1>" + face + r"\g<2>", xml)
+                    data = xml.encode("utf-8")
+                dst.writestr(item, data)
+        with open(pptx_path, "wb") as fh:
+            fh.write(out.getvalue())
+    except Exception:
+        # The run-level faces are already set on every run; a theme
+        # patch failure never blocks the deliverable.
+        pass
+
+
 def render_insights_deck(plan, out_path, static_dir=None):
     """Render a slide-plan dict to a finished PPTX at out_path.
     Returns the number of slides rendered."""
@@ -604,4 +638,5 @@ def render_insights_deck(plan, out_path, static_dir=None):
         fn(d, sl)
         rendered += 1
     prs.save(out_path)
+    _apply_theme_faces(out_path)
     return rendered
