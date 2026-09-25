@@ -64876,10 +64876,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 .replace(/>/g,  "%3E");
             return "background-image: url('" + u + "');";
         }
-        // Streaming poster placeholder: the real CROSSWALK ///-mark, cropped
-        // straight from the logo art (static/crosswalk-slashes.png, white on
-        // transparent) and recolored dark via CSS brightness(0), centered on a
-        // lime tile. Rendered as real <img> elements (not an SVG background) so
+        // Streaming poster placeholder: the Crosswalk bar mark
+        // (static/crosswalk-slashes.png, white on transparent) recoloured
+        // dark via CSS brightness(0), centred on a lime tile. The file was
+        // a crop out of the wordmark until 2026-09-25; it is now drawn from
+        // the logo's own geometry, the same three tapered bars the app
+        // renders inline everywhere else. Rendered as real <img> elements (not an SVG background) so
         // it's pixel-accurate and robust. The real iTunes poster layers on top
         // via .tiq-ph-img; titles with no artwork - or whose poster URL 404s /
         // is paywalled (onerror removes it) - fall through to the lime mark.
