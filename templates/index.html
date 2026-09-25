@@ -128553,6 +128553,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'demos',   label: 'Demographics', match: ['demographics'] },
             { id: 'touch',   label: 'Touchpoints',  match: ['touchpoints'] }
         ];
+        // A section the renderer switched off for this partnership. Read
+        // the inline style, not the computed one: once a section is seated
+        // in a panel that is not the open one, everything computes to none.
+        function _bpHidden(el) {
+            return !!(el && el.style && el.style.display === 'none');
+        }
+        // Match a breakdown label and the figure welded to it. The labels
+        // run straight into each other in textContent:
+        // "Earned Media$6.73MBrand Engagement$891,000Brand Lift$564,325".
+        // A real unit letter is followed by the next label's CAPITAL; a
+        // stolen one is followed by the rest of that label in lower case,
+        // so only a following lower-case letter disqualifies it. That
+        // lookahead has to be case sensitive, which is why the label is
+        // spelled out letter by letter here instead of using the i flag:
+        // under i, [a-z] matches the capital too and Earned Media loses
+        // its M.
+        function _bpPartRe(name) {
+            var pat = name.split('').map(function (ch) {
+                if (ch === ' ') return '\\s*';
+                if (/[A-Za-z]/.test(ch)) return '[' + ch.toLowerCase() + ch.toUpperCase() + ']';
+                return ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }).join('');
+            return new RegExp(pat + '\\s*(\\$[\\d.,]+\\s*(?:[KMB](?![a-z]))?)');
+        }
         function _bpMoney(s) {
             var m = String(s || '').match(/\$\s*([\d.,]+)\s*([KMB]?)/i);
             if (!m) return null;
@@ -128616,14 +128640,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!hit) continue;
                     var panel = host.querySelector('[data-bp-panel="' + s.id + '"]');
                     if (panel && c.parentElement !== panel) panel.appendChild(c);
-                    claimed[s.id] = true;
+                    if (!_bpHidden(c)) claimed[s.id] = true;
                     return;
                 }
                 // Anything unrecognised stays visible under the first slab
                 // rather than disappearing into the attic.
                 var first = host.querySelector('[data-bp-panel="lift"]');
                 if (first && c.parentElement !== first) first.appendChild(c);
-                claimed.lift = true;
+                if (!_bpHidden(c)) claimed.lift = true;
             });
             // A section seated on an earlier pass is no longer a child of
             // the container, so the loop above cannot see it and the first
@@ -128634,7 +128658,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // a claim survives the move.
             _BP_SECTIONS.forEach(function (s) {
                 var seated = host.querySelector('[data-bp-panel="' + s.id + '"]');
-                if (seated && seated.children.length) claimed[s.id] = true;
+                if (!seated) return;
+                if (Array.prototype.some.call(seated.children, function (c) { return !_bpHidden(c); })) {
+                    claimed[s.id] = true;
+                }
             });
 
             // ---- head ----
@@ -128647,7 +128674,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // the summing line above it ("earned media + brand
                 // engagement + ...") carries the same words, so the figure
                 // has to follow immediately for the match to count.
-                var re = new RegExp(name.replace(/ /g, '\\s*') + '\\s*(\\$[\\d.,]+\\s*[KMB]?)', 'i');
+                var re = _bpPartRe(name);
                 var m = heroTxt.match(re);
                 if (m) parts.push({ name: name, raw: m[1].replace(/\s+/g, ''), v: _bpMoney(m[1]) });
             });
