@@ -44320,6 +44320,12 @@ def _synth_chat_gate(allow_api_key: bool = True):
                      'Contact your admin.',
         }), 403)
     user['_auth_via'] = 'session'
+    # The users.json record carries no 'username' field (the dict key
+    # IS the username), so inject the session's. Without this, every
+    # job-owner check downstream compared the record's EMAIL against
+    # the username the job status stored, and a user's own polls
+    # 403'd (2026-09-25, keith's read-status / notify-when-done).
+    user.setdefault('username', session['username'])
     return user, None
 
 
@@ -57500,6 +57506,29 @@ def _pm_gate_pull(user):
     return _prometheus_mode_of(user) in ('pull', 'both')
 
 
+def _pm_job_owner_ok(payload_user, user):
+    """True when this session may see the polled job (2026-09-25,
+    keith's 403s). The job status stores the session username at
+    kickoff; the gate's user dict historically carried only the email
+    when the record lacked a username field. Accept any of the
+    caller's identities (username, email, session username) so an
+    owner can never be locked out of their own job; super admins see
+    everything; a job with no recorded owner stays visible."""
+    po = str(payload_user or '').strip().lower()
+    if not po:
+        return True
+    if str(user.get('role') or '').strip().lower() == 'super_admin':
+        return True
+    idents = {str(user.get('username') or '').strip().lower(),
+              str(user.get('email') or '').strip().lower()}
+    try:
+        idents.add(str(session.get('username') or '').strip().lower())
+    except Exception:
+        pass
+    idents.discard('')
+    return po in idents
+
+
 def _pm_gate_refusal(kind):
     """Build a partner-safe 403 for a mode-blocked chatbot request.
 
@@ -59671,8 +59700,7 @@ def api_synth_chat_read_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
@@ -59722,8 +59750,7 @@ def api_synth_chat_notify_when_done():
         status = json.loads(resp['Body'].read().decode('utf-8'))
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
-    if (status.get('user') and status.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(status.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     st = str(status.get('status') or '').strip().lower()
     # Already finished: send the output now (a held read / any error
@@ -62080,8 +62107,7 @@ def api_synth_chat_deck_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     if str(payload.get('status') or '').strip().lower() == 'error':
         # The deck worker already emailed the failure to ops; the
@@ -62107,8 +62133,7 @@ def api_synth_chat_bpiq_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
@@ -62129,8 +62154,7 @@ def api_synth_chat_jiq_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
@@ -62151,8 +62175,7 @@ def api_synth_chat_fw_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
@@ -62173,8 +62196,7 @@ def api_synth_chat_aiq_status(job_id):
     except Exception:
         return jsonify({'success': False, 'error': 'unknown job'}), 404
     uname = (user.get('username') or user.get('email') or '').strip()
-    if (payload.get('user') and payload.get('user') != uname
-            and user.get('role') != 'super_admin'):
+    if not _pm_job_owner_ok(payload.get('user'), user):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
 
