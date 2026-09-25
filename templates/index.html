@@ -7598,6 +7598,23 @@
             word-break: normal;
             line-height: 1.15;
         }
+        /* The cohort size ("88K") sits on its own full-width line under the
+           label, but `.behavioral-header-row span` left-aligns every span
+           with !important - so the size hung 36-80px inboard of the numbers
+           it was labelling. It belongs on the column edge like everything
+           else in a numeric column. */
+        .behavioral-table .behavioral-header-row span.profile-col .cmp-col-size,
+        .behavioral-table .behavioral-header-row .cmp-col-cell .cmp-col-size {
+            text-align: right !important;
+        }
+        /* That full-width size line also stops the header cell from
+           shrink-wrapping, so it now fills its whole track - and text-align
+           cannot move a flex line, only justify-content can. Without this the
+           cohort title itself ("BOOMERS") sat ~22px left of its column. */
+        .behavioral-table .behavioral-header-row span.profile-col,
+        .behavioral-table .behavioral-header-row .cmp-col-cell {
+            justify-content: flex-end;
+        }
         /* Belt-and-suspenders right-align for the cohort DATA cells inside
            each .behavioral-item row. Most renderers already stamp inline
            text-align:right on these via JS, but if any code path emits a
@@ -25326,9 +25343,7 @@ https://www.instagram.com/p/..."></textarea>
             white-space: nowrap;
         }
         #dashboardView.piq-v4 .behavioral-header-row .profile-col .cmp-col-size,
-        #dashboardView.piq-v4 .behavioral-header-row .cmp-col-cell .cmp-col-size {
-            text-align: left;
-        }
+        #dashboardView.piq-v4 .behavioral-header-row .cmp-col-cell .cmp-col-size,
         #dashboardView.piq-v4 .interest-header-row .cmp-col-size {
             text-align: right;
         }
