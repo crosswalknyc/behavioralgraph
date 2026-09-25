@@ -49,6 +49,7 @@
     "fast_channels.py",
     "fast_rail_audit.py",
     "film_ticketing.py",
+    "first_party_derivation.py",
     "goodreads_charts.py",
     "google_trends_wide.py",
     "headline_estimates.py",

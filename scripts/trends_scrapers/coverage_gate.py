@@ -30,6 +30,12 @@ stream_estimates + headline_estimates have landed:
      is merged narrowly: only that service's block moves, and the
      title's rows on services that were reading correctly stay where
      they are.
+     Rows on the panels whose platform publishes a figure on the row
+     (Wattpad reads and votes, Libby holds) or whose row is one
+     volume of a series priced on the same chart (comics) are never
+     sent to per-title research. They are derived from those figures
+     (`first_party_derivation`, 2026-09-25), the same move that gave
+     Netflix its chart from the views Netflix publishes.
   4. Results merge into `latest/` AND today's dated snapshot so window
      math, deltas, and tomorrow's continuity guard stay coherent.
   5. Live compute_view caches are purged and the payload recomputed; the
@@ -129,18 +135,37 @@ _CROSS_SERVICE_BASES = ('cross_service',)
 # Both are priced through the narrow per-service path.
 _PER_SERVICE_BASES = _CAP_BASES + _CROSS_SERVICE_BASES
 
+# A reading derived from the platform's OWN published figure for the
+# row (2026-09-25): a Wattpad story's cumulative reads, a Libby title's
+# hold count, a comics volume placed inside its own series on the
+# chart. See `first_party_derivation`. It is not a research call, so
+# the sub-100 credibility floor below (which exists to catch a failed
+# research call) does not apply: a story with 65 lifetime reads has a
+# handful of readers a day and that is the honest reading.
+_FIRST_PARTY_BASES = ('first_party',)
+
+# Rendered lists whose rows carry a first-party figure the derivation
+# reads from. A blank row here is derived, never sent to per-title web
+# research, which is the path that kept failing on them.
+_FIRST_PARTY_PREFIXES = ('books_trending.wattpad', 'comics_trending')
+
 
 def _audience_state(it: dict) -> str:
     """'researched' | 'carried' | 'rank_tier' | 'platform_cap' |
     'cross_service' | 'missing' for a rendered row. Sub-100 estimates
     count as missing (credibility floor, 2026-09-09) so a degenerate
-    research value gets re-priced instead of passing."""
+    research value gets re-priced instead of passing, except when the
+    reading is a first-party derivation, which is honest at any
+    positive value."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
             try:
-                if float(blk.get('us_estimate') or 0) >= 100:
-                    basis = blk.get('est_basis')
+                v = float(blk.get('us_estimate') or 0)
+                basis = blk.get('est_basis')
+                if v > 0 and basis in _FIRST_PARTY_BASES:
+                    return 'researched'
+                if v >= 100:
                     if basis in _RANK_TIER_BASES:
                         return 'rank_tier'
                     if basis in _CARRIED_BASES:
@@ -279,6 +304,32 @@ def _cap_platform_key(path: str) -> str:
     return ''
 
 
+def _service_key_for_path(path: str) -> str:
+    """The estimator platform key for ANY service rail at `path`, or
+    '' for a cross-platform list.
+
+    `_cap_platform_key` only knows the streaming and FAST rails, which
+    is all the cap pass needs. The full re-price path needs the chart
+    panels too: a row on Apple Books Comics used to be handed to the
+    research with the label `comics_trending.apple_comics.items #82`,
+    which the label matcher read as the Apple BOOKS store, so the
+    answer came back with no block for the service the row is on and
+    the row stayed blank. Resolved through the same tables the
+    annotators stamp from, so a new panel gains this with it.
+    """
+    key = _cap_platform_key(path)
+    if key:
+        return key
+    try:
+        import trends_iq
+        fn = getattr(trends_iq, '_coverage_platform_for_path', None)
+        if callable(fn):
+            return str(fn(path) or '')
+    except Exception:
+        pass
+    return ''
+
+
 def _entry_key_candidates(se, kind: str, title: str, artist: str) -> list:
     """Stored keys a row could resolve to, in the order the annotator
     tries them.
@@ -312,8 +363,10 @@ def _platform_chart_label(se, kind: str, platform_key: str) -> str:
     return platform_key
 
 
-def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
-                                             int, int, int, list[dict]]:
+def collect_missing(payload: dict,
+                    first_party_out: Optional[dict] = None,
+                    ) -> tuple[list[dict], list[dict],
+                               int, int, int, list[dict]]:
     """Walk the rendered payload. Returns (stream_items,
     headline_items, total_nonfilm, researched_count, baseline_count,
     cap_targets).
@@ -322,7 +375,14 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
     baseline-stamped), mapped to estimator item dicts and deduped by
     lookup key. `cap_targets` is the capped population, deduped by the
     stored entry the row reads and carrying the set of service keys
-    that need a reading of their own."""
+    that need a reading of their own.
+
+    Rows on the first-party panels (Wattpad, comics) never enter the
+    research population: their reading is derived from the figures on
+    the row (`first_party_derivation`). When `first_party_out` is
+    given it is filled with `{'wattpad': [keys], 'comics': [keys]}` of
+    the blank rows seen there, so the caller can run the derivation
+    and report on exactly those rows."""
     from scripts.trends_scrapers import stream_estimates as se
 
     cards = (payload or {}).get('cards') or {}
@@ -330,6 +390,8 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
     headline_by_key: dict[str, dict] = {}
     cap_by_key: dict[str, dict] = {}
     total = researched = baseline = 0
+    fp_wattpad: list[str] = []
+    fp_comics: list[str] = []
 
     # Read lazily: the stored keys are only needed to resolve a capped
     # row onto the entry it reads, and the snapshot is a large object.
@@ -362,6 +424,44 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
                                  title, state)
             continue
         kind = _estimator_kind_for(path, it)
+
+        # First-party panels: the row carries the figure its reading
+        # is derived from (Wattpad reads, Libby holds) or sits inside
+        # a series that does (comics volumes). Per-title web research
+        # is what kept failing here, so these never enter it.
+        if kind is not None and any(path.startswith(p)
+                                    for p in _FIRST_PARTY_PREFIXES):
+            artist = (it.get('artist') or it.get('author') or '').strip()
+            key = se._lookup_key(kind, title, artist)
+            if key:
+                (fp_wattpad if kind == 'wattpad_story'
+                 else fp_comics).append(key)
+            continue
+
+        # A blank row on a service rail whose title the store already
+        # holds wants ONE service block written into that entry, not a
+        # whole new entry. The whole-item path replaced the entry and
+        # with it every other service's reading of the title, and it
+        # labelled the row by its payload path, which the research did
+        # not read as the service. Republic of Doyle sat blank on Roku
+        # through several passes that way while its Tubi reading was
+        # fine. A rail that is one distribution path through another
+        # service resolves to the PARENT here, so fixing the parent
+        # is what fixes the breakout; the child is never priced on
+        # its own (`derived_rails`).
+        if (state == 'missing' and kind is not None
+                and (path.startswith('streaming_trending')
+                     or path.startswith('fast_trending'))
+                and _cap_platform_key(path)):
+            artist = (it.get('artist') or it.get('author') or '').strip()
+            if kind == 'fast_channel':
+                artist = _platform_slug_from_path(path)
+            cands = _entry_key_candidates(se, kind, title, artist)
+            if any(c in stored_keys() for c in cands):
+                _collect_cap_target(se, stored_keys, cap_by_key, path,
+                                     rank, it, title, state)
+                continue
+
         if kind is None:
             key = se._cp_normalize(title)
             if key and key not in headline_by_key:
@@ -382,26 +482,56 @@ def collect_missing(payload: dict) -> tuple[list[dict], list[dict],
         artist = (it.get('artist') or it.get('author') or '').strip()
         if kind == 'fast_channel':
             artist = _platform_slug_from_path(path)
+        # The label names the SERVICE the row is on, the way the
+        # nightly collectors label it, so the research returns a block
+        # for that service. The payload path is kept alongside for the
+        # trail; it is not what the label matcher reads.
+        service_key = _service_key_for_path(path)
+        if service_key:
+            label = f'{_platform_chart_label(se, kind, service_key)} #{rank}'
+        else:
+            label = f'{path} #{rank}'
         item = {
             'kind':          kind,
             'display_title': title,
             'artist':        artist,
             'best_rank':     rank,
-            'chart_labels':  [f'{path} #{rank}'],
+            'chart_labels':  [label],
             'image':         it.get('image'),
             'url':           it.get('url'),
+            'gate_path':     path,
         }
         key = se._lookup_key(kind, title, artist)
         prev = stream_by_key.get(key)
         if prev is None or rank < prev['best_rank']:
             stream_by_key[key] = item
+        elif label not in prev['chart_labels']:
+            prev['chart_labels'].append(label)
 
     # A title that is capped on one service AND unpriced on another is
     # already covered by the full re-price, so it is dropped from the
     # capped population to keep the two passes from pricing it twice.
+    # Its services ride along on the full re-price's labels, or the
+    # research would return no block for them and the rows that put
+    # the title here would stay exactly as they were: The Other Boleyn
+    # Girl was blank on BritBox on Amazon and carried on Starz on
+    # Amazon, the Starz row won, and the research was asked about
+    # Starz alone.
     priced_keys = set(stream_by_key)
-    cap_targets = [t for t in cap_by_key.values()
-                   if t['entry_key'] not in priced_keys]
+    cap_targets = []
+    for t in cap_by_key.values():
+        if t['entry_key'] not in priced_keys:
+            cap_targets.append(t)
+            continue
+        item = stream_by_key[t['entry_key']]
+        for p in sorted(t['platforms']):
+            lab = f'{_platform_chart_label(se, t["kind"], p)} #{t["best_rank"]}'
+            if lab not in item['chart_labels']:
+                item['chart_labels'].append(lab)
+
+    if first_party_out is not None:
+        first_party_out['wattpad'] = sorted(set(fp_wattpad))
+        first_party_out['comics'] = sorted(set(fp_comics))
 
     return (list(stream_by_key.values()), list(headline_by_key.values()),
             total, researched, baseline, cap_targets)
@@ -505,6 +635,93 @@ def _merge_stream_results(results: dict[str, dict],
 
     snap = se._read_snapshot('stream_estimates') or {}
     items = snap.get('items') or {}
+
+    # The same per-service credibility floor the narrow merge applies
+    # (2026-09-25). A whole-item result carries one block per service
+    # and each block is judged against ITS service's own priced rows:
+    # a reading an order of magnitude under the bottom of what already
+    # charts there is a failed call, not a quiet title. The Other
+    # Boleyn Girl came through here at 144 a day on BritBox, whose
+    # rows bottom out in the low thousands, and the derived Prime
+    # Video breakout then computed 78 from it. Dropping the block
+    # leaves the row blank for tonight's retry, which is the honest
+    # state; a result with no block left is dropped whole.
+    # Keyed by (kind, service): a service key can name different
+    # stores for different kinds (`apple` is Apple Music for a song
+    # and Apple Books for a book) and their levels are not comparable.
+    floors = _rail_credibility_floors_by_kind(items)
+    for k in list(results):
+        res = results[k]
+        blocks = res.get('by_platform')
+        if not isinstance(blocks, dict) or not blocks:
+            continue
+        kind = str(res.get('kind') or k.split(':', 1)[0])
+        kept: dict = {}
+        for p, blk in blocks.items():
+            try:
+                v = int((blk or {}).get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                v = 0
+            floor = max(100, floors.get((kind, p), 0))
+            if v < floor:
+                logger.info("coverage_gate: dropping %s@%s at %d, under "
+                            "the service's own floor of %d", k, p, v,
+                            floor)
+                continue
+            kept[p] = blk
+        if len(kept) == len(blocks):
+            continue
+        if not kept:
+            results.pop(k, None)
+            continue
+        res['by_platform'] = kept
+        agg = sum(int((b or {}).get('us_estimate') or 0)
+                  for b in kept.values())
+        if agg > 0:
+            res['us_estimate'] = agg
+            for f, mult in (('us_estimate_low', 0.75),
+                            ('us_estimate_high', 1.20)):
+                try:
+                    cur = int(res.get(f) or 0)
+                except (TypeError, ValueError):
+                    cur = 0
+                if f == 'us_estimate_low' and (cur <= 0 or cur > agg):
+                    res[f] = int(agg * mult)
+                if f == 'us_estimate_high' and (cur <= 0 or cur < agg):
+                    res[f] = int(agg * mult)
+    if not results:
+        return 0
+
+    # A fresh whole-item result replaces the stored entry, but it is
+    # only fresh about the services it was asked about. A reading the
+    # entry already held for another service is a reading taken for
+    # that service and stays; blanking it would hand that rail a hole
+    # to fill tomorrow with a number about nothing. Republic of Doyle
+    # priced for Roku must not lose its Tubi reading on the way in.
+    for k, res in results.items():
+        prev = items.get(k)
+        if not isinstance(prev, dict):
+            continue
+        old_blocks = prev.get('by_platform')
+        new_blocks = res.get('by_platform')
+        if not isinstance(old_blocks, dict) or not old_blocks:
+            continue
+        if not isinstance(new_blocks, dict):
+            new_blocks = {}
+        merged = dict(old_blocks)
+        merged.update(new_blocks)
+        if len(merged) == len(new_blocks):
+            continue
+        res['by_platform'] = merged
+        agg = sum(int((b or {}).get('us_estimate') or 0)
+                  for b in merged.values() if isinstance(b, dict))
+        if agg > 0:
+            res['us_estimate'] = agg
+            res['us_estimate_low'] = min(
+                agg, int(res.get('us_estimate_low') or 0) or agg)
+            res['us_estimate_high'] = max(
+                agg, int(res.get('us_estimate_high') or 0) or agg)
+
     items.update(results)
     snap['items'] = items
     snap['count'] = len(items)
@@ -586,6 +803,8 @@ def _rail_credibility_floors(items: dict) -> dict:
         for key, blk in (entry.get('by_platform') or {}).items():
             if not isinstance(blk, dict):
                 continue
+            if blk.get('est_basis') in _FIRST_PARTY_BASES:
+                continue     # honest at any level; not a research row
             try:
                 v = int(blk.get('us_estimate') or 0)
             except (TypeError, ValueError):
@@ -599,6 +818,37 @@ def _rail_credibility_floors(items: dict) -> dict:
         vals.sort()
         p05 = vals[int(len(vals) * 0.05)]
         out[key] = int(p05 * _RAIL_FLOOR_FRACTION)
+    return out
+
+
+def _rail_credibility_floors_by_kind(items: dict) -> dict:
+    """`_rail_credibility_floors`, pooled per (kind, service key).
+    Blocks carrying a first-party derivation are left out of the pool:
+    they can honestly sit far under the researched rows and would
+    otherwise pull the floor down to nothing."""
+    pools: dict = {}
+    for key, entry in (items or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        kind = str(entry.get('kind') or str(key).split(':', 1)[0])
+        for p, blk in (entry.get('by_platform') or {}).items():
+            if not isinstance(blk, dict):
+                continue
+            if blk.get('est_basis') in _FIRST_PARTY_BASES:
+                continue
+            try:
+                v = int(blk.get('us_estimate') or 0)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                pools.setdefault((kind, p), []).append(v)
+    out: dict = {}
+    for kp, vals in pools.items():
+        if len(vals) < _RAIL_FLOOR_MIN_ROWS:
+            continue
+        vals.sort()
+        p05 = vals[int(len(vals) * 0.05)]
+        out[kp] = int(p05 * _RAIL_FLOOR_FRACTION)
     return out
 
 
@@ -813,6 +1063,70 @@ def _price_stream_items(se, stream_items: list[dict], *,
     return results
 
 
+def _run_first_party(target_date_iso: str, meter: Any,
+                     wattpad_keys: list, comics_keys: list,
+                     dry_run: bool = False) -> dict[str, Any]:
+    """Derive the Wattpad and comics readings from the platforms' own
+    figures and write them into the store.
+
+    Wattpad is re-levelled as a whole chart set, not just the blank
+    rows: the rate and the share are reasoned once for the set, and a
+    set priced half from its own reads and half from per-title
+    research would carry two levels on one rail. Comics: every row
+    without a reading for its service is placed inside its series on
+    that chart, or read from its Libby holds. Both write through the
+    normal snapshot boundary so the 60-day distinctness backstop and
+    natural digits apply.
+    """
+    from scripts.trends_scrapers import stream_estimates as se
+    from scripts.trends_scrapers import first_party_derivation as fp
+    from scripts.trends_scrapers import _base
+
+    out: dict[str, Any] = {'wattpad': {}, 'comics': {}}
+    snap = se._read_snapshot('stream_estimates') or {}
+    items = snap.get('items') or {}
+    client = fp.anthropic_client()
+    try:
+        out['wattpad'] = fp.run_wattpad(items, target_date_iso,
+                                        client=client, spend_monitor=meter)
+    except Exception:
+        logger.exception("coverage_gate: Wattpad first-party pass failed "
+                         "(non-fatal)")
+    try:
+        out['comics'] = fp.run_comics(items, target_date_iso,
+                                      client=client, spend_monitor=meter)
+    except Exception:
+        logger.exception("coverage_gate: comics first-party pass failed "
+                         "(non-fatal)")
+    wrote = (out['wattpad'].get('written') or 0) \
+        + (out['comics'].get('holds') or 0) \
+        + (out['comics'].get('series') or 0) \
+        + (out['comics'].get('orphan_research') or 0)
+    out['written'] = wrote
+    if wrote and not dry_run:
+        snap['items'] = items
+        snap['count'] = len(items)
+        snap.setdefault('target_date', target_date_iso)
+        snap['coverage_gate_at'] = datetime.now(timezone.utc).isoformat()
+        if out['wattpad'].get('params'):
+            snap[fp.PARAMS_KEY] = out['wattpad']['params']
+        _base.write_snapshot('stream_estimates', snap)
+    logger.info("coverage_gate: first-party pass wrote %d reading(s): "
+                "Wattpad %d of %d stories (%s parameters; %d blank rows "
+                "were on the board), comics %d from holds, %d inside "
+                "their series, %d under a sized series, %d could not be "
+                "derived (%d blank comics rows were on the board)",
+                wrote, out['wattpad'].get('written') or 0,
+                out['wattpad'].get('rows') or 0,
+                out['wattpad'].get('params_basis') or 'none',
+                len(wattpad_keys),
+                out['comics'].get('holds') or 0,
+                out['comics'].get('series') or 0,
+                out['comics'].get('orphan_research') or 0,
+                len(out['comics'].get('cannot') or []), len(comics_keys))
+    return out
+
+
 def run_gate(dry_run: bool = False) -> dict[str, Any]:
     """Run the full coverage gate. Returns a summary dict:
     {total, researched_before, researched_after, rendered_after_pct,
@@ -828,8 +1142,12 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
 
     payload = trends_iq.compute_view(dict(_DEFAULT_FILTERS),
                                       force_refresh=True)
+    first_party: dict = {}
     (stream_items, headline_items,
-     total, researched, baseline, cap_targets) = collect_missing(payload)
+     total, researched, baseline, cap_targets) = collect_missing(
+        payload, first_party_out=first_party)
+    fp_wattpad = first_party.get('wattpad') or []
+    fp_comics = first_party.get('comics') or []
     cap_rows = sum(len(t['rows']) for t in cap_targets)
     cap_blocks = sum(len(t['platforms']) for t in cap_targets)
     cross_titles = sum(1 for t in cap_targets
@@ -839,16 +1157,21 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
                 "(%.2f%%), %d need pricing (%d stream-kind, %d headline), "
                 "%d row(s) want a reading of their own service across %d "
                 "service reading(s) on %d title(s), %d of which were "
-                "showing another service's reading",
+                "showing another service's reading; %d Wattpad and %d "
+                "comics row(s) blank, to be derived from their own figures",
                 total, researched, pct_before,
                 len(stream_items) + len(headline_items),
                 len(stream_items), len(headline_items),
-                cap_rows, cap_blocks, len(cap_targets), cross_titles)
+                cap_rows, cap_blocks, len(cap_targets), cross_titles,
+                len(fp_wattpad), len(fp_comics))
 
     summary: dict[str, Any] = {
         'total': total,
         'researched_before': researched,
         'researched_before_pct': round(pct_before, 2),
+        'first_party_wattpad_blank': len(fp_wattpad),
+        'first_party_comics_blank': len(fp_comics),
+        'first_party_written': 0,
         'priced_stream': 0,
         'priced_headline': 0,
         'capped_before': cap_rows,
@@ -916,6 +1239,26 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
         summary['priced_headline'] = _merge_headline_results(h_results)
         logger.info("coverage_gate: priced + merged %d/%d headline "
                     "items", len(h_results), len(headline_items))
+
+    # Wattpad and comics: derived from the platforms' own figures,
+    # never per-title research. Runs every time, blank rows or not,
+    # so the Wattpad set is always one level and a comics volume
+    # never outlives its siblings' readings.
+    try:
+        fp_stats = _run_first_party(target_date_iso, meter,
+                                    fp_wattpad, fp_comics)
+        summary['first_party_written'] = fp_stats.get('written') or 0
+        summary['first_party'] = {
+            'wattpad': {k: v for k, v in (fp_stats.get('wattpad') or {})
+                        .items() if k != 'no_reads'},
+            'wattpad_no_reads': (fp_stats.get('wattpad') or {})
+            .get('no_reads') or [],
+            'comics': {k: v for k, v in (fp_stats.get('comics') or {})
+                       .items() if k not in ('trail',)},
+        }
+    except Exception:
+        logger.exception("coverage_gate: first-party pass failed "
+                         "(non-fatal)")
 
     summary['spend_usd'] = round(meter.total(), 2)
 

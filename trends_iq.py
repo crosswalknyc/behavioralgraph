@@ -4382,6 +4382,16 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # `_STREAM_FIELDS`). Travels with `prev_date` so the
             # baseline behind the chip is inspectable.
             'prev_days_covered':   per.get('prev_days_covered'),
+            # A reading derived from the platform's own published
+            # figure for the row (Wattpad reads, Libby holds, a comics
+            # volume inside its series) says so, because it is honest
+            # at any positive value and the coverage passes must not
+            # read a small one as a failed research call. Only this
+            # stored basis travels; the render-side bases are stamped
+            # by their own passes.
+            'est_basis':           (per.get('est_basis')
+                                    if per.get('est_basis') == 'first_party'
+                                    else None),
         }
     elif platform_key and (isinstance(entry.get('by_platform'), dict)
                            or _entry_is_current(entry)):
@@ -6951,12 +6961,18 @@ def _coverage_has_audience(it: dict) -> bool:
     Sub-100 estimates count as NOT covered (credibility floor,
     2026-09-09): a chip reading "8 weekly US listeners" on a charting
     row reads as broken, so the baseline pass overwrites it with a
-    chart-tier value instead."""
+    chart-tier value instead. A reading derived from the platform's
+    own figure for the row (`est_basis='first_party'`, 2026-09-25) is
+    covered at any positive value: a story with 65 lifetime reads has
+    a handful of readers a day, and that is the reading."""
     for f in ('us_streams', 'us_readers'):
         blk = it.get(f)
         if isinstance(blk, dict):
             try:
-                if float(blk.get('us_estimate') or 0) >= 100:
+                v = float(blk.get('us_estimate') or 0)
+                if v >= 100:
+                    return True
+                if v > 0 and blk.get('est_basis') == 'first_party':
                     return True
             except (TypeError, ValueError):
                 pass

@@ -4601,6 +4601,25 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
                  f'OverDrive Libby comics US borrows 2026')
         item_line = (f'COMIC / GRAPHIC NOVEL TITLE: {display_title}\n'
                       f'AUTHOR / CREATOR: {artist or "(unknown)"}')
+        # A volume is not a standalone work (2026-09-25). Asking about
+        # "Blue Lock Volume 37" as if it were one finds nothing, while
+        # the SERIES has well-documented US sales and readership. Name
+        # the series so the anchor is the series and the volume is
+        # placed inside it.
+        try:
+            from . import first_party_derivation as _fpd
+            _series = _fpd.series_display(display_title)
+            if _series and _fpd.series_key(display_title)[1] \
+                    and _series.lower() != (display_title or '').lower():
+                item_line += (f'\nSERIES: {_series}. This row is ONE '
+                              f'VOLUME of that series. Anchor on the '
+                              f'series\' US readership and sales, then '
+                              f'place this volume inside it (a current '
+                              f'release sells most, a backlist volume a '
+                              f'fraction of that). Do not research the '
+                              f'volume as a standalone work.')
+        except Exception:
+            pass
         # Surface any Libby LA County hold count so Claude has the
         # raw local signal it must project upward. Comics Libby
         # panel carries the same `holds` field books use, so the
@@ -7515,10 +7534,18 @@ def fetch(only: Optional[set[str]] = None,
                              target_date_iso, len(wip_researched))
 
     already_done_keys = set(already_covered) | set(wip_researched.keys())
+    # Wattpad is never researched title by title (2026-09-25). Every
+    # story carries its own published figures (cumulative reads,
+    # votes, parts, completion) and the whole chart set is derived
+    # from them in `first_party_derivation.run_wattpad` further down,
+    # the way Netflix's chart is derived from the views Netflix
+    # publishes. Web research on a fanfiction title is what kept
+    # returning implausibly low numbers and being refused.
     items_to_research = [
         it for it in items
         if _lookup_key(it['kind'], it['display_title'],
                         it.get('artist') or '') not in already_done_keys
+        and it['kind'] != 'wattpad_story'
     ]
     if len(items_to_research) < len(items):
         logger.info("stream_estimates: skipping %d items already researched "
@@ -7672,6 +7699,32 @@ def fetch(only: Optional[set[str]] = None,
         logger.exception("stream_estimates: continuity guard pass "
                           "failed (non-fatal)")
 
+    # Wattpad: the whole chart set derived from each story's own
+    # published figures, one parameter call for the set. Lands in the
+    # fresh population so the carried-forward walk leaves it alone;
+    # the trend attach below gives every row its day-over-day chip.
+    _fp_params = prior_snap.get('first_party_wattpad_params')
+    if 'wattpad_story' in wanted:
+        try:
+            from . import first_party_derivation as _fp
+            _fp_stats = _fp.run_wattpad(
+                researched_new, target_date_iso,
+                client=_fp.anthropic_client(),
+                spend_monitor=spend_monitor,
+                yesterday_params=_fp_params)
+            if _fp_stats.get('params'):
+                _fp_params = _fp_stats['params']
+            if _fp_stats.get('written'):
+                logger.info("stream_estimates: Wattpad chart set derived "
+                             "from its own reads: %d stories (%s "
+                             "parameters), order check %s",
+                             _fp_stats['written'],
+                             _fp_stats.get('params_basis'),
+                             json.dumps(_fp_stats.get('order_check') or {}))
+        except Exception:
+            logger.exception("stream_estimates: Wattpad first-party "
+                              "derivation failed (non-fatal)")
+
     # Compose the final `researched` dict as the union of:
     #   - Everything from prior_snap (preserves items whose kind is
     #     not covered by this run's --only filter, and items already
@@ -7681,6 +7734,23 @@ def fetch(only: Optional[set[str]] = None,
     #     one for the same key).
     researched = dict(prior_items)
     researched.update(researched_new)
+    fresh_keys = set(researched_new.keys())
+
+    # Comics: a volume with no reading for its service is placed
+    # inside its own series on that chart, read from its Libby holds,
+    # or put under a series sized in one call. Needs the composed dict
+    # because the siblings it anchors to are mostly carried items.
+    if 'comic' in wanted:
+        try:
+            from . import first_party_derivation as _fp
+            _cs_stats = _fp.run_comics(
+                researched, target_date_iso,
+                client=_fp.anthropic_client(),
+                spend_monitor=spend_monitor)
+            fresh_keys |= set(_cs_stats.get('written_keys') or ())
+        except Exception:
+            logger.exception("stream_estimates: comics first-party "
+                              "derivation failed (non-fatal)")
 
     # Attach day-over-day trend by comparing against the DAY BEFORE
     # the target day (target_date_iso - 1). This matches the plain-
@@ -7722,7 +7792,7 @@ def fetch(only: Optional[set[str]] = None,
         prev_day_items = ((yesterday or {}).get('items') or {})
         pre_fast_state = _capture_fast_containment_state(researched)
         n_walked = _apply_inherited_daily_variation(
-            researched, set(researched_new.keys()), prev_day_items,
+            researched, fresh_keys, prev_day_items,
             target_date_iso, prev_date_iso=prev_date_iso)
         n_nudged = _enforce_min_daily_movement(
             researched, prev_day_items, target_date_iso)
@@ -7842,6 +7912,9 @@ def fetch(only: Optional[set[str]] = None,
         'items':        researched,
         'count':        len(researched),
         'target_date':  target_date_iso,
+        # The parameter set the Wattpad chart was derived with, kept
+        # so tomorrow's call reasons from it (`first_party_derivation`).
+        'first_party_wattpad_params': _fp_params,
         'inputs':       [{'key': _lookup_key(it['kind'],
                                               it['display_title'],
                                               it.get('artist') or ''),
