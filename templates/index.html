@@ -135531,6 +135531,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var tiles = [];
             var usTxt = fmtCount(us);
             if (usTxt) tiles.push({ lbl: 'US audience', val: usTxt, accent: true });
+            // The count the projection is built from, next to the
+            // projection itself. It was only visible on the Demographics
+            // tab, so the header gave a number with nothing behind it.
+            var sampleTxt = fmtCount(parsed.sampleSize);
+            if (sampleTxt) tiles.push({ lbl: 'Crosswalk sample', val: sampleTxt, accent: false });
             var fTxt = fmtPct(female);
             if (fTxt) tiles.push({ lbl: 'Female', val: fTxt, accent: false });
             var uTxt = fmtPct(under35);
