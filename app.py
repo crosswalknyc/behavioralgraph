@@ -51759,6 +51759,40 @@ def _pm_pricing_question(text):
     return False
 
 
+def _chatbot_error_is_transient_blip(err, tb=None):
+    """True for transient transport blips between Render and the
+    profile engine: read timeouts, connection refused / reset /
+    aborted, broken pipes, DNS hiccups. These self-heal on the next
+    poll and usually nobody saw them (the status / health checks
+    retry). Jenna 2026-09-25 (verbatim): "dont email these types of
+    errors anymore" - they log to stdout only; genuine code failures
+    still email."""
+    try:
+        if isinstance(err, (TimeoutError, ConnectionError,
+                            BrokenPipeError)):
+            return True
+    except Exception:
+        pass
+    try:
+        import requests as _rq_cls
+        if isinstance(err, (_rq_cls.exceptions.Timeout,
+                            _rq_cls.exceptions.ConnectionError)):
+            return True
+    except Exception:
+        pass
+    try:
+        name = type(err).__name__ if isinstance(err, BaseException) \
+            else ''
+        blob = f"{name} {err} {tb or ''}".lower()
+    except Exception:
+        return False
+    needles = ('read timed out', 'timed out', 'connection refused',
+               'connection reset', 'connection aborted', 'broken pipe',
+               'max retries exceeded', 'temporary failure in name',
+               'name or service not known')
+    return any(n in blob for n in needles)
+
+
 def _chatbot_error_email(route, err, user_email=None, payload=None,
                          tb=None):
     """Email chatbot failure detail to ops (Jenna + Jessie). SES
@@ -51771,7 +51805,22 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
     workers). Safe without a request context (background threads pass
     user_email/payload explicitly). Never raises; the SES send itself
     runs on a daemon thread so a slow send cannot delay the response.
+
+    Transient transport blips (read timeout / connection refused /
+    reset on a poll to the engine) never email - stdout log only
+    (Jenna 2026-09-25). Sustained engine outages still surface through
+    the queue-health monitor's consecutive-poll alert, which is a
+    different signal from a single blip.
     """
+    try:
+        if _chatbot_error_is_transient_blip(err, tb):
+            print(f"[chatbot-error] transient transport blip on "
+                  f"{str(route)[:80]}: "
+                  f"{type(err).__name__ if isinstance(err, BaseException) else err}"
+                  f" - logged only, no email (Jenna 2026-09-25)")
+            return False
+    except Exception:
+        pass
     try:
         route = str(route or 'unknown')[:160]
         err_name = (type(err).__name__
