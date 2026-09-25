@@ -219,10 +219,20 @@ def test_reprice() -> None:
     before = se._charted_slugs()
     wrote: dict = {}
     real = _patched_write(wrote)
+    # A key has to be present for the stamp to be written at all
+    # (5c795f2f): a keyless run skips the reasoning and must not mark
+    # the charts levelled.
+    import os
+    had = os.environ.get('ANTHROPIC_API_KEY')
+    os.environ['ANTHROPIC_API_KEY'] = 'test-key-not-used'
     try:
         stats = rcp.reprice(se, slugs=['netflix', 'max'])
     finally:
         _restore_write(real)
+        if had is None:
+            os.environ.pop('ANTHROPIC_API_KEY', None)
+        else:
+            os.environ['ANTHROPIC_API_KEY'] = had
 
     check('the chart pass saw only the scope',
           se.saw_chart_sets, ['netflix', 'max'])
@@ -245,6 +255,28 @@ def test_reprice() -> None:
           sorted((wrote.get('payload') or {})
                  .get(rcp.LEVELLED_FIELD) or {}),
           ['max', 'netflix'])
+
+
+def test_no_key_does_not_stamp() -> None:
+    print('a keyless run writes but never marks a chart levelled')
+    import os
+    snaps = {'stream_estimates': board(),
+             'netflix': {'fetched_at': iso(_PRICED)}}
+    se = FakeEstimator(snaps, coherence_result={'rails': 1, 'moved': 4,
+                                                'held': 0})
+    wrote: dict = {}
+    real = _patched_write(wrote)
+    had = os.environ.pop('ANTHROPIC_API_KEY', None)
+    try:
+        rcp.reprice(se, slugs=['netflix'])
+    finally:
+        _restore_write(real)
+        if had is not None:
+            os.environ['ANTHROPIC_API_KEY'] = had
+    check('the mechanical passes still wrote',
+          bool(wrote.get('payload')), True)
+    check('but nothing is stamped levelled',
+          (wrote.get('payload') or {}).get(rcp.LEVELLED_FIELD) or {}, {})
 
 
 def test_reprice_noop() -> None:
@@ -316,7 +348,7 @@ def test_empty_board() -> None:
 
 def main() -> int:
     for fn in (test_scope, test_scope_ignores_unrelated_writes,
-               test_reprice, test_reprice_noop,
+               test_reprice, test_no_key_does_not_stamp, test_reprice_noop,
                test_reprice_restores_on_failure, test_dry_run,
                test_empty_board):
         fn()

@@ -284,7 +284,8 @@ def fetch() -> dict[str, Any]:
             label='disneyplus_top10')
         rows, unresolved = _guard.carry_missing(
             rows, _previous().get('national'), _EXPECTED_CHARTS,
-            key_of=_guard.kind_key, label='disneyplus_top10')
+            key_of=_guard.kind_key, label='disneyplus_top10',
+            archive_source='disneyplus_top10')
         rows.sort(key=lambda r: (r['collection'], r['rank']))
 
     if len(rows) >= _MIN_HEALTHY:

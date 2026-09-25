@@ -237,7 +237,7 @@ def fetch() -> dict[str, Any]:
             key_of=_guard.kind_key, label='pluto_popular')
         rows, unresolved = _guard.carry_missing(
             rows, prev_rows, _EXPECTED_CHARTS, key_of=_guard.kind_key,
-            label='pluto_popular')
+            label='pluto_popular', archive_source='pluto_popular')
 
     healthy = len(rows) >= _MIN_HEALTHY
     prev_healthy = len(prev_rows) >= _MIN_HEALTHY

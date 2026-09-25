@@ -223,9 +223,87 @@ def test_scrapers_wired() -> None:
           ['movies', 'series'])
 
 
+# ---------------------------------------------------------------------------
+# The archive walk-back
+# ---------------------------------------------------------------------------
+
+def test_archive_walk_back() -> None:
+    print('a rail that misses twice carries from the day that has it')
+    import io
+    import json as _json
+    from . import _base
+
+    # HBO Max on 2026-09-25: today's earlier capture is movies-only
+    # too, so "the previous capture" cannot cover the series chart.
+    # Yesterday's has Lanterns at #1.
+    archive = {
+        '2026-09-25': [row('Supergirl', 'Film', 'Top 10 Movies Today')],
+        '2026-09-24': [row('Supergirl', 'Film', 'Top 10 Movies Today'),
+                       row('Lanterns', 'TV', 'Top 10 Series Today', 1)],
+    }
+
+    class FakeS3:
+        def __init__(self):
+            self.asked: list[str] = []
+
+        def get_object(self, Bucket, Key):
+            self.asked.append(Key)
+            day = Key.split('/')[1] if '/' in Key else ''
+            if day not in archive:
+                raise RuntimeError('no such key')
+            body = _json.dumps({'national': archive[day]}).encode()
+            return {'Body': io.BytesIO(body)}
+
+    fake = FakeS3()
+    real = _base._s3_client
+    _base._s3_client = lambda: fake
+    try:
+        today = [row('Supergirl', 'Film', 'Top 10 Movies Today')]
+        out, unresolved = guard.carry_missing(
+            today, today, EXPECTED, key_of=guard.kind_key,
+            label='max', archive_source='max', archive_days=5)
+    finally:
+        _base._s3_client = real
+
+    check('the series chart came back', unresolved, [])
+    check('with yesterday\'s rows',
+          [r['title'] for r in out if r['category_display'] == 'TV'],
+          ['Lanterns'])
+    check('marked stale', out[-1].get(guard.STALE_FIELD), True)
+    check('and saying which day it came from',
+          out[-1].get(guard.STALE_DAY_FIELD), '2026-09-24')
+    check('today\'s movie chart untouched',
+          [r['title'] for r in out if r['category_display'] == 'Film'],
+          ['Supergirl'])
+    check('it stopped at the first day that had it',
+          fake.asked[-1].split('/')[1], '2026-09-24')
+
+    # Nothing in the window carries it.
+    archive.pop('2026-09-24')
+    fake2 = FakeS3()
+    _base._s3_client = lambda: fake2
+    try:
+        out2, unresolved2 = guard.carry_missing(
+            [row('Supergirl', 'Film', 'm')], [], EXPECTED,
+            key_of=guard.kind_key, label='max', archive_source='max',
+            archive_days=3)
+    finally:
+        _base._s3_client = real
+    check('an absent rail is reported, never invented',
+          unresolved2, ['series'])
+    check('and the read ships without it', len(out2), 1)
+
+    # A scraper that names no archive source keeps the old behaviour.
+    out3, unresolved3 = guard.carry_missing(
+        [row('Supergirl', 'Film', 'm')], [], EXPECTED,
+        key_of=guard.kind_key, label='x')
+    check('no archive source means no walk-back', unresolved3, ['series'])
+    check('and no rows added', len(out3), 1)
+
+
 def main() -> int:
     for fn in (test_kind_reading, test_missing_rails, test_rerender,
-               test_carry, test_scrapers_wired):
+               test_carry, test_archive_walk_back, test_scrapers_wired):
         fn()
     print()
     if _FAILURES:

@@ -212,6 +212,26 @@ def run_runall_sources(sources: list[str]) -> int:
     return proc.returncode
 
 
+def run_coverage_gate() -> int:
+    """Price whatever the re-run brought onto the board.
+
+    Same reason the residential batch ends with this: a re-scrape
+    lands new titles hours after the nightly pricing pass has already
+    run, and without a pass of its own every one of them renders
+    blank until the next night. Subprocess, so a crash here leaves the
+    refreshed snapshots in place.
+    """
+    logger.info("pricing what the re-run brought onto the board ...")
+    proc = subprocess.run(
+        [sys.executable, '-m', 'scripts.trends_scrapers.coverage_gate'],
+        cwd=str(_REPO_ROOT),
+    )
+    if proc.returncode != 0:
+        logger.warning("coverage gate exited %d; the refreshed rails keep "
+                       "whatever readings they had", proc.returncode)
+    return proc.returncode
+
+
 def purge_dashboard_cache() -> int:
     """Delete today's live Trends IQ dashboard cache entries so the
     next dashboard load recomputes from the fresh snapshots. Historic
@@ -261,6 +281,9 @@ def main() -> int:
                     help='skip scraping; just purge cache (and warm if --warm)')
     ap.add_argument('--warm', action='store_true',
                     help='recompute the default dashboard view after the purge')
+    ap.add_argument('--skip-coverage', action='store_true',
+                    help='scrape only; leave the pricing pass to the '
+                         'nightly (for a scraper smoke test)')
     args = ap.parse_args()
 
     local = [m for m in args.local_modules.split(',') if m.strip()]
@@ -273,6 +296,8 @@ def main() -> int:
             run_runall_sources(runall)
         if not local and not runall:
             logger.info("nothing to scrape (no modules/sources given)")
+        elif not args.skip_coverage:
+            run_coverage_gate()
 
     try:
         purge_dashboard_cache()

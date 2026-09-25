@@ -89,6 +89,7 @@ from typing import Any, Optional
 import boto3
 
 from scripts.trends_scrapers import _usage_tap  # noqa: E402
+from scripts.trends_scrapers import chart_entry_sync as _ces  # noqa: E402
 
 # Per-kind absolute plausibility floors (2026-09-04 scale fix). Shared
 # with the backfill releveler so the forward continuity guard and the
@@ -6842,6 +6843,119 @@ def _set_platform_reading(it: dict, slug: str, new_value: int,
     return True
 
 
+# Where a chart's top slot is allowed to sit against its service's
+# daily cap once the chart has to be brought under it. A band, drawn
+# per service per chart per day, never a constant.
+_CAP_HEADROOM_MIN = 0.72
+_CAP_HEADROOM_SPAN = 0.21          # so the band is [0.72, 0.93]
+
+# How far apart two charts on the SAME cap must sit, as a fraction of
+# that cap. A salt alone does not deliver this: two draws out of a
+# 0.21-wide band land inside 1% of each other often enough that the
+# first pair tried did. 0.035 of cap puts any two top slots at least
+# ~4% apart, which clears the 1% bar with room, and the band still
+# holds six charts before the separation has to give.
+_CAP_HEADROOM_SEP = 0.035
+_CAP_HEADROOM_TRIES = 24
+
+
+def _draw_cap_headroom(salt: str, used: Optional[list]) -> float:
+    """A headroom in the band, kept clear of the ones already taken.
+
+    Deterministic in every branch: the retries walk a salted sequence
+    rather than a random one, so the same run on the same day draws
+    the same headrooms in the same order.
+    """
+    taken = list(used or [])
+
+    def draw(n: int) -> float:
+        return _CAP_HEADROOM_MIN + _h01(f'{salt}|{n}') * _CAP_HEADROOM_SPAN
+
+    best, best_gap = draw(0), -1.0
+    for n in range(_CAP_HEADROOM_TRIES):
+        h = draw(n)
+        gap = min((abs(h - t) for t in taken), default=float('inf'))
+        if gap >= _CAP_HEADROOM_SEP:
+            return h
+        if gap > best_gap:
+            best, best_gap = h, gap
+    # More charts on one cap than the band can separate. Take the
+    # roomiest draw and say so rather than stacking two on a seat.
+    logger.warning(
+        "chart sets: %d chart(s) already placed under this cap; the "
+        "best remaining headroom sits %.3f from its nearest neighbour, "
+        "under the %.3f separation", len(taken), best_gap,
+        _CAP_HEADROOM_SEP)
+    return best
+
+
+def _fit_chart_under_cap(values: dict, slug: str, group: str,
+                         ceiling: Optional[int],
+                         target_date_iso: str,
+                         used_headrooms: Optional[dict] = None) -> bool:
+    """Bring a whole chart under its service's cap, keeping its shape.
+
+    A proposed #1 over the cap used to be seated by clamping, and a
+    clamp puts every over-cap chart on the same seat. On 2026-09-25
+    that was Disney+ Series at 2,087,459 and Disney+ Films at
+    2,087,469 against a cap of 2,142,857, Pluto Movies at 687,555 and
+    Pluto Series at 687,461 and Starz at 687,497 against 714,285, and
+    Peacock's two charts ten apart against 1,714,285. Seven charts
+    across five services, all sitting on a fixed fraction of their cap
+    with a hair of jitter, which is the cross-file pinning signature
+    rule 1 forbids and the first thing a forensic pass finds.
+
+    The cap is a property of the service, so a chart that breaches it
+    is a chart drawn at the wrong scale, not a chart with one bad row.
+    Rescaling the whole set by one factor keeps every interval the
+    reasoning chose and moves the top slot to a headroom drawn from
+    the service, the chart and the day, so two services never share a
+    seat and a service's two charts do not either.
+
+    The clamp downstream stays exactly where it is. It is the last
+    resort for a value that arrives over the cap by some other route,
+    and after this it should almost never fire on a charted row.
+    """
+    if not ceiling or ceiling <= 1 or not values:
+        return False
+    top = max((v for v in values.values()
+               if isinstance(v, int) and v > 0), default=0)
+    if top <= 0 or top <= ceiling:
+        return False
+
+    salt = f'{slug}|{group}|{target_date_iso}|capfit'
+    # Separation is per CAP, not per service: Pluto and Starz publish
+    # against the same 714,285 and had their top slots 58 apart.
+    bucket = (used_headrooms if used_headrooms is not None
+              else {}).setdefault(int(ceiling), [])
+    headroom = _draw_cap_headroom(salt, bucket)
+    bucket.append(headroom)
+    target_top = max(1.0, ceiling * headroom)
+    scale = target_top / top
+
+    for t, v in list(values.items()):
+        if isinstance(v, int) and v > 0:
+            values[t] = max(1, int(round(v * scale)))
+
+    # Rounding can collapse two neighbours that were one apart. Walk
+    # the chart down and keep it strictly descending, which is the
+    # invariant the coherence pass measures.
+    ordered = sorted((t for t in values
+                      if isinstance(values[t], int) and values[t] > 0),
+                     key=lambda t: -values[t])
+    for prev, cur in zip(ordered, ordered[1:]):
+        if values[cur] >= values[prev]:
+            values[cur] = max(1, values[prev] - 1)
+
+    logger.info(
+        "chart sets: %s / %s proposed a top slot of %d against a daily "
+        "cap of %d; rescaled the whole chart by %.4f so it tops out at "
+        "%d, which is %.0f%% of the cap", slug, group or 'chart', top,
+        ceiling, scale, values[ordered[0]] if ordered else 0,
+        headroom * 100)
+    return True
+
+
 def _reason_published_charts_as_sets(researched: dict[str, dict],
                                       target_date_iso: str) -> dict:
     """Re-level every published chart in one call each.
@@ -6876,6 +6990,9 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
 
     depth_sources = (_read_snapshot('streaming_depth') or {}).get(
         'sources') or {}
+    # Headrooms already handed out, keyed by cap, so two charts that
+    # have to be brought under the SAME cap cannot land on one seat.
+    cap_headrooms: dict[int, list] = {}
     for slug, label in _charted_slugs():
         snap = _read_snapshot(published_chart_snapshot(slug))
         if not snap:
@@ -6912,9 +7029,16 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             if not hit:
                 continue
             group = hit[2] if len(hit) > 2 else ''
+            # Every key a reader could resolve for this title, not the
+            # one the chart's kind implies. A row whose only entry is
+            # a sibling used to be dropped from its own chart, and a
+            # row with two entries was written on one and read on the
+            # other. See `chart_entry_sync`.
+            cands = _ces.entry_key_candidates(prefix, kind, norm)
             row = {'title': title, 'published_rank': hit[0],
                    'kind': kind, 'category': r.get('category_display') or '',
-                   '_item_key': f'{prefix}{kind}:{norm}'}
+                   '_item_key': f'{prefix}{kind}:{norm}',
+                   '_entry_keys': cands}
             for f in ('weekly_views', 'weekly_hours_viewed',
                       'weeks_in_top10'):
                 if r.get(f):
@@ -6922,8 +7046,21 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             charts.setdefault(group, []).append(row)
 
         for group, rows in sorted(charts.items()):
-            rows = [r for r in rows
-                    if isinstance(researched.get(r['_item_key']), dict)]
+            kept = []
+            for r in rows:
+                pk = _ces.primary(researched, r.get('_entry_keys') or [])
+                if pk is None:
+                    logger.info(
+                        "chart sets: %s / %s has no stored entry for %r "
+                        "under any of %s; it stays off the set",
+                        slug, group, r['title'], r.get('_entry_keys'))
+                    continue
+                # Downstream reads (the chart floor, the catalog
+                # sizing) key off one entry; make it the one that
+                # exists.
+                r['_item_key'] = pk
+                kept.append(r)
+            rows = kept
             if len(rows) < 2:
                 out['skipped'] += 1
                 continue
@@ -6951,16 +7088,23 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             if not values:
                 out['skipped'] += 1
                 continue
+            _fit_chart_under_cap(values, slug, group, ceiling,
+                                  target_date_iso,
+                                  used_headrooms=cap_headrooms)
             out['charts'] += 1
             for r in rows:
                 v = values.get(r['title'])
                 if not isinstance(v, int) or v <= 0:
                     continue
-                if _set_platform_reading(
-                        researched[r['_item_key']], slug, v,
-                        r['_item_key'],
-                        f'{target_date_iso}|chartset|{slug}'):
+                wrote = _ces.write_across(
+                    sys.modules[__name__], researched,
+                    r.get('_entry_keys') or [r['_item_key']], slug, v,
+                    f'{target_date_iso}|chartset|{slug}')
+                if wrote['set'] or wrote['created']:
                     out['titles'] += 1
+                    out['created'] = out.get('created', 0) + wrote['created']
+                    out['mirrored'] = (out.get('mirrored', 0)
+                                       + max(0, len(wrote['keys']) - 1))
             logger.info(
                 "chart sets: %s / %s sized %d title(s) in one call "
                 "(%s anchor%s%s)", slug, pretty, len(values),

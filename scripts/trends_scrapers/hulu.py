@@ -81,20 +81,43 @@ _HULU_TILE_RE = re.compile(
     r'aria-label="([^"]{2,220})"',
     re.IGNORECASE,
 )
-_HULU_TAIL_ITEM_RE   = re.compile(r',\s*Item\s+\d+\s+of\s+many\s*$', re.IGNORECASE)
+# The position tail. Hulu writes the rail length two ways and the
+# pattern has to read both: "Item 3 of many" on a rail it paginates,
+# and "Item 3 of 9" on one it has counted. Matching only the first
+# spelling is what put "SportsCenter, Item 3 of 9" on the board as a
+# title, because the suffix then survived into the name and the row
+# could not be priced against any title anyone has heard of. The
+# count is the thing that varies, so it is the thing left open.
+_HULU_TAIL_ITEM_RE   = re.compile(r',\s*Item\s+\d+\s+of\s+(?:many|\d+)\s*$',
+                                   re.IGNORECASE)
 _HULU_TAIL_SEASON_RE = re.compile(r',\s*Season\s+\d+\s*$',           re.IGNORECASE)
 # 2026-08-14: Hulu now labels the primary tile anchor as
 # "Play <Title>" (the play-button becomes the tile's main hit target).
 # Strip the verb; the title we want is what follows.
 _HULU_HEAD_PLAY_RE   = re.compile(r'^\s*Play\s+',                     re.IGNORECASE)
+# The invisible directional marks these SPAs wrap accessible names in.
+# They sit between words, so a pattern written against what the label
+# looks like matches nothing. Same set HBO Max needs (`max_streaming.
+# strip_isolates`) and the auth guard flattens with.
+_HULU_ISOLATE_RE     = re.compile(r'[\u2066-\u2069\u200e\u200f\u061c]')
 
 
 def _clean_title(raw: str) -> str:
-    """Strip Hulu's screen-reader decorations from the aria-label."""
-    s = unescape(raw).strip()
+    """Strip Hulu's screen-reader decorations from the aria-label.
+
+    The tails are stripped in a loop because they stack: a tile can
+    be labelled "<Title>, Season 2, Item 4 of 9", and one pass would
+    leave the season behind once the position came off.
+    """
+    s = _HULU_ISOLATE_RE.sub('', unescape(raw)).strip()
     s = _HULU_HEAD_PLAY_RE.sub('', s)
-    s = _HULU_TAIL_ITEM_RE.sub('', s)
-    s = _HULU_TAIL_SEASON_RE.sub('', s)
+    for _ in range(4):
+        before = s
+        s = _HULU_TAIL_ITEM_RE.sub('', s)
+        s = _HULU_TAIL_SEASON_RE.sub('', s)
+        s = s.strip()
+        if s == before:
+            break
     return s.strip()
 
 

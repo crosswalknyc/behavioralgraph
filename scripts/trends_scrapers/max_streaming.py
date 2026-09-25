@@ -546,7 +546,8 @@ def fetch() -> dict[str, Any]:
                 _EXPECTED_CHARTS, key_of=_guard.kind_key, label='max')
             rows, unresolved = _guard.carry_missing(
                 rows, _previous().get('national'), _EXPECTED_CHARTS,
-                key_of=_guard.kind_key, label='max')
+                key_of=_guard.kind_key, label='max',
+                archive_source='max')
         else:
             unresolved = []
 

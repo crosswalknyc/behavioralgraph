@@ -309,7 +309,8 @@ def fetch() -> dict[str, Any]:
             key_of=_guard.kind_key, label='peacock_top10')
         rows, unresolved = _guard.carry_missing(
             rows, _previous().get('national'), _EXPECTED_CHARTS,
-            key_of=_guard.kind_key, label='peacock_top10')
+            key_of=_guard.kind_key, label='peacock_top10',
+            archive_source='peacock_top10')
 
     if len(rows) >= _MIN_HEALTHY:
         _merge_into_service_snapshot(rows)

@@ -154,14 +154,59 @@ _PINOT_REF_RE = re.compile(
     r'rankedBoxshot_Video:(\d+)_[0-9a-f-]+)"')
 
 
+# The cache is a JavaScript string literal before it is JSON, so a
+# title's punctuation arrives escaped twice over: `\u0027`, `\x27` and
+# a plain `\'` all mean an apostrophe. `html.unescape` knows none of
+# them, so the backslash survived into the title and Netflix's own #3
+# for the day published as "Wonka\'s The Golden Ticket".
+#
+# It did not break matching - the key normaliser strips punctuation in
+# runs, so the escaped and clean spellings reduce to the same key - but
+# it is the name a reader sees and the name the research is asked
+# about, and both of those have to be the title.
+_JS_ESCAPE_RE = re.compile(r'\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)', re.S)
+_JS_CONTROL_ESCAPES = {'n': '\n', 't': '\t', 'r': '\r',
+                       'b': '\b', 'f': '\f', 'v': '\v', '0': '\0'}
+
+
+def _js_unescape(raw: str) -> str:
+    """Decode the escapes a JS string literal carries.
+
+    Left to right in one pass, so `\\\\'` reads as a backslash then a
+    quote rather than as an escaped quote. An escape with no meaning
+    (`\\'`) yields the character itself, which is what the runtime
+    would do.
+    """
+    def _one(m: 're.Match[str]') -> str:
+        g = m.group(1)
+        if g[0] in 'ux' and len(g) > 1:
+            try:
+                return chr(int(g[1:], 16))
+            except ValueError:
+                return g
+        return _JS_CONTROL_ESCAPES.get(g, g)
+    return _JS_ESCAPE_RE.sub(_one, raw)
+
+
+def _cache_string(raw: str) -> str:
+    """One string out of the cache, as text."""
+    return unescape(_js_unescape(raw)).strip()
+
+
+# The string body pattern. `(?:[^"\\]|\\.)` rather than `[^"]` so a
+# title carrying an escaped quote is read whole instead of being cut
+# at its own punctuation.
+_JS_STR = r'((?:[^"\\]|\\.){1,200})'
+
+
 def _pinot_titles(html: str) -> dict[str, str]:
     """Every ranked-entry ref in the cache, mapped to its title."""
     out: dict[str, str] = {}
     for m in re.finditer(
             r'"(PinotRankedBoxshotEntityTreatment:rankedBoxshot_Video:'
             r'\d+_[0-9a-f-]+)"\s*:\s*\{(.{0,1200}?)"displayString"'
-            r'\s*:\s*"([^"]{1,200})"', html, re.S):
-        out.setdefault(m.group(1), unescape(m.group(3)).strip())
+            r'\s*:\s*"' + _JS_STR + r'"', html, re.S):
+        out.setdefault(m.group(1), _cache_string(m.group(3)))
     return out
 
 
@@ -223,7 +268,7 @@ def _extract_top10_rows(html: str) -> tuple[list[dict], list[dict]]:
         rows: list[dict] = []
         for tile in _NETFLIX_TILE_RE.finditer(slice_html):
             title_id = tile.group(1)
-            aria     = unescape(tile.group(2)).strip()
+            aria     = _cache_string(tile.group(2))
             # aria-label sometimes contains "<Title>. <runtime>. <rating>."
             # Take the first sentence-fragment as the title.
             title = aria.split('.')[0].strip() if '.' in aria else aria

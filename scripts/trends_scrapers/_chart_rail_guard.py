@@ -56,6 +56,10 @@ logger = logging.getLogger(__name__)
 # Netflix guard uses, so a reader that already understands one
 # understands all of them.
 STALE_FIELD = 'stale_from_previous'
+# The archive day a carried row actually came from. A rail that misses
+# twice is carried from further back than yesterday, and the row says
+# how far.
+STALE_DAY_FIELD = 'stale_from_date'
 
 
 def collection_key(row: Any) -> str:
@@ -138,10 +142,70 @@ def rerender_recovered(rows: Sequence[Any], retry_rows: Sequence[Any],
     return list(rows) + recovered
 
 
+def dated_snapshots_with(source: str, missing: Sequence[str], *,
+                         days: int = 5,
+                         key_of: Callable[[Any], str] = collection_key,
+                         label: str = '') -> list[Any]:
+    """Rows for the missing charts, from the most recent day that has them.
+
+    `latest/` is not a safe place to look for a chart that has been
+    absent for more than one run. On 2026-09-25 HBO Max rendered
+    movies-only at 15:07 UTC and again at 18:08; the second run read
+    "the previous capture", found the first run of the SAME day, and
+    published without the series chart even though the day before had
+    it with Lanterns at #1. A guard that can only see one capture back
+    cannot cover a rail that misses twice.
+
+    Walks the dated archive newest first and stops at the first day
+    that actually carries the chart, bounded to a few days because a
+    chart from last week is not this week's order and carrying it
+    would be worse than saying the rail is absent. Each row is marked
+    with the day it came from, so the archive says how stale it is
+    rather than only that it is stale.
+    """
+    if not missing:
+        return []
+    try:
+        from . import _base
+        from . import stream_window_index as _swi
+        s3 = _base._s3_client()
+    except Exception as e:  # noqa: BLE001
+        logger.info("%s: cannot reach the archive to walk back (%s)",
+                    label or 'chart guard', e)
+        return []
+
+    want = set(missing)
+    for day in list(_swi.archive_days(days))[:days]:
+        key = f'{_base.S3_DATED_PREFIX.format(date=day)}{source}.json'
+        try:
+            import json
+            snap = json.loads(
+                s3.get_object(Bucket=_base.S3_BUCKET,
+                              Key=key)['Body'].read().decode('utf-8'))
+        except Exception:
+            continue
+        rows = [r for r in (snap.get('national') or [])
+                if isinstance(r, dict) and key_of(r) in want]
+        if not rows:
+            continue
+        logger.warning(
+            "%s: %s absent from today's render and from the last "
+            "capture; carrying it from %s (%d row(s))",
+            label or 'chart guard', ', '.join(missing), day, len(rows))
+        return [dict(r, **{STALE_FIELD: True, STALE_DAY_FIELD: day})
+                for r in rows]
+    logger.warning(
+        "%s: no capture in the last %d day(s) carries %s",
+        label or 'chart guard', days, ', '.join(missing))
+    return []
+
+
 def carry_missing(rows: Sequence[Any], prev_rows: Optional[Sequence[Any]],
                   expected: Sequence[str], *,
                   key_of: Callable[[Any], str] = collection_key,
-                  label: str = '') -> tuple[list[Any], list[str]]:
+                  label: str = '',
+                  archive_source: str = '',
+                  archive_days: int = 5) -> tuple[list[Any], list[str]]:
     """Fill a still-missing chart from the previous capture.
 
     Returns the rows to publish and the charts that are STILL absent
@@ -167,19 +231,32 @@ def carry_missing(rows: Sequence[Any], prev_rows: Optional[Sequence[Any]],
             carried_by_chart.setdefault(k, []).append(
                 dict(r, **{STALE_FIELD: True}))
 
+    # Whatever the last capture cannot cover, look for in the dated
+    # archive. The previous capture is often this same day's earlier
+    # run, which for a rail that misses twice is already missing it.
+    from_archive = [n for n in missing
+                    if not carried_by_chart.get(str(n).strip().lower())]
+    if from_archive and archive_source:
+        for r in dated_snapshots_with(archive_source, from_archive,
+                                      days=archive_days, key_of=key_of,
+                                      label=label):
+            carried_by_chart.setdefault(key_of(r), []).append(r)
+
     unresolved: list[str] = []
     for name in missing:
         carried = carried_by_chart.get(str(name).strip().lower()) or []
         if not carried:
             unresolved.append(name)
             logger.warning(
-                "%s: %s chart is empty and the previous capture has no "
-                "rows for it either; publishing without that chart",
-                label or 'chart guard', name)
+                "%s: %s chart is empty and no capture in the last %d "
+                "day(s) has rows for it either; publishing without that "
+                "chart", label or 'chart guard', name, archive_days)
             continue
         out.extend(carried)
+        day = next((r.get(STALE_DAY_FIELD) for r in carried
+                    if r.get(STALE_DAY_FIELD)), 'the previous capture')
         logger.warning(
             "%s: %s chart parsed 0 rows; carrying %d row(s) forward from "
-            "the previous capture rather than shipping half a day",
-            label or 'chart guard', name, len(carried))
+            "%s rather than shipping half a day",
+            label or 'chart guard', name, len(carried), day)
     return out, unresolved
