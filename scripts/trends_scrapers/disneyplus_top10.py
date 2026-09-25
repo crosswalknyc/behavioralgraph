@@ -59,6 +59,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from . import _chart_rail_guard as _guard
 from ._base import run_scraper
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ _SERIES = 'Top 10 Series in the US Today'
 
 _DEPTH = 10
 _MIN_HEALTHY = 6
+
+# Disney+ publishes two charts on one page, so one of them coming back
+# empty is a collector that stopped walking. The floor above counts
+# rows across both and cannot see it. See `_chart_rail_guard`.
+_EXPECTED_CHARTS = ('series', 'movies')
 
 _S3_BUCKET = 'dashboard-inputs'
 _S3_LATEST = 'trends_iq_snapshots/latest/disneyplus_top10.json'
@@ -248,22 +254,50 @@ def _merge_into_service_snapshot(rows: list[dict]) -> None:
         logger.warning("disneyplus_top10: merge write failed (%s)", e)
 
 
-def fetch() -> dict[str, Any]:
+def _render() -> list:
     from ._playwright import render_pages
 
-    rendered = render_pages(
+    return render_pages(
         [('home', HOME_URL)], homepage=HOMEPAGE,
         cookie_domain='disneyplus.com', wait_ms=8000, scroll_ms=3000,
         timeout_ms=70000, hydration_wait_ms=16000,
         assert_signed_in='disneyplus.com', page_hook=_hook)
 
+
+def fetch() -> dict[str, Any]:
+    rendered = _render()
     rows = extract(rendered[0][1]) if rendered else []
+
+    # Both charts render off the same page, so one of them absent is a
+    # walk that stopped early rather than Disney+ publishing an empty
+    # chart. The row-count floor below cannot see it: ten clean movie
+    # rows clear a six-row floor while the series chart is missing
+    # entirely. Render once more, then carry yesterday's rows for the
+    # rail that is still absent.
+    unresolved: list[str] = []
+    if rows and _guard.missing_rails(rows, _EXPECTED_CHARTS,
+                                     key_of=_guard.kind_key):
+        retry = _render()
+        rows = _guard.rerender_recovered(
+            rows, extract(retry[0][1]) if retry else [],
+            _EXPECTED_CHARTS, key_of=_guard.kind_key,
+            label='disneyplus_top10')
+        rows, unresolved = _guard.carry_missing(
+            rows, _previous().get('national'), _EXPECTED_CHARTS,
+            key_of=_guard.kind_key, label='disneyplus_top10')
+        rows.sort(key=lambda r: (r['collection'], r['rank']))
+
     if len(rows) >= _MIN_HEALTHY:
         _merge_into_service_snapshot(rows)
-        return {'national': rows,
-                'chart_captured_at': datetime.now(timezone.utc).isoformat(),
-                'chart_rails': sorted({r['collection'] for r in rows}),
-                'chart_positions': len(rows)}
+        out = {'national': rows,
+               'chart_captured_at': datetime.now(timezone.utc).isoformat(),
+               'chart_rails': sorted({r['collection'] for r in rows}),
+               'chart_positions': len(rows)}
+        if unresolved:
+            out['charts_unresolved'] = unresolved
+        if any(r.get(_guard.STALE_FIELD) for r in rows):
+            out['stale_from_previous'] = True
+        return out
 
     prev = _previous()
     prev_rows = prev.get('national') or []

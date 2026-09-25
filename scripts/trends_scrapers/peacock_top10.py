@@ -46,6 +46,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from . import _chart_rail_guard as _guard
 from ._base import run_scraper
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,11 @@ CHART_SLUGS = {
     '/watch/home/top-10-tv':     ('Top 10 TV Today', 'TV'),
     '/watch/home/top-10-movies': ('Top 10 Movies Today', 'Film'),
 }
+
+# Peacock publishes two charts on one page, so one of them coming back
+# empty is a collector that stopped walking. The floor below counts
+# rows across both and cannot see it. See `_chart_rail_guard`.
+_EXPECTED_CHARTS = ('series', 'movies')
 
 _DEPTH = 10
 
@@ -268,7 +274,7 @@ def _merge_into_service_snapshot(rows: list[dict]) -> None:
         logger.warning("peacock_top10: merge write failed (%s)", e)
 
 
-def fetch() -> dict[str, Any]:
+def _render() -> dict:
     from ._playwright import render_pages
 
     rendered = render_pages(
@@ -276,21 +282,46 @@ def fetch() -> dict[str, Any]:
         cookie_domain='peacocktv.com', wait_ms=8000, scroll_ms=3000,
         timeout_ms=70000, hydration_wait_ms=16000,
         assert_signed_in='peacocktv.com', page_hook=collect_charts)
+    if not rendered:
+        return {}
+    try:
+        return json.loads(rendered[0][1]) or {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
 
-    acc: dict = {}
-    if rendered:
-        try:
-            acc = json.loads(rendered[0][1])
-        except (TypeError, json.JSONDecodeError):
-            acc = {}
 
+def fetch() -> dict[str, Any]:
+    acc = _render()
     rows = _rows_from(acc)
     now = datetime.now(timezone.utc).isoformat()
+
+    # Both rails are virtualised on one page, so one of them absent is
+    # a walk that ended before it entered the DOM rather than Peacock
+    # publishing an empty chart. The row floor below counts across
+    # both charts and reads ten movie rows as healthy while the TV
+    # chart is missing. Render once more, then carry yesterday's rows
+    # for whichever rail is still absent.
+    unresolved: list[str] = []
+    if rows and _guard.missing_rails(rows, _EXPECTED_CHARTS,
+                                     key_of=_guard.kind_key):
+        rows = _guard.rerender_recovered(
+            rows, _rows_from(_render()), _EXPECTED_CHARTS,
+            key_of=_guard.kind_key, label='peacock_top10')
+        rows, unresolved = _guard.carry_missing(
+            rows, _previous().get('national'), _EXPECTED_CHARTS,
+            key_of=_guard.kind_key, label='peacock_top10')
+
     if len(rows) >= _MIN_HEALTHY:
         _merge_into_service_snapshot(rows)
-        return {'national': rows, 'chart_captured_at': now,
-                'chart_rails': [CHART_SLUGS[s][0] for s in acc],
-                'chart_positions': len(rows)}
+        out = {'national': rows, 'chart_captured_at': now,
+               'chart_rails': sorted({str(r.get('collection') or '')
+                                      for r in rows} - {''}),
+               'chart_positions': len(rows)}
+        if unresolved:
+            out['charts_unresolved'] = unresolved
+        if any(r.get(_guard.STALE_FIELD) for r in rows):
+            out['stale_from_previous'] = True
+        return out
 
     # Never publish a short read over a good one: the rail would lose
     # most of its chart and the catalog would be promoted into

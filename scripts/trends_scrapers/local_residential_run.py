@@ -10,6 +10,22 @@ scrapers write to, so the dashboard picks them up transparently.
 
 Usage (one-shot, from bg-webapp/):
     python3 -m scripts.trends_scrapers.local_residential_run
+    python3 -m scripts.trends_scrapers.local_residential_run --skip-coverage
+
+The batch ends by pricing what it brought in, because these rails
+refresh nine hours after the nightly orchestrator has run and nothing
+re-prices against them until the next morning. Two passes, in this
+order:
+
+    coverage gate               every title new to today's chart gets
+                                a reading, instead of rendering blank
+                                for the rest of the day
+    residential_chart_pricing   every declared chart that moved is
+                                sized again as a set, so the readings
+                                descend in the order the service is
+                                publishing right now
+
+`--skip-coverage` scrapes only, for a scraper smoke test.
 
 Install as a launchd job (runs daily at 9am + on wake):
     python3 -m scripts.trends_scrapers.local_residential_run --install-launchd
@@ -282,10 +298,76 @@ def _refresh_storage_state() -> int:
     return proc.returncode
 
 
-def _run_all() -> int:
-    """Refresh donated cookies from local Chrome, then run every
-    RESIDENTIAL_SCRAPERS entry. Returns 0 if at least one scraper
-    succeeded, 1 if all failed."""
+def _run_coverage_gate() -> int:
+    """Price whatever this run brought onto the board.
+
+    This batch refreshes half the streaming rails hours after the
+    nightly orchestrator has finished, and the nightly is where the
+    coverage gate used to live and nowhere else. So a title that first
+    appeared in THIS run had no pricing pass behind it and rendered
+    blank for the rest of the day: on 2026-09-25 that was Netflix's
+    own #2 and #3 for the day, three new Disney+ rows and five new
+    Peacock ones, all of them collected correctly by the gate's walk
+    and simply never walked, because the walk had already run at 03:00
+    against yesterday's rails.
+
+    Run in its own subprocess, the same way the scrapers are, so a
+    crash here cannot take the batch down with it.
+    """
+    logger.info("pricing what this run brought onto the board ...")
+    cmd = [sys.executable, '-m', 'scripts.trends_scrapers.coverage_gate']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[coverage_gate stdout] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[coverage_gate stderr] %s", proc.stderr.strip())
+    if proc.returncode != 0:
+        logger.warning("coverage gate exited %d; the rails this run "
+                        "refreshed keep whatever readings they had",
+                        proc.returncode)
+    return proc.returncode
+
+
+def _run_chart_pricing() -> int:
+    """Re-level the charts this run just moved.
+
+    The pricing pass runs at 06:00 UTC on the build box and these
+    scrapes land at 15:00 UTC, so for the fifteen hours in between
+    the session-gated rails rendered yesterday's readings against
+    today's order. On 2026-09-25 every declared chart passed the sort
+    test at 07:40 PT and five had degraded an hour after the
+    re-scrape. Closing that means pricing the charts where they are
+    scraped, which is here.
+
+    After the coverage gate, not before: a title new to today's chart
+    has no reading at all, the gate is what gives it one, and the
+    set-level pass drops a title it has no entry for. Running first
+    would size the chart over a partial set and leave the new title
+    blank, which is the other half of the same audit.
+
+    Own subprocess, like everything else in this lane, so a crash
+    here cannot take the batch down with it.
+    """
+    logger.info("re-levelling the charts this run moved ...")
+    cmd = [sys.executable, '-m',
+           'scripts.trends_scrapers.residential_chart_pricing']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[chart_pricing stdout] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[chart_pricing stderr] %s", proc.stderr.strip())
+    if proc.returncode != 0:
+        logger.warning("chart pricing exited %d; the rails this run "
+                        "refreshed keep the order they had", proc.returncode)
+    return proc.returncode
+
+
+def _run_all(run_coverage: bool = True) -> int:
+    """Refresh donated cookies from local Chrome, run every
+    RESIDENTIAL_SCRAPERS entry, then price what they brought in.
+    Returns 0 if at least one scraper succeeded, 1 if all failed."""
     _refresh_cookies()
     _auto_login_refresh()
     # Last, so it sees the freshest cookies: the streaming sessions are
@@ -298,6 +380,15 @@ def _run_all() -> int:
             ok_count += 1
     logger.info("residential run complete: %d/%d scrapers ok",
                  ok_count, len(RESIDENTIAL_SCRAPERS))
+    # Nothing moved means nothing new to price, and neither pass is
+    # free, so they only run behind a scraper that published. The gate
+    # gives every new title a reading; the chart pass then re-levels
+    # each declared chart against the order it is showing now.
+    if ok_count and run_coverage:
+        _run_coverage_gate()
+        _run_chart_pricing()
+    elif not ok_count:
+        logger.info("no scraper published; skipping the coverage pass")
     return 0 if ok_count else 1
 
 
@@ -428,13 +519,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--install-launchd',   action='store_true')
     ap.add_argument('--uninstall-launchd', action='store_true')
+    ap.add_argument('--skip-coverage', action='store_true',
+                    help='scrape only; leave the pricing pass to the '
+                         'nightly (for a scraper smoke test)')
     args = ap.parse_args()
 
     if args.install_launchd:
         return _install_launchd()
     if args.uninstall_launchd:
         return _uninstall_launchd()
-    return _run_all()
+    return _run_all(run_coverage=not args.skip_coverage)
 
 
 if __name__ == '__main__':

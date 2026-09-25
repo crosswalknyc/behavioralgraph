@@ -52,6 +52,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from . import _chart_rail_guard as _guard
 from ._base import run_scraper
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,11 @@ CHARTS = [
 
 _DEPTH = 20
 _MIN_HEALTHY = 12
+
+# Pluto publishes two charts, one per page. The floor above counts
+# rows across both, so a page that never hydrates reads as healthy.
+# See `_chart_rail_guard`.
+_EXPECTED_CHARTS = ('series', 'movies')
 
 _S3_BUCKET = 'dashboard-inputs'
 _S3_LATEST = 'trends_iq_snapshots/latest/pluto_popular.json'
@@ -183,9 +189,28 @@ def _drift(before: list[dict], after: list[dict]) -> tuple[int, float]:
                    else (s[mid - 1] + s[mid]) / 2.0)
 
 
-def fetch() -> dict[str, Any]:
+def _render_charts(entries: list) -> list[dict]:
+    """Render the given CHARTS entries and return their rows."""
     from ._playwright import render_pages
 
+    if not entries:
+        return []
+    rendered = dict(render_pages(
+        [(label, url) for label, url, _u, _h, _k, _c in entries],
+        homepage=HOMEPAGE, wait_ms=6000, scroll_ms=3000,
+        timeout_ms=60000, hydration_wait_ms=14000, page_hook=_hook))
+
+    rows: list[dict] = []
+    for label, _url, uuid, heading, kind, chart in entries:
+        got = extract(rendered.get(label, '[]'), uuid, heading, kind,
+                      chart)
+        logger.info("pluto_popular %s: %r -> %d row(s)", label, chart,
+                    len(got))
+        rows.extend(got)
+    return rows
+
+
+def fetch() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
     prev = _previous() or {}
@@ -193,18 +218,26 @@ def fetch() -> dict[str, Any]:
     prev_date = prev.get('chart_capture_date') or ''
     prev_at = prev.get('chart_captured_at') or ''
 
-    rendered = dict(render_pages(
-        [(label, url) for label, url, _u, _h, _k, _c in CHARTS],
-        homepage=HOMEPAGE, wait_ms=6000, scroll_ms=3000,
-        timeout_ms=60000, hydration_wait_ms=14000, page_hook=_hook))
+    rows = _render_charts(CHARTS)
 
-    rows: list[dict] = []
-    for label, _url, uuid, heading, kind, chart in CHARTS:
-        got = extract(rendered.get(label, '[]'), uuid, heading, kind,
-                      chart)
-        logger.info("pluto_popular %s: %r -> %d row(s)", label, chart,
-                    len(got))
-        rows.extend(got)
+    # Pluto's two charts live on two pages, so one of them failing is
+    # one page that did not hydrate rather than Pluto publishing an
+    # empty chart. The row floor counts across both and reads twenty
+    # clean movie rows as healthy while the series chart is missing
+    # entirely. Render the missing page once more, then carry
+    # yesterday's rows for it rather than publishing half a day.
+    unresolved: list[str] = []
+    missing = _guard.missing_rails(rows, _EXPECTED_CHARTS,
+                                   key_of=_guard.kind_key)
+    if rows and missing:
+        again = [c for c in CHARTS
+                 if _guard.chart_kind(c[4]) in set(missing)]
+        rows = _guard.rerender_recovered(
+            rows, _render_charts(again), _EXPECTED_CHARTS,
+            key_of=_guard.kind_key, label='pluto_popular')
+        rows, unresolved = _guard.carry_missing(
+            rows, prev_rows, _EXPECTED_CHARTS, key_of=_guard.kind_key,
+            label='pluto_popular')
 
     healthy = len(rows) >= _MIN_HEALTHY
     prev_healthy = len(prev_rows) >= _MIN_HEALTHY
@@ -225,11 +258,16 @@ def fetch() -> dict[str, Any]:
                 'last_observed_count': len(rows)}
 
     if healthy:
-        return {'national': rows,
-                'chart_captured_at': now.isoformat(),
-                'chart_capture_date': today,
-                'chart_rails': [c for _l, _u2, _u, _h, _k, c in CHARTS],
-                'capture_pinned': False}
+        out = {'national': rows,
+               'chart_captured_at': now.isoformat(),
+               'chart_capture_date': today,
+               'chart_rails': [c for _l, _u2, _u, _h, _k, c in CHARTS],
+               'capture_pinned': False}
+        if unresolved:
+            out['charts_unresolved'] = unresolved
+        if any(r.get(_guard.STALE_FIELD) for r in rows):
+            out['stale_from_previous'] = True
+        return out
 
     reason = (f'pluto_popular: read {len(rows)} row(s), below the '
               f'{_MIN_HEALTHY}-row health floor')

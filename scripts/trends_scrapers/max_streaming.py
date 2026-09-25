@@ -40,12 +40,14 @@ Standalone:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sys
 from html import unescape
 from typing import Any
 
+from . import _chart_rail_guard as _guard
 from ._base import run_scraper
 from ._playwright import render_pages
 
@@ -451,7 +453,31 @@ _NAV_STOPWORDS = frozenset({
 
 
 
-def fetch() -> dict[str, Any]:
+# HBO Max publishes a series chart AND a film chart, and both render
+# off the same page, so one of them coming back empty is a collector
+# that stopped walking rather than HBO Max publishing an empty chart.
+# See `_chart_rail_guard` for why a row-count floor cannot catch this.
+_EXPECTED_CHARTS = ('series', 'movies')
+
+_S3_BUCKET = 'dashboard-inputs'
+_S3_LATEST = 'trends_iq_snapshots/latest/max.json'
+
+
+def _previous() -> dict:
+    """The last published max snapshot. Empty on any failure: a chart
+    we cannot carry is reported, never invented."""
+    try:
+        import boto3
+        s3 = boto3.client('s3', region_name='us-east-2')
+        d = json.loads(s3.get_object(
+            Bucket=_S3_BUCKET, Key=_S3_LATEST)['Body'].read())
+        return d if isinstance(d, dict) else {}
+    except Exception as e:  # noqa: BLE001
+        logger.info("max: no previous snapshot to carry from (%s)", e)
+        return {}
+
+
+def _render() -> list:
     # Max IP-gates non-US ranges (including Hetzner Falkenstein and any
     # residential proxy that lands outside the US). Route through the
     # IPRoyal residential proxy so we hit a US exit. This is a no-op
@@ -462,32 +488,38 @@ def fetch() -> dict[str, Any]:
     # dashboard's Country/Region dropdown must be set to
     # "United States". The default "Random" rotation gives US only
     # ~12% of the time.
-    rendered = render_pages(MAX_URLS,
-                             homepage='https://www.hbomax.com/',
-                             cookie_domain='hbomax.com',
-                             wait_selectors=_MAX_HYDRATE_SELECTORS,
-                             wait_ms=4000,
-                             scroll_ms=3000,
-                             hydration_wait_ms=12000,
-                             use_proxy=True,
-                             # Logged out, play.hbomax.com bounces to
-                             # the marketing site and serves plan cards
-                             # and promotional artwork at HTTP 200. That
-                             # parses into tiles, so nothing here may be
-                             # published without proving the session.
-                             assert_signed_in='hbomax.com',
-                             page_hook=collect_chart_rails)
+    return render_pages(MAX_URLS,
+                         homepage='https://www.hbomax.com/',
+                         cookie_domain='hbomax.com',
+                         wait_selectors=_MAX_HYDRATE_SELECTORS,
+                         wait_ms=4000,
+                         scroll_ms=3000,
+                         hydration_wait_ms=12000,
+                         use_proxy=True,
+                         # Logged out, play.hbomax.com bounces to
+                         # the marketing site and serves plan cards
+                         # and promotional artwork at HTTP 200. That
+                         # parses into tiles, so nothing here may be
+                         # published without proving the session.
+                         assert_signed_in='hbomax.com',
+                         page_hook=collect_chart_rails)
 
+
+def _charts_from(rendered: list) -> list[tuple[str, list[dict]]]:
+    for _label, html in rendered or []:
+        charts = extract_charts(html)
+        if charts:
+            return charts
+    return []
+
+
+def fetch() -> dict[str, Any]:
     # The platform's own ranked rail decides the order. Reading tile
     # position instead is how our board ended up putting Lanterns at 4
     # while HBO Max itself had it at 1. Ordering downstream is the
     # ranking agent's business; which titles the platform charts, and
     # in what order, is this scraper's, and the platform says so.
-    charts: list[tuple[str, list[dict]]] = []
-    for _label, html in rendered:
-        charts = extract_charts(html)
-        if charts:
-            break
+    charts = _charts_from(_render())
 
     if charts:
         rows: list[dict] = []
@@ -496,10 +528,39 @@ def fetch() -> dict[str, Any]:
                         ', '.join(f"{c['rank']} {c['title']}"
                                   for c in chart))
             rows.extend(chart)
-        return {'national': rows,
-                'chart_rail': charts[0][0],
-                'chart_rails': [n for n, _ in charts],
-                'chart_positions': len(rows)}
+
+        # One rail short. On 2026-09-25 that shipped the movies chart
+        # whole and the series chart absent, and the six-row floor
+        # every scraper here carries reported health, because five
+        # clean movie rows are not a short read. Render once more, and
+        # if the rail is still absent carry yesterday's rather than
+        # publishing a half-width archive day, which does not come
+        # back.
+        missing = _guard.missing_rails(rows, _EXPECTED_CHARTS,
+                                       key_of=_guard.kind_key)
+        if missing:
+            logger.info("max: %s chart absent from this render; "
+                        "rendering once more", ', '.join(missing))
+            rows = _guard.rerender_recovered(
+                rows, [r for _n, c in _charts_from(_render()) for r in c],
+                _EXPECTED_CHARTS, key_of=_guard.kind_key, label='max')
+            rows, unresolved = _guard.carry_missing(
+                rows, _previous().get('national'), _EXPECTED_CHARTS,
+                key_of=_guard.kind_key, label='max')
+        else:
+            unresolved = []
+
+        rails = sorted({str(r.get('collection') or '') for r in rows}
+                       - {''})
+        out = {'national': rows,
+               'chart_rail': charts[0][0],
+               'chart_rails': rails,
+               'chart_positions': len(rows)}
+        if unresolved:
+            out['charts_unresolved'] = unresolved
+        if any(r.get(_guard.STALE_FIELD) for r in rows):
+            out['stale_from_previous'] = True
+        return out
 
     # The pre-flight already proved the session, so reaching here
     # means the ranked rail did not render or is no longer named
