@@ -513,9 +513,51 @@ def _uninstall_launchd() -> int:
     return 0
 
 
+def _load_repo_env() -> None:
+    """Load `<repo_root>/.env` (the parent of bg-webapp) into the
+    process environment for names not already set.
+
+    launchd starts this lane with PATH, AWS_REGION and PYTHONPATH and
+    nothing else, so the coverage gate and the chart pricing pass it
+    runs had no ANTHROPIC_API_KEY and skipped every reasoning call
+    without failing (2026-09-25: "chart sets: no API key, keeping
+    per-item values"). The key lives in the repo-root .env on this
+    machine, the same file the dashboard reads. Names only are
+    logged; values never are. Never raises.
+    """
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+        path = os.path.join(repo_root, '.env')
+        if not os.path.exists(path):
+            return
+        loaded = []
+        with open(path, encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                if line.startswith('export '):
+                    line = line[len('export '):]
+                name, _, value = line.partition('=')
+                name = name.strip()
+                value = value.strip().strip('"').strip("'")
+                if name and value and not os.environ.get(name):
+                    os.environ[name] = value
+                    loaded.append(name)
+        if loaded:
+            logging.getLogger(__name__).info(
+                'loaded %d name(s) from %s: %s', len(loaded), path,
+                ', '.join(sorted(loaded)))
+    except Exception:
+        logging.getLogger(__name__).exception(
+            'repo .env load skipped (non-fatal)')
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO,
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    _load_repo_env()
     ap = argparse.ArgumentParser()
     ap.add_argument('--install-launchd',   action='store_true')
     ap.add_argument('--uninstall-launchd', action='store_true')

@@ -216,6 +216,17 @@ def reprice(se, *, slugs: Optional[list[str]] = None,
         # One call per chart, the whole chart sized together. Anything
         # that fails here is non-fatal by construction inside the
         # function: the rail keeps the readings it had.
+        #
+        # Without a key the set pass silently keeps per-item values,
+        # and a run that then stamped the charts as levelled would put
+        # them out of scope for the next run that does have one. That
+        # is what the first keyless run on 2026-09-25 did. The
+        # mechanical passes still run and write; the stamp does not.
+        reasoned = bool((os.environ.get('ANTHROPIC_API_KEY') or '').strip())
+        if not reasoned:
+            logger.warning('residential chart pricing: ANTHROPIC_API_KEY '
+                           'is not set; the set-level pass is skipped and '
+                           'the charts are NOT stamped as levelled')
         cs = se._reason_published_charts_as_sets(items, target_date_iso)
         stats['charts'] = cs.get('charts', 0)
         stats['titles'] = cs.get('titles', 0)
@@ -244,8 +255,9 @@ def reprice(se, *, slugs: Optional[list[str]] = None,
     # Per slug, so tomorrow's scope asks the right question of each
     # chart and a narrowed run does not mark the rest as levelled.
     levelled = dict(board.get(LEVELLED_FIELD) or {})
-    for slug in in_scope:
-        levelled[slug] = now_iso
+    if reasoned:
+        for slug in in_scope:
+            levelled[slug] = now_iso
     board[LEVELLED_FIELD] = levelled
     # The shared write path: board file, today's dated copy, the window
     # index, and the reasoning companion merged rather than replaced.
