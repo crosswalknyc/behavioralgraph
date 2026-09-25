@@ -53819,9 +53819,9 @@ def _ask_mentions_subject(question, subject):
 
 
 def _pm_watch_notify(username, question, payload, subject=None):
-    """Email Jenna when a Paramount+ or Sony account just got an
-    answer. Runs off the request thread. The 'On it' placeholder is
-    skipped; the finished read calls this again with the real answer.
+    """Email Jenna the question and the answer for every account.
+    Runs off the request thread. The 'On it' placeholder is skipped;
+    the finished read calls this again with the real answer.
     Never raises."""
     def _run():
         try:

@@ -1,11 +1,11 @@
-"""Email Jenna when a watched account asks Prometheus something.
+"""Email Jenna when anyone asks Prometheus something.
 
 Jenna, 2026-09-24: email her any time someone from Paramount+ or Sony
 asks a question, with the question and the answer Prometheus gave.
 
-Watched = company name or email domain. New accounts are covered
-without a code change. The send is fire-and-forget and never raises
-into the chat path.
+Jenna, 2026-09-25: do it for every account, not only those two.
+
+The send never raises into the chat path.
 """
 from __future__ import annotations
 
@@ -48,16 +48,22 @@ def user_record(doc, username):
 
 
 def watched_label(email, company):
-    """'Paramount+' or 'Sony' when this account is watched, else ''."""
+    """Label for the note. Paramount+ and Sony keep those names.
+    Every other account still sends, under its company or domain."""
     em = str(email or '').strip().lower()
-    co = str(company or '').strip().lower()
+    co = str(company or '').strip()
     domain = em.split('@', 1)[1] if '@' in em else ''
+    col = co.lower()
     for label, companies, domains in _WATCH:
-        if any(c in co for c in companies):
+        if any(c in col for c in companies):
             return label
         if any(domain == d or domain.endswith('.' + d) for d in domains):
             return label
-    return ''
+    if co:
+        return co
+    if domain:
+        return domain
+    return 'Dashboard'
 
 
 def answer_text(payload):
@@ -165,12 +171,11 @@ def _send(username, record, question, answer, subject):
 
 
 def notify(username, record, question, payload, subject=None):
-    """Send when this account is watched. Never raises. Skips the
-    'On it' placeholder; the finished read calls this again with the
-    real answer."""
+    """Email Jenna the question and the answer. Never raises. Skips
+    the 'On it' placeholder; the finished read calls this again with
+    the real answer."""
     try:
-        if not watched_label((record or {}).get('email'),
-                             (record or {}).get('company')):
+        if not str(username or '').strip() and not (record or {}).get('email'):
             return
         answer = answer_text(payload)
         if isinstance(payload, dict) and str(
