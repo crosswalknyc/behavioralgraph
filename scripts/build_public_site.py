@@ -334,7 +334,7 @@ def main():
     js = js.replace('<a href="#">LinkedIn</a>',
                     '<a href="https://www.linkedin.com/company/crosswalk-technologies" target="_blank" rel="noopener">LinkedIn</a>')
     js = js.replace('<a href="#">Privacy Policy</a><a href="#">Your Privacy Choices</a><a href="#">Opt-Out</a><a href="#">Terms of Use</a><a href="#">Tracking consent</a><a href="#">COPPA</a>',
-                    '<a href="privacy-policy-1.html">Privacy Policy</a><a href="do-not-sell-my-personal-information.html">Your Privacy Choices</a><a href="optout.html">Opt-Out</a><a href="terms-of-use.html">Terms of Use</a><a href="tracking-transparency.html">Tracking consent</a><a href="deidentified-data.html">De-identified data</a><a href="coppa.html">COPPA</a><a href="app.html">Join the panel</a>')
+                    '<a href="privacy-policy-1.html">Privacy Policy</a><a href="do-not-sell-my-personal-information.html">Your Privacy Choices</a><a href="optout.html">Opt-Out</a><a href="terms-of-use.html">Terms of Use</a><a href="tracking-transparency.html">Tracking consent</a><a href="deidentified-data.html">De-identified data</a><a href="coppa.html">COPPA</a><a href="/site/join">Join the panel</a>')
     (OUT / "assets" / "js" / "crosswalk.js").write_text(js, encoding="utf-8")
 
     # Legacy css/js for the legal pages copied from website/.
