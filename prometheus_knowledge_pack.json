@@ -1,26 +1,26 @@
 {
  "version": 1,
  "content_hash": "b6f999170123feae06df0358ba539b24af2b288b5bbf267715c1c2bc73455083",
- "examples_hash": "70e1a09cd4d2d2a1f13e64cb394c442d9afa076bb94738c5ac8032090861ada3",
+ "examples_hash": "4f40a3c8e85e71352c7a7c210a9e22413915636c9ec1842315c46b83808c3783",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
   ".cursor/rules/canonical-brand-category.mdc": "9489d976342fda339a1c821a7ad9b43a8cdfad01bd327f3e91d456403c6c3768",
   ".cursor/rules/crosswalk-audience-vetting-framework.mdc": "2cc05b465e981135b41bae87fcedfff83ff82289ed97ad3e403574bced7a9ba0",
-  ".cursor/rules/crosswalk-brand-standards.mdc": "eb66580ccab96a8e90e238cf3e97e6a9822effc7b102d6e0a810888c07b80e18",
+  ".cursor/rules/crosswalk-brand-standards.mdc": "cc356efe466b9ee3bfbbd741be58e0089559a7055b738e4636cb4e8cf9ea6dde",
   ".cursor/rules/default-date-range.mdc": "af60aa5161cac76e31937132afbaaa7acf83a52727ebb2fbec0ef9d958e82cec",
   ".cursor/rules/in-place-corrections.mdc": "e08bf4274b45dd991fec142789918289f13b136f31ed9c56ba7150f2acf5faad",
   ".cursor/rules/individual-level-language.mdc": "e36c375ca8def4264dd9f826db8ee60d0166f278ebbdb517a53300fcf467692b",
   ".cursor/rules/no-em-dashes.mdc": "1ae6da8a97e7a094889cd9e32270afec82a5ac8088982e1ed8c42fe2b241399d",
   ".cursor/rules/no-modeled-or-source-language.mdc": "43b4eecfae0589958d4b56626f9ae866b92dc598bf15e76e32cd44fbf4dd72e6",
   ".cursor/rules/no-operator-hints-in-dashboard.mdc": "11cf4f4e4941733d2f53abf4cff647d07c3992752792ace9eaf77dd7a7324334",
-  ".cursor/rules/no-round-numbers-in-deliverables.mdc": "5932e018fb0dc63cfc69f1025eef5c51c99e0206c9f31c77adf96bee5c49f558",
+  ".cursor/rules/no-round-numbers-in-deliverables.mdc": "b588ce6a0d7aefb7e8439863e540fde63be4085b43335011686a7a86b372116c",
   ".cursor/rules/no-round-sample-sizes.mdc": "e5e519707c0164136da81c82b5c8fccece70a183d809783e488a84a0bbd4e2a3",
   ".cursor/rules/partner-api-shared-catalog.mdc": "10566e53228794e932bfd0cfe843f8658597f60479d765030c181d0343d6244d",
   ".cursor/rules/reasoned-answers-clickstream-boundary.mdc": "d0ce9e8945f21eedb7e3265804ca8b4a0635b43a3e2495ca33c3436676b93ca0",
   ".cursor/rules/reasoning-wins-when-fact-rooted.mdc": "09c11ea03c239a3d23485e547df55cc319471ec14ecb83905236902e8d8b15f3",
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
-  ".cursor/skills/crosswalk-brand-standards/SKILL.md": "174a0399b70725ab86b27dde917ceffaea8c2ae0c32052d7e823f109365accfe",
+  ".cursor/skills/crosswalk-brand-standards/SKILL.md": "1adecc2dae85a139bf843dbebee76bc5411c56a4ba5c1e66966eb3a19acc61d0",
   ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "a85ec231ea9b4c8156d789236559be38c5e4dd505b52d53bc6ff3c794a663048",
   ".cursor/skills/crosswalk-panel-analyst/SKILL.md": "c17c4dd47637bddb11e93b4bd7b2cc3cb9a351f3b62b55b3ead6397138e565cb",
   ".cursor/skills/crosswalk-panel-analyst/references/boundary.md": "e9a9bcf2b0feb26257e92fa5a610e17dbc03f697dc3eca56a1a734b2c4e4c287",
@@ -118,6 +118,12 @@
   }
  },
  "examples": {
+  "audience_sizing": {
+   "subject": "The God Of The Woods Readers",
+   "title": "The God Of The Woods Readers | Full Total Universe split into generational bands | Sep 18 2025 to Sep 18 2026",
+   "q": "i want to know the % of the god of the woods audience by generation indexed vs. gen pop",
+   "text": "Millennials carry half the file at 687,413 projected US people, 49.8% of the 1,381,390 reader audience, with Gen X the second block at 475,815.\n\nMillennials, projected US people: 687,413, Gen X, projected US people: 475,815, Gen Z, projected US people: 130,574.\n\nGeneration mix, Sep 18 2025 to Sep 18 2026 (share of the audience's projected US people)\n- Millennials: 49.8% share. 687,413 projected US people; the 25-34 and 35-44 bands are the spine of the file\n- Gen X: 34.4% share. 475,815 projected US people; 45-54 at 21.6% and 55-64 at 12.8% carry this block\n- Gen Z: 9.5% share. 130,574 projected US people; 18-24 ..."
+  },
   "category_demand": {
    "subject": "Paw Patrol Series",
    "title": "Paw Patrol Series | Parents of Kids 4-6 | Jul 1 2025 to Jun 30 2026",
@@ -125,10 +131,10 @@
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
   },
   "competitive_overlap": {
-   "subject": "Shark Tank",
-   "title": "Shark Tank",
-   "q": "Compare the selected cuts against the base profile",
-   "text": "The file is two nearly equal generational halves plus a small commerce tail. Millennials are 19.4M (39.2% of the 49.5M file) and Gen X is 18.3M (36.9%). Together 37.7M, 76.1% of the audience. Gen Z is 3.8M (7.7%). The remaining 16.2% sits older; a Shark Tank Boomers profile already exists in the library to cover it.\n\nWHAT THEY SHARE\n- LinkedIn is the spine. Millennials 58.9 vs 28.5 parent (+30.4pp), Gen X 52.8 (+24.3pp). Both halves read as a professional and founder-minded identity, not a general reality-TV audience. That is the plannable definition: business-identity adults, 37.7M, reachable on LinkedIn at ..."
+   "subject": "The God Of The Woods Readers",
+   "title": "The God Of The Woods Readers | Each generational band of The God of the Woods Readers benchmarked against US Gen Pop 2026 | Sep 18 2025 to Sep 18 2026",
+   "q": "I'm interested in comparing the generational breaks for The God of the Woods Readers profile versus the generational breaks (Boomers, Gen X, Gen Z, and Millennials) for Gen Pop 2026 to get an index for each generation.  In which Generations does The God of the Woods Readers overindex?",
+   "text": "The file overindexes in two bands only: Millennials index 186 against the US general population and Gen X 142, while Gen Z (47) and Boomers and older (22) sit well below average.\n\nMillennials, index vs US Gen Pop 2026: 186, Gen X, index vs US Gen Pop 2026: 142, Gen Z, index vs US Gen Pop 2026: 47.\n\nGenerational band mix, Sep 18 2025 to Sep 18 2026 (share of the audience's projected US people, indexed against the same band in US Gen Pop 2026)\n- Millennials: 49.8% share, 26.8% penetration. index 186. 687,413 projected US people; the strongest overindex on the file, spine of the readership at 25-34 and 35-44\n- Gen ..."
   },
   "sponsorship_fit": {
    "subject": "Shark Tank",
