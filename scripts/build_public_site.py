@@ -56,7 +56,7 @@ LOGOS = ["crosswalk-logo-black.png", "crosswalk-logo-white.png", "favicon.svg"]
 IMAGES = ["panelist.jpg", "hero.jpg", "about.jpg"]
 
 META = {
-    "index.html": ("Crosswalk | Ask any audience question in plain English.",
+    "index.html": ("Crosswalk | How can I help you today?",
                    "Prometheus answers from 30 million opted-in people and their entire digital life. Who they are, what they watch, what they buy, where they signed up, and what they did yesterday."),
     "products.html": ("Crosswalk | Products", "Nine reports, one for each kind of question. Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ."),
     "panel.html": ("Crosswalk | The panel", "30 million people chose to be counted. How the opted-in panel works and what clients receive."),
