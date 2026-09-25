@@ -258,10 +258,45 @@ def write_snapshot(source: str, payload: dict, *,
             logger.exception('stream_estimates: distinctness backstop '
                              'skipped (non-fatal)')
 
+    # The board parses this file on every page load, on a 512 MB host.
+    # Reasoning prose the board never renders moves to a sibling
+    # `stream_estimates_reasoning.json` under the same prefixes; the
+    # board file keeps every rendered field. See stream_reasoning_split.
+    reasoning: Optional[dict] = None
+    if source == 'stream_estimates' and isinstance(payload.get('items'), dict):
+        try:
+            from . import stream_reasoning_split as _srs
+            payload, reasoning = _srs.split(payload)
+            if reasoning:
+                reasoning['fetched_at'] = payload['fetched_at']
+            else:
+                reasoning = None
+        except Exception:
+            reasoning = None
+            logger.exception('stream_estimates: reasoning split skipped '
+                             '(non-fatal, full payload written)')
+
     body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     s3 = _s3_client()
 
     key_latest = f'{S3_LATEST_PREFIX}{source}.json'
+    if reasoning is not None:
+        # Merged over the existing companion, never a plain overwrite:
+        # a pass that re-priced a few hundred rows holds prose for only
+        # those rows in memory. See stream_reasoning_split.write_companion.
+        try:
+            from . import stream_reasoning_split as _srs
+            _srs.write_companion(
+                s3, S3_BUCKET,
+                f'{S3_LATEST_PREFIX}{_srs.COMPANION_SOURCE}.json', reasoning)
+            if also_dated:
+                _srs.write_companion(
+                    s3, S3_BUCKET,
+                    (S3_DATED_PREFIX.format(date=now.strftime('%Y-%m-%d'))
+                     + f'{_srs.COMPANION_SOURCE}.json'), reasoning)
+        except Exception:
+            logger.exception('stream_estimates: reasoning companion write '
+                             'failed (non-fatal)')
     s3.put_object(Bucket=S3_BUCKET, Key=key_latest, Body=body,
                    ContentType='application/json',
                    CacheControl='public, max-age=60')
@@ -695,6 +730,28 @@ def run_scraper(source: str, label: str, kind: str,
 
     elapsed = time.time() - started
     payload['scrape_elapsed_s'] = round(elapsed, 2)
+
+    # A rail can parse rows, write a snapshot and report success while
+    # every title it published is the tile read aloud rather than the
+    # programme's name. ESPN+ and Hulu both did on 2026-09-25 and
+    # nothing said so. This says so: it never edits a title and never
+    # drops a row, it puts the rail into the run's `source_health`
+    # tally so the degradation travels with the snapshot.
+    try:
+        from .title_shape import check as _title_shape_check
+        _title_shape_check(source, payload)
+    except Exception:
+        logger.debug("title_shape check skipped for %s", source,
+                      exc_info=True)
+    # Carry whatever this source recorded onto its own file. A healthy
+    # run stamps nothing, so the field's presence is the signal.
+    try:
+        from . import source_health as _sh
+        _sh.stamp(payload, source)
+    except Exception:
+        logger.debug("source_health stamp skipped for %s", source,
+                      exc_info=True)
+
     try:
         write_snapshot(source, payload)
     except Exception as e:
