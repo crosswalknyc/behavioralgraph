@@ -128625,6 +128625,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (first && c.parentElement !== first) first.appendChild(c);
                 claimed.lift = true;
             });
+            // A section seated on an earlier pass is no longer a child of
+            // the container, so the loop above cannot see it and the first
+            // pass is the only one that claims anything. Every later call
+            // then found nothing live and returned at the nav block, which
+            // is where the active panel gets set: the tabs rendered, took
+            // the click, and never switched. Read the panels themselves so
+            // a claim survives the move.
+            _BP_SECTIONS.forEach(function (s) {
+                var seated = host.querySelector('[data-bp-panel="' + s.id + '"]');
+                if (seated && seated.children.length) claimed[s.id] = true;
+            });
 
             // ---- head ----
             var hero = document.getElementById('bpiqHeroValue');
