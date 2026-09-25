@@ -9,7 +9,6 @@ into the chat path.
 """
 from __future__ import annotations
 
-import threading
 import traceback
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
@@ -28,6 +27,24 @@ _REPLY_TO = 'jenna@crosswalknyc.com'
 # Immediate replies that mean the real answer is still being written.
 # The finished job sends the actual answer, so these are not emailed.
 _PLACEHOLDER_PREFIXES = ('On it.',)
+
+
+def user_record(doc, username):
+    """The account dict for a username.
+
+    load_users() returns the full document, with accounts under
+    'users'. A username-keyed map still works.
+    """
+    if not isinstance(doc, dict):
+        return {}
+    name = str(username or '').strip()
+    if not name:
+        return {}
+    inner = doc.get('users')
+    if isinstance(inner, dict) and isinstance(inner.get(name), dict):
+        return inner[name]
+    rec = doc.get(name)
+    return rec if isinstance(rec, dict) else {}
 
 
 def watched_label(email, company):
@@ -159,9 +176,8 @@ def notify(username, record, question, payload, subject=None):
         if isinstance(payload, dict) and str(
                 payload.get('reply') or '').startswith(_PLACEHOLDER_PREFIXES):
             return
-        threading.Thread(
-            target=_send,
-            args=(username, record, question, answer, subject),
-            daemon=True).start()
+        # Caller already moved this off the request. Send here so the
+        # note is not left on a second thread that can die first.
+        _send(username, record, question, answer, subject)
     except Exception:
         traceback.print_exc()

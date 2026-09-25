@@ -53826,8 +53826,7 @@ def _pm_watch_notify(username, question, payload, subject=None):
     def _run():
         try:
             import prometheus_watch_notify as _pwn
-            rec = (load_users() or {}).get(
-                str(username or '').strip()) or {}
+            rec = _pwn.user_record(load_users() or {}, username)
             _pwn.notify(username, rec, question, payload, subject)
         except Exception:
             traceback.print_exc()
