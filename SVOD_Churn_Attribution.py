@@ -5385,8 +5385,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             "", "", "", "", "", "",
         ))
     rows.extend([
-        ("Exclusion Window (days)", "", p['exclusion_days'], "", "", "", "", "", "", ""),
-        ("Attribution Window (days)", "", p['attribution_window'], "", "", "", "", "", "", ""),
+        ("Exclusion Window (days)", "", p.get('exclusion_days', 0), "", "", "", "", "", "", ""),
+        ("Attribution Window (days)", "", p.get('attribution_window', 30), "", "", "", "", "", "", ""),
         ("Genre", "", "", genre, "", "", "", "", "", ""),
         ("Content Cadence", "", "", content_cadence, "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
@@ -7803,6 +7803,14 @@ def run_synthetic_attribution(config: dict) -> dict:
 
     # Resolve to the params dict write_output expects
     p = dict(config)
+    # Window defaults (2026-09-25, Dark Matter S2 on Apple TV+): the
+    # wizard-composed config carries neither field, and write_output
+    # reads both for its header rows. Synthetic runs model the
+    # pre-existing base via pre_existing_pct, so there is no
+    # pre-campaign exclusion filter (0); the attribution window is the
+    # standard 30 days the dashboard displays.
+    p.setdefault('exclusion_days', 0)
+    p.setdefault('attribution_window', 30)
     p['episode_dates'] = episode_dates
     p['tracking_mode'] = p.get('tracking_mode') or ('episode' if episode_dates else None)
     p['track_episodes'] = bool(episode_dates) and p.get('track_episodes', True)
