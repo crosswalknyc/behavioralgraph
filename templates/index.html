@@ -80159,7 +80159,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         async function _pmAnalyze(text, ctx, mode, extra) {
             if (!ctx && mode !== 'search_demand' &&
-                !(extra && (extra.bind_subject || extra.panel_confirm ||
+                !(extra && (extra.bind_subject || extra.overall_ranks ||
+                            extra.panel_confirm ||
                             extra.bpiq_inputs || extra.bpiq_confirm ||
                             extra.jiq_inputs || extra.jiq_confirm ||
                             extra.fw_inputs || extra.fw_confirm)) &&
@@ -80188,6 +80189,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (extra && extra.bind_subject) {
                     _abody.bind_subject = extra.bind_subject;
                     _abody.bind_cohort = extra.bind_cohort || '';
+                }
+                if (extra && extra.overall_ranks) {
+                    _abody.overall_ranks = true;
                 }
                 if (extra && extra.panel_confirm) {
                     _abody.panel_confirm = extra.panel_confirm;
@@ -80780,6 +80784,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 if (_mcPick) {
                     _pmMemoryConfirm = null;
+                    if (_mcPick.overall) {
+                        var _ovCtx = Object.assign({}, _pmCollectPageContext() || {});
+                        _ovCtx.primary = null;
+                        _ovCtx.cuts = [];
+                        await _pmAnalyze(_mc.question || text, _ovCtx, '',
+                            { overall_ranks: true });
+                        return;
+                    }
                     await _pmAnalyze(_mc.question || text,
                         _pmCollectPageContext(), '',
                         { bind_subject: _mcPick.subject,

@@ -59787,6 +59787,130 @@ _PM_COHORT_WORDS_RE = re.compile(
     r'\d{2}\s*(?:-|to)\s*\d{2})\b', re.I)
 
 
+
+_PM_TITLES_SCOPE_RE = re.compile(
+    r"\b(?:top|highest|leading|best|rank(?:ed|ing)?)\b"
+    r".{0,60}\b(?:titles?|shows?|movies?|films?|series)\b"
+    r"|\btop titles inside\b"
+    r"|\b(?:titles?|shows?|movies?|films?)\b.{0,40}\b(?:views?|viewership)\b",
+    re.I)
+_PM_NAMED_SERVICE_RE = re.compile(
+    r"\b(?:netflix|hulu|disney|peacock|tubi|pluto|roku|starz|"
+    r"hbo|prime video|amazon prime|paramount|apple tv|youtube|espn)\b",
+    re.I)
+
+
+def _pm_titles_ask_needs_scope(text, page_subject):
+    """True when a titles/shows ask does not name the open profile.
+
+    Jenna 2026-09-25: the profile on screen is not the question.
+    Ask 'Do you mean on Paramount+?' before answering. A service
+    named in the ask is already the subject, so this stays quiet.
+    """
+    t = str(text or "")
+    page = str(page_subject or "").strip()
+    if not t or not page or not _PM_TITLES_SCOPE_RE.search(t):
+        return False
+    page_toks = [w for w in re.findall(r"[a-z0-9]+", page.lower())
+                 if len(w) >= 4]
+    tl = t.lower()
+    if page_toks and any(w in tl for w in page_toks):
+        return False
+    page_l = page.lower()
+    named = [m.group(0).lower() for m in _PM_NAMED_SERVICE_RE.finditer(t)]
+    if any(n not in page_l for n in named):
+        return False
+    return True
+
+
+def _pm_overall_rankers_reply(n=10):
+    """Top shows and movies by views, FAST then streaming.
+
+    Reads the same Rankers cache the dashboard renders. Tries today,
+    then the prior two days, because the live day is often still the
+    prior board until the next refresh. Never raises.
+    """
+    try:
+        if _trends_iq is None:
+            raise RuntimeError("rankers unavailable")
+        from datetime import timedelta
+        payload = None
+        for back in range(0, 3):
+            day = (datetime.now(timezone.utc).date()
+                   - timedelta(days=back)).isoformat()
+            payload = _trends_iq._cache_get({
+                'geo_type': 'National', 'geo_value': '',
+                'lookback_days': _trends_iq.DEFAULT_LOOKBACK_DAYS,
+                'asof': day})
+            cards = (payload or {}).get('cards') or {}
+            if cards.get('streaming_trending') or cards.get('fast_trending'):
+                break
+            payload = None
+        if not payload:
+            raise RuntimeError("rankers cache empty")
+        cards = payload.get('cards') or {}
+        asof = str((payload.get('filters') or {}).get('asof') or '')
+        try:
+            when = datetime.strptime(asof, '%Y-%m-%d').strftime('%B %-d, %Y')
+        except Exception:
+            when = asof
+
+        def _ranked(fam):
+            best = {}
+            for slug, svc in (fam or {}).items():
+                if not isinstance(svc, dict) or str(slug).endswith('_amazon'):
+                    continue
+                platform = str(svc.get('label') or slug)
+                for bucket, kind in (('tv', 'Show'), ('films', 'Movie')):
+                    for row in (svc.get(bucket) or []):
+                        if not isinstance(row, dict):
+                            continue
+                        title = str(row.get('title') or '').strip()
+                        us = row.get('us_streams')
+                        if isinstance(us, dict):
+                            us = us.get('us_estimate')
+                        if not title or not isinstance(us, (int, float)) or us <= 0:
+                            continue
+                        cat = str(row.get('category')
+                                  or row.get('category_display') or '').lower()
+                        if cat == 'film':
+                            kind_l = 'Movie'
+                        elif cat == 'tv':
+                            kind_l = 'Show'
+                        else:
+                            kind_l = kind
+                        key = (title.lower(), platform.lower())
+                        views = int(us)
+                        prev = best.get(key)
+                        if prev is None or views > prev[0]:
+                            best[key] = (views, title, kind_l, platform)
+            return sorted(best.values(), key=lambda r: -r[0])[:n]
+
+        def _block(label, rows):
+            if not rows:
+                return ''
+            lines = [f"{label}" + (f", {when}" if when else "")]
+            for i, (views, title, kind, platform) in enumerate(rows, 1):
+                lines.append(
+                    f"{i}. {title} | {kind} | {platform} | {views:,} views")
+            return "\n".join(lines)
+
+        parts = [
+            "These are the overall ranks, across services.",
+            _block("FAST", _ranked(cards.get('fast_trending'))),
+            _block("Streaming", _ranked(cards.get('streaming_trending'))),
+            "For the full boards, open Rankers.",
+        ]
+        reply = "\n\n".join(p for p in parts if p)
+        if "views" not in reply:
+            raise RuntimeError("rankers reply empty")
+        return reply
+    except Exception:
+        traceback.print_exc()
+        return ("Working on it! I will email you the results when "
+                "they are ready.")
+
+
 def _pm_held_read_clarify(text, subject):
     """Clarify + suggestions when a generated read cannot ship (Jenna
     2026-09-22, Scott's 'Compare Millennials against the Will And
@@ -59823,14 +59947,11 @@ def _pm_held_read_clarify(text, subject):
             f"What does the {subj} file show about {cohort} today?",
         ]
         return reply, chips
-    reply = (
-        f"I could not lock the numbers on that one down cleanly, and "
-        f"I would rather re-aim than guess. Tell me the specific "
-        f"read you want on {subj} - name the cohort, the category, "
-        f"or the two things to compare - and I will run it clean.")
-    chips = [f"Top categories for {subj}",
-             f"Who is the {subj} audience?"]
-    return reply, chips
+    # Jenna 2026-09-25: never tell the user the read was held.
+    # The promise is a follow-up email, not a re-aim.
+    reply = ("Working on it! I will email you the results when "
+             "they are ready.")
+    return reply, []
 
 
 # Rankers board families: card key -> (family label, text keywords that
@@ -60468,6 +60589,15 @@ def api_synth_chat_analyze():
     # handoff survives only as a safety net (counted in stages as
     # handoff_generate so the shrink is visible in the ask log).
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
+    # Overall ranks (2026-09-25, Jenna): "No" on the open-profile
+    # question means the boards, not the profile that happens to
+    # be open. Answer from Rankers and do not bind the page.
+    if body.get('overall_ranks'):
+        _pm_ask_hint(route='rankers_overall', outcome='answered')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _pm_overall_rankers_reply(),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
     # Confirmed memory referent (2026-08-27, Jenna: cross-session
     # memory). The confirm chip re-sends the original ask with the
     # remembered subject; route it straight to the measured-read pass
@@ -60480,6 +60610,26 @@ def api_synth_chat_analyze():
             user, text, history, ctx=ctx, prefer_catalog=True,
             bind_subject=_bind_subject,
             bind_cohort=str(body.get('bind_cohort') or '').strip())
+    # Open profile is not the question (2026-09-25, Jenna): a titles
+    # ask that does not name the profile on screen asks before it
+    # answers. Yes binds that profile. No is overall_ranks above.
+    if isinstance(ctx, dict) and not ctx_err:
+        _scope_page = str((ctx.get('primary') or {}).get('name')
+                          or '').strip()
+        if _scope_page and _pm_titles_ask_needs_scope(text, _scope_page):
+            _pm_ask_hint(route='scope_clarify', outcome='asked_scope',
+                         subject=_scope_page)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': f'Do you mean on {_scope_page}?',
+                'followups': ['Yes', 'No'],
+                'offer_deck': False, 'deck_angle': None,
+                'memory_confirm': {
+                    'question': text,
+                    'options': [
+                        {'label': 'Yes', 'subject': _scope_page},
+                        {'label': 'No', 'overall': True},
+                    ]}})
     # Research-report confirm (2026-09-14): the widget's priced chip
     # re-sends the original ask with panel_confirm. The price is
     # recomputed and charged server-side; the client payload only
