@@ -33830,6 +33830,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!window.__intentIQ.titles.length) loadIntentIQTitles();
             };
 
+            // The picked campaign survives a refresh and a trip to another
+            // product, the way Profile IQ holds its open profile. Keyed by
+            // user, because the workspace is shared. The tab inside a
+            // campaign is already remembered per slug, so the two restore
+            // together and you land exactly where you left.
+            function _aiqTitleMemKey() {
+                var u = '';
+                try {
+                    if (typeof currentUsername !== 'undefined' && currentUsername) u = '_' + currentUsername;
+                } catch (e) { }
+                return 'aiqLastTitle' + u;
+            }
+
             async function loadIntentIQTitles() {
                 document.getElementById('iiqStatus').textContent = 'Loading titles...';
                 try {
@@ -33848,7 +33861,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var opt = new Option((t.display_name || t.title_slug) + (t.opening_date ? ' (' + t.opening_date + ')' : ''), t.title_slug);
                         sel.appendChild(opt);
                     });
-                    sel.value = window.__intentIQ.titles[0].title_slug;
+                    var want = '';
+                    try { want = localStorage.getItem(_aiqTitleMemKey()) || ''; } catch (e) { }
+                    var remembered = want && window.__intentIQ.titles.some(function (t) {
+                        return t.title_slug === want;
+                    });
+                    sel.value = remembered ? want : window.__intentIQ.titles[0].title_slug;
                     onIntentIQTitleChange();
                 } catch (e) {
                     document.getElementById('iiqStatus').textContent = 'Failed to load titles: ' + (e.message || e);
@@ -33859,6 +33877,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var slug = document.getElementById('iiqTitleSelect').value;
                 if (!slug) return;
                 window.__intentIQ.currentSlug = slug;
+                try { localStorage.setItem(_aiqTitleMemKey(), slug); } catch (e) { }
                 reloadIntentIQ();
             };
 
