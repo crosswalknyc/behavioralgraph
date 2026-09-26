@@ -64,7 +64,9 @@ For a blank row at position i in its group:
                     kind, at a salted share of it.
 
 Every value then takes natural last digits (`_natural_last_digits`),
-stays strictly inside its bracket, and is written as a reading FOR the
+stays strictly inside its bracket wherever an integer fits there (a
+list whose readings bottom out at 1 ties at 1, as its own rows already
+do, rather than leaving a row blank), and is written as a reading FOR the
 service the row is on (`by_platform[service]`) with
 `est_basis='bracketed'`, so the row on Max shows a number about Max and
 nothing else. The same title on two lists of one service (`.items` and
@@ -253,20 +255,27 @@ def _reason_sequence(se, values: list[int], missing_idx: list[int],
         floor = 1 if (anchor and anchor <= 101) else 101
         v = max(floor, v)
         v = se._natural_last_digits(v, salt_base, f'{i}|bracket')
-        # Digits moved by up to +/-100; hold the bracket strictly.
+        # Digits moved by up to +/-100; hold the bracket strictly where
+        # the integers allow it.
         if hi:
             if v >= hi:
                 v = hi - max(1, (hi - lo) // 3) if hi - lo > 3 else hi - 1
             if v <= lo:
                 v = lo + max(1, (hi - lo) // 3) if hi - lo > 3 else lo + 1
             if not (lo < v < hi):
-                continue                 # gap too tight to hold two rows
+                # No integer sits between the two neighbours. A tie
+                # with the lower one is the honest answer on a list
+                # whose own readings already tie at this scale (the
+                # Wattpad and Apple Comics tails run 1, 1, 1 ...);
+                # leaving the row blank never is. 2026-09-26: 27 rows
+                # reached the alert this way, every one on a list
+                # that bottoms out at 1.
+                v = lo if lo >= 1 else hi
         elif a > 0 and v >= a:
-            v = a - max(1, a // 20)
+            v = a - max(1, a // 20) if a > 1 else 1
         elif b > 0 and v <= b:
             v = b + max(1, b // 20)
-        if v < 1:
-            continue
+        v = max(1, v)
         filled[i] = v
         out[i] = v
     return out
