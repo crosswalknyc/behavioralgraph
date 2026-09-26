@@ -514,10 +514,26 @@ def main(argv: list[str] | None = None) -> int:
     """
     from scripts.trends_scrapers.run_guard import RunLock, start_watchdog
 
-    with RunLock() as lock:
+    # A partial re-run (`--only ...`, the path a cookie donation takes)
+    # queues behind a run already going rather than exiting: it waits
+    # up to 30 minutes for the lock, and a contention that resolves is
+    # a log line, not an alert. The full nightly keeps the old
+    # behaviour, because two full passes over the same keys is the
+    # thing the lock exists to prevent and worth telling someone.
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    partial = any(a == '--only' or a.startswith('--only=') for a in raw)
+    if partial:
+        lock_kw = dict(wait_s=30 * 60,
+                       label="A partial Trends IQ re-run (--only)",
+                       quiet=True)
+    else:
+        lock_kw = {}
+
+    with RunLock(**lock_kw) as lock:
         if not lock.acquired:
-            # RunLock has already logged and alerted. Exit quietly
-            # rather than starting a second pass over the same keys.
+            # RunLock has already logged (and, for the nightly,
+            # alerted). Exit rather than starting a second pass over
+            # the same keys.
             return 3
         watchdog_done = start_watchdog()
         try:

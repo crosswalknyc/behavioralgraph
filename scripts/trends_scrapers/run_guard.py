@@ -155,9 +155,24 @@ class RunLock:
     it releases automatically if the process is killed.
     """
 
-    def __init__(self, path: str = LOCK_PATH):
+    def __init__(self, path: str = LOCK_PATH, *, wait_s: float = 0.0,
+                 label: str = "Tonight's Trends IQ run",
+                 quiet: bool = False):
+        """`wait_s` > 0 polls for the lock that long before giving up:
+        a partial re-run (`run_all --only ...`) behind a cookie
+        donation should queue behind a run already going, not exit.
+        On 2026-09-26 two donations twenty seconds apart each started
+        a refresh of the same two sources; the second hit the lock,
+        exited, and sent an alert written for the nightly. `label`
+        names the run in the alert so it says what actually collided.
+        `quiet` logs a contention instead of alerting; for a partial
+        run the log line is the right surface."""
         self.path = path
+        self.wait_s = max(0.0, float(wait_s or 0.0))
+        self.label = label
+        self.quiet = quiet
         self.acquired = False
+        self.waited_s = 0.0
         self._fh = None
 
     def __enter__(self) -> "RunLock":
@@ -165,12 +180,27 @@ class RunLock:
             import fcntl
             os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
             self._fh = open(self.path, "a+")
-            try:
-                fcntl.flock(self._fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except (OSError, IOError):
-                self._on_contended()
-                self._close()
-                return self
+            deadline = time.monotonic() + self.wait_s
+            while True:
+                try:
+                    fcntl.flock(self._fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except (OSError, IOError):
+                    if time.monotonic() >= deadline:
+                        self._on_contended()
+                        self._close()
+                        return self
+                    if self.waited_s == 0.0:
+                        hp, hs = self._read_holder()
+                        logger.info("run_guard: %s is waiting for the run "
+                                    "lock held by pid %s (started %s), up to "
+                                    "%.0f min", self.label, hp or "?",
+                                    hs or "?", self.wait_s / 60.0)
+                    time.sleep(5.0)
+                    self.waited_s += 5.0
+            if self.waited_s:
+                logger.info("run_guard: %s took the run lock after waiting "
+                            "%.0fs", self.label, self.waited_s)
             self._fh.seek(0)
             self._fh.truncate()
             self._fh.write(f"{os.getpid()}\n{_now_iso()}\n")
@@ -188,14 +218,22 @@ class RunLock:
         holder_pid, holder_started = self._read_holder()
         age_h = self._holder_age_hours(holder_started)
         logger.error("run_guard: another run already holds %s "
-                      "(pid=%s started=%s age=%sh); exiting",
+                      "(pid=%s started=%s age=%sh); %s exiting%s",
                       self.path, holder_pid or "?", holder_started or "?",
-                      f"{age_h:.1f}" if age_h is not None else "?")
+                      f"{age_h:.1f}" if age_h is not None else "?",
+                      self.label,
+                      f" after waiting {self.waited_s:.0f}s" if self.waited_s
+                      else "")
+        if self.quiet and not (age_h is not None
+                               and age_h >= STALE_RUN_HOURS):
+            # A partial re-run that could not get in is a log line, not
+            # an alert; the run it queued behind publishes the board.
+            return
         if age_h is not None and age_h >= STALE_RUN_HOURS:
             send_alert(
                 "stale_run",
                 "Trends IQ: previous scraper run is still going",
-                "Tonight's Trends IQ run did not start. The previous run "
+                f"{self.label} did not start. The previous run "
                 "is still holding the run lock.\n\n"
                 f"  holder pid   : {holder_pid or 'unknown'}\n"
                 f"  started (UTC): {holder_started or 'unknown'}\n"
@@ -211,15 +249,17 @@ class RunLock:
             send_alert(
                 "overlapping_run",
                 "Trends IQ: scraper run skipped, one was already going",
-                "Tonight's Trends IQ run exited without starting because "
-                "the previous one had not finished.\n\n"
+                f"{self.label} exited without starting because "
+                "another run had not finished.\n\n"
                 f"  holder pid   : {holder_pid or 'unknown'}\n"
                 f"  started (UTC): {holder_started or 'unknown'}\n"
                 f"  running for  : "
-                f"{f'{age_h:.1f} hours' if age_h is not None else 'unknown'}\n\n"
-                "Data is not lost. The run in progress still publishes. "
-                "If this repeats, the run is outgrowing its nightly "
-                "window.\n",
+                f"{f'{age_h:.1f} hours' if age_h is not None else 'unknown'}\n"
+                + (f"  waited       : {self.waited_s / 60.0:.0f} min before "
+                   "giving up\n" if self.waited_s else "")
+                + "\nData is not lost. The run in progress still publishes. "
+                "If the holder is the nightly and this repeats, the run is "
+                "outgrowing its nightly window.\n",
             )
 
     def _read_holder(self) -> tuple[Optional[str], Optional[str]]:

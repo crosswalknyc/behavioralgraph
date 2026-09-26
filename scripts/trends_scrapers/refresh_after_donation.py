@@ -41,9 +41,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger('refresh_after_donation')
 
@@ -212,6 +214,46 @@ def run_runall_sources(sources: list[str]) -> int:
     return proc.returncode
 
 
+# Two donation commands a few seconds apart used to start two refreshes
+# of the same sources, the second exiting on the run lock and then
+# pricing the board again anyway (2026-09-26 16:29 UTC, music and
+# podcast charts, twice). A refresh that finished for the same sources
+# inside this window has already put those sources and their pricing
+# on the board; the second one purges and warms and is done.
+_RECENT_STAMP = '/var/lock/trends_donation_refresh_last.json'
+_RECENT_WINDOW_S = 10 * 60
+
+
+def _recent_identical_refresh(sources: list[str]) -> Optional[str]:
+    """ISO time of a refresh for exactly these sources that finished
+    within the window, else None. Never raises."""
+    try:
+        import json
+        from datetime import datetime, timezone
+        with open(_RECENT_STAMP) as fh:
+            rec = json.load(fh)
+        if sorted(rec.get('sources') or []) != sorted(sources):
+            return None
+        done = datetime.fromisoformat(rec['finished_at'])
+        age = (datetime.now(timezone.utc) - done).total_seconds()
+        return rec['finished_at'] if 0 <= age <= _RECENT_WINDOW_S else None
+    except Exception:
+        return None
+
+
+def _stamp_refresh(sources: list[str]) -> None:
+    try:
+        import json
+        from datetime import datetime, timezone
+        os.makedirs(os.path.dirname(_RECENT_STAMP), exist_ok=True)
+        with open(_RECENT_STAMP, 'w') as fh:
+            json.dump({'sources': sorted(sources),
+                       'finished_at': datetime.now(timezone.utc).isoformat()},
+                      fh)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("refresh stamp not written: %s", e)
+
+
 def run_coverage_gate() -> int:
     """Price whatever the re-run brought onto the board.
 
@@ -290,13 +332,30 @@ def main() -> int:
     runall = [s for s in args.runall_sources.split(',') if s.strip()]
 
     if not args.purge_only:
+        scraped = False
+        recent = _recent_identical_refresh(runall) if runall else None
+        if recent:
+            logger.info("a refresh for %s finished at %s, inside the last "
+                        "%d min; its scrape and pricing are already on the "
+                        "board, so this one only purges and warms",
+                        ','.join(runall), recent, _RECENT_WINDOW_S // 60)
+            runall = []
         if local:
-            run_local_modules(local)
+            scraped = bool(run_local_modules(local)) or scraped
         if runall:
-            run_runall_sources(runall)
-        if not local and not runall:
+            rc = run_runall_sources(runall)
+            if rc == 0:
+                scraped = True
+                _stamp_refresh(runall)
+            else:
+                logger.info("run_all did not run this pass (exit %d); "
+                            "nothing new to price", rc)
+        if not local and not runall and not recent:
             logger.info("nothing to scrape (no modules/sources given)")
-        elif not args.skip_coverage:
+        elif scraped and not args.skip_coverage:
+            # Price only what THIS pass brought in. A pass whose scrape
+            # did not run has nothing new on the board, and pricing it
+            # anyway was the duplicate coverage gate on 2026-09-26.
             run_coverage_gate()
 
     try:
