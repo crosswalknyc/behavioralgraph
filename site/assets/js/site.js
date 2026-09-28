@@ -20,7 +20,7 @@
           '</a>' +
           '<div class="nav-r">' +
             '<button class="has-mega" type="button" id="prodBtn" aria-expanded="false" aria-controls="mega">Products</button>' +
-            '<a href="panel.html" data-nav="panel.html">The panel</a>' +
+            '<a href="panel.html" data-nav="panel.html">The Panel</a>' +
             '<a href="/the-read" data-nav="the-read">The Read</a>' +
             '<a href="about.html" data-nav="about.html">About</a>' +
             '<a href="contact.html" data-nav="contact.html">Contact</a>' +
@@ -48,7 +48,7 @@
         '<a href="trends-iq.html">Trends IQ</a>' +
         '<a href="ranker-iq.html">Ranker IQ</a>' +
         '<a href="fin-iq.html">Fin IQ</a>' +
-        '<a href="panel.html">The panel</a>' +
+        '<a href="panel.html">The Panel</a>' +
         '<a href="/the-read">The Read</a>' +
         '<a href="about.html">About</a>' +
         '<a href="contact.html">Contact</a>' +

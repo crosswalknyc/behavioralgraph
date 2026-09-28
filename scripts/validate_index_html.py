@@ -576,3 +576,4 @@ if __name__ == "__main__":
 # (site-hero-kevin-hart-chip 2026-09-28 - Site: new Prometheus hero line; Kevin Hart Netflix chip on homepage + Subscriber IQ)
 # (site-hero-lead-three-lines 2026-09-28 - Site: widen homepage hero lead to 68ch so it sets on three lines)
 # (site-hero-10m-nbsp-gen-pop-matched 2026-09-28 - Site: keep "10 million" together; gen-pop-matched)
+# (site-nav-panel-products-hero 2026-09-28 - Site: The Panel in top nav; Products hero headline + lead)
