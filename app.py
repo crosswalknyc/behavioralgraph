@@ -57650,6 +57650,75 @@ def _pm_gate_pull(user):
     return _prometheus_mode_of(user) in ('pull', 'both')
 
 
+# GARBLED-INPUT NORMALIZATION (2026-09-28, Phase 4): "top 1 0 starz
+# series" hit the calm fallback because a split number reads as noise.
+# Join single digits split by a space when they form a plausible
+# number, and collapse runs of spaces. Routing and the model both see
+# the repaired text; nothing else changes.
+_PM_SPLIT_DIGIT_RE = re.compile(r'\b(\d)\s+(\d)\b')
+
+
+def _pm_normalize_ask(text):
+    t = str(text or '')
+    if not t:
+        return t
+    prev = None
+    while prev != t:
+        prev = t
+        t = _PM_SPLIT_DIGIT_RE.sub(r'\1\2', t)
+    return re.sub(r'[ \t]{2,}', ' ', t)
+
+
+# NUMERIC FOLLOW-UP (2026-09-28, Phase 3): "what is that as a share of
+# the US population?" after a delivered count is arithmetic on the
+# last answer, not a fresh read. Resolve the count from the last
+# agent turn and answer instantly.
+_PM_US_SHARE_RE = re.compile(
+    r'\b(?:as a |what )?(?:share|percent(?:age)?)\s+of\s+(?:the\s+)?'
+    r'(?:us|u\.s\.|american)\s*(?:population|pop|adults|country|'
+    r'gen pop)?\b', re.IGNORECASE)
+_PM_COUNT_IN_REPLY_RE = re.compile(
+    r'(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?\s*[MKB])\s*'
+    r'(?:us\s+)?(?:unique\s+)?(?:viewers|people|users|accounts|'
+    r'subscribers|buyers|players|individuals)', re.IGNORECASE)
+
+
+def _pm_parse_count(tok):
+    tok = str(tok).strip()
+    try:
+        if tok[-1] in 'MKBmkb':
+            mult = {'k': 1e3, 'm': 1e6, 'b': 1e9}[tok[-1].lower()]
+            return float(tok[:-1].strip()) * mult
+        return float(tok.replace(',', ''))
+    except Exception:
+        return None
+
+
+def _pm_numeric_followup_reply(text, history):
+    """US-population share arithmetic on the last delivered count, or
+    None when the ask is not that shape or no count resolves."""
+    if not _PM_US_SHARE_RE.search(str(text or '')) \
+            or len(str(text or '')) > 120:
+        return None
+    for turn in reversed(list(history or [])[-8:]):
+        if (turn.get('role') or '') == 'user':
+            continue
+        matches = _PM_COUNT_IN_REPLY_RE.findall(
+            str(turn.get('text') or ''))
+        if not matches:
+            continue
+        vals = [v for v in (_pm_parse_count(m) for m in matches)
+                if v and v > 999]
+        if not vals:
+            continue
+        n = max(vals)
+        share = n / 329_900_000.0 * 100.0
+        share_s = (f"{share:.2f}%" if share < 1 else f"{share:.1f}%")
+        return (f"That is {share_s} of the US population - "
+                f"{int(n):,} of 329.9M people.")
+    return None
+
+
 # STATUS-CHECK INTERCEPT (2026-09-28 Jenna, keith's "is eastside golf
 # running?" got an empty step on one surface and a duplicate 5-credit
 # build offer on the other: "these were clearly a status update check.
@@ -58351,7 +58420,7 @@ def _pm_stash_pending_question(username, subject, question):
         now = _t.time()
         lst = [e for e in (doc.get(uname) or [])
                if isinstance(e, dict)
-               and now - float(e.get('ts') or 0) < 48 * 3600]
+               and now - float(e.get('ts') or 0) < 7 * 24 * 3600]
         lst = [e for e in lst
                if str(e.get('question') or '') != str(question)]
         lst.insert(0, {'subject': str(subject)[:160],
@@ -58509,6 +58578,62 @@ def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
         traceback.print_exc()
     if len(hits) == 1:
         return next(iter(hits.values()))
+    return None
+
+
+# TWO-BASE READS (2026-09-28, Phase 3 of the improvement plan):
+# comparison and overlap asks name two audiences, and the generation
+# pass bound exactly one, so "how much do X and Y overlap" was
+# half-answered. When the ask carries comparison vocabulary and two
+# catalog subjects resolve (or one plus the open page), the read gets
+# BOTH digests: the second rides the existing COMPARISON PROFILE
+# rendering in the digest bundle.
+_PM_TWO_BASE_VOCAB_RE = re.compile(
+    r'\b(?:compare[ds]?|comparison|versus|vs\.?|overlap|'
+    r'both audiences|side by side|head to head|against)\b',
+    re.IGNORECASE)
+
+
+def _pm_two_base_detect(text, ctx=None):
+    """Return {'pair': [side1, side2]} when the ask is a two-audience
+    read with both sides resolvable, else None. Each side carries
+    subject + s3_key. The open page fills side one when exactly one
+    other subject is named."""
+    t = str(text or '')
+    if not _PM_TWO_BASE_VOCAB_RE.search(t):
+        return None
+    toks = set(_normalize_for_match(t).split())
+    found = {}
+    try:
+        for entry in _profile_catalog_for_chat():
+            subj = str(entry.get('subject')
+                       or entry.get('display_name') or '').strip()
+            st = [w for w in _normalize_for_match(subj).split()
+                  if w not in _PM_BASE_GENERIC_TOKENS]
+            if not st or sum(len(w) for w in st) < 4:
+                continue
+            if set(st) <= toks:
+                key = _normalize_for_match(subj)
+                is_tu = ' - ' not in str(entry.get('display_name')
+                                         or subj)
+                if key not in found or is_tu:
+                    found[key] = {
+                        'subject': subj,
+                        's3_key': str(entry.get('s3_key') or '')}
+    except Exception:
+        traceback.print_exc()
+    pair = [v for v in found.values() if v.get('s3_key')]
+    pair.sort(key=lambda v: -len(v['subject']))
+    if len(pair) == 1 and ctx and (ctx.get('primary') or {}) \
+            .get('s3_key'):
+        pname = str(ctx['primary'].get('name') or '').strip()
+        if _normalize_for_match(pname) != \
+                _normalize_for_match(pair[0]['subject']):
+            pair = [{'subject': pname or 'the open profile',
+                     's3_key': str(ctx['primary']['s3_key'])},
+                    pair[0]]
+    if len(pair) >= 2:
+        return {'pair': pair[:2]}
     return None
 
 
@@ -59157,6 +59282,50 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                            'options': _opts}})
         except Exception:
             traceback.print_exc()
+    # TWO-BASE READS (2026-09-28, Phase 3): a comparison / overlap ask
+    # naming two resolvable audiences gets both digests. The second
+    # side rides the digest bundle's COMPARISON PROFILE rendering, and
+    # its own published measurements ride the anchors block so both
+    # sides stay consistent with what each already shipped.
+    try:
+        _two = _pm_two_base_detect(text, ctx)
+    except Exception:
+        _two = None
+    if _two:
+        _b1, _b2 = _two['pair']
+        if base is None and _b1.get('s3_key') \
+                and not str(_b1['s3_key']).startswith('subiq:'):
+            base = {'subject': _b1['subject'],
+                    's3_key': _b1['s3_key'], 'source': 'catalog'}
+        _second = None
+        if base is not None:
+            for _cand in (_b1, _b2):
+                if _normalize_for_match(_cand['subject']) != \
+                        _normalize_for_match(base.get('subject') or ''):
+                    _second = _cand
+                    break
+        if base is not None and _second and _second.get('s3_key') \
+                and not str(_second['s3_key']).startswith('subiq:') \
+                and not str(base.get('s3_key') or '').startswith('subiq:') \
+                and not digest_block:
+            try:
+                _pc2 = {'primary': {'s3_key': base['s3_key'],
+                                    'name': base.get('subject') or ''},
+                        'extras': [{'s3_key': _second['s3_key'],
+                                    'name': _second['subject']}]}
+                digest_block = pma.get_digest_bundle(
+                    s3_client, S3_BUCKET, _pc2)[0]
+                _led2 = il.consult(subject=_second['subject'])
+                if _led2.get('block'):
+                    anchors_block = (
+                        f"{anchors_block or ''}\n\n"
+                        f"PUBLISHED MEASUREMENTS - "
+                        f"{_second['subject']}\n{_led2['block']}").strip()
+                print(f"[pm-twobase] paired read: "
+                      f"{base.get('subject')!r} x "
+                      f"{_second['subject']!r}")
+            except Exception:
+                traceback.print_exc()
     panel_charge = None
     if not base:
         # BUILD-FIRST (2026-09-24 Jenna, the PA-09 ask, verbatim: "in
@@ -61163,6 +61332,17 @@ def api_synth_chat_analyze():
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             panel_confirm=_panel_confirm)
+    # Garbled-input repair (2026-09-28, Phase 4): split digits and
+    # space runs join before anything routes on the text.
+    text = _pm_normalize_ask(text)
+    # NUMERIC FOLLOW-UP (2026-09-28, Phase 3): share-of-US arithmetic
+    # on the last delivered count answers instantly.
+    _nf_reply = _pm_numeric_followup_reply(text, history)
+    if _nf_reply:
+        _pm_ask_hint(route='numeric_followup', outcome='answered')
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': _nf_reply,
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
     # FEEDBACK / METHODOLOGY INTERCEPT (2026-09-28, W39 review):
     # product feedback and number challenges acknowledge and forward
     # to ops; they never generate a read.

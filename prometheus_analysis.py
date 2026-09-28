@@ -751,12 +751,31 @@ def is_missing_key_error(err) -> bool:
     return "NoSuchKey" in str(err)
 
 
+_bundle_ttl_cache = {}
+
+
 def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
     """Assemble the full digest bundle for a page context:
     {primary: {s3_key, name}, cuts: [{s3_key, name}, ...]}.
     Returns (bundle_text, primary_meta). Caches per (key, etag); the
     nightly precomputed index, when provably fresh, serves the same
-    digest without downloading + parsing the CSV."""
+    digest without downloading + parsing the CSV. A 90-second TTL
+    layer on top (2026-09-28, Phase 2 latency) lets rapid follow-up
+    asks in the same conversation skip the S3 freshness round-trips
+    entirely; in-place corrections still surface within the TTL."""
+    _ttl_key = None
+    try:
+        _prim = (page_context.get('primary') or {}).get('s3_key') or ''
+        _cutk = tuple((c.get('s3_key') or '')
+                      for c in (page_context.get('cuts') or [])[:max_cuts])
+        _extk = tuple((x.get('s3_key') or '')
+                      for x in (page_context.get('extras') or [])[:3])
+        _ttl_key = (_prim, _cutk, _extk, max_cuts)
+        hit = _bundle_ttl_cache.get(_ttl_key)
+        if hit and time.time() - hit[0] < 90:
+            return hit[1], hit[2]
+    except Exception:
+        _ttl_key = None
     genpop = load_genpop_map(s3_client, bucket)
     norms = load_norms(s3_client, bucket)
     norms_ver = (norms or {}).get('built_at') or ''
@@ -822,7 +841,18 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
         except Exception as e:
             parts.append(f"COMPARISON PROFILE: {ex.get('name') or e_key} "
                          f"(failed to load: {e})")
-    return '\n\n'.join(parts), p_meta
+    _bundle_text = '\n\n'.join(parts)
+    if _ttl_key is not None:
+        try:
+            _bundle_ttl_cache[_ttl_key] = (time.time(), _bundle_text,
+                                           p_meta)
+            if len(_bundle_ttl_cache) > 40:
+                for k, _ in sorted(_bundle_ttl_cache.items(),
+                                   key=lambda kv: kv[1][0])[:10]:
+                    _bundle_ttl_cache.pop(k, None)
+        except Exception:
+            pass
+    return _bundle_text, p_meta
 
 
 # ---------------------------------------------------------------------------
@@ -866,7 +896,8 @@ CROSS-MODULE SIGNALS (thinking between modules)
 - When a Subscriber IQ line is present, "Compare with its Subscriber IQ read" is a natural followup to offer.
 
 PUBLISHED MEASUREMENTS (consistency, binding)
-- The user prompt may carry a "PUBLISHED MEASUREMENTS" block: numbers Crosswalk has already delivered for this subject on earlier questions. These are binding. If your answer touches the same metric, state the exact published number; never contradict it, never restate it at different precision. A figure adjacent to a published one (a longer window, a share of it, a per-month slice) must be arithmetically consistent with it.
+- The user prompt may carry a "PUBLISHED MEASUREMENTS" block: numbers Crosswalk has already delivered for this subject on earlier questions. These are binding. If your answer touches the same metric, state the exact published number; never contradict it, never restate it at different precision. A figure adjacent to a published one (a longer window, a share of it, a per-month slice) must be arithmetically consistent with it. Cohort counts sit strictly inside their published parent count (a female or Gen Z slice can never exceed the subject total), platform shares sum to at most 100, and a monthly figure sits inside its yearly one.
+- MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
 
 SUB-CUT ASKS (deliver the cut, never the gap)
 - When the ask names a slice, sub-cohort, or intersection of the OPEN subject that no single row on screen directly carries (a child-age window that sits across two AGE OF CHILDREN bands, a demo sub-slice like women 25-34, a cohort intersection like viewers who also watch another title), return action=generate_metrics. Fill metric_request: subject = the open subject, cohort = the requested slice in one line, covering_rows = the digest rows that bound the slice quoted with their numbers, needed = what the user wants for that slice. A deeper measurement pass delivers the cohort read.
@@ -2036,10 +2067,83 @@ _SCRUB_COMPILED = tuple(
     (re.compile(pat, re.IGNORECASE), rep) for pat, rep in _SCRUB_RULES)
 
 
+# First-party frame guards (2026-09-28, Phase 2 of the improvement
+# plan): the prompts forbid source citations and off-clickstream
+# claims, but nothing checked the OUTPUT side. These detectors close
+# that: a sentence that cites a research vendor or asserts behavior a
+# clickstream cannot observe (awareness, ad recall, stated intent,
+# in-store traffic, linear tune-in) is removed whole inside
+# scrub_user_text - a reply minus one sentence stays coherent, a
+# shipped citation breaks the product frame. Word-swapping a citation
+# is never attempted: "according to [the analysis]" reads wrong.
+_CITATION_RX = re.compile(
+    r'\b(?:statista|nielsen|pew(?:\s+research)?|emarketer|yougov|'
+    r'comscore|sensor\s*tower|data\.ai|mri[\s-]?simmons|kantar|'
+    r'parrot\s+analytics|antenna|samba\s*tv|luth)\b'
+    r'|\baccording to (?!the profile\b|the file\b|the data\b|'
+    r'your dashboard\b|crosswalk\b|the read\b)'
+    r'|\bas reported by\b|\bsourced? from\b|\bper (?:a|an|the)? ?'
+    r'(?:survey|study|report)\b|\bsurveys? (?:found|show|suggest)\b'
+    r'|\bindustry (?:reports?|estimates?) (?:say|show|suggest)\b',
+    re.IGNORECASE)
+
+_OFFCLICK_RX = re.compile(
+    r'\b(?:brand\s+)?awareness\b|\bad\s+recall\b|\brecall(?:ed)?\s+'
+    r'seeing\b|\bintend(?:s)?\s+to\s+(?:buy|purchase|subscribe)\b'
+    r'|\bstated\s+intent\b|\bfoot\s*traffic\b|\bfootfall\b'
+    r'|\bin[\s-]store\s+(?:visits?|traffic|purchases?)\b'
+    r'|\b(?:watched|viewed|tuned\s+in)\s+on\s+(?:cable|linear|'
+    r'broadcast\s+tv)\b|\bover[\s-]the[\s-]air\b'
+    r'|\bword\s+of\s+mouth\b|\battended\s+in\s+person\b',
+    re.IGNORECASE)
+
+_SENTENCE_SPLIT_RX = re.compile(r'(?<=[.!?])\s+')
+
+
+def contains_source_citation(text):
+    return bool(_CITATION_RX.search(str(text or '')))
+
+
+def contains_offclickstream_claim(text):
+    return bool(_OFFCLICK_RX.search(str(text or '')))
+
+
+def _drop_frame_breaking_sentences(s):
+    """Remove whole sentences that cite a vendor or assert an
+    off-clickstream behavior. Never empties a reply: when every
+    sentence would drop, the text returns unchanged (the calm layers
+    upstream own that case)."""
+    if not (_CITATION_RX.search(s) or _OFFCLICK_RX.search(s)):
+        return s
+    out_lines = []
+    changed = False
+    for line in s.split('\n'):
+        parts = _SENTENCE_SPLIT_RX.split(line) if line.strip() else [line]
+        kept = [p for p in parts
+                if not (_CITATION_RX.search(p) or _OFFCLICK_RX.search(p))]
+        if len(kept) != len(parts):
+            changed = True
+        out_lines.append(' '.join(kept).strip() if line.strip()
+                         else line)
+    out = '\n'.join(out_lines)
+    out = re.sub(r'\n{3,}', '\n\n', out).strip()
+    if not out:
+        return s
+    if changed:
+        try:
+            print('[scrub] dropped frame-breaking sentence(s) '
+                  '(citation or off-clickstream claim)')
+        except Exception:
+            pass
+    return out
+
+
 def scrub_user_text(text):
     """Defense-in-depth vocabulary pass on any Prometheus text headed
     to the user: banned internal terms replaced with product language,
-    em / en dashes replaced with hyphens."""
+    em / en dashes replaced with hyphens, and whole sentences dropped
+    when they cite a research vendor or assert off-clickstream
+    behavior (2026-09-28 Phase 2)."""
     s = str(text or '')
     if not s:
         return s
@@ -2047,6 +2151,7 @@ def scrub_user_text(text):
     s = s.replace('\u2015', ' - ')
     for rx, rep in _SCRUB_COMPILED:
         s = rx.sub(rep, s)
+    s = _drop_frame_breaking_sentences(s)
     s = re.sub(r'[ \t]{2,}', ' ', s)
     return s
 
@@ -2102,6 +2207,7 @@ WINDOW
 
 PUBLISHED MEASUREMENTS
 - The user prompt may carry a PUBLISHED MEASUREMENTS block: numbers Crosswalk has already delivered for this subject on earlier questions. BINDING. A repeat of the same measurement restates the exact published number. An overlapping or adjacent measurement (different window, a share of a published total) must be arithmetically consistent with what was published.
+- TWO-AUDIENCE READS: when the data carries a COMPARISON PROFILE, deliver the genuinely two-sided read the ask wants - both audiences quantified on the same definitions, side by side. Any overlap count sits at or below the smaller audience; a deduped union sits between the larger audience and the sum; each side stays consistent with its own published measurements. Cohort counts sit strictly inside their parent totals.
 
 CLARIFY
 - If the subject is ambiguous (several titles share the name, or the platform is unknown and changes the read), return action=clarify with ONE short question and 2 to 4 tappable options. Each option must be a complete re-ask that starts with "Search demand for", e.g. "Search demand for Normal (2026 Bob Odenkirk film) on HBO Max". Never clarify when a reasonable single reading exists.
@@ -3261,6 +3367,8 @@ HOW TO REASON THE NUMBERS
 - PUBLISHED MEASUREMENTS are BINDING: a repeat of the same measurement restates the exact published number; an overlapping or adjacent measurement (longer window, a share of a published total, a monthly slice of a published annual) must be arithmetically consistent with what was published.
 - Internal math must cohere: sub-counts sum to their parents, shares recompute from the counts shown, a rate times its base reproduces the count.
 - Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. Percentages carry one decimal.
+- MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
+- TREND ASKS ("since January", "month by month", "how has it moved"): deliver the series, not one point - monthly or weekly figures across the window. Endpoints and published measurements bind; movement between points stays plausible and organic.
 - The window: use the user's window if named; else the subject's real release or campaign window if you know it; else 2025-07-01 to 2026-06-30.
 
 SUB-COHORT READS (a slice or cut of an open profile)
