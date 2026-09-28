@@ -102,7 +102,7 @@ SIGNUP_HTML = """<!DOCTYPE html>
     <div>
       <div class="eyebrow"><span class="n">01</span> Sign up</div>
       <h1 class="h-l">Create your dashboard and ask your first question.</h1>
-      <p class="lead" style="margin-top:18px">Your account opens with Prometheus and a $5,000 balance. Ask anything about any audience. Each report you pull draws from the balance, and the file is yours in the dashboard.</p>
+      <p class="lead" style="margin-top:18px">Your account opens with Prometheus and a $500 balance. Ask anything about any audience. Each report you pull draws from the balance, and the file is yours in the dashboard.</p>
       <div class="panel" style="margin-top:26px;padding:16px 18px;border-color:var(--green)">
         <div class="eyebrow" style="margin-bottom:8px"><span class="n">Your first question</span></div>
         <div id="q" style="font-size:17px;font-weight:600">Who watches Landman, and what do they buy?</div>
@@ -117,7 +117,7 @@ SIGNUP_HTML = """<!DOCTYPE html>
       <div class="li"><b>Attribution IQ</b><span class="p">$500 setup, $100 per day in flight</span></div>
       <div class="li"><b>Trends IQ, Rankers IQ, Fin IQ</b><span class="p">Included</span></div>
       <div class="li"><b>Chat with Prometheus</b><span class="p">about $0.15 to $0.84 per question</span></div>
-      <div class="li" style="padding-top:10px;border-top:1px solid var(--rule-d)"><b>Top up</b><span class="p">$5,000 when the balance reaches $500</span></div>
+      <div class="li" style="padding-top:10px;border-top:1px solid var(--rule-d)"><b>Top up</b><span class="p">$5,000 when the balance reaches $100</span></div>
     </div>
   </div>
   <div class="right light">
@@ -140,8 +140,8 @@ SIGNUP_HTML = """<!DOCTYPE html>
       </div>
       <div class="fieldset">
         <h3>Opening balance</h3>
-        <div class="total" style="border-top:0;margin-top:0;padding-top:0"><span class="body">Charged on the next screen</span><span class="amt">$5,000.00</span></div>
-        <p class="fine">Prepaid, not a fee. Every dollar is a report your team pulls or will pull. You enter the card on a secure payment page. It stays on file, and when the balance reaches $500 it tops up with another $5,000. Change or stop top-ups any time from the dashboard. Usage statement downloadable anytime.</p>
+        <div class="total" style="border-top:0;margin-top:0;padding-top:0"><span class="body">Charged on the next screen</span><span class="amt">$500.00</span></div>
+        <p class="fine">Prepaid, not a fee. Every dollar is a report your team pulls or will pull. You enter the card on a secure payment page. It stays on file, and when the balance reaches $100 it tops up with another $5,000. Change or stop top-ups any time from the dashboard. Usage statement downloadable anytime.</p>
       </div>
       <p id="err" class="fine" style="display:none;color:var(--amethyst);font-size:13px"></p>
       <button class="btn btn-olive" type="submit" id="go" style="width:100%;min-height:48px">Continue to payment</button>
@@ -240,9 +240,9 @@ WELCOME_HTML = """<!DOCTYPE html>
     </div>
     <div id="login" style="margin-top:30px;display:none"><a class="btn btn-green" href="/login">Log in to the dashboard</a></div>
     <div class="stats" id="stats" style="max-width:760px;margin:56px auto 0;padding-top:24px;border-top:1px solid var(--rule-d);grid-template-columns:repeat(3,1fr);visibility:hidden">
-      <div class="stat"><div class="lab">Balance</div><div class="fig acc" id="bal">$5,000.00</div></div>
+      <div class="stat"><div class="lab">Balance</div><div class="fig acc" id="bal">$500.00</div></div>
       <div class="stat"><div class="lab">Reports pulled</div><div class="fig">0</div></div>
-      <div class="stat"><div class="lab">Next top-up at</div><div class="fig">$500</div></div>
+      <div class="stat"><div class="lab">Next top-up at</div><div class="fig">$100</div></div>
     </div>
   </div>
 </section>

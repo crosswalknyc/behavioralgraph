@@ -18859,17 +18859,24 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
     if (window.CW_SELF_SERVE_PLAN) {
+        var _ssCss = document.createElement('style');
+        _ssCss.textContent = [
+            'body.cw-self-serve .view-toggle,',
+            'body.cw-self-serve #formView,',
+            'body.cw-self-serve #dashboardView,',
+            'body.cw-self-serve [id$="IQView"]{display:none !important;}'
+        ].join('');
+        document.head.appendChild(_ssCss);
         document.addEventListener('DOMContentLoaded', function () {
+            document.body.classList.add('cw-self-serve');
             var dd = document.getElementById('viewNavDropdown');
-            if (!dd) return;
-            Array.prototype.slice.call(dd.options).forEach(function (o) {
-                if (o.disabled) o.parentNode.removeChild(o);
-            });
-            Array.prototype.slice.call(dd.querySelectorAll('optgroup')).forEach(function (g) {
-                if (!g.querySelector('option')) g.parentNode.removeChild(g);
-            });
-            if (typeof window.rebuildViewNavCustomPanel === 'function') {
-                try { window.rebuildViewNavCustomPanel(); } catch (_) {}
+            if (dd) {
+                Array.prototype.slice.call(dd.options).forEach(function (o) {
+                    if (o.parentNode) o.parentNode.removeChild(o);
+                });
+                if (typeof window.rebuildViewNavCustomPanel === 'function') {
+                    try { window.rebuildViewNavCustomPanel(); } catch (_) {}
+                }
             }
         });
     }

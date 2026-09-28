@@ -9863,7 +9863,7 @@ def compute_product_access_flags(user, role):
     # or explicit list) is emitted so the frontend can render correctly.
     _bp_journeys = _journeys_access_of(u, 'brand_partnership_iq')
     _sf_journeys = _journeys_access_of(u, 'sf_conversion')
-    return {
+    _access = {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
         'has_sf_conversion_access': _sf_journeys is not None,
@@ -9947,6 +9947,13 @@ def compute_product_access_flags(user, role):
         ),
         'pay_per_use_enabled': bool(u.get('pay_per_use_enabled', False)),
     }
+    # Self-serve Prometheus plan: no product tabs, no Rankers, no
+    # Trends, no legacy catalog. Only files this account paid to pull.
+    try:
+        from site_signup import clamp_self_serve_access
+        return clamp_self_serve_access(u, _access)
+    except Exception:
+        return _access
 
 
 def apply_cloak_product_access_overrides(access):
@@ -56550,8 +56557,21 @@ def api_synth_chat_approve():
         # Explicit-list users (self-serve Prometheus plan) must be able
         # to open the file they just asked for. '*' users are a no-op.
         try:
-            from site_signup import grant_runs_to_user as _grant_runs
-            _grant_runs(session.get('username'), [ex_key])
+            from site_signup import (
+                grant_runs_to_user as _grant_runs,
+                is_self_serve_plan as _is_self_serve,
+            )
+            _buyer = None
+            try:
+                _buyer = get_current_user()
+            except Exception:
+                _buyer = None
+            # A free library match is legacy content. Self-serve
+            # accounts only receive files they pay to pull.
+            if _is_self_serve(_buyer):
+                url = None
+            else:
+                _grant_runs(session.get('username'), [ex_key])
         except Exception:
             traceback.print_exc()
         return jsonify({

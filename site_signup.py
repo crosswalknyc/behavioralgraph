@@ -6,11 +6,11 @@ and runs the self-serve flow the site's Ask box leads into:
     1. POST /site/api/signup
          Creates the dashboard account on the Prometheus self-serve plan
          (status pending_payment) and returns a Stripe Checkout URL for
-         the $5,000 opening balance. The card is saved on the customer
+         the $500 opening balance. The card is saved on the customer
          so auto-reload can charge it later.
     2. Stripe webhook checkout.session.completed (billing_routes.py)
          Credits the wallet, saves the card, turns auto-reload on
-         ($5,000 when the balance reaches $500), then calls
+         ($5,000 when the balance reaches $100), then calls
          activate_after_payment() below.
     3. activate_after_payment()
          Flips the account to active and emails jenna@, liz@, jessie@
@@ -26,8 +26,9 @@ The plan itself (what the user can see once logged in):
     * allowed_runs [] and allowed_categories [] so nothing is granted
       by the fleet-wide auto-add; app.py grants each file the user
       pulls through Prometheus to that user only
-    * paying_customer True, billing_mode auto_reload, threshold $500,
-      amount $5,000 (wallet.py enforces the same floors)
+    * paying_customer True, billing_mode auto_reload, threshold $100,
+      amount $5,000. The opening balance is $500, so the threshold
+      sits under it and the first login does not immediately reload.
 
 No em dashes. Emails are plain text and never raise.
 """
@@ -47,8 +48,11 @@ site_bp = Blueprint("site", __name__)
 
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 PLAN_KEY = "prometheus_self_serve"
-OPENING_BALANCE_USD = 5000.0
-AUTO_RELOAD_THRESHOLD_USD = 500.0
+OPENING_BALANCE_USD = 500.0
+# Under the opening balance on purpose. A $500 start with a $500
+# threshold would fire the $5,000 reload the moment the wallet is
+# credited (reload runs when balance is at or below the threshold).
+AUTO_RELOAD_THRESHOLD_USD = 100.0
 AUTO_RELOAD_AMOUNT_USD = 5000.0
 SIGNUP_SOURCE = "self_serve_signup"
 
@@ -129,6 +133,46 @@ def is_self_serve_plan(user: Optional[dict]) -> bool:
     return bool(user) and str(user.get("plan") or "") == PLAN_KEY
 
 
+def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
+    """Self-serve accounts see Prometheus only.
+
+    Every product flag, tab grant, and catalog list is closed. The
+    one list that stays is allowed_runs, and only the files this
+    account paid to pull. Defaults in compute_product_access_flags
+    (Profile IQ on, empty category list widened to everything) do
+    not apply here.
+    """
+    if not is_self_serve_plan(user) or not isinstance(access, dict):
+        return access
+    out = dict(access)
+    runs = user.get("allowed_runs") if isinstance(user, dict) else []
+    out["allowed_runs"] = list(runs) if isinstance(runs, list) else []
+    for key in (
+        "allowed_categories",
+        "allowed_behavioral_categories",
+        "allowed_trends_tabs",
+        "allowed_rankers_tabs",
+        "allowed_intent_iq_runs",
+        "analysis_iq_modules",
+        "rankers_iq_options",
+        "hedge_fund_iq_tickers",
+        "impact_iq_journeys",
+        "sf_conversion_journeys",
+        "brand_partnership_iq_journeys",
+        "allowed_lenses",
+    ):
+        if key in out:
+            out[key] = []
+    for key, val in list(out.items()):
+        if key.startswith("has_") and key != "has_chatbot_profile_iq_access":
+            out[key] = False
+    out["has_chatbot_profile_iq_access"] = True
+    out["prometheus_access"] = "full"
+    out["prometheus_mode"] = "both"
+    out["pay_per_use_enabled"] = True
+    return out
+
+
 def is_pending_payment(user: Optional[dict]) -> bool:
     return bool(user) and str(user.get("signup_status") or "") == "pending_payment"
 
@@ -183,7 +227,7 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
         # fleet-wide auto-add (allowed_categories match) never fires.
         "allowed_categories": [],
         "allowed_runs": [],
-        "allowed_behavioral_categories": ["*"],
+        "allowed_behavioral_categories": [],
         "has_profile_iq_access": False,
         "has_subscriber_iq_access": False,
         "has_ecommerce_iq_access": False,
@@ -352,8 +396,8 @@ def site_signup():
             username=username,
             product_name="Crosswalk dashboard opening balance",
             product_description=(
-                "$5,000.00 prepaid balance for Prometheus reports. "
-                "Tops up $5,000 when the balance reaches $500."),
+                "$500.00 prepaid balance for Prometheus reports. "
+                "Tops up $5,000 when the balance reaches $100."),
             metadata={
                 "subject_kind": "user",
                 "subject_key": username,
