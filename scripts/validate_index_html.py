@@ -580,3 +580,4 @@ if __name__ == "__main__":
 # (site-products-table-align-billing 2026-09-28 - Site: Products question column left-aligned; Attribution price shortened; billing note rewrite)
 # (site-products-report-pricing 2026-09-28 - Site: Products 02 eyebrow Report pricing; headline One report, one price.)
 # (site-signup-close-panel-lead 2026-09-28 - Site: sign-up close headline on 12 pages; Panel hero lead rewrite)
+# (site-panel-how-it-works 2026-09-28 - Site: Panel section 02 How it works; single What clients receive card)
