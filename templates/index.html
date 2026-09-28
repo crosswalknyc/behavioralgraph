@@ -51893,126 +51893,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div id="jiqAdultAnimationBody"></div>
                 </div>
 
-                <!-- Digital Animation Creators - 7-tab UFC-style renderer
-                     against _JIQ_ANIM_CREATORS_DATA. Story-mode:
-                     animation_creators_discovery. Covers 3 animation hubs
-                     (@adultswim, @AnimationonFOX, @animated) and 3 solo
-                     content creators (@beastanimations, @theodd1sout,
-                     @jaidenanimations). Each tab is a card; the tab bar
-                     shows/hides cards via _jiqAnimCrActivateTab. -->
-                <div id="jiqAnimCrTabBar"
-                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(168,85,247,0.08) 100%);
-                            border: 1px solid rgba(245,158,11,0.32); border-radius: 8px;
-                            position: sticky; top: 0; z-index: 30;
-                            backdrop-filter: blur(6px);"></div>
-
-                <div class="card" id="jiqAnimCrOverviewCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(168,85,247,0.05) 100%);
-                            border: 1px solid rgba(245,158,11,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrOverviewCardTitle" style="margin: 0;">&#127912; Digital Animation Creators &#183; overview</h3>
-                        <div id="jiqAnimCrOverviewCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                <!-- Digital Animation Creators - nest walk (US)
+                     Painted only when meta.story_mode ===
+                     'animation_creators_discovery'. Hubs feed platforms.
+                     Solo creators are destinations. -->
+                <div id="jiqAnimCrTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
+                <div class="jiq-frag" id="jiqAnimCrNestCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqAnimCrNestMeta">Discovery journey · trailing 12 months</div>
+                            <h2 id="jiqAnimCrNestTitle">Digital animation<br>creators.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqAnimCrNestLead">Hubs feed platforms, and solo creators are destinations.</div>
+                            <p id="jiqAnimCrNestDeck">43.87M people touched one of six handles. 21.68M came through Adult Swim, Animation on FOX, or @animated. 22.43M came through Beast Animations, TheOdd1sOut, or JaidenAnimations. 3.64M touched two or more handles.</p>
+                            <div class="jiq-frag-kpis" id="jiqAnimCrNestKpis"></div>
+                        </div>
+                        <div class="jiq-frag-art" id="jiqAnimCrNestArt"
+                             data-hero="{{ url_for('static', filename='anim-creators-hero.jpg') }}"></div>
                     </div>
-                    <div id="jiqAnimCrOverviewCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrOverviewCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrHubsCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(168,85,247,0.06) 100%);
-                            border: 1px solid rgba(168,85,247,0.28);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrHubsCardTitle" style="margin: 0;">&#10024; Animation Hubs &#183; combined (@adultswim + @AnimationonFOX + @animated)</h3>
-                        <div id="jiqAnimCrHubsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrHubsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrHubsCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrAdultSwimCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(245,158,11,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrAdultSwimCardTitle" style="margin: 0;">&#128250; Adult Swim &#183; @adultswim</h3>
-                        <div id="jiqAnimCrAdultSwimCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrAdultSwimCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrAdultSwimCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrAnimFoxCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(251,146,60,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(251,146,60,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrAnimFoxCardTitle" style="margin: 0;">&#129418; Animation on FOX &#183; @AnimationonFOX</h3>
-                        <div id="jiqAnimCrAnimFoxCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrAnimFoxCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrAnimFoxCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrAnimatedCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(168,85,247,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrAnimatedCardTitle" style="margin: 0;">&#10024; @animated &#183; animation hub</h3>
-                        <div id="jiqAnimCrAnimatedCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrAnimatedCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrAnimatedCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrIndiesCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(34,211,238,0.06) 0%, rgba(20,184,166,0.06) 100%);
-                            border: 1px solid rgba(34,211,238,0.28);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrIndiesCardTitle" style="margin: 0;">&#127916; Independent Creators &#183; combined (@beastanimations + @theodd1sout + @jaidenanimations)</h3>
-                        <div id="jiqAnimCrIndiesCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrIndiesCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrIndiesCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrBeastAnimCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(34,197,94,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrBeastAnimCardTitle" style="margin: 0;">&#128058; Beast Animations &#183; @beastanimations</h3>
-                        <div id="jiqAnimCrBeastAnimCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrBeastAnimCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrBeastAnimCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrOdd1soutCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(56,189,248,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrOdd1soutCardTitle" style="margin: 0;">&#127916; TheOdd1sOut &#183; @theodd1sout</h3>
-                        <div id="jiqAnimCrOdd1soutCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrOdd1soutCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrOdd1soutCardBody"></div>
-                </div>
-
-                <div class="card" id="jiqAnimCrJaidenCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(15,23,42,0.05) 100%);
-                            border: 1px solid rgba(244,114,182,0.24);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqAnimCrJaidenCardTitle" style="margin: 0;">&#128036; JaidenAnimations &#183; @jaidenanimations</h3>
-                        <div id="jiqAnimCrJaidenCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqAnimCrJaidenCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqAnimCrJaidenCardBody"></div>
+                    <div id="jiqAnimCrNestHost"></div>
                 </div>
 
                 <!-- Neurotrophic Drinks — CPG brand category segment card.
@@ -86242,7 +86140,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             { value: '__demo_ufc_paramount__',    label: 'UFC × Paramount+ (US)' },
                             { value: '__demo_arrow_pluto__',     label: 'Arrow · Pluto TV' },
                             { value: '__demo_adult_animation__',  label: 'Adult Animation · SVOD discovery' },
-                            { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
+                            { value: '__demo_animation_creators__', label: 'Digital Animation Creators' },
                             { value: '__demo_heated_rivalry_song__', label: 'Heated Rivalry · song journey' },
                             { value: '__demo_young_sheldon_pvod__', label: 'Young Sheldon · Amazon PVOD episode' },
                             { value: '__demo_dexters_lab_pvod__', label: "Dexter's Laboratory · Amazon PVOD episode" }
@@ -86370,6 +86268,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqArrowHydrateRun === 'function') {
                 var _arrowRun = _jiqArrowHydrateRun(key);
                 if (_arrowRun) return _arrowRun;
+            }
+            if (typeof _jiqAnimCrHydrateRun === 'function') {
+                var _animCrRun = _jiqAnimCrHydrateRun(key);
+                if (_animCrRun) return _animCrRun;
             }
             if (!window.__jiqAllowAll) return null;
             // Neurotrophic Drinks (CPG brand category) — 8 consumer
@@ -88141,15 +88043,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _jiqHideCard('jiqMusicInfluenceCard');
             _jiqHideCard('jiqUbgCard');
             _jiqHideCard('jiqAdultAnimationCard');
-            _jiqHideCard('jiqAnimCrOverviewCard');
-            _jiqHideCard('jiqAnimCrHubsCard');
-            _jiqHideCard('jiqAnimCrAdultSwimCard');
-            _jiqHideCard('jiqAnimCrAnimFoxCard');
-            _jiqHideCard('jiqAnimCrAnimatedCard');
-            _jiqHideCard('jiqAnimCrIndiesCard');
-            _jiqHideCard('jiqAnimCrBeastAnimCard');
-            _jiqHideCard('jiqAnimCrOdd1soutCard');
-            _jiqHideCard('jiqAnimCrJaidenCard');
+            _jiqHideCard('jiqAnimCrNestCard');
+            if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
             _jiqHideCard('jiqNeuroCard');
             _jiqHideCard('jiqFragCard');
             _jiqHideCard('jiqSongCard');
@@ -88390,16 +88285,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             }
 
-            // Digital Animation Creators - 7-tab UFC-style renderer.
-            // Overview + 6 creators (3 hubs, 3 solo creators). Each tab is
-            // a card; the tab bar toggles visibility. When the story mode
-            // is not active, the tab bar is hidden.
+            // Digital Animation Creators - nest walk. Cover, pills, and
+            // UFC nest primitives. Six handles sit as sections on Hubs
+            // and Independents. Hide the nest when this story is off.
             if (_isAnimCreatorsStory) {
                 if (typeof renderJourneyIqAnimCr === 'function') {
                     renderJourneyIqAnimCr(_pickClickstreamBlock('animation_creators'));
                 }
                 if (typeof _jiqAnimCrActivateTab === 'function') {
-                    var _animCrInitTab = (typeof _jiqAnimCrActiveTab !== 'undefined' && _jiqAnimCrActiveTab) || 'overview';
+                    var _animCrInitTab = (typeof _jiqAnimCrActiveTab !== 'undefined' && _jiqAnimCrActiveTab) || 'case';
                     _jiqAnimCrActivateTab(_animCrInitTab);
                 }
             } else {
@@ -101449,300 +101343,469 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             read: 'The set splits cleanly into two funnels. The 3 animation hubs (@adultswim, @AnimationonFOX, @animated), read here as one combined surface, act as feeder for SVOD platforms - the on-platform home shelves (Max, Hulu) convert at 69.3%, the highest conversion in the whole set, and studio catalog clip reposts (Rick and Morty, Family Guy, The Simpsons, Bob\u2019s Burgers) source 38.2% of hub first-touches. The 3 solo creators (Beast Animations, TheOdd1sOut, JaidenAnimations) sit as their own destinations - YT search converts at 78-82% because viewers are looking for a specific person, not a genre. Cross-collab paths between the 3 solo creators convert at 51-55% and are the fastest growth vector inside the solo cluster.'
         };
 
+        var _JIQ_ANIM_CR_TABS = [
+            { id: 'case',         label: 'Overview' },
+            { id: 'discovery',    label: 'Discovery' },
+            { id: 'hubs',         label: 'Hubs' },
+            { id: 'independents', label: 'Independents' },
+            { id: 'comeback',     label: 'Come back' },
+            { id: 'read',         label: 'The read' },
+            { id: 'methodology',  label: 'How we counted' }
+        ];
+        var _jiqAnimCrActiveTab = 'case';
+
+        function _jiqAnimCrD() {
+            return (typeof _JIQ_ANIM_CREATORS_DATA !== 'undefined' && _JIQ_ANIM_CREATORS_DATA) || {};
+        }
         function _jiqAnimCrEsc(s) {
+            if (typeof _jiqFragEsc === 'function') return _jiqFragEsc(s);
             if (s == null) return '';
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
-
-        function _jiqAnimCrAbbrevM(v) {
-            if (v == null || isNaN(v)) return '-';
-            var n = Number(v);
-            if (n >= 1000) return (n / 1000).toFixed(1) + 'B';
-            if (n >= 1)    return n.toFixed(2) + 'M';
-            return (n * 1000).toFixed(0) + 'K';
+        function _jiqAnimCrMill(m) {
+            var n = Number(m);
+            if (!isFinite(n)) return '';
+            var s = n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+            return s + 'M';
         }
-
-        function _jiqAnimCrConvColor(pct) {
-            if (pct == null) return '#94a3b8';
-            var p = Number(pct);
-            if (p >= 60) return '#10b981';
-            if (p >= 40) return '#84cc16';
-            if (p >= 25) return '#eab308';
-            if (p >= 15) return '#f97316';
-            return '#f87171';
+        function _jiqAnimCrPct(n) {
+            if (typeof _jiqUfcPct1 === 'function') return _jiqUfcPct1(n);
+            return (Math.round(Number(n) * 10) / 10) + '%';
         }
-
-        function _jiqAnimCrPanelChip(pb) {
-            if (!pb) return '';
-            return '<span style="display:inline-block; padding:0.22rem 0.55rem; border-radius:999px; '
-                 +   'font-size:0.65rem; font-weight:700; letter-spacing:0.02em; '
-                 +   'background:rgba(245,158,11,0.14); border:1px solid rgba(245,158,11,0.35); color:#fed7aa;" '
-                 +   'title="' + _jiqAnimCrEsc(pb.detail || '') + '">'
-                 +   _jiqAnimCrEsc(pb.short || pb.label || 'Panel')
-                 + '</span>';
+        function _jiqAnimCrSec(a, b, c) {
+            return _jiqUfcNestSec(a, b, c);
         }
-
-        function _jiqAnimCrConvChip(pct) {
-            if (pct == null) return '<span style="opacity:0.55; font-size:0.66rem;">-</span>';
-            var color = _jiqAnimCrConvColor(pct);
-            return '<span style="display:inline-block; padding:0.16rem 0.5rem; border-radius:999px; '
-                 +   'font-size:0.66rem; font-weight:800; letter-spacing:0.02em; '
-                 +   'background:' + color + '1f; border:1px solid ' + color + '66; color:' + color + ';" '
-                 +   'title="Share of touched viewers who press play within 14 days of hitting this touchpoint">'
-                 +   Number(pct).toFixed(1) + '% conv 14d'
-                 + '</span>';
+        function _jiqAnimCrRead(s) {
+            return _jiqUfcNestRead(s);
         }
-
-        var _JIQ_ANIM_CR_TABS = [
-            { id: 'overview',    label: 'Overview',                emoji: '\ud83c\udfa8' },
-            { id: 'hubs',        label: 'Animation Hubs',          emoji: '\u2728' },
-            { id: 'adult_swim',  label: 'Adult Swim',              emoji: '\ud83d\udcfa' },
-            { id: 'anim_fox',    label: 'Animation on FOX',        emoji: '\ud83e\udd8a' },
-            { id: 'animated',    label: '@animated',               emoji: '\ud83c\udf9e\ufe0f' },
-            { id: 'indies',      label: 'Independent Creators',    emoji: '\ud83c\udfac' },
-            { id: 'beast_anim',  label: 'Beast Animations',        emoji: '\ud83d\udc3a' },
-            { id: 'odd1sout',    label: 'TheOdd1sOut',             emoji: '\ud83c\udfad' },
-            { id: 'jaiden',      label: 'JaidenAnimations',        emoji: '\ud83d\udc24' }
-        ];
-        var _jiqAnimCrActiveTab = 'overview';
-
+        function _jiqAnimCrPeople(m) {
+            return Math.round(Number(m) * 1e6 + 1e-6);
+        }
+        function _jiqAnimCrPanelChip() {
+            return 'US only · trailing 12 months · unique people';
+        }
+        function _jiqAnimCrC(id) {
+            var d = _jiqAnimCrD();
+            return (d.creators && d.creators[id]) || {};
+        }
+        function _jiqAnimCrReachRows(ids) {
+            return ids.map(function(id) {
+                var c = _jiqAnimCrC(id);
+                return {
+                    label: c.display || id,
+                    accounts: _jiqAnimCrPeople(c.reach_12mo_m),
+                    v: Number(c.reach_12mo_m) || 0,
+                    show: _jiqAnimCrMill(c.reach_12mo_m)
+                };
+            });
+        }
+        function _jiqAnimCrDiscRows(c, asPeople) {
+            var reach = Number(c.reach_12mo_m) || 0;
+            return (c.discovery || []).map(function(row) {
+                var people = reach * (Number(row.pct) || 0) / 100;
+                return {
+                    label: row.host,
+                    accounts: _jiqAnimCrPeople(people),
+                    v: asPeople ? people : Number(row.pct) || 0,
+                    show: asPeople
+                        ? (_jiqAnimCrPct(row.pct) + '  ' + _jiqAnimCrMill(people))
+                        : (_jiqAnimCrPct(row.pct) + ' first touch  ' + _jiqAnimCrPct(row.conv_14d_pct) + ' play in 14d')
+                };
+            });
+        }
+        function _jiqAnimCrComebackRows(c) {
+            return (c.comeback || []).map(function(row) {
+                return {
+                    label: row.host,
+                    v: Number(row.pct) || 0,
+                    show: _jiqAnimCrPct(row.pct)
+                };
+            });
+        }
+        function _jiqAnimCrContentRows(c) {
+            return (c.top_content || []).map(function(row) {
+                return {
+                    label: row.title,
+                    v: Number(row.likes_m) || 0,
+                    show: _jiqAnimCrMill(row.likes_m) + ' likes'
+                };
+            });
+        }
+        function _jiqAnimCrSpineFromReach(parentM, childM, parentLabel, childLabel, parentDoing, childDoing) {
+            var parent = Number(parentM) || 0;
+            var child = Number(childM) || 0;
+            var kept = parent > 0 ? Math.round((child / parent) * 1000) / 10 : 0;
+            var drop = Math.round((parent - child) * 1000) / 1000;
+            return [
+                {
+                    label: parentLabel,
+                    doing: parentDoing || '',
+                    accounts: _jiqAnimCrPeople(parent),
+                    show: _jiqAnimCrMill(parent),
+                    kept: kept,
+                    dropped: drop,
+                    droppedShow: _jiqAnimCrMill(drop)
+                },
+                {
+                    label: childLabel,
+                    doing: childDoing || '',
+                    accounts: _jiqAnimCrPeople(child),
+                    show: _jiqAnimCrMill(child)
+                }
+            ];
+        }
+        function _jiqAnimCrHandleBlock(id, num, head, sub) {
+            var c = _jiqAnimCrC(id);
+            if (!c.display) return '';
+            return _jiqAnimCrSec(num, head, sub)
+                + '<div class="jiq-ufc-figs is-4">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(c.reach_12mo_m) + '</b><span>People who touched ' + _jiqAnimCrEsc(c.handle) + '</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(c.us_followers_m) + '</b><span>US followers on the home handle</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqAnimCrPct(((c.comeback || [])[0] || {}).pct) + '</b><span>' + _jiqAnimCrEsc(((c.comeback || [])[0] || {}).host || 'Top return') + '</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrPct(_jiqAnimCrBestConv(c)) + '</b><span>Best 14-day play rate on a first touch</span></div>'
+                + '</div>'
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'First touch', rows: _jiqAnimCrDiscRows(c, false) },
+                    { title: 'What they come back for', scale: 100, rows: _jiqAnimCrComebackRows(c) }
+                ])
+                + '</div>'
+                + _jiqAnimCrRead(_jiqAnimCrPlainRead(c.read));
+        }
+        function _jiqAnimCrBestConv(c) {
+            return (c.discovery || []).reduce(function(m, row) {
+                var v = Number(row.conv_14d_pct);
+                return (isFinite(v) && v > m) ? v : m;
+            }, 0);
+        }
+        function _jiqAnimCrPlainRead(s) {
+            if (!s) return '';
+            return String(s)
+                .replace(/Read as:/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        function _jiqAnimCrHideOldCards() {
+            [
+                'jiqAnimCrOverviewCard', 'jiqAnimCrHubsCard', 'jiqAnimCrAdultSwimCard',
+                'jiqAnimCrAnimFoxCard', 'jiqAnimCrAnimatedCard', 'jiqAnimCrIndiesCard',
+                'jiqAnimCrBeastAnimCard', 'jiqAnimCrOdd1soutCard', 'jiqAnimCrJaidenCard'
+            ].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
         function _jiqAnimCrRenderTabBar() {
             var bar = document.getElementById('jiqAnimCrTabBar');
             if (!bar) return;
-            var active = (typeof _jiqAnimCrActiveTab !== 'undefined' && _jiqAnimCrActiveTab) || _JIQ_ANIM_CR_TABS[0].id;
-            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">'
+            var active = _jiqAnimCrActiveTab || _JIQ_ANIM_CR_TABS[0].id;
+            bar.className = 'jiq-ufc-tabbar';
+            bar.innerHTML = '<div class="jiq-ufc-pills">'
                 + _JIQ_ANIM_CR_TABS.map(function(t) {
-                    var isActive = (t.id === active);
-                    return '<button type="button" data-animcr-tab="' + t.id + '" '
-                        + 'onclick="_jiqAnimCrActivateTab(\'' + t.id + '\')" '
-                        + 'style="padding:0.3rem 0.68rem; border-radius:999px; cursor:pointer; '
-                        +        'font-size:0.72rem; font-weight:700; '
-                        +        'border:1px solid ' + (isActive ? 'rgba(245,158,11,0.68)' : 'rgba(148,163,184,0.25)') + '; '
-                        +        'background:' + (isActive ? 'linear-gradient(135deg, rgba(245,158,11,0.28), rgba(168,85,247,0.14))' : 'rgba(15,23,42,0.35)') + '; '
-                        +        'color:' + (isActive ? '#fed7aa' : '#cbd5e1') + ';">'
-                        + t.emoji + ' ' + _jiqAnimCrEsc(t.label)
-                        + '</button>';
+                    var on = (t.id === active) ? ' is-on' : '';
+                    return '<button type="button" class="' + on + '" data-animcr-tab="' + t.id + '" '
+                        + 'onclick="_jiqAnimCrActivateTab(\'' + t.id + '\')">'
+                        + _jiqAnimCrEsc(t.label) + '</button>';
                 }).join('')
-                + '</div>';
+                + '</div><div class="jiq-ufc-tabmeta">' + _jiqAnimCrPanelChip() + '</div>';
             bar.style.display = '';
         }
-
         function _jiqAnimCrActivateTab(tabId) {
+            if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+            if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
             var match = _JIQ_ANIM_CR_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_ANIM_CR_TABS[0];
             _jiqAnimCrActiveTab = match.id;
-            _JIQ_ANIM_CR_TABS.forEach(function(t) {
-                var cardId = 'jiqAnimCr' + t.id.split('_').map(function(p) { return p.charAt(0).toUpperCase() + p.slice(1); }).join('') + 'Card';
-                var el = document.getElementById(cardId);
-                if (el) el.style.display = (t.id === match.id) ? '' : 'none';
-            });
+            _jiqAnimCrHideOldCards();
+            _jiqAnimCrPaintNestCover();
+            var host = document.getElementById('jiqAnimCrNestHost');
+            var paint = _JIQ_ANIM_CR_NEST_RENDER && _JIQ_ANIM_CR_NEST_RENDER[match.id];
+            if (host && paint) host.innerHTML = paint();
             _jiqAnimCrRenderTabBar();
         }
-
         function _jiqAnimCrHideTabBar() {
             var bar = document.getElementById('jiqAnimCrTabBar');
             if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+            _jiqHideCard('jiqAnimCrNestCard');
         }
-
-        function renderJourneyIqAnimCr(p) {
-            var data = (p && p.creators) ? p : _JIQ_ANIM_CREATORS_DATA;
-            if (!data) return;
-
-            _renderAnimCrOverview(data);
-            Object.keys(data.creators).forEach(function(k) {
-                _renderAnimCrCreator(k, data.creators[k], data);
-            });
-
-            _jiqAnimCrRenderTabBar();
-            _jiqAnimCrActivateTab(_jiqAnimCrActiveTab || 'overview');
-        }
-
-        function _renderAnimCrOverview(data) {
-            _jiqShowCard('jiqAnimCrOverviewCard');
-            var sub  = document.getElementById('jiqAnimCrOverviewCardSubtitle');
-            var body = document.getElementById('jiqAnimCrOverviewCardBody');
-            if (sub) sub.innerHTML = _jiqAnimCrPanelChip(data.panel_basis);
-            if (!body) return;
-
-            var tl = data.topline || {};
-
-            function tile(label, val, subtxt, color) {
-                return '<div style="flex:1 1 150px; min-width:150px; padding:0.7rem 0.85rem; border-radius:8px; '
-                     +   'background:rgba(15,23,42,0.5); border:1px solid ' + color + '55;">'
-                     +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">' + _jiqAnimCrEsc(label) + '</div>'
-                     +   '<div style="font-size:1.1rem; font-weight:800; color:' + color + ';">' + _jiqAnimCrEsc(val) + '</div>'
-                     +   (subtxt ? '<div style="font-size:0.65rem; opacity:0.65; margin-top:0.2rem;">' + _jiqAnimCrEsc(subtxt) + '</div>' : '')
-                     + '</div>';
+        function _jiqAnimCrPaintNestCover() {
+            var d = _jiqAnimCrD();
+            var tl = d.topline || {};
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            var kpis = document.getElementById('jiqAnimCrNestKpis');
+            if (kpis) {
+                kpis.innerHTML = [
+                    { l: 'Touched one of the six handles', v: _jiqAnimCrMill(tl.combined_reach_m) },
+                    { l: 'Came through a studio hub', v: _jiqAnimCrMill(hubs.reach_12mo_m) },
+                    { l: 'Came through an independent creator', v: _jiqAnimCrMill(indies.reach_12mo_m) },
+                    { l: 'Touched two or more handles', v: _jiqAnimCrMill(tl.cross_creator_overlap_m), hot: true }
+                ].map(function(k) {
+                    return '<div class="jiq-frag-kpi' + (k.hot ? ' is-hot' : '') + '">'
+                        + '<div class="jiq-frag-kpi-l">' + _jiqAnimCrEsc(k.l) + '</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqAnimCrEsc(k.v) + '</div></div>';
+                }).join('');
             }
-
-            var tiles = '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.85rem;">'
-                + tile('Creators covered',       (tl.creators_covered || 6) + ' handles',                       '3 animation hubs + 3 solo creators',                       '#fbbf24')
-                + tile('Combined reach',         _jiqAnimCrAbbrevM(tl.combined_reach_m),                         Number(tl.combined_pct_of_panel || 0).toFixed(1) + '% of the social-active US panel', '#a855f7')
-                + tile('Cross-creator overlap',  _jiqAnimCrAbbrevM(tl.cross_creator_overlap_m),                  'US viewers who touched 2 or more of the 6 handles',        '#38bdf8')
-                + tile('Median first-to-play',   (tl.median_days_first_to_play || 0) + ' d',                    'from first discovery touchpoint to first anchor play',      '#84cc16')
-                + tile('Median follow rate',     Number(tl.median_follow_rate_pct || 0).toFixed(1) + '%',       'touched viewers who follow or subscribe',                   '#f472b6')
-                + tile('Return within 30d',      Number(tl.return_within_30d_pct || 0).toFixed(1) + '%',        'touched viewers who come back within 30 days',              '#22d3ee')
-                + '</div>';
-
-            var rows = _JIQ_ANIM_CR_TABS.filter(function(t) {
-                if (t.id === 'overview') return false;
-                var c = data.creators && data.creators[t.id];
-                return c && !c.combined;
-            }).map(function(t) {
-                var c = data.creators[t.id];
-                if (!c) return '';
-                var topSrc = (c.discovery && c.discovery.length) ? c.discovery[0] : null;
-                var bestConv = (c.discovery || []).reduce(function(m, d) {
-                    return (d && d.conv_14d_pct != null && (m == null || d.conv_14d_pct > m.conv_14d_pct)) ? d : m;
-                }, null);
-                var retention = (c.comeback && c.comeback.length) ? c.comeback[0] : null;
-                var typeLabel = (c.type === 'animation_hub') ? 'Hub' : 'Creator';
-                var typeColor = (c.type === 'animation_hub') ? '#a855f7' : '#22d3ee';
-                return '<tr>'
-                     +   '<td style="padding:6px 8px;">'
-                     +     '<button type="button" onclick="_jiqAnimCrActivateTab(\'' + t.id + '\')" style="background:transparent; border:0; padding:0; cursor:pointer; color:#fed7aa; font-weight:800; text-decoration:underline; font-size:0.72rem;">'
-                     +       t.emoji + ' ' + _jiqAnimCrEsc(c.display)
-                     +     '</button>'
-                     +     '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + _jiqAnimCrEsc(c.handle) + '</div>'
-                     +   '</td>'
-                     +   '<td style="padding:6px 8px;"><span style="padding:0.14rem 0.44rem; border-radius:999px; font-size:0.6rem; font-weight:800; background:' + typeColor + '1f; border:1px solid ' + typeColor + '66; color:' + typeColor + ';">' + typeLabel + '</span></td>'
-                     +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#e2e8f0;">' + _jiqAnimCrAbbrevM(c.reach_12mo_m) + '</td>'
-                     +   '<td style="padding:6px 8px; font-size:0.68rem;">' + (topSrc ? _jiqAnimCrEsc(topSrc.host) + ' <span style="opacity:0.6;">(' + Number(topSrc.pct).toFixed(1) + '%)</span>' : '&mdash;') + '</td>'
-                     +   '<td style="padding:6px 8px; font-size:0.68rem;">' + (bestConv ? _jiqAnimCrEsc(bestConv.host) + ' &middot; ' + _jiqAnimCrConvChip(bestConv.conv_14d_pct) : '&mdash;') + '</td>'
-                     +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#5eead4;">' + (retention ? Number(retention.pct).toFixed(1) + '%' : '&mdash;') + '</td>'
-                     + '</tr>';
-            }).join('');
-
-            var table = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.45rem; color:#fed7aa;">Comparison across the 6 handles</h4>'
-                + '<div style="overflow-x:auto;">'
-                + '<table style="width:100%; border-collapse:collapse; font-size:0.72rem; background:rgba(15,23,42,0.35); border-radius:8px; overflow:hidden;">'
-                +   '<thead>'
-                +     '<tr style="background:rgba(245,158,11,0.08); color:#fed7aa; text-transform:uppercase; letter-spacing:0.05em; font-size:0.6rem;">'
-                +       '<th style="padding:8px; text-align:left;">Creator</th>'
-                +       '<th style="padding:8px; text-align:left;">Type</th>'
-                +       '<th style="padding:8px; text-align:right;">Reach (12mo)</th>'
-                +       '<th style="padding:8px; text-align:left;">Top discovery source</th>'
-                +       '<th style="padding:8px; text-align:left;">Highest-converting source</th>'
-                +       '<th style="padding:8px; text-align:right;">Top comeback</th>'
-                +     '</tr>'
-                +   '</thead>'
-                +   '<tbody>' + rows + '</tbody>'
-                + '</table>'
-                + '</div>';
-
-            var read = data.read
-                ? '<div style="margin-top:0.85rem; padding:0.7rem 0.85rem; border-radius:8px; background:linear-gradient(135deg, rgba(168,85,247,0.08), rgba(245,158,11,0.04)); border:1px solid rgba(168,85,247,0.28);">'
-                  + '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity:0.75; color:#e9d5ff; margin-bottom:0.3rem;">Read</div>'
-                  + '<div style="font-size:0.78rem; line-height:1.5; color:#e2e8f0;">' + _jiqAnimCrEsc(data.read) + '</div>'
-                  + '</div>'
-                : '';
-
-            body.innerHTML = tiles + table + read;
-        }
-
-        function _renderAnimCrCreator(key, creator, data) {
-            var cardKey = key.split('_').map(function(p) { return p.charAt(0).toUpperCase() + p.slice(1); }).join('');
-            var cardId  = 'jiqAnimCr' + cardKey + 'Card';
-            _jiqShowCard(cardId);
-
-            var body = document.getElementById(cardId + 'Body');
-            var sub  = document.getElementById(cardId + 'Subtitle');
-            var meta = document.getElementById(cardId + 'Meta');
-            if (meta) meta.innerHTML = _jiqAnimCrEsc(creator.handle + ' \u00b7 ' + creator.home);
-            if (sub)  sub.innerHTML  = _jiqAnimCrPanelChip(data.panel_basis)
-                                    + '<div style="margin-top:0.4rem; font-size:0.72rem;">' + _jiqAnimCrEsc(creator.audience_note || '') + '</div>';
-            if (!body) return;
-
-            var topReturn = (creator.comeback && creator.comeback.length) ? Number(creator.comeback[0].pct).toFixed(1) + '%' : '-';
-            var typeLabel = (creator.type === 'animation_hub') ? 'Animation hub' : 'Content creator';
-
-            function tile(label, val, subtxt, color) {
-                return '<div style="flex:1 1 150px; min-width:150px; padding:0.7rem 0.85rem; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid ' + color + '55;">'
-                     +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">' + _jiqAnimCrEsc(label) + '</div>'
-                     +   '<div style="font-size:1.15rem; font-weight:800; color:' + color + ';">' + _jiqAnimCrEsc(val) + '</div>'
-                     +   (subtxt ? '<div style="font-size:0.65rem; opacity:0.65; margin-top:0.2rem;">' + _jiqAnimCrEsc(subtxt) + '</div>' : '')
-                     + '</div>';
+            var meta = document.getElementById('jiqAnimCrNestMeta');
+            if (meta) meta.textContent = 'Discovery journey · trailing 12 months';
+            var title = document.getElementById('jiqAnimCrNestTitle');
+            if (title) title.innerHTML = 'Digital animation<br>creators.';
+            var lead = document.getElementById('jiqAnimCrNestLead');
+            if (lead) lead.textContent = 'Hubs feed platforms, and solo creators are destinations.';
+            var deck = document.getElementById('jiqAnimCrNestDeck');
+            if (deck) {
+                deck.textContent = _jiqAnimCrMill(tl.combined_reach_m) + ' people touched one of six handles. '
+                    + _jiqAnimCrMill(hubs.reach_12mo_m) + ' came through Adult Swim, Animation on FOX, or @animated. '
+                    + _jiqAnimCrMill(indies.reach_12mo_m) + ' came through Beast Animations, TheOdd1sOut, or JaidenAnimations. '
+                    + _jiqAnimCrMill(tl.cross_creator_overlap_m) + ' touched two or more handles.';
             }
-
-            var tiles = '<div style="display:flex; flex-wrap:wrap; gap:0.55rem; margin-bottom:0.85rem;">'
-                + tile('Type',           typeLabel,                                          creator.home,                             '#a855f7')
-                + tile('US followers',   _jiqAnimCrAbbrevM(creator.us_followers_m),          'primary platform',                       '#fbbf24')
-                + tile('Reach (12mo)',   _jiqAnimCrAbbrevM(creator.reach_12mo_m),            'US viewers with 1+ touchpoint',          '#38bdf8')
-                + tile('Top comeback',   topReturn,                                          'top return-and-play retention signal',   '#22d3ee')
-                + '</div>';
-
-            var discRows = (creator.discovery || []).map(function(d) {
-                return '<tr>'
-                     +   '<td style="padding:6px 8px; font-weight:800;">' + _jiqAnimCrEsc(d.host) + '</td>'
-                     +   '<td style="padding:6px 8px; font-size:0.68rem; opacity:0.85;">' + _jiqAnimCrEsc(d.label) + '</td>'
-                     +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#fbbf24;">' + Number(d.pct).toFixed(1) + '%</td>'
-                     +   '<td style="padding:6px 8px; text-align:right;">' + _jiqAnimCrConvChip(d.conv_14d_pct) + '</td>'
-                     +   '<td style="padding:6px 8px; text-align:right; font-size:0.68rem; opacity:0.75;">' + (d.med_days != null ? Number(d.med_days).toFixed(0) + ' d' : '-') + '</td>'
-                     + '</tr>';
-            }).join('');
-
-            var discTable = '<h4 style="font-size:0.82rem; margin:0.3rem 0 0.35rem; color:#fed7aa;">\ud83d\udd0e Discovery paths</h4>'
-                + '<div style="overflow-x:auto;">'
-                + '<table style="width:100%; border-collapse:collapse; font-size:0.72rem; background:rgba(15,23,42,0.35); border-radius:8px; overflow:hidden;">'
-                +   '<thead><tr style="background:rgba(245,158,11,0.08); color:#fed7aa; text-transform:uppercase; letter-spacing:0.05em; font-size:0.6rem;">'
-                +     '<th style="padding:8px; text-align:left;">Source</th>'
-                +     '<th style="padding:8px; text-align:left;">What the viewer saw</th>'
-                +     '<th style="padding:8px; text-align:right;">Share of first-touches</th>'
-                +     '<th style="padding:8px; text-align:right;">Conversion (14d)</th>'
-                +     '<th style="padding:8px; text-align:right;">Median days</th>'
-                +   '</tr></thead>'
-                +   '<tbody>' + discRows + '</tbody>'
-                + '</table>'
-                + '</div>';
-
-            var contentRows = (creator.top_content || []).map(function(t) {
-                // Engagement chip - trailing 12mo aggregated likes + shares
-                // on the creator's / hub's own posts featuring this anchor.
-                var engagement = '';
-                if (t.likes_m != null || t.shares_m != null) {
-                    var parts = [];
-                    if (t.likes_m  != null) parts.push('\u2665 '  + _jiqAnimCrAbbrevM(t.likes_m)  + ' likes');
-                    if (t.shares_m != null) parts.push('\u21aa '  + _jiqAnimCrAbbrevM(t.shares_m) + ' shares');
-                    engagement = ' <span style="display:inline-block; padding:0.14rem 0.52rem; margin-left:0.35rem; border-radius:999px; '
-                              +   'font-size:0.65rem; font-weight:800; letter-spacing:0.02em; '
-                              +   'background:rgba(244,114,182,0.10); border:1px solid rgba(244,114,182,0.34); color:#f9a8d4;" '
-                              +   'title="Aggregated engagement on this anchor across the trailing 12 months">'
-                              +   parts.join(' \u00b7 ')
-                              + '</span>';
+            var art = document.getElementById('jiqAnimCrNestArt');
+            if (art) {
+                var hero = art.getAttribute('data-hero') || '';
+                if (hero) {
+                    art.innerHTML = '<img src="' + _jiqAnimCrEsc(hero) + '" alt="" onerror="this.remove()">';
+                    art.classList.remove('is-ini');
+                    art.classList.add('is-animcr');
+                } else {
+                    art.innerHTML = '<span class="jiq-frag-art-ini">DA</span>';
+                    art.classList.add('is-ini');
+                    art.classList.remove('is-animcr');
                 }
-                return '<li style="padding:0.35rem 0;"><strong style="color:#fed7aa;">' + _jiqAnimCrEsc(t.title) + '</strong>'
-                     + engagement
-                     + (t.signal ? ' <span style="opacity:0.75; font-size:0.7rem;">&middot; ' + _jiqAnimCrEsc(t.signal) + '</span>' : '')
-                     + '</li>';
-            }).join('');
-            var content = contentRows
-                ? '<h4 style="font-size:0.82rem; margin:0.85rem 0 0.35rem; color:#fed7aa;">\ud83d\udcfa Top anchor content</h4>'
-                  + '<ul style="list-style:disc; padding-left:1.2rem; margin:0 0 0.6rem;">' + contentRows + '</ul>'
-                : '';
-
-            var comebackRows = (creator.comeback || []).map(function(c) {
-                return '<div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.6rem; border-radius:6px; background:rgba(34,211,238,0.06); border:1px solid rgba(34,211,238,0.18); margin-bottom:0.28rem;">'
-                     +   '<div style="font-size:0.72rem; font-weight:700; color:#e2e8f0;">' + _jiqAnimCrEsc(c.host) + '</div>'
-                     +   '<div style="font-size:0.72rem; font-weight:800; color:#5eead4;">' + Number(c.pct).toFixed(1) + '%</div>'
-                     + '</div>';
-            }).join('');
-            var comeback = comebackRows
-                ? '<h4 style="font-size:0.82rem; margin:0.85rem 0 0.35rem; color:#fed7aa;">\ud83d\udd01 Come back</h4>'
-                  + '<div>' + comebackRows + '</div>'
-                : '';
-
-            var read = creator.read
-                ? '<div style="margin-top:0.85rem; padding:0.7rem 0.85rem; border-radius:8px; background:linear-gradient(135deg, rgba(168,85,247,0.08), rgba(245,158,11,0.04)); border:1px solid rgba(168,85,247,0.28);">'
-                  + '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity:0.75; color:#e9d5ff; margin-bottom:0.3rem;">Read</div>'
-                  + '<div style="font-size:0.78rem; line-height:1.5; color:#e2e8f0;">' + _jiqAnimCrEsc(creator.read) + '</div>'
-                  + '</div>'
-                : '';
-
-            body.innerHTML = tiles + discTable + content + comeback + read;
+            }
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
+            var nest = document.getElementById('jiqAnimCrNestCard');
+            if (nest) nest.style.display = '';
         }
-
-
-        // ══════════════════════════════════════════════════════════════
+        function _jiqAnimCrNestCase() {
+            var d = _jiqAnimCrD();
+            var tl = d.topline || {};
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            var social = 198.63;
+            var spine = _jiqAnimCrSpineFromReach(
+                social, tl.combined_reach_m,
+                'People with a TikTok, YouTube, or Instagram session',
+                'Touched one of the six handles',
+                'Trailing 12 months. Unique people.',
+                'A post view, a video play, or a profile page on one of the six handles.'
+            );
+            return _jiqAnimCrSec('01 Overview', 'Hubs feed platforms, and solo creators are destinations.', 'Six handles. Two jobs. Unique people.')
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(hubs.reach_12mo_m) + '</b><span>Studio hubs. They hand viewers to Max and Hulu.</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqAnimCrMill(indies.reach_12mo_m) + '</b><span>Independent creators. They are the watch, not a door to a show.</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(tl.cross_creator_overlap_m) + '</b><span>Touched two or more of the six handles.</span></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(spine) + '</div>'
+                + _jiqAnimCrSec('The six handles', 'Family Guy clips and TheOdd1sOut carry the most people.', 'Reach is unique people with one touch in the year.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Studio hubs', rows: _jiqAnimCrReachRows(['adult_swim', 'anim_fox', 'animated']) },
+                    { title: 'Independent creators', rows: _jiqAnimCrReachRows(['odd1sout', 'jaiden', 'beast_anim']) }
+                ])
+                + '</div>'
+                + _jiqAnimCrRead(_jiqAnimCrMill(tl.combined_reach_m) + ' is ' + _jiqAnimCrPct(tl.combined_pct_of_panel) + ' of people who used TikTok, YouTube, or Instagram in the year. A hub clip is a door to a show. A solo video is the show.');
+        }
+        function _jiqAnimCrNestDiscovery() {
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            var hubShelf = (hubs.discovery || []).filter(function(r) { return /shelf/i.test(r.host); })[0] || {};
+            var indieSearch = (indies.discovery || []).filter(function(r) { return /search/i.test(r.host); })[0] || {};
+            var hubClip = (hubs.discovery || [])[0] || {};
+            var indieHome = (indies.discovery || [])[0] || {};
+            return _jiqAnimCrSec('02 Discovery', 'Clips start the hub path and search finishes the solo path.', 'First touch on each handle. One channel each.')
+                + '<div class="jiq-ufc-mix">'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">Studio hubs</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-hot" style="flex:' + (hubClip.pct || 38) + '">' + _jiqAnimCrPct(hubClip.pct) + '</div>'
+                + '<div class="is-app" style="flex:' + (hubShelf.pct || 15) + '">' + _jiqAnimCrPct(hubShelf.pct) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - (hubClip.pct || 0) - (hubShelf.pct || 0)) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap is-2">'
+                + '<div><b>Studio clip</b><span>' + _jiqAnimCrPct(hubClip.pct) + ' of first touches. ' + _jiqAnimCrPct(hubClip.conv_14d_pct) + ' play in 14 days.</span></div>'
+                + '<div><b>Home shelf</b><span>' + _jiqAnimCrPct(hubShelf.pct) + ' of first touches. ' + _jiqAnimCrPct(hubShelf.conv_14d_pct) + ' play in 14 days.</span></div>'
+                + '</div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">Independent creators</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-soc" style="flex:' + (indieHome.pct || 45) + '">' + _jiqAnimCrPct(indieHome.pct) + '</div>'
+                + '<div class="is-hot" style="flex:' + (indieSearch.pct || 22) + '">' + _jiqAnimCrPct(indieSearch.pct) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - (indieHome.pct || 0) - (indieSearch.pct || 0)) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap is-2">'
+                + '<div><b>YouTube home</b><span>' + _jiqAnimCrPct(indieHome.pct) + ' of first touches. Volume, not the hottest play rate.</span></div>'
+                + '<div><b>Name search</b><span>' + _jiqAnimCrPct(indieSearch.pct) + ' of first touches. ' + _jiqAnimCrPct(indieSearch.conv_14d_pct) + ' play in 14 days.</span></div>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
+                + _jiqAnimCrSec('Every first touch', 'Home shelf and name search convert the hardest.', 'Share of first touches. Play in 14 days sits next to it.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Hubs', rows: _jiqAnimCrDiscRows(hubs, false) },
+                    { title: 'Independents', rows: _jiqAnimCrDiscRows(indies, false) }
+                ])
+                + '</div>'
+                + _jiqAnimCrRead('A Max or Hulu row converts at ' + _jiqAnimCrPct(hubShelf.conv_14d_pct) + '. A creator-name search converts at ' + _jiqAnimCrPct(indieSearch.conv_14d_pct) + '. Those are the two doors that already know what they want.');
+        }
+        function _jiqAnimCrNestHubs() {
+            var hubs = _jiqAnimCrC('hubs');
+            var social = 198.63;
+            var spine = _jiqAnimCrSpineFromReach(
+                social, hubs.reach_12mo_m,
+                'People with a TikTok, YouTube, or Instagram session',
+                'Touched Adult Swim, Animation on FOX, or @animated',
+                'Trailing 12 months.',
+                'Deduped across the three hub handles.'
+            );
+            return _jiqAnimCrSec('03 Hubs', 'Studio clips start it and the home shelf finishes it.', _jiqAnimCrMill(hubs.reach_12mo_m) + ' unique people across three handles.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(spine) + '</div>'
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(_jiqAnimCrC('adult_swim').reach_12mo_m) + '</b><span>Adult Swim</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(_jiqAnimCrC('anim_fox').reach_12mo_m) + '</b><span>Animation on FOX</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(_jiqAnimCrC('animated').reach_12mo_m) + '</b><span>@animated</span></div>'
+                + '</div>'
+                + _jiqAnimCrSec('Where they first land', 'Studio clips do the volume and the shelf does the play.', 'Share of first touches on the combined hub file.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First touch on a hub', rows: _jiqAnimCrDiscRows(hubs, false) }], true)
+                + '</div>'
+                + _jiqAnimCrHandleBlock('adult_swim', 'Adult Swim', 'Rick and Morty clips feed Max.', '@adultswim · ' + _jiqAnimCrMill(_jiqAnimCrC('adult_swim').reach_12mo_m) + ' people.')
+                + _jiqAnimCrHandleBlock('anim_fox', 'Animation on FOX', 'Family Guy clips feed Hulu.', '@AnimationonFOX · ' + _jiqAnimCrMill(_jiqAnimCrC('anim_fox').reach_12mo_m) + ' people.')
+                + _jiqAnimCrHandleBlock('animated', '@animated', 'The feed hands viewers to the source.', '@animated · ' + _jiqAnimCrMill(_jiqAnimCrC('animated').reach_12mo_m) + ' people.');
+        }
+        function _jiqAnimCrNestIndies() {
+            var indies = _jiqAnimCrC('indies');
+            var social = 198.63;
+            var spine = _jiqAnimCrSpineFromReach(
+                social, indies.reach_12mo_m,
+                'People with a TikTok, YouTube, or Instagram session',
+                'Touched Beast Animations, TheOdd1sOut, or JaidenAnimations',
+                'Trailing 12 months.',
+                'Deduped across the three solo handles.'
+            );
+            return _jiqAnimCrSec('04 Independents', 'Search finds a person, not a genre.', _jiqAnimCrMill(indies.reach_12mo_m) + ' unique people across three handles.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(spine) + '</div>'
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqAnimCrMill(_jiqAnimCrC('odd1sout').reach_12mo_m) + '</b><span>TheOdd1sOut</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(_jiqAnimCrC('jaiden').reach_12mo_m) + '</b><span>JaidenAnimations</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrMill(_jiqAnimCrC('beast_anim').reach_12mo_m) + '</b><span>Beast Animations</span></div>'
+                + '</div>'
+                + _jiqAnimCrSec('Where they first land', 'YouTube home is volume and name search is the play.', 'Share of first touches on the combined solo file.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First touch on a solo creator', rows: _jiqAnimCrDiscRows(indies, false) }], true)
+                + '</div>'
+                + _jiqAnimCrHandleBlock('odd1sout', 'TheOdd1sOut', 'A name search is the hottest door in the set.', '@theodd1sout · ' + _jiqAnimCrMill(_jiqAnimCrC('odd1sout').reach_12mo_m) + ' people.')
+                + _jiqAnimCrHandleBlock('jaiden', 'JaidenAnimations', 'The same funnel, with a tighter community tab.', '@jaidenanimations · ' + _jiqAnimCrMill(_jiqAnimCrC('jaiden').reach_12mo_m) + ' people.')
+                + _jiqAnimCrHandleBlock('beast_anim', 'Beast Animations', 'Small reach, high intent on every touch.', '@beastanimations · ' + _jiqAnimCrMill(_jiqAnimCrC('beast_anim').reach_12mo_m) + ' people.');
+        }
+        function _jiqAnimCrNestComeback() {
+            var d = _jiqAnimCrD();
+            var tl = d.topline || {};
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            return _jiqAnimCrSec('05 Come back', 'More than half come back within 30 days.', 'Return watch, not a cancel. These are free handles.')
+                + '<div class="jiq-ufc-figs is-4">'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqAnimCrPct(tl.return_within_30d_pct) + '</b><span>Back within 30 days, across all six handles</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrPct(tl.median_follow_rate_pct) + '</b><span>Follow or subscribe after the first touch</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + (tl.median_days_first_to_play || 2) + ' d</b><span>Median days from first touch to first play</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqAnimCrPct(((hubs.comeback || [])[1] || {}).pct) + '</b><span>Hub viewers who open a second hub title in 90 days</span></div>'
+                + '</div>'
+                + _jiqAnimCrSec('What a return looks like', 'Hubs return for a show, solo fans for a video.', '')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Hubs', scale: 100, rows: _jiqAnimCrComebackRows(hubs) },
+                    { title: 'Independents', scale: 100, rows: _jiqAnimCrComebackRows(indies) }
+                ])
+                + '</div>'
+                + _jiqAnimCrRead('A hub return is often the next episode of the same show. A solo return is the next upload from the same person. Buy the next episode on Max or Hulu. Buy the next video on YouTube.');
+        }
+        function _jiqAnimCrNestRead() {
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            var hubShelf = (hubs.discovery || []).filter(function(r) { return /shelf/i.test(r.host); })[0] || {};
+            var indieSearch = (indies.discovery || []).filter(function(r) { return /search/i.test(r.host); })[0] || {};
+            return _jiqAnimCrSec('06 The read', 'Treat hubs as feeders and creators as destinations.', 'Same six handles. Two buys.')
+                + '<div class="jiq-ufc-tldr">'
+                + '<div>Put the next Adult Swim or FOX episode on the home shelf. That door converts at ' + _jiqAnimCrPct(hubShelf.conv_14d_pct) + '.</div>'
+                + '<div>Buy creator-name search and the next upload for TheOdd1sOut and JaidenAnimations. Name search converts at ' + _jiqAnimCrPct(indieSearch.conv_14d_pct) + '.</div>'
+                + '<div>Do not treat @animated as a destination. Pay it to hand the click to the original piece.</div>'
+                + '</div>'
+                + _jiqAnimCrSec('What this means', 'Buy the two paths as two media plans.', '')
+                + '<div class="jiq-ufc-levers">'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Hubs</div>'
+                + '<div class="jiq-ufc-lever-v">' + _jiqAnimCrMill(hubs.reach_12mo_m) + '</div>'
+                + '<div class="jiq-ufc-lever-l">Clips find them. The shelf plays them.</div>'
+                + '<div class="jiq-ufc-lever-s">Family Guy, Rick and Morty, and The Simpsons clips start the path. Max and Hulu finish it.</div></div>'
+                + '<div class="jiq-ufc-lever"><div class="jiq-ufc-lever-k">Independents</div>'
+                + '<div class="jiq-ufc-lever-v">' + _jiqAnimCrMill(indies.reach_12mo_m) + '</div>'
+                + '<div class="jiq-ufc-lever-l">They already know the name.</div>'
+                + '<div class="jiq-ufc-lever-s">YouTube home is volume. A typed name is the play. A collab between TheOdd1sOut and JaidenAnimations is the fastest add inside this cluster.</div></div>'
+                + '</div>';
+        }
+        function _jiqAnimCrNestMethod() {
+            var d = _jiqAnimCrD();
+            var tl = d.topline || {};
+            var hubs = _jiqAnimCrC('hubs');
+            var indies = _jiqAnimCrC('indies');
+            return _jiqAnimCrSec('07 How we counted', 'Every count is a unique person.', 'Trailing 12 months ending August 31, 2026.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'What sits in the file', rows: [
+                    { label: 'Used TikTok, YouTube, or Instagram', v: 198.63, show: '198.63M' },
+                    { label: 'Touched one of the six handles', v: tl.combined_reach_m, show: _jiqAnimCrMill(tl.combined_reach_m) },
+                    { label: 'Touched a studio hub', v: hubs.reach_12mo_m, show: _jiqAnimCrMill(hubs.reach_12mo_m) },
+                    { label: 'Touched an independent creator', v: indies.reach_12mo_m, show: _jiqAnimCrMill(indies.reach_12mo_m) },
+                    { label: 'Touched two or more handles', v: tl.cross_creator_overlap_m, show: _jiqAnimCrMill(tl.cross_creator_overlap_m) }
+                ] }], true)
+                + '</div>'
+                + _jiqAnimCrRead('A touch is a post view, a video play of at least three seconds, or a profile page on that handle. A play in 14 days is a qualifying watch of the underlying show or video after that first touch. Broadcast television stays out. A person counts once inside a handle and once in each combined file.')
+                + _jiqAnimCrRead('Hub reach is smaller than the three hub handles added together because ' + _jiqAnimCrMill(hubs.within_group_overlap_m) + ' people touched two hubs. Indie reach is smaller than the three solo handles added together because ' + _jiqAnimCrMill(indies.within_group_overlap_m) + ' people touched two solo creators.');
+        }
+        var _JIQ_ANIM_CR_NEST_RENDER = {
+            case: _jiqAnimCrNestCase,
+            discovery: _jiqAnimCrNestDiscovery,
+            hubs: _jiqAnimCrNestHubs,
+            independents: _jiqAnimCrNestIndies,
+            comeback: _jiqAnimCrNestComeback,
+            read: _jiqAnimCrNestRead,
+            methodology: _jiqAnimCrNestMethod
+        };
+        function renderJourneyIqAnimCr(p) {
+            if (p && p.creators) {
+                window._JIQ_ANIM_CREATORS_DATA = p;
+            }
+            _jiqAnimCrHideOldCards();
+            _jiqAnimCrActivateTab(_jiqAnimCrActiveTab || 'case');
+        }
+        function _jiqAnimCrHydrateRun(key) {
+            if (key !== '__demo_animation_creators__') return null;
+            var data = (typeof _JIQ_ANIM_CREATORS_DATA !== 'undefined') ? _JIQ_ANIM_CREATORS_DATA : null;
+            if (!data) return null;
+            var tl = data.topline || {};
+            return {
+                success: true,
+                data: {
+                    meta: {
+                        story_mode: 'animation_creators_discovery',
+                        target_name: 'Digital Animation Creators',
+                        target_display: 'Digital Animation Creators',
+                        project_name: 'Digital Animation Creators',
+                        customer_brand: 'Digital Animation Creators',
+                        start_date: '2025-09-01',
+                        end_date: '2026-08-31',
+                        target_type: 'creator_discovery_journey',
+                        category: 'tv'
+                    },
+                    facts: [
+                        { label: 'Window', value: 'Trailing 12 months ending August 31, 2026.' },
+                        { label: 'Touched a handle', value: _jiqAnimCrMill(tl.combined_reach_m) + ' people.' },
+                        { label: 'Studio hubs', value: _jiqAnimCrMill(_jiqAnimCrC('hubs').reach_12mo_m) + ' people.' },
+                        { label: 'Independents', value: _jiqAnimCrMill(_jiqAnimCrC('indies').reach_12mo_m) + ' people.' }
+                    ],
+                    animation_creators: data
+                }
+            };
+        }
         // AMC+ AUDIENCE & PLATFORM MIGRATION — full data + renderers.
         // Replaces the earlier stub. See _JIQ_AMC_DATA below for the
         // eight-tab data model; renderers follow at the bottom of
@@ -104399,6 +104462,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         function _jiqUfcActivateTab(tabId) {
             if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
+            if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
             var match = _JIQ_UFC_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_UFC_TABS[0];
             _jiqUfcActiveTab = match.id;
@@ -105112,6 +105176,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!match) match = _JIQ_ARROW_TABS[0];
             _jiqArrowActiveTab = match.id;
             if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+            if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
             _jiqArrowPaintNestCover();
             var host = document.getElementById('jiqArrowNestHost');
             var paint = _JIQ_ARROW_NEST_RENDER && _JIQ_ARROW_NEST_RENDER[match.id];
@@ -184780,6 +184845,65 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqUfcNestCard .jiq-frag-read { margin-bottom: 8px; }
     #jiqUfcNestHost { padding-bottom: 28px; }
     #jiqArrowNestHost { padding-bottom: 28px; }
+
+    #jiqAnimCrNestCard {
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        border-radius: 14px;
+        flex: 0 0 auto;
+    }
+    body[data-theme="light"] #jiqAnimCrNestCard { background: #E9E8E1; color: #0C1618; }
+    #jiqAnimCrNestTitle {
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95; text-transform: none !important;
+    }
+    @media (max-width: 1080px) { #jiqAnimCrNestTitle { font-size: 38px; } }
+    #jiqAnimCrNestDeck, #jiqAnimCrNestCard .jiq-frag-label, #jiqAnimCrNestCard .jiq-frag-doing,
+    #jiqAnimCrNestCard .jiq-frag-read, #jiqAnimCrNestCard .jiq-frag-detlab,
+    #jiqAnimCrNestCard .jiq-frag-kpi-v, #jiqAnimCrNestCard .jiq-frag-count,
+    #jiqAnimCrNestCard .jiq-frag-lost, #jiqAnimCrNestCard .jiq-frag-sec h3,
+    #jiqAnimCrNestCard .jiq-frag-sec em,
+    #jiqAnimCrNestCard .jiq-frag-read-lead,
+    #jiqAnimCrNestCard .jiq-ufc-lever-k,
+    #jiqAnimCrNestCard .jiq-ufc-lever-l,
+    #jiqAnimCrNestCard .jiq-ufc-lever-s,
+    #jiqAnimCrNestCard .jiq-ufc-tldr { text-transform: none !important; }
+    .jiq-frag-art.is-animcr img { object-position: 42% 32%; }
+    #jiqAnimCrNestHost { padding-bottom: 28px; }
+    #jiqAnimCrNestCard .jiq-ufc-spine { margin: 0 34px; }
+    #jiqAnimCrNestCard .jiq-frag-detours.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px 0; margin-top: 22px;
+    }
+    #jiqAnimCrNestCard .jiq-frag-detours.cols-2 .jiq-frag-det + .jiq-frag-det {
+        margin-left: 36px; padding-left: 36px;
+        border-left: 1px solid rgba(233,232,225,.16);
+    }
+    body[data-theme="light"] #jiqAnimCrNestCard .jiq-frag-detours.cols-2 .jiq-frag-det + .jiq-frag-det {
+        border-left-color: #C9C6BA;
+    }
+    #jiqAnimCrNestCard .jiq-frag-detours.cols-1 { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
+    #jiqAnimCrNestCard .jiq-frag-detrow,
+    #jiqAnimCrNestCard .jiq-frag-detrow.is-wide {
+        grid-template-columns: minmax(0, 1fr) 140px 16rem;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(233,232,225,.08);
+    }
+    #jiqAnimCrNestCard .jiq-frag-det .jiq-frag-detrow:last-child { border-bottom: 0; }
+    body[data-theme="light"] #jiqAnimCrNestCard .jiq-frag-detrow,
+    body[data-theme="light"] #jiqAnimCrNestCard .jiq-frag-detrow.is-wide {
+        border-bottom-color: #DDDACE;
+    }
+    #jiqAnimCrNestCard .jiq-frag-detbar { width: 140px; }
+    #jiqAnimCrNestCard .jiq-frag-detval { width: 16rem; text-align: right; }
+    #jiqAnimCrNestCard .jiq-frag-detlab {
+        white-space: normal; overflow: visible; line-height: 1.35; word-spacing: 0.12em;
+    }
+    #jiqAnimCrNestCard .jiq-frag-detlab.is-wrap { white-space: normal; overflow: visible; }
+    #jiqAnimCrNestCard .jiq-frag-det h5 { word-spacing: 0.35em; letter-spacing: .08em; }
+    #jiqAnimCrNestCard .jiq-frag-read { margin-bottom: 8px; }
+
     #jiqArrowNestCard .jiq-ufc-spine { margin: 0 34px; }
     #jiqArrowNestCard .jiq-frag-detours.cols-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
