@@ -578,3 +578,4 @@ if __name__ == "__main__":
 # (site-hero-10m-nbsp-gen-pop-matched 2026-09-28 - Site: keep "10 million" together; gen-pop-matched)
 # (site-nav-panel-products-hero 2026-09-28 - Site: The Panel in top nav; Products hero headline + lead)
 # (site-products-table-align-billing 2026-09-28 - Site: Products question column left-aligned; Attribution price shortened; billing note rewrite)
+# (site-products-report-pricing 2026-09-28 - Site: Products 02 eyebrow Report pricing; headline One report, one price.)
