@@ -582,3 +582,4 @@ if __name__ == "__main__":
 # (site-signup-close-panel-lead 2026-09-28 - Site: sign-up close headline on 12 pages; Panel hero lead rewrite)
 # (site-panel-how-it-works 2026-09-28 - Site: Panel section 02 How it works; single What clients receive card)
 # (site-categories-35-plus 2026-09-28 - Site: behavioral categories 40+ -> 35+ everywhere)
+# (site-panel-card-align-counted 2026-09-28 - Site: Panel card top-aligned with headline; What gets counted copy)
