@@ -2423,9 +2423,6 @@ def apply_prometheus_only_seat(user: dict, *, wipe_catalog: bool = False) -> dic
     user["prometheus_access"] = "full"
     user["prometheus_mode"] = "both"
     user["pay_per_use_enabled"] = True
-    user["company_billing_admin"] = True
-    user["billing_source"] = "company"
-    user["company"] = WBD_COMPANY_NAME
     user["auto_access_new"] = {"profile_iq": False}
     user["sf_conversion_journeys"] = None
     user["brand_partnership_iq_journeys"] = None
@@ -2516,8 +2513,118 @@ def attach_wbd_seat(user: dict, users_data: dict, *,
     rec = ensure_wbd_shared_wallet(
         users_data, seed_user=user if seed else None)
     apply_prometheus_only_seat(user, wipe_catalog=wipe_catalog)
+    user["company"] = WBD_COMPANY_NAME
+    user["billing_source"] = "company"
+    user["company_billing_admin"] = True
     inherit_company_paid_runs(user, users_data, replace=wipe_catalog)
     return rec
+
+
+_STAFF_USERNAMES = frozenset({
+    "admin", "jenna", "jessie", "liz", "anastasia",
+})
+
+
+def is_internal_staff_seat(user: dict, username: str = "") -> bool:
+    """Crosswalk staff never get the paid-reports-only lock."""
+    if not isinstance(user, dict):
+        user = {}
+    if str(user.get("role") or "").strip().lower() == "super_admin":
+        return True
+    uname = str(username or "").strip().lower()
+    if uname in _STAFF_USERNAMES:
+        return True
+    email = str(user.get("email") or "").strip().lower()
+    if email.endswith("@crosswalknyc.com"):
+        return True
+    return False
+
+
+def is_paid_only_plan(user) -> bool:
+    return (isinstance(user, dict)
+            and str(user.get("plan") or "").strip()
+            == PROMETHEUS_SELF_SERVE_PLAN)
+
+
+def company_wants_paid_only(users_data: dict, company_name: str) -> bool:
+    """True when new company seats should inherit paid-reports-only."""
+    name = str(company_name or "").strip()
+    if not name:
+        return False
+    if is_wbd_company(name):
+        return True
+    rec = ((users_data or {}).get("companies") or {}).get(name)
+    return bool(isinstance(rec, dict) and rec.get("member_prometheus_only"))
+
+
+def mark_company_paid_only(users_data: dict, company_name: str,
+                           seed_user=None) -> dict:
+    """Stamp a company so new members only see paid Prometheus pulls."""
+    name = str(company_name or "").strip()
+    if not name or not isinstance(users_data, dict):
+        return {}
+    if is_wbd_company(name):
+        return ensure_wbd_shared_wallet(users_data, seed_user=seed_user)
+    rec = ensure_company_record(users_data, name, seed_user=seed_user)
+    if not isinstance(rec, dict):
+        return rec
+    rec["member_prometheus_only"] = True
+    rec["paying_customer"] = True
+    rec["unlimited"] = False
+    if not isinstance(rec.get("allowed_runs"), list):
+        rec["allowed_runs"] = []
+    elif "*" in rec["allowed_runs"]:
+        rec["allowed_runs"] = _clean_paid_runs(rec["allowed_runs"])
+    return rec
+
+
+def attach_paid_only_seat(user: dict, users_data: dict, *,
+                          wipe_catalog: bool = True,
+                          username: str = ""):
+    """Lock one seat to Prometheus + reports they pay to pull.
+
+    If they bill through a company wallet, that company is stamped so
+    the next person added there gets the same access. WBD still gives
+    every member wallet-admin. Other companies keep their own admin
+    flags.
+    """
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return None
+    if is_internal_staff_seat(user, username):
+        return None
+    company = str(user.get("company") or "").strip()
+    if is_wbd_company(company):
+        return attach_wbd_seat(user, users_data, wipe_catalog=wipe_catalog)
+    apply_prometheus_only_seat(user, wipe_catalog=wipe_catalog)
+    billed = str(user.get("billing_source") or "").strip().lower() == "company"
+    if company and billed:
+        mark_company_paid_only(users_data, company, seed_user=user)
+        inherit_company_paid_runs(user, users_data, replace=wipe_catalog)
+    return user
+
+
+def attach_paid_only_company(users_data: dict, company_name: str, *,
+                             wipe_members: bool = True):
+    """Lock a company wallet and every current member on that wallet."""
+    name = str(company_name or "").strip()
+    if not name or not isinstance(users_data, dict):
+        return None, [], []
+    rec = mark_company_paid_only(users_data, name)
+    applied = []
+    skipped = []
+    if not wipe_members:
+        return rec, applied, skipped
+    for uname, member in company_members(name, users_data):
+        if is_internal_staff_seat(member, uname):
+            skipped.append(uname)
+            continue
+        if is_wbd_company(name):
+            attach_wbd_seat(member, users_data, wipe_catalog=True, seed=False)
+        else:
+            apply_prometheus_only_seat(member, wipe_catalog=True)
+            inherit_company_paid_runs(member, users_data, replace=True)
+        applied.append(uname)
+    return rec, applied, skipped
 
 
 def company_teammate_usernames(user: dict, users_data: dict,
@@ -2583,6 +2690,8 @@ def admin_billing_row_for_user(username: str, user: dict,
             "wallet_transactions") or [])[:50],
         "billed_via_company": billed,
         "company_wallet_name": key if billed else "",
+        "plan": str(user.get("plan") or ""),
+        "paid_only_access": is_paid_only_plan(user),
     }
 
 
@@ -3451,6 +3560,9 @@ __all__ = [
     "resolve_billing_subject", "ensure_company_record",
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
+    "is_internal_staff_seat", "is_paid_only_plan",
+    "company_wants_paid_only", "mark_company_paid_only",
+    "attach_paid_only_seat", "attach_paid_only_company",
     "company_paid_runs", "grant_company_paid_runs",
     "inherit_company_paid_runs",
     "company_teammate_usernames",

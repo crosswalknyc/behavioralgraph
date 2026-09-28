@@ -1813,6 +1813,9 @@ def admin_companies_billing():
             "brand_partnership_iq_usd": float(
                 ((c.get("tool_price_overrides") or {})
                  .get("brand_partnership_iq") or 0.0) or 0.0),
+            "member_prometheus_only": bool(
+                c.get("member_prometheus_only")),
+            "paid_only_access": bool(c.get("member_prometheus_only")),
         })
     rows.sort(key=lambda r: (
         not r["paying_customer"],
@@ -1914,6 +1917,91 @@ def admin_company_billing_config(company_name):
     if not ok:
         return jsonify({"error": msg}), 404
     return jsonify({"success": True})
+
+
+@billing_bp.route(
+    "/api/admin/user/<target_username>/paid-only-access",
+    methods=["POST"])
+def admin_user_paid_only_access(target_username):
+    """Lock one seat to Prometheus + reports they pay to pull."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    from app import _users_cas_mutate  # type: ignore
+
+    state = {"error": "", "username": "", "company": "", "runs": 0}
+
+    def _apply(data):
+        key, u = _lookup_user_record(data, target_username)
+        if not key or not isinstance(u, dict):
+            state["error"] = "user_not_found"
+            return None
+        if wallet.is_internal_staff_seat(u, key):
+            state["error"] = "staff_blocked"
+            return None
+        wallet.attach_paid_only_seat(
+            u, data, wipe_catalog=True, username=key)
+        state["username"] = key
+        state["company"] = str(u.get("company") or "")
+        runs = u.get("allowed_runs")
+        state["runs"] = len(runs) if isinstance(runs, list) else 0
+        return data
+
+    final = _users_cas_mutate(_apply)
+    if state["error"] == "user_not_found":
+        return jsonify({"error": "user_not_found"}), 404
+    if state["error"] == "staff_blocked":
+        return jsonify({"error": "staff_blocked"}), 400
+    if final is None:
+        return jsonify({"error": "could_not_apply"}), 500
+    return jsonify({
+        "success": True,
+        "username": state["username"],
+        "company": state["company"],
+        "paid_only_access": True,
+        "allowed_runs_count": state["runs"],
+    })
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/paid-only-access",
+    methods=["POST"])
+def admin_company_paid_only_access(company_name):
+    """Lock a company wallet and every current member on it."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    from app import _users_cas_mutate  # type: ignore
+
+    name = str(company_name or "").strip()
+    if not name:
+        return jsonify({"error": "company_required"}), 400
+    state = {"error": "", "applied": [], "skipped": []}
+
+    def _apply(data):
+        rec, applied, skipped = wallet.attach_paid_only_company(
+            data, name, wipe_members=True)
+        if rec is None:
+            state["error"] = "company_required"
+            return None
+        state["applied"] = applied
+        state["skipped"] = skipped
+        return data
+
+    final = _users_cas_mutate(_apply)
+    if state["error"]:
+        return jsonify({"error": state["error"]}), 400
+    if final is None:
+        return jsonify({"error": "could_not_apply"}), 500
+    return jsonify({
+        "success": True,
+        "company": name,
+        "paid_only_access": True,
+        "applied": state["applied"],
+        "skipped": state["skipped"],
+    })
 
 
 @billing_bp.route(

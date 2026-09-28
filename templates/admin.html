@@ -4552,6 +4552,25 @@
                         </div>
                     </div>
 
+                    <div id="paidOnlyPanel" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-dark); margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.65rem;">
+                            <span style="font-size: 1.35rem; line-height: 1;">🔓</span>
+                            <div style="flex: 1; min-width: 220px;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Paid reports only</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">They only see Prometheus and the reports they pay to pull. Anyone on the same company wallet sees those same paid reports. New people you add to that company get the same access.</div>
+                            </div>
+                        </div>
+                        <label class="checkbox-group" style="margin-bottom: 0.55rem;">
+                            <input type="checkbox" id="newPaidOnlyAccess">
+                            <span>Apply when I save this user</span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <button type="button" class="btn btn-small btn-primary" id="paidOnlyApplyBtn" onclick="applyPaidOnlyAccess()">Paid reports only</button>
+                            <span id="paidOnlyOnBadge" style="display: none; font-size: 0.72rem; font-weight: 600; color: var(--accent-cyan);">On</span>
+                        </div>
+                        <div id="paidOnlyStatus" style="display: none; margin-top: 0.55rem; font-size: 0.72rem; line-height: 1.5;"></div>
+                    </div>
+
                     <!-- Company-shared wallet routing (Jenna 2026-09-09) -->
                     <div class="form-row">
                         <div class="form-group">
@@ -10329,6 +10348,11 @@
             const _payPanelAdd = document.getElementById('payLinkPanel');
             if (_payPanelAdd) _payPanelAdd.style.display = 'none';
             if (typeof _payLinkReset === 'function') _payLinkReset();
+            const _paidBoxAdd = document.getElementById('newPaidOnlyAccess');
+            if (_paidBoxAdd) _paidBoxAdd.checked = false;
+            const _paidBadgeAdd = document.getElementById('paidOnlyOnBadge');
+            if (_paidBadgeAdd) _paidBadgeAdd.style.display = 'none';
+            if (typeof _paidOnlyStatus === 'function') _paidOnlyStatus('');
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
             const addCreditsWrap = document.getElementById('addCreditsInModalWrap');
@@ -10592,6 +10616,12 @@
             document.getElementById('newDepartment').value = user.department || '';
             // Company-shared wallet routing (Jenna 2026-09-09).
             const _bs = document.getElementById('newBillingSource');
+            const _paidBox = document.getElementById('newPaidOnlyAccess');
+            const _paidOn = String(user.plan || '') === 'prometheus_self_serve';
+            if (_paidBox) _paidBox.checked = _paidOn;
+            const _paidBadge = document.getElementById('paidOnlyOnBadge');
+            if (_paidBadge) _paidBadge.style.display = _paidOn ? 'inline' : 'none';
+            if (typeof _paidOnlyStatus === 'function') _paidOnlyStatus('');
             if (_bs) _bs.value = (user.billing_source === 'company')
                 ? 'company' : 'user';
             const _cba = document.getElementById('newCompanyBillingAdmin');
@@ -14274,6 +14304,91 @@
             }
         }
 
+        function _paidOnlyStatus(msg, kind) {
+            var el = document.getElementById('paidOnlyStatus');
+            if (!el) return;
+            if (!msg) { el.style.display = 'none'; return; }
+            var color = kind === 'error' ? 'var(--accent-pink, #E682FF)'
+                      : kind === 'ok'    ? 'var(--accent-cyan)'
+                      : 'var(--text-secondary)';
+            el.style.color = color;
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function applyPaidOnlyAccess() {
+            var uname = _currentEditUsernameForApi();
+            var box = document.getElementById('newPaidOnlyAccess');
+            if (!uname) {
+                if (box) box.checked = true;
+                _paidOnlyStatus(
+                    'Checked. This will apply when you save the user.',
+                    'ok');
+                return;
+            }
+            if (!confirm(
+                    'This turns off every dashboard tab except Prometheus. '
+                    + 'They will only see reports they pay to pull. '
+                    + 'Continue?')) {
+                return;
+            }
+            var btn = document.getElementById('paidOnlyApplyBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+            _paidOnlyStatus('');
+            fetch('/api/admin/user/' + encodeURIComponent(uname)
+                  + '/paid-only-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}'
+            })
+                .then(function (r) {
+                    return r.json().then(function (d) {
+                        return { ok: r.ok, d: d };
+                    });
+                })
+                .then(function (res) {
+                    if (res.ok && res.d && res.d.success) {
+                        if (box) box.checked = true;
+                        var badge = document.getElementById('paidOnlyOnBadge');
+                        if (badge) badge.style.display = 'inline';
+                        if (allUsers[uname]) {
+                            allUsers[uname].plan = 'prometheus_self_serve';
+                        }
+                        _paidOnlyStatus(
+                            'On. They only see Prometheus and paid reports.',
+                            'ok');
+                        if (typeof loadUsers === 'function') {
+                            loadUsers().then(function () {
+                                if (typeof editUser === 'function') {
+                                    editUser(uname);
+                                }
+                                _paidOnlyStatus(
+                                    'On. They only see Prometheus and paid reports.',
+                                    'ok');
+                            }).catch(function () {});
+                        }
+                    } else {
+                        var code = (res.d && res.d.error) || '';
+                        var msg = code === 'staff_blocked'
+                            ? 'Internal accounts keep full access.'
+                            : (code === 'user_not_found'
+                                ? 'Save this user first, then click again.'
+                                : 'Could not apply. Try again.');
+                        _paidOnlyStatus(msg, 'error');
+                    }
+                })
+                .catch(function () {
+                    _paidOnlyStatus(
+                        'Could not reach the server. Try again.', 'error');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Paid reports only';
+                    }
+                });
+        }
+
         function generatePayLink() {
             var uname = _currentEditUsernameForApi();
             if (!uname) {
@@ -14805,6 +14920,10 @@
                         'newCompanyBillingAdmin');
                     return !!(el && el.checked);
                 })(),
+                paid_only_access: !!(
+                    document.getElementById('newPaidOnlyAccess')
+                    && document.getElementById('newPaidOnlyAccess').checked
+                ),
                 // Per-member spend scope (Jenna 2026-09-09). "inherit"
                 // (default), "*" (all), or list of tool_keys.
                 company_spend_scope: (function() {

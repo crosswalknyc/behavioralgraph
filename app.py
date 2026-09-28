@@ -5541,10 +5541,22 @@ def create_user():
         # "remove ... purgatory since we dont need it anymore"). The
         # has_purgatory_approval field is silently ignored on create.
         import wallet as _wallet_co
+        _new_u = data['users'][username]
+        _want_paid = bool(req_data.get('paid_only_access'))
+        if _wallet_co.is_internal_staff_seat(_new_u, username):
+            _want_paid = False
         if _wallet_co.is_wbd_company(company):
             data['users'][username]['company'] = _wallet_co.WBD_COMPANY_NAME
             _wallet_co.attach_wbd_seat(
                 data['users'][username], data, wipe_catalog=True)
+        elif _want_paid or (
+                company
+                and _wallet_co.company_wants_paid_only(data, company)
+                and str(_new_u.get('billing_source') or '').lower()
+                == 'company'):
+            _wallet_co.attach_paid_only_seat(
+                data['users'][username], data,
+                wipe_catalog=True, username=username)
         elif str(data['users'][username].get('billing_source') or '').lower() == 'company':
             _wallet_co.ensure_company_record(
                 data, company, seed_user=data['users'][username])
@@ -5875,11 +5887,25 @@ def update_user(username):
             del data['users'][username]
             username = new_username
 
+        _want_paid = bool(req_data.get('paid_only_access'))
+        if _wallet_co.is_internal_staff_seat(user, username):
+            _want_paid = False
+        _already_paid = _wallet_co.is_paid_only_plan(user)
         if _wallet_co.is_wbd_company(user.get('company')):
             user['company'] = _wallet_co.WBD_COMPANY_NAME
             user['billing_source'] = 'company'
             _wallet_co.attach_wbd_seat(
                 user, data, wipe_catalog=not _was_wbd)
+        elif _want_paid:
+            _wallet_co.attach_paid_only_seat(
+                user, data, wipe_catalog=True, username=username)
+        elif (
+            _wallet_co.company_wants_paid_only(data, user.get('company'))
+            and str(user.get('billing_source') or '').lower() == 'company'
+        ):
+            _wallet_co.attach_paid_only_seat(
+                user, data, wipe_catalog=not _already_paid,
+                username=username)
         elif str(user.get('billing_source') or '').lower() == 'company':
             if not str(user.get('company') or '').strip():
                 return jsonify({

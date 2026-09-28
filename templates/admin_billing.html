@@ -671,6 +671,27 @@
       </div>
 
       <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <h3 style="margin: 0 0 8px 0; font-size: 16px;">
+          Paid reports only
+        </h3>
+        <div style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">
+          Prometheus stays on. Every other tab turns off. They only
+          see reports they pay to pull. On a company wallet, teammates
+          see those same paid reports, and new people added to the
+          company get the same access.
+        </div>
+        <div id="m-paid-only-status"
+          style="color: #5E7E12; font-size: 13px; font-weight: 600;
+                 margin-bottom: 10px; display: none;">
+          On
+        </div>
+        <button type="button" id="m-paid-only-btn"
+                onclick="applyPaidOnlyFromBilling()">
+          Paid reports only
+        </button>
+      </div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
         <h3 style="margin: 0 0 12px 0; font-size: 16px;">
           Card on file
         </h3>
@@ -891,6 +912,10 @@
           html += '<div style="color:#6B7280;font-size:11px;">' +
             esc(u.company_wallet_name) + ' wallet</div>';
         }
+        if (u.paid_only_access) {
+          html += '<div style="color:#5E7E12;font-size:11px;">' +
+            'Paid reports only</div>';
+        }
         html += '</div>';
         html += '<div style="color: #6B7280;">' +
           esc(u.email || '') + '</div>';
@@ -964,7 +989,12 @@
       rows.forEach(c => {
         const balCls = c.wallet_balance_usd < 0 ? ' negative' : '';
         html += '<div class="user-row">';
-        html += '<div><strong>' + esc(c.company) + '</strong></div>';
+        html += '<div><strong>' + esc(c.company) + '</strong>';
+        if (c.paid_only_access) {
+          html += '<div style="color:#5E7E12;font-size:11px;">' +
+            'Paid reports only</div>';
+        }
+        html += '</div>';
         html += '<div style="color:#6B7280;">' +
           (c.member_count || 0) + '</div>';
         if (c.unlimited) {
@@ -1069,7 +1099,50 @@
       else $('m-balance').style.color = '';
       renderCardStatus(u);
       renderTxns(u.wallet_transactions || []);
+      const paidOn = !!u.paid_only_access;
+      const paidEl = $('m-paid-only-status');
+      if (paidEl) paidEl.style.display = paidOn ? 'block' : 'none';
       $('user-modal').classList.add('open');
+    }
+
+    async function applyPaidOnlyFromBilling() {
+      const kind = currentSubjectKind;
+      const key = currentSubjectKey;
+      if (!key) return;
+      const companyAsk = kind === 'company'
+        ? 'Everyone at this company will only see Prometheus and reports they pay to pull. Continue?'
+        : 'This turns off every dashboard tab except Prometheus. They will only see reports they pay to pull. Continue?';
+      if (!confirm(companyAsk)) return;
+      const path = kind === 'company'
+        ? '/api/admin/company/' + encodeURIComponent(key) + '/paid-only-access'
+        : '/api/admin/user/' + encodeURIComponent(key) + '/paid-only-access';
+      const btn = $('m-paid-only-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+      try {
+        const r = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const d = await r.json();
+        if (r.ok && d && d.success) {
+          const paidEl = $('m-paid-only-status');
+          if (paidEl) paidEl.style.display = 'block';
+          if (typeof reloadAfterMutation === 'function') {
+            await reloadAfterMutation();
+          }
+        } else if (d && d.error === 'staff_blocked') {
+          alert('Internal accounts keep full access.');
+        } else {
+          alert('Could not apply. Try again.');
+        }
+      } catch (e) {
+        alert('Could not reach the server. Try again.');
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Paid reports only';
+      }
     }
 
     function closeModal() {
