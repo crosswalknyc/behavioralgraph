@@ -57584,6 +57584,130 @@ def _pm_gate_pull(user):
     return _prometheus_mode_of(user) in ('pull', 'both')
 
 
+# STATUS-CHECK INTERCEPT (2026-09-28 Jenna, keith's "is eastside golf
+# running?" got an empty step on one surface and a duplicate 5-credit
+# build offer on the other: "these were clearly a status update check.
+# needs to recognize that in the future"). Subject-named status
+# questions answer from the caller's own runs; they never reach the
+# analysis pass, the answer library, or the build interpreter. The
+# interceptor only speaks when a run actually matches the named
+# subject, so "is yellowstone still running?" as an airing question
+# falls through to analysis untouched when no Yellowstone run exists.
+_PM_STATUS_ASK_RES = (
+    re.compile(r"^\s*(?:is|are)\s+(?:my\s+|the\s+)?(.+?)\s+(?:still\s+)?"
+               r"(?:running|building|done|finished|ready|complete(?:d)?|"
+               r"going|in\s+progress|live\s+yet)\s*\??\s*$", re.I),
+    re.compile(r"^\s*(?:did|has|have)\s+(?:my\s+|the\s+)?(.+?)\s+"
+               r"(?:finish(?:ed)?|complete(?:d)?|land(?:ed)?|"
+               r"come\s+back|run(?:\s+yet)?)\s*\??\s*$", re.I),
+    re.compile(r"^\s*(?:status|progress|eta)\s+(?:of|on|for)\s+"
+               r"(.+?)\s*\??\s*$", re.I),
+    re.compile(r"^\s*how(?:'s|\s+is)\s+(?:my\s+|the\s+)?(.+?)\s+"
+               r"(?:coming(?:\s+along)?|going|doing|progressing)"
+               r"\s*\??\s*$", re.I),
+)
+
+_PM_STATUS_TAIL_TOKENS = {'build', 'builds', 'profile', 'profiles',
+                          'run', 'runs', 'pull', 'pulls', 'cut',
+                          'cuts', 'report', 'job', 'request'}
+
+
+def _pm_status_ask_subject(text):
+    """Return the subject phrase of a status question, or ''."""
+    t = str(text or '').strip()
+    if not t or len(t) > 120:
+        return ''
+    for rx in _PM_STATUS_ASK_RES:
+        m = rx.match(t)
+        if not m:
+            continue
+        words = [w for w in re.split(r'\s+', m.group(1).strip()) if w]
+        while words and _normalize_for_match(words[-1]) in \
+                _PM_STATUS_TAIL_TOKENS:
+            words.pop()
+        if words:
+            return ' '.join(words[:6])
+    return ''
+
+
+def _pm_status_matching_runs(user, phrase, limit=40):
+    """The caller's runs whose subject matches the phrase (token
+    containment either way), most recent first. Empty on any listener
+    trouble - the ask then falls through to normal routing."""
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return []
+    uid = (user.get('email') or user.get('username') or '').strip()
+    if not uid:
+        return []
+    try:
+        import requests as _rq
+        resp = _rq.get(
+            f"{SYNTH_QUEUE_URL}/synth/list",
+            params={'limit': limit, 'user': uid},
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET}, timeout=12)
+        if resp.status_code != 200:
+            return []
+        docs = resp.json() or []
+    except Exception:
+        return []
+    want = {w for w in _normalize_for_match(phrase).split()
+            if w not in _PM_BASE_GENERIC_TOKENS}
+    if not want:
+        return []
+    out = []
+    for doc in docs:
+        if not isinstance(doc, dict):
+            continue
+        subj = {w for w in _normalize_for_match(
+                    str(doc.get('subject') or '')).split()
+                if w not in _PM_BASE_GENERIC_TOKENS}
+        if subj and (want <= subj or subj <= want):
+            out.append(doc)
+    return out
+
+
+def _pm_status_reply_for_runs(runs):
+    """One plain status line per matching run (up to 3). Failed runs
+    read as still building - the ops-hold convention keeps internal
+    failures invisible while the rerun completes under the same id."""
+    lines = []
+    for doc in runs[:3]:
+        subj = str(doc.get('subject') or 'Your profile').strip()
+        st = str(doc.get('status') or '').strip().lower()
+        if st == 'complete':
+            if doc.get('subiq_s3_key'):
+                lines.append(
+                    f"{subj} is finished. The Subscriber IQ read is "
+                    f"live in the Subscriber IQ tab now.")
+            else:
+                line = (f"{subj} is finished and live in the Select "
+                        f"Profile dropdown.")
+                if doc.get('tu_key'):
+                    line += f" File: {doc['tu_key']}"
+                lines.append(line)
+        elif st in ('failed', 'error', 'ops_hold'):
+            lines.append(
+                f"{subj} is still building - it is taking a little "
+                f"longer than usual. It lands in the Select Profile "
+                f"dropdown and this chat confirms the moment it "
+                f"finishes.")
+        else:
+            si, tot = doc.get('step_index'), doc.get('step_total') or 11
+            lab = str(doc.get('step_label') or '').strip()
+            if isinstance(si, int) and tot:
+                pct = max(0, min(100, int(round(100.0 * si / tot))))
+                line = f"{subj} is building now - step {si} of {tot}"
+                if lab:
+                    line += f" ({lab})"
+                line += f", about {pct}%."
+            else:
+                line = f"{subj} is {st or 'queued'}."
+            line += (" It lands in the Select Profile dropdown and "
+                     "this chat confirms the moment it finishes.")
+            lines.append(line)
+    return '\n'.join(lines)
+
+
 # CUT-REQUEST INTERCEPT (2026-09-28 Jenna, keith's "Let's do one cut
 # of males only and another cut of black consumers" answered with a
 # replayed brand read: "it should have asked him what profile he was
@@ -60763,6 +60887,22 @@ def api_synth_chat_analyze():
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             panel_confirm=_panel_confirm)
+    # STATUS-CHECK INTERCEPT (2026-09-28 Jenna): "is eastside golf
+    # running?" answers from the caller's own runs. Fires only when a
+    # run actually matches the named subject; everything else falls
+    # through untouched.
+    _status_phrase = _pm_status_ask_subject(text)
+    if _status_phrase:
+        _status_runs = _pm_status_matching_runs(user, _status_phrase)
+        if _status_runs:
+            _pm_ask_hint(route='status_check', outcome='answered',
+                         subject=str(_status_runs[0].get('subject')
+                                     or _status_phrase))
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pm_status_reply_for_runs(_status_runs),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
     # CUT-REQUEST INTERCEPT (2026-09-28 Jenna): a cut request is a
     # build action - it never rides the analysis pass or replays from
     # the answer library. Parent named in the ask: hand straight to
