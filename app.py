@@ -47502,6 +47502,52 @@ def _bind_relative_window(draft, user_text, chat_history=None,
         return False
 
 
+_WINDOW_AFFIRM_RE = re.compile(
+    r"\b(?:default(?:\s+window)?\s+(?:is\s+)?(?:fine|good|ok(?:ay)?|"
+    r"works)|(?:that|this|it)(?:'s|\s+is)?\s+(?:fine|good|ok(?:ay)?|"
+    r"perfect|great)|sounds?\s+good|works\s+for\s+me|"
+    r"keep\s+(?:it|the\s+default)|use\s+the\s+default|"
+    r"yes|yep|sure|ok(?:ay)?|good|fine)\b", re.IGNORECASE)
+
+
+def _bind_window_confirmation(draft, user_text):
+    """A chained window confirmation settles the window (2026-09-28,
+    Phase 1 of the improvement plan; the rdesocio double-ask: 'date
+    range: that default window is fine' carries no date vocabulary, so
+    nothing marked the window explicit and the confirm card asked
+    again - he abandoned twice). Any 'date range:' suffix whose
+    content AFFIRMS rather than names a window marks the draft's
+    current range explicit. Two or more suffixes force it regardless
+    of content: the user has answered twice and is never asked a
+    third time. Named windows are already bound upstream by the
+    relative and shared-explicit binders."""
+    try:
+        if not isinstance(draft, dict) \
+                or draft.get('date_range_explicit'):
+            return False
+        t = str(user_text or '')
+        parts = re.split(r'(?i)\bdate\s+range\s*:\s*', t)
+        if len(parts) < 2:
+            return False
+        answers = [p.strip()[:80] for p in parts[1:] if p.strip()]
+        if not answers:
+            return False
+        affirmed = any(_WINDOW_AFFIRM_RE.search(a.split('.')[0])
+                       for a in answers)
+        if affirmed or len(answers) >= 2:
+            draft['date_range_explicit'] = True
+            try:
+                print(f"[window-confirm] settled by chained "
+                      f"confirmation ({len(answers)} answer(s), "
+                      f"affirmed={affirmed})")
+            except Exception:
+                pass
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _bind_shared_explicit_window(draft, user_text, decision=None):
     """Bind an explicit 'Date range: X to Y' clause that applies to the
     WHOLE request onto this draft.
@@ -58360,6 +58406,112 @@ def _pm_pop_pending_question(username, completed_subject):
     return popped['q']
 
 
+# Fuzzy catalog tier (2026-09-28, Phase 1 of the improvement plan):
+# exact token matching means 'Emily in Parris' or 'Kardashians' can
+# miss the catalog and trigger a duplicate build of a profile the
+# library already carries. One typo'd token per subject is tolerated
+# (edit distance 1 on tokens of 5+, 2 on 8+); ambiguous fuzzy hits
+# never bind.
+_PM_SUBJECT_ALIASES = {
+    'kuwtk': 'keeping up with the kardashians',
+    'hbomax': 'hbo max',
+    'gotw': 'the god of the woods',
+}
+
+
+def _pm_edit_distance(a, b, cap=3):
+    """Small bounded Levenshtein; returns cap when clearly beyond."""
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    if abs(la - lb) >= cap:
+        return cap
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        best = cur[0]
+        for j in range(1, lb + 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1,
+                         prev[j - 1] + (a[i - 1] != b[j - 1]))
+            best = min(best, cur[j])
+        if best >= cap:
+            return cap
+        prev = cur
+    return min(prev[lb], cap)
+
+
+def _pm_token_typo_eq(a, b):
+    a, b = str(a), str(b)
+    if a == b:
+        return True
+    if len(a) < 5 or len(b) < 5:
+        return False
+    allow = 2 if min(len(a), len(b)) >= 8 else 1
+    return _pm_edit_distance(a, b, cap=allow + 1) <= allow
+
+
+def _pm_expand_alias_tokens(toks, raw_text):
+    """Add canonical tokens for any house alias present in the text."""
+    out = set(toks)
+    norm = _normalize_for_match(raw_text)
+    flat = norm.replace(' ', '')
+    for alias, canon in _PM_SUBJECT_ALIASES.items():
+        if alias in flat or alias in norm:
+            out.update(_normalize_for_match(canon).split())
+    return out
+
+
+def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
+    """The single catalog subject the ask nearly names, or None.
+
+    Every distinctive token of the subject must appear in the ask
+    either exactly or one typo away, at least one match must have
+    needed the typo tolerance (exact matches are upstream), and the
+    fuzzy hit must be unique across the catalog - two candidates is
+    an ambiguity, not a bind."""
+    base_tokens = set(_normalize_for_match(text).split())
+    if extra_tokens:
+        base_tokens |= set(extra_tokens)
+    q_tokens = _pm_expand_alias_tokens(base_tokens, text)
+    if not q_tokens:
+        return None
+    hits = {}
+    try:
+        for entry in _profile_catalog_for_chat():
+            subj = str(entry.get('subject')
+                       or entry.get('display_name') or '').strip()
+            st = [w for w in _normalize_for_match(subj).split()
+                  if w not in _PM_BASE_GENERIC_TOKENS]
+            if not st or sum(len(w) for w in st) < 5 \
+                    or not any(len(w) >= 5 for w in st):
+                continue
+            needed_typo = False
+            ok = True
+            for w in st:
+                if w in q_tokens:
+                    continue
+                tw = next((qt for qt in q_tokens
+                           if _pm_token_typo_eq(w, qt)), None)
+                if tw is None:
+                    ok = False
+                    break
+                needed_typo = True
+            # Alias expansion counts as a qualifying near-miss too:
+            # 'kuwtk' matches every token exactly AFTER expansion, and
+            # the exact tier upstream never saw those tokens.
+            needed_alias = ok and not set(st) <= base_tokens
+            if ok and (needed_typo or needed_alias):
+                hits[_normalize_for_match(subj)] = {
+                    'subject': subj,
+                    's3_key': str(entry.get('s3_key') or ''),
+                }
+    except Exception:
+        traceback.print_exc()
+    if len(hits) == 1:
+        return next(iter(hits.values()))
+    return None
+
+
 def _pm_generation_base(subject_hint, text, ctx=None,
                         prefer_catalog=False):
     """Resolve the base that authorizes a generated read.
@@ -58479,6 +58631,18 @@ def _pm_generation_base(subject_hint, text, ctx=None,
         return best
     if partial:
         return partial
+    # 2b. Fuzzy tier (2026-09-28, Phase 1): a unique one-typo-away
+    # catalog subject binds instead of falling through to a duplicate
+    # build offer. Ambiguity never binds.
+    try:
+        fz = _pm_fuzzy_catalog_subject(
+            f"{text or ''} {subject_hint or ''}")
+        if fz and fz.get('s3_key'):
+            print(f"[pm-base] fuzzy catalog bind: {fz['subject']!r}")
+            return {'subject': fz['subject'], 's3_key': fz['s3_key'],
+                    'source': 'catalog'}
+    except Exception:
+        traceback.print_exc()
     if page_base is not None:
         return page_base
 
@@ -67954,6 +68118,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
         _bind_relative_window(draft, prompt, decision=decision)
         _bind_shared_explicit_window(draft, prompt, decision=decision)
         _apply_standing_default_window(draft)
+    _bind_window_confirmation(draft, prompt)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
     # `cuts` was computed above (deliverable defs only), BEFORE the

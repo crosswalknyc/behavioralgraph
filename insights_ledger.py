@@ -1084,6 +1084,63 @@ def find_exact(entries, question=None, key=None):
     return None
 
 
+_ROLLING_WINDOW_RX = re.compile(
+    r'\b(?:last|past|trailing|previous)\s+\d+\s*'
+    r'(?:day|week|month|year)s?\b'
+    r'|\bt\d+d\b|\byesterday\b|\btoday\b'
+    r'|\b(?:this|last)\s+(?:week|month|quarter|year)\b'
+    r'|\bmonth to date\b|\byear to date\b|\bytd\b',
+    re.IGNORECASE)
+
+
+def _exact_if_fresh(e):
+    """Rolling-window answers age out of verbatim replay (2026-09-28,
+    Phase 1 of the improvement plan): an answer to 'the last 30 days'
+    banked on day 0 describes a different window by day 31, and
+    because replay short-circuits regeneration the stale number could
+    never update. A stale rolling entry still rides the constraint
+    block (the fresh read anchors to it); it just stops replaying
+    verbatim. Absolute windows replay forever. Fresh = the banked
+    timestamp is within one window span of now, 48-hour floor so a
+    7-day ask does not churn daily."""
+    if not e:
+        return None
+    q = f"{e.get('q') or ''} {e.get('wl') or ''}"
+    if not _ROLLING_WINDOW_RX.search(q):
+        return e
+    try:
+        ts = datetime.strptime(str(e.get('ts') or ''),
+                               '%Y-%m-%dT%H:%M:%SZ')
+        ts = ts.replace(tzinfo=timezone.utc)
+    except Exception:
+        return e
+    age_s = (datetime.now(timezone.utc) - ts).total_seconds()
+    span_s = None
+    try:
+        ws = datetime.strptime(str(e.get('ws') or ''), '%Y-%m-%d')
+        we = datetime.strptime(str(e.get('we') or ''), '%Y-%m-%d')
+        span_s = max(0.0, (we - ws).total_seconds()) + 86400
+    except Exception:
+        span_s = None
+    if span_s is None:
+        m = re.search(r'(?:last|past|trailing|previous)\s+(\d+)\s*'
+                      r'(day|week|month|year)', q, re.IGNORECASE)
+        if m:
+            mult = {'day': 1, 'week': 7, 'month': 30, 'year': 365}
+            span_s = (int(m.group(1))
+                      * mult[m.group(2).lower()] * 86400)
+    if span_s is None:
+        span_s = 30 * 86400
+    if age_s <= max(span_s, 2 * 86400):
+        return e
+    try:
+        print(f"[insights-ledger] rolling-window entry aged out of "
+              f"replay ({e.get('k')}); it still rides constraints")
+    except Exception:
+        pass
+    return None
+
+
 def consult(subject=None, question=None, metric_family=None,
             window_start=None, window_end=None):
     """Look up ledger history for this ask.
@@ -1091,7 +1148,8 @@ def consult(subject=None, question=None, metric_family=None,
     Returns {'subject', 'skey', 'entries', 'block', 'exact'}:
     - entries: stored entries for the resolved subject (oldest first)
     - block:   PUBLISHED MEASUREMENTS body ('' when no history)
-    - exact:   entry to replay verbatim, or None
+    - exact:   entry to replay verbatim, or None (a rolling-window
+      entry older than its own span never replays verbatim)
     Never raises; empty result on any failure.
     """
     empty = {'subject': None, 'skey': None, 'entries': [],
@@ -1111,7 +1169,7 @@ def consult(subject=None, question=None, metric_family=None,
                        if isinstance(e, dict)]
             return {'subject': bucket.get('subject'), 'skey': gkey,
                     'entries': entries, 'block': render_block(entries),
-                    'exact': gexact}
+                    'exact': _exact_if_fresh(gexact)}
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
                    if isinstance(e, dict)]
@@ -1132,7 +1190,7 @@ def consult(subject=None, question=None, metric_family=None,
             exact = find_semantic(entries, question)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),
-                'exact': exact}
+                'exact': _exact_if_fresh(exact)}
     except Exception as e:
         print(f"[insights-ledger] consult failed: {e}")
         return empty
