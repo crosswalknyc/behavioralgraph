@@ -387,9 +387,30 @@ def _run_all(run_coverage: bool = True) -> int:
     if ok_count and run_coverage:
         _run_coverage_gate()
         _run_chart_pricing()
+        _run_board_gate()
     elif not ok_count:
         logger.info("no scraper published; skipping the coverage pass")
     return 0 if ok_count else 1
+
+
+def _run_board_gate() -> int:
+    """Last step: check the rendered board against the rules the
+    rankers are sold on (chart order, chart present, catalog under the
+    chart, no cap seats, rail order, no blanks), fix in place once,
+    re-check, alert only on a survivor. Jenna 2026-09-28: "did you set
+    up something so these errors cannot continue to happen." This is
+    that. Own subprocess so it can never take the lane down.
+    """
+    logger.info("checking the rendered board against its invariants ...")
+    cmd = [sys.executable, '-m',
+           'scripts.trends_scrapers.board_invariants', '--gate']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[board_invariants] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[board_invariants stderr] %s", proc.stderr.strip()[-4000:])
+    return proc.returncode
 
 
 # ────────────────────────────────────────────────────────────────────

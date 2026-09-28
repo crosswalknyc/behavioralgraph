@@ -777,6 +777,25 @@ def _run_main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: last-digit check crashed "
                                "(non-fatal)")
 
+        # Every check above watches one pass. This one watches the
+        # PAGE: the rendered board against the rules the rankers are
+        # sold on (chart order, chart present, catalog under the chart,
+        # no cap seats, rail order, no blanks). Six passes run in
+        # sequence and any later one can undo an earlier guarantee;
+        # on 2026-09-28 every per-pass guard was green while 52
+        # catalog rows sat above their platform's chart and three
+        # chart services rendered no chart. Audit, fix in place once,
+        # re-audit, alert only on a survivor. Jenna: "did you set up
+        # something so these errors cannot continue to happen."
+        try:
+            from scripts.trends_scrapers.board_invariants import gate as _board_gate
+            _bg = _board_gate()
+            logging.info("run_all: board invariants -> %s violation(s) "
+                         "after fix", _bg.get('violations'))
+        except Exception:
+            logging.exception("run_all: board invariants gate crashed "
+                               "(non-fatal)")
+
     # ------------------------------------------------------------------
     # Publish what the streaming section used to work out per request.
     #

@@ -24,6 +24,7 @@
     "backfill_daily_estimates.py",
     "backfill_history.py",
     "bench_section_budget.py",
+    "board_invariants.py",
     "book_charts.py",
     "britbox.py",
     "britbox_amazon.py",
