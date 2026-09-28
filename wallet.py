@@ -2336,6 +2336,211 @@ def ensure_company_record(users_data: dict, company_name: str,
     return rec
 
 
+# WBD (Jenna 2026-09-28): one shared company wallet. Every WBD seat
+# manages it. Prometheus only. A report lands in a tab only after
+# they pay to pull it.
+WBD_COMPANY_NAME = "WBD"
+PROMETHEUS_SELF_SERVE_PLAN = "prometheus_self_serve"
+_PROMETHEUS_ONLY_FALSE_FLAGS = (
+    "has_profile_iq_access",
+    "has_subscriber_iq_access",
+    "has_ecommerce_iq_access",
+    "has_ticket_sales_iq_access",
+    "has_hedge_fund_iq_access",
+    "gets_hedge_fund_iq_emails",
+    "has_ticket_sales_tracker_access",
+    "has_rankers_iq_access",
+    "has_talent_fit_access",
+    "has_sf_conversion_access",
+    "has_flywheel_conversion_access",
+    "has_flywheel_iq_access",
+    "has_brand_partnership_iq_access",
+    "has_sentiment_iq_access",
+    "has_journey_iq_access",
+    "has_intent_iq_access",
+    "has_share_of_time_access",
+    "has_share_of_time_run_access",
+    "has_blue_iq_access",
+    "has_brand_tracking_iq_access",
+    "has_impact_iq_access",
+    "has_trends_iq_access",
+    "has_microdramas_iq_access",
+)
+_PROMETHEUS_ONLY_EMPTY_LISTS = (
+    "allowed_categories",
+    "allowed_behavioral_categories",
+    "allowed_journey_iq_runs",
+    "allowed_intent_iq_runs",
+    "allowed_trends_tabs",
+    "allowed_rankers_tabs",
+    "analysis_iq_modules",
+    "rankers_iq_options",
+    "hedge_fund_iq_tabs",
+    "hedge_fund_iq_tickers",
+    "impact_iq_journeys",
+)
+
+
+def is_wbd_company(name: str) -> bool:
+    return str(name or "").strip().upper() == WBD_COMPANY_NAME
+
+
+def ensure_wbd_shared_wallet(users_data: dict, seed_user=None) -> dict:
+    """Create or refresh the WBD company wallet and the seat template
+    every WBD member inherits. Existing money and card stay put."""
+    rec = ensure_company_record(
+        users_data, WBD_COMPANY_NAME, seed_user=seed_user)
+    if not isinstance(rec, dict):
+        return rec
+    rec["member_prometheus_only"] = True
+    rec["member_company_billing_admin"] = True
+    rec["default_spend_scope"] = "*"
+    rec["paying_customer"] = True
+    rec["unlimited"] = False
+    if not str(rec.get("billing_mode") or "").strip():
+        rec["billing_mode"] = "auto_reload"
+    # Paid Prometheus pulls for this company. New WBD seats inherit
+    # this list and nothing else from the catalog.
+    if not isinstance(rec.get("allowed_runs"), list):
+        rec["allowed_runs"] = []
+    elif "*" in rec["allowed_runs"]:
+        rec["allowed_runs"] = [
+            str(k).strip() for k in rec["allowed_runs"]
+            if str(k).strip() and str(k).strip() != "*"]
+    return rec
+
+
+def apply_prometheus_only_seat(user: dict, *, wipe_catalog: bool = False) -> dict:
+    """Prometheus only. No product tabs. Catalog starts empty so a
+    report appears only after they pay to pull it."""
+    if not isinstance(user, dict):
+        return user
+    user["plan"] = PROMETHEUS_SELF_SERVE_PLAN
+    user["paying_customer"] = True
+    user["unlimited"] = False
+    user["credits"] = 0
+    user["has_chatbot_profile_iq_access"] = True
+    user["prometheus_access"] = "full"
+    user["prometheus_mode"] = "both"
+    user["pay_per_use_enabled"] = True
+    user["company_billing_admin"] = True
+    user["billing_source"] = "company"
+    user["company"] = WBD_COMPANY_NAME
+    user["auto_access_new"] = {"profile_iq": False}
+    user["sf_conversion_journeys"] = None
+    user["brand_partnership_iq_journeys"] = None
+    user["allowed_lenses"] = []
+    for flag in _PROMETHEUS_ONLY_FALSE_FLAGS:
+        user[flag] = False
+    for key in _PROMETHEUS_ONLY_EMPTY_LISTS:
+        user[key] = []
+    runs = user.get("allowed_runs")
+    if wipe_catalog or not isinstance(runs, list) or "*" in runs:
+        user["allowed_runs"] = []
+    return user
+
+
+def _clean_paid_runs(runs) -> list:
+    if not isinstance(runs, list):
+        return []
+    out = []
+    for raw in runs:
+        key = str(raw or "").strip()
+        if key and key != "*" and key not in out:
+            out.append(key)
+    return out
+
+
+def company_paid_runs(users_data: dict, company_name: str) -> list:
+    """Profile keys this company paid to pull. Empty if none."""
+    if not isinstance(users_data, dict) or not company_name:
+        return []
+    rec = (users_data.get("companies") or {}).get(company_name)
+    if not isinstance(rec, dict):
+        return []
+    return _clean_paid_runs(rec.get("allowed_runs"))
+
+
+def grant_company_paid_runs(users_data: dict, company_name: str,
+                            keys) -> bool:
+    """Record paid pulls on the company and give every teammate the
+    same list. A WBD employee sees what any other WBD employee paid
+    for, and nothing from the rest of the catalog."""
+    add = _clean_paid_runs(keys)
+    if not isinstance(users_data, dict) or not company_name or not add:
+        return False
+    companies = users_data.setdefault("companies", {})
+    rec = companies.get(company_name)
+    paid = _clean_paid_runs(
+        rec.get("allowed_runs") if isinstance(rec, dict) else None)
+    wrote = False
+    for key in add:
+        if key not in paid:
+            paid.append(key)
+            wrote = True
+    if isinstance(rec, dict):
+        rec["allowed_runs"] = list(paid)
+    for _uname, member in company_members(company_name, users_data):
+        cur = member.get("allowed_runs")
+        if not isinstance(cur, list) or "*" in cur:
+            continue
+        extra = [k for k in paid if k not in cur]
+        if extra:
+            member["allowed_runs"] = list(cur) + extra
+            wrote = True
+    return wrote
+
+
+def inherit_company_paid_runs(user: dict, users_data: dict, *,
+                              replace: bool = False) -> dict:
+    """Copy the company's paid-report list onto this seat."""
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return user
+    _subject, kind, key = resolve_billing_subject(user, users_data)
+    if kind != "company" or not key:
+        return user
+    paid = company_paid_runs(users_data, key)
+    cur = user.get("allowed_runs")
+    if replace or not isinstance(cur, list) or "*" in cur:
+        user["allowed_runs"] = list(paid)
+    else:
+        user["allowed_runs"] = list(cur) + [k for k in paid if k not in cur]
+    return user
+
+
+def attach_wbd_seat(user: dict, users_data: dict, *,
+                    wipe_catalog: bool = False, seed: bool = True):
+    """Point this user at the shared WBD wallet and apply the seat."""
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return None
+    rec = ensure_wbd_shared_wallet(
+        users_data, seed_user=user if seed else None)
+    apply_prometheus_only_seat(user, wipe_catalog=wipe_catalog)
+    inherit_company_paid_runs(user, users_data, replace=wipe_catalog)
+    return rec
+
+
+def company_teammate_usernames(user: dict, users_data: dict,
+                               username: str = "") -> list:
+    """Usernames that share this user's company wallet, buyer first.
+
+    A paid Prometheus pull belongs to the company that paid, so every
+    teammate on that wallet can open the report.
+    """
+    names = []
+    if username:
+        names.append(str(username))
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return names
+    _subject, kind, key = resolve_billing_subject(user, users_data)
+    if kind != "company" or not key:
+        return names
+    for uname, _u in company_members(key, users_data):
+        if uname not in names:
+            names.append(uname)
+    return names
+
+
 def admin_billing_row_for_user(username: str, user: dict,
                                users_data: dict) -> dict:
     """Admin Users-tab snapshot. Company-billed people show the
@@ -3244,6 +3449,11 @@ __all__ = [
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
     "resolve_billing_subject", "ensure_company_record",
+    "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
+    "apply_prometheus_only_seat", "attach_wbd_seat",
+    "company_paid_runs", "grant_company_paid_runs",
+    "inherit_company_paid_runs",
+    "company_teammate_usernames",
     "admin_billing_row_for_user",
     "norm_usage_desc", "collect_usage_ledger_rows",
     "user_can_export_company_history", "collect_transaction_history",

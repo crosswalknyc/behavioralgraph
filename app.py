@@ -1804,6 +1804,8 @@ def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
                 aan = user.get('auto_access_new', {})
                 if aan and aan.get('profile_iq') is False:
                     continue
+                if str(user.get('plan') or '').strip() == 'prometheus_self_serve':
+                    continue
                 runs = user.get('allowed_runs', ['*'])
                 if isinstance(runs, list) and '*' in runs:
                     continue
@@ -5539,7 +5541,11 @@ def create_user():
         # "remove ... purgatory since we dont need it anymore"). The
         # has_purgatory_approval field is silently ignored on create.
         import wallet as _wallet_co
-        if str(data['users'][username].get('billing_source') or '').lower() == 'company':
+        if _wallet_co.is_wbd_company(company):
+            data['users'][username]['company'] = _wallet_co.WBD_COMPANY_NAME
+            _wallet_co.attach_wbd_seat(
+                data['users'][username], data, wipe_catalog=True)
+        elif str(data['users'][username].get('billing_source') or '').lower() == 'company':
             _wallet_co.ensure_company_record(
                 data, company, seed_user=data['users'][username])
         save_users(data)
@@ -5581,6 +5587,10 @@ def update_user(username):
             return jsonify({'success': False, 'error': 'User not found'})
         
         user = data['users'][username]
+        import wallet as _wallet_co
+        _was_wbd = (
+            _wallet_co.is_wbd_company(user.get('company'))
+            and str(user.get('billing_source') or '').lower() == 'company')
 
         # Only super_admin may CHANGE product access flags or the user's
         # role (Jenna 2026-08-25). No-op writes (same value) are allowed
@@ -5865,13 +5875,17 @@ def update_user(username):
             del data['users'][username]
             username = new_username
 
-        if str(user.get('billing_source') or '').lower() == 'company':
+        if _wallet_co.is_wbd_company(user.get('company')):
+            user['company'] = _wallet_co.WBD_COMPANY_NAME
+            user['billing_source'] = 'company'
+            _wallet_co.attach_wbd_seat(
+                user, data, wipe_catalog=not _was_wbd)
+        elif str(user.get('billing_source') or '').lower() == 'company':
             if not str(user.get('company') or '').strip():
                 return jsonify({
                     'success': False,
                     'error': 'Company name is required for a shared company wallet',
                 }), 400
-            import wallet as _wallet_co
             _wallet_co.ensure_company_record(
                 data, user.get('company'), seed_user=user)
         

@@ -632,16 +632,40 @@ def grant_runs_to_user(username: str, s3_keys) -> bool:
     changed = {"v": False}
 
     def _mut(doc):
-        u = (doc.get("users") or {}).get(username)
-        if not isinstance(u, dict):
+        users = doc.get("users") or {}
+        buyer = users.get(username)
+        if not isinstance(buyer, dict):
             return None
-        cur = u.get("allowed_runs")
-        if not isinstance(cur, list) or "*" in cur:
+        wrote = False
+        try:
+            import wallet as _w
+            _subject, kind, key = _w.resolve_billing_subject(buyer, doc)
+            if kind == "company" and key:
+                wrote = bool(_w.grant_company_paid_runs(doc, key, keys))
+        except Exception:
+            wrote = False
+        if not wrote:
+            targets = [username]
+            try:
+                import wallet as _w
+                targets = _w.company_teammate_usernames(
+                    buyer, doc, username=username) or [username]
+            except Exception:
+                targets = [username]
+            for uname in targets:
+                u = users.get(uname)
+                if not isinstance(u, dict):
+                    continue
+                cur = u.get("allowed_runs")
+                if not isinstance(cur, list) or "*" in cur:
+                    continue
+                add = [k for k in keys if k not in cur]
+                if not add:
+                    continue
+                u["allowed_runs"] = cur + add
+                wrote = True
+        if not wrote:
             return None
-        add = [k for k in keys if k not in cur]
-        if not add:
-            return None
-        u["allowed_runs"] = cur + add
         changed["v"] = True
         return doc
 
