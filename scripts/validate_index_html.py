@@ -573,3 +573,4 @@ if __name__ == "__main__":
 # (books-apple-keep-foreign-drop-variants 2026-09-21 - Books/Apple: keep foreign-language real editions, drop variants/fan-fic + buried-mention title matches)
 # (audible-drop-variant-editions 2026-09-21 - shared variant/derivative drop in match_gate; applied on Audible + Apple)
 # (appletv-relevance-gate 2026-09-22 - Apple TV resolver: match_gate floor, no least-bad fallback)
+# (site-hero-kevin-hart-chip 2026-09-28 - Site: new Prometheus hero line; Kevin Hart Netflix chip on homepage + Subscriber IQ)
