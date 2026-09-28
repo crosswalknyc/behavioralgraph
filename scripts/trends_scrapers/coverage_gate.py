@@ -183,6 +183,16 @@ def _audience_state(it: dict) -> str:
                     return 'researched'
                 if v > 0 and basis in _BRACKETED_BASES:
                     return 'bracketed'
+                # A derived-rail row is the parent's reading times the
+                # rail's carriage share, so the 100 floor does not
+                # apply to it: the parent row is what is judged, and
+                # a parent at 121 makes an honest child in the dozens.
+                # It still inherits the parent's basis below, so a
+                # carried or capped parent is re-priced through the
+                # parent, once (2026-09-28, The Office on BritBox on
+                # Amazon).
+                if v > 0 and blk.get('derived_from'):
+                    v = max(v, 100.0)
                 if v >= 100:
                     if basis in _RANK_TIER_BASES:
                         return 'rank_tier'

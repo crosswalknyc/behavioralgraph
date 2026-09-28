@@ -5252,6 +5252,12 @@ def _stamp_derived_rail_block(row: dict, child_slug: str,
         v = parent_blk.get(field)
         if v is not None:
             blk[field] = v
+    # Says what this number is: the parent's reading times the rail's
+    # carriage share. A coverage pass judges the PARENT row; the child
+    # is honest at any positive value, including under 100 (The Office
+    # at 121 on BritBox is a few dozen on BritBox on Amazon, and the
+    # 100 credibility floor read that as blank on 2026-09-28).
+    blk['derived_from'] = dr.parent_slug(child_slug)
 
     row['us_streams'] = blk
     return disposition
@@ -6976,8 +6982,9 @@ def _coverage_has_audience(it: dict) -> bool:
                 v = float(blk.get('us_estimate') or 0)
                 if v >= 100:
                     return True
-                if v > 0 and blk.get('est_basis') in ('first_party',
-                                                      'bracketed'):
+                if v > 0 and (blk.get('est_basis') in ('first_party',
+                                                       'bracketed')
+                              or blk.get('derived_from')):
                     return True
             except (TypeError, ValueError):
                 pass
