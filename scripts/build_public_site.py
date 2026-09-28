@@ -57,8 +57,8 @@ IMAGES = ["panelist.jpg", "hero.jpg", "about.jpg"]
 
 META = {
     "index.html": ("Crosswalk | How can I help you today?",
-                   "Prometheus answers from 30 million opted-in people and their entire digital life. Who they are, what they watch, what they buy, where they signed up, and what they did yesterday."),
-    "products.html": ("Crosswalk | Products", "Nine reports, one for each kind of question. Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ."),
+                   "Your research assistant, Prometheus, is ready to help 24 hours a day, tuned in to our 10 million person gen-pop-matched panel to answer your audience, profile, alignment and attributional questions while the rest of the world sleeps."),
+    "products.html": ("Crosswalk | Products", "Your questions answered in 9 types of reports. Profile IQ, Subscriber IQ, Digital Journey IQ, Attribution IQ, Brand Partnership IQ, Flywheel IQ, Trends IQ, Rankers IQ, Fin IQ."),
     "panel.html": ("Crosswalk | The panel", "30 million people chose to be counted. How the opted-in panel works and what clients receive."),
     "company.html": ("Crosswalk | Company", "Crosswalk Technologies, Inc. Who we work with, how we write the numbers, The Read, and how to reach us."),
 }

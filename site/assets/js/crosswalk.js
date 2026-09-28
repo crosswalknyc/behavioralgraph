@@ -7,7 +7,7 @@
       '<a class="logo-pill" href="index.html"><img src="assets/logos/crosswalk-logo-black.png" alt="Crosswalk"></a>' +
       '<nav class="nav-links">' +
         '<a href="products.html">Products</a>' +
-        '<a href="panel.html">The panel</a>' +
+        '<a href="panel.html">The Panel</a>' +
         '<a href="/the-read">The Read</a>' +
         '<a href="company.html">Company</a>' +
         '<a class="btn btn-ghost" href="/login">Log in</a>' +
