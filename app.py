@@ -57584,6 +57584,50 @@ def _pm_gate_pull(user):
     return _prometheus_mode_of(user) in ('pull', 'both')
 
 
+# CUT-REQUEST INTERCEPT (2026-09-28 Jenna, keith's "Let's do one cut
+# of males only and another cut of black consumers" answered with a
+# replayed brand read: "it should have asked him what profile he was
+# talking about and then helped prompt him to run cuts of it").
+# Imperative cut vocabulary near 'cut(s)'; analytical questions about
+# an existing cut ("what's the male cut of the audience") stay on the
+# analysis path.
+_PM_CUT_INTENT_RE = re.compile(
+    r"\b(?:do|run|make|create|add|build|pull|need|want|get|give|lets|"
+    r"let's|can you|could you|please)\b[^.?!\n]{0,40}?\bcuts?\b"
+    r"|\bcut\s+(?:this|that|it|the)\b"
+    # imperative-start command, incl. the composed chip:
+    # 'Cut USA Today by males only and black consumers'
+    r"|^\s*cuts?\b", re.IGNORECASE)
+
+# 'one cut of males only and another cut of black consumers' ->
+# ['males only', 'black consumers']
+_PM_CUT_COHORT_RE = re.compile(
+    r"\bcuts?\s+(?:of|for|by)\s+([a-z0-9][a-z0-9 +&'\-]{1,40}?)"
+    r"(?=\s+(?:and|plus)\b|\s*[,.;!?\n]|$)", re.IGNORECASE)
+
+_PM_CUT_IDIOM_RE = re.compile(
+    r"\bcut\s+(?:to the chase|corners|it (?:out|down|short))\b",
+    re.IGNORECASE)
+
+
+def _pm_text_names_catalog_subject(text):
+    """True when the ask itself names a catalog profile (every
+    distinctive token of some catalog subject appears in the text)."""
+    toks = set(_normalize_for_match(text).split())
+    if not toks:
+        return False
+    try:
+        for entry in _profile_catalog_for_chat():
+            st = [w for w in _normalize_for_match(
+                      str(entry.get('subject') or '')).split()
+                  if w not in _PM_BASE_GENERIC_TOKENS]
+            if st and sum(len(w) for w in st) >= 4 and set(st) <= toks:
+                return True
+    except Exception:
+        traceback.print_exc()
+    return False
+
+
 def _pm_job_owner_ok(payload_user, user):
     """True when this session may see the polled job (2026-09-25,
     keith's 403s). The job status stores the session username at
@@ -60719,6 +60763,61 @@ def api_synth_chat_analyze():
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             panel_confirm=_panel_confirm)
+    # CUT-REQUEST INTERCEPT (2026-09-28 Jenna): a cut request is a
+    # build action - it never rides the analysis pass or replays from
+    # the answer library. Parent named in the ask: hand straight to
+    # the build flow. No parent named: confirm the profile first,
+    # leading with the one open on screen; the chip carries the full
+    # composed command so the cohorts survive the tap.
+    if _PM_CUT_INTENT_RE.search(text or '') \
+            and not _PM_CUT_IDIOM_RE.search(text or ''):
+        if ctx_err:
+            return ctx_err
+        if re.fullmatch(r'\s*cut a different profile\.?\s*',
+                        text or '', re.IGNORECASE):
+            _pm_ask_hint(route='cut_clarify', outcome='asked_parent')
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('Name the profile and the cuts in one line, '
+                          'like: Cut Yellowstone by males only and '
+                          'Black consumers.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        if _pm_text_names_catalog_subject(text):
+            _pm_ask_hint(route='cut_reroute', outcome='rerouted')
+            return jsonify({
+                'success': True, 'action': 'build_profile',
+                'route_hint': 'interpret', 'reply': '',
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
+        _cut_cohorts = [c.strip() for c in
+                        _PM_CUT_COHORT_RE.findall(text or '')
+                        if c.strip()]
+        _cut_page = str(((ctx or {}).get('primary') or {})
+                        .get('name') or '').strip()
+        if _cut_page:
+            _cut_composed = (
+                f"Cut {_cut_page} by {' and '.join(_cut_cohorts)}"
+                if _cut_cohorts else f"Cut {_cut_page}")
+            _pm_ask_hint(route='cut_clarify', outcome='asked_parent',
+                         subject=_cut_page)
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': (f'Happy to run those. Which profile am I '
+                          f'cutting - {_cut_page} (open on your '
+                          f'screen) or a different one?'),
+                'followups': [_cut_composed,
+                              'Cut a different profile'],
+                'offer_deck': False, 'deck_angle': None})
+        _pm_ask_hint(route='cut_clarify', outcome='asked_parent')
+        _cut_example = (' and '.join(_cut_cohorts) if _cut_cohorts
+                        else 'males only and Black consumers')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Which profile should I cut? Name it and the '
+                      'cuts in one line, like: Cut Yellowstone by '
+                      + _cut_example + '.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _nc_refs = []
 
