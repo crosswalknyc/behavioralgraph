@@ -140212,6 +140212,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (u.includes('STREAMING') && u.includes('VIDEO')) return 'STREAMING VIDEO';
                 if (u === 'STREAMING/PLATFORM' || u === 'STREAMING PLATFORM') return 'STREAMING VIDEO';
                 if (u === 'PLATFORMS') return 'STREAMING VIDEO'; // backend sometimes uses "PLATFORMS" for streaming video
+                // Fold every alias onto its canonical display label BEFORE
+                // grouping. CATEGORY_DISPLAY_LABELS was only being applied
+                // when the row was painted, so POLITICIAN and
+                // POLITICS/ACTIVIST built two separate buckets that then
+                // rendered under the same name - two "Politics / activist"
+                // rows in TALENT. Same split hit BANK/BANKS/BANKING,
+                // SEARCH ENGINE/SEARCH ENGINE_AI and VIDEO GAME/GAMES.
+                if (typeof CATEGORY_DISPLAY_LABELS !== 'undefined' && CATEGORY_DISPLAY_LABELS[u]) {
+                    return CATEGORY_DISPLAY_LABELS[u];
+                }
                 return cat || 'UNCATEGORIZED';
             };
             // Expand profiles with secondary_category into both categories
@@ -140245,23 +140255,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
                 const isMasterExpanded = expandedDashCategories.has(masterId);
                 
-                // Count distinct SUBJECTS (canonical bases) shown in
-                // the tree, not raw file count. Keyed by
-                // getProfileGroupKey so e.g. "Dwayne The Rock Johnson
-                // - Avid Fan", "... - Casual Fan", "... - 2024 - Avid
-                // Fan" all collapse into ONE - same grouping logic
-                // that produces the tree rows below.
-                const _uniqueSubjectsInMaster = new Set();
-                let accessibleInMaster = 0;
-                Object.values(subcats).forEach(items => {
-                    items.forEach(p => {
-                        const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                        _uniqueSubjectsInMaster.add(subj);
-                        if (p.accessible !== false) accessibleInMaster++;
-                    });
-                });
-                const totalInMaster = _uniqueSubjectsInMaster.size;
-                const countLabel = `${totalInMaster}`;
+                // Count distinct SUBJECTS (canonical bases) actually
+                // rendered, so "Dwayne The Rock Johnson - Avid Fan",
+                // "... - Casual Fan" and "... - 2024 - Avid Fan" count ONCE.
+                // Filled in as the rows below are emitted, then substituted
+                // into the header. Counting the raw items up front instead
+                // overstated any master whose render drops files: GEN POP
+                // lists only the preferred Gen Pop file
+                // (resolveGenPopFileName) but was counting every one, so a
+                // library holding Gen_Pop_2026 and Gen_Pop_2026_UK showed
+                // one row under a header reading 2.
+                const _renderedSubjects = new Set();
+                const _countToken = '@@CNT_' + masterId + '@@';
                 const countClass = 'profile-cat-count';
                 
                 html += `
@@ -140269,7 +140274,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <span class="cat-arrow">▸</span>
                         ${(window._piqV4FolderDotHtml || function(){ return ''; })(master)}
                         <span class="profile-cat-label">${(window._piqV4FolderLabel || function(s){return s;})(master)}</span>
-                        <span class="${countClass}">${Number(countLabel).toLocaleString("en-US")}</span>
+                        <span class="${countClass}">${_countToken}</span>
                     </div>
                     <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
                 `;
@@ -140295,6 +140300,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                        _renderedSubjects.add(subj);
                         const runs = bySubject[subj];
                         const first = runs[0];
                         if (runs.length === 1) {
@@ -140331,6 +140337,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                        _renderedSubjects.add(subj);
                         const runs = bySubject[subj];
                         const first = runs[0];
                         if (runs.length === 1) {
@@ -140392,6 +140399,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // fall into 'OTHER' so nothing disappears.
                         const _isMovieCat = (cat || '').toUpperCase() === 'MOVIE';
                         const _renderSubjectRow = (subj) => {
+                            _renderedSubjects.add(subj);
                             const runs = bySubject[subj];
                             const first = runs[0];
                             if (runs.length === 1) {
@@ -140534,6 +140542,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 
                 html += `</div>`;
+                html = html.replace(_countToken, Number(_renderedSubjects.size).toLocaleString("en-US"));
             });
 
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
