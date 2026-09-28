@@ -584,3 +584,4 @@ if __name__ == "__main__":
 # (site-categories-35-plus 2026-09-28 - Site: behavioral categories 40+ -> 35+ everywhere)
 # (site-panel-card-align-counted 2026-09-28 - Site: Panel card top-aligned with headline; What gets counted copy)
 # (site-home-answer-section 2026-09-28 - Site: homepage The answer: question pill below eyebrow; new headline + lead)
+# (site-home-answer-drop-so-what 2026-09-28 - Site: remove What this means note + rule from homepage The answer)
