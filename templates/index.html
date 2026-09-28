@@ -31377,8 +31377,20 @@ https://www.instagram.com/p/..."></textarea>
                          payload arrival; changing this select applies
                          instantly on the client (no server round-trip). -->
                     <label for="trendsIQLens">Lens</label>
-                    <select id="trendsIQLens" onchange="applyTrendsIQLens()">
+                    <select id="trendsIQLens" onchange="applyTrendsIQLens('lens')">
                         <option value="">All audiences</option>
+                    </select>
+                </div>
+                <div>
+                    <!-- Gender (2026-09-28). Same lens machinery, rank
+                         mode: nothing is hidden, every row is re-valued
+                         to that gender's audience and re-ordered. One
+                         lens at a time: picking a gender clears Lens
+                         and vice versa. Options populate from
+                         cards.lens_config entries with group='gender'. -->
+                    <label for="trendsIQGender">Gender</label>
+                    <select id="trendsIQGender" onchange="applyTrendsIQLens('gender')">
+                        <option value="">All</option>
                     </select>
                 </div>
                 <div>
@@ -51364,6 +51376,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div id="jiqUfcNestHost"></div>
                 </div>
 
+                <!-- ARROW x PLUTO TV - FAST discovery-to-play (US)
+                     Painted only when meta.story_mode === 'arrow_pluto'.
+                     No paywall. Retention is return play. -->
+                <div id="jiqArrowTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
+                <div class="jiq-frag" id="jiqArrowNestCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqArrowNestMeta">Play journey · May 1 to Sep 28, 2026</div>
+                            <h2 id="jiqArrowNestTitle">Arrow<br>on Pluto TV.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqArrowNestLead">Most Arrow viewers were already on Pluto. Search brought the new ones.</div>
+                            <p id="jiqArrowNestDeck">6,005,357 people played Arrow on Pluto. 3,570,247 were already there. 1,186,493 came for another title, then Arrow. 1,248,617 opened Pluto for Arrow. 1,394,834 opened Arrow and left before five minutes.</p>
+                            <div class="jiq-frag-kpis" id="jiqArrowNestKpis"></div>
+                        </div>
+                        <div class="jiq-frag-art" id="jiqArrowNestArt"
+                             data-hero="{{ url_for('static', filename='arrow-pluto-hero.jpg') }}"></div>
+                    </div>
+                    <div id="jiqArrowNestHost"></div>
+                </div>
+
                 <div class="card" id="jiqUfcCaseCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(244,114,50,0.06) 0%, rgba(15,23,42,0.05) 100%);
@@ -63778,10 +63809,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             millennials:                      'Millennial',
             gen_x:                            'Gen X',
             baby_boomers:                     'Boomer',
-            unlikely_collaborators_follower:  'Unlikely Collaborators'
+            unlikely_collaborators_follower:  'Unlikely Collaborators',
+            women:                            'US women',
+            men:                              'US men'
         };
         function _tiqLensAudienceUnit(unitShort, lensId) {
-            var label = _TIQ_LENS_LABEL[lensId] || '';
+            var _lm = (window.__trendsIQ && window.__trendsIQ.lensMeta) || {};
+            var label = _TIQ_LENS_LABEL[lensId] || ((_lm[lensId] || {}).short_label) || '';
             if (!label) return unitShort;
             // Replace "weekly US NOUN" / "US NOUN" / "daily US NOUN" with
             // "weekly LABEL NOUN". Preserves the daily/weekly qualifier
@@ -64027,10 +64061,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // desc, index asc). Rows with -1 keep their order at
                     // the tail.
                     var enriched = rows.map(function(r, idx) {
-                        return { row: r, val: valueOf(r), idx: idx };
+                        var ord = Number(r.getAttribute('data-order'));
+                        return { row: r, val: valueOf(r), idx: idx,
+                                 ord: isFinite(ord) ? ord : idx };
                     });
+                    // Ties fall back to the row's ORIGINAL order, so
+                    // clearing a lens restores the page exactly.
                     enriched.sort(function(a, b) {
                         if (b.val !== a.val) return b.val - a.val;
+                        if (a.ord !== b.ord) return a.ord - b.ord;
                         return a.idx - b.idx;
                     });
                     // Only reinsert if the order actually changed.
@@ -64045,6 +64084,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                         tbody.appendChild(frag);
                     }
+                    try { _tiqRenumberRanks(tbody); } catch (e) {}
                 }
                 // .tiq-row containers - look for a direct parent .tiq-panel-body
                 // OR the panel itself. Group siblings by parent so nested
@@ -64079,6 +64119,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         }
                         parent.appendChild(frag2);
                     }
+                    try { _tiqRenumberRanks(parent); } catch (e) {}
                 });
             }
         }
@@ -64537,25 +64578,132 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Preserves the current selection if the lens still exists.
         function _tiqPopulateLensDropdown(lensConfig) {
             var sel = document.getElementById('trendsIQLens');
+            var selG = document.getElementById('trendsIQGender');
             if (!sel) return;
-            var prev = sel.value || (window.__trendsIQ.activeLens || '');
+            var prev = (sel.value || (selG && selG.value)
+                        || window.__trendsIQ.activeLens || '');
+            // Per-lens behaviour (2026-09-28): 'filter' hides rows
+            // under a per-kind cutoff (the generations); 'rank' hides
+            // nothing and re-orders by that audience (gender).
+            var meta = {};
             // Rebuild options from scratch so stale entries from a
             // previous payload don't linger.
             var html = '<option value="">All audiences</option>';
+            var htmlG = '<option value="">All</option>';
             (lensConfig || []).forEach(function(l) {
                 if (!l || !l.id || !l.label) return;
+                meta[l.id] = { mode: l.mode || 'filter', group: l.group || 'audience',
+                               short_label: l.short_label || '', label: l.label };
                 var label = (l.emoji ? l.emoji + ' ' : '') + l.label;
-                html += '<option value="' + _tiqEsc(l.id) + '">'
-                        + _tiqEsc(label) + '</option>';
+                var opt = '<option value="' + _tiqEsc(l.id) + '">'
+                          + _tiqEsc(label) + '</option>';
+                if ((l.group || '') === 'gender') htmlG += opt; else html += opt;
             });
+            window.__trendsIQ.lensMeta = meta;
             sel.innerHTML = html;
-            // Restore previous selection if the lens still exists.
-            var stillValid = false;
+            if (selG) selG.innerHTML = htmlG;
+            // Restore previous selection in whichever dropdown owns it.
+            sel.value = ''; if (selG) selG.value = '';
+            var owner = null;
             for (var i = 0; i < sel.options.length; i++) {
-                if (sel.options[i].value === prev) { stillValid = true; break; }
+                if (sel.options[i].value === prev) { owner = sel; break; }
             }
-            sel.value = stillValid ? prev : '';
-            window.__trendsIQ.activeLens = sel.value;
+            if (!owner && selG) {
+                for (var g = 0; g < selG.options.length; g++) {
+                    if (selG.options[g].value === prev) { owner = selG; break; }
+                }
+            }
+            if (owner && prev) owner.value = prev;
+            window.__trendsIQ.activeLens = owner ? prev : '';
+        }
+
+        // Sheet rows (Rankers tabs) carry the per-lens audience on the
+        // row so the Views cell and the sort key can follow the lens.
+        function _tiqByLensAttr(us) {
+            var bl = us && us.us_estimate_by_lens;
+            if (!bl || typeof bl !== 'object') return '';
+            try { return JSON.stringify(bl).replace(/"/g, '&quot;'); }
+            catch (e) { return ''; }
+        }
+
+        // Swap every sheet row's Views cell, tooltip and sort key
+        // (data-views) to the active lens's audience, or back to the
+        // global figure when no lens is active. The base value and
+        // unit are stashed on the row the first time through so the
+        // swap is reversible without a repaint.
+        function _tiqLensRewriteSheetViews(root, lensId) {
+            root = root || document.getElementById('trendsIQPanels');
+            if (!root) return;
+            var rows = root.querySelectorAll('tr.tiq-sheet-row[data-views-by-lens]');
+            for (var i = 0; i < rows.length; i++) {
+                var tr = rows[i];
+                if (!tr.hasAttribute('data-views-base')) {
+                    tr.setAttribute('data-views-base', tr.getAttribute('data-views') || '');
+                }
+                var cell = tr.querySelector('.tiq-sheet-td-views');
+                if (cell && !tr.hasAttribute('data-views-unit')) {
+                    var tip0 = cell.getAttribute('title') || '';
+                    var first = tip0.split(' \u00b7 ')[0] || '';
+                    var mm = first.match(/^\S+\s+(.+)$/);
+                    tr.setAttribute('data-views-unit', mm ? mm[1] : '');
+                    tr.setAttribute('data-views-tiprest',
+                                    tip0.indexOf(' \u00b7 ') > -1
+                                        ? tip0.slice(tip0.indexOf(' \u00b7 ')) : '');
+                }
+                var base = tr.getAttribute('data-views-base') || '';
+                var v = base;
+                if (lensId) {
+                    try {
+                        var bl = JSON.parse((tr.getAttribute('data-views-by-lens') || '{}')
+                                            .replace(/&quot;/g, '"'));
+                        var lv = Number(bl[lensId]);
+                        if (isFinite(lv) && lv > 0) v = String(Math.round(lv));
+                    } catch (e) {}
+                }
+                if (tr.getAttribute('data-views') === v && tr.getAttribute('data-views-lens') === (lensId || '')) continue;
+                tr.setAttribute('data-views', v);
+                tr.setAttribute('data-views-lens', lensId || '');
+                if (!cell) continue;
+                var n = Number(v);
+                if (isFinite(n) && n > 0) {
+                    cell.innerHTML = _tiqEsc(_tiqFullNum(n));
+                    var unit = tr.getAttribute('data-views-unit') || 'weekly US views';
+                    if (lensId) unit = _tiqLensAudienceUnit(unit, lensId);
+                    cell.setAttribute('title', _tiqFullNum(n) + ' ' + unit
+                                      + (tr.getAttribute('data-views-tiprest') || ''));
+                } else {
+                    cell.innerHTML = '<span class="tiq-sheet-dim">\u2014</span>';
+                    cell.setAttribute('title', '');
+                }
+            }
+        }
+
+        // After a re-sort the printed rank follows the new order, so a
+        // Women view reads 1, 2, 3 down the page rather than the
+        // global positions shuffled.
+        function _tiqRenumberRanks(container) {
+            var sheetRanks = container.querySelectorAll(':scope > tr.tiq-sheet-row .tiq-sheet-rank');
+            if (sheetRanks.length) {
+                var trs = container.querySelectorAll(':scope > tr.tiq-sheet-row');
+                var k = 0;
+                for (var i = 0; i < trs.length; i++) {
+                    if (trs[i].style.display === 'none') continue;
+                    var sp = trs[i].querySelector('.tiq-sheet-rank');
+                    if (sp) sp.textContent = String(++k);
+                }
+                return;
+            }
+            var rowsR = container.querySelectorAll(':scope > .tiq-row > .tiq-rank');
+            var j = 0;
+            for (var r = 0; r < rowsR.length; r++) {
+                var row = rowsR[r].parentElement;
+                if (row && row.style.display === 'none') continue;
+                if (/^\d+$/.test((rowsR[r].textContent || '').trim())) {
+                    rowsR[r].textContent = String(++j);
+                } else {
+                    j++;
+                }
+            }
         }
 
         // Store the lens_scores map on window.__trendsIQ.  Payload format:
@@ -64682,29 +64830,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             gaming:       'game'
         };
 
-        window.applyTrendsIQLens = function() {
-            var sel = document.getElementById('trendsIQLens');
+        window.applyTrendsIQLens = function(from) {
+            var selL = document.getElementById('trendsIQLens');
+            var selG = document.getElementById('trendsIQGender');
+            // One lens at a time. The dropdown that just changed wins;
+            // the other resets to All.
+            if (from === 'gender' && selG && selG.value && selL) selL.value = '';
+            if (from === 'lens' && selL && selL.value && selG) selG.value = '';
+            var sel = (selG && selG.value) ? selG : selL;
             var lensId = (sel && sel.value) || '';
             window.__trendsIQ.activeLens = lensId;
+            var lensMeta = ((window.__trendsIQ.lensMeta || {})[lensId]) || {};
+            var rankOnly = (lensMeta.mode === 'rank');
             var byTitle = window.__trendsIQ.lensScores || {};
             var cutoffs = (window.__trendsIQ.lensCutoffs || {})[lensId] || {};
             var panels  = document.getElementById('trendsIQPanels');
             if (!panels) return;
             var hasScores = Object.keys(byTitle).length > 0;
 
-            // No filter active - clear every row's display override
-            // AND every stashed lens tooltip.  Idempotent - safe to
-            // call on every repaint.
-            if (!lensId || !hasScores) {
+            // No filter active, or a rank-mode lens (gender): every row
+            // stays visible with no stashed why-tooltip. For a rank
+            // lens the chips, sheet Views and row order then follow
+            // that audience; with no lens they return to the global
+            // figures. Idempotent - safe to call on every repaint.
+            if (!lensId || !hasScores || rankOnly) {
                 var allRows = panels.querySelectorAll(_TIQ_LENS_ROW_SELECTOR);
                 for (var j = 0; j < allRows.length; j++) {
                     allRows[j].style.display = '';
-                    allRows[j].removeAttribute('data-lens-why');
+                    if (allRows[j].hasAttribute('data-lens-why')) {
+                        // Only the lens's own tooltip comes off.
+                        allRows[j].removeAttribute('title');
+                        allRows[j].removeAttribute('data-lens-why');
+                    }
                     if (allRows[j].dataset && 'lensScore' in allRows[j].dataset) {
                         delete allRows[j].dataset.lensScore;
                     }
                 }
+                var oldBanners = panels.querySelectorAll('.tiq-lens-empty-banner');
+                for (var ob = 0; ob < oldBanners.length; ob++) oldBanners[ob].remove();
                 _tiqLensUpdateMetaBanner(sel, lensId);
+                try { _tiqLensRewriteAudienceChips(panels); } catch (e) {}
+                try { _tiqLensRewriteSheetViews(panels, (hasScores && rankOnly) ? lensId : ''); } catch (e) {}
+                try { _tiqLensResortPanelsByAudience(panels); } catch (e) {}
                 return;
             }
 
@@ -64840,8 +65007,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Per-lens audience rescaling (2026-09-03). Swap every
             // audience chip's number + unit to the lens-scoped value
             // when active, then re-sort visible rows so a Gen Z view
-            // puts Gen-Z-dominant items on top.
+            // puts Gen-Z-dominant items on top. Sheet Views follow
+            // the lens the same way (2026-09-28).
             try { _tiqLensRewriteAudienceChips(panels); } catch (e) {}
+            try { _tiqLensRewriteSheetViews(panels, lensId); } catch (e) {}
             try { _tiqLensResortPanelsByAudience(panels); } catch (e) {}
         };
 
@@ -64851,9 +65020,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var txt = meta.textContent || '';
             var idx = txt.indexOf('  \u00b7  filtered:');
             if (idx > -1) txt = txt.slice(0, idx);
+            var _ri = txt.indexOf('  \u00b7  ranked by:');
+            if (_ri > -1) txt = txt.slice(0, _ri);
             if (lensId && sel) {
                 var lensLabel = sel.options[sel.selectedIndex].text;
-                meta.textContent = txt + '  \u00b7  filtered: ' + lensLabel;
+                var _mode = (((window.__trendsIQ || {}).lensMeta || {})[lensId] || {}).mode;
+                meta.textContent = txt + (_mode === 'rank'
+                    ? '  \u00b7  ranked by: ' : '  \u00b7  filtered: ') + lensLabel;
             } else {
                 meta.textContent = txt;
             }
@@ -67726,7 +67899,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var dispName = _tiqEsc(String(it.title || ''));
                 var artistAttr = _tiqEsc(String(it.artist || it.publisher || ''));
                 var genreAttr = _tiqEsc(String(it.genre || ''));
-                return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-artist="' + artistAttr + '" data-genres="' + genreAttr + '" data-views="' + (hasVal ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-artist="' + artistAttr + '" data-genres="' + genreAttr + '" data-views="' + (hasVal ? estimate : '') + '" data-views-by-lens="' + _tiqByLensAttr(us) + '" data-delta="' + deltaSort + '">' +
                        '<td class="tiq-sheet-td-title">' +
                          '<div class="tiq-sheet-titlecell">' +
                            '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -68654,7 +68827,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
                             var dataGenres = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).join(' · ')) : '';
                             var genreKey = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).map(function(g) { return String(g || '').toLowerCase().trim(); }).join('|')) : '';
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-views-by-lens="' + _tiqByLensAttr(us) + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -69040,7 +69213,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
                             var dataGenres = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).join(' · ')) : '';
                             var genreKey = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).map(function(g) { return String(g || '').toLowerCase().trim(); }).join('|')) : '';
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-views-by-lens="' + _tiqByLensAttr(us) + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -69191,7 +69364,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var chType = String(ch.genre || '').trim();
                             var chTypeAttr = _tiqEsc(chType);
                             var typeHidden = (activeType && chType !== activeType) ? ' tiq-genre-hidden' : '';
-                            return '<tr class="tiq-sheet-row' + typeHidden + '" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="" data-genres="" data-chantype="' + chTypeAttr + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            return '<tr class="tiq-sheet-row' + typeHidden + '" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="" data-genres="" data-chantype="' + chTypeAttr + '" data-views="' + (hasViews ? estimate : '') + '" data-views-by-lens="' + _tiqByLensAttr(us) + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -86060,6 +86233,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' },
                             { value: '__demo_ubg_hulu__',         label: 'Universal Basic Guys · Hulu' },
                             { value: '__demo_ufc_paramount__',    label: 'UFC × Paramount+ (US)' },
+                            { value: '__demo_arrow_pluto__',     label: 'Arrow · Pluto TV' },
                             { value: '__demo_adult_animation__',  label: 'Adult Animation · SVOD discovery' },
                             { value: '__demo_animation_creators__', label: 'Digital Animation Creators · discovery tabs' },
                             { value: '__demo_heated_rivalry_song__', label: 'Heated Rivalry · song journey' },
@@ -86185,6 +86359,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqSongHydrateRun === 'function') {
                 var _songRun = _jiqSongHydrateRun(key);
                 if (_songRun) return _songRun;
+            }
+            if (typeof _jiqArrowHydrateRun === 'function') {
+                var _arrowRun = _jiqArrowHydrateRun(key);
+                if (_arrowRun) return _arrowRun;
             }
             if (!window.__jiqAllowAll) return null;
             // Neurotrophic Drinks (CPG brand category) — 8 consumer
@@ -87988,6 +88166,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             var _isSpeStory              = (_storyMode === 'spe_cross_window');
             var _isUfcStory              = (_storyMode === 'ufc_paramount');
+            var _isArrowStory            = (_storyMode === 'arrow_pluto');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -88135,6 +88314,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } else {
                 if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
                 _jiqHideCard('jiqUfcNestCard');
+            }
+
+            if (_isArrowStory) {
+                if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+                if (typeof _jiqArrowPaintNestCover === 'function') _jiqArrowPaintNestCover();
+                if (typeof _jiqArrowActivateTab === 'function') {
+                    var _arrowInitTab = (typeof _jiqArrowActiveTab !== 'undefined' && _jiqArrowActiveTab) || 'case';
+                    _jiqArrowActivateTab(_arrowInitTab);
+                }
+            } else {
+                if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
+                _jiqHideCard('jiqArrowNestCard');
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -104200,6 +104391,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         function _jiqUfcActivateTab(tabId) {
+            if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
             var match = _JIQ_UFC_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_UFC_TABS[0];
             _jiqUfcActiveTab = match.id;
@@ -104832,6 +105024,437 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             read: _jiqUfcNestReadTab,
             methodology: _jiqUfcNestMethod
         };
+
+        var _JIQ_ARROW_DATA = {"meta": {"title": "Arrow", "platform": "Pluto TV", "window_start": "2026-05-01", "window_end": "2026-09-28", "window_label": "May 1 to Sep 28, 2026", "window_days": 151, "geo": "United States", "unit": "unique US people", "qualifying_play": "Five or more minutes on an Arrow on-demand episode or the Arrow linear channel on Pluto TV.", "story_mode": "arrow_pluto", "launch_note": "Arrow joined Pluto on May 1, 2026 as exclusive free streaming, on demand and as a linear channel. All eight seasons. No subscription and no card."}, "universe": {"us_pop": 329900000, "pluto_t12": 98351108, "pluto_t12_bp": 29.8124, "pluto_window": 63212847, "existing_pre": 52184673, "existing_active": 48271849, "new_in_window": 14940998, "opened": 7400191, "watched": 6005357, "bounced": 1394834}, "journeys": {"A": {"id": "A", "label": "Already on Pluto, then played Arrow", "people": 3570247, "pct": 59.451}, "A2": {"id": "A2", "label": "Came for another title, then played Arrow", "people": 1186493, "pct": 19.7572}, "B": {"id": "B", "label": "First Pluto play was Arrow", "people": 1248617, "pct": 20.7917}}, "discovery": {"overall": [{"id": "search", "label": "Google or Bing, where to watch Arrow", "people": 1680023, "pct": 27.9754}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 1232051, "pct": 20.5159}, {"id": "inapp", "label": "Pluto home row or because-you-watched", "people": 1523421, "pct": 25.3677}, {"id": "linear", "label": "Tuned the Arrow channel while flipping", "people": 1030842, "pct": 17.1654}, {"id": "direct", "label": "Opened Pluto already knowing Arrow moved", "people": 310701, "pct": 5.1737}, {"id": "youtube", "label": "YouTube episode hunt, then Pluto", "people": 228319, "pct": 3.8019}], "A": [{"id": "search", "label": "Google or Bing, where to watch Arrow", "people": 779641, "pct": 21.8372}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 581217, "pct": 16.2795}, {"id": "inapp", "label": "Pluto home row or because-you-watched", "people": 1123817, "pct": 31.4773}, {"id": "linear", "label": "Tuned the Arrow channel while flipping", "people": 863471, "pct": 24.1852}, {"id": "direct", "label": "Opened Pluto already knowing Arrow moved", "people": 149283, "pct": 4.1813}, {"id": "youtube", "label": "YouTube episode hunt, then Pluto", "people": 72818, "pct": 2.0396}], "A2": [{"id": "search", "label": "Google or Bing, where to watch Arrow", "people": 297641, "pct": 25.0858}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 253417, "pct": 21.3585}, {"id": "inapp", "label": "Pluto home row or because-you-watched", "people": 364187, "pct": 30.6944}, {"id": "linear", "label": "Tuned the Arrow channel while flipping", "people": 147283, "pct": 12.4133}, {"id": "direct", "label": "Opened Pluto already knowing Arrow moved", "people": 83147, "pct": 7.0078}, {"id": "youtube", "label": "YouTube episode hunt, then Pluto", "people": 40818, "pct": 3.4402}], "B": [{"id": "search", "label": "Google or Bing, where to watch Arrow", "people": 602741, "pct": 48.2727}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 397417, "pct": 31.8286}, {"id": "inapp", "label": "Pluto home row or because-you-watched", "people": 35417, "pct": 2.8365}, {"id": "linear", "label": "Tuned the Arrow channel while flipping", "people": 20088, "pct": 1.6088}, {"id": "direct", "label": "Opened Pluto already knowing Arrow moved", "people": 78271, "pct": 6.2686}, {"id": "youtube", "label": "YouTube episode hunt, then Pluto", "people": 114683, "pct": 9.1848}], "b_search_pct": 48.2727, "a_inapp_pct": 31.4773, "a_linear_pct": 24.1852}, "funnels": {"spine": [{"label": "US people", "doing": "Everyone in the country", "people": 329900000, "kept": 29.8, "dropped": 231548892}, {"label": "Used Pluto in the last 12 months", "doing": "Any Pluto app or site session", "people": 98351108, "kept": 64.3, "dropped": 35138261}, {"label": "Used Pluto in this window", "doing": "May 1 to Sep 28, 2026", "people": 63212847, "kept": 11.7, "dropped": 55812656}, {"label": "Opened Arrow on Pluto", "doing": "On-demand title or the live channel", "people": 7400191, "kept": 81.2, "dropped": 1394834}, {"label": "Played Arrow for five minutes", "doing": "The watched file. Three groups add to this.", "people": 6005357, "kept": 58.5, "dropped": 2493878}, {"label": "Came back within 30 days", "doing": "A second Arrow session after the first play", "people": 3511479, "kept": 66.1, "dropped": 1190902}, {"label": "Played five or more episodes", "doing": "On-demand or linear, same person", "people": 2320577, "kept": 47.3, "dropped": 1223306}, {"label": "Finished Season 1", "doing": "Twenty-three episodes", "people": 1097271}], "A": [{"label": "Already on Pluto and still using it", "doing": "Pluto in February to April, and again after May 1", "people": 48271849, "kept": 17.4, "dropped": 39854586}, {"label": "Saw Arrow in the app or on the live guide", "doing": "Home row, because-you-watched, or the Arrow channel", "people": 8417263, "kept": 50.8, "dropped": 4145414}, {"label": "Opened Arrow", "doing": "Started an episode or tuned the channel", "people": 4271849, "kept": 83.6, "dropped": 701602}, {"label": "Played Arrow for five minutes", "doing": "Already-on-Pluto watchers", "people": 3570247, "kept": 51.6, "dropped": 1728574}, {"label": "Came back within 7 days", "doing": "Second Arrow session", "people": 1841673, "kept": 83.1, "dropped": 312102}, {"label": "Played five or more episodes", "doing": "Same people", "people": 1529571}], "A2": [{"label": "New to Pluto, first play was not Arrow", "doing": "The 100, Hart of Dixie, CSI, Survivor, or another title", "people": 13692381, "kept": 17.7, "dropped": 11273764}, {"label": "Saw Arrow later", "doing": "Home row after another title, or the live channel", "people": 2418617, "kept": 61.5, "dropped": 932124}, {"label": "Opened Arrow", "doing": "Started an episode or tuned the channel", "people": 1486493, "kept": 79.8, "dropped": 300000}, {"label": "Played Arrow for five minutes", "doing": "Came for something else, then Arrow", "people": 1186493}], "B": [{"label": "First learned Arrow is free on Pluto", "doing": "Search, a clip, or YouTube. Not already on Pluto.", "people": 4186493, "kept": 52.2, "dropped": 2001876}, {"label": "Opened Pluto", "doing": "App or site, first Pluto session in a year", "people": 2184617, "kept": 75.2, "dropped": 542768}, {"label": "Opened Arrow", "doing": "On-demand title or the live channel", "people": 1641849, "kept": 76.0, "dropped": 393232}, {"label": "Played Arrow for five minutes", "doing": "First Pluto play was Arrow", "people": 1248617, "kept": 33.1, "dropped": 835770}, {"label": "Came back within 7 days", "doing": "Second Arrow session", "people": 412847, "kept": 88.3, "dropped": 48430}, {"label": "Played five or more episodes", "doing": "Same people", "people": 364417}]}, "retention": {"returned_7d": {"people": 2479389, "pct": 41.2863}, "returned_30d": {"people": 3511479, "pct": 58.4724}, "eps5": {"people": 2320577, "pct": 38.6418}, "season_1": {"people": 1097271, "pct": 18.2715}, "never": {"people": 2493878, "pct": 41.5276}, "by_journey": {"A": {"ret30": 2294671, "ret30_pct": 64.2721, "eps5": 1529571, "eps5_pct": 42.8422, "s1": 779817, "s1_pct": 21.8421, "other_pluto_30d": 3008717, "other_pluto_30d_pct": 84.272, "the_100_7d": 792047, "the_100_7d_pct": 22.1847}, "B": {"ret30": 601741, "ret30_pct": 48.1926, "eps5": 364417, "eps5_pct": 29.1857, "s1": 178217, "s1_pct": 14.2732}, "A2": {"ret30": 615067, "ret30_pct": 51.8391, "eps5": 426589, "eps5_pct": 35.9538, "s1": 139237, "s1_pct": 11.7352}}}, "bounce": {"people": 1394834, "vod": {"people": 815617, "pct": 58.4741}, "linear": {"people": 579217, "pct": 41.5259}, "day14": [{"label": "Came back and played Arrow", "people": 273967, "pct": 19.6415}, {"label": "Came back to Pluto, still no Arrow play", "people": 392976, "pct": 28.1737}, {"label": "Never returned to Pluto", "people": 727891, "pct": 52.1848}], "first_24h": [{"label": "Watched an Arrow clip on YouTube", "people": 617713, "pct": 44.2858, "overlap": true}, {"label": "Searched The Flash on Netflix", "people": 304657, "pct": 21.8418, "overlap": true}, {"label": "Opened The 100 on Pluto instead", "people": 254863, "pct": 18.2719, "overlap": true}]}, "peers": [{"title": "Arrow", "people": 6005357, "vs_arrow": 100}, {"title": "The 100", "people": 5418263, "vs_arrow": 90.2}, {"title": "My Wife and Kids", "people": 4126581, "vs_arrow": 68.7}, {"title": "Hart of Dixie", "people": 3271849, "vs_arrow": 54.5}, {"title": "Everwood", "people": 1864217, "vs_arrow": 31.0}], "cross": {"the_100": {"people": 1720047, "pct": 28.6419}, "hart": {"people": 677663, "pct": 11.2843}, "flash_search": {"people": 1452473, "pct": 24.1863}, "netflix_t30": {"people": 3259217, "pct": 54.2718}, "prime_t30": {"people": 2479389, "pct": 41.2863}, "not_prime": {"people": 3525968, "pct": 58.7137}, "max_t30": {"people": 1191671, "pct": 19.8435}, "youtube_t30": {"people": 4394971, "pct": 73.1842}, "hulu_t30": {"people": 1692841, "pct": 28.1888}, "disney_t30": {"people": 1359717, "pct": 22.6417}, "tubi_t30": {"people": 1463817, "pct": 24.3752}, "roku_t30": {"people": 1131493, "pct": 18.8414}, "prime_cancel_any": {"people": 417571, "pct": 16.8417, "of": "Arrow viewers who used Prime Video in the last 30 days"}, "prime_cancel_netflix": {"people": 229873, "pct": 9.2714, "of": "Arrow viewers who used Prime Video in the last 30 days"}, "prime_still_2svod": {"people": 1519417, "pct": 61.2819, "of": "Arrow viewers who used Prime Video in the last 30 days"}}, "demos": {"gender": [{"label": "Male", "people": 3434071, "pct": 57.1835}, {"label": "Female", "people": 2500717, "pct": 41.6414}, {"label": "Another gender", "people": 70569, "pct": 1.1751}], "age": [{"label": "18-24", "people": 1371849, "pct": 22.8438}, {"label": "25-34", "people": 1877641, "pct": 31.2661}, {"label": "35-44", "people": 1452817, "pct": 24.192}, {"label": "45-54", "people": 809217, "pct": 13.4749}, {"label": "55+", "people": 493833, "pct": 8.2232}], "ethnicity": [{"label": "White", "people": 3680417, "pct": 61.2856}, {"label": "Hispanic / Latino", "people": 1119641, "pct": 18.644}, {"label": "Black", "people": 731817, "pct": 12.1861}, {"label": "Asian", "people": 316649, "pct": 5.2728}, {"label": "Another race", "people": 156833, "pct": 2.6116}], "income": [{"label": "Under $50,000", "people": 1709817, "pct": 28.4715}, {"label": "$50,000 to $99,999", "people": 2173641, "pct": 36.195}, {"label": "$100,000 to $149,999", "people": 1277217, "pct": 21.268}, {"label": "$150,000+", "people": 844682, "pct": 14.0655}]}, "cover": {"eyebrow": "Play journey · May 1 to Sep 28, 2026", "title": "Arrow<br>on Pluto TV.", "lead": "Most Arrow viewers were already on Pluto. Search brought the new ones.", "deck": "6,005,357 people played Arrow on Pluto. 3,570,247 were already there. 1,186,493 came for another title, then Arrow. 1,248,617 opened Pluto for Arrow. 1,394,834 opened Arrow and left before five minutes.", "kpis": [{"l": "Played Arrow", "v": 6005357}, {"l": "Already on Pluto, then Arrow", "v": 3570247}, {"l": "First Pluto play was Arrow", "v": 1248617}, {"l": "Opened and left", "v": 1394834, "hot": true}]}, "read": {"tldr": ["6,005,357 people played Arrow on Pluto from May 1 to Sep 28.", "59.5% were already on Pluto. 20.8% opened Pluto for Arrow.", "41.5% never came back after the first play.", "28.6% also played The 100. 54.3% still used Netflix.", "Keep episode 2 on autoplay. Sit Arrow next to The 100."], "moves": [{"title": "Sit Arrow next to The 100", "why": "1,720,047 Arrow viewers also played The 100. That is the closest companion on the service."}, {"title": "Autoplay episode 2 for new Pluto people", "why": "Only 29.2% of Arrow-first viewers reach five episodes. Already-on-Pluto viewers sit at 42.8%."}, {"title": "Send the bounce to a Pluto end card, not a dead clip", "why": "617,713 people who left Arrow watched a YouTube clip the same day. That is the leak."}, {"title": "Treat Netflix Flash viewers as a bridge, not a loss", "why": "3,259,217 still used Netflix. 1,452,473 searched The Flash. Flash and Legends stayed on Netflix. Arrow did not."}]}};
+
+        var _JIQ_ARROW_TABS = [
+            { id: 'case',        label: 'Overview' },
+            { id: 'discovery',   label: 'Discovery' },
+            { id: 'journey_b',   label: 'Arrow-first' },
+            { id: 'journey_a',   label: 'Already on Pluto' },
+            { id: 'journey_c',   label: 'Opened and left' },
+            { id: 'churn',       label: 'Come back' },
+            { id: 'segments',    label: 'Who they are' },
+            { id: 'read',        label: 'The read' },
+            { id: 'methodology', label: 'How we counted' }
+        ];
+        var _jiqArrowActiveTab = 'case';
+
+        function _jiqArrowD() {
+            return (typeof _JIQ_ARROW_DATA !== 'undefined' && _JIQ_ARROW_DATA) || {};
+        }
+        function _jiqArrowNum(n) {
+            if (typeof _jiqFragNum === 'function') return _jiqFragNum(n);
+            try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+        }
+        function _jiqArrowMill(n) {
+            n = Number(n) || 0;
+            var m = n / 1e6;
+            var s = m.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+            return s + 'M';
+        }
+        function _jiqArrowPct(n) {
+            if (typeof _jiqUfcPct1 === 'function') return _jiqUfcPct1(n);
+            return (Math.round(Number(n) * 10) / 10) + '%';
+        }
+        function _jiqArrowSec(a, b, c) {
+            return _jiqUfcNestSec(a, b, c);
+        }
+        function _jiqArrowRead(s) {
+            return _jiqUfcNestRead(s);
+        }
+        function _jiqArrowPeopleRows(funnel) {
+            return (funnel || []).map(function(step, i, arr) {
+                var next = arr[i + 1];
+                var row = {
+                    label: step.label,
+                    doing: step.doing || '',
+                    accounts: step.people,
+                    show: (step.people >= 1000000) ? _jiqArrowMill(step.people) : _jiqArrowNum(step.people)
+                };
+                if (next) {
+                    row.kept = step.kept;
+                    row.dropped = step.dropped;
+                    row.droppedShow = (step.dropped >= 1000000)
+                        ? _jiqArrowMill(step.dropped)
+                        : _jiqArrowNum(step.dropped);
+                }
+                return row;
+            });
+        }
+        function _jiqArrowPanelChip() {
+            return 'US only · May 1 to Sep 28, 2026 · unique people';
+        }
+        function _jiqArrowRenderTabBar() {
+            var bar = document.getElementById('jiqArrowTabBar');
+            if (!bar) return;
+            var active = _jiqArrowActiveTab || _JIQ_ARROW_TABS[0].id;
+            bar.className = 'jiq-ufc-tabbar';
+            bar.innerHTML = '<div class="jiq-ufc-pills">'
+                + _JIQ_ARROW_TABS.map(function(t) {
+                    var on = (t.id === active) ? ' is-on' : '';
+                    return '<button type="button" class="' + on + '" data-arrow-tab="' + t.id + '" '
+                        + 'onclick="_jiqArrowActivateTab(\'' + t.id + '\')">'
+                        + _jiqEsc(t.label) + '</button>';
+                }).join('')
+                + '</div><div class="jiq-ufc-tabmeta">' + _jiqArrowPanelChip() + '</div>';
+            bar.style.display = '';
+        }
+        function _jiqArrowActivateTab(tabId) {
+            var match = _JIQ_ARROW_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_ARROW_TABS[0];
+            _jiqArrowActiveTab = match.id;
+            if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+            _jiqArrowPaintNestCover();
+            var host = document.getElementById('jiqArrowNestHost');
+            var paint = _JIQ_ARROW_NEST_RENDER && _JIQ_ARROW_NEST_RENDER[match.id];
+            if (host && paint) host.innerHTML = paint();
+            _jiqArrowRenderTabBar();
+        }
+        function _jiqArrowHideTabBar() {
+            var bar = document.getElementById('jiqArrowTabBar');
+            if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+            _jiqHideCard('jiqArrowNestCard');
+        }
+        function _jiqArrowPaintNestCover() {
+            var d = _jiqArrowD();
+            var cover = d.cover || {};
+            var kpis = document.getElementById('jiqArrowNestKpis');
+            if (kpis) {
+                kpis.innerHTML = (cover.kpis || []).map(function(k) {
+                    return '<div class="jiq-frag-kpi' + (k.hot ? ' is-hot' : '') + '">'
+                        + '<div class="jiq-frag-kpi-l">' + _jiqFragEsc(k.l) + '</div>'
+                        + '<div class="jiq-frag-kpi-v">' + _jiqFragEsc(_jiqArrowMill(k.v)) + '</div></div>';
+                }).join('');
+            }
+            var meta = document.getElementById('jiqArrowNestMeta');
+            if (meta) meta.textContent = cover.eyebrow || 'Play journey · May 1 to Sep 28, 2026';
+            var title = document.getElementById('jiqArrowNestTitle');
+            if (title) title.innerHTML = cover.title || 'Arrow<br>on Pluto TV.';
+            var lead = document.getElementById('jiqArrowNestLead');
+            if (lead) lead.textContent = cover.lead || '';
+            var deck = document.getElementById('jiqArrowNestDeck');
+            if (deck) deck.textContent = cover.deck || '';
+            var art = document.getElementById('jiqArrowNestArt');
+            if (art) {
+                var hero = art.getAttribute('data-hero') || '';
+                if (hero) {
+                    art.innerHTML = '<img src="' + _jiqFragEsc(hero) + '" alt="" onerror="this.remove()">';
+                    art.classList.remove('is-ini');
+                    art.classList.add('is-arrow');
+                } else {
+                    art.innerHTML = '<span class="jiq-frag-art-ini">AR</span>';
+                    art.classList.add('is-ini');
+                    art.classList.remove('is-arrow');
+                }
+            }
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
+            var nest = document.getElementById('jiqArrowNestCard');
+            if (nest) nest.style.display = '';
+        }
+        function _jiqArrowNestCase() {
+            var d = _jiqArrowD();
+            var j = d.journeys || {};
+            var u = d.universe || {};
+            var peers = d.peers || [];
+            var spine = _jiqArrowPeopleRows((d.funnels || {}).spine || []);
+            return _jiqArrowSec('01 Overview', 'Most Arrow viewers were already on Pluto.', 'Three groups. They add to ' + _jiqArrowMill(u.watched) + '.')
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowMill((j.A || {}).people) + '</b><span>Already on Pluto, then played Arrow</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowMill((j.A2 || {}).people) + '</b><span>Came for another title, then Arrow</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqArrowMill((j.B || {}).people) + '</b><span>First Pluto play was Arrow</span></div>'
+                + '</div>'
+                + _jiqArrowRead(_jiqArrowMill(u.bounced) + ' opened Arrow and left before five minutes. They are not in the ' + _jiqArrowMill(u.watched) + '.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(spine) + '</div>'
+                + _jiqArrowSec('The other May 1 titles', 'Arrow is the largest of the four exclusives.', 'Same window. Unique people who played that title on Pluto.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'Pluto plays, May 1 to Sep 28', rows: peers.map(function(p) {
+                    return { label: p.title, accounts: p.people, v: p.people, show: _jiqArrowNum(p.people) };
+                }) }], true)
+                + '</div>'
+                + _jiqArrowRead('There is no paywall. The leak is a short open, then a YouTube clip.');
+        }
+        function _jiqArrowNestDiscovery() {
+            var d = _jiqArrowD();
+            var disc = d.discovery || {};
+            var bSearch = disc.b_search_pct || 0;
+            var aIn = disc.a_inapp_pct || 0;
+            var aLin = disc.a_linear_pct || 0;
+            var rows = (disc.overall || []).map(function(ch) {
+                return {
+                    label: ch.label,
+                    accounts: ch.people,
+                    show: _jiqArrowPct(ch.pct) + '  ' + _jiqArrowMill(ch.people)
+                };
+            });
+            return _jiqArrowSec('02 Discovery', 'Search brought new viewers. The app kept existing ones.', 'First Arrow-on-Pluto touch. One channel each. Adds to the watched file.')
+                + '<div class="jiq-ufc-mix">'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">Arrow-first viewers</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-hot" style="flex:' + bSearch + '">' + _jiqArrowPct(bSearch) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - bSearch) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap"><b>Google or Bing</b><span>First touch for ' + _jiqArrowPct(bSearch) + ' of people whose first Pluto play was Arrow.</span></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-col">'
+                + '<div class="jiq-ufc-mix-k">Already on Pluto</div>'
+                + '<div class="jiq-ufc-mix-bar">'
+                + '<div class="is-app" style="flex:' + aIn + '">' + _jiqArrowPct(aIn) + '</div>'
+                + '<div class="is-soc" style="flex:' + aLin + '">' + _jiqArrowPct(aLin) + '</div>'
+                + '<div class="is-rest" style="flex:' + (100 - aIn - aLin) + '"></div>'
+                + '</div>'
+                + '<div class="jiq-ufc-mix-cap is-2">'
+                + '<div><b>In the app</b><span>' + _jiqArrowPct(aIn) + '</span></div>'
+                + '<div><b>Live channel</b><span>' + _jiqArrowPct(aLin) + '</span></div>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
+                + _jiqArrowSec('All first touches', 'Search is first. The app is a close second.', _jiqArrowMill((d.universe || {}).watched) + ' people. Six channels. One person each.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First-exposure channel', rows: rows }], true)
+                + '</div>';
+        }
+        function _jiqArrowNestClip() {
+            var d = _jiqArrowD();
+            var rows = _jiqArrowPeopleRows(((d.funnels || {}).B) || []);
+            var ret = ((d.retention || {}).by_journey || {}).B || {};
+            var j = d.journeys || {};
+            return _jiqArrowSec('03 Arrow-first', 'They searched where to watch, then opened Pluto.', 'This nest is only people whose first Pluto play was Arrow.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
+                + _jiqArrowSec('After the first play', 'New-to-Pluto viewers binge less.', 'Of the ' + _jiqArrowMill((j.B || {}).people) + ' Arrow-first viewers.')
+                + '<div class="jiq-ufc-figs is-4">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(ret.ret30_pct) + '</b><span>Came back within 30 days</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqArrowPct(ret.eps5_pct) + '</b><span>Played five or more episodes</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(ret.s1_pct) + '</b><span>Finished Season 1</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(((d.discovery || {}).b_search_pct)) + '</b><span>First touch was search</span></div>'
+                + '</div>'
+                + _jiqArrowRead('Already-on-Pluto viewers reach five episodes more often. Autoplay episode 2 on this group.')
+                + _jiqArrowSec('Not in this nest', 'Two other groups make up the rest of the watched file.', '')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([{ title: 'The rest of the watched file', rows: [
+                    { label: 'Came for another title, then Arrow', accounts: (j.A2 || {}).people, v: (j.A2 || {}).people, show: _jiqArrowMill((j.A2 || {}).people) },
+                    { label: 'Already on Pluto, then Arrow', accounts: (j.A || {}).people, v: (j.A || {}).people, show: _jiqArrowMill((j.A || {}).people) }
+                ]}])
+                + '</div>';
+        }
+        function _jiqArrowNestInside() {
+            var d = _jiqArrowD();
+            var rows = _jiqArrowPeopleRows(((d.funnels || {}).A) || []);
+            var ret = ((d.retention || {}).by_journey || {}).A || {};
+            var a2rows = _jiqArrowPeopleRows(((d.funnels || {}).A2) || []);
+            return _jiqArrowSec('04 Already on Pluto', 'The home row and the live channel did the work.', 'This nest starts at people already using Pluto. It does not start at US people.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(rows) + '</div>'
+                + _jiqArrowSec('After the first play', 'Arrow is additive. They keep watching other Pluto titles.', 'Of the ' + _jiqArrowMill(((d.journeys || {}).A || {}).people) + ' already-on-Pluto Arrow viewers.')
+                + '<div class="jiq-ufc-figs is-4">'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqArrowPct(ret.other_pluto_30d_pct) + '</b><span>Kept watching other Pluto titles within 30 days</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(ret.the_100_7d_pct) + '</b><span>Played The 100 within 7 days</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(ret.eps5_pct) + '</b><span>Played five or more Arrow episodes</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct(ret.s1_pct) + '</b><span>Finished Season 1</span></div>'
+                + '</div>'
+                + _jiqArrowRead(_jiqArrowNum(ret.other_pluto_30d) + ' stayed inside Pluto for something else. Arrow did not replace the rest of the service.')
+                + _jiqArrowSec('Came for another title', 'The 100 and Hart of Dixie launched the same day.', 'New to Pluto. First play was not Arrow. Then they opened Arrow.')
+                + '<div class="jiq-ufc-spine">' + _jiqUfcNestSpine(a2rows) + '</div>';
+        }
+        function _jiqArrowNestWall() {
+            var d = _jiqArrowD();
+            var b = d.bounce || {};
+            var day14 = (b.day14 || []).map(function(o) {
+                return { label: o.label, accounts: o.people, v: o.people, show: _jiqArrowMill(o.people) + '  ' + _jiqArrowPct(o.pct) };
+            });
+            var first = (b.first_24h || []).map(function(o) {
+                return { label: o.label, accounts: o.people, v: o.people, show: _jiqArrowMill(o.people) + '  ' + _jiqArrowPct(o.pct) };
+            });
+            return _jiqArrowSec('05 Opened and left', 'They tuned in, then left for a clip.', _jiqArrowMill(b.people) + ' opened Arrow and left before five minutes.')
+                + '<div class="jiq-ufc-figs">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowMill((b.vod || {}).people) + '</b><span>Opened on-demand and left</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowMill((b.linear || {}).people) + '</b><span>Tuned the live channel and left</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqArrowMill(((b.day14 || [])[2] || {}).people) + '</b><span>Never returned to Pluto in 14 days</span></div>'
+                + '</div>'
+                + _jiqArrowSec('14-day outcome', 'One person each. Adds to the bounce file.', '')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'After they left', rows: day14 }], true)
+                + '</div>'
+                + _jiqArrowSec('What they did in the first 24 hours', 'More people watched a YouTube clip than came back to play Arrow.', 'Same person, first day. Rows overlap.')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'First 24 hours after the short open', rows: first }], true)
+                + '</div>'
+                + _jiqArrowRead('There is no signup page to recover. The next click is a clip or The Flash on Netflix.');
+        }
+        function _jiqArrowNestRetention() {
+            var d = _jiqArrowD();
+            var r = d.retention || {};
+            var by = r.by_journey || {};
+            return _jiqArrowSec('06 Come back', 'Four in ten never returned after the first play.', 'Return play, not a cancel. Pluto has no subscription to drop.')
+                + '<div class="jiq-ufc-figs is-4">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct((r.returned_7d || {}).pct) + '</b><span>Back within 7 days</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct((r.returned_30d || {}).pct) + '</b><span>Back within 30 days</span></div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqArrowPct((r.eps5 || {}).pct) + '</b><span>Five or more episodes</span></div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqArrowPct((r.never || {}).pct) + '</b><span>Never came back</span></div>'
+                + '</div>'
+                + _jiqArrowRead(_jiqArrowNum((r.season_1 || {}).people) + ' finished Season 1. That is ' + _jiqArrowPct((r.season_1 || {}).pct) + ' of people who played Arrow.')
+                + _jiqArrowSec('The three groups do not return the same way', 'Already-on-Pluto viewers stay. Arrow-first viewers leave sooner.', '')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Back within 30 days', scale: 100, rows: [
+                        { label: 'Already on Pluto', v: (by.A || {}).ret30_pct, show: _jiqArrowPct((by.A || {}).ret30_pct) },
+                        { label: 'Came for another title', v: (by.A2 || {}).ret30_pct, show: _jiqArrowPct((by.A2 || {}).ret30_pct) },
+                        { label: 'Arrow-first', v: (by.B || {}).ret30_pct, show: _jiqArrowPct((by.B || {}).ret30_pct) }
+                    ]},
+                    { title: 'Five or more episodes', scale: 100, rows: [
+                        { label: 'Already on Pluto', v: (by.A || {}).eps5_pct, show: _jiqArrowPct((by.A || {}).eps5_pct) },
+                        { label: 'Came for another title', v: (by.A2 || {}).eps5_pct, show: _jiqArrowPct((by.A2 || {}).eps5_pct) },
+                        { label: 'Arrow-first', v: (by.B || {}).eps5_pct, show: _jiqArrowPct((by.B || {}).eps5_pct) }
+                    ]}
+                ])
+                + '</div>';
+        }
+        function _jiqArrowNestSegments() {
+            var d = _jiqArrowD();
+            var dem = d.demos || {};
+            var x = d.cross || {};
+            function rows(block) {
+                return (block || []).map(function(r) {
+                    return { label: r.label, accounts: r.people, v: r.people, show: _jiqArrowPct(r.pct) + '  ' + _jiqArrowNum(r.people) };
+                });
+            }
+            return _jiqArrowSec('07 Who they are', 'Male, 25 to 34, and still on Netflix for The Flash.', 'Of the ' + _jiqArrowMill((d.universe || {}).watched) + ' who played Arrow.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Gender', rows: rows(dem.gender) },
+                    { title: 'Age', rows: rows(dem.age) }
+                ])
+                + '</div>'
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Ethnicity', rows: rows(dem.ethnicity) },
+                    { title: 'Income', rows: rows(dem.income) }
+                ])
+                + '</div>'
+                + _jiqArrowSec('Where else they sat', '41.3% used Prime Video. 54.3% used Netflix. The rest of Arrowverse is still there.', 'Same people. Rows overlap.')
+                + '<div class="jiq-frag-detours cols-2">'
+                + _jiqUfcNestDetours([
+                    { title: 'Also used in the last 30 days', rows: [
+                        { label: 'YouTube', v: (x.youtube_t30 || {}).people, show: _jiqArrowPct((x.youtube_t30 || {}).pct) },
+                        { label: 'Netflix', v: (x.netflix_t30 || {}).people, show: _jiqArrowPct((x.netflix_t30 || {}).pct) },
+                        { label: 'Prime Video', v: (x.prime_t30 || {}).people, show: _jiqArrowPct((x.prime_t30 || {}).pct) },
+                        { label: 'Hulu', v: (x.hulu_t30 || {}).people, show: _jiqArrowPct((x.hulu_t30 || {}).pct) },
+                        { label: 'Disney+', v: (x.disney_t30 || {}).people, show: _jiqArrowPct((x.disney_t30 || {}).pct) },
+                        { label: 'Max', v: (x.max_t30 || {}).people, show: _jiqArrowPct((x.max_t30 || {}).pct) }
+                    ]},
+                    { title: 'On Pluto and around Arrow', rows: [
+                        { label: 'Also played The 100', v: (x.the_100 || {}).people, show: _jiqArrowPct((x.the_100 || {}).pct) },
+                        { label: 'Also played Hart of Dixie', v: (x.hart || {}).people, show: _jiqArrowPct((x.hart || {}).pct) },
+                        { label: 'Searched The Flash', v: (x.flash_search || {}).people, show: _jiqArrowPct((x.flash_search || {}).pct) },
+                        { label: 'Also used Tubi', v: (x.tubi_t30 || {}).people, show: _jiqArrowPct((x.tubi_t30 || {}).pct) },
+                        { label: 'Also used Roku Channel', v: (x.roku_t30 || {}).people, show: _jiqArrowPct((x.roku_t30 || {}).pct) }
+                    ]}
+                ])
+                + '</div>'
+                + _jiqArrowRead('Of Arrow viewers who used Prime Video, ' + _jiqArrowPct((x.prime_cancel_any || {}).pct) + ' cancelled a paid streaming plan in the window. ' + _jiqArrowPct((x.prime_still_2svod || {}).pct) + ' still paid for two or more.');
+        }
+        function _jiqArrowNestReadTab() {
+            var d = _jiqArrowD();
+            var moves = ((d.read || {}).moves) || [];
+            var tldr = ((d.read || {}).tldr) || [];
+            return _jiqArrowSec('08 The read', 'Keep them in Season 1. Pair Arrow with The 100.', '')
+                + '<div class="jiq-ufc-tldr">' + tldr.map(function(line) {
+                    return '<div>' + _jiqFragEsc(line) + '</div>';
+                }).join('') + '</div>'
+                + '<div class="jiq-ufc-figs is-4">'
+                + moves.map(function(m) {
+                    return '<div class="jiq-ufc-fig"><b>' + _jiqFragEsc(m.title) + '</b><span>' + _jiqFragEsc(m.why) + '</span></div>';
+                }).join('')
+                + '</div>';
+        }
+        function _jiqArrowNestMethod() {
+            var d = _jiqArrowD();
+            var u = d.universe || {};
+            var m = d.meta || {};
+            return _jiqArrowSec('09 How we counted', 'Unique people. Five minutes is a play.', m.window_label || '')
+                + _jiqArrowRead(m.qualifying_play || '')
+                + '<div class="jiq-frag-detours cols-1">'
+                + _jiqUfcNestDetours([{ title: 'What sits in this file', rows: [
+                    { label: 'US people', accounts: u.us_pop, v: u.us_pop, show: _jiqArrowNum(u.us_pop) },
+                    { label: 'Used Pluto in the last 12 months', accounts: u.pluto_t12, v: u.pluto_t12, show: _jiqArrowNum(u.pluto_t12) },
+                    { label: 'Used Pluto in this window', accounts: u.pluto_window, v: u.pluto_window, show: _jiqArrowNum(u.pluto_window) },
+                    { label: 'Opened Arrow', accounts: u.opened, v: u.opened, show: _jiqArrowNum(u.opened) },
+                    { label: 'Played Arrow five minutes', accounts: u.watched, v: u.watched, show: _jiqArrowNum(u.watched) },
+                    { label: 'Opened and left', accounts: u.bounced, v: u.bounced, show: _jiqArrowNum(u.bounced) }
+                ] }], true)
+                + '</div>'
+                + _jiqArrowRead('A person in Journey C never produced a five-minute Arrow play, so they are not in the watched total. Broadcast television is out. The Arrow channel on Pluto is in. Download CSV keeps every number from this read in one file.');
+        }
+        var _JIQ_ARROW_NEST_RENDER = {
+            case: _jiqArrowNestCase,
+            discovery: _jiqArrowNestDiscovery,
+            journey_b: _jiqArrowNestClip,
+            journey_a: _jiqArrowNestInside,
+            journey_c: _jiqArrowNestWall,
+            churn: _jiqArrowNestRetention,
+            segments: _jiqArrowNestSegments,
+            read: _jiqArrowNestReadTab,
+            methodology: _jiqArrowNestMethod
+        };
+        function _jiqArrowHydrateRun(key) {
+            if (key !== '__demo_arrow_pluto__') return null;
+            var data = (typeof _JIQ_ARROW_DATA !== 'undefined') ? _JIQ_ARROW_DATA : null;
+            if (!data) return null;
+            var u = data.universe || {};
+            var meta = data.meta || {};
+            return {
+                success: true,
+                data: {
+                    meta: {
+                        story_mode: 'arrow_pluto',
+                        target_name: 'Arrow',
+                        target_display: 'Arrow on Pluto TV',
+                        project_name: 'Arrow on Pluto TV',
+                        customer_brand: 'Pluto TV',
+                        start_date: meta.window_start || '2026-05-01',
+                        end_date: meta.window_end || '2026-09-28',
+                        target_type: 'fast_title_journey',
+                        category: 'tv'
+                    },
+                    facts: [
+                        { label: 'Window', value: meta.window_label || 'May 1 to Sep 28, 2026' },
+                        { label: 'Played Arrow', value: _jiqArrowNum(u.watched) + ' people.' },
+                        { label: 'Already on Pluto', value: _jiqArrowNum((data.journeys || {}).A && (data.journeys || {}).A.people) + ' then played Arrow.' },
+                        { label: 'Opened and left', value: _jiqArrowNum(u.bounced) + ' left before five minutes.' }
+                    ],
+                    arrow_pluto: data
+                }
+            };
+        }
+        function _jiqArrowBuildCsv() {
+            var d = _jiqArrowD();
+            var lines = ['section,subsection,metric,value,unit,notes'];
+            function row(a, b, c, v, u, n) {
+                function esc(x) {
+                    x = String(x == null ? '' : x);
+                    if (x.indexOf(',') >= 0 || x.indexOf('"') >= 0) return '"' + x.replace(/"/g, '""') + '"';
+                    return x;
+                }
+                lines.push([esc(a), esc(b), esc(c), esc(v), esc(u || ''), esc(n || '')].join(','));
+            }
+            var u = d.universe || {};
+            row('universe', 'base', 'played', u.watched, 'people', 'A + A2 + B');
+            row('universe', 'base', 'opened and left', u.bounced, 'people', '');
+            Object.keys(d.journeys || {}).forEach(function(k) {
+                var j = d.journeys[k];
+                row('journeys', k, j.label, j.people, 'people', '');
+            });
+            return lines.join('\n');
+        }
+        function _jiqArrowDownloadCsv() {
+            var blob = new Blob([_jiqArrowBuildCsv()], { type: 'text/csv' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'Arrow_Pluto_Journey_2026_09_28.csv';
+            a.click();
+        }
+
 
                 // ---- CSV builder ------------------------------------------------
         // Walks _JIQ_UFC_DATA and emits a long-form CSV. Columns:
@@ -114399,7 +115022,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, heated_rivalry_song: 1, barbie_song: 1, fragrance_shop_journey: 1, young_sheldon_pvod: 1, dexters_lab_pvod: 1, gg_lapsed_flywheel: 1, gg_regular_flywheel: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, arrow_pluto: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, heated_rivalry_song: 1, barbie_song: 1, fragrance_shop_journey: 1, young_sheldon_pvod: 1, dexters_lab_pvod: 1, gg_lapsed_flywheel: 1, gg_regular_flywheel: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
@@ -183747,6 +184370,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     }
     .jiq-frag-art.is-ys img { object-position: center 18%; }
     .jiq-frag-art.is-ufc img { object-position: 68% 18%; }
+    .jiq-frag-art.is-arrow img { object-position: 38% 18%; }
     .jiq-frag-art.is-dexter img { object-position: center 48%; }
     .jiq-frag-art.is-gg-lapsed img { object-position: center 32%; }
     .jiq-frag-art.is-gg-regular img { object-position: center 22%; }
@@ -183956,6 +184580,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
         letter-spacing: -.045em; line-height: .95; text-transform: none !important;
     }
+
+    #jiqArrowNestCard {
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        border-radius: 14px;
+        flex: 0 0 auto;
+    }
+    body[data-theme="light"] #jiqArrowNestCard { background: #E9E8E1; color: #0C1618; }
+    #jiqArrowNestTitle {
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95; text-transform: none !important;
+    }
+    @media (max-width: 1080px) { #jiqArrowNestTitle { font-size: 38px; } }
+    #jiqArrowNestDeck, #jiqArrowNestCard .jiq-frag-label, #jiqArrowNestCard .jiq-frag-doing,
+    #jiqArrowNestCard .jiq-frag-read, #jiqArrowNestCard .jiq-frag-detlab,
+    #jiqArrowNestCard .jiq-frag-kpi-v, #jiqArrowNestCard .jiq-frag-count,
+    #jiqArrowNestCard .jiq-frag-lost, #jiqArrowNestCard .jiq-frag-sec h3,
+    #jiqArrowNestCard .jiq-frag-sec em,
+    #jiqArrowNestCard .jiq-frag-read-lead { text-transform: none !important; }
+    .jiq-frag-art.is-arrow img { object-position: 38% 18%; }
     @media (max-width: 1080px) { #jiqUfcNestTitle { font-size: 38px; } }
 
     #jiqSongCard {

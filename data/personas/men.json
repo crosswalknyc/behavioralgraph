@@ -1,0 +1,105 @@
+{
+  "lens_id": "men",
+  "display_name": "Men",
+  "emoji": "\u2642",
+  "group": "gender",
+  "mode": "rank",
+  "short_label": "US men",
+  "pop_share": 0.49,
+  "source_profile": "US adult men, all ages, all regions. Composition read from the GENDER row across the Gen Pop file and the male cuts of the profile corpus (Reba McEntire - Male, Shark Tank - Male, Protein Enthusiasts - Male, Kardashians - Male), triangulated against the gender splits that platforms and measurement firms publish for their own audiences.",
+  "one_line": "US adult men, 18 and up, every generation together. About 49 percent of US adults. This lens is not a taste filter: every item stays on the board, and each item is re-valued to the share of its audience that is men, then re-ranked by that number. The job is to get the SHARE right for each item, item by item, from what is known about who actually watches, listens, reads, plays, buys and searches for it.",
+  "demographics": {
+    "age_range": "18 to 80 plus, weighted like the US adult population: roughly a fifth each in 18-29, 30-44, 45-59 and 60 plus, with men outnumbered by women above 65.",
+    "gender_skew": "100 percent men by definition. The baseline share of any US audience is about 49 percent; the tilt you return says how far THIS item's audience sits from that baseline.",
+    "income_band": "Mirrors the US distribution with a higher median than women; men are the majority of six-figure earners and of investment-account and sports-betting-account holders.",
+    "education": "Men now hold the minority of US bachelor's degrees among adults under 50; over-represented in trades and in engineering and computer science.",
+    "occupation_skew": "Over-represented in construction, trades, transport, manufacturing, engineering, software, finance and sales; under-represented in healthcare, education and admin.",
+    "ethnicity_skew": "Mirrors the US adult population.",
+    "life_stage": "Every stage. Fathers of young children under-index on parenting content relative to mothers; men 55 plus are the heaviest news, sports, history and western-film consumers.",
+    "geo_skew": ["Mirrors the US population. No DMA tilt for the lens as a whole."]
+  },
+  "psychographics": {
+    "values": [
+      "This is a population, not a subculture. Half of every audience. Do not score men as a niche.",
+      "The signal that separates items is COMPOSITION. Fantasy football, sports betting, UFC, boxing, NFL RedZone, shooter and simulation games, crypto and day trading, cars and tools run 65 to 80 percent men. Sports leagues, sports-talk podcasts, action and sci-fi franchises, hip-hop streaming, rock and metal, war and spy thrillers, military history, tech and markets headlines run 55 to 65 percent men. News, drama, prestige TV, comedy, most streaming top-10s, most search terms sit near 50. Reality TV, daytime, home, cooking, wellness, parenting, beauty, true crime, romance, K-drama and Broadway run 20 to 40 percent men.",
+      "Men are the majority of the audience for live sports on every major league except the WNBA, for esports and Twitch, for YouTube long-form creators in gaming, science, cars, finance and comedy, and for podcasts in sports, politics, business, technology and long-form interview.",
+      "Men are the majority of buyers for games, consumer electronics, tools, auto parts, sports merchandise, spirits and craft beer; near parity on QSR, streaming subscriptions and Amazon.",
+      "Younger men are heavily on YouTube, Twitch, Kick, Discord and Reddit; older men on cable news, ESPN, History, Discovery, westerns and network sports."
+    ],
+    "aesthetics": [
+      "Not applicable as a taste rule. Read the item for who its audience actually is."
+    ],
+    "tone_they_respond_to": "Not a scoring input. This lens measures audience composition, not tone.",
+    "tone_they_reject": "Not a scoring input."
+  },
+  "consumption_signals": {
+    "reads_hard": ["Media: ESPN, The Athletic, Bleacher Report, Barstool, Yahoo Sports, CBS Sports, Fox Sports, MotorTrend, Car and Driver, The Verge, Ars Technica, Wired, TechCrunch, Tom's Hardware, IGN, Kotaku, GameSpot, Polygon, Men's Health, GQ, Esquire, Wall Street Journal (60), Bloomberg (65), CNBC (60), Investopedia, CoinDesk, Reddit front page (60 to 65)."],
+    "reads_soft": ["General news at parity with women; political and business news above parity; health, education and lifestyle news below parity."],
+    "watches": {
+      "streaming": ["Prime Video Thursday Night Football, Reacher, The Boys, Invincible, Jack Ryan, The Terminal List, Fallout, Yellowstone (near parity), Landman, Tulsa King, Lioness, Mayor of Kingstown, 1923, The Last of Us (55), House of the Dragon (55), Severance (55), Shogun (60), Slow Horses (55), Andor (60), The Mandalorian (60), Marvel and DC series (60), Cobra Kai (55), Dave Chappelle and stand-up specials (60), Formula 1: Drive to Survive (60), Quarterback, Receiver, Full Swing, Untold, Netflix boxing and NFL Christmas games (65 to 70), UFC Fight Pass, DAZN, ESPN+, anime shonen (60 to 65)."],
+      "fast": ["Pluto sports and classic-action channels, Tubi westerns and martial arts, Fawesome action, MotorTrend, Bloomberg TV, NewsNation, Cheddar, Stadium, Fubo Sports, FailArmy, PowerNation, Real Stories, History Vault channels."],
+      "film": ["Action, war, heist, spy, sci-fi, superhero, sports biopics, westerns, martial arts, horror at near parity, Nolan, Tarantino, Villeneuve, Michael Mann, Guy Ritchie, John Wick, Mission: Impossible, Top Gun, Gladiator, Dune, Oppenheimer (55), Deadpool & Wolverine (60), Bad Boys, Fast & Furious, Godzilla and Kong, Transformers, Planet of the Apes."],
+      "cable": ["ESPN, FS1, NFL Network, NBA TV, MLB Network, Golf Channel, History, Discovery, Motor Trend, Comedy Central, FX, AMC, Paramount Network, Fox News (55), CNBC, Adult Swim, Velocity, Outdoor Channel."]
+    },
+    "listens": {
+      "podcasts": ["The Joe Rogan Experience, The Pat McAfee Show, The Bill Simmons Podcast, Pardon My Take, The Dan Le Batard Show, New Heights (near parity because of the Swift crossover), Bussin' With The Boys, The Herd, First Take, Club Shay Shay, All The Smoke, The Volume, Fantasy Footballers, The Ringer NBA, Lex Fridman, Huberman Lab, Theo Von, Shane Gillis, Bert Kreischer, Andrew Schulz, Kill Tony, Tim Dillon, The Daily (parity), Pod Save America (55), Ben Shapiro, Tucker Carlson, Candace Owens (near parity), Bankless, Acquired, All-In, BG2, Dwarkesh, Hard Fork, Darknet Diaries, Hardcore History, Dan Carlin, The Rest Is History (55), SmartLess (parity), Diary of a CEO (parity), Crime Junkie (35)."],
+      "music_artists": ["Drake, Kendrick Lamar, Travis Scott, Future, Metro Boomin, 21 Savage, Lil Baby, Playboi Carti, Gunna, J. Cole, Eminem, Kanye West, Tyler the Creator, Post Malone (parity), Morgan Wallen (parity), Zach Bryan (parity), Luke Combs, Jelly Roll, Chris Stapleton, Bailey Zimmerman, Kid Rock, Metallica, Foo Fighters, Linkin Park, Green Day, Ghost, Sleep Token, Slipknot, Pearl Jam, Zach Top, Fuerza Regida, Peso Pluma, Junior H, Bad Bunny (parity), Fred again.., Skrillex, Kaskade, Kygo, Bruce Springsteen, Bob Dylan, The Rolling Stones, AC/DC."],
+      "music_genres": ["hip-hop and rap (55 to 60 percent men), rock (60 to 65), metal (70), EDM (60), regional Mexican (55), classic rock (60), jazz (60), country (40 to 45), pop (40), Latin pop (45), R&B (45), K-pop (25 to 30), Christian contemporary (40), musical theater (35)."]
+    },
+    "reads_books": {
+      "formats": ["Audiobooks in nonfiction and history (men are the majority of nonfiction audiobook listeners), Kindle, hardcover nonfiction, manga, comics, graphic novels."],
+      "genres": ["military and political history (70 to 75 percent men), business and investing (65 to 70), biography of leaders and athletes (65), science and technology (65), sci-fi (60), fantasy epic (55), thriller by a man (55), spy and war fiction (65), westerns (70), horror (55), comics superhero (65 to 70), manga shonen and seinen (65), shojo (30), romance (10 to 15), self-help (35), literary fiction (35), cookbooks (35), memoir (40), children's picture books (35)."],
+      "authors_or_titles": ["Brandon Sanderson, Andy Weir, James Clavell, Tom Clancy, Jack Carr, Lee Child, Vince Flynn, Brad Thor, Michael Connelly, Stephen King (near parity), Blake Crouch, Pierce Brown, Joe Abercrombie, Matt Dinniman (Dungeon Crawler Carl), Frank Herbert, Cormac McCarthy, Malcolm Gladwell, Walter Isaacson, Ron Chernow, Erik Larson (parity), Robert Greene, Ryan Holiday, Morgan Housel, Nassim Taleb, Peter Attia, David Goggins, Jocko Willink, Jordan Peterson, Tim Ferriss, James Clear (parity), Chris Voss, Ray Dalio, Ben Horowitz, Andrew Huberman, Bill Bryson, Michael Lewis, Kai Bird, Chuck Palahniuk, Ernest Cline, Hugh Howey, R.F. Kuang (40)."]
+    },
+    "plays": ["Call of Duty, Madden, NBA 2K, EA FC, MLB The Show, Counter-Strike, Valorant, Fortnite (65 to 70), Apex, Warzone, Battlefield, Halo, Destiny, Diablo, Elden Ring, Baldur's Gate 3 (60), Helldivers 2, GTA, Red Dead, Cyberpunk, Assassin's Creed, God of War, Spider-Man (60), Zelda (55), Pokemon (parity), Mario Kart (parity), Minecraft (55), Roblox (parity), Chess.com (70), sports betting apps (70 to 75), fantasy football (75 to 80), Gorilla Tag, Beat Saber (55), Stardew Valley (50), Animal Crossing (40), The Sims (40), match-3 (30 to 35)."],
+    "shops": ["Home Depot, Lowe's, Harbor Freight, AutoZone, O'Reilly, Best Buy, Micro Center, Newegg, GameStop, Steam, PlayStation Store, Xbox Store, Bass Pro and Cabela's, Dick's, Fanatics, Nike (55), Adidas (55), Under Armour (60), Carhartt, Duluth Trading, Vuori (55), Lululemon (40), Amazon (parity), Costco (45), Walmart (45), Total Wine, Chewy (45), Tesla, Ford and Chevy dealers, Crypto exchanges (70), Robinhood (65), Schwab (60), DraftKings and FanDuel (70 to 75)."],
+    "eats_at": ["Buffalo Wild Wings (60), Wingstop (60), Hooters (70), Texas Roadhouse (parity), Chipotle (parity), Five Guys (55), Jersey Mike's (55), Jimmy John's (55), Taco Bell (55), Wendy's (55), Whataburger (55), Raising Cane's (parity), Dutch Bros (45), Starbucks (40), Panera (40), Crumbl (35)."],
+    "buys": ["Games and consoles, PC parts, TVs and audio, tools, auto parts and accessories, grills and smokers, golf and fishing gear, sports merchandise and tickets, spirits and craft beer, protein and pre-workout, men's grooming, watches, sneakers, streaming sports add-ons."],
+    "follows_talent": ["Joe Rogan, Pat McAfee, Shannon Sharpe, Stephen A. Smith, Bill Simmons, Dave Portnoy, Theo Von, Shane Gillis, Andrew Schulz, Kevin Hart (55), Dwayne Johnson (55), Tom Brady, Patrick Mahomes, Travis Kelce (parity), Jason Kelce, LeBron James, Steph Curry, Shohei Ohtani, Aaron Judge, Max Verstappen, Lewis Hamilton (parity), Tiger Woods, Scottie Scheffler, Conor McGregor, Jon Jones, Jake Paul, Elon Musk, Mark Zuckerberg, Jensen Huang, MrBeast (60), Kai Cenat (65), IShowSpeed (70), Adin Ross (75), Sketch, Marques Brownlee (70), Linus Tech Tips (80), Mark Rober (60), Dude Perfect (65), Cleetus McFarland (80), Donut Media (75), Chris Williamson, Lex Fridman, Andrew Huberman (60), David Goggins (70), Jocko Willink (75), Jordan Peterson (65), Ben Shapiro (60), Tucker Carlson (60), Jon Stewart (55), John Oliver (55), Bill Maher (55)."]
+  },
+  "themes_they_care_about": [
+    "Live sports, fantasy sports and sports betting across NFL, NBA, MLB, NHL, college football and basketball, UFC, boxing, golf, F1, NASCAR, soccer.",
+    "Games, esports, hardware, PC building, consoles, Twitch and Kick streamers.",
+    "Cars, trucks, EVs, motorsport, tools, DIY, grills.",
+    "Markets, investing, crypto, business, startups, AI and tech products.",
+    "Action, sci-fi, war, spy, heist and superhero franchises; anime shonen; westerns.",
+    "Hip-hop, rock, metal, EDM, classic rock; stand-up comedy.",
+    "Long-form interview and comedy podcasts; politics and news commentary.",
+    "Fitness, strength training, protein, supplements, longevity science.",
+    "Military and political history, biographies of leaders, athletes and founders.",
+    "Men's health topics: testosterone, hair loss, ED, sleep, sober-curious, mental health framed through performance."
+  ],
+  "themes_they_avoid": [
+    "Nothing is avoided under this lens. Items simply carry a lower share where the audience is mostly women: romance and romantasy, Bravo and reality-dating, Hallmark and Lifetime, K-drama and K-pop, beauty and skincare, parenting and fertility, wedding and home-organizing content, Broadway, BookTok, celebrity and royal news, daytime TV, cozy and match-3 games."
+  ],
+  "filter_rules_for_agent": [
+    "THIS LENS RANKS, IT DOES NOT FILTER. Score is secondary. The TILT is the deliverable: return, for each item, how the men share of ITS audience compares to the 49 percent baseline. tilt 1.0 means 49 percent men. tilt 1.5 means about 74 percent men (fantasy football, UFC, Call of Duty, Cleetus McFarland). tilt 0.7 means about 34 percent men (Bravo, Sabrina Carpenter, Emily Henry). tilt 0.3 means about 15 percent men (romance novels, Hallmark, Crumbl).",
+    "Anchor on published audience composition wherever it is known: Nielsen and network sales decks for TV, Edison and Spotify for podcasts and music, Circana and BookScan for books, ESA and Newzoo for games, Pew and Statista for platforms and search. When unknown, reason from the closest known comparable, not from a stereotype about the topic.",
+    "Streaming top-10 titles mostly sit between 0.8 and 1.2. Push above 1.25 only for live sports, sports docs, action and war franchises with a male lead and no romance line, hard sci-fi, most anime shonen, stand-up specials. Push below 0.75 only for romance, reality-dating, K-drama, Hallmark, Bridgerton-class and beauty or wedding formats.",
+    "Music: hip-hop and rap 1.15 to 1.25; rock 1.25; metal 1.45; EDM 1.2; regional Mexican 1.1; country 0.85 to 0.95; pop men 0.95 to 1.05; pop women 0.7 to 0.8; K-pop 0.5 to 0.6; R&B 0.9; Christian contemporary 0.8; musical theater 0.7.",
+    "Podcasts: sports 1.4 to 1.6; long-form interview and comedy 1.2 to 1.35; politics and news 1.1 to 1.2; business, tech and crypto 1.3 to 1.45; science and health 1.05 to 1.15; true crime narrative 0.65 to 0.75; relationship and lifestyle 0.4 to 0.55; horror fiction 1.05.",
+    "Books: military and political history 1.45 to 1.55; business and investing 1.35 to 1.45; sci-fi 1.2; spy and war fiction 1.3; epic fantasy 1.1; thriller by a man 1.1; horror 1.1; comics superhero 1.35 to 1.45; manga shonen and seinen 1.3, shojo 0.6; literary fiction 0.7; memoir 0.8; self-help 0.7; romance and romantasy 0.2 to 0.3; children's picture books 0.7; Wattpad 0.3 to 0.4.",
+    "Games: shooters 1.45 to 1.55; sports sims 1.55; fantasy football and betting apps 1.5 to 1.6; MOBA and battle royale 1.4; fighting 1.5; open world action 1.35; strategy and 4X 1.4; Chess.com 1.4; Roblox 1.0; Pokemon and Mario Kart 1.0; Minecraft 1.1; life sim and cozy 0.8; match-3 and word 0.65 to 0.75; VR fitness 1.1.",
+    "Searches and headlines: sports scores, betting lines, draft and trade terms 1.35 to 1.5; markets, crypto, tech products and AI 1.25 to 1.4; cars and tools 1.4; politics and general news 1.0 to 1.1; weather and local 1.0; celebrity, royal, recipe, holiday, kids, pets and beauty terms 0.55 to 0.8.",
+    "Sports: NFL 1.12; NBA 1.25; MLB 1.3; NHL 1.3; college football 1.2; UFC 1.5; boxing 1.5; NASCAR 1.25; golf 1.5; F1 1.15; tennis 1.05; soccer 1.2; Olympics 0.95; gymnastics 0.55; WNBA 1.0; women's college basketball 0.95; USWNT and NWSL 0.95.",
+    "Talent: score the person's actual following, not their gender. Joe Rogan 1.45; Pat McAfee 1.6; MrBeast 1.2; IShowSpeed 1.45; Marques Brownlee 1.4; Travis Kelce 0.9 (Swift halo); Jason Kelce 1.1; Pedro Pascal 0.9; Sydney Sweeney 1.05 (large male following); Caitlin Clark 1.0; Alix Earle 0.4; Taylor Swift 0.55; Kevin Hart 1.1; Dwayne Johnson 1.15.",
+    "FAST channels: sports, motors, action, westerns, military history, tech and business news 1.3 to 1.5; classic sitcoms 0.95; general news 1.1; kids 0.85; Hallmark, Lifetime, reality, true crime, cooking and home 0.5 to 0.7; Black cinema and faith 0.9.",
+    "Never return the same tilt for a whole panel. Two titles on one chart with different audiences must carry different tilts. Keep the fourth decimal alive.",
+    "Score (0-100) should still be filled and should track the tilt: a tilt of 1.5 reads as 85 to 95, 1.0 as 50 to 60, 0.5 as 15 to 25. It is only used for tooltips and cutoffs in other modes."
+  ],
+  "expected_kept_share_per_tab": "100 percent of items on every tab. This lens runs in rank mode: nothing is hidden, every row is re-valued to its men audience and re-ordered.",
+  "reasoned_from_profile": {
+    "profile_key": "Gen_Pop_2026.csv GENDER row (men 48.9) and the male cuts of the profile corpus, read against published audience gender splits.",
+    "note": "The lens exists so a reader can sort any board by its men audience. It is a composition read, not a persona brief; the tilt bands above are the calibration and the per-item reasoning is what moves an item off its band.",
+    "notable_index_signals": [
+      "GENDER MALE 48.9 percent of US adults 18 plus; 47 percent of adults 65 plus",
+      "NFL TV audience 55 percent men; NBA 60 to 65; MLB 65; NHL 65; UFC 70 to 75; golf 75; WNBA under 50",
+      "Sports podcast listeners 70 to 75 percent men; comedy interview 60 to 65; business and tech 65 to 70 (Edison)",
+      "Hip-hop streaming 55 to 60 percent men; rock 60 to 65; metal 70; pop 40 (Luminate)",
+      "Shooter and sports game players 70 to 80 percent men; match-3 30 to 35 (ESA, Newzoo)",
+      "Sports betting account holders 70 to 75 percent men; crypto holders 65 to 70; Robinhood 65",
+      "History and business book buyers 65 to 75 percent men; romance 10 to 15",
+      "Twitch viewers 65 percent men; Reddit 60 to 65; YouTube parity overall, 60 plus on gaming and tech channels"
+    ]
+  }
+}

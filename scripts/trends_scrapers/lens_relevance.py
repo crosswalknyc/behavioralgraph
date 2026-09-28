@@ -172,6 +172,8 @@ _PERSONA_POP_SHARE: dict[str, float] = {
     'gen_x':                            0.196,   # 45-60
     'baby_boomers':                     0.211,   # 61-79
     'unlikely_collaborators_follower':  0.041,   # cohort reach, per profile
+    'women':                            0.511,   # US adults 18+ (Census ACS)
+    'men':                              0.489,
 }
 
 
@@ -424,6 +426,14 @@ _JSON_PERSONA_FILES: list[str] = [
     'millennials',
     'gen_x',
     'baby_boomers',
+    # Gender (Jenna 2026-09-28: "add a new filter besides generations
+    # ... so you can sort by male or female overall"). These carry
+    # group='gender' and mode='rank' in their JSON: the frontend puts
+    # them in a second dropdown, hides nothing, re-values every row to
+    # that gender's audience and re-orders. Each is about half of the
+    # US adult population, so the tilt is the whole signal.
+    'women',
+    'men',
 ]
 
 # Data dir sits at repo-root / bg-webapp / data / personas.  The
@@ -550,7 +560,22 @@ def _load_json_lenses() -> list[dict[str, Any]]:
             'emoji':       doc.get('emoji') or '\U0001F9ED',
             'description': (doc.get('one_line') or '')[:200],
             'persona':     _compose_persona_prompt(doc),
+            # Dropdown placement and behaviour (2026-09-28). 'audience'
+            # lenses filter (per-kind cutoff); 'gender' lenses rank
+            # (nothing hidden, rows re-valued and re-ordered).
+            'group':       str(doc.get('group') or 'audience'),
+            'mode':        str(doc.get('mode') or 'filter'),
+            'short_label': str(doc.get('short_label') or ''),
         })
+        # A JSON persona may carry its own population share; the
+        # gender lenses do, so the rescaling math needs no code edit
+        # when a share is refined.
+        try:
+            ps = float(doc.get('pop_share') or 0)
+            if 0 < ps < 1:
+                _PERSONA_POP_SHARE[lens_id] = ps
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -577,6 +602,50 @@ _LENSES.extend(_load_json_lenses())
 # appears in the batch.
 # ---------------------------------------------------------------------------
 _ANCHORS: dict[str, list[dict[str, Any]]] = {
+    # Gender lenses (2026-09-28). Score tracks the tilt (see the
+    # briefs): 1.5 reads 85-95, 1.0 reads 50-60, 0.5 reads 15-25.
+    # Anchors span the whole range on every kind so a batch can peg
+    # composition rather than taste.
+    'women': [
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 94},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',           'score': 55},
+        {'kind': 'book',     'title': 'The Art of War (Sun Tzu)',              'score': 22},
+        {'kind': 'podcast',  'title': 'Crime Junkie',                          'score': 84},
+        {'kind': 'podcast',  'title': 'SmartLess',                             'score': 56},
+        {'kind': 'podcast',  'title': 'The Pat McAfee Show',                   'score': 14},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 82},
+        {'kind': 'song',     'title': 'I Had Some Help (Post Malone / Morgan Wallen)', 'score': 55},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 40},
+        {'kind': 'film',     'title': 'Bridgerton',                            'score': 88},
+        {'kind': 'film',     'title': 'The Last of Us',                        'score': 48},
+        {'kind': 'film',     'title': 'Thursday Night Football',               'score': 24},
+        {'kind': 'search',   'title': 'taylor swift',                          'score': 80},
+        {'kind': 'search',   'title': 'weather',                               'score': 55},
+        {'kind': 'search',   'title': 'nfl scores',                            'score': 26},
+        {'kind': 'game',     'title': 'Royal Match',                           'score': 78},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 54},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 18},
+    ],
+    'men': [
+        {'kind': 'book',     'title': 'The Art of War (Sun Tzu)',              'score': 88},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',           'score': 56},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 8},
+        {'kind': 'podcast',  'title': 'The Pat McAfee Show',                   'score': 92},
+        {'kind': 'podcast',  'title': 'SmartLess',                             'score': 54},
+        {'kind': 'podcast',  'title': 'Crime Junkie',                          'score': 24},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 70},
+        {'kind': 'song',     'title': 'I Had Some Help (Post Malone / Morgan Wallen)', 'score': 55},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 26},
+        {'kind': 'film',     'title': 'Thursday Night Football',               'score': 86},
+        {'kind': 'film',     'title': 'The Last of Us',                        'score': 60},
+        {'kind': 'film',     'title': 'Bridgerton',                            'score': 16},
+        {'kind': 'search',   'title': 'nfl scores',                            'score': 84},
+        {'kind': 'search',   'title': 'weather',                               'score': 54},
+        {'kind': 'search',   'title': 'taylor swift',                          'score': 24},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 90},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 55},
+        {'kind': 'game',     'title': 'Royal Match',                           'score': 26},
+    ],
     'millennials': [
         {'kind': 'podcast',  'title': 'SmartLess',                     'score': 95},
         {'kind': 'podcast',  'title': 'My Favorite Murder',            'score': 90},
@@ -1497,7 +1566,10 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
                  len(items))
     lens_meta = [
         {'id': l['id'], 'label': l['label'],
-         'emoji': l['emoji'], 'description': l['description']}
+         'emoji': l['emoji'], 'description': l['description'],
+         'group': l.get('group') or 'audience',
+         'mode': l.get('mode') or 'filter',
+         'short_label': l.get('short_label') or ''}
         for l in _LENSES
     ]
     if dry_run:
