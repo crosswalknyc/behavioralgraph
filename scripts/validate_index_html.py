@@ -581,3 +581,4 @@ if __name__ == "__main__":
 # (site-products-report-pricing 2026-09-28 - Site: Products 02 eyebrow Report pricing; headline One report, one price.)
 # (site-signup-close-panel-lead 2026-09-28 - Site: sign-up close headline on 12 pages; Panel hero lead rewrite)
 # (site-panel-how-it-works 2026-09-28 - Site: Panel section 02 How it works; single What clients receive card)
+# (site-categories-35-plus 2026-09-28 - Site: behavioral categories 40+ -> 35+ everywhere)
