@@ -23884,6 +23884,13 @@ https://www.instagram.com/p/..."></textarea>
             font-weight: 500 !important;
             border-bottom-color: #3B3D38 !important;
         }
+        /* The header row is plain <span>s - it has none of the .pct / .gp /
+           .idx classes that right-align the data cells - so Profile, Gen Pop
+           and Index sat 19-35px left of the numbers they label. Category and
+           Segment stay left. */
+        #dashboardView.piq-v4 .piq-data-row.head span:nth-child(n+3) {
+            text-align: right !important;
+        }
         #dashboardView.piq-v4 #tab-insights .snapshot-label,
         #dashboardView.piq-v4 .piq-data-row .key {
             color: #9AA09B !important;
