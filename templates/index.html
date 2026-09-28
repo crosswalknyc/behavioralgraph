@@ -136164,7 +136164,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 'SEARCH ENGINE/AI': 'Search engine / AI',
                 'SOCIAL MEDIA': 'Social media',
                 'MUSICIAN/BAND': 'Musician / band',
-                'INFLUENCER/CREATOR': 'Influencer / creator',
+                'CREATOR/INFLUENCER': 'Creator / influencer',
+                'INFLUENCER/CREATOR': 'Creator / influencer',
                 'HOST/PERSONALITY': 'Host / personality',
                 'POLITICS/ACTIVIST': 'Politics / activist',
                 'WRITER/DIRECTOR/AUTHOR/ARTIST': 'Writer / director',
@@ -166274,7 +166275,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             'STREAMING PLATFORM': 'STREAMING/PLATFORM',
             'POLITICIAN': 'POLITICS/ACTIVIST',
             'FESTIVAL': 'EVENTS',
-            'VIDEO GAME': 'GAMES'
+            'VIDEO GAME': 'GAMES',
+            // Two spellings of the same TALENT category (Jessie 2026-09-28).
+            // Both are real values in MASTER_CATEGORIES, so before the alias
+            // fold reached the grouping step they sat side by side in the
+            // selector as "Creator/Influencer" and "Influencer / creator".
+            'INFLUENCER/CREATOR': 'CREATOR/INFLUENCER'
         };
         function getCategoryDisplayLabel(cat) {
             return CATEGORY_DISPLAY_LABELS[(cat || '').toUpperCase()] || cat;
