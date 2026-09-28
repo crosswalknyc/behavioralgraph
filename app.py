@@ -57708,6 +57708,98 @@ def _pm_status_reply_for_runs(runs):
     return '\n'.join(lines)
 
 
+# DELIVERY + FEEDBACK INTERCEPTS (2026-09-28, the W39 weekly review):
+# "please email david carter@... when it is ready" and "the key art is
+# from an older series, please replace it" each burned a full paid
+# read. A delivery request registers the ready-notification on the
+# caller's in-flight builds; product feedback and methodology
+# challenges acknowledge, forward to ops, and never generate.
+_PM_EMAIL_ADDR_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w{2,}")
+_PM_EMAIL_WHEN_READY_RE = re.compile(
+    # '.' stays inside the spans: addresses carry dots
+    # (david.carter@spe.sony.com).
+    r"\b(?:e-?mail|send)\b[^?!\n]{0,80}?\bwhen\b[^?!\n]{0,30}?"
+    r"\b(?:ready|done|finish(?:e[sd])?|complete[sd]?|lands?|arrives?)\b",
+    re.IGNORECASE)
+
+_PM_FEEDBACK_RES = (
+    # wrong / stale artwork, images, titles on a card
+    re.compile(r"\b(?:key\s*art|artwork|thumbnail|poster|image|logo)\b"
+               r"[^.?!\n]{0,60}\b(?:wrong|older|old|incorrect|replace|"
+               r"outdated|from an?\b)", re.IGNORECASE),
+    re.compile(r"\breplace\s+(?:the|this|that)\s+"
+               r"(?:key\s*art|artwork|thumbnail|poster|image|logo)\b",
+               re.IGNORECASE),
+)
+_PM_METHOD_CHALLENGE_RES = (
+    re.compile(r"\bhow\s+is\b[^.?!\n]{0,60}\bcalculated\b",
+               re.IGNORECASE),
+    re.compile(r"\b(?:seems?|looks?|is)\s+(?:very|too|way too)\s+"
+               r"(?:high|low)\b", re.IGNORECASE),
+)
+
+_PM_FEEDBACK_SENT = {}
+
+
+def _pm_forward_user_feedback(username, text, kind):
+    """One SES note to ops per distinct feedback message per hour.
+    Never raises, never blocks the reply."""
+    try:
+        sig = hashlib.md5(
+            f"{username}|{str(text)[:200]}".encode()).hexdigest()
+        now = time.time()
+        if now - _PM_FEEDBACK_SENT.get(sig, 0) < 3600:
+            return
+        _PM_FEEDBACK_SENT[sig] = now
+
+        def _send():
+            try:
+                import boto3 as _b3
+                ses = _b3.client('ses', region_name='us-east-2')
+                ses.send_email(
+                    Source='BehavioralGraph <jenna@crosswalknyc.com>',
+                    Destination={'ToAddresses': [
+                        'jenna@crosswalknyc.com',
+                        'jessie@crosswalknyc.com']},
+                    Message={
+                        'Subject': {'Data':
+                                    f'Prometheus user feedback: '
+                                    f'{username or "unknown"}'},
+                        'Body': {'Text': {'Data': (
+                            f'Kind: {kind}\n'
+                            f'User: {username}\n\n'
+                            f'{str(text)[:1500]}\n')}}})
+            except Exception:
+                traceback.print_exc()
+        threading.Thread(target=_send, daemon=True).start()
+    except Exception:
+        traceback.print_exc()
+
+
+_PM_BUILD_NOTIFY_PREFIX = 'system/pm_build_notify/'
+
+
+def _pm_register_build_notify(run_id, emails, requested_by):
+    """Stash a ready-notification opt-in for one queue run. The worker
+    merges these into the recipient list of the branded completion
+    email at send time."""
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=f"{_PM_BUILD_NOTIFY_PREFIX}{run_id}.json",
+            Body=json.dumps({
+                'run_id': run_id,
+                'emails': list(emails),
+                'requested_by': requested_by,
+                'requested_at': time.time(),
+            }).encode('utf-8'),
+            ContentType='application/json')
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 # CUT-REQUEST INTERCEPT (2026-09-28 Jenna, keith's "Let's do one cut
 # of males only and another cut of black consumers" answered with a
 # replayed brand read: "it should have asked him what profile he was
@@ -60887,6 +60979,90 @@ def api_synth_chat_analyze():
         return _pm_generate_metrics_response(
             user, text, history, ctx=ctx, prefer_catalog=True,
             panel_confirm=_panel_confirm)
+    # FEEDBACK / METHODOLOGY INTERCEPT (2026-09-28, W39 review):
+    # product feedback and number challenges acknowledge and forward
+    # to ops; they never generate a read.
+    _fb_user = (session.get('username') or user.get('username')
+                or '').strip()
+    if any(rx.search(text or '') for rx in _PM_FEEDBACK_RES):
+        _pm_forward_user_feedback(_fb_user, text, 'content_feedback')
+        _pm_ask_hint(route='user_feedback', outcome='forwarded')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Thank you - passed straight to the team, and '
+                      'I will make sure it gets fixed. The read '
+                      'itself stands in the meantime.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    if any(rx.search(text or '') for rx in _PM_METHOD_CHALLENGE_RES):
+        _pm_forward_user_feedback(_fb_user, text, 'number_challenge')
+        _pm_ask_hint(route='user_feedback', outcome='forwarded')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Every figure is Crosswalk first-party '
+                      'measurement: unique US people in the window, '
+                      'projected to the US population. I have flagged '
+                      'your note so the team gives this one a second '
+                      'look, and I will follow up here if it moves.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    # DELIVERY REQUEST INTERCEPT (2026-09-28, W39 review): "email
+    # <address> when it is ready" registers the ready-notification on
+    # the caller's in-flight builds instead of generating a read.
+    if _PM_EMAIL_WHEN_READY_RE.search(text or ''):
+        _addr_m = _PM_EMAIL_ADDR_RE.search(text or '')
+        _notify_addr = (_addr_m.group(0) if _addr_m
+                        else str(user.get('email') or '').strip())
+        if _notify_addr and '@' in _notify_addr:
+            # A delivery ask names no subject: take every non-terminal
+            # run the caller owns (usually exactly one).
+            _nf_runs = []
+            try:
+                import requests as _rqn
+                _nf_resp = _rqn.get(
+                    f"{SYNTH_QUEUE_URL}/synth/list",
+                    params={'limit': 25, 'active': '1',
+                            'user': (user.get('email')
+                                     or user.get('username')
+                                     or '').strip()},
+                    headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET},
+                    timeout=12)
+                if _nf_resp.status_code == 200:
+                    _nf_runs = [d for d in (_nf_resp.json() or [])
+                                if isinstance(d, dict)]
+            except Exception:
+                _nf_runs = []
+            _nf_active = [d for d in _nf_runs
+                          if str(d.get('status') or '').lower()
+                          not in ('complete', 'error', 'failed',
+                                  'canceled', 'cancelled')]
+            if _nf_active:
+                _done_subjects = []
+                for _nfd in _nf_active[:3]:
+                    if _pm_register_build_notify(
+                            str(_nfd.get('run_id') or ''),
+                            [_notify_addr], _fb_user):
+                        _done_subjects.append(
+                            str(_nfd.get('subject') or 'your profile'))
+                if _done_subjects:
+                    _pm_ask_hint(route='delivery_request',
+                                 outcome='notify_registered')
+                    _subj_txt = ' and '.join(_done_subjects)
+                    return jsonify({
+                        'success': True, 'action': 'answer',
+                        'reply': (f'Done. {_notify_addr} gets an '
+                                  f'email the moment {_subj_txt} is '
+                                  f'ready, and it will be here in '
+                                  f'the chat too.'),
+                        'followups': [], 'offer_deck': False,
+                        'deck_angle': None})
+            _pm_ask_hint(route='delivery_request',
+                         outcome='nothing_active')
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('Nothing is building for your account right '
+                          'now. Kick off a pull and ask me again, and '
+                          'I will set up the email.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
     # STATUS-CHECK INTERCEPT (2026-09-28 Jenna): "is eastside golf
     # running?" answers from the caller's own runs. Fires only when a
     # run actually matches the named subject; everything else falls

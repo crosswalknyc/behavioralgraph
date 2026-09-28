@@ -777,6 +777,15 @@ _ASK_FAMILY_RULES = (
                       'income', 'hhi', 'education', 'household size',
                       'marital', 'parental status', 'demographic',
                       'demos', 'skew younger', 'skew older')),
+    # 2026-09-28 (W39 review): sits BEFORE brand_rank because
+    # 'overindex in the four generation breaks' is a generational
+    # read, not a brand ranking; a plain 'which brands overindex'
+    # carries no generation word and stays brand_rank.
+    ('generation_breaks', ('generation break', 'generational',
+                           'four generation', 'by generation',
+                           'across generations', 'generation splits',
+                           'gen z vs', 'boomers vs',
+                           'millennials vs')),
     ('brand_rank', ('top brands', 'which brands', 'what brands',
                     'brands index', 'index highest', 'indexes highest',
                     'over index', 'overindex', 'over-index',
@@ -790,6 +799,12 @@ _ASK_FAMILY_RULES = (
     ('comparison', ('compare', 'comparison', 'versus', ' vs ',
                     'side by side', 'against the other', 'differ from',
                     'overlap with', 'stack up')),
+    # 2026-09-28 (W39 review): "load the millennials profile and
+    # summarize it" matched nothing, so a repeat paid for a fresh
+    # read each time.
+    ('profile_summary', ('summarize', 'summarise', 'give me a summary',
+                         'profile overview', 'quick overview',
+                         'recap of the profile')),
 )
 _DIM_STOP = {'category', 'categories', 'share', 'mix', 'breakdown',
              'of', 'the', 'by', 'top'}
