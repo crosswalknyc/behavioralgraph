@@ -1028,6 +1028,14 @@ def _dimension_ok(entry, qn):
     ).split())
     dtoks = [w for w in dim.split()
              if w not in _DIM_STOP and w not in subj_toks]
+    if not dtoks and dim:
+        # The cohort text swallowed the dimension's own tokens (a
+        # 'genre cohorts' cohort plus a 'Genre' dimension left
+        # nothing), which degenerated this gate to always-true and
+        # replayed a genre table for a second-screen ask (2026-09-28,
+        # Casey). Fall back to the raw dimension tokens: a ranked
+        # table never serves an ask that names none of its axis.
+        dtoks = [w for w in dim.split() if w not in _DIM_STOP]
     if dtoks and not any(w.rstrip('s') in qn for w in dtoks):
         return False
     # A two-axis table ("Show by streaming platform") only serves an
@@ -1103,6 +1111,60 @@ def _window_covers(entry, years):
     return all(y0 <= y <= y1 for y in years)
 
 
+_TOPIC_STOP = {'give', 'show', 'what', 'which', 'most', 'common',
+               'happening', 'while', 'person', 'people', 'watching',
+               'their', 'them', 'they', 'this', 'that', 'with',
+               'each', 'segmented', 'split', 'versus', 'does'}
+
+
+def _topic_stem(w):
+    for suf in ('ing', 'ers', 'er', 'ed', 'es', 's'):
+        if w.endswith(suf) and len(w) - len(suf) >= 4:
+            return w[:len(w) - len(suf)]
+    return w
+
+
+def _topical_overlap_ok(entry, qn, floor=0.34):
+    """A meaning-level replay must actually be ABOUT the ask
+    (2026-09-28, Casey's second-screen ask replayed a genre table
+    four times). The ask's distinctive topic tokens must appear in
+    the stored read's own text (question + dimension + reply) at a
+    minimum share, stem-matched so 'engage' meets 'engaging'.
+    Exact-question replays never reach this gate."""
+    try:
+        toks = [w for w in str(qn or '').split()
+                if len(w) >= 4 and w not in _TOPIC_STOP
+                and w not in _DIM_STOP]
+        subj_toks = set(normalize_subject(
+            str(entry.get('subject') or '')).split())
+        toks = [w for w in toks if w not in subj_toks]
+        if len(toks) < 3:
+            return True  # too little signal to judge; older behavior
+        etext = ' '.join((
+            str(entry.get('qn') or entry.get('q') or ''),
+            normalize_subject(
+                (entry.get('breakdown') or {}).get('dimension') or ''),
+            str(entry.get('reply') or '')[:1200].lower(),
+        ))
+        estems = {_topic_stem(w) for w in
+                  re.findall(r'[a-z0-9]+', etext) if len(w) >= 4}
+        qstems = {_topic_stem(w) for w in set(toks)}
+        # Prefix hit so 'engage' meets 'engag(ing)' whichever side
+        # stemmed shorter.
+        hit = sum(1 for q in qstems
+                  if any(len(q) >= 4 and len(e) >= 4
+                         and (q.startswith(e) or e.startswith(q))
+                         for e in estems))
+        share = hit / max(1, len(qstems))
+        if share >= floor:
+            return True
+        print(f"[insights-ledger] semantic candidate rejected on "
+              f"topic overlap ({share:.0%}): {entry.get('k')}")
+        return False
+    except Exception:
+        return True
+
+
 def find_semantic(entries, question):
     """Meaning-level replay candidate: the best stored read whose
     (family, cohort, slice dimension) matches the ask. Overlapping
@@ -1161,6 +1223,8 @@ def find_semantic(entries, question):
         else:
             dist = 0
         if not _dimension_ok(e, qn):
+            continue
+        if not _topical_overlap_ok(e, qn):
             continue
         rank = provenance_rank(e)
         if best is None or dist < best_dist \
