@@ -5616,8 +5616,12 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Count"] = int(round(n / OUTPUT_DIVISOR))
                 except (ValueError, TypeError):
                     pass
-        # Secondary Count: scale if numeric; skip "Average Days from Show Available" (days value)
-        if "Average Days from Show Available" not in cat:
+        # Secondary Count: scale if numeric; skip day-valued cells - the
+        # "Average Days from Show Available" headline AND the per-episode
+        # "days avg" column (dividing a days value by 10 turned 5.5 days
+        # into the 0/1 artifact).
+        sec_lbl = str(df_out.loc[idx, "Secondary Label"] or "").strip().lower()
+        if "Average Days from Show Available" not in cat and "days avg" not in sec_lbl:
             sc = df_out.loc[idx, "Secondary Count"]
             if sc != "" and sc is not None and not pd.isna(sc):
                 try:
@@ -5625,9 +5629,12 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Secondary Count"] = int(round(n / OUTPUT_DIVISOR))
                 except (ValueError, TypeError):
                     pass
-        # Tertiary Count: scale if numeric (e.g. min avg view)
+        # Tertiary Count: scale if numeric; skip "min avg view" - that cell
+        # is episode minutes viewed, not a count (dividing by 10 turned a
+        # 42-minute average view into the 4.2 artifact).
+        ter_lbl = str(df_out.loc[idx, "Tertiary Label"] or "").strip().lower()
         tc = df_out.loc[idx, "Tertiary Count"]
-        if tc != "" and tc is not None and not pd.isna(tc):
+        if "min avg view" not in ter_lbl and tc != "" and tc is not None and not pd.isna(tc):
             try:
                 n = float(str(tc).replace(",", ""))
                 scaled = n / OUTPUT_DIVISOR
@@ -6931,21 +6938,32 @@ def _build_synthetic_panel(config: dict) -> dict:
         conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
     new_signups_panel = max(1, int(clean_sample_panel * conversion_pct / 100.0))
 
-    # Avg days to signup: research first, cadence-based fallback
+    # Avg days to signup: research first, cadence-banded salted fallback.
+    # The old fixed fallbacks (3.5 / 8.5 / 6.2) stamped identical headline
+    # values across every synthetic pull - a cross-file pinning signature.
+    def _fallback_avg_days() -> float:
+        cadence_lower = (config.get('content_cadence') or '').lower()
+        skey = str(config.get('project_name') or (config.get('show_search_terms') or ['show'])[0])
+        if 'event' in cadence_lower or 'one' in cadence_lower or 'awards' in cadence_lower:
+            lo, hi = 2.7, 4.6
+        elif 'weekly' in cadence_lower:
+            lo, hi = 7.2, 9.9
+        else:
+            lo, hi = 5.2, 7.4  # all-at-once
+        v = round(_svod_salt_unit(f"{skey}|avg_days|{cadence_lower}", lo, hi), 1)
+        for retired in (3.5, 8.5, 6.2):
+            if abs(v - retired) < 0.05:
+                v = round(v + 0.2, 1)
+        return v
+
     if research and research.get('avg_days_to_signup') is not None:
         try:
             avg_days = float(research['avg_days_to_signup'])
             print(f"   🎯 avg_days_to_signup from research: {avg_days:.1f}")
         except (TypeError, ValueError):
-            avg_days = 8.5
+            avg_days = _fallback_avg_days()
     else:
-        cadence_lower = (config.get('content_cadence') or '').lower()
-        if 'event' in cadence_lower or 'one' in cadence_lower or 'awards' in cadence_lower:
-            avg_days = 3.5
-        elif 'weekly' in cadence_lower:
-            avg_days = 8.5
-        else:
-            avg_days = 6.2  # all-at-once
+        avg_days = _fallback_avg_days()
 
     clean_conv  = round(new_signups_panel * 100.0 / clean_sample_panel, 2) if clean_sample_panel > 0 else 0.0
     total_conv  = round(new_signups_panel * 100.0 / total_panel, 2) if total_panel > 0 else 0.0
@@ -7234,6 +7252,72 @@ def _emit_demographics_df(pcts: dict, gpcts: dict, new_signups_panel: int) -> pd
     return pd.DataFrame(rows)
 
 
+def _svod_salt_unit(salt: str, lo: float, hi: float) -> float:
+    """Deterministic uniform draw in [lo, hi) keyed on an arbitrary salt string.
+
+    Same value on every re-run for the same salt; distinct across titles,
+    episodes, and fields. Used to keep synthetic outputs off shared
+    constants (no cross-file templates, no pinned values).
+    """
+    h = int(_hashlib.md5(salt.encode("utf-8")).hexdigest()[:12], 16)
+    return lo + (h / float(0xFFFFFFFFFFFF)) * (hi - lo)
+
+
+def _salted_timing_curve(show_key: str, curve_key: str, max_day: int = 30) -> list:
+    """Signup-timing decay for one (title, curve) pair.
+
+    Replaces the retired constant template (every title and every episode
+    used to share one 28.0/15.0/8.5/... curve - a cross-file pinning
+    signature). The shape stays front-loaded with a long tail, but the
+    day-0 level, decay speed, and per-day wobble all derive from a
+    deterministic hash of title + curve key, so re-runs are stable while
+    no two curves match. Percentages land on messy 2dp values, never on a
+    .X0 / .00 boundary.
+    """
+    base = f"{show_key}|{curve_key}"
+    day0  = _svod_salt_unit(base + "|d0",   24.6, 31.4)
+    drop1 = _svod_salt_unit(base + "|d1",   0.47, 0.60)    # day1 / day0
+    fast  = _svod_salt_unit(base + "|fast", 0.585, 0.685)  # days 2-4 per-day decay
+    mid   = _svod_salt_unit(base + "|mid",  0.80, 0.875)   # days 5-10
+    tail  = _svod_salt_unit(base + "|tail", 0.915, 0.955)  # days 11+
+    raws = []
+    val = day0
+    for d in range(0, max_day + 1):
+        if d == 0:
+            val = day0
+        elif d == 1:
+            val = day0 * drop1
+        elif d <= 4:
+            val *= fast * _svod_salt_unit(f"{base}|w{d}", 0.95, 1.06)
+        elif d <= 10:
+            val *= mid * _svod_salt_unit(f"{base}|w{d}", 0.95, 1.06)
+        else:
+            val *= tail * _svod_salt_unit(f"{base}|w{d}", 0.96, 1.05)
+        raws.append(max(0.03, val))
+    # Normalize the post-day-0 tail so total in-window coverage lands in a
+    # salted 91-97.5% band (the attribution window is 30 days - a curve
+    # covering only ~75% of signups would not reconcile). Day 0 keeps its
+    # own band; only the tail stretches or compresses.
+    target = _svod_salt_unit(base + "|sum", 91.0, 97.5)
+    tail_sum = sum(raws[1:])
+    if tail_sum > 0:
+        tail_scale = max(0.55, min(1.8, (target - raws[0]) / tail_sum))
+        raws = [raws[0]] + [r * tail_scale for r in raws[1:]]
+    out = []
+    for d, r in enumerate(raws):
+        pct = round(max(0.03, r), 2)
+        # Keep off .X0 / .00 boundaries (round-number tells).
+        if int(round(pct * 100)) % 10 == 0:
+            nudge = round(0.01 + 0.03 * _svod_salt_unit(f"{base}|n{d}", 0.0, 1.0), 2)
+            pct = round(pct + (nudge if _svod_salt_unit(f"{base}|s{d}", 0.0, 1.0) > 0.5 else -nudge), 2)
+            if pct <= 0:
+                pct = round(0.03 + 0.04 * _svod_salt_unit(f"{base}|f{d}", 0.0, 1.0), 2)
+            if int(round(pct * 100)) % 10 == 0:
+                pct = round(pct + 0.01, 2)
+        out.append((d, pct))
+    return out
+
+
 def _build_synthetic_episodes(config: dict, new_signups_panel: int) -> tuple:
     """Build df_episode_attribution + df_episode_timing + df_timing.
 
@@ -7263,56 +7347,86 @@ def _build_synthetic_episodes(config: dict, new_signups_panel: int) -> tuple:
     if n == 0:
         return episode_dates, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    # Distribution: premiere gets the largest share, finale spike, mid-season dip.
+    # Salt key: per-title determinism (re-runs stable, cross-title distinct).
+    show_key = str(config.get('project_name') or (config.get('show_search_terms') or ['show'])[0])
+
+    # Distribution: premiere gets the largest share, finale spike, mid-season
+    # dip - with a title-salted wobble so two same-length seasons never
+    # publish an identical split.
     if n == 1:
         shares = [1.0]
     else:
         shares = []
         for i in range(n):
             if i == 0:
-                shares.append(2.4)         # premiere
+                base = 2.4 * _svod_salt_unit(f"{show_key}|share|premiere", 0.90, 1.10)
             elif i == n - 1:
-                shares.append(1.4)         # finale
+                base = 1.4 * _svod_salt_unit(f"{show_key}|share|finale", 0.90, 1.11)
             elif i == n - 2:
-                shares.append(1.0)
+                base = 1.0 * _svod_salt_unit(f"{show_key}|share|penult", 0.92, 1.09)
             else:
                 position = i / (n - 1)
-                shares.append(1.5 - 0.7 * abs(0.5 - position) * 2)  # midseason dip
+                base = (1.5 - 0.7 * abs(0.5 - position) * 2) * _svod_salt_unit(
+                    f"{show_key}|share|mid{i}", 0.93, 1.08)  # midseason dip
+            shares.append(base)
         total = sum(shares)
         shares = [s / total for s in shares]
 
+    # Episode runtime: honor every config spelling; per-episode viewed
+    # minutes vary below runtime (an average view never exactly equals the
+    # runtime, and no two episodes share one pinned value).
+    runtime_min = 0.0
+    for _k in ('avg_episode_minutes', 'episode_runtime_minutes', 'runtime_minutes'):
+        try:
+            if config.get(_k):
+                runtime_min = float(config[_k])
+                break
+        except (TypeError, ValueError):
+            continue
+    if runtime_min <= 0:
+        runtime_min = 42.0
+
+    # Days-avg slope shrinks with season length: the raw 0.3/episode slope
+    # is calibrated for 6-13 episode seasons; on a 150+ episode library
+    # title it would span negative to 25+ days (the retired ladder shipped
+    # a "-2 days avg" artifact on exactly that shape).
+    days_slope = 0.3 * min(1.0, 12.0 / n) if n else 0.3
     ep_rows = []
     for ep, share in zip(episode_dates, shares):
         ep_signups = max(1, int(round(new_signups_panel * share)))
+        epn = ep["episode_num"]
+        avg_days_ep = round(
+            max(0.4, 6.5 + (epn - n / 2) * days_slope
+                + _svod_salt_unit(f"{show_key}|epdays|{epn}", -0.45, 0.45)), 1)
+        dur_ep = round(runtime_min * _svod_salt_unit(f"{show_key}|epdur|{epn}", 0.80, 0.96), 1)
+        if abs(dur_ep - round(dur_ep)) < 0.05:  # keep off .0 endings
+            dur_ep = round(dur_ep + _svod_salt_unit(f"{show_key}|epdur2|{epn}", 0.1, 0.4), 1)
         ep_rows.append({
-            "EPISODE_NUM":          ep["episode_num"],
+            "EPISODE_NUM":          epn,
             "EPISODE_DATE":         ep["date_str"],
             "SIGNUPS_ATTRIBUTED":   ep_signups,
             "TOTAL_VIEWS":          int(ep_signups * 180),
             "PERCENTAGE":           round(share * 100, 1),
-            "AVG_DAYS_TO_SIGNUP":   round(6.5 + (ep["episode_num"] - n / 2) * 0.3, 1),
-            "AVG_DURATION_MINUTES": float(config.get('avg_episode_minutes', 42.0)),
+            "AVG_DAYS_TO_SIGNUP":   avg_days_ep,
+            "AVG_DURATION_MINUTES": dur_ep,
         })
     df_episode_attribution = pd.DataFrame(ep_rows)
 
-    # Per-episode signup timing curve (days since episode → signup count)
-    timing_curve = [
-        (0,28.0),(1,15.0),(2,8.5),(3,5.5),(4,4.0),(5,3.3),(6,2.8),(7,2.5),
-        (8,2.2),(9,2.0),(10,1.8),(11,1.6),(12,1.5),(13,1.4),(14,1.3),
-        (15,1.2),(16,1.1),(17,1.0),(18,0.9),(19,0.9),(20,0.8),(21,0.8),
-        (22,0.7),(23,0.7),(24,0.6),(25,0.6),(26,0.5),(27,0.5),(28,0.5),
-        (29,0.4),(30,0.4),
-    ]
+    # Signup timing curves (days since drop -> signup count). The overall
+    # curve and every per-episode curve are independently salted - the old
+    # shared 28.0/15.0/8.5/... template is retired (pinning signature).
+    overall_curve = _salted_timing_curve(show_key, "overall")
     df_timing = pd.DataFrame([
         {"DAYS_TO_SIGNUP": d,
          "SIGNUP_COUNT":   max(0, int(round(new_signups_panel * pct / 100.0))),
          "PERCENTAGE":     pct}
-        for (d, pct) in timing_curve
+        for (d, pct) in overall_curve
     ])
     ep_timing_rows = []
     for ep, share in zip(episode_dates, shares):
         ep_total = new_signups_panel * share
-        for (d, pct) in timing_curve:
+        ep_curve = _salted_timing_curve(show_key, f"ep{ep['episode_num']}")
+        for (d, pct) in ep_curve:
             ep_timing_rows.append({
                 "EPISODE_NUM":    ep["episode_num"],
                 "DAYS_TO_SIGNUP": d,
@@ -7653,23 +7767,44 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
                 "ENGAGED_WITH_SHOW": month_signups,
                 "ENGAGEMENT_RATE":   round(month_signups * 100.0 / total_month, 2),
             })
+            # Churn rate: title+month salted. The old (mo+y)%5 ladder cycled
+            # the same five values (8.5/8.7/8.9/9.1/9.3) across every file -
+            # a cross-file template signature.
+            churn_rate = round(_svod_salt_unit(f"{_mo_salt}|churn_rate|{label}", 7.6, 10.3), 2)
+            if int(round(churn_rate * 100)) % 10 == 0:  # keep off .X0 boundaries
+                churn_rate = round(churn_rate + 0.03, 2)
             churn_rows.append({
                 "VISIT_MONTH":   label,
-                "CHURNED_USERS": _messy_monthly(int(total_month * 0.085), label, 'monthly_churn'),
-                "CHURN_RATE":    round(8.5 + ((mo + y) % 5) * 0.2, 2),
+                "CHURNED_USERS": _messy_monthly(int(total_month * churn_rate / 100.0), label, 'monthly_churn'),
+                "CHURN_RATE":    churn_rate,
             })
         return pd.DataFrame(sig_rows), pd.DataFrame(churn_rows)
     return pd.DataFrame(), pd.DataFrame()
 
 
-def _build_synthetic_touchpoints(new_signups_panel: int) -> pd.DataFrame:
-    """1st-5th post-signup touchpoint distribution. Heavy 1st-touch."""
+def _build_synthetic_touchpoints(new_signups_panel: int, show_key: str = "show") -> pd.DataFrame:
+    """1st-5th post-signup touchpoint distribution. Heavy 1st-touch.
+
+    Shares are title-salted (the retired 0.74/0.07/0.04/0.03/0.12 constants
+    stamped identical 74.00%/7.00%/... splits across every synthetic pull -
+    a cross-file template signature). Rank 5 takes the exact remainder so
+    the five counts always sum to the signup total.
+    """
+    r1 = _svod_salt_unit(f"{show_key}|touch|1", 0.705, 0.775)
+    r2 = _svod_salt_unit(f"{show_key}|touch|2", 0.055, 0.088)
+    r3 = _svod_salt_unit(f"{show_key}|touch|3", 0.030, 0.052)
+    r4 = _svod_salt_unit(f"{show_key}|touch|4", 0.020, 0.040)
+    c1 = max(1, int(round(new_signups_panel * r1)))
+    c2 = max(1, int(round(new_signups_panel * r2)))
+    c3 = max(1, int(round(new_signups_panel * r3)))
+    c4 = max(1, int(round(new_signups_panel * r4)))
+    c5 = max(1, new_signups_panel - (c1 + c2 + c3 + c4))
     return pd.DataFrame([
-        {"TOUCHPOINT_RANK": 1, "USER_COUNT": max(1, int(new_signups_panel * 0.74))},
-        {"TOUCHPOINT_RANK": 2, "USER_COUNT": max(1, int(new_signups_panel * 0.07))},
-        {"TOUCHPOINT_RANK": 3, "USER_COUNT": max(1, int(new_signups_panel * 0.04))},
-        {"TOUCHPOINT_RANK": 4, "USER_COUNT": max(1, int(new_signups_panel * 0.03))},
-        {"TOUCHPOINT_RANK": 5, "USER_COUNT": max(1, int(new_signups_panel * 0.12))},
+        {"TOUCHPOINT_RANK": 1, "USER_COUNT": c1},
+        {"TOUCHPOINT_RANK": 2, "USER_COUNT": c2},
+        {"TOUCHPOINT_RANK": 3, "USER_COUNT": c3},
+        {"TOUCHPOINT_RANK": 4, "USER_COUNT": c4},
+        {"TOUCHPOINT_RANK": 5, "USER_COUNT": c5},
     ])
 
 
@@ -7799,7 +7934,9 @@ def run_synthetic_attribution(config: dict) -> dict:
     df_monthly_signups, df_monthly_churn = _build_synthetic_monthly(
         config, panel['new_signups_panel']
     )
-    df_touchpoints = _build_synthetic_touchpoints(panel['new_signups_panel'])
+    df_touchpoints = _build_synthetic_touchpoints(
+        panel['new_signups_panel'],
+        show_key=str(config.get('project_name') or (config.get('show_search_terms') or ['show'])[0]))
 
     # Resolve to the params dict write_output expects
     p = dict(config)
