@@ -49642,6 +49642,19 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             _dec_norm = str(spec_draft.get('decision') or 'new_build').strip() or 'new_build'
         est_credits = int(_V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_credits'] = est_credits
+        if _dec_norm == 'existing_match':
+            try:
+                _em_uname = ''
+                _em_user = None
+                try:
+                    _em_uname = (session.get('username') or '').strip()
+                    _em_user = get_current_user()
+                except Exception:
+                    _em_user = None
+                est_credits = _apply_existing_match_retail_price(
+                    spec_draft, _em_user, _em_uname)
+            except Exception:
+                traceback.print_exc()
         # Override Claude's hallucinated run-time guess with a value
         # anchored to actual observed pipeline speed (see
         # _estimate_run_minutes docstring).
@@ -52676,6 +52689,12 @@ def api_synth_chat_clarify():
             draft['base_credits'] = draft['estimated_credits']
             draft['existing_match_s3_key'] = data.get('s3_key')
             draft['existing_match_display_name'] = disp
+            try:
+                _apply_existing_match_retail_price(
+                    draft, user,
+                    session.get('username') or user.get('username') or '')
+            except Exception:
+                traceback.print_exc()
             draft['existing_match_days_old'] = data.get('days_old')
             draft['existing_match_last_modified'] = data.get(
                 'last_modified')
@@ -52760,9 +52779,19 @@ def api_synth_chat_clarify():
             draft['decision'] = 'existing_match'
             draft['run_avid'] = False
             draft['addon_cuts'] = []
+            if data.get('s3_key'):
+                draft['existing_match_s3_key'] = data.get('s3_key')
+            if disp:
+                draft['existing_match_display_name'] = disp
             draft['estimated_credits'] = int(
                 _V1_CREDITS.get('existing_match', 0))
             draft['base_credits'] = draft['estimated_credits']
+            try:
+                _apply_existing_match_retail_price(
+                    draft, user,
+                    session.get('username') or user.get('username') or '')
+            except Exception:
+                traceback.print_exc()
             draft.pop('ask_existing_profile', None)
             draft.pop('existing_profile_data', None)
             return jsonify({
@@ -54784,6 +54813,10 @@ def api_synth_chat_interpret():
         # flow: total = base + 3 x cuts. Kept separate so re-answering
         # the cuts question can't compound.
         spec_draft['base_credits'] = estimated_credits
+        if _dec_norm == 'existing_match':
+            estimated_credits = _apply_existing_match_retail_price(
+                spec_draft, user,
+                session.get('username') or user.get('username') or '')
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
             _dec_norm, bool(spec_draft.get('run_avid')))
         # Pin the est. sample now so the approval card shows the exact
@@ -55030,17 +55063,21 @@ def api_synth_chat_interpret():
         _chip_options = None
         _chip_targets = None
         if _dec_norm == 'existing_match':
+            estimated_credits = _apply_existing_match_retail_price(
+                spec_draft, user,
+                session.get('username') or user.get('username') or '')
             _fresh_new_credits = int(_V1_CREDITS.get(
                 'new_build', CREDITS_PROFILE_ANALYSIS))
             _chip_options = [
                 {'id': 'use_existing', 'label': 'Yes, use this'},
                 {'id': 'run_new', 'label': 'No, run what I asked'},
             ]
+            _reuse_cr = int(spec_draft.get('estimated_credits') or 0)
             _chip_targets = {
                 'use_existing': {
                     'action': 'approve',
                     'endpoint': '/api/brief-chat/approve',
-                    'credits': 0,
+                    'credits': _reuse_cr,
                 },
                 'run_new': {
                     'action': 'approve',
@@ -56546,6 +56583,133 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
         return None
 
 
+def _existing_match_charge_credits(user, s3_key, username=""):
+    """Credits to charge when handing back an existing catalog file.
+
+    Full-access seats stay 0 (library reuse is free). Prometheus-only
+    seats pay the retail Profile pull unless they already bought this
+    key. Staff never pay this way.
+    """
+    try:
+        import wallet as _w
+        uname = str(username or (user or {}).get('username') or '').strip()
+        if not _w.pays_retail_for_library_match(user, uname):
+            return 0
+        data = load_users()
+        live = ((data.get('users') or {}).get(uname) or user)
+        if _w.already_owns_paid_run(live, data, s3_key, username=uname):
+            return 0
+        return int(_V1_CREDITS.get('new_build', CREDITS_PROFILE_ANALYSIS))
+    except Exception:
+        traceback.print_exc()
+        try:
+            import wallet as _w
+            if _w.pays_retail_for_library_match(user, username):
+                return int(_V1_CREDITS.get(
+                    'new_build', CREDITS_PROFILE_ANALYSIS))
+        except Exception:
+            pass
+        return 0
+
+
+def _apply_existing_match_retail_price(draft, user, username=""):
+    """Stamp retail Profile cost onto an existing_match draft when
+    this seat pays for catalog files. Returns the credits to show."""
+    if not isinstance(draft, dict):
+        return 0
+    dec = str(draft.get('decision') or '').strip().lower()
+    if dec != 'existing_match':
+        try:
+            return int(draft.get('estimated_credits') or 0)
+        except (TypeError, ValueError):
+            return 0
+    key = str(draft.get('existing_match_s3_key') or '').strip()
+    cr = _existing_match_charge_credits(user, key, username=username)
+    draft['estimated_credits'] = cr
+    draft['base_credits'] = cr
+    usd = 0.0
+    if cr > 0:
+        try:
+            uname = str(username or (user or {}).get('username') or '')
+            usd = float(_v1_price_usd_for('new_build', 0, username=uname) or 0)
+        except Exception:
+            usd = 0.0
+    draft['estimated_usd'] = usd
+    return cr
+
+
+def _charge_existing_match_or_402(user, username, ex_key, subject_name,
+                                  pull_type):
+    """Take the retail Profile charge for a catalog match, or return
+    a 402 Flask response. None means they already own it or this seat
+    does not pay for library files. True means the charge landed."""
+    price = _existing_match_charge_credits(user, ex_key, username=username)
+    if price <= 0 or not username:
+        return None
+    if not has_credits_for(username, price, pull_type=pull_type):
+        _, _left = check_user_credits(username)
+        _snap = _caller_wallet_snapshot(username)
+        _wallet = float(_snap.get('wallet_balance_usd') or 0.0)
+        _usd = 0.0
+        try:
+            import wallet as _w_live
+            _data = load_users()
+            _u = (_data.get('users') or {}).get(username) or user or {}
+            _subj, _, _ = _w_live.resolve_billing_subject(_u, _data)
+            _usd, _ = _w_live.should_charge_wallet(
+                _subj, _w_live.pull_type_to_tool_key(pull_type)
+                or 'api_chatbot_profile_iq_build')
+        except Exception:
+            traceback.print_exc()
+        if _snap.get('paying_customer'):
+            _err = (f"This run costs ${_usd:.2f}. Wallet balance is "
+                    f"${_wallet:.2f}. Top up to keep going.")
+        else:
+            _err = (f"You're out of credits for this run - {price} needed, "
+                    f"{_left} remaining. Top up to keep going.")
+        return jsonify({
+            'success': False,
+            'guidance': True,
+            'error': _err,
+            'credits_required': price,
+            'credits_remaining': _left,
+            'wallet_balance_usd': _wallet,
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
+        }), 402
+    try:
+        if not consume_credit(
+                username,
+                description=(f"Chatbot Profile IQ [existing_match] - "
+                             f"{subject_name or 'profile'}"),
+                job_id='',
+                pull_type=pull_type,
+                credits_used=price):
+            _, _left = check_user_credits(username)
+            _snap = _caller_wallet_snapshot(username)
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': 'This pull could not be charged. Top up to keep going.',
+                'credits_required': price,
+                'credits_remaining': _left,
+                'wallet_balance_usd': float(
+                    _snap.get('wallet_balance_usd') or 0.0),
+                'top_up_url': '/wallet',
+                'top_up_label': 'Buy more credits',
+            }), 402
+    except Exception:
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'guidance': True,
+            'error': 'This pull could not be charged. Top up to keep going.',
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
+        }), 402
+    return True
+
+
 @app.route('/api/brief-chat/approve', methods=['POST'])
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
@@ -56682,35 +56846,30 @@ def api_synth_chat_approve():
     # via migration/local_override_profile.py - not through this route.
     decision, ex_key, d_type = _normalize_v1_decision(draft)
 
-    # existing_match: no queue, no build, no credit charge. Return the
-    # pre-signed URL right here so the dashboard can offer a download.
+    # existing_match: no queue, no rebuild. Full-access seats reuse
+    # the file at $0. Prometheus-only seats pay the retail Profile
+    # price, then the file is granted to them (and their company).
     if decision == 'existing_match':
+        _charge_user = (session.get('username') or user.get('username')
+                        or '').strip()
+        _em_subject = (draft.get('existing_match_display_name')
+                       or spec.get('name') or 'profile')
+        _em_pt = f'Chatbot Profile IQ ({decision})'
+        _em_charged = _charge_existing_match_or_402(
+            user, _charge_user, ex_key, _em_subject, _em_pt)
+        if isinstance(_em_charged, tuple):
+            return _em_charged
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
-        # Explicit-list users (self-serve Prometheus plan) must be able
-        # to open the file they just asked for. '*' users are a no-op.
         try:
-            from site_signup import (
-                grant_runs_to_user as _grant_runs,
-                is_self_serve_plan as _is_self_serve,
-            )
-            _buyer = None
-            try:
-                _buyer = get_current_user()
-            except Exception:
-                _buyer = None
-            # A free library match is legacy content. Self-serve
-            # accounts only receive files they pay to pull.
-            if _is_self_serve(_buyer):
-                url = None
-            else:
-                _grant_runs(session.get('username'), [ex_key])
+            from site_signup import grant_runs_to_user as _grant_runs
+            _grant_runs(_charge_user, [ex_key])
         except Exception:
             traceback.print_exc()
         return jsonify({
             'success': True,
             'decision': 'existing_match',
             'reused_existing': True,
-            'subject': draft.get('existing_match_display_name') or spec['name'],
+            'subject': _em_subject,
             's3_key': ex_key,
             'profile_name': ex_key.rsplit('/', 1)[-1] if ex_key else None,
             'download_url': url,
@@ -68898,6 +69057,11 @@ def api_v1_profiles_check():
     d_type = conclusion['d_type']
     _v1_cuts = conclusion['cuts']
     price = conclusion['price']
+    if decision == 'existing_match':
+        _em_cr = _existing_match_charge_credits(
+            user, ex_key, user.get('username') or '')
+        if _em_cr > 0:
+            price = _em_cr
 
     if not conclusion['buildable']:
         # The check itself succeeded; the verdict is "this prompt would
@@ -68944,9 +69108,13 @@ def api_v1_profiles_check():
         'existing_match_last_modified': None,
         # USD is the primary framing going forward. `credits_would_charge`
         # is retained so existing integrations keep working.
-        'price_usd': _v1_price_usd_for(
-            decision, len(_v1_cuts or []),
-            username=user.get('username') or ''),
+        'price_usd': (
+            _v1_price_usd_for('new_build', 0,
+                              username=user.get('username') or '')
+            if (decision == 'existing_match' and price > 0)
+            else _v1_price_usd_for(
+                decision, len(_v1_cuts or []),
+                username=user.get('username') or '')),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': _scrub_v1_freetext(
@@ -68978,7 +69146,7 @@ def api_v1_profiles_check():
             {'label': c.get('name_label') or c.get('label') or c['cut_id'],
              'price_usd': _cut_usd_each,
              'credits': ADDON_CUT_CREDITS} for c in _v1_cuts]
-    if decision == 'existing_match' and ex_key:
+    if decision == 'existing_match' and ex_key and price <= 0:
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         if url:
             resp['download_url'] = url
@@ -69093,6 +69261,10 @@ def api_v1_profiles_run():
     d_type = conclusion['d_type']
     _v1_run_cuts = conclusion['cuts']
     price = conclusion['price']
+    if decision == 'existing_match':
+        _em_cr = _existing_match_charge_credits(user, ex_key, username)
+        if _em_cr > 0:
+            price = _em_cr
 
     if not conclusion['buildable']:
         # Refused BEFORE any charge (previously this surfaced as an
@@ -69137,11 +69309,50 @@ def api_v1_profiles_run():
             'credits_remaining': credits_left,
         }), 402
 
-    # -------- existing_match: no queue, no credits, immediate return --------
+    # -------- existing_match: no queue, immediate return --------
+    # Full-access keys reuse the file at $0. Prometheus-only keys pay
+    # the retail Profile price, then receive the file.
     if decision == 'existing_match':
+        _em_pt = f'Chatbot Profile IQ v1 ({decision})'
+        if price > 0:
+            _em_charged = False
+            try:
+                _em_charged = bool(consume_credit(
+                    username,
+                    description=(f"Chatbot Profile IQ [existing_match] - "
+                                 f"{draft.get('existing_match_display_name') or draft.get('subject') or 'profile'}"),
+                    job_id='',
+                    pull_type=_em_pt,
+                    credits_used=price,
+                ))
+            except Exception:
+                traceback.print_exc()
+                _em_charged = False
+            if not _em_charged:
+                _, credits_left = check_user_credits(username)
+                _price_usd_tier = _v1_price_usd_for(
+                    'new_build', 0, username=username)
+                _bal_usd = _v1_balance_usd(username)
+                return jsonify({
+                    'success': False,
+                    'error': 'charge failed - no run started',
+                    'decision': decision,
+                    'price_usd': _price_usd_tier,
+                    'balance_usd': _bal_usd,
+                    'credits_required': price,
+                    'credits_remaining': credits_left,
+                }), 402
+        try:
+            from site_signup import grant_runs_to_user as _grant_runs
+            _grant_runs(username, [ex_key])
+        except Exception:
+            traceback.print_exc()
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         _, credits_left = check_user_credits(username)
         _bal_usd = _v1_balance_usd(username)
+        _charge_usd = (
+            _v1_price_usd_for('new_build', 0, username=username)
+            if price > 0 else 0.0)
         resp_body = {
             'success': True,
             'decision': 'existing_match',
@@ -69154,11 +69365,9 @@ def api_v1_profiles_run():
             'profile_name': ex_key.rsplit('/', 1)[-1],
             'download_url': url,
             'download_expires_seconds': 86400 if url else None,
-            # USD is the primary framing (2026-09-09). credits kept for
-            # existing integrations. An existing_match is always free.
-            'charge_usd': 0.0,
+            'charge_usd': _charge_usd,
             'balance_usd': _bal_usd,
-            'credits_charged': 0,
+            'credits_charged': price,
             'credits_remaining': credits_left,
             'subject_verified': True,
             'match_score': conclusion.get('match_score'),

@@ -2546,6 +2546,50 @@ def is_paid_only_plan(user) -> bool:
             == PROMETHEUS_SELF_SERVE_PLAN)
 
 
+def pays_retail_for_library_match(user, username: str = "") -> bool:
+    """Prometheus-only seats pay retail for a catalog file they do
+    not already own. Full-access seats keep the free library reuse.
+    Staff never pay this way."""
+    if not isinstance(user, dict):
+        return False
+    if is_internal_staff_seat(user, username):
+        return False
+    return is_paid_only_plan(user)
+
+
+def already_owns_paid_run(user, users_data, s3_key,
+                          username: str = "") -> bool:
+    """True when this seat or its company wallet already paid for
+    this profile key."""
+    wanted = str(s3_key or "").strip()
+    if not wanted or not isinstance(user, dict):
+        return False
+    want_base = wanted.rsplit("/", 1)[-1]
+
+    def _has(runs) -> bool:
+        if not isinstance(runs, list):
+            return False
+        for raw in runs:
+            key = str(raw or "").strip()
+            if not key:
+                continue
+            if key == wanted or key.rsplit("/", 1)[-1] == want_base:
+                return True
+        return False
+
+    if _has(user.get("allowed_runs")):
+        return True
+    if not isinstance(users_data, dict):
+        return False
+    try:
+        _subject, kind, cname = resolve_billing_subject(user, users_data)
+    except Exception:
+        return False
+    if kind == "company" and cname and _has(company_paid_runs(users_data, cname)):
+        return True
+    return False
+
+
 def company_wants_paid_only(users_data: dict, company_name: str) -> bool:
     """True when new company seats should inherit paid-reports-only."""
     name = str(company_name or "").strip()
@@ -3561,6 +3605,7 @@ __all__ = [
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
     "is_internal_staff_seat", "is_paid_only_plan",
+    "pays_retail_for_library_match", "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
     "attach_paid_only_seat", "attach_paid_only_company",
     "company_paid_runs", "grant_company_paid_runs",
