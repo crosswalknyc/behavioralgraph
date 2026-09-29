@@ -27839,6 +27839,19 @@ def list_jobs():
         job_list = []
         categories = set()
         
+        # An empty in-memory catalog does NOT mean "still loading". It also
+        # happens when async_cache_loader never finished - on 2026-09-29 every
+        # worker served the "loading" payload for ~25 minutes and a restart
+        # didn't clear it, because the self-heal below sits AFTER this early
+        # return and so is unreachable in exactly the state that needs it.
+        # Try the persisted cache first (one ~2MB S3 GET, and only while the
+        # catalog is empty) and report "loading" only if that yields nothing.
+        if not s3_cache.get('jobs') and s3_client:
+            try:
+                load_persisted_cache()
+            except Exception as e:
+                print(f"⚠️ list_jobs cold-start cache load failed: {e}")
+
         # Return quickly if cache is still loading
         if not cache_loading_complete and not s3_cache.get('jobs'):
             return jsonify({
