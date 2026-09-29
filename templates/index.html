@@ -185958,15 +185958,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }).map(function (k) { return k.id; });
         }
         // Profile IQ parks its chrome on the body, so it outlives the
-        // swap by a frame and paints over whatever opens next. Clear
-        // it in the same tick; its own watcher restores it on return.
-        function dropStrayChrome() {
-            var dash = document.getElementById('dashboardView');
-            if (dash && getComputedStyle(dash).display !== 'none') return;
-            ['piqStickyChrome', 'piqLibraryRail'].forEach(function (id) {
-                var el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+        // swap and paints over whatever opens next. An inline display
+        // cannot stand it down, because the visible state is held by a
+        // class rule that outranks it. Profile IQ's own pin function
+        // does the full teardown and reads the view as hidden the
+        // moment it is, so call that. On Profile IQ it just re-pins.
+        function settleProfileChrome() {
+            if (typeof window._piqV4PinChrome !== 'function') return;
+            try { window._piqV4PinChrome(); } catch (e) { /* chrome only */ }
         }
         var NAMES = ['showProfileIQ', 'showSubscriberIQ', 'showSFConversion',
                      'showCultureRankerIQ', 'showTicketSalesIQ',
@@ -185994,7 +185993,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     views().forEach(function (k) {
                         if (opened.indexOf(k.id) === -1) k.style.display = 'none';
                     });
-                    dropStrayChrome();
+                    settleProfileChrome();
                     return out;
                 };
                 wrapped._cwSweep = true;
