@@ -186000,10 +186000,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 window[name] = wrapped;
             });
         }
+        // Install now rather than on DOMContentLoaded. This is the
+        // last script in the document, so every show function already
+        // exists. The product restore that runs on load, and the menu
+        // dispatcher, both build handler maps inside DOMContentLoaded
+        // callbacks registered earlier than this one, and several of
+        // their entries hold the function object itself rather than
+        // looking it up when called. Waiting would let them capture
+        // the unwrapped originals, which is how a restored product
+        // came up stacked on top of Profile IQ.
+        wrap();
+        // Run again once the DOM is ready in case a later block
+        // defines one of these. Wrapping is idempotent.
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', wrap);
-        } else {
-            wrap();
         }
     })();
 </script>
