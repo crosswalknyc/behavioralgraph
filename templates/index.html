@@ -185834,5 +185834,83 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     })();
 </script>
 
+<script>
+    // Product switching leaves one view standing (2026-09-29). Each
+    // show function used to hide its siblings from its own hardcoded
+    // list, and those lists went stale every time a product was
+    // added: Rankers stayed mounted under Profile IQ, and walking the
+    // menu stacked four products on one page. The set is read from
+    // the DOM instead, so a product added later is covered for free.
+    (function () {
+        function views() {
+            var c = document.querySelector('.container');
+            if (!c) return [];
+            var out = [];
+            for (var i = 0; i < c.children.length; i++) {
+                var k = c.children[i];
+                if (k.tagName !== 'DIV') continue;
+                if (!/View$/.test(k.id || '')) continue;
+                if (k.classList.contains('modal')) continue;
+                out.push(k);
+            }
+            return out;
+        }
+        function visibleIds() {
+            return views().filter(function (k) {
+                return getComputedStyle(k).display !== 'none';
+            }).map(function (k) { return k.id; });
+        }
+        // Profile IQ parks its chrome on the body, so it outlives the
+        // swap by a frame and paints over whatever opens next. Clear
+        // it in the same tick; its own watcher restores it on return.
+        function dropStrayChrome() {
+            var dash = document.getElementById('dashboardView');
+            if (dash && getComputedStyle(dash).display !== 'none') return;
+            ['piqStickyChrome', 'piqLibraryRail'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+        var NAMES = ['showProfileIQ', 'showSubscriberIQ', 'showSFConversion',
+                     'showCultureRankerIQ', 'showTicketSalesIQ',
+                     'showTicketSalesTracker', 'showHedgeFundIQ',
+                     'showSentimentIQ', 'showEcommerceIQ', 'showJourneyIQ',
+                     'showShareOfTimeIQ', 'showFlywheelConversionDashboard',
+                     'showDashboardView', 'showTalentFitIQ', 'showBlueIQ',
+                     'showTrendsIQ', 'showMicrodramasIQ', 'showIntentIQ',
+                     'showBrandTrackingIQ'];
+        function wrap() {
+            NAMES.forEach(function (name) {
+                var original = window[name];
+                if (typeof original !== 'function' || original._cwSweep) return;
+                var wrapped = function () {
+                    var before = visibleIds();
+                    var out = original.apply(this, arguments);
+                    var after = visibleIds();
+                    var opened = after.filter(function (id) {
+                        return before.indexOf(id) === -1;
+                    });
+                    // Nothing new opened means the call bailed on its
+                    // access check, or the product was already up.
+                    // Either way there is no switch to clean up after.
+                    if (!opened.length) return out;
+                    views().forEach(function (k) {
+                        if (opened.indexOf(k.id) === -1) k.style.display = 'none';
+                    });
+                    dropStrayChrome();
+                    return out;
+                };
+                wrapped._cwSweep = true;
+                window[name] = wrapped;
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', wrap);
+        } else {
+            wrap();
+        }
+    })();
+</script>
+
 </body>
 </html>
