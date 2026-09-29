@@ -10178,8 +10178,12 @@ def compute_product_access_flags(user, role):
     # Self-serve Prometheus plan: no product tabs, no Rankers, no
     # Trends, no legacy catalog. Only files this account paid to pull.
     try:
-        from site_signup import clamp_self_serve_access
-        return clamp_self_serve_access(u, _access)
+        from site_signup import (
+            apply_complimentary_product_flags,
+            clamp_self_serve_access,
+        )
+        return apply_complimentary_product_flags(
+            u, clamp_self_serve_access(u, _access))
     except Exception:
         return _access
 
@@ -10249,6 +10253,11 @@ def index():
     
     _acc = compute_product_access_flags(user, role)
     _acc = apply_cloak_product_access_overrides(_acc)
+    try:
+        from site_signup import apply_complimentary_product_flags
+        _acc = apply_complimentary_product_flags(user, _acc)
+    except Exception:
+        pass
     has_profile_iq = _acc['has_profile_iq_access']
     has_subscriber_iq = _acc['has_subscriber_iq_access']
     has_sf_conversion = _acc['has_sf_conversion_access']

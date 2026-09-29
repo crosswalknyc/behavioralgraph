@@ -18859,19 +18859,85 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
     window.CW_SELF_SERVE_HAS_PRODUCTS = {{ 'true' if self_serve_has_products|default(false) else 'false' }};
+    window.CW_SS_PROFILE = {{ 'true' if has_profile_iq_access else 'false' }};
+    window.CW_SS_SUB = {{ 'true' if has_subscriber_iq_access else 'false' }};
+    window.CW_SS_FLY = {{ 'true' if has_flywheel_iq_access else 'false' }};
+    window.CW_SS_JIQ = {{ 'true' if has_journey_iq_access else 'false' }};
+    window._syncSelfServeProductNav = function () {
+        var has = !!(window.CW_SELF_SERVE_HAS_PRODUCTS
+            || window.CW_SS_PROFILE || window.CW_SS_SUB
+            || window.CW_SS_FLY || window.CW_SS_JIQ);
+        var dd = document.getElementById('viewNavDropdown');
+        if (dd) {
+            if (window.CW_SS_PROFILE) {
+                var p = dd.querySelector('option[value="profileIQ"]');
+                if (p) p.disabled = false;
+            }
+            if (window.CW_SS_SUB) {
+                var s = dd.querySelector('option[value="subscriberIQ"]');
+                if (s) s.disabled = false;
+            }
+            if (window.CW_SS_FLY) {
+                var f = dd.querySelector('option[value="flywheelIQ"]');
+                if (f) f.disabled = false;
+            }
+            if (window.CW_SS_JIQ) {
+                var j = dd.querySelector('option[value="journeyIQ"]');
+                if (j) j.disabled = false;
+            }
+            for (var i = 0; i < dd.options.length; i++) {
+                if (!dd.options[i].disabled && dd.options[i].value) { has = true; break; }
+            }
+        }
+        var toggle = document.getElementById('iqTabsContainer');
+        if (toggle) {
+            if (window.CW_SELF_SERVE_PLAN && !has) {
+                toggle.style.setProperty('display', 'none', 'important');
+            } else {
+                toggle.style.setProperty('display', 'flex', 'important');
+                toggle.style.setProperty('visibility', 'visible', 'important');
+            }
+        }
+        var rail = document.getElementById('selfServeProductRail');
+        if (rail) {
+            rail.style.display = has ? 'flex' : 'none';
+        }
+        if (has) {
+            document.body.classList.add('cw-self-serve-products');
+            document.body.classList.remove('cw-self-serve');
+            var dv = document.getElementById('dashboardView');
+            if (dv && window.CW_SS_PROFILE) {
+                dv.style.setProperty('display', 'flex', 'important');
+                dv.style.setProperty('visibility', 'visible', 'important');
+            }
+        } else if (window.CW_SELF_SERVE_PLAN) {
+            document.body.classList.add('cw-self-serve');
+        }
+    };
     if (window.CW_SELF_SERVE_PLAN) {
         var _ssCss = document.createElement('style');
-        // Hide the create-profile form only. Complimentary and paid
-        // files need SELECT PRODUCT plus the IQ views. Do not strip
-        // dropdown options; disabled products stay out of the panel.
-        var _ssRules = ['body.cw-self-serve #formView{display:none !important;}'];
-        if (!window.CW_SELF_SERVE_HAS_PRODUCTS) {
-            _ssRules.push('body.cw-self-serve .view-toggle{display:none !important;}');
-        }
-        _ssCss.textContent = _ssRules.join('');
+        _ssCss.textContent = [
+            'body.cw-self-serve #formView,body.cw-self-serve-products #formView{display:none !important;}',
+            'body.cw-self-serve-products .header-right-section{flex-direction:row;align-items:center;gap:1rem;}',
+            'body.cw-self-serve-products .view-toggle{display:flex !important;visibility:visible !important;}',
+            'body.cw-self-serve-products .view-nav-custom-wrap{display:flex !important;}',
+            'body.cw-self-serve-products .view-nav-trigger{display:inline-flex !important;min-width:220px;}'
+        ].join('');
         document.head.appendChild(_ssCss);
         document.addEventListener('DOMContentLoaded', function () {
-            document.body.classList.add('cw-self-serve');
+            if (typeof window._syncSelfServeProductNav === 'function') {
+                window._syncSelfServeProductNav();
+            }
+            var sel = document.getElementById('selfServeProductSelect');
+            if (sel && !sel._cwBound) {
+                sel._cwBound = true;
+                sel.addEventListener('change', function () {
+                    var dd = document.getElementById('viewNavDropdown');
+                    if (!dd) return;
+                    dd.value = this.value;
+                    try { dd.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                });
+            }
         });
     }
 </script>
@@ -19582,6 +19648,17 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         <header>
             <div style="display: flex; align-items: center;">
                 <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo-white-transparent.png') }}" alt="Crosswalk"></div>
+                {% if self_serve_plan %}
+                <div id="selfServeProductRail" style="display:{% if has_profile_iq_access or has_subscriber_iq_access or has_flywheel_iq_access or has_journey_iq_access %}flex{% else %}none{% endif %};align-items:center;gap:10px;margin-left:18px;">
+                    <label for="selfServeProductSelect" style="color:#9AA09B;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;white-space:nowrap;">Select product</label>
+                    <select id="selfServeProductSelect" style="background:#15252A;color:#E9E8E1;border:1px solid #3B3D38;border-radius:8px;padding:8px 12px;min-width:200px;font-size:14px;font-family:inherit;">
+                        {% if has_profile_iq_access %}<option value="profileIQ">Profile IQ</option>{% endif %}
+                        {% if has_subscriber_iq_access %}<option value="subscriberIQ">Subscriber IQ</option>{% endif %}
+                        {% if has_flywheel_iq_access %}<option value="flywheelIQ">Flywheel</option>{% endif %}
+                        {% if has_journey_iq_access %}<option value="journeyIQ">Digital Journey IQ</option>{% endif %}
+                    </select>
+                </div>
+                {% endif %}
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
@@ -54934,7 +55011,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             let selectionWasHidden = false;
             const currentValue = dropdown.value;
             // Iterate a snapshot since we mutate the options collection.
+            var _ssKeep = {
+                profileIQ: !!window.CW_SS_PROFILE,
+                subscriberIQ: !!window.CW_SS_SUB,
+                flywheelIQ: !!window.CW_SS_FLY,
+                journeyIQ: !!window.CW_SS_JIQ
+            };
             Array.from(dropdown.options).forEach(opt => {
+                if (_ssKeep[opt.value]) return;
                 if (hiddenMap[opt.value] === true) {
                     if (opt.value === currentValue) selectionWasHidden = true;
                     opt.parentNode && opt.parentNode.removeChild(opt);
@@ -55400,6 +55484,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
                         if (opt) opt.disabled = !pv[1];
                     });
+                    if (window.CW_SS_PROFILE) {
+                        var _sp = viewDropdown.querySelector('option[value="profileIQ"]');
+                        if (_sp) _sp.disabled = false;
+                    }
+                    if (window.CW_SS_SUB) {
+                        var _ss = viewDropdown.querySelector('option[value="subscriberIQ"]');
+                        if (_ss) _ss.disabled = false;
+                    }
+                    if (window.CW_SS_FLY) {
+                        var _sf = viewDropdown.querySelector('option[value="flywheelIQ"]');
+                        if (_sf) _sf.disabled = false;
+                    }
+                    if (window.CW_SS_JIQ) {
+                        var _sj = viewDropdown.querySelector('option[value="journeyIQ"]');
+                        if (_sj) _sj.disabled = false;
+                    }
+                    if (typeof window._syncSelfServeProductNav === 'function') {
+                        try { window._syncSelfServeProductNav(); } catch (_) {}
+                    }
                     // If the current product was just revoked, land on the first granted one.
                     var _cur = viewDropdown.options[viewDropdown.selectedIndex];
                     if (_cur && _cur.disabled) {

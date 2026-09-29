@@ -159,6 +159,44 @@ def _has_complimentary(user: Optional[dict], product: str) -> bool:
         return titled or gifted
 
 
+def apply_complimentary_product_flags(user: Optional[dict], access: dict) -> dict:
+    """Open Profile / Flywheel / Subscriber / Journey when this seat
+    holds complimentary files. Public signup never inherits gifts."""
+    if not isinstance(user, dict) or not isinstance(access, dict):
+        return access
+    try:
+        import wallet as _w
+        if _w.is_public_signup_seat(user):
+            return access
+    except Exception:
+        if str(user.get("signup_source") or "") == "self_serve_signup":
+            return access
+    out = dict(access)
+    ck = user.get("complimentary_keys") if isinstance(
+        user.get("complimentary_keys"), dict) else {}
+    ct = user.get("complimentary_titles") if isinstance(
+        user.get("complimentary_titles"), dict) else {}
+    pairs = (
+        ("profile_iq", "has_profile_iq_access"),
+        ("flywheel_iq", "has_flywheel_iq_access"),
+        ("subscriber_iq", "has_subscriber_iq_access"),
+        ("journey_iq", "has_journey_iq_access"),
+    )
+    for product, flag in pairs:
+        gifted = bool(ck.get(product) or ct.get(product))
+        try:
+            import wallet as _w
+            gifted = bool(
+                _w.complimentary_keys(user, product)
+                or _w.complimentary_needles(user, product)
+                or gifted)
+        except Exception:
+            pass
+        if gifted:
+            out[flag] = True
+    return out
+
+
 def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
     """Self-serve accounts see Prometheus plus files they hold.
 
@@ -208,7 +246,7 @@ def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
         out["has_subscriber_iq_access"] = True
     if jiq or _has_complimentary(user, "journey_iq"):
         out["has_journey_iq_access"] = True
-    return out
+    return apply_complimentary_product_flags(user, out)
 
 
 def is_pending_payment(user: Optional[dict]) -> bool:

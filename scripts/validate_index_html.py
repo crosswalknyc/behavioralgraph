@@ -203,6 +203,8 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Brand Tracking SELECT PRODUCT dropdown option"),
     ('CW_SELF_SERVE_HAS_PRODUCTS',
      "Prometheus-only seats keep SELECT PRODUCT when they hold files"),
+    ('selfServeProductRail',
+     "Prometheus-only complimentary seats show SELECT PRODUCT next to the logo"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives).
