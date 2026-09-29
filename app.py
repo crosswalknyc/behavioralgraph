@@ -15454,14 +15454,46 @@ def _bfi_run(started_by: str) -> None:
             else:
                 cur['variants'].append(p['name'])
 
-        def has_custom(name: str) -> bool:
+        def custom_entry(name: str):
             entry = profile_image_cache.get((name or '').lower().strip(), {})
-            return bool(entry.get('is_custom') and entry.get('image_url'))
+            if entry.get('is_custom') and entry.get('image_url'):
+                return entry
+            return None
 
+        # A group is one subject and its cuts: "YouTube", "YouTube - Gen Z",
+        # "YouTube - Female". normalize_search_name already reduces a cut to
+        # the subject by taking what sits before the dash, which is what the
+        # naming convention means by it.
+        #
+        # The group has work while ANY of those names is missing an image.
+        # Skipping the whole group as soon as one of them had one is why a
+        # cut could sit blank forever behind a base that was already done.
         eligible: list[dict] = []
         for key, g in groups.items():
-            if has_custom(g['storage_name']) or any(has_custom(v) for v in g['variants']):
+            # Only real profile names. storage_name can be a synthesised
+            # canonical ("Go-GURT" inferred from "Go-GURT - Avid Fan") that
+            # no profile actually carries, and an entry on a name nothing
+            # looks up is an orphan that also keeps the group looking
+            # unfinished on every later run.
+            names, seen = [], set()
+            for n in list(g['variants']):
+                k = (n or '').lower().strip()
+                if k and k not in seen:
+                    seen.add(k)
+                    names.append(n)
+            donor, missing = None, []
+            for n in names:
+                e = custom_entry(n)
+                if e is not None:
+                    if donor is None:
+                        donor = e
+                else:
+                    missing.append(n)
+            if not missing:
                 continue
+            g['names'] = names
+            g['missing'] = missing
+            g['donor'] = donor
             eligible.append(g)
 
         with _bfi_lock:
@@ -15480,6 +15512,28 @@ def _bfi_run(started_by: str) -> None:
         CHECKPOINT_EVERY = 10
         pending_writes = 0
 
+        def _write_entries(names, image_url, source, origin=None):
+            """Give every name in the group its own entry.
+
+            Images are looked up by the profile's exact name, so one entry on
+            the base subject is invisible to "Subject - Cut". They share the
+            one uploaded file; only the key and the title differ.
+            """
+            global profile_image_cache_dirty
+            nonlocal pending_writes
+            for nm in names:
+                profile_image_cache[(nm or '').lower().strip()] = {
+                    'image_url': image_url,
+                    'title': nm,
+                    'source': 'custom',
+                    'is_custom': True,
+                    'cached_at': datetime.now().isoformat(),
+                    'backfill_source': source,
+                    'backfill_origin': origin,
+                }
+                pending_writes += 1
+            profile_image_cache_dirty = True
+
         for idx, g in enumerate(eligible, 1):
             with _bfi_lock:
                 if _bfi_status['cancel_requested']:
@@ -15488,12 +15542,35 @@ def _bfi_run(started_by: str) -> None:
                 _bfi_status['current_profile'] = g['storage_name']
 
             master = master_category(g['category'])
+            prefix = f"[{master}] {g['storage_name']}"
+            targets = g.get('missing') or [g['storage_name']]
+
+            # One name in this group already has an image, so the rest are
+            # cuts of something we have already resolved. Hand them the same
+            # file rather than looking the subject up a second time.
+            donor = g.get('donor')
+            if donor:
+                _write_entries(targets, donor.get('image_url'),
+                               donor.get('backfill_source') or 'inherited',
+                               donor.get('backfill_origin'))
+                with _bfi_lock:
+                    _bfi_status['ok'] += 1
+                _bfi_log(f'{prefix} OK inherited -> {len(targets)} cut(s)')
+                with _bfi_lock:
+                    _bfi_status['processed'] = idx
+                if pending_writes >= CHECKPOINT_EVERY:
+                    try:
+                        save_profile_image_cache()
+                        _bfi_log(f'checkpoint saved after {idx} profiles')
+                    except Exception as e:
+                        _bfi_log(f'checkpoint failed: {e}')
+                    pending_writes = 0
+                continue
+
             try:
                 img_url, source = resolve_image_url(g['search_name'], master)
             except Exception as e:
                 img_url, source = None, f'error:{e}'
-
-            prefix = f"[{master}] {g['storage_name']}"
 
             if not img_url:
                 with _bfi_lock:
@@ -15516,22 +15593,13 @@ def _bfi_run(started_by: str) -> None:
                             Body=data,
                             ContentType=content_type,
                         )
-                        cache_key = g['storage_name'].lower().strip()
-                        entry = {
-                            'image_url': f'/api/profile-image-file/{s3_key}',
-                            'title': g['storage_name'],
-                            'source': 'custom',
-                            'is_custom': True,
-                            'cached_at': datetime.now().isoformat(),
-                            'backfill_source': source,
-                            'backfill_origin': img_url,
-                        }
-                        profile_image_cache[cache_key] = entry
-                        profile_image_cache_dirty = True
-                        pending_writes += 1
+                        _write_entries(targets,
+                                       f'/api/profile-image-file/{s3_key}',
+                                       source, img_url)
                         with _bfi_lock:
                             _bfi_status['ok'] += 1
-                        _bfi_log(f'{prefix} OK src={source}')
+                        extra = (' -> %d name(s)' % len(targets)) if len(targets) > 1 else ''
+                        _bfi_log(f'{prefix} OK src={source}{extra}')
                     except Exception as e:
                         with _bfi_lock:
                             _bfi_status['failed'] += 1
