@@ -27225,7 +27225,6 @@ https://www.instagram.com/p/..."></textarea>
                     <div class="dash-dropdown">
                         <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or a designed analysis deck (.pptx)." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                            <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 Current Page (CSV)</a>
                             <!-- 2026-09-08 (Jenna): true all-tabs export.
                                  Covers Demographics + Behavioral +
                                  Interests + Location + Insights in one
@@ -164976,6 +164975,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // EXPORT FUNCTIONS
         // ============================================================================
         
+        // No longer offered in the Export menu (Jenna 2026-09-28): the
+        // all-tabs CSV covers this page and every other one. Kept because
+        // exportAllTabsCSV() is deliberately written to mirror the columns
+        // and formatting below, and its comments point back here.
         function exportToCSV() {
             if (!currentProfileData || !currentDashboardData) {
                 alert('Please select a profile first');
