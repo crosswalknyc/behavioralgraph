@@ -26,6 +26,10 @@ The plan itself (what the user can see once logged in):
     * allowed_runs [] and allowed_categories [] so nothing is granted
       by the fleet-wide auto-add; app.py grants each file the user
       pulls through Prometheus to that user only
+    * An existing catalog match still bills at the retail Profile
+      price. They do not get the WBD complimentary Gilmore /
+      Dexter / Young Sheldon files, even if they type WBD as
+      their company
     * paying_customer True, billing_mode auto_reload, threshold $100,
       amount $5,000. The opening balance is $500, so the threshold
       sits under it and the first login does not immediately reload.
@@ -158,9 +162,9 @@ def _has_complimentary(user: Optional[dict], product: str) -> bool:
 def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
     """Self-serve accounts see Prometheus plus files they hold.
 
-    The fleet stays closed. Paid pulls and complimentary grants
-    (Gilmore Girls on Profile / Flywheel / Subscriber, Dexter's Lab
-    and Young Sheldon on Digital Journey) turn on only those tabs.
+    The fleet stays closed. A tab turns on only after this seat
+    pays to pull a file. Complimentary grants are WBD-admin gifts
+    only and never apply to a public /site/signup.html seat.
     """
     if not is_self_serve_plan(user) or not isinstance(access, dict):
         return access
@@ -220,8 +224,9 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
                                company: str, question: str,
                                came_from: str) -> dict:
     """The users.json record for a self-serve Prometheus account. Every
-    product flag is off except Prometheus; nothing is pre-granted."""
-    return {
+    product flag is off except Prometheus; nothing is pre-granted.
+    Public signup never inherits complimentary files."""
+    rec = {
         "password_hash": password_hash,
         "email": email,
         "first_name": first_name,
@@ -230,6 +235,7 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
         "department": "",
         "role": "user",
         "plan": PLAN_KEY,
+        "signup_source": SIGNUP_SOURCE,
         "signup_status": "pending_payment",
         "signup_created_at": _now_iso(),
         "signup_first_question": question[:300],
@@ -304,7 +310,23 @@ def new_self_serve_user_record(*, password_hash: str, email: str,
         "pay_per_use_enabled": True,
         "collab_team": [],
         "auto_access_new": {},
+        "allowed_flywheel_iq_runs": [],
+        "allowed_subscriber_iq_runs": [],
+        "complimentary_keys": {},
+        "complimentary_titles": {},
     }
+    try:
+        import wallet as _w
+        _w.apply_prometheus_only_seat(rec, wipe_catalog=True)
+    except Exception:
+        traceback.print_exc()
+    rec["signup_source"] = SIGNUP_SOURCE
+    rec["billing_source"] = "user"
+    rec["plan"] = PLAN_KEY
+    rec["complimentary_keys"] = {}
+    rec["complimentary_titles"] = {}
+    rec["company_billing_admin"] = False
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +515,23 @@ def activate_after_payment(username: str, metadata: dict,
         if rec.get("plan") != PLAN_KEY:
             rec["plan"] = PLAN_KEY
             changed = True
+        if rec.get("signup_source") != SIGNUP_SOURCE:
+            rec["signup_source"] = SIGNUP_SOURCE
+            changed = True
+        rec["billing_source"] = "user"
+        rec["complimentary_keys"] = {}
+        rec["complimentary_titles"] = {}
+        try:
+            import wallet as _w
+            _w.apply_prometheus_only_seat(rec, wipe_catalog=False)
+            rec["signup_source"] = SIGNUP_SOURCE
+            rec["billing_source"] = "user"
+            rec["complimentary_keys"] = {}
+            rec["complimentary_titles"] = {}
+            _w.refresh_paid_only_product_flags(rec)
+        except Exception:
+            traceback.print_exc()
+        changed = True
         snap.update(rec)
         return doc if changed else None
 

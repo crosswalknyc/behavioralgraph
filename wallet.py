@@ -2342,6 +2342,7 @@ def ensure_company_record(users_data: dict, company_name: str,
 # they pay to pull it.
 WBD_COMPANY_NAME = "WBD"
 PROMETHEUS_SELF_SERVE_PLAN = "prometheus_self_serve"
+PUBLIC_SIGNUP_SOURCE = "self_serve_signup"
 _PROMETHEUS_ONLY_FALSE_FLAGS = (
     "has_profile_iq_access",
     "has_subscriber_iq_access",
@@ -2499,6 +2500,8 @@ def _holder_has_complimentary(holder) -> bool:
 
 def has_complimentary_grant(user, users_data=None) -> bool:
     """True when this seat or its company wallet holds a freebie."""
+    if is_public_signup_seat(user):
+        return _holder_has_complimentary(user)
     if _holder_has_complimentary(user):
         return True
     if not isinstance(user, dict) or not isinstance(users_data, dict):
@@ -2741,6 +2744,11 @@ def inherit_company_paid_runs(user: dict, users_data: dict, *,
     """Copy the company's paid and complimentary lists onto this seat."""
     if not isinstance(user, dict) or not isinstance(users_data, dict):
         return user
+    if is_public_signup_seat(user):
+        user["complimentary_titles"] = {}
+        user["complimentary_keys"] = {}
+        refresh_paid_only_product_flags(user)
+        return user
     _subject, kind, key = resolve_billing_subject(user, users_data)
     if kind != "company" or not key:
         refresh_paid_only_product_flags(user)
@@ -2753,7 +2761,7 @@ def inherit_company_paid_runs(user: dict, users_data: dict, *,
             user[field] = list(paid)
         else:
             user[field] = list(cur) + [k for k in paid if k not in cur]
-    if isinstance(rec, dict):
+    if isinstance(rec, dict) and not is_public_signup_seat(user):
         if replace or not isinstance(user.get("complimentary_titles"), dict):
             user["complimentary_titles"] = _merge_title_map(
                 {}, rec.get("complimentary_titles"))
@@ -2768,6 +2776,9 @@ def inherit_company_paid_runs(user: dict, users_data: dict, *,
             user["complimentary_keys"] = _merge_key_map(
                 user.get("complimentary_keys"),
                 rec.get("complimentary_keys"))
+    elif is_public_signup_seat(user):
+        user["complimentary_titles"] = {}
+        user["complimentary_keys"] = {}
     refresh_paid_only_product_flags(user)
     return user
 
@@ -2781,6 +2792,12 @@ def attach_wbd_seat(user: dict, users_data: dict, *,
         users_data, seed_user=user if seed else None)
     apply_prometheus_only_seat(user, wipe_catalog=wipe_catalog)
     user["company"] = WBD_COMPANY_NAME
+    if is_public_signup_seat(user):
+        user["billing_source"] = "user"
+        user["complimentary_titles"] = {}
+        user["complimentary_keys"] = {}
+        refresh_paid_only_product_flags(user)
+        return rec
     user["billing_source"] = "company"
     user["company_billing_admin"] = True
     inherit_company_paid_runs(user, users_data, replace=wipe_catalog)
@@ -2813,6 +2830,19 @@ def is_paid_only_plan(user) -> bool:
             == PROMETHEUS_SELF_SERVE_PLAN)
 
 
+def is_public_signup_seat(user) -> bool:
+    """True when the seat was created on /site/signup.html.
+
+    Public signups are Prometheus-only. They never inherit the WBD
+    complimentary grant. They pay retail for an existing catalog
+    file until they themselves pull it.
+    """
+    if not isinstance(user, dict):
+        return False
+    return (str(user.get("signup_source") or "").strip()
+            == PUBLIC_SIGNUP_SOURCE)
+
+
 def pays_retail_for_library_match(user, username: str = "") -> bool:
     """Prometheus-only seats pay retail for a catalog file they do
     not already own. Full-access seats keep the free library reuse.
@@ -2827,12 +2857,15 @@ def pays_retail_for_library_match(user, username: str = "") -> bool:
 def already_owns_paid_run(user, users_data, s3_key,
                           username: str = "") -> bool:
     """True when this seat or its company wallet already holds this
-    profile key, including a complimentary Gilmore Girls grant."""
+    profile key, including a complimentary Gilmore Girls grant.
+    Public signup seats only own files on their own record."""
     wanted = str(s3_key or "").strip()
     if not wanted or not isinstance(user, dict):
         return False
     if catalog_item_allowed(user, "allowed_runs", wanted, default_open=False):
         return True
+    if is_public_signup_seat(user):
+        return False
     if not isinstance(users_data, dict):
         return False
     try:
@@ -3861,6 +3894,7 @@ __all__ = [
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
     "is_internal_staff_seat", "is_paid_only_plan",
+    "PUBLIC_SIGNUP_SOURCE", "is_public_signup_seat",
     "pays_retail_for_library_match", "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
     "attach_paid_only_seat", "attach_paid_only_company",
