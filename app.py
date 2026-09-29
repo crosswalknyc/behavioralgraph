@@ -357,6 +357,8 @@ def redirect_if_must_reset_password():
 _VIEW_LOCK_ALLOWED_EXACT = frozenset({
     '/login', '/logout', '/set-password', '/api/set-password',
     '/health', '/healthz', '/ready', '/favicon.ico',
+    '/caa', '/caa/', '/wbd', '/wbd/', '/pricing', '/pricing/',
+    '/uta', '/uta/', '/iag', '/iag/',
 })
 
 
@@ -2829,7 +2831,10 @@ def _normalize_role(role):
 # DEV ENVIRONMENT ACCESS CONTROL
 # In development mode, only admin and super_admin users can access the site
 # This allows testing changes without affecting regular users
-ALLOWED_DEV_PATHS = ['/login', '/logout', '/health', '/healthz', '/ready', '/static', '/api/login']
+ALLOWED_DEV_PATHS = [
+    '/login', '/logout', '/health', '/healthz', '/ready', '/static',
+    '/api/login', '/caa', '/wbd', '/pricing', '/uta', '/iag',
+]
 
 @app.before_request
 def check_dev_environment_access():
@@ -4029,9 +4034,82 @@ def wbd_budget_page():
         resp = make_response(render_template('wbd_budget.html'), 200)
         resp.headers.update(headers)
         return resp
-    resp = make_response(render_template('wbd_gate.html', error=False), 200)
+_PROPOSAL_HTML = {}
+
+
+def _proposal_html(key):
+    """Private proposal HTML, cached per process after the first read."""
+    hit = _PROPOSAL_HTML.get(key)
+    if hit:
+        return hit
+    if not s3_client:
+        return None
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        body = obj['Body'].read()
+    except Exception:
+        return None
+    _PROPOSAL_HTML[key] = body
+    return body
+
+
+def _gated_proposal(gate, path, template, s3_key):
+    """Password gate, then the proposal. No dashboard login."""
+    headers = {
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+        'Cache-Control': 'private, no-store',
+    }
+    if request.method == 'POST':
+        if gate.password_ok(request.form.get('password') or ''):
+            resp = redirect(path)
+            resp.set_cookie(
+                gate.COOKIE_NAME,
+                gate.cookie_token(app.secret_key),
+                max_age=gate.COOKIE_MAX_AGE,
+                httponly=True,
+                secure=bool(request.is_secure),
+                samesite='Lax',
+                path=path,
+            )
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(render_template(template, error=True), 401)
+        resp.headers.update(headers)
+        return resp
+    if gate.cookie_ok(request.cookies.get(gate.COOKIE_NAME), app.secret_key):
+        html = _proposal_html(s3_key)
+        if not html:
+            resp = make_response('This page is not available right now.', 503)
+            resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(html, 200)
+        resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+        resp.headers.update(headers)
+        return resp
+    resp = make_response(render_template(template, error=False), 200)
     resp.headers.update(headers)
     return resp
+
+
+@app.route('/uta', methods=['GET', 'POST'])
+@app.route('/uta/', methods=['GET', 'POST'])
+def uta_proposal_page():
+    """Password-gated UTA proposal. No dashboard login required."""
+    import uta_gate as _uta
+    return _gated_proposal(
+        _uta, '/uta', 'uta_gate.html',
+        'proposals/Crosswalk_UTA_Proposal.html')
+
+
+@app.route('/iag', methods=['GET', 'POST'])
+@app.route('/iag/', methods=['GET', 'POST'])
+def iag_proposal_page():
+    """Password-gated IAG proposal. No dashboard login required."""
+    import iag_gate as _iag
+    return _gated_proposal(
+        _iag, '/iag', 'iag_gate.html',
+        'proposals/Crosswalk_IAG_Proposal.html')
 
 
 @app.route('/pricing', methods=['GET'])
