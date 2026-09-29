@@ -2686,9 +2686,15 @@ def _clean_paid_runs(runs) -> list:
     if not isinstance(runs, list):
         return []
     out = []
+    # Dedup through a set, not `key not in out`. That list scan made this
+    # quadratic in the seat's run count, and callers like _key_in_list rebuild
+    # the list on every lookup: a 5,959-run seat cost 87ms per call, so the
+    # per-profile check in list_jobs needed 6.5 min of CPU per request.
+    seen = set()
     for raw in runs:
         key = str(raw or "").strip()
-        if key and key != "*" and key not in out:
+        if key and key != "*" and key not in seen:
+            seen.add(key)
             out.append(key)
     return out
 
