@@ -21943,7 +21943,12 @@ https://www.instagram.com/p/..."></textarea>
             transition: left .18s ease, width .15s ease;
         }
         #pmChatsTab:hover { width: 34px; }
-        #pmChatsTab.rail-open { left: 222px; }
+        /* Open: header and body shift right of the rail column, so the
+           tab (inside the body) already sits at the seam. */
+        #prometheusWidget.rail-open #prometheusHeader,
+        #prometheusWidget.rail-open #prometheusBody { margin-left: 222px; }
+        #prometheusWidget #prometheusHeader,
+        #prometheusWidget #prometheusBody { transition: margin-left .18s ease; }
         #pmChatsTab .pm-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px; }
         #pmChatsTab .pm-tab-label {
             writing-mode: vertical-rl; transform: rotate(180deg);
@@ -22316,6 +22321,13 @@ https://www.instagram.com/p/..."></textarea>
             <div class="pm-rs pm-rs-nw" data-rs="nw" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-se" data-rs="se" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-sw" data-rs="sw" aria-hidden="true"></div>
+            <div id="pmThreadRail" style="position:absolute; top:0; left:0; bottom:0; width:222px; background:#15252A; border-right:1px solid rgba(233,232,225,0.14); z-index:5; transform:translateX(-105%); transition:transform 0.18s ease; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.85rem 0.75rem 0.5rem;">
+                    <span style="font-size:0.62rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#7C878A;">Chats &amp; Tasks</span>
+                    <button type="button" onclick="pmNewChat()" style="background:rgba(199,242,62,0.14); border:1px solid rgba(199,242,62,0.45); color:#C7F23E; border-radius:999px; padding:0.22rem 0.7rem; font-size:0.68rem; font-weight:700; cursor:pointer; font-family:inherit;">+ New chat</button>
+                </div>
+                <div id="pmThreadList" style="flex:1; overflow-y:auto; padding:0 0.4rem 0.6rem;"></div>
+            </div>
             <div id="prometheusHeader">
                 <div style="display:flex; align-items:center; gap:12px; min-width:0;">
                     <button type="button" id="pmThreadRailBtn" onclick="pmThreadRailToggle()" aria-label="Your threads" title="Your threads" style="background:none; border:1px solid rgba(233,232,225,0.16); border-radius:8px; color:#9AA09B; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:0 0 auto; padding:0;">
@@ -22348,13 +22360,6 @@ https://www.instagram.com/p/..."></textarea>
                     <span class="pm-tab-label">Chats &amp; Tasks</span>
                     <span class="pm-tab-chevron" aria-hidden="true">›</span>
                 </button>
-                <div id="pmThreadRail" style="position:absolute; top:0; left:0; bottom:0; width:222px; background:#15252A; border-right:1px solid rgba(233,232,225,0.12); z-index:60; transform:translateX(-105%); transition:transform 0.18s ease; display:flex; flex-direction:column; border-radius:0 0 0 12px;">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.7rem 0.75rem 0.5rem;">
-                        <span style="font-size:0.62rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#7C878A;">Threads</span>
-                        <button type="button" onclick="pmNewChat()" style="background:rgba(199,242,62,0.14); border:1px solid rgba(199,242,62,0.45); color:#C7F23E; border-radius:999px; padding:0.22rem 0.7rem; font-size:0.68rem; font-weight:700; cursor:pointer; font-family:inherit;">+ New chat</button>
-                    </div>
-                    <div id="pmThreadList" style="flex:1; overflow-y:auto; padding:0 0.4rem 0.6rem;"></div>
-                </div>
                 <div id="prometheusFundsLock" role="alertdialog" aria-label="Buy credits to use Prometheus">
                     <div class="pm-funds-card">
                         <div class="pm-funds-title">Buy credits to use Prometheus.</div>
@@ -77251,20 +77256,48 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // is: save current, activate target, load its history.
         var _pmThreadsIdx = null;
         var _pmRailOpen = false;
-        function pmThreadRailToggle() {
+        var _PM_RAIL_W = 222;
+        function _pmRailApply(open) {
             var rail = document.getElementById('pmThreadRail');
-            var body = document.getElementById('prometheusBody');
-            if (!rail || !body) return;
-            if (getComputedStyle(body).position === 'static') {
-                body.style.position = 'relative';
-            }
-            _pmRailOpen = !_pmRailOpen;
+            var widget = document.getElementById('prometheusWidget');
+            if (!rail || !widget) return;
+            var was = _pmRailOpen;
+            _pmRailOpen = !!open;
             rail.style.transform = _pmRailOpen ? 'translateX(0)'
                                                : 'translateX(-105%)';
+            widget.classList.toggle('rail-open', _pmRailOpen);
             var tab = document.getElementById('pmChatsTab');
             if (tab) tab.classList.toggle('rail-open', _pmRailOpen);
+            // The widget is right-anchored, so width growth extends
+            // LEFT: the chat keeps its full width and the drawer can
+            // stay open beside it.
+            if (_pmRailOpen && !was) {
+                var w = widget.getBoundingClientRect().width;
+                widget.style.width = Math.min(
+                    w + _PM_RAIL_W,
+                    Math.floor(window.innerWidth * 0.94)) + 'px';
+            } else if (!_pmRailOpen && was) {
+                var w2 = widget.getBoundingClientRect().width;
+                widget.style.width = Math.max(w2 - _PM_RAIL_W, 360) + 'px';
+            }
+            try {
+                localStorage.setItem('pmRailOpen_v1',
+                                     _pmRailOpen ? '1' : '');
+            } catch (_) {}
             if (_pmRailOpen) _pmThreadsLoad();
         }
+        function pmThreadRailToggle() {
+            _pmRailApply(!_pmRailOpen);
+        }
+        // Left open on purpose stays open (2026-09-28): restore the
+        // saved state once the DOM is ready.
+        setTimeout(function () {
+            try {
+                if (localStorage.getItem('pmRailOpen_v1') === '1') {
+                    _pmRailApply(true);
+                }
+            } catch (_) {}
+        }, 400);
         function _pmThreadsLoad() {
             fetch('/api/brief-chat/threads', { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
