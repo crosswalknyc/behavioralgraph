@@ -76570,7 +76570,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // saves) are wiped on init so every device resets to the
             // corner once.
             var LKEY = 'prometheusLauncherPos2', WKEY = 'prometheusWidgetPos2',
-                OKEY = 'prometheusOpen', SKEY = 'prometheusWidgetSize';
+                OKEY = 'prometheusOpen', SKEY = 'prometheusWidgetSize_v2';
             function _el(id) { return document.getElementById(id); }
             // Dynamic anchoring (2026-08-21 Jenna: "placement should be
             // dynamic and if you drag your window bigger/smaller it
@@ -76689,9 +76689,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (pid === null || ev.pointerId !== pid) return;
                     try { ev.currentTarget.releasePointerCapture(pid); } catch (_) {}
                     pid = null; dir = null; s0 = null;
+                    // Store the width WITHOUT the thread rail's
+                    // growth. The rail adds its width every time it
+                    // opens, so saving the grown figure made the
+                    // window 222px wider on every reload.
                     try {
+                        var railW = window._pmRailOpen
+                            ? (window._pmRailGrow || 0) : 0;
                         localStorage.setItem(SKEY, JSON.stringify(
-                            { w: el.offsetWidth, h: el.offsetHeight }));
+                            { w: Math.max(MIN_W, el.offsetWidth - railW),
+                              h: el.offsetHeight }));
                     } catch (_) {}
                     // Resizing is not moving (2026-08-21 Jenna: default
                     // stays bottom right unless the user MOVES it).
@@ -76852,19 +76859,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (l.classList.contains('pm-on')) _applyPos(l, LKEY);
                     if (w.classList.contains('pm-on')) _applyPos(w, WKEY);
                 });
-                if (window.ResizeObserver) {
-                    var _rt = null;
-                    new ResizeObserver(function() {
-                        if (!w.classList.contains('pm-on')) return;
-                        clearTimeout(_rt);
-                        _rt = setTimeout(function() {
-                            try {
-                                localStorage.setItem(SKEY, JSON.stringify(
-                                    { w: w.offsetWidth, h: w.offsetHeight }));
-                            } catch (_) {}
-                        }, 250);
-                    }).observe(w);
-                }
+                // No ResizeObserver save here. It persisted every
+                // size change, not just the ones the user asked for:
+                // a viewport clamp or the thread rail opening became
+                // the remembered size and the window never recovered.
+                // The drag handler below saves a real resize.
             }
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', _initPrometheus);
@@ -137433,10 +137432,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 document.documentElement.style.setProperty('--piq-header-bottom', headerBottom + 'px');
             }
             var chromeBottom = Math.round(wrap.getBoundingClientRect().bottom);
-            if (promo) {
-                var promoMax = Math.max(360, window.innerHeight - (chromeBottom + 18)) + 'px';
-                if (promo.style.maxHeight !== promoMax) promo.style.maxHeight = promoMax;
-            }
+            // The Prometheus window is not clamped to the space below
+            // the sticky chrome. It floats above that chrome and the
+            // user sizes it by dragging, so an inline max-height only
+            // held the window short and left the bottom drag handle
+            // doing nothing. Clear whatever an older build wrote.
+            if (promo && promo.style.maxHeight) promo.style.maxHeight = '';
             if (document.documentElement.style.getPropertyValue('--piq-chrome-bottom') !== chromeBottom + 'px') {
                 document.documentElement.style.setProperty('--piq-chrome-bottom', chromeBottom + 'px');
             }
