@@ -52470,7 +52470,8 @@ _PM_PRICING_COPY = (
     "Flywheel - $500\n"
     "Brand Partnership - $1000\n"
     "Add Attribution - $500 for the initial pull and $100 x day to "
-    "track per campaign\n\n"
+    "track per campaign\n"
+    "Trends, Rankers, Fin - starts at $5000/mo\n\n"
     "All Prometheus (chat bot) usage is billed at a metered rate of "
     "$10.50 / $52.50 per million in/out, plus $0.021 per search.")
 
