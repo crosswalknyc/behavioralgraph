@@ -138513,7 +138513,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         });
 
+        // A profile load finishes asynchronously and used to take the
+        // view unconditionally. Switching product while a profile CSV
+        // was still in flight let the completion re-show Profile IQ on
+        // top of the product that had just opened: renderDashboard and
+        // showDashboardView both run after the await, and
+        // showDashboardView calls showProfileIQ, the only thing in this
+        // document that makes dashboardView visible. Unreachable until
+        // Profile IQ started loading fast enough to switch away from
+        // mid-flight (2026-09-29).
+        function _piqActiveProduct() {
+            var dd = document.getElementById('viewNavDropdown');
+            return (dd && dd.value) || 'profileIQ';
+        }
+        function _piqTakeViewIfStillActive(productAtStart) {
+            var now = _piqActiveProduct();
+            if (now !== productAtStart) {
+                // The data is rendered and cached either way; only the
+                // view swap is dropped, so returning to Profile IQ
+                // shows the profile without another fetch.
+                console.warn('[view-switch] profile load finished after '
+                             + 'switching from ' + productAtStart + ' to '
+                             + now + ' - not taking the view');
+                return false;
+            }
+            showDashboardView();
+            return true;
+        }
+
         async function loadCachedResult(fileKey) {
+            const _productAtStart = _piqActiveProduct();
             const tryKey = async (key) => {
                 const response = await fetch(`/api/get-csv-data/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
                 if (response.status === 401) { window.location.href = '/login'; return { needRedirect: true }; }
@@ -138531,7 +138560,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     currentS3Key = fileKey;
                     selectedDashProfile = fileKey;
                     renderDashboard(data.data, data.brand, data.date_range, data.display_override);
-                    showDashboardView();
+                    _piqTakeViewIfStillActive(_productAtStart);
                     applyGenPopMode();
                 } else {
                     const msg = response.status === 404
@@ -138950,6 +138979,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         async function loadJobResult(jobId) {
+            const _productAtStart = _piqActiveProduct();
             try {
                 const response = await fetch(`/api/job-data/${jobId}`, { credentials: 'same-origin' });
                 const data = await response.json();
@@ -138958,7 +138988,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     currentJobId = jobId;
                     currentS3Key = null;
                     renderDashboard(data.data, data.brand, data.date_range);
-                    showDashboardView();
+                    _piqTakeViewIfStillActive(_productAtStart);
                 }
             } catch (error) { console.error('Failed:', error); }
         }
