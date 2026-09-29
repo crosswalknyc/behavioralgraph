@@ -141423,6 +141423,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out.push({
                     key: 'profile',
                     label: (typeof _baseCohortLabel === 'function' ? _baseCohortLabel() : 'Total Universe'),
+                    dateRange: (originalData && originalData.dateRange) || '',
                     parsed: originalData
                 });
             }
@@ -141432,6 +141433,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 out.push({
                     key: k,
                     label: run.label || 'Run',
+                    dateRange: run.dateRange || (run.parsed && run.parsed.dateRange) || '',
                     parsed: run.parsed
                 });
             });
@@ -156564,6 +156566,70 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return '"' + base + (suffix ? ' ' + suffix : '') + '"';
         }
 
+        // ---- CSV download stamp (DATE DOWNLOADED + STUDY DATE RANGE) ----
+        var _CW_STAMP_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+        function _cwFmtStampRange(rangeStr) {
+            var s = String(rangeStr || '').trim();
+            if (!s) return '';
+            try {
+                return s.replace(/\d{4}-\d{2}-\d{2}/g, function (iso) {
+                    var m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    if (!m) return iso;
+                    var mo = parseInt(m[2], 10), dd = parseInt(m[3], 10);
+                    if (!mo || mo > 12 || !dd) return iso;
+                    return _CW_STAMP_MONTHS[mo - 1] + ' ' + dd + ', ' + m[1];
+                });
+            } catch (e) { return s; }
+        }
+
+        function _cwCsvDownloadStamp(ranges) {
+            // Header rows prepended to every exported CSV. `ranges` is an
+            // array of {label, range}. One entry emits the plain
+            // STUDY DATE RANGE row (same shape as server downloads); two or
+            // more entries (profile + cuts) each get a labeled row.
+            try {
+                var now = new Date();
+                var today = _CW_STAMP_MONTHS[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+                var q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+                var lines = ['DATE DOWNLOADED,' + q(today)];
+                var rs = (ranges || []).filter(function (r) { return r; });
+                var withRange = rs.filter(function (r) { return String(r.range || '').trim(); });
+                if (!withRange.length) {
+                    lines.push('STUDY DATE RANGE,' + q('Not stated in file'));
+                } else if (rs.length === 1) {
+                    lines.push('STUDY DATE RANGE,' + q(_cwFmtStampRange(rs[0].range)));
+                } else {
+                    rs.forEach(function (r) {
+                        var rng = String((r && r.range) || '').trim();
+                        var lbl = String((r && r.label) || 'Cut').replace(/[\r\n]+/g, ' ').trim() || 'Cut';
+                        lines.push(q('STUDY DATE RANGE (' + lbl + ')') + ',' + q(rng ? _cwFmtStampRange(rng) : 'Not stated in file'));
+                    });
+                }
+                return lines.join('\n') + '\n\n';
+            } catch (e) { return ''; }
+        }
+
+        function _cwPageStampRanges(baseLabel) {
+            // Ranges for the CURRENT Profile IQ page: the loaded profile
+            // plus every cut pinned via Compare Runs.
+            var out = [];
+            try {
+                var d = (typeof currentDashboardData !== 'undefined' && currentDashboardData)
+                    ? currentDashboardData : (window.currentDashboardData || null);
+                var lbl = baseLabel || '';
+                if (!lbl) { try { lbl = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || ''; } catch (e0) {} }
+                if (!lbl) { try { lbl = (typeof _baseCohortLabel === 'function' && _baseCohortLabel()) || ''; } catch (e1) {} }
+                out.push({ label: lbl || 'Profile', range: (d && d.dateRange) || '' });
+                var cuts = (typeof _extraCohortsForCsv === 'function') ? (_extraCohortsForCsv() || []) : [];
+                cuts.forEach(function (c) {
+                    if (!c) return;
+                    out.push({ label: c.label || 'Cut', range: c.dateRange || (c.parsed && c.parsed.dateRange) || '' });
+                });
+            } catch (e) {}
+            return out;
+        }
+
         function _cohortDemoPct(cohort, catKey, bucketLabel) {
             try {
                 var p = cohort && cohort.parsed;
@@ -164937,6 +165003,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             
             // Download the CSV
+            csvContent = _cwCsvDownloadStamp(_cwPageStampRanges(profileName)) + csvContent;
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -165193,6 +165260,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             });
 
             // Download
+            csvContent = _cwCsvDownloadStamp(_cwPageStampRanges(profileName)) + csvContent;
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -168941,7 +169009,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         demographicsIndex: p.demographicsIndex,
                         behavioral: p.behavioral || {},
                         behavioralProjection: {},
-                        locations: p.locations || []
+                        locations: p.locations || [],
+                        dateRange: openTab.dateRange || p.dateRange || ''
                     };
                     profilesData.push(profileData);
                     console.log(`✓ Using open tab data for ${openTab.name}: sample=${p.sampleSize}`);
@@ -168994,7 +169063,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             demographicsIndex: parsed.demographicsIndex,
                             behavioral: parsed.behavioral,
                             behavioralProjection: parsed.behavioralProjection,
-                            locations: parsed.locations
+                            locations: parsed.locations,
+                            dateRange: data.date_range || ''
                         };
                         
                         profilesData.push(profileData);
@@ -171520,6 +171590,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 csv += `"${b.name}",${b.avgIndex},${b.medianIndex},${b.totalBehaviors},${b.overIndexCount},${b.underIndexCount},${b.strongOverIndex},${b.veryStrongOverIndex},${b.sampleSize}\n`;
             });
             
+            csv = _cwCsvDownloadStamp((window.comparisonProfilesData || []).map(function (p) { return { label: p.name, range: p.dateRange || '' }; })) + csv;
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -172076,6 +172147,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
             });
             
+            csv = _cwCsvDownloadStamp((profiles || []).map(function (p) { return { label: p.name, range: p.dateRange || '' }; })) + csv;
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -172318,6 +172390,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             
             // Download the CSV
+            csvContent = _cwCsvDownloadStamp((profiles || []).map(function (p) { return { label: p.name, range: p.dateRange || '' }; })) + csvContent;
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -172558,6 +172631,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 fullCsv += csvContent;
             });
+            fullCsv = _cwCsvDownloadStamp((profiles || []).map(function (p) { return { label: p.name, range: p.dateRange || '' }; })) + fullCsv;
             const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -172647,6 +172721,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 fullCsv += csvContent;
             });
+            fullCsv = _cwCsvDownloadStamp((profiles || []).map(function (p) { return { label: p.name, range: p.dateRange || '' }; })) + fullCsv;
             const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
