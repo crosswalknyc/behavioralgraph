@@ -19383,8 +19383,8 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                     <span class="credits-info-label" id="modalCreditsAvailableLabel">{% if paying_customer|default(false) and credits != -1 %}Available{% else %}Available Credits{% endif %}</span>
                     <span class="credits-info-value" id="modalCreditsAvailable">{% if credits == -1 %}Unlimited{% elif paying_customer|default(false) %}${{ '{:,.2f}'.format(wallet_balance_usd|default(0)) }}{% else %}{{ credits }}{% endif %}</span>
                 </div>
-                <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each credit was used for">
-                    <span class="credits-info-label">Credits Used</span>
+                <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each dollar went to">
+                    <span class="credits-info-label">Spend to date</span>
                     <span class="credits-used-value-wrap">
                         <span class="credits-info-value" id="modalCreditsUsed">{{ credits_used }}</span>
                         <span class="credits-used-chevron" id="creditsUsedChevron" aria-label="Expand to view usage">▾</span>
@@ -19392,10 +19392,21 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                 </div>
                 <div id="creditUsageDetail" style="display: none; margin: 0 0 0.35rem; max-height: 260px; overflow-y: auto; overflow-x: hidden;">
                     <div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; padding-bottom:0.15rem;">
-                        <span style="font-size:0.56rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em;">What each credit went to</span>
+                        <span style="font-size:0.56rem; font-weight:600; color:#7C878A; text-transform:uppercase; letter-spacing:0.09em;">What each dollar went to</span>
                         <button type="button" class="wallet-link-btn" onclick="event.stopPropagation(); downloadTxnHistory('self');">Download CSV</button>
                     </div>
                     <div id="creditUsageList"></div>
+                </div>
+                <div class="credits-info-row credits-used-row" id="pmQueriesRow" onclick="togglePmQueriesDetail()" style="cursor: pointer;" title="Every question you have asked Prometheus">
+                    <span class="credits-info-label">Prometheus Queries</span>
+                    <span class="credits-used-value-wrap">
+                        <span class="credits-info-value" id="pmQueriesCount"></span>
+                        <span class="credits-used-chevron" id="pmQueriesChevron" aria-label="Expand to view your questions">▾</span>
+                    </span>
+                </div>
+                <div id="pmQueriesDetail" style="display: none; margin: 0 0 0.35rem;">
+                    <input type="text" id="pmQueriesSearch" placeholder="Search your questions..." oninput="_pmQueriesRender(this.value)" onclick="event.stopPropagation();" style="width:100%; box-sizing:border-box; background:rgba(233,232,225,0.06); border:1px solid rgba(233,232,225,0.16); border-radius:8px; color:#E9E8E1; font-size:0.74rem; padding:0.45rem 0.6rem; margin:0.15rem 0 0.35rem; outline:none; font-family:inherit;">
+                    <div id="pmQueriesList" style="max-height: 240px; overflow-y: auto; overflow-x: hidden;"></div>
                 </div>
                 <div class="credits-info-row">
                     <span class="credits-info-label">Account</span>
@@ -22268,6 +22279,7 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
+                    <input type="text" id="pmThreadSearch" placeholder="Search queries" aria-label="Search your queries" oninput="_pmThreadSearch(this.value)" style="width:132px; background:rgba(233,232,225,0.07); border:1px solid rgba(233,232,225,0.16); border-radius:999px; color:#E9E8E1; font-size:0.68rem; padding:0.28rem 0.65rem; outline:none; font-family:inherit;">
                     <span id="synthChatQueueBadge"></span>
                     <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -77159,6 +77171,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
         }
 
+        var _pmSearchQ = '';
+        function _pmThreadSearch(q) {
+            // Search past queries in the thread (2026-09-28 Jenna): a
+            // user turn that matches stays visible with its reply; an
+            // empty box restores the full thread. Survives rerenders
+            // via the hook at the end of synthChatRerender.
+            _pmSearchQ = String(q || '').trim().toLowerCase();
+            _pmApplyThreadSearch();
+        }
+        function _pmApplyThreadSearch() {
+            var box = document.getElementById('synthChatMessages');
+            if (!box) return;
+            var nodes = box.querySelectorAll('.pm-msg');
+            if (!_pmSearchQ) {
+                nodes.forEach(function (n) { n.style.display = ''; });
+                return;
+            }
+            var showNext = false;
+            nodes.forEach(function (n) {
+                var isUser = n.classList.contains('pm-msg-user');
+                var txt = (n.textContent || '').toLowerCase();
+                if (isUser) {
+                    var hit = txt.indexOf(_pmSearchQ) !== -1;
+                    n.style.display = hit ? '' : 'none';
+                    showNext = hit;
+                } else {
+                    n.style.display = showNext ? '' : 'none';
+                }
+            });
+        }
         function synthChatRerender() {
             var box = document.getElementById('synthChatMessages');
             if (!box) return;
@@ -77219,6 +77261,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     '</div></div>';
             }).join('');
             box.innerHTML = rows;
+            try { _pmApplyThreadSearch(); } catch (_) {}
             // Capture the last TURN before live bubbles (thinking dots,
             // notify offers) re-append below it - they sit at the
             // bottom and must not steal the scroll anchor.
@@ -181856,7 +181899,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (!data || !data.success) return;
                     creditUsageCache = data.usage || [];
                     const usedEl = document.getElementById('modalCreditsUsed');
-                    if (usedEl && typeof data.credits_used === 'number') {
+                    if (usedEl && typeof data.spend_usd_total === 'number') {
+                        usedEl.textContent = '$' + Number(data.spend_usd_total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    } else if (usedEl && typeof data.credits_used === 'number') {
                         usedEl.textContent = data.credits_used;
                     }
                     try { applyCreditsSurface(data); } catch (_) {}
@@ -181927,6 +181972,67 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return d.toLocaleDateString(undefined, opts);
         }
 
+        function _walletUsdFmt(row, credits) {
+            // Dollars, not credits (2026-09-28): wallet rows carry usd
+            // from the server; legacy rows convert at $60/credit.
+            var usd = (row && row.usd != null) ? Number(row.usd)
+                      : Number(credits || 0) * 60;
+            return '$' + usd.toLocaleString(undefined,
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        let _pmQueriesCache = null;
+        function togglePmQueriesDetail() {
+            const detail = document.getElementById('pmQueriesDetail');
+            const chevron = document.getElementById('pmQueriesChevron');
+            if (!detail || !chevron) return;
+            if (detail.style.display === 'none' || !detail.style.display) {
+                detail.style.display = 'block';
+                chevron.textContent = '\u25b4';
+                if (_pmQueriesCache) { _pmQueriesRender(); return; }
+                const listEl = document.getElementById('pmQueriesList');
+                if (listEl) listEl.innerHTML = '<span style="color: var(--text-secondary);">Loading...</span>';
+                fetch('/api/me/prometheus-queries')
+                    .then(r => r.json())
+                    .then(data => {
+                        _pmQueriesCache = (data && data.queries) || [];
+                        const cEl = document.getElementById('pmQueriesCount');
+                        if (cEl) cEl.textContent = _pmQueriesCache.length;
+                        _pmQueriesRender();
+                    })
+                    .catch(() => {
+                        if (listEl) listEl.innerHTML = '<span style="color: var(--accent-red);">Could not load your questions.</span>';
+                    });
+            } else {
+                detail.style.display = 'none';
+                chevron.textContent = '\u25be';
+            }
+        }
+        function _pmQueriesRender(filter) {
+            const listEl = document.getElementById('pmQueriesList');
+            if (!listEl) return;
+            const f = String(filter == null
+                ? (document.getElementById('pmQueriesSearch') || {}).value || ''
+                : filter).trim().toLowerCase();
+            const rows = (_pmQueriesCache || []).filter(function (r) {
+                return !f || String(r.q || '').toLowerCase().indexOf(f) !== -1;
+            });
+            if (!rows.length) {
+                listEl.innerHTML = '<span style="color: var(--text-secondary);">'
+                    + (f ? 'No questions match.' : 'No Prometheus questions yet. Ask anything and it will show here.')
+                    + '</span>';
+                return;
+            }
+            listEl.innerHTML = rows.map(function (r) {
+                const d = r.ts ? new Date(r.ts) : null;
+                const short = (d && !isNaN(d)) ? _walletShortDate(d) : '';
+                return '<div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.75rem; align-items:baseline; padding:0.5rem 0; border-top:1px solid rgba(233,232,225,0.07);">'
+                     +   '<div style="min-width:0; color:#E9E8E1; font-size:0.74rem; line-height:1.35;">' + escapeHtml(String(r.q || '')) + '</div>'
+                     +   '<div style="color:#7C878A; font-size:0.64rem; white-space:nowrap;">' + escapeHtml(short) + '</div>'
+                     + '</div>';
+            }).join('');
+        }
+
         let creditUsageCache = null;
         function toggleCreditUsageDetail() {
             const detail = document.getElementById('creditUsageDetail');
@@ -181959,7 +182065,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                  +     `<div style="color:#7C878A; font-size:0.66rem; margin-top:0.15rem;">${escapeHtml(kind)}</div>`
                                  +   `</div>`
                                  +   `<div style="text-align:right; white-space:nowrap;">`
-                                 +     `<div style="color:#E9E8E1; font-size:0.74rem; font-weight:600; font-variant-numeric:tabular-nums;">${credits} credit${credits !== 1 ? 's' : ''}</div>`
+                                 +     `<div style="color:#E9E8E1; font-size:0.74rem; font-weight:600; font-variant-numeric:tabular-nums;">${_walletUsdFmt(row, credits)}</div>`
                                  +     `<div style="color:#7C878A; font-size:0.66rem; margin-top:0.15rem;" title="${escapeHtml(full)}">${escapeHtml(short)}</div>`
                                  +   `</div>`
                                  + `</div>`;
