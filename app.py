@@ -52467,7 +52467,7 @@ _PM_PRICING_COPY = (
     "Digital Journey - $500\n"
     "Profile - $300\n"
     "Subscriber Acquisition - $500\n"
-    "Flywheel - $300\n"
+    "Flywheel - $500\n"
     "Brand Partnership - $1000\n"
     "Add Attribution - $500 for the initial pull and $100 x day to "
     "track per campaign\n\n"
@@ -62108,7 +62108,7 @@ def api_synth_chat_analyze():
             return jsonify({
                 'success': True, 'action': 'answer',
                 'reply': ('That flywheel prices at '
-                          + _pm_tool_price_label('flywheel_iq', '$300')
+                          + _pm_tool_price_label('flywheel_iq', '$500')
                           + ' and your '
                           'account cannot cover it right now. Add '
                           'funds or ask your admin, and I will run '
@@ -63394,7 +63394,7 @@ def _pm_fw_confirm_reply(parsed):
         f"owned touch point before the event against after it, and "
         f"what the converters bought. It lands on the Flywheel IQ "
         f"page when finished. It prices at "
-        f"{_pm_tool_price_label('flywheel_iq', '$300')}. Run it?")
+        f"{_pm_tool_price_label('flywheel_iq', '$500')}. Run it?")
 
 
 def _pm_run_fw_job(job_id, username, inputs, extras):
