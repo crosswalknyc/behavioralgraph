@@ -593,3 +593,4 @@ if __name__ == "__main__":
 # (site-home-answer-drop-so-what 2026-09-28 - Site: remove What this means note + rule from homepage The answer)
 # (site-signup-rate-card 2026-09-29 - Site: signup rate card Flywheel $500; Trends/Rankers/Fin starts at $5000/mo)
 # (pricing-flywheel-500-monthly-5000 2026-09-29 - Flywheel IQ $500/pull; Trends/Rankers/Fin $5000/mo defaults; site + Prometheus copy)
+# (pricing-consistent-everywhere 2026-09-29 - Flywheel $500 + Trends/Rankers/Fin $5000/mo on budget pages, report pages, Prometheus pricing copy)
