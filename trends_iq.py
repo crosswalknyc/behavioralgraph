@@ -11344,6 +11344,12 @@ def _stamp_published_ranks(slug: str, snap: dict, *row_lists) -> int:
         return 0
     if not index:
         return 0
+    # A carried chart (board invariant I2, 2026-09-29): when today's
+    # capture has no chart, `published_chart_index` returns the most
+    # recent archived one with the day as a fourth element on every
+    # position, and the pricing pass sees the same carry. The row says
+    # which day its position came from.
+    stale_from = None
     marked = 0
     seen: set = set()
     for rows in row_lists:
@@ -11367,10 +11373,14 @@ def _stamp_published_ranks(slug: str, snap: dict, *row_lists) -> int:
             # outranking the other.
             if len(hit) > 2:
                 row['published_group'] = hit[2]
+            if len(hit) > 3 and hit[3]:
+                row['published_stale_from'] = hit[3]
+                stale_from = hit[3]
             marked += 1
     if marked:
-        logger.info("%s: %d row(s) carry a published chart position (%s)",
-                    slug, marked, next(iter(index.values()))[1])
+        logger.info("%s: %d row(s) carry a published chart position (%s)%s",
+                    slug, marked, next(iter(index.values()))[1],
+                    f", carried from {stale_from}" if stale_from else '')
     return marked
 
 
@@ -12582,6 +12592,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # background and is discarded.
     results: dict = {}
     pending_sections: list = []
+    # Sections that RAISED, as opposed to the ones that ran out of
+    # time. Both leave a hole in the payload, so both have to reach
+    # the TTL choice and the ops alert below. Tracking only timeouts
+    # is what let a pass where every section threw cache itself as a
+    # complete view for a full day, silently.
+    failed_sections: list = []
     ex = ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq')
     try:
         futures = {ex.submit(fn): key for key, fn in tasks.items()}
@@ -12593,6 +12609,9 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             except Exception as e:
                 logger.warning("trends_iq section %s failed: %s", key, e)
                 results[key] = None
+                failed_sections.append('%s (%s: %s)' % (
+                    key, type(e).__name__, str(e)[:160]))
+        failed_sections = sorted(failed_sections)
         pending_sections = sorted(futures[f] for f in not_done)
     finally:
         ex.shutdown(wait=False, cancel_futures=True)
@@ -12613,6 +12632,24 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
              f"lookback_days={lookback_days}, asof={asof or 'live'}\n"
              'The view retries automatically within '
              f'{PARTIAL_RETRY_TTL_S // 60} minutes.\n'
+             f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
+
+    if failed_sections:
+        logger.warning(
+            "trends_iq sections raised and render empty: %s",
+            ', '.join(failed_sections))
+        _send_ops_alert(
+            'section_failed',
+            'Trends IQ sections failed to build',
+            ('These Trends IQ sections raised while building the view '
+             'and rendered empty. The view is cached only until the '
+             f'next {PARTIAL_RETRY_TTL_S // 60}-minute retry rather '
+             'than for the full day, so it rebuilds on the next '
+             'request.\n\n  ' + '\n  '.join(failed_sections)
+             + '\n\nFilters: '
+             f"geo_type={filters.get('geo_type') or 'National'}, "
+             f"geo_value={filters.get('geo_value') or ''}, "
+             f"lookback_days={lookback_days}, asof={asof or 'live'}\n"
              f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
 
     trending_searches = results.get('trending_searches') or []
@@ -13086,16 +13123,23 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'historic':      historic,
         },
         'generated_at': now.isoformat(),
-        # Partial payloads (sections still pending) go stale fast so the
-        # next request after PARTIAL_RETRY_TTL_S recomputes and fills in
-        # the missing panels. Complete payloads keep the full TTL.
+        # Partial payloads go stale fast so the next request after
+        # PARTIAL_RETRY_TTL_S recomputes and fills in the missing
+        # panels. Only complete payloads keep the full TTL. A section
+        # that RAISED counts as partial here: it leaves the same hole
+        # as one that timed out, and holding that for a day is how an
+        # empty view outlived the healthy data behind it.
         'stale_until':  (now + timedelta(
-            seconds=(PARTIAL_RETRY_TTL_S if pending_sections
+            seconds=(PARTIAL_RETRY_TTL_S
+                     if (pending_sections or failed_sections)
                      else CACHE_TTL_S))).isoformat(),
         # Section keys that missed the compute budget this pass. Their
         # panels render the neutral warming-up state; the frontend can
         # also use this list to schedule a quiet re-fetch.
         'pending_sections': pending_sections,
+        # Sections that raised this pass, with the exception that did
+        # it. Empty on a healthy view.
+        'failed_sections': failed_sections,
         'cards': {
             'trending_searches':              trending_searches,
             'trending_searches_by_category':  searches_by_category,
