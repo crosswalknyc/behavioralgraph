@@ -2912,6 +2912,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
     'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
+    'allowed_flywheel_iq_runs', 'allowed_subscriber_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
     'has_share_of_time_access', 'has_share_of_time_run_access',
     'has_blue_iq_access',
@@ -17390,6 +17391,13 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
         return True
     if isinstance(allowed_runs, list) and s3_key in allowed_runs:
         return True
+    try:
+        import wallet as _w
+        if _w.catalog_item_allowed(
+                user, 'allowed_runs', s3_key, default_open=False):
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -17408,7 +17416,19 @@ def _require_profile_run_access(s3_key: str):
         return True, None
     # Explicit umbrella deny (has_profile_iq_access default is True, so
     # this only fires when admin has flipped it off for that user).
-    if user.get('has_profile_iq_access') is False:
+    # Paid-only seats keep the flag off until they hold a file; an
+    # explicit allowed_runs list or complimentary title still opens
+    # those files.
+    explicit = (isinstance(user.get('allowed_runs'), list)
+                and '*' not in (user.get('allowed_runs') or []))
+    has_gift = False
+    try:
+        import wallet as _w
+        has_gift = bool(_w.complimentary_needles(user, 'profile_iq'))
+    except Exception:
+        has_gift = False
+    if (user.get('has_profile_iq_access') is False
+            and not explicit and not has_gift):
         return False, (jsonify({
             'success': False,
             'error': 'Profile IQ access not enabled for this user',
@@ -18737,6 +18757,23 @@ def api_intent_weekly_pdf(title_slug):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _user_can_open_subscriber(user, s3_key, label=''):
+    if not user:
+        return False
+    role = _normalize_role(user.get('role', 'user'))
+    if role in ('admin', 'super_admin'):
+        return True
+    try:
+        import wallet as _w
+        return _w.catalog_item_allowed(
+            user, 'allowed_subscriber_iq_runs', s3_key, label)
+    except Exception:
+        raw = user.get('allowed_subscriber_iq_runs')
+        if raw is None or (isinstance(raw, list) and '*' in raw):
+            return True
+        return s3_key in (raw or [])
+
+
 @app.route('/api/subscriber-iq/list')
 @requires_auth
 def list_subscriber_iq_files():
@@ -18788,6 +18825,11 @@ def list_subscriber_iq_files():
         
         # Sort by last modified (newest first)
         files.sort(key=lambda x: x['last_modified'], reverse=True)
+        user = get_current_user()
+        files = [f for f in files
+                 if _user_can_open_subscriber(
+                     user, (f or {}).get('s3_key'),
+                     (f or {}).get('show_name'))]
         
         return jsonify({
             'success': True,
@@ -18814,6 +18856,10 @@ def get_subscriber_iq_data(s3_key):
     if not s3_client:
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    user = get_current_user()
+    if not _user_can_open_subscriber(user, s3_key):
+        return jsonify({'success': False,
+                        'error': 'Subscriber IQ access not granted for this file'}), 403
     
     try:
         print(f"📂 Fetching from S3: {SUBSCRIBER_S3_BUCKET}/{s3_key}")
@@ -19814,7 +19860,33 @@ def _user_can_flywheel(user):
     if user.get('has_flywheel_iq_access'):
         return True
     mods = user.get('analysis_iq_modules') or []
-    return 'flywheel_iq' in mods
+    if 'flywheel_iq' in mods:
+        return True
+    raw = user.get('allowed_flywheel_iq_runs')
+    if isinstance(raw, list) and raw and '*' not in raw:
+        return True
+    try:
+        import wallet as _w
+        return bool(_w.complimentary_needles(user, 'flywheel_iq'))
+    except Exception:
+        return False
+
+
+def _user_can_open_flywheel(user, key, label=''):
+    if not user:
+        return False
+    role = (user.get('role') or '').strip()
+    if role in ('super_admin', 'admin'):
+        return True
+    try:
+        import wallet as _w
+        return _w.catalog_item_allowed(
+            user, 'allowed_flywheel_iq_runs', key, label)
+    except Exception:
+        raw = user.get('allowed_flywheel_iq_runs')
+        if raw is None or (isinstance(raw, list) and '*' in raw):
+            return True
+        return key in (raw or [])
 
 
 def _flywheel_title_from_name(stem):
@@ -19974,7 +20046,10 @@ def api_flywheel_runs():
     user = get_current_user()
     if not _user_can_flywheel(user):
         return jsonify({'success': False, 'error': 'Flywheel access required'}), 403
-    return jsonify({'success': True, 'runs': _flywheel_list_files()})
+    runs = [r for r in _flywheel_list_files()
+            if _user_can_open_flywheel(user, (r or {}).get('key'),
+                                       (r or {}).get('label'))]
+    return jsonify({'success': True, 'runs': runs})
 
 
 @app.route('/api/flywheel-iq/run')
@@ -19987,6 +20062,8 @@ def api_flywheel_run():
     # The key is a file name, never a path. Anything with a separator
     # is refused rather than normalized.
     if not key or '/' in key or '\\' in key or key.startswith('.') or not key.lower().endswith('.csv'):
+        return jsonify({'success': False, 'error': 'run not found'}), 404
+    if not _user_can_open_flywheel(user, key):
         return jsonify({'success': False, 'error': 'run not found'}), 404
     try:
         payload = _flywheel_load(key)
@@ -27907,7 +27984,17 @@ def list_jobs():
                 # Mirrors _user_can_access_profile_run: Gen Pop baselines
                 # (underscore canonical + spaced generational skins) are
                 # universal.
-                if sk in allowed_set or 'gen_pop' in sk_lower or sk_lower.startswith('gen pop '):
+                label = (e.get('display_name') or e.get('project_name')
+                         or e.get('name') or '')
+                gift = False
+                try:
+                    import wallet as _w
+                    gift = _w.catalog_item_allowed(
+                        u, 'allowed_runs', sk, label, default_open=False)
+                except Exception:
+                    gift = False
+                if (sk in allowed_set or gift or 'gen_pop' in sk_lower
+                        or sk_lower.startswith('gen pop ')):
                     e['accessible'] = True
                 else:
                     e['accessible'] = False
@@ -31454,6 +31541,16 @@ def user_can_run_analysis_module(user, module_key):
     top_flag = _MODULE_TOP_LEVEL_FLAG.get(module_key)
     if top_flag and user.get(top_flag):
         return True
+    if module_key == 'journey_iq':
+        raw = user.get('allowed_journey_iq_runs')
+        if isinstance(raw, list) and raw and '*' not in raw:
+            return True
+        try:
+            import wallet as _w
+            if _w.complimentary_needles(user, 'journey_iq'):
+                return True
+        except Exception:
+            pass
     # Standard: Analysis IQ access + module list (saved by admin checkboxes)
     if user.get('has_analysis_iq_access'):
         modules = user.get('analysis_iq_modules') or []
@@ -40852,12 +40949,29 @@ def _user_jiq_run_access(user):
     return False, True, set()
 
 
-def _filter_jiq_runs_for_user(runs, user):
-    """Apply the per-user allow-list to a list of run-summary dicts."""
+def _jiq_item_allowed(user, key='', demo_id='', project_name=''):
     is_admin, allow_all, allowed = _user_jiq_run_access(user)
     if is_admin or allow_all:
+        return True
+    if key in allowed or demo_id in allowed:
+        return True
+    try:
+        import wallet as _w
+        return _w.catalog_item_allowed(
+            user, 'allowed_journey_iq_runs', key or demo_id,
+            project_name or demo_id, default_open=False)
+    except Exception:
+        return False
+
+
+def _filter_jiq_runs_for_user(runs, user):
+    """Apply the per-user allow-list to a list of run-summary dicts."""
+    is_admin, allow_all, _allowed = _user_jiq_run_access(user)
+    if is_admin or allow_all:
         return runs
-    return [r for r in runs if (r or {}).get('key') in allowed]
+    return [r for r in runs if _jiq_item_allowed(
+        user, (r or {}).get('key'), (r or {}).get('demo_id'),
+        (r or {}).get('project_name'))]
 
 
 @app.route('/api/journey-iq/list', methods=['GET'])
@@ -41004,11 +41118,11 @@ def list_journey_iq():
         if is_admin or allow_all:
             allowed_demos = [d['demo_id'] for d in demo_runs]
         else:
-            allowed_set = set(_allowed or [])
             allowed_demos = [
                 d['demo_id'] for d in demo_runs
-                if d['demo_id'] in allowed_set
-                or d['key'] in allowed_set]
+                if _jiq_item_allowed(
+                    user, d.get('key'), d.get('demo_id'),
+                    d.get('project_name'))]
 
         resp_out = jsonify({
             'success':       True,
@@ -41067,9 +41181,7 @@ def get_journey_iq_result(s3_key):
             # Story journeys honor the same per-user allow-list as any
             # run (2026-09-18, Jenna: per-user journey access). Grants
             # may store either the demo id or the full S3 key.
-            _adm, _all, _alw = _user_jiq_run_access(user)
-            if not (_adm or _all or s3_key in (_alw or [])
-                    or full_key in (_alw or [])):
+            if not _jiq_item_allowed(user, full_key, s3_key, s3_key):
                 return jsonify({'success': False,
                                 'error': 'You do not have access to '
                                          'this Journey IQ run'}), 403
@@ -41089,7 +41201,8 @@ def get_journey_iq_result(s3_key):
 
         # Access guard #3: per-user run allow-list (live keys only — archive
         # already gated above for admins, and non-admins were rejected).
-        if not is_admin and not allow_all and full_key not in allowed:
+        if not is_admin and not allow_all and not _jiq_item_allowed(
+                user, full_key, s3_key, s3_key):
             return jsonify({'success': False,
                             'error': 'You do not have access to this Journey IQ run'}), 403
 

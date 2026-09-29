@@ -133,20 +133,46 @@ def is_self_serve_plan(user: Optional[dict]) -> bool:
     return bool(user) and str(user.get("plan") or "") == PLAN_KEY
 
 
-def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
-    """Self-serve accounts see Prometheus only.
+def _granted_list(user: Optional[dict], field: str) -> list:
+    raw = user.get(field) if isinstance(user, dict) else []
+    if not isinstance(raw, list):
+        return []
+    return [str(k).strip() for k in raw if str(k).strip() and str(k).strip() != "*"]
 
-    Every product flag, tab grant, and catalog list is closed. The
-    one list that stays is allowed_runs, and only the files this
-    account paid to pull. Defaults in compute_product_access_flags
-    (Profile IQ on, empty category list widened to everything) do
-    not apply here.
+
+def _has_complimentary(user: Optional[dict], product: str) -> bool:
+    if not isinstance(user, dict):
+        return False
+    try:
+        import wallet as _w
+        return bool(_w.complimentary_needles(user, product)
+                    or _w.complimentary_keys(user, product))
+    except Exception:
+        titles = user.get("complimentary_titles")
+        keys = user.get("complimentary_keys")
+        titled = isinstance(titles, dict) and bool(titles.get(product))
+        gifted = isinstance(keys, dict) and bool(keys.get(product))
+        return titled or gifted
+
+
+def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
+    """Self-serve accounts see Prometheus plus files they hold.
+
+    The fleet stays closed. Paid pulls and complimentary grants
+    (Gilmore Girls on Profile / Flywheel / Subscriber, Dexter's Lab
+    and Young Sheldon on Digital Journey) turn on only those tabs.
     """
     if not is_self_serve_plan(user) or not isinstance(access, dict):
         return access
     out = dict(access)
-    runs = user.get("allowed_runs") if isinstance(user, dict) else []
-    out["allowed_runs"] = list(runs) if isinstance(runs, list) else []
+    runs = _granted_list(user, "allowed_runs")
+    fly = _granted_list(user, "allowed_flywheel_iq_runs")
+    sub = _granted_list(user, "allowed_subscriber_iq_runs")
+    jiq = _granted_list(user, "allowed_journey_iq_runs")
+    out["allowed_runs"] = runs
+    out["allowed_flywheel_iq_runs"] = fly
+    out["allowed_subscriber_iq_runs"] = sub
+    out["allowed_journey_iq_runs"] = jiq
     for key in (
         "allowed_categories",
         "allowed_behavioral_categories",
@@ -170,6 +196,14 @@ def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
     out["prometheus_access"] = "full"
     out["prometheus_mode"] = "both"
     out["pay_per_use_enabled"] = True
+    if runs or _has_complimentary(user, "profile_iq"):
+        out["has_profile_iq_access"] = True
+    if fly or _has_complimentary(user, "flywheel_iq"):
+        out["has_flywheel_iq_access"] = True
+    if sub or _has_complimentary(user, "subscriber_iq"):
+        out["has_subscriber_iq_access"] = True
+    if jiq or _has_complimentary(user, "journey_iq"):
+        out["has_journey_iq_access"] = True
     return out
 
 

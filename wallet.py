@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -2370,6 +2371,8 @@ _PROMETHEUS_ONLY_EMPTY_LISTS = (
     "allowed_categories",
     "allowed_behavioral_categories",
     "allowed_journey_iq_runs",
+    "allowed_flywheel_iq_runs",
+    "allowed_subscriber_iq_runs",
     "allowed_intent_iq_runs",
     "allowed_trends_tabs",
     "allowed_rankers_tabs",
@@ -2379,10 +2382,202 @@ _PROMETHEUS_ONLY_EMPTY_LISTS = (
     "hedge_fund_iq_tickers",
     "impact_iq_journeys",
 )
+_CATALOG_LIST_FIELDS = (
+    "allowed_runs",
+    "allowed_flywheel_iq_runs",
+    "allowed_subscriber_iq_runs",
+    "allowed_journey_iq_runs",
+)
+_FLAG_FOR_CATALOG = {
+    "allowed_runs": "has_profile_iq_access",
+    "allowed_flywheel_iq_runs": "has_flywheel_iq_access",
+    "allowed_subscriber_iq_runs": "has_subscriber_iq_access",
+    "allowed_journey_iq_runs": "has_journey_iq_access",
+}
+_PRODUCT_FOR_CATALOG = {
+    "allowed_runs": "profile_iq",
+    "allowed_flywheel_iq_runs": "flywheel_iq",
+    "allowed_subscriber_iq_runs": "subscriber_iq",
+    "allowed_journey_iq_runs": "journey_iq",
+}
+# Jenna 2026-09-28: WBD sees Gilmore Girls for free in Profile IQ,
+# Flywheel, and Subscriber IQ, plus Dexter's Lab and Young Sheldon
+# in Digital Journey IQ. Title needles keep new matching files in
+# those tabs without opening the rest of the fleet.
+WBD_COMPLIMENTARY_LISTS = {
+    "allowed_runs": [
+        "Gilmore Girls Viewers - Avid Fan.csv",
+        "Gilmore_Girls_Viewers_08_19_2026_18_53.csv",
+    ],
+    "allowed_flywheel_iq_runs": [
+        "Gilmore_Girls_Acquired_Reactivated_Amazon_Flywheel_2026_09_17.csv",
+    ],
+    "allowed_subscriber_iq_runs": [
+        "Gilmore_Girls_09_17_2026_15_56.csv",
+    ],
+    "allowed_journey_iq_runs": [
+        "__demo_dexters_lab_pvod__",
+        "__demo_young_sheldon_pvod__",
+        "journey-iq/demos/__demo_dexters_lab_pvod__.json.gz",
+        "journey-iq/demos/__demo_young_sheldon_pvod__.json.gz",
+    ],
+}
+WBD_COMPLIMENTARY_TITLES = {
+    "profile_iq": ["gilmore girls"],
+    "flywheel_iq": ["gilmore girls"],
+    "subscriber_iq": ["gilmore girls"],
+    "journey_iq": [
+        "young sheldon",
+        "dexters lab",
+        "dexter's laboratory",
+        "dexters laboratory",
+    ],
+}
 
 
 def is_wbd_company(name: str) -> bool:
     return str(name or "").strip().upper() == WBD_COMPANY_NAME
+
+
+def _norm_title_blob(text) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def title_matches_needles(text, needles) -> bool:
+    blob = _norm_title_blob(text)
+    if not blob:
+        return False
+    for raw in needles or []:
+        needle = _norm_title_blob(raw)
+        if needle and needle in blob:
+            return True
+    return False
+
+
+def complimentary_needles(holder, product: str) -> list:
+    titles = holder.get("complimentary_titles") if isinstance(holder, dict) else None
+    if not isinstance(titles, dict):
+        return []
+    out = []
+    seen = set()
+    for raw in titles.get(product) or []:
+        n = str(raw or "").strip()
+        fold = n.lower()
+        if n and fold not in seen:
+            seen.add(fold)
+            out.append(n)
+    return out
+
+
+def owns_complimentary_title(holder, product: str, *name_parts) -> bool:
+    blob = " ".join(str(p) for p in name_parts if p)
+    return title_matches_needles(blob, complimentary_needles(holder, product))
+
+
+def complimentary_keys(holder, product: str) -> list:
+    keys = holder.get("complimentary_keys") if isinstance(holder, dict) else None
+    if not isinstance(keys, dict):
+        return []
+    return _clean_paid_runs(keys.get(product))
+
+
+def _key_in_list(item_key, keys) -> bool:
+    want = str(item_key or "").strip()
+    if not want:
+        return False
+    want_base = want.rsplit("/", 1)[-1]
+    for key in _clean_paid_runs(keys):
+        if key == want or key.rsplit("/", 1)[-1] == want_base:
+            return True
+        if want.startswith("__demo_") and (key == want or want in key):
+            return True
+        if key.startswith("__demo_") and (key == want or key in want):
+            return True
+    return False
+
+
+def catalog_item_allowed(holder, field: str, item_key, item_label="",
+                         *, default_open: bool = True) -> bool:
+    """True when this seat may open one catalog item.
+
+    Full-access users (missing list or '*') stay open when
+    default_open is True. Paid-only seats always carry an explicit
+    list, so missing-or-star never reopens the fleet for them.
+    Complimentary keys and title needles cover the free grant.
+    """
+    if not isinstance(holder, dict):
+        return False
+    raw = holder.get(field)
+    if default_open and (raw is None or (isinstance(raw, list) and "*" in raw)):
+        return True
+    if _key_in_list(item_key, raw):
+        return True
+    product = _PRODUCT_FOR_CATALOG.get(field, "")
+    if _key_in_list(item_key, complimentary_keys(holder, product)):
+        return True
+    return owns_complimentary_title(holder, product, item_key, item_label)
+
+
+def refresh_paid_only_product_flags(user: dict) -> dict:
+    """Turn on only the tabs that have a granted file or title."""
+    if not isinstance(user, dict) or not is_paid_only_plan(user):
+        return user
+    for field, flag in _FLAG_FOR_CATALOG.items():
+        keys = _clean_paid_runs(user.get(field))
+        product = _PRODUCT_FOR_CATALOG.get(field, "")
+        gifted = complimentary_keys(user, product)
+        user[flag] = bool(
+            keys or gifted or complimentary_needles(user, product))
+    user["has_chatbot_profile_iq_access"] = True
+    return user
+
+
+def _merge_title_map(into, incoming) -> dict:
+    out = dict(into) if isinstance(into, dict) else {}
+    if not isinstance(incoming, dict):
+        return out
+    for product, needles in incoming.items():
+        have = []
+        seen = set()
+        for raw in list(out.get(product) or []) + list(needles or []):
+            n = str(raw or "").strip()
+            fold = n.lower()
+            if n and fold not in seen:
+                seen.add(fold)
+                have.append(n)
+        out[str(product)] = have
+    return out
+
+
+def _merge_key_map(into, incoming) -> dict:
+    out = dict(into) if isinstance(into, dict) else {}
+    if not isinstance(incoming, dict):
+        return out
+    for product, keys in incoming.items():
+        cur = _clean_paid_runs(out.get(product))
+        for key in _clean_paid_runs(keys):
+            if key not in cur:
+                cur.append(key)
+        out[str(product)] = cur
+    return out
+
+
+def seed_wbd_complimentary(rec: dict) -> dict:
+    """Keep WBD's free Gilmore / Dexter / Young Sheldon grant on the
+    company record. Paid pulls stay on allowed_runs; this gift lives
+    on complimentary_keys so a free file is not billed as a purchase."""
+    if not isinstance(rec, dict):
+        return rec
+    gifted = {}
+    for field, keys in WBD_COMPLIMENTARY_LISTS.items():
+        product = _PRODUCT_FOR_CATALOG.get(field)
+        if product:
+            gifted[product] = list(keys)
+    rec["complimentary_keys"] = _merge_key_map(
+        rec.get("complimentary_keys"), gifted)
+    rec["complimentary_titles"] = _merge_title_map(
+        rec.get("complimentary_titles"), WBD_COMPLIMENTARY_TITLES)
+    return rec
 
 
 def ensure_wbd_shared_wallet(users_data: dict, seed_user=None) -> dict:
@@ -2399,20 +2594,18 @@ def ensure_wbd_shared_wallet(users_data: dict, seed_user=None) -> dict:
     rec["unlimited"] = False
     if not str(rec.get("billing_mode") or "").strip():
         rec["billing_mode"] = "auto_reload"
-    # Paid Prometheus pulls for this company. New WBD seats inherit
-    # this list and nothing else from the catalog.
     if not isinstance(rec.get("allowed_runs"), list):
         rec["allowed_runs"] = []
     elif "*" in rec["allowed_runs"]:
-        rec["allowed_runs"] = [
-            str(k).strip() for k in rec["allowed_runs"]
-            if str(k).strip() and str(k).strip() != "*"]
+        rec["allowed_runs"] = _clean_paid_runs(rec["allowed_runs"])
+    seed_wbd_complimentary(rec)
     return rec
 
 
 def apply_prometheus_only_seat(user: dict, *, wipe_catalog: bool = False) -> dict:
     """Prometheus only. No product tabs. Catalog starts empty so a
-    report appears only after they pay to pull it."""
+    report appears only after they pay to pull it. Complimentary
+    company grants are copied back on inherit."""
     if not isinstance(user, dict):
         return user
     user["plan"] = PROMETHEUS_SELF_SERVE_PLAN
@@ -2434,6 +2627,10 @@ def apply_prometheus_only_seat(user: dict, *, wipe_catalog: bool = False) -> dic
     runs = user.get("allowed_runs")
     if wipe_catalog or not isinstance(runs, list) or "*" in runs:
         user["allowed_runs"] = []
+    if wipe_catalog or not isinstance(user.get("complimentary_titles"), dict):
+        user["complimentary_titles"] = {}
+    if wipe_catalog or not isinstance(user.get("complimentary_keys"), dict):
+        user["complimentary_keys"] = {}
     return user
 
 
@@ -2448,14 +2645,19 @@ def _clean_paid_runs(runs) -> list:
     return out
 
 
-def company_paid_runs(users_data: dict, company_name: str) -> list:
-    """Profile keys this company paid to pull. Empty if none."""
+def company_catalog_list(users_data: dict, company_name: str,
+                         field: str = "allowed_runs") -> list:
     if not isinstance(users_data, dict) or not company_name:
         return []
     rec = (users_data.get("companies") or {}).get(company_name)
     if not isinstance(rec, dict):
         return []
-    return _clean_paid_runs(rec.get("allowed_runs"))
+    return _clean_paid_runs(rec.get(field))
+
+
+def company_paid_runs(users_data: dict, company_name: str) -> list:
+    """Profile keys this company paid to pull. Empty if none."""
+    return company_catalog_list(users_data, company_name, "allowed_runs")
 
 
 def grant_company_paid_runs(users_data: dict, company_name: str,
@@ -2485,23 +2687,43 @@ def grant_company_paid_runs(users_data: dict, company_name: str,
         if extra:
             member["allowed_runs"] = list(cur) + extra
             wrote = True
+        refresh_paid_only_product_flags(member)
     return wrote
 
 
 def inherit_company_paid_runs(user: dict, users_data: dict, *,
                               replace: bool = False) -> dict:
-    """Copy the company's paid-report list onto this seat."""
+    """Copy the company's paid and complimentary lists onto this seat."""
     if not isinstance(user, dict) or not isinstance(users_data, dict):
         return user
     _subject, kind, key = resolve_billing_subject(user, users_data)
     if kind != "company" or not key:
+        refresh_paid_only_product_flags(user)
         return user
-    paid = company_paid_runs(users_data, key)
-    cur = user.get("allowed_runs")
-    if replace or not isinstance(cur, list) or "*" in cur:
-        user["allowed_runs"] = list(paid)
-    else:
-        user["allowed_runs"] = list(cur) + [k for k in paid if k not in cur]
+    rec = (users_data.get("companies") or {}).get(key)
+    for field in _CATALOG_LIST_FIELDS:
+        paid = company_catalog_list(users_data, key, field)
+        cur = user.get(field)
+        if replace or not isinstance(cur, list) or "*" in cur:
+            user[field] = list(paid)
+        else:
+            user[field] = list(cur) + [k for k in paid if k not in cur]
+    if isinstance(rec, dict):
+        if replace or not isinstance(user.get("complimentary_titles"), dict):
+            user["complimentary_titles"] = _merge_title_map(
+                {}, rec.get("complimentary_titles"))
+        else:
+            user["complimentary_titles"] = _merge_title_map(
+                user.get("complimentary_titles"),
+                rec.get("complimentary_titles"))
+        if replace or not isinstance(user.get("complimentary_keys"), dict):
+            user["complimentary_keys"] = _merge_key_map(
+                {}, rec.get("complimentary_keys"))
+        else:
+            user["complimentary_keys"] = _merge_key_map(
+                user.get("complimentary_keys"),
+                rec.get("complimentary_keys"))
+    refresh_paid_only_product_flags(user)
     return user
 
 
@@ -2559,25 +2781,12 @@ def pays_retail_for_library_match(user, username: str = "") -> bool:
 
 def already_owns_paid_run(user, users_data, s3_key,
                           username: str = "") -> bool:
-    """True when this seat or its company wallet already paid for
-    this profile key."""
+    """True when this seat or its company wallet already holds this
+    profile key, including a complimentary Gilmore Girls grant."""
     wanted = str(s3_key or "").strip()
     if not wanted or not isinstance(user, dict):
         return False
-    want_base = wanted.rsplit("/", 1)[-1]
-
-    def _has(runs) -> bool:
-        if not isinstance(runs, list):
-            return False
-        for raw in runs:
-            key = str(raw or "").strip()
-            if not key:
-                continue
-            if key == wanted or key.rsplit("/", 1)[-1] == want_base:
-                return True
-        return False
-
-    if _has(user.get("allowed_runs")):
+    if catalog_item_allowed(user, "allowed_runs", wanted, default_open=False):
         return True
     if not isinstance(users_data, dict):
         return False
@@ -2585,9 +2794,10 @@ def already_owns_paid_run(user, users_data, s3_key,
         _subject, kind, cname = resolve_billing_subject(user, users_data)
     except Exception:
         return False
-    if kind == "company" and cname and _has(company_paid_runs(users_data, cname)):
-        return True
-    return False
+    if kind != "company" or not cname:
+        return False
+    rec = (users_data.get("companies") or {}).get(cname)
+    return catalog_item_allowed(rec, "allowed_runs", wanted, default_open=False)
 
 
 def company_wants_paid_only(users_data: dict, company_name: str) -> bool:
