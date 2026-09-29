@@ -89,9 +89,35 @@ function makeEnv(opts) {
         ['dashboardView', 'sfConversionView'].forEach(hide);
     };
 
+    // setViewNavDropdown is what each show function calls to mark the
+    // active product; the stale-load guard reads it back.
+    var state = { product: 'profileIQ' };
+    window.showProfileIQ._product = 'profileIQ';
+    var PRODUCT_OF = {
+        showProfileIQ: 'profileIQ', showBlueIQ: 'blueIQ',
+        showTrendsIQ: 'trendsIQ', showCultureRankerIQ: 'cultureRankerIQ',
+        showSentimentIQ: 'sentimentIQ', showSubscriberIQ: 'subscriberIQ'
+    };
+    Object.keys(PRODUCT_OF).forEach(function (n) {
+        var inner = window[n];
+        window[n] = function () {
+            state.product = PRODUCT_OF[n];
+            return inner.apply(this, arguments);
+        };
+    });
+    window.showDashboardView = function () { window.showProfileIQ(); };
+
+    // A profile CSV load that resolves after the user switched away.
+    // guarded=false is the old unconditional showDashboardView().
+    window.staleProfileLoad = function (productAtStart, guarded) {
+        if (guarded && state.product !== productAtStart) return false;
+        window.showDashboardView();
+        return true;
+    };
+
     return { window: window, document: document,
              getComputedStyle: getComputedStyle, els: els, chrome: chrome,
-             owned: OWNED_IDS, show: show };
+             owned: OWNED_IDS, show: show, state: state };
 }
 
 function visibleOwned(env) {
@@ -100,21 +126,27 @@ function visibleOwned(env) {
     });
 }
 
-function runSequence(env, steps) {
+function runSequence(env, steps, staleLoad, expect) {
     steps.forEach(function (fn) {
         // A real caller lets the exception propagate; what matters here
         // is whether the page was left coherent.
         try { env.window[fn](); } catch (e) { /* expected in throw cases */ }
     });
+    // A profile load started on Profile IQ, before the switches above,
+    // now resolves.
+    if (staleLoad) {
+        try {
+            env.window.staleProfileLoad('profileIQ', staleLoad === 'guarded');
+        } catch (e) { /* ignore */ }
+    }
     var vis = visibleOwned(env);
-    return {
-        visible: vis,
-        chrome: env.chrome.visible,
-        // The invariant: one view standing, and the Profile IQ chrome up
-        // only when Profile IQ is the one standing.
-        ok: vis.length === 1 &&
-            env.chrome.visible === (vis[0] === 'dashboardView')
-    };
+    // The invariant: exactly one view standing, the Profile IQ chrome up
+    // only when Profile IQ is the one standing, and -- when the sequence
+    // says so -- that view is the product the user actually chose.
+    var ok = vis.length === 1 &&
+             env.chrome.visible === (vis[0] === 'dashboardView');
+    if (ok && expect) ok = vis[0] === expect;
+    return { visible: vis, chrome: env.chrome.visible, ok: ok };
 }
 
 var SEQUENCES = [
@@ -144,7 +176,16 @@ var SEQUENCES = [
       opts: { throwAfterShow: 'showCultureRankerIQ' } },
     { name: 'Profile IQ -> Blue IQ, Blue IQ throws after showing',
       steps: ['showProfileIQ', 'showBlueIQ'],
-      opts: { throwAfterShow: 'showBlueIQ' } }
+      opts: { throwAfterShow: 'showBlueIQ' } },
+    // The reported 911: a profile CSV load started on Profile IQ lands
+    // after the user switched to Rankers. Unguarded, its completion
+    // calls showDashboardView and re-shows Profile IQ on top.
+    { name: 'stale profile load lands after switch, UNGUARDED (old)',
+      steps: ['showProfileIQ', 'showCultureRankerIQ'],
+      staleLoad: 'unguarded', expect: 'trendsIQView' },
+    { name: 'stale profile load lands after switch, GUARDED (new)',
+      steps: ['showProfileIQ', 'showCultureRankerIQ'],
+      staleLoad: 'guarded', expect: 'trendsIQView' }
 ];
 
 function evaluate(label, blockSrc) {
@@ -158,7 +199,7 @@ function evaluate(label, blockSrc) {
         var install = new Function('window', 'document', 'getComputedStyle',
                                    blockSrc);
         install(env.window, env.document, env.getComputedStyle);
-        var r = runSequence(env, seq.steps);
+        var r = runSequence(env, seq.steps, seq.staleLoad, seq.expect);
         if (r.ok) { pass++; } else { fail++; }
         lines.push((r.ok ? '  PASS  ' : '  FAIL  ') + seq.name +
                    '\n          visible=[' + r.visible.join(', ') + ']' +
