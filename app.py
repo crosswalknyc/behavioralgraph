@@ -79,6 +79,7 @@ import threading
 import queue as _stdlib_queue
 import traceback
 import re
+import unicodedata
 import io
 import gzip
 import hashlib
@@ -27424,6 +27425,49 @@ def get_queue_status():
         return jsonify({'error': str(e)}), 500
 
 
+# Categories whose profiles ARE a person, so an IMDB person id (nm…) is a
+# legitimate match. The IMDB backfill searched IMDB by profile name with no
+# category check, so 43 brand/title profiles adopted the first person whose
+# name merely contained theirs: Levi -> Zachary Levi, Hilton -> Paris Hilton,
+# Dominos -> Derek & The Dominos, Oppenheimer (the film) -> Alan Oppenheimer.
+IMDB_PERSON_CATEGORIES = {
+    'ACTOR', 'ACTRESS', 'ATHLETE', 'AUTHOR', 'CHEF', 'COMEDIAN',
+    'CREATOR/INFLUENCER', 'DIRECTOR', 'HOST/PERSONALITY',
+    'INFLUENCER/CREATOR', 'JOURNALIST', 'MLB ATHLETE', 'MODEL',
+    'MUSICIAN/BAND', 'NBA ATHLETE', 'NFL ATHLETE', 'PODCASTER',
+    'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 'TALENT', 'WNBA ATHLETE',
+}
+
+
+def _imdb_tag_is_plausible(job):
+    """True when a job's IMDB id should be surfaced to the dashboard.
+
+    A person id on a person profile is always fine. On a brand or title
+    profile it is only fine when the IMDB name is literally the profile
+    name (IMDB carries a few org entries in the nm namespace — "Atlanta
+    Hawks", "Costco", "Shudder"). Anything else is a fuzzy mismatch and
+    would render a stranger's badge on the card.
+
+    Applied at the serve boundary rather than in the backfill so a re-run
+    of the (ad hoc, uncommitted) scraper cannot reintroduce the bug.
+    """
+    if not isinstance(job, dict) or not job.get('imdb_id'):
+        return False
+    if (job.get('category') or '').strip().upper() in IMDB_PERSON_CATEGORIES:
+        return True
+    label = job.get('imdb_label')
+    if not label:
+        return False
+
+    def _flatten(value):
+        text = unicodedata.normalize('NFKD', str(value))
+        text = ''.join(c for c in text if not unicodedata.combining(c))
+        return ' '.join(re.sub(r'[^A-Za-z0-9 ]', ' ', text).upper().split())
+
+    subject = job.get('profile_subject') or job.get('project_name') or ''
+    return _flatten(label) == _flatten(subject)
+
+
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
@@ -27585,11 +27629,12 @@ def list_jobs():
                 # and merged onto in-memory jobs by load_persisted_cache(). Only
                 # forward when present + truthy (skips both "never scraped" and
                 # "scraped but no person match" cases so the frontend can cleanly
-                # hide the block without a separate null check). Same source the
-                # IQ Ranker uses for its inline IMDB chip.
-                imdb_val = j.get('imdb_id')
-                if imdb_val:
-                    entry['imdb_id'] = imdb_val
+                # hide the block without a separate null check) AND when the id
+                # plausibly belongs to this profile — see
+                # _imdb_tag_is_plausible(). Same source the IQ Ranker uses for
+                # its inline IMDB chip.
+                if _imdb_tag_is_plausible(j):
+                    entry['imdb_id'] = j['imdb_id']
                     if j.get('imdb_label'):
                         entry['imdb_label'] = j['imdb_label']
                 job_list.append(entry)
