@@ -483,6 +483,10 @@ try:
         connect_timeout=2,
         read_timeout=2,
         retries={'max_attempts': 1},
+        # gunicorn runs 12 threads per worker plus several background threads,
+        # all sharing this one client. botocore defaults to 10 connections, so
+        # the pool was the bottleneck long before S3 was.
+        max_pool_connections=64,
         signature_version='s3v4',  # Force signature version 4 for presigned URLs
         s3={'addressing_style': 'virtual'}  # Use virtual-hosted-style URLs
     )
@@ -27828,12 +27832,19 @@ def get_queue_status():
         return jsonify({'error': str(e)}), 500
 
 
+# Guards the cold-start reload below so a worker runs at most one at a time.
+_cold_start_reload_lock = threading.Lock()
+_cold_start_reload_last_ts = 0.0
+_COLD_START_RELOAD_MIN_GAP_SECS = 15.0
+
+
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
     """List all jobs (local + S3 cached) with caching for performance. Use ?refresh=1 to sync from S3 before returning."""
     import time
     global _persisted_cache_etag, _persisted_cache_last_head_ts
+    global _cold_start_reload_last_ts
     
     try:
         job_list = []
@@ -27846,11 +27857,23 @@ def list_jobs():
         # return and so is unreachable in exactly the state that needs it.
         # Try the persisted cache first (one ~2MB S3 GET, and only while the
         # catalog is empty) and report "loading" only if that yields nothing.
+        # One reload at a time, and at most one per 15s. Letting every request
+        # do this melted production on 2026-09-29: each stalled tab fired its
+        # own ~2MB GET, dozens per worker at once, which exhausted the S3
+        # connection pool and starved the boot thread that would have filled
+        # the catalog - so the catalog stayed empty and the next request tried
+        # again. Callers that don't get the lock fall through to "loading".
         if not s3_cache.get('jobs') and s3_client:
-            try:
-                load_persisted_cache()
-            except Exception as e:
-                print(f"⚠️ list_jobs cold-start cache load failed: {e}")
+            now_ts = time.time()
+            if (now_ts - _cold_start_reload_last_ts >= _COLD_START_RELOAD_MIN_GAP_SECS
+                    and _cold_start_reload_lock.acquire(blocking=False)):
+                try:
+                    _cold_start_reload_last_ts = now_ts
+                    load_persisted_cache()
+                except Exception as e:
+                    print(f"⚠️ list_jobs cold-start cache load failed: {e}")
+                finally:
+                    _cold_start_reload_lock.release()
 
         # Return quickly if cache is still loading
         if not cache_loading_complete and not s3_cache.get('jobs'):
