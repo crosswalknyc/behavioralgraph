@@ -4034,11 +4034,6 @@ def wbd_budget_page():
         resp = make_response(render_template('wbd_budget.html'), 200)
         resp.headers.update(headers)
         return resp
-    resp = make_response(render_template('wbd_gate.html', error=False), 200)
-    resp.headers.update(headers)
-    return resp
-
-
 _PROPOSAL_HTML = {}
 
 
