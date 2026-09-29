@@ -107,6 +107,17 @@ function makeEnv(opts) {
     });
     window.showDashboardView = function () { window.showProfileIQ(); };
 
+    // The self-serve access sync (loadAndApplyLiveFeatures ->
+    // _syncSelfServeProductNav) resolving after the user switched away.
+    // Unguarded it re-pins dashboardView with display:flex !important,
+    // which also makes _piqV4PinChrome re-pin the body-level chrome.
+    window.syncSelfServeNav = function (guarded) {
+        if (guarded && state.product !== 'profileIQ') return false;
+        els.dashboardView.style.display = 'flex';
+        window._piqV4PinChrome();
+        return true;
+    };
+
     // A profile CSV load that resolves after the user switched away.
     // guarded=false is the old unconditional showDashboardView().
     window.staleProfileLoad = function (productAtStart, guarded) {
@@ -126,12 +137,18 @@ function visibleOwned(env) {
     });
 }
 
-function runSequence(env, steps, staleLoad, expect) {
+function runSequence(env, steps, staleLoad, expect, navSync) {
     steps.forEach(function (fn) {
         // A real caller lets the exception propagate; what matters here
         // is whether the page was left coherent.
         try { env.window[fn](); } catch (e) { /* expected in throw cases */ }
     });
+    // The boot-time access sync, in flight across the switches above,
+    // now resolves.
+    if (navSync) {
+        try { env.window.syncSelfServeNav(navSync === 'guarded'); }
+        catch (e) { /* ignore */ }
+    }
     // A profile load started on Profile IQ, before the switches above,
     // now resolves.
     if (staleLoad) {
@@ -185,7 +202,15 @@ var SEQUENCES = [
       staleLoad: 'unguarded', expect: 'trendsIQView' },
     { name: 'stale profile load lands after switch, GUARDED (new)',
       steps: ['showProfileIQ', 'showCultureRankerIQ'],
-      staleLoad: 'guarded', expect: 'trendsIQView' }
+      staleLoad: 'guarded', expect: 'trendsIQView' },
+    // The confirmed 911: _syncSelfServeProductNav lands after the switch
+    // and pins Profile IQ back over Rankers (Jenna's d70b8af0, 09-28).
+    { name: 'self-serve nav sync lands after switch, UNGUARDED (old)',
+      steps: ['showProfileIQ', 'showCultureRankerIQ'],
+      navSync: 'unguarded', expect: 'trendsIQView' },
+    { name: 'self-serve nav sync lands after switch, GUARDED (new)',
+      steps: ['showProfileIQ', 'showCultureRankerIQ'],
+      navSync: 'guarded', expect: 'trendsIQView' }
 ];
 
 function evaluate(label, blockSrc) {
@@ -199,7 +224,7 @@ function evaluate(label, blockSrc) {
         var install = new Function('window', 'document', 'getComputedStyle',
                                    blockSrc);
         install(env.window, env.document, env.getComputedStyle);
-        var r = runSequence(env, seq.steps, seq.staleLoad, seq.expect);
+        var r = runSequence(env, seq.steps, seq.staleLoad, seq.expect, seq.navSync);
         if (r.ok) { pass++; } else { fail++; }
         lines.push((r.ok ? '  PASS  ' : '  FAIL  ') + seq.name +
                    '\n          visible=[' + r.visible.join(', ') + ']' +
