@@ -28155,26 +28155,37 @@ def list_jobs():
                 e['accessible'] = True
         else:
             allowed_set = set(allowed_runs or [])
+            try:
+                import wallet as _w
+            except Exception:
+                _w = None
             for e in job_list:
                 sk = e.get('s3_key') or ''
                 sk_lower = sk.lower()
+                # Cheap checks first, and skip the wallet lookup when they
+                # already grant access. catalog_item_allowed rebuilds the
+                # seat's whole run list per call, so asking it about profiles
+                # the allow-list covers was pure waste - and for a seat with
+                # ~6k explicit runs it was 4,510 x 87ms = 6.5 min of CPU per
+                # request, which is why those seats never loaded at all
+                # (prod 2026-09-29) while '*' seats were unaffected.
                 # Mirrors _user_can_access_profile_run: Gen Pop baselines
                 # (underscore canonical + spaced generational skins) are
                 # universal.
+                if (sk in allowed_set or 'gen_pop' in sk_lower
+                        or sk_lower.startswith('gen pop ')):
+                    e['accessible'] = True
+                    continue
                 label = (e.get('display_name') or e.get('project_name')
                          or e.get('name') or '')
                 gift = False
-                try:
-                    import wallet as _w
-                    gift = _w.catalog_item_allowed(
-                        u, 'allowed_runs', sk, label, default_open=False)
-                except Exception:
-                    gift = False
-                if (sk in allowed_set or gift or 'gen_pop' in sk_lower
-                        or sk_lower.startswith('gen pop ')):
-                    e['accessible'] = True
-                else:
-                    e['accessible'] = False
+                if _w is not None:
+                    try:
+                        gift = _w.catalog_item_allowed(
+                            u, 'allowed_runs', sk, label, default_open=False)
+                    except Exception:
+                        gift = False
+                e['accessible'] = bool(gift)
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         

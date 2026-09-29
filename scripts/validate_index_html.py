@@ -5,7 +5,7 @@
 # required `validate` check pending and unmergeable. Someone with `workflow`
 # scope should broaden the workflow's pull_request trigger to run on all PRs.
 # (Until that lands, non-index.html PRs touch this file to trigger the check.)
-# Trigger touch: Trends Digest daily-move fixes (dash for steady/unknown).
+# Trigger touch: fix quadratic allowed_runs access check in list_jobs.
 """Validate structural invariants of ``templates/index.html``.
 
 This file has been silently broken multiple times in a single week by
