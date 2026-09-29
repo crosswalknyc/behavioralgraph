@@ -17506,21 +17506,26 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
     because the dashboard's default cohort view needs them.
 
     Access sources:
-      * role in (admin, super_admin) acting as themselves
-      * user.allowed_runs is None / contains '*'
-      * s3_key is in an explicit user.allowed_runs list
+      * any seat that is not Prometheus-only (full catalog)
+      * admin / super_admin / Crosswalk staff
+      * Prometheus-only: complimentary or paid allowed_runs only
       * key contains 'gen_pop' (Gen Pop is universal)
-
-    Category Access is a subscription for auto-adding *new* profiles
-    onto allowed_runs. It does not unlock the rest of the catalog when
-    an admin has picked an explicit run list (the previous OR with
-    allowed_categories=['*'] made Run Access a no-op).
     """
     if not user:
         return False
-    role = user.get('role', 'user')
-    if role in ('admin', 'super_admin'):
-        return True
+    _uname = ''
+    try:
+        _uname = session.get('username') or ''
+    except Exception:
+        _uname = ''
+    try:
+        import wallet as _w
+        if _w.has_full_profile_catalog(user, _uname):
+            return True
+    except Exception:
+        role = user.get('role', 'user')
+        if role in ('admin', 'super_admin'):
+            return True
     key_lower = (s3_key or '').lower()
     # Gen Pop is universal: the canonical underscore form (Gen_Pop_2026.csv)
     # AND the generational baseline skins ('Gen Pop 2026 - Gen Z.csv', ...)
@@ -18907,6 +18912,8 @@ def _user_can_open_subscriber(user, s3_key, label=''):
         return True
     try:
         import wallet as _w
+        if _w.has_full_profile_catalog(user):
+            return True
         return _w.catalog_item_allowed(
             user, 'allowed_subscriber_iq_runs', s3_key, label)
     except Exception:
@@ -20022,6 +20029,8 @@ def _user_can_open_flywheel(user, key, label=''):
         return True
     try:
         import wallet as _w
+        if _w.has_full_profile_catalog(user):
+            return True
         return _w.catalog_item_allowed(
             user, 'allowed_flywheel_iq_runs', key, label)
     except Exception:
@@ -28144,12 +28153,15 @@ def list_jobs():
             allowed_runs is None
             or (isinstance(allowed_runs, list) and '*' in allowed_runs)
         )
-        # Explicit Run Access is the live allow-list. Category Access only
-        # auto-subscribes *new* profiles onto that list (see
-        # auto_add_runs_to_all_users); it must not reopen the catalog when
-        # an admin has picked specific profiles (allowed_categories
-        # defaults to ['*'] on new users, which previously made every
-        # profile accessible).
+        try:
+            import wallet as _w
+            if _w.has_full_profile_catalog(u, session.get('username') or ''):
+                has_all_access = True
+        except Exception:
+            pass
+        # Only Prometheus-only seats are governed. Everyone else,
+        # including Jessie, sees the full catalog even if an old
+        # allowed_runs snapshot is still on the record.
         if has_all_access:
             for e in job_list:
                 e['accessible'] = True
@@ -41127,6 +41139,12 @@ def _user_jiq_run_access(user):
     is_admin = role in ('admin', 'super_admin')
     if is_admin:
         return True, True, set()
+    try:
+        import wallet as _w
+        if _w.has_full_profile_catalog(user):
+            return False, True, set()
+    except Exception:
+        pass
     raw = (user or {}).get('allowed_journey_iq_runs')
     if raw is None:
         return False, True, set()

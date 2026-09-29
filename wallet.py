@@ -2836,6 +2836,21 @@ def is_internal_staff_seat(user: dict, username: str = "") -> bool:
     return False
 
 
+def has_full_profile_catalog(user, username: str = "") -> bool:
+    """True when this seat is not on the Prometheus-only governor.
+
+    Only prometheus_self_serve seats are limited to files they paid
+    for (plus any complimentary grant). Jessie, other staff, Kartel,
+    and every regular dashboard seat see the full catalog even if an
+    old allowed_runs snapshot is still on the record.
+    """
+    if not isinstance(user, dict):
+        return False
+    if is_internal_staff_seat(user, username):
+        return True
+    return not is_paid_only_plan(user)
+
+
 def is_paid_only_plan(user) -> bool:
     return (isinstance(user, dict)
             and str(user.get("plan") or "").strip()
@@ -3905,7 +3920,8 @@ __all__ = [
     "resolve_billing_subject", "ensure_company_record",
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
-    "is_internal_staff_seat", "is_paid_only_plan",
+    "is_internal_staff_seat", "has_full_profile_catalog",
+    "is_paid_only_plan",
     "PUBLIC_SIGNUP_SOURCE", "is_public_signup_seat",
     "pays_retail_for_library_match", "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
