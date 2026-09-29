@@ -145357,8 +145357,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 
                 if (!response.ok) {
                     console.error('Failed to load profiles:', response.status);
-                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Failed to load profiles</div>';
+                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Reconnecting...</div>';
                     if (window._boot) window._boot.failStep('profiles');
+                    // Same backoff as the "loading" path: a 502 or a
+                    // timeout during an instance restart is transient, and
+                    // leaving a dead-end message meant the sidebar stayed
+                    // empty until the user reloaded by hand (prod 2026-09-29).
+                    _dashProfileLoadingTries++;
+                    const _errRetryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _errRetryMs);
                     return;
                 }
                 
@@ -145426,8 +145435,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             } catch (error) {
                 console.error('Failed to load profiles:', error);
-                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Error loading profiles</div>';
+                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Reconnecting...</div>';
                 if (window._boot) window._boot.failStep('profiles');
+                    // Same backoff as the "loading" path: a 502 or a
+                    // timeout during an instance restart is transient, and
+                    // leaving a dead-end message meant the sidebar stayed
+                    // empty until the user reloaded by hand (prod 2026-09-29).
+                    _dashProfileLoadingTries++;
+                    const _errRetryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _errRetryMs);
             }
         }
 
