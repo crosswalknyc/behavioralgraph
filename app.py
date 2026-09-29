@@ -85,7 +85,11 @@ import hashlib
 import secrets
 import time
 from html import escape
-from datetime import datetime, timedelta, date
+# timezone belongs here with the rest. Six functions reach for it -
+# the Prometheus thread endpoints, the chat-history save, the CSV
+# date stamp, a rankers reply - and every one raised NameError
+# because it was only ever imported locally inside other functions.
+from datetime import datetime, timedelta, date, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
