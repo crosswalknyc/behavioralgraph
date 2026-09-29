@@ -376,6 +376,47 @@ def _path_ok_while_view_locked(path):
     )
 
 
+ACCESS_EXPIRED_MESSAGE = (
+    "This account's access window has ended. "
+    "Contact your administrator if you need it reopened."
+)
+
+
+@app.before_request
+def reject_if_access_expired():
+    """Seats with access_expires stop after that calendar day (UTC)."""
+    uname = session.get('username')
+    if not uname:
+        return None
+    if session.get('cloaked_from'):
+        return None
+    path = request.path or ''
+    if path in ('/login', '/logout') or path.startswith('/static/'):
+        return None
+    if path in ('/health', '/healthz', '/ready', '/favicon.ico'):
+        return None
+    try:
+        import wallet as _wallet_exp
+        data = load_users()
+        user = (data.get('users') or {}).get(uname)
+        if not user:
+            return None
+        if _normalize_role(user.get('role', 'user')) == 'super_admin':
+            return None
+        if not _wallet_exp.access_window_expired(user):
+            return None
+    except Exception:
+        return None
+    session.clear()
+    if path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'error': ACCESS_EXPIRED_MESSAGE,
+            'redirect': '/login',
+        }), 403
+    return redirect(url_for('login_page'))
+
+
 @app.before_request
 def redirect_if_dashboard_view_locked():
     """Card-gated seats land on /wallet. No dashboard content until
@@ -3848,6 +3889,16 @@ def login_page():
         
         if not verify_password(user['password_hash'], password):
             return jsonify({'success': False, 'error': 'Invalid username or password'})
+
+        try:
+            import wallet as _wallet_exp
+            if _wallet_exp.access_window_expired(user):
+                return jsonify({
+                    'success': False,
+                    'error': ACCESS_EXPIRED_MESSAGE,
+                })
+        except Exception:
+            pass
 
         # Self-serve signup that never finished the opening balance
         # (site_signup.py). Send them back to finish, do not open a
@@ -59030,6 +59081,10 @@ NO_FUNDS_MESSAGE = (
     "going. The moment funding lands, your next ask goes straight "
     "through.")
 
+OPENING_FUNDS_MESSAGE = (
+    "Prometheus opens after the $500 card payment. Use the payment "
+    "link in your welcome email, or add $500 on the wallet page.")
+
 
 def _pm_has_funding(user, username, data=None):
     """Pure funding decision for the Prometheus ask surfaces (Jenna
@@ -59062,6 +59117,13 @@ def _pm_has_funding(user, username, data=None):
             return True, 'unlimited'
     except Exception:
         pass
+    try:
+        if data is None:
+            data = load_users()
+        if _w.opening_funding_unmet(user, data):
+            return False, 'opening_topup'
+    except Exception:
+        traceback.print_exc()
     try:
         has_cr, left = check_user_credits(username)
         if left == -1:
@@ -59106,9 +59168,11 @@ def _pm_funds_gate(user):
         except Exception:
             pass
         print(f"[prometheus] funds gate blocked {uname!r} ({reason})")
+        reply = (OPENING_FUNDS_MESSAGE if reason == 'opening_topup'
+                 else NO_FUNDS_MESSAGE)
         return jsonify({
             'success': True, 'action': 'answer',
-            'reply': NO_FUNDS_MESSAGE,
+            'reply': reply,
             'followups': [],
             'no_funds': True,
             'top_up_url': '/wallet',

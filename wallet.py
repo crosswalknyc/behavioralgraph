@@ -1598,11 +1598,56 @@ def dashboard_view_locked(user: dict, users_data: dict = None,
     return _lifetime_topups_usd(subject) + 1e-9 < float(need)
 
 
+def opening_funding_unmet(user: dict, users_data: dict = None,
+                          subject: dict = None) -> bool:
+    """True until the billing subject has a card AND lifetime
+    top-ups meet the opening amount on the user or the subject.
+
+    This is the Prometheus / pull hold. It does not blank the rest
+    of the dashboard. require_card_to_view still uses
+    dashboard_view_locked for that.
+    """
+    if subject is None:
+        if isinstance(users_data, dict):
+            subject, _, _ = resolve_billing_subject(user or {}, users_data)
+        else:
+            subject = user
+    need = max(opening_topup_usd(user), opening_topup_usd(subject))
+    if need <= 0:
+        return False
+    if not has_card_on_file(subject):
+        return True
+    return _lifetime_topups_usd(subject) + 1e-9 < float(need)
+
+
+def access_window_expired(user: dict, today=None) -> bool:
+    """True when access_expires is a date and today is after it.
+
+    The stored date is the last calendar day they can sign in
+    (UTC). Missing / unreadable dates never expire.
+    """
+    raw = (user or {}).get("access_expires")
+    if not raw:
+        return False
+    try:
+        exp = datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return False
+    if today is None:
+        day = datetime.now(timezone.utc).date()
+    else:
+        try:
+            day = today.date()
+        except Exception:
+            day = today
+    return day > exp
+
+
 def opening_checkout_allowed(amt, *, amount_locked: bool = False,
                              user: dict = None,
                              users_data: dict = None) -> bool:
     """Allow a sub-$5,000 amount only for an amount-locked admin
-    payment link, or a still-locked seat's opening checkout.
+    payment link, or a seat whose opening top-up is still unpaid.
     Regular Add Funds stays at $5,000."""
     try:
         amt = float(amt)
@@ -1614,8 +1659,8 @@ def opening_checkout_allowed(amt, *, amount_locked: bool = False,
         return True
     if amount_locked:
         return True
-    if user and requires_card_to_view(user):
-        return dashboard_view_locked(user, users_data)
+    if user and opening_funding_unmet(user, users_data):
+        return True
     return False
 
 
@@ -2074,6 +2119,13 @@ def wallet_can_absorb(user: dict, amount_usd: float) -> tuple:
     if mode == "auto_reload":
         if not has_card_on_file(user):
             return False, "auto_reload_no_card"
+        # Do not treat a saved card as funding until the opening
+        # top-up has landed. Otherwise the first Prometheus ask
+        # would auto-charge $5,000 and skip the $500 opener.
+        if opening_topup_usd(user) > 0 and (
+                _lifetime_topups_usd(user) + 1e-9
+                < opening_topup_usd(user)):
+            return False, "opening_topup_unmet"
         # Assume auto-reload will succeed. The caller triggers the
         # Stripe charge synchronously and rolls back the deduct on
         # Stripe failure.
@@ -2103,6 +2155,10 @@ def needs_auto_reload(user: dict) -> tuple:
     if billing_mode(user) != "auto_reload":
         return False, 0.0
     if not has_card_on_file(user):
+        return False, 0.0
+    if opening_topup_usd(user) > 0 and (
+            _lifetime_topups_usd(user) + 1e-9
+            < opening_topup_usd(user)):
         return False, 0.0
     if wallet_balance(user) > auto_reload_threshold(user):
         return False, 0.0
@@ -3927,6 +3983,7 @@ __all__ = [
     "top_up_pack_sizes", "top_up_min_custom",
     "OPENING_TOPUP_MIN_USD", "opening_topup_usd",
     "requires_card_to_view", "dashboard_view_locked",
+    "opening_funding_unmet", "access_window_expired",
     "has_complimentary_grant", "complimentary_view_unlocked",
     "opening_checkout_allowed",
     "wallet_balance", "wallet_stats",
