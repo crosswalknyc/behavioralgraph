@@ -155,16 +155,25 @@ _RAILS: dict[str, DerivedRail] = {
         child='starz_amazon',
         parent='starz',
         label='Starz on Amazon',
-        anchor_share=0.44,
+        # 2026-09-29: first-party distribution data puts roughly 80% of
+        # Starz viewing through Amazon, well above the 44% the 10-KT
+        # revenue split implied (Amazon sells at wholesale, so its
+        # dollars understate its heads by more than the earlier
+        # working allowed). The rail hovers around that figure and
+        # never sits on it: the film library still over-indexes to the
+        # Amazon-carried audience and the flagship originals still
+        # under-index, each title holds its own place inside its band,
+        # and the daily movement rides on top.
+        anchor_share=0.80,
         bands={
             # Studio films reach Prime Video subscribers in the pay-one
             # window and are watched there first, so the film library
             # over-indexes to the Amazon-carried audience. The flagship
             # originals are what drive people to install the Starz app,
             # so they under-index.
-            'film': (0.440, 0.496),
-            'tv':   (0.372, 0.436),
-            '':     (0.372, 0.496),
+            'film': (0.792, 0.868),
+            'tv':   (0.724, 0.796),
+            '':     (0.724, 0.868),
         },
         method=("the part of this title's Starz audience that watches "
                 'inside Prime Video'),

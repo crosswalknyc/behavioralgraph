@@ -195,8 +195,16 @@ _MIX: dict = {
                'The Roku Channel', 'Apple TV Channels',
                'YouTube Primetime Channels', 'Hulu',
                'operator-sold streaming through Xfinity and DirecTV'),
-        amazon_share=0.44, on_amazon=True, breakout=True,
-        basis=('Starz Entertainment Form 10-KT filed 2026-02-26: "Starz '
+        amazon_share=0.80, on_amazon=True, breakout=True,
+        basis=('2026-09-29: first-party distribution data received by '
+               'Crosswalk puts roughly 80% of Starz viewing through '
+               'Amazon. That replaces the 44% derived below from the '
+               'revenue split, which understated Amazon because it '
+               'sells at wholesale economics (its dollars are a smaller '
+               'share than its heads). The rail hovers around 80% with '
+               'per-title and daily movement, never on it. Earlier '
+               'working, kept for the record: '
+               'Starz Entertainment Form 10-KT filed 2026-02-26: "Starz '
                'generated 29.0% of its revenue from Amazon.com, Inc. and '
                'its subsidiaries" over the nine months to 2025-12-31, '
                'against 29.7% the prior fiscal year. Amazon is the only '

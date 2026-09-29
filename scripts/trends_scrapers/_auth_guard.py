@@ -184,6 +184,19 @@ _SITES: dict[str, dict[str, Any]] = {
         'label': 'Peacock',
         'app_url': 'https://www.peacocktv.com/watch/home',
         'hosts': ['peacocktv.com', 'www.peacocktv.com'],
+        # The "Who's watching?" chooser at /profiles. Measured
+        # 2026-09-29: the tiles are DIVs, not buttons (so the text-
+        # based fallback only ever saw the nav: 'Home', 'Movies', a
+        # skip link, and parked there four mornings running). Each
+        # tile's click handler sits on the OUTER `.profiles__avatar`
+        # card (innerText "Jenna\nYou must be 18+ ..."); clicking the
+        # inner `.profiles__avatar--image` does nothing. Measured by
+        # clicking each candidate: only the outer card navigated to
+        # /watch/home with rails rendered. The edit pencil beside it
+        # is a separate button and must not be the thing clicked.
+        'chooser_tiles': '.profiles__avatar.profiles-main-page',
+        'profile_name': 'jenna',
+        'home_url': 'https://www.peacocktv.com/watch/home',
         'signed_in': ['continue watching', 'keep watching',
                       'because you watched', 'trending now'],
         'signed_out': ['choose your plan', 'start watching free',

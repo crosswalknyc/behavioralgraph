@@ -3062,7 +3062,9 @@ _STREAMING_PLATFORMS_META = [
     # `scripts/trends_scrapers/derived_rails.py`.
     {'key': 'starz_amazon',
      'label': 'Starz on Amazon',
-     'ceiling': 2_480_000,
+     # 5,000,000 (Starz) x 0.868 (top of the film band) since the
+     # 2026-09-29 move to an 80% Amazon anchor; was 2,480,000 at 44%.
+     'ceiling': 4_340_000,
      'derived_from': 'starz',
      'anchors': (
          'Starz sold through Amazon Prime Video Channels. Same '
@@ -8626,8 +8628,74 @@ def _pc_key(kind: str, norm: str) -> str:
     return f'{kind}:{norm}'
 
 
+# How far back a declared chart service may carry its last published
+# chart when today's capture has none. A chart from last week is not
+# this week's order, so beyond this the rail is honestly chartless.
+_CHART_CARRY_DAYS = 5
+
+# Service -> the sibling snapshot(s) whose archive holds its chart.
+_CHART_ARCHIVE_SOURCES: dict[str, tuple[str, ...]] = {
+    'disneyplus':    ('disneyplus_top10',),
+    'peacock':       ('peacock_top10',),
+    'paramountplus': ('paramountplus_top',),
+    'hulu':          ('hulu_popular',),
+    'starz':         ('starz_top10',),
+    'tubi':          ('tubi_popular',),
+    'pluto':         ('pluto_popular',),
+}
+
+
 def published_chart_index(slug: str,
                           snap: Optional[dict]) -> dict[str, tuple]:
+    """Positions this service publishes: today's, or the most recent
+    archived chart within `_CHART_CARRY_DAYS`, each entry then carrying
+    the day it came from as a fourth element.
+
+    Board invariant I2 (2026-09-29): a service that publishes a chart
+    renders one, or the last one it did publish marked with that day.
+    Disney+ hit a sign-in wall, Peacock parked on its profile chooser,
+    Prime Video and Paramount+ never hydrated their Top 10 for an
+    anonymous visitor, and all four rails rendered no chart at all and
+    fell back to our own order as if the platform had none. The carry
+    lives HERE, in the reader both the render and the pricing pass
+    use, so a carried chart is levelled exactly like a captured one; a
+    render-only carry left the chart rows at catalog values.
+    """
+    out = _published_chart_index_one(slug, snap)
+    if out or slug not in _PUBLISHED_CHARTS:
+        return out
+    # Where the archived chart lives. A chart scraped by a sibling
+    # (disneyplus_top10, peacock_top10, hulu_popular, ...) is merged
+    # into `latest/<service>.json` only, never into that day's dated
+    # copy, so the service's own archive never holds a chart and the
+    # sibling's archive is the record. The sibling is tried first.
+    sources = list(_CHART_ARCHIVE_SOURCES.get(slug, ())) + [slug]
+    for back in range(1, _CHART_CARRY_DAYS + 1):
+        idx = {}
+        for src in sources:
+            try:
+                prior = _read_dated_snapshot(src, back)
+            except Exception:
+                prior = None
+            if not prior:
+                continue
+            idx = _published_chart_index_one(slug, prior)
+            if idx:
+                break
+        if idx:
+            day = (date.today() - timedelta(days=back)).isoformat()
+            logger.warning("%s: no published chart in today's snapshot; "
+                           "carrying the chart archived %d day(s) back (%s)",
+                           slug, back, day)
+            return {k: tuple(v) + (day,) for k, v in idx.items()}
+    logger.warning("%s: no published chart today and none archived in "
+                   "the last %d days; the rail renders without one",
+                   slug, _CHART_CARRY_DAYS)
+    return {}
+
+
+def _published_chart_index_one(slug: str,
+                               snap: Optional[dict]) -> dict[str, tuple]:
     """Positions this service actually publishes, for one snapshot.
 
     Returns `{'film:norm title': (position, chart label, chart group),

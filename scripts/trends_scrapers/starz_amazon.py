@@ -64,6 +64,15 @@ contradict it: Prime Video Channels carries about 44% of the Starz US
 streaming audience, the Starz app about a third, and the remaining
 channels storefronts and MVPD-sold OTT paths the rest.
 
+SUPERSEDED 2026-09-29. First-party distribution data received by
+Crosswalk puts roughly 80% of Starz viewing through Amazon. The
+revenue-split working above understated Amazon's head count because
+Amazon sells at wholesale economics. The anchor now lives at 0.80 in
+`derived_rails._RAILS['starz_amazon']` (bands: films 0.792 to 0.868,
+series 0.724 to 0.796) and `carriage_mix.CARRIAGE['starz']`; this
+module reads it from there. The rail hovers around 80% and never
+sits on it.
+
 So Jenna's expectation holds against the direct app and only against
 the direct app: the Amazon-carried audience is the larger of the two
 distribution paths, which is exactly what management means by calling
