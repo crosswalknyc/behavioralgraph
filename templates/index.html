@@ -185932,86 +185932,147 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 </script>
 
 <script>
-    // Product switching leaves one view standing (2026-09-29). Each
-    // show function used to hide its siblings from its own hardcoded
-    // list, and those lists went stale every time a product was
-    // added: Rankers stayed mounted under Profile IQ, and walking the
-    // menu stacked four products on one page. The set is read from
-    // the DOM instead, so a product added later is covered for free.
+    // Product switching leaves exactly one view standing (2026-09-29).
+    //
+    // An earlier pass inferred intent by diffing visibility: it hid
+    // whatever was not newly revealed and bailed when nothing new
+    // appeared. That bail fired in the common case, because
+    // showProfileIQ hides a stale hardcoded list. It still targets
+    // rankerIQView, an id that no longer exists in this document, and
+    // it never hides Trends, Blue, Microdramas, Intent, Share of Time
+    // or Flywheel, so those stay mounted underneath Profile IQ.
+    // Clicking back to one of them revealed nothing new, so the sweep
+    // returned early, and the early return also skipped the Profile IQ
+    // chrome teardown. That chrome is the only part that matters
+    // visually: it is pinned to document.body at z-index 2147481000,
+    // outside .container, so no hide loop over container children can
+    // reach it. Rankers and Trends also share trendsIQView, so
+    // switching between those two never revealed anything new either.
+    //
+    // Each product declares the one view it owns instead of the sweep
+    // guessing. After the call, if that view is up, every other owned
+    // view comes down and the Profile IQ chrome is always settled.
     (function () {
-        function views() {
-            var c = document.querySelector('.container');
-            if (!c) return [];
-            var out = [];
-            for (var i = 0; i < c.children.length; i++) {
-                var k = c.children[i];
-                if (k.tagName !== 'DIV') continue;
-                if (!/View$/.test(k.id || '')) continue;
-                if (k.classList.contains('modal')) continue;
-                out.push(k);
+        var TARGET = {
+            showProfileIQ: 'dashboardView',
+            showDashboardView: 'dashboardView',
+            showSubscriberIQ: 'subscriberIQView',
+            showSFConversion: 'sfConversionView',
+            showCultureRankerIQ: 'trendsIQView',
+            showTrendsIQ: 'trendsIQView',
+            showTicketSalesIQ: 'ticketSalesIQView',
+            showTicketSalesTracker: 'ticketSalesTrackerView',
+            showHedgeFundIQ: 'hedgeFundIQView',
+            showSentimentIQ: 'sentimentIQView',
+            showEcommerceIQ: 'ecommerceIQView',
+            showJourneyIQ: 'journeyIQView',
+            showShareOfTimeIQ: 'shareOfTimeIQView',
+            showFlywheelConversionDashboard: 'flywheelConversionView',
+            showTalentFitIQ: 'talentFitIQView',
+            showBlueIQ: 'blueIQView',
+            showMicrodramasIQ: 'microdramasIQView',
+            showIntentIQ: 'intentIQView',
+            showRoasIQ: 'roasIQView',
+            showLLMOIQ: 'llmoIQView',
+            showTalentSearchIQ: 'talentSearchIQView',
+            showTalentTheaterIQ: 'talentTheaterIQView',
+            showCustomAnalysis: 'customAnalysisView',
+            showFormView: 'formView'
+        };
+        // helmIQView is opened by an inline handler in the product menu
+        // rather than a show function, so there is nothing to wrap for
+        // it. It still has to come down when another product opens.
+        var EXTRA = ['helmIQView'];
+        // Only views a product owns are swept. Views that live inside a
+        // product are deliberately absent, because hiding them would
+        // break the product that owns them: comparisonReportView sits
+        // in Profile IQ's compare tab, and the daily/historic metric
+        // tables and charts sit inside their dashboards. So are the
+        // non-product panels (deck editor, ribbon, chat), and
+        // flywheelIQView and impactIQView, which no code ever shows.
+        var OWNED = (function () {
+            var seen = {}, out = [], k, i;
+            for (k in TARGET) {
+                if (!TARGET.hasOwnProperty(k)) continue;
+                if (!seen[TARGET[k]]) { seen[TARGET[k]] = 1; out.push(TARGET[k]); }
+            }
+            for (i = 0; i < EXTRA.length; i++) {
+                if (!seen[EXTRA[i]]) { seen[EXTRA[i]] = 1; out.push(EXTRA[i]); }
             }
             return out;
+        })();
+
+        function isVisible(el) {
+            if (!el) return false;
+            if (el.style && el.style.display === 'none') return false;
+            try {
+                return getComputedStyle(el).display !== 'none';
+            } catch (e) {
+                return true;
+            }
         }
-        function visibleIds() {
-            return views().filter(function (k) {
-                return getComputedStyle(k).display !== 'none';
-            }).map(function (k) { return k.id; });
-        }
-        // Profile IQ parks its chrome on the body, so it outlives the
-        // swap and paints over whatever opens next. An inline display
-        // cannot stand it down, because the visible state is held by a
-        // class rule that outranks it. Profile IQ's own pin function
-        // does the full teardown and reads the view as hidden the
-        // moment it is, so call that. On Profile IQ it just re-pins.
+        // Profile IQ pins its hero and tab bar to document.body, so the
+        // chrome outlives the swap and paints over whatever opens next.
+        // An inline display cannot stand it down from here; its own pin
+        // function reads the view as hidden the moment it is and does
+        // the full teardown, so call that. On Profile IQ it re-pins.
         function settleProfileChrome() {
             if (typeof window._piqV4PinChrome !== 'function') return;
             try { window._piqV4PinChrome(); } catch (e) { /* chrome only */ }
         }
-        var NAMES = ['showProfileIQ', 'showSubscriberIQ', 'showSFConversion',
-                     'showCultureRankerIQ', 'showTicketSalesIQ',
-                     'showTicketSalesTracker', 'showHedgeFundIQ',
-                     'showSentimentIQ', 'showEcommerceIQ', 'showJourneyIQ',
-                     'showShareOfTimeIQ', 'showFlywheelConversionDashboard',
-                     'showDashboardView', 'showTalentFitIQ', 'showBlueIQ',
-                     'showTrendsIQ', 'showMicrodramasIQ', 'showIntentIQ',
-                     'showBrandTrackingIQ'];
+        function sweep(keepId) {
+            for (var i = 0; i < OWNED.length; i++) {
+                if (OWNED[i] === keepId) continue;
+                var el = document.getElementById(OWNED[i]);
+                if (el && isVisible(el)) el.style.display = 'none';
+            }
+            settleProfileChrome();
+        }
         function wrap() {
-            NAMES.forEach(function (name) {
+            Object.keys(TARGET).forEach(function (name) {
                 var original = window[name];
                 if (typeof original !== 'function' || original._cwSweep) return;
                 var wrapped = function () {
-                    var before = visibleIds();
-                    var out = original.apply(this, arguments);
-                    var after = visibleIds();
-                    var opened = after.filter(function (id) {
-                        return before.indexOf(id) === -1;
-                    });
-                    // Nothing new opened means the call bailed on its
-                    // access check, or the product was already up.
-                    // Either way there is no switch to clean up after.
-                    if (!opened.length) return out;
-                    views().forEach(function (k) {
-                        if (opened.indexOf(k.id) === -1) k.style.display = 'none';
-                    });
-                    settleProfileChrome();
-                    return out;
+                    var keep = TARGET[name];
+                    // try/finally, because these functions reveal their
+                    // own view early and then keep working: Rankers
+                    // touches window.__trendsIQ and calls
+                    // loadTrendsIQFilterOptions after the view is up. A
+                    // throw past that point used to skip the sweep
+                    // entirely, leaving the new product on screen with
+                    // Profile IQ still under it. The sweep has to run
+                    // even when the product it swept to is broken.
+                    try {
+                        return original.apply(this, arguments);
+                    } finally {
+                        // A show function returns without opening
+                        // anything when it bails on its access check.
+                        // Sweep only once its own view is actually up,
+                        // so a product the seat cannot open never
+                        // blanks the page.
+                        if (isVisible(document.getElementById(keep))) {
+                            sweep(keep);
+                        }
+                    }
                 };
                 wrapped._cwSweep = true;
                 window[name] = wrapped;
             });
         }
-        // Install now rather than on DOMContentLoaded. This is the
-        // last script in the document, so every show function already
-        // exists. The product restore that runs on load, and the menu
-        // dispatcher, both build handler maps inside DOMContentLoaded
-        // callbacks registered earlier than this one, and several of
-        // their entries hold the function object itself rather than
-        // looking it up when called. Waiting would let them capture
-        // the unwrapped originals, which is how a restored product
-        // came up stacked on top of Profile IQ.
+        // Install at parse time rather than on DOMContentLoaded. This is
+        // the last script in the document, so every top-level show
+        // function already exists. The product restore that runs on
+        // load and the menu dispatcher both build handler maps inside
+        // DOMContentLoaded callbacks registered earlier than this one,
+        // and several of their entries hold the function object itself
+        // rather than looking it up when called. Waiting would let them
+        // capture the unwrapped originals, which is how a restored
+        // product came up stacked on top of Profile IQ.
         wrap();
-        // Run again once the DOM is ready in case a later block
-        // defines one of these. Wrapping is idempotent.
+        // showIntentIQ is assigned inside an earlier DOMContentLoaded
+        // callback, so it does not exist yet at parse time. Our listener
+        // is registered last and therefore runs after it is defined.
+        // Wrapping is idempotent.
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', wrap);
         }
