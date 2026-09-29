@@ -145180,6 +145180,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         // Load profiles when dashboard tab is shown
         let dashboardProfilePolling = null;
+        // Consecutive "still loading" replies; drives the retry backoff.
+        let _dashProfileLoadingTries = 0;
         
         // v2 bump (2026-06-10): forces the cached /api/jobs payload to be
         // refetched after the IMDB-id backfill so variant profiles
@@ -145367,18 +145369,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (container) {
                         container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Loading profiles from cloud...</div>';
                     }
-                    // Poll every 2 seconds until ready
-                    if (!dashboardProfilePolling) {
-                        dashboardProfilePolling = setInterval(() => loadDashboardProfiles(), 2000);
-                    }
+                    // Retry with backoff, not a flat 2s interval. A wedged
+                    // worker can report "loading" indefinitely (prod
+                    // 2026-09-29), and several open tabs each polling every
+                    // 2s pinned CPU above the autoscale target - starving the
+                    // very boot thread we were waiting on and tripping the
+                    // /healthz timeout. 2s grows to a 30s ceiling.
+                    _dashProfileLoadingTries++;
+                    const _retryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _retryMs);
                     return;
                 }
                 
-                // Clear polling interval once loaded
+                // Clear the pending retry once loaded, and reset the
+                // backoff so a later cold start starts from 2s again.
                 if (dashboardProfilePolling) {
-                    clearInterval(dashboardProfilePolling);
+                    clearTimeout(dashboardProfilePolling);
                     dashboardProfilePolling = null;
                 }
+                _dashProfileLoadingTries = 0;
                 
                 setSessionJobsCache(data);
                 const profiles = data.jobs || [];
