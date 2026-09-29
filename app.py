@@ -394,6 +394,11 @@ def redirect_if_dashboard_view_locked():
             return None
         if not _wallet_lock.dashboard_view_locked(user, data):
             return None
+        # Freebies do not need a card. A paid-only seat with a
+        # complimentary grant can open those files without a
+        # top-up. Catalog filters still hide everything else.
+        if _wallet_lock.complimentary_view_unlocked(user, data):
+            return None
     except Exception:
         return None
     if path.startswith('/api/'):
@@ -414,7 +419,8 @@ def _post_auth_redirect(user, users_data=None):
     try:
         import wallet as _wallet_lock
         data = users_data if users_data is not None else load_users()
-        if _wallet_lock.dashboard_view_locked(user, data):
+        if (_wallet_lock.dashboard_view_locked(user, data)
+                and not _wallet_lock.complimentary_view_unlocked(user, data)):
             return '/wallet'
     except Exception:
         pass

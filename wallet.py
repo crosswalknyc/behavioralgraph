@@ -2481,6 +2481,50 @@ def complimentary_keys(holder, product: str) -> list:
     return _clean_paid_runs(keys.get(product))
 
 
+def _holder_has_complimentary(holder) -> bool:
+    if not isinstance(holder, dict):
+        return False
+    keys = holder.get("complimentary_keys")
+    if isinstance(keys, dict):
+        for lst in keys.values():
+            if _clean_paid_runs(lst):
+                return True
+    titles = holder.get("complimentary_titles")
+    if isinstance(titles, dict):
+        for lst in titles.values():
+            if any(str(x or "").strip() for x in (lst or [])):
+                return True
+    return False
+
+
+def has_complimentary_grant(user, users_data=None) -> bool:
+    """True when this seat or its company wallet holds a freebie."""
+    if _holder_has_complimentary(user):
+        return True
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return False
+    try:
+        _subject, kind, name = resolve_billing_subject(user, users_data)
+    except Exception:
+        return False
+    if kind != "company" or not name:
+        return False
+    rec = (users_data.get("companies") or {}).get(name)
+    return _holder_has_complimentary(rec)
+
+
+def complimentary_view_unlocked(user, users_data=None) -> bool:
+    """Complimentary files do not need a card.
+
+    A paid-only seat with a free grant can open those files with
+    no card on file and no top-up. Full-access card locks (the
+    opening $500 seat) stay locked so the fleet does not leak.
+    """
+    if not is_paid_only_plan(user):
+        return False
+    return has_complimentary_grant(user, users_data)
+
+
 def _key_in_list(item_key, keys) -> bool:
     want = str(item_key or "").strip()
     if not want:
@@ -2565,7 +2609,8 @@ def _merge_key_map(into, incoming) -> dict:
 def seed_wbd_complimentary(rec: dict) -> dict:
     """Keep WBD's free Gilmore / Dexter / Young Sheldon grant on the
     company record. Paid pulls stay on allowed_runs; this gift lives
-    on complimentary_keys so a free file is not billed as a purchase."""
+    on complimentary_keys so a free file is not billed as a purchase.
+    No card and no top-up are required to open these files."""
     if not isinstance(rec, dict):
         return rec
     gifted = {}
@@ -3799,6 +3844,7 @@ __all__ = [
     "top_up_pack_sizes", "top_up_min_custom",
     "OPENING_TOPUP_MIN_USD", "opening_topup_usd",
     "requires_card_to_view", "dashboard_view_locked",
+    "has_complimentary_grant", "complimentary_view_unlocked",
     "opening_checkout_allowed",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
