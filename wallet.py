@@ -124,8 +124,8 @@ DEFAULT_PRICING = {
         # tool_price_overrides. Digital Journey is $500 (2026-09-18).
         "brand_partnership_iq": 1000.0,
         "journey_iq": 500.0,
-        # 2026-09-18 (Jenna): Flywheel report is $300 per pull.
-        "flywheel_iq": 300.0,
+        # 2026-09-29: Flywheel report is $500 per pull.
+        "flywheel_iq": 500.0,
         # 2026-09-22 (Jenna): Attribution IQ tracking - $500 first
         # setup pull, $100 per prepaid daily-refresh day (charged up
         # front through the user's chosen end date; no refunds).
@@ -142,7 +142,13 @@ DEFAULT_PRICING = {
     # ... and then one for pulling one'. Empty by default; admin sets
     # values in /admin/billing -> Pricing. When both are set, a paying
     # customer is billed the monthly for access + the per-pull on use.
-    "per_tool_monthly_usd": {},
+    # 2026-09-29: Trends IQ, Rankers IQ (bundle) and Fin IQ start at
+    # $5,000/mo, matching the public rate card.
+    "per_tool_monthly_usd": {
+        "trends_iq": 5000.0,
+        "rankers_iq_access": 5000.0,
+        "hedge_fund_iq": 5000.0,
+    },
     # Built-in tools an admin has HIDDEN from the pricing panel to
     # reduce clutter (Jenna 2026-09-09: 'needs to be a way to delete
     # from there too'). Soft-hide only: the MODULE_CATALOG code still
@@ -472,7 +478,7 @@ MODULE_CATALOG = [
     ("journey_iq",                 "Digital Journey IQ",
      "modules", 10, 500.0, "has_journey_iq_access"),
     ("flywheel_iq",                "Flywheel IQ",
-     "modules", 5, 300.0, "has_flywheel_iq_access"),
+     "modules", 5, 500.0, "has_flywheel_iq_access"),
     ("attribution_iq_setup",       "Attribution IQ - Tracking Setup",
      "modules", 5, 500.0, "has_intent_iq_access"),
     ("attribution_iq_daily",       "Attribution IQ - Daily Refresh",
