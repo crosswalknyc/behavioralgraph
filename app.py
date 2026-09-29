@@ -10357,12 +10357,16 @@ def index():
                            user_email=email,
                            cloaked_from=session.get('cloaked_from'),
                            # Self-serve Prometheus plan (2026-09-24):
-                           # the dashboard opens Prometheus on load and
-                           # drops the disabled products from SELECT
-                           # PRODUCT so the user sees only what they have.
+                           # the dashboard opens Prometheus on load.
+                           # Granted products (paid pulls or complimentary
+                           # files) stay in SELECT PRODUCT so WBD can
+                           # open Gilmore Girls / Dexter / Young Sheldon.
                            self_serve_plan=bool(
                                user and str(user.get('plan') or '')
                                == 'prometheus_self_serve'),
+                           self_serve_has_products=bool(
+                               has_profile_iq or has_subscriber_iq
+                               or has_flywheel_iq or has_journey_iq),
                            is_dev_env=IS_DEV_ENV)
 
 

@@ -18858,26 +18858,20 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
     // Self-serve Prometheus plan (2026-09-24). Set before any module
     // script runs so the Prometheus launcher init can read it.
     window.CW_SELF_SERVE_PLAN = {{ 'true' if self_serve_plan else 'false' }};
+    window.CW_SELF_SERVE_HAS_PRODUCTS = {{ 'true' if self_serve_has_products|default(false) else 'false' }};
     if (window.CW_SELF_SERVE_PLAN) {
         var _ssCss = document.createElement('style');
-        _ssCss.textContent = [
-            'body.cw-self-serve .view-toggle,',
-            'body.cw-self-serve #formView,',
-            'body.cw-self-serve #dashboardView,',
-            'body.cw-self-serve [id$="IQView"]{display:none !important;}'
-        ].join('');
+        // Hide the create-profile form only. Complimentary and paid
+        // files need SELECT PRODUCT plus the IQ views. Do not strip
+        // dropdown options; disabled products stay out of the panel.
+        var _ssRules = ['body.cw-self-serve #formView{display:none !important;}'];
+        if (!window.CW_SELF_SERVE_HAS_PRODUCTS) {
+            _ssRules.push('body.cw-self-serve .view-toggle{display:none !important;}');
+        }
+        _ssCss.textContent = _ssRules.join('');
         document.head.appendChild(_ssCss);
         document.addEventListener('DOMContentLoaded', function () {
             document.body.classList.add('cw-self-serve');
-            var dd = document.getElementById('viewNavDropdown');
-            if (dd) {
-                Array.prototype.slice.call(dd.options).forEach(function (o) {
-                    if (o.parentNode) o.parentNode.removeChild(o);
-                });
-                if (typeof window.rebuildViewNavCustomPanel === 'function') {
-                    try { window.rebuildViewNavCustomPanel(); } catch (_) {}
-                }
-            }
         });
     }
 </script>

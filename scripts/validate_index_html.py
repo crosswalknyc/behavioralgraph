@@ -201,11 +201,15 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "Brand Tracking showBrandTrackingIQ() entry point"),
     ('value="brandTrackingIQ"',
      "Brand Tracking SELECT PRODUCT dropdown option"),
+    ('CW_SELF_SERVE_HAS_PRODUCTS',
+     "Prometheus-only seats keep SELECT PRODUCT when they hold files"),
 ]
 
-# Anchors we DO NOT want in the file (false negatives). Left empty for
-# now; add here if a bad string keeps re-appearing.
-FORBIDDEN_ANCHORS: list[tuple[str, str]] = []
+# Anchors we DO NOT want in the file (false negatives).
+FORBIDDEN_ANCHORS: list[tuple[str, str]] = [
+    ('body.cw-self-serve [id$="IQView"]',
+     "must not hide every IQ view for Prometheus-only seats with files"),
+]
 
 
 # ---- IMPLEMENTATION --------------------------------------------------------
