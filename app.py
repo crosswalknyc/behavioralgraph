@@ -58940,6 +58940,89 @@ def _pm_page_clarify_subject(text, page_subject):
     return ''
 
 
+def _pm_open_screen_confirm(text, ctx):
+    """Ask before an answer is attached to the profile open on screen.
+
+    Jenna 2026-09-28: always confirm that attachment. Never treat the
+    open profile as the subject until the user says yes.
+
+    BASE CLARIFY (2026-09-24 Jenna): before answering against the
+    open page, an ask that names a DIFFERENT subject gets the
+    question instead of a guess - 'Did you want this on Landman
+    (open on your screen) or on Emily in Paris?'. The chips re-run
+    the original ask bound to the picked subject.
+
+    Titles asks that already asked, board views that are not about
+    the selected profile, and a catalog subject that is not the open
+    profile return None. Yes on the open-screen question re-sends
+    the original ask with bind_subject.
+    """
+    page = str((ctx.get('primary') or {}).get('name') or '').strip()
+    if not page:
+        return None
+    named = ''
+    try:
+        named = _pm_page_clarify_subject(text, page)
+    except Exception:
+        traceback.print_exc()
+    if named:
+        _pm_ask_hint(route='base_clarify', outcome='asked_base',
+                     subject=page)
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': (f'Did you want this on {page} (open on '
+                      f'your screen) or on {named}?'),
+            'followups': [f'On {page}', f'On {named}',
+                          'Something else'],
+            'offer_deck': False, 'deck_angle': None,
+            'memory_confirm': {'question': text, 'options': [
+                {'label': f'On {page}', 'subject': page},
+                {'label': f'On {named}', 'subject': named}]}})
+    try:
+        if _pm_titles_ask_needs_scope(text, page):
+            return None
+    except Exception:
+        traceback.print_exc()
+    view_id = str(((ctx.get('view_context') or {}).get('view_id'))
+                  or '')
+    if view_id in ('cultureRankerIQ', 'trendsIQ'):
+        toks = [t for t in re.findall(r'[a-z0-9]+', page.lower())
+                if len(t) >= 3]
+        if not (toks and any(t in str(text or '').lower() for t in toks)):
+            return None
+    page_key = str((ctx.get('primary') or {}).get('s3_key') or '')
+    attach = True
+    try:
+        base = _pm_generation_base('', text, ctx=ctx, prefer_catalog=True)
+    except Exception:
+        traceback.print_exc()
+        base = None
+    if base and str(base.get('source') or '') != 'page':
+        bkey = str(base.get('s3_key') or '')
+        bsub = _normalize_for_match(
+            str(base.get('subject') or '').split(' - ')[0])
+        psub = _normalize_for_match(page.split(' - ')[0])
+        same = (bool(page_key) and bkey == page_key) or (
+            bool(bsub) and bool(psub)
+            and (bsub == psub or bsub in psub or psub in bsub))
+        attach = same
+    if not attach:
+        return None
+    yes = f'Yes, {page}'
+    _pm_ask_hint(route='open_screen_confirm',
+                 outcome='asked_open_screen', subject=page)
+    return jsonify({
+        'success': True, 'action': 'answer',
+        'reply': (f'Do you want this on {page} (open on your screen)?'),
+        'followups': [yes, 'Something else'],
+        'offer_deck': False, 'deck_angle': None,
+        'memory_confirm': {
+            'question': text,
+            'options': [{'label': yes, 'subject': page}],
+        },
+    })
+
+
 def _pm_short_name_identity(toks, raw_text):
     """Short-name subject identity (2026-09-23 Jenna, 'How many people
     have watched BET content in the last 12 months' quoted a research
@@ -62182,6 +62265,13 @@ def api_synth_chat_analyze():
     # analysis pass first. The base gate inside resolves the subject
     # (catalog first, then the open page, then Subscriber IQ) and
     # steers to the 5-credit build when no base exists anywhere.
+    # Open profile is not the subject until the user says so
+    # (2026-09-28). Mode chips stay commands on the view already open.
+    # Yes re-sends with bind_subject, which returns above this point.
+    if isinstance(ctx, dict) and not str(body.get('mode') or '').strip():
+        _osc = _pm_open_screen_confirm(text, ctx)
+        if _osc is not None:
+            return _osc
     if _route == 'generate':
         if _route_d.get('why') == 'no_ctx_data_ask':
             return _pm_generate_metrics_response(user, text, history)
@@ -62222,36 +62312,6 @@ def api_synth_chat_analyze():
                       'want included), or open a view with data on '
                       'screen, then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    # BASE CLARIFY (2026-09-24 Jenna): before answering against the
-    # open page, an ask that names a DIFFERENT subject gets the
-    # question instead of a guess - 'Did you want this on Landman
-    # (open on your screen) or on Emily in Paris?'. Mode chips (exec
-    # summary, personas, ...) are render-shape commands on the open
-    # view and never clarify. The chips re-run the original ask bound
-    # to the picked subject via the memory-confirm machinery; a
-    # subject with no base lands on the build-first offer.
-    _clar_page = str((ctx.get('primary') or {}).get('name') or '').strip()
-    if _clar_page and not str(body.get('mode') or '').strip():
-        _clar_named = ''
-        try:
-            _clar_named = _pm_page_clarify_subject(text, _clar_page)
-        except Exception:
-            traceback.print_exc()
-        if _clar_named:
-            _pm_ask_hint(route='base_clarify', outcome='asked_base',
-                         subject=_clar_page)
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': (f'Did you want this on {_clar_page} (open on '
-                          f'your screen) or on {_clar_named}?'),
-                'followups': [f'On {_clar_page}', f'On {_clar_named}',
-                              'Something else'],
-                'offer_deck': False, 'deck_angle': None,
-                'memory_confirm': {'question': text, 'options': [
-                    {'label': f'On {_clar_page}',
-                     'subject': _clar_page},
-                    {'label': f'On {_clar_named}',
-                     'subject': _clar_named}]}})
     # 2026-09-09 Jenna: "Analyze this data" is session-metered, not
     # per-pull charged. Pay-per-use accounts bill via the session
     # close; subscribed accounts are covered by their tier. Real
@@ -63424,7 +63484,8 @@ def _pm_resolve_deck_subject(text, ctx):
         name = str((ctx.get('primary') or {}).get('name') or '').strip()
         subject = name.split(' - ')[0].strip() or name or 'this audience'
         return ({'ctx': ctx, 'subject': subject,
-                 'partner': resolved_partner, 'clarify': None}, None)
+                 'partner': resolved_partner, 'clarify': None,
+                 'used_open_page': True}, None)
 
     # No named subject and nothing open: recover a profile name from the
     # raw ask itself (the extractor can miss a name inside a long,
@@ -63642,6 +63703,22 @@ def api_synth_chat_deck():
         return res_err
     if resolution.get('clarify'):
         return jsonify({'success': True, 'clarify': resolution['clarify']})
+    if resolution.get('used_open_page') \
+            and not body.get('confirm_open_screen'):
+        page = str(resolution.get('subject') or 'this profile').strip()
+        yes = f'Yes, {page}'
+        return jsonify({
+            'success': True,
+            'reply': (f'Do you want this on {page} (open on your '
+                      f'screen)?'),
+            'followups': [yes, 'Something else'],
+            'memory_confirm': {
+                'question': text,
+                'deck': True,
+                'options': [{'label': yes, 'subject': page,
+                             'deck': True}],
+            },
+        })
     ctx = resolution['ctx']
     deck_subject = resolution.get('subject') or ''
     deck_partner = resolution.get('partner') or ''

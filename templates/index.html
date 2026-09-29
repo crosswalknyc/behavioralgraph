@@ -80719,7 +80719,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmStartDeck('Build a deck from this', ctx, _pmDeckClarifyAngle);
         }
 
-        async function _pmStartDeck(text, boundCtx, angleOverride) {
+        async function _pmStartDeck(text, boundCtx, angleOverride, confirmOpen) {
             var ctx = boundCtx || _pmCollectPageContext();
             var angle = (angleOverride && String(angleOverride)) ||
                 _pmPendingDeckAngle ||
@@ -80728,12 +80728,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmDeckInFlight = true;
             var _end = _synthChatBeginThinking('deck');
             try {
-                var _fr = await _synthChatFetchJson('/api/brief-chat/deck', {
+                var _dbody = {
                     text: String(text || ''),
                     angle: angle,
                     page_context: ctx,
                     history: synthChatHistory.slice(-14)
-                });
+                };
+                if (confirmOpen) _dbody.confirm_open_screen = true;
+                var _fr = await _synthChatFetchJson('/api/brief-chat/deck', _dbody);
                 var data = _fr.data;
                 if (data && data.success && data.pay_per_use_offer) {
                     // Decks are an analysis-tier feature. Same offer,
@@ -80776,6 +80778,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         data.clarify.question ||
                             'Which profile should the deck cover?',
                         { options: copts });
+                    return;
+                }
+                if (data && data.success && data.memory_confirm) {
+                    _pmMemoryConfirm = data.memory_confirm;
+                    var _oscOpts = (data.followups || []).map(function(f) {
+                        return { label: f, send: f };
+                    });
+                    _synthChatPushTurnWithMeta('agent',
+                        data.reply ||
+                            'Do you want this on the profile open on your screen?',
+                        { options: _oscOpts });
                     return;
                 }
                 if (!data || !_fr.r.ok || !data.success || !data.job_id) {
@@ -81116,6 +81129,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 if (_mcPick) {
                     _pmMemoryConfirm = null;
+                    if (_mcPick.deck) {
+                        await _pmStartDeck(_mc.question || text,
+                            _pmCollectPageContext(), '', true);
+                        return;
+                    }
                     if (_mcPick.overall) {
                         var _ovCtx = Object.assign({}, _pmCollectPageContext() || {});
                         _ovCtx.primary = null;
