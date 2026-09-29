@@ -157,7 +157,6 @@ src = src.replace(OLD_HELPERS, NEW_HELPERS)
 OLD_ROUTE = "@app.route('/api/me/prometheus-queries')"
 NEW_ROUTE = '''@app.route('/api/brief-chat/threads', methods=['GET'])
 @requires_auth
-@_chatbot_route_guard('brief-chat/threads')
 def api_synth_chat_threads():
     """The caller's chat threads for the left rail, most recent
     first (2026-09-28 Jenna). Session-only."""
@@ -175,7 +174,6 @@ def api_synth_chat_threads():
 
 @app.route('/api/brief-chat/threads/new', methods=['POST'])
 @requires_auth
-@_chatbot_route_guard('brief-chat/threads-new')
 def api_synth_chat_threads_new():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
@@ -203,7 +201,6 @@ def api_synth_chat_threads_new():
 
 @app.route('/api/brief-chat/threads/activate', methods=['POST'])
 @requires_auth
-@_chatbot_route_guard('brief-chat/threads-activate')
 def api_synth_chat_threads_activate():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
@@ -222,7 +219,6 @@ def api_synth_chat_threads_activate():
 
 @app.route('/api/brief-chat/threads/rename', methods=['POST'])
 @requires_auth
-@_chatbot_route_guard('brief-chat/threads-rename')
 def api_synth_chat_threads_rename():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
@@ -244,7 +240,6 @@ def api_synth_chat_threads_rename():
 
 @app.route('/api/brief-chat/threads/delete', methods=['POST'])
 @requires_auth
-@_chatbot_route_guard('brief-chat/threads-delete')
 def api_synth_chat_threads_delete():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
