@@ -10636,6 +10636,57 @@ def check_cache():
 
 @app.route('/api/download-cached/<path:s3_key>')
 @requires_auth
+def _fmt_study_date(iso):
+    try:
+        return datetime.strptime(str(iso), '%Y-%m-%d').strftime('%B %-d, %Y')
+    except Exception:
+        return str(iso)
+
+
+def _stamp_csv_text(text, study_range=''):
+    """Prepend DATE DOWNLOADED + STUDY DATE RANGE rows to a CSV
+    (2026-09-28 Jenna: every product CSV names when it was pulled and
+    the window it covers). The range parses from the file's own window
+    row when the caller does not supply one. Already-stamped text
+    passes through untouched; any failure returns the original."""
+    try:
+        lines = str(text).splitlines()
+        if not lines:
+            return text
+        if any(ln.startswith('DATE DOWNLOADED') for ln in lines[:4]):
+            return text
+        rng = str(study_range or '').strip()
+        if not rng:
+            m = re.search(
+                r'(\d{4}-\d{2}-\d{2})\s*(?:TO|to|To|through|-|\u2013)'
+                r'\s*(\d{4}-\d{2}-\d{2})', text)
+            if m:
+                rng = (f"{_fmt_study_date(m.group(1))} - "
+                       f"{_fmt_study_date(m.group(2))}")
+        today = datetime.now(timezone.utc).strftime('%B %-d, %Y')
+        ncols = max(1, lines[0].count(',') + 1)
+
+        def _row(label, val):
+            cell = '"' + str(val).replace('"', '""') + '"'
+            return ','.join([label, cell] + [''] * max(0, ncols - 2))
+
+        out = [lines[0],
+               _row('DATE DOWNLOADED', today),
+               _row('STUDY DATE RANGE', rng or 'Not stated in file')]
+        return '\n'.join(out + lines[1:])
+    except Exception:
+        return text
+
+
+def _stamp_csv_bytes(content, study_range=''):
+    try:
+        return _stamp_csv_text(
+            content.decode('utf-8', errors='replace'),
+            study_range).encode('utf-8')
+    except Exception:
+        return content
+
+
 def download_cached(s3_key):
     """Download a cached file from S3."""
     ok, err = _require_profile_run_access(s3_key)
@@ -10647,7 +10698,8 @@ def download_cached(s3_key):
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         csv_content = response['Body'].read()
-        
+        if str(s3_key).lower().endswith('.csv'):
+            csv_content = _stamp_csv_bytes(csv_content)
         return Response(
             csv_content,
             mimetype='text/csv',
@@ -19816,7 +19868,7 @@ def download_ticket_sales_tracker(s3_key):
         return jsonify({'error': 'Download not available'}), 403
     try:
         response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
-        csv_content = response['Body'].read()
+        csv_content = _stamp_csv_bytes(response['Body'].read())
         return Response(csv_content, mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename={s3_key.split("/")[-1]}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -24770,8 +24822,11 @@ def download_result(job_id):
     # Try local file first
     result_file = job.get('result_file')
     if result_file and os.path.exists(result_file):
+        from io import BytesIO
+        with open(result_file, 'rb') as _fh:
+            _stamped = _stamp_csv_bytes(_fh.read())
         return send_file(
-            result_file,
+            BytesIO(_stamped),
             mimetype='text/csv',
             as_attachment=True,
             download_name=f"{job.get('project_name', 'data')}_behavioral_graph.csv"
@@ -24783,7 +24838,7 @@ def download_result(job_id):
         try:
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
             from io import BytesIO
-            body = response['Body'].read()
+            body = _stamp_csv_bytes(response['Body'].read())
             return send_file(
                 BytesIO(body),
                 mimetype='text/csv',
@@ -35229,7 +35284,7 @@ def download_sf_lf_conversion(s3_key):
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
         response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
-        content = response['Body'].read()
+        content = _stamp_csv_bytes(response['Body'].read())
         filename = os.path.basename(s3_key)
         return Response(
             content,
@@ -59625,6 +59680,16 @@ def _pm_csv_download_response(user, text, history=None):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     try:
         fname, csv_text = pma.build_generated_csv(entry)
+        _rng = ''
+        try:
+            if entry.get('ws') and entry.get('we'):
+                _rng = (f"{_fmt_study_date(entry['ws'])} - "
+                        f"{_fmt_study_date(entry['we'])}")
+            elif entry.get('wl'):
+                _rng = str(entry['wl'])
+        except Exception:
+            _rng = ''
+        csv_text = _stamp_csv_text(csv_text, _rng)
         fname = _pm_csv_task_filename(entry) or fname
         s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
