@@ -22009,23 +22009,37 @@ https://www.instagram.com/p/..."></textarea>
         #pmThreadRailBtn { transition: color .15s ease, border-color .15s ease; }
         #pmThreadRailBtn:hover { color: #E9E8E1 !important; border-color: rgba(233,232,225,0.32) !important; }
         #prometheusBody { position: relative; }
+        /* The tab hangs off the OUTSIDE of the card, so it cannot be a
+           child of #prometheusWidget: that clips its children, and the
+           clipping is load-bearing - it is what hides #pmThreadRail while
+           the rail sits at translateX(-105%). The tab is a sibling instead,
+           pinned to the widget's left edge by _pmChatsTabSync(). Left/top
+           carry no transition because that sync drives them per frame. */
         #pmChatsTab {
-            position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-            z-index: 61; width: 30px; min-height: 148px;
-            padding: 14px 0 12px; display: flex; flex-direction: column;
+            position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+            z-index: 2147482201; width: 30px; min-height: 148px;
+            padding: 14px 0 12px; display: none; flex-direction: column;
             align-items: center; justify-content: flex-start; gap: 10px;
-            background: #1B2F35; border: 1px solid #3B3D38; border-left: 3px solid #C7F23E;
-            border-radius: 0 10px 10px 0; color: #E9E8E1; cursor: pointer;
-            font-family: inherit; box-shadow: 6px 8px 20px rgba(0, 0, 0, .28);
-            transition: left .18s ease, width .15s ease;
+            background: #1B2F35; border: 1px solid #3B3D38; border-right: none;
+            border-left: 3px solid #C7F23E;
+            border-radius: 10px 0 0 10px; color: #E9E8E1; cursor: pointer;
+            font-family: inherit; box-shadow: -6px 8px 20px rgba(0, 0, 0, .28);
+            transition: background .15s ease;
         }
-        #pmChatsTab:hover { width: 34px; }
-        /* Open: header and body shift right of the rail column, so the
-           tab (inside the body) already sits at the seam. */
+        #pmChatsTab.pm-on { display: flex; }
+        /* Hover shifts colour rather than width: the tab is pinned by its
+           left edge, so growing it would slide it under the card. */
+        #pmChatsTab:hover { background: #223B43; }
+        /* Open: header and body shift right to clear the rail column. */
         #prometheusWidget.rail-open #prometheusHeader,
         #prometheusWidget.rail-open #prometheusBody { margin-left: 222px; }
         #prometheusWidget #prometheusHeader,
         #prometheusWidget #prometheusBody { transition: margin-left .18s ease; }
+        /* Only while the rail opens/closes. _pmRailApply sets width and left
+           inline, which used to apply instantly and snap the whole card
+           sideways while the rail slid. Kept off at rest so dragging and
+           edge-resizing stay 1:1 with the pointer. */
+        #prometheusWidget.pm-rail-anim { transition: width .18s ease, left .18s ease; }
         #pmChatsTab .pm-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; flex: 0 0 6px; }
         #pmChatsTab .pm-tab-label {
             writing-mode: vertical-rl; transform: rotate(180deg);
@@ -22034,7 +22048,8 @@ https://www.instagram.com/p/..."></textarea>
         }
         #pmChatsTab .pm-tab-chevron { color: #C7F23E; font-size: 16px; line-height: 1; font-weight: 600; transition: transform .18s ease; }
         #pmChatsTab.rail-open .pm-tab-chevron { transform: rotate(180deg); }
-        body[data-theme="light"] #pmChatsTab { background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12; }
+        body[data-theme="light"] #pmChatsTab { background: #FFFFFF; border-color: #C9C6BA; border-right: none; border-left-color: #5E7E12; }
+        body[data-theme="light"] #pmChatsTab:hover { background: #F4F3EE; }
         body[data-theme="light"] #pmChatsTab .pm-tab-dot { background: #5E7E12; }
         body[data-theme="light"] #pmChatsTab .pm-tab-chevron { color: #5E7E12; }
         body[data-theme="light"] #pmChatsTab .pm-tab-label { color: #0C1618; }
@@ -22274,6 +22289,7 @@ https://www.instagram.com/p/..."></textarea>
                 height: min(72vh, calc(100vh - 60px)) !important; resize: none;
             }
             #prometheusWidget .pm-rs { display: none; }
+            #pmChatsTab { display: none !important; }
         }
         body[data-theme="light"] #prometheusWidget {
             background: #FFFFFF; border-color: #C9C6BA; color: #0C1618;
@@ -22389,6 +22405,11 @@ https://www.instagram.com/p/..."></textarea>
             <span class="pm-launcher-label">Ask Prometheus</span>
             <span id="prometheusLauncherDot" aria-hidden="true"></span>
         </div>
+        <button type="button" id="pmChatsTab" onclick="pmThreadRailToggle()" aria-label="Chats and tasks" title="Chats &amp; Tasks">
+            <span class="pm-tab-dot" aria-hidden="true"></span>
+            <span class="pm-tab-label">Chats &amp; Tasks</span>
+            <span class="pm-tab-chevron" aria-hidden="true">›</span>
+        </button>
         <div id="prometheusWidget" class="no-uppercase" role="dialog" aria-label="Prometheus">
             <div class="pm-rs pm-rs-n" data-rs="n" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-s" data-rs="s" aria-hidden="true"></div>
@@ -22432,11 +22453,6 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div id="prometheusBody">
-                <button type="button" id="pmChatsTab" onclick="pmThreadRailToggle()" aria-label="Chats and tasks" title="Chats &amp; Tasks">
-                    <span class="pm-tab-dot" aria-hidden="true"></span>
-                    <span class="pm-tab-label">Chats &amp; Tasks</span>
-                    <span class="pm-tab-chevron" aria-hidden="true">›</span>
-                </button>
                 <div id="prometheusFundsLock" role="alertdialog" aria-label="Buy credits to use Prometheus">
                     <div class="pm-funds-card">
                         <div class="pm-funds-title">Buy credits to use Prometheus.</div>
@@ -77208,6 +77224,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             widget.classList.toggle('rail-open', _pmRailOpen);
             var tab = document.getElementById('pmChatsTab');
             if (tab) tab.classList.toggle('rail-open', _pmRailOpen);
+            // Let the width/left change below animate instead of snapping,
+            // and drop the class again so drag/resize stay instant.
+            widget.classList.add('pm-rail-anim');
+            if (window._pmRailAnimT) clearTimeout(window._pmRailAnimT);
+            window._pmRailAnimT = setTimeout(function () {
+                widget.classList.remove('pm-rail-anim');
+            }, 260);
+            // Keep the outside tab glued to the edge for the whole slide.
+            _pmChatsTabSyncFor(300);
             // Open LEFT no matter how the window is anchored
             // (2026-09-28): a dragged window is left-positioned, so a
             // plain width increase grows RIGHT and shoves it off
@@ -77251,6 +77276,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function pmThreadRailToggle() {
             _pmRailApply(!_pmRailOpen);
         }
+        // #pmChatsTab sits outside #prometheusWidget (see its CSS), so it has
+        // to be pinned to the widget's left edge by hand.
+        function _pmChatsTabSync() {
+            var tab = document.getElementById('pmChatsTab');
+            var widget = document.getElementById('prometheusWidget');
+            if (!tab || !widget) return;
+            if (!widget.classList.contains('pm-on')) {
+                tab.classList.remove('pm-on');
+                return;
+            }
+            tab.classList.add('pm-on');
+            var r = widget.getBoundingClientRect();
+            tab.style.left = Math.round(r.left - tab.offsetWidth) + 'px';
+            tab.style.top = Math.round(r.top + r.height / 2) + 'px';
+        }
+        // Follow the edge across an animation rather than jumping to where it
+        // will end up: a MutationObserver only fires once, at the start.
+        function _pmChatsTabSyncFor(ms) {
+            var until = Date.now() + (ms || 0);
+            (function step() {
+                _pmChatsTabSync();
+                if (Date.now() < until) requestAnimationFrame(step);
+            })();
+        }
+        (function _pmChatsTabWatch() {
+            var widget = document.getElementById('prometheusWidget');
+            if (!widget) return;
+            var wasOn = false;
+            // Opening, collapsing, dragging, edge-resizing and the rail's own
+            // growth all land as inline style or class changes on the widget.
+            try {
+                new MutationObserver(function () {
+                    var isOn = widget.classList.contains('pm-on');
+                    // Ride out the 320ms pmEnter animation on open.
+                    if (isOn && !wasOn) _pmChatsTabSyncFor(380);
+                    else _pmChatsTabSync();
+                    wasOn = isOn;
+                }).observe(widget, { attributes: true,
+                                     attributeFilter: ['style', 'class'] });
+            } catch (_) {}
+            window.addEventListener('resize', _pmChatsTabSync);
+            _pmChatsTabSync();
+        })();
         // Left open on purpose stays open (2026-09-28): restore the
         // saved state once the DOM is ready.
         setTimeout(function () {
@@ -145180,6 +145248,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         // Load profiles when dashboard tab is shown
         let dashboardProfilePolling = null;
+        // Consecutive "still loading" replies; drives the retry backoff.
+        let _dashProfileLoadingTries = 0;
         
         // v2 bump (2026-06-10): forces the cached /api/jobs payload to be
         // refetched after the IMDB-id backfill so variant profiles
@@ -145355,8 +145425,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 
                 if (!response.ok) {
                     console.error('Failed to load profiles:', response.status);
-                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Failed to load profiles</div>';
+                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Reconnecting...</div>';
                     if (window._boot) window._boot.failStep('profiles');
+                    // Same backoff as the "loading" path: a 502 or a
+                    // timeout during an instance restart is transient, and
+                    // leaving a dead-end message meant the sidebar stayed
+                    // empty until the user reloaded by hand (prod 2026-09-29).
+                    _dashProfileLoadingTries++;
+                    const _errRetryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _errRetryMs);
                     return;
                 }
                 
@@ -145367,18 +145446,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (container) {
                         container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Loading profiles from cloud...</div>';
                     }
-                    // Poll every 2 seconds until ready
-                    if (!dashboardProfilePolling) {
-                        dashboardProfilePolling = setInterval(() => loadDashboardProfiles(), 2000);
-                    }
+                    // Retry with backoff, not a flat 2s interval. A wedged
+                    // worker can report "loading" indefinitely (prod
+                    // 2026-09-29), and several open tabs each polling every
+                    // 2s pinned CPU above the autoscale target - starving the
+                    // very boot thread we were waiting on and tripping the
+                    // /healthz timeout. 2s grows to a 30s ceiling.
+                    _dashProfileLoadingTries++;
+                    const _retryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _retryMs);
                     return;
                 }
                 
-                // Clear polling interval once loaded
+                // Clear the pending retry once loaded, and reset the
+                // backoff so a later cold start starts from 2s again.
                 if (dashboardProfilePolling) {
-                    clearInterval(dashboardProfilePolling);
+                    clearTimeout(dashboardProfilePolling);
                     dashboardProfilePolling = null;
                 }
+                _dashProfileLoadingTries = 0;
                 
                 setSessionJobsCache(data);
                 const profiles = data.jobs || [];
@@ -145415,8 +145503,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
             } catch (error) {
                 console.error('Failed to load profiles:', error);
-                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Error loading profiles</div>';
+                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Reconnecting...</div>';
                 if (window._boot) window._boot.failStep('profiles');
+                    // Same backoff as the "loading" path: a 502 or a
+                    // timeout during an instance restart is transient, and
+                    // leaving a dead-end message meant the sidebar stayed
+                    // empty until the user reloaded by hand (prod 2026-09-29).
+                    _dashProfileLoadingTries++;
+                    const _errRetryMs = Math.min(
+                        30000, 2000 * Math.pow(1.7, Math.min(_dashProfileLoadingTries - 1, 8)));
+                    if (dashboardProfilePolling) clearTimeout(dashboardProfilePolling);
+                    dashboardProfilePolling = setTimeout(() => loadDashboardProfiles(), _errRetryMs);
             }
         }
 

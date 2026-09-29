@@ -5,7 +5,7 @@
 # required `validate` check pending and unmergeable. Someone with `workflow`
 # scope should broaden the workflow's pull_request trigger to run on all PRs.
 # (Until that lands, non-index.html PRs touch this file to trigger the check.)
-# Trigger touch: Trends Digest daily-move fixes (dash for steady/unknown).
+# Trigger touch: add the dead allowed_runs prune script.
 """Validate structural invariants of ``templates/index.html``.
 
 This file has been silently broken multiple times in a single week by
@@ -591,3 +591,6 @@ if __name__ == "__main__":
 # (site-panel-card-align-counted 2026-09-28 - Site: Panel card top-aligned with headline; What gets counted copy)
 # (site-home-answer-section 2026-09-28 - Site: homepage The answer: question pill below eyebrow; new headline + lead)
 # (site-home-answer-drop-so-what 2026-09-28 - Site: remove What this means note + rule from homepage The answer)
+# (site-signup-rate-card 2026-09-29 - Site: signup rate card Flywheel $500; Trends/Rankers/Fin starts at $5000/mo)
+# (pricing-flywheel-500-monthly-5000 2026-09-29 - Flywheel IQ $500/pull; Trends/Rankers/Fin $5000/mo defaults; site + Prometheus copy)
+# (pricing-consistent-everywhere 2026-09-29 - Flywheel $500 + Trends/Rankers/Fin $5000/mo on budget pages, report pages, Prometheus pricing copy)
