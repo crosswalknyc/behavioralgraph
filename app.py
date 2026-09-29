@@ -357,6 +357,8 @@ def redirect_if_must_reset_password():
 _VIEW_LOCK_ALLOWED_EXACT = frozenset({
     '/login', '/logout', '/set-password', '/api/set-password',
     '/health', '/healthz', '/ready', '/favicon.ico',
+    '/caa', '/caa/', '/wbd', '/wbd/', '/pricing', '/pricing/',
+    '/uta', '/uta/', '/iag', '/iag/',
 })
 
 
@@ -2829,7 +2831,10 @@ def _normalize_role(role):
 # DEV ENVIRONMENT ACCESS CONTROL
 # In development mode, only admin and super_admin users can access the site
 # This allows testing changes without affecting regular users
-ALLOWED_DEV_PATHS = ['/login', '/logout', '/health', '/healthz', '/ready', '/static', '/api/login']
+ALLOWED_DEV_PATHS = [
+    '/login', '/logout', '/health', '/healthz', '/ready', '/static',
+    '/api/login', '/caa', '/wbd', '/pricing', '/uta', '/iag',
+]
 
 @app.before_request
 def check_dev_environment_access():
@@ -2963,7 +2968,8 @@ SUPER_ADMIN_ONLY_USER_FIELDS = frozenset({'role'})
 
 def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
     """Return (jsonify_403, 403) if a non-super_admin is trying to change
-    a product-access flag or the user's role; return None otherwise.
+    the user's role; return None otherwise. Product modules are not
+    restricted.
 
     Update flow (pass `existing_user`): only the fields whose values are
     actually CHANGING count as "touched" - no-op writes (same value as
@@ -2971,9 +2977,8 @@ def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
     fields without having to strip every restricted key client-side.
 
     Create flow (leave `existing_user=None`): ANY restricted field
-    present in the request is considered a touch. Non-super admins
-    should create users under company defaults and let a super_admin
-    customize product access afterward.
+    present in the request is considered a touch. Restricted here
+    is only `role`. Product modules are editable by every admin.
 
     Purgatory approval retains its own dedicated inline gate below
     (unchanged), so it is intentionally NOT in this set.
@@ -4032,6 +4037,84 @@ def wbd_budget_page():
     resp = make_response(render_template('wbd_gate.html', error=False), 200)
     resp.headers.update(headers)
     return resp
+
+
+_PROPOSAL_HTML = {}
+
+
+def _proposal_html(key):
+    """Private proposal HTML, cached per process after the first read."""
+    hit = _PROPOSAL_HTML.get(key)
+    if hit:
+        return hit
+    if not s3_client:
+        return None
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        body = obj['Body'].read()
+    except Exception:
+        return None
+    _PROPOSAL_HTML[key] = body
+    return body
+
+
+def _gated_proposal(gate, path, template, s3_key):
+    """Password gate, then the proposal. No dashboard login."""
+    headers = {
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+        'Cache-Control': 'private, no-store',
+    }
+    if request.method == 'POST':
+        if gate.password_ok(request.form.get('password') or ''):
+            resp = redirect(path)
+            resp.set_cookie(
+                gate.COOKIE_NAME,
+                gate.cookie_token(app.secret_key),
+                max_age=gate.COOKIE_MAX_AGE,
+                httponly=True,
+                secure=bool(request.is_secure),
+                samesite='Lax',
+                path=path,
+            )
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(render_template(template, error=True), 401)
+        resp.headers.update(headers)
+        return resp
+    if gate.cookie_ok(request.cookies.get(gate.COOKIE_NAME), app.secret_key):
+        html = _proposal_html(s3_key)
+        if not html:
+            resp = make_response('This page is not available right now.', 503)
+            resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
+            resp.headers.update(headers)
+            return resp
+        resp = make_response(html, 200)
+        resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+        resp.headers.update(headers)
+        return resp
+    resp = make_response(render_template(template, error=False), 200)
+    resp.headers.update(headers)
+    return resp
+
+
+@app.route('/uta', methods=['GET', 'POST'])
+@app.route('/uta/', methods=['GET', 'POST'])
+def uta_proposal_page():
+    """Password-gated UTA proposal. No dashboard login required."""
+    import uta_gate as _uta
+    return _gated_proposal(
+        _uta, '/uta', 'uta_gate.html',
+        'proposals/Crosswalk_UTA_Proposal.html')
+
+
+@app.route('/iag', methods=['GET', 'POST'])
+@app.route('/iag/', methods=['GET', 'POST'])
+def iag_proposal_page():
+    """Password-gated IAG proposal. No dashboard login required."""
+    import iag_gate as _iag
+    return _gated_proposal(
+        _iag, '/iag', 'iag_gate.html',
+        'proposals/Crosswalk_IAG_Proposal.html')
 
 
 @app.route('/pricing', methods=['GET'])
@@ -5366,10 +5449,9 @@ def create_user():
     try:
         req_data = request.json
 
-        # Only super_admin may grant product access or set user status
-        # on create (Jenna 2026-08-25). Non-super admins should create
-        # users under company defaults and let a super_admin customize
-        # access afterward.
+        # 2026-09-04 / 2026-09-29: every admin may set product modules
+        # on create (Dashboard Access checkboxes). Only `role` stays
+        # super-admin-only so a regular admin cannot promote anyone.
         guard = _reject_if_non_super_touches_restricted(req_data)
         if guard is not None:
             return guard
@@ -5619,13 +5701,8 @@ def update_user(username):
             _wallet_co.is_wbd_company(user.get('company'))
             and str(user.get('billing_source') or '').lower() == 'company')
 
-        # Only super_admin may CHANGE product access flags or the user's
-        # role (Jenna 2026-08-25). No-op writes (same value) are allowed
-        # so non-super admins can save unrelated fields (name, email,
-        # credits, etc.) without stripping every restricted key client-
-        # side. The admin.html modal also disables these controls and
-        # strips restricted keys from the request when the current user
-        # is not super_admin.
+        # 2026-09-04 / 2026-09-29: every admin may flip product modules
+        # on Edit User. Only `role` stays super-admin-only.
         guard = _reject_if_non_super_touches_restricted(req_data, existing_user=user)
         if guard is not None:
             return guard
@@ -7437,14 +7514,13 @@ def api_get_company_defaults(company_name):
 
 
 @app.route('/api/admin/companies/<path:company_name>/defaults', methods=['PUT'])
-@requires_super_admin
+@requires_admin
 def api_set_company_defaults(company_name):
     """Save custom defaults for a company.
 
-    Super_admin only per Jenna 2026-08-25 ("only let super admins grant
-    access to allow product access to users..."). Company defaults seed
-    every new user's product-access flags, so allowing non-super admins
-    to edit them would be a trivial bypass of the per-user gate.
+    2026-09-29: any admin can save company defaults. Those defaults
+    seed Create User module checkboxes; every admin can already flip
+    the same flags on a single user.
     """
     try:
         req = request.get_json() or {}
@@ -7491,13 +7567,12 @@ def api_set_company_defaults(company_name):
 
 
 @app.route('/api/admin/companies/<path:company_name>/defaults', methods=['DELETE'])
-@requires_super_admin
+@requires_admin
 def api_delete_company_defaults(company_name):
     """Remove custom defaults for a company (revert to global).
 
-    Super_admin only per Jenna 2026-08-25 - same rationale as
-    api_set_company_defaults above (this endpoint also mutates the
-    product-access template applied to new users).
+    2026-09-29: any admin can clear company defaults. Same access
+    as saving them.
     """
     try:
         data = load_users()
@@ -7539,6 +7614,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
                 user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
+                user['has_flywheel_iq_access'] = cd.get('has_flywheel_iq_access', False)
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
                 user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
@@ -7566,6 +7642,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_talent_fit_access'] = False
                 user['has_flywheel_conversion_access'] = False
+                user['has_flywheel_iq_access'] = False
                 user['has_brand_partnership_iq_access'] = False
                 user['has_sentiment_iq_access'] = False
                 user['has_journey_iq_access'] = False
@@ -17520,12 +17597,19 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
         _uname = ''
     try:
         import wallet as _w
+        # Module off on a regular seat hides Profile IQ even though
+        # the file catalog is otherwise ungoverned.
+        if (not _w.is_paid_only_plan(user)
+                and not _w.profile_iq_module_enabled(user, _uname)):
+            return False
         if _w.has_full_profile_catalog(user, _uname):
             return True
     except Exception:
         role = user.get('role', 'user')
         if role in ('admin', 'super_admin'):
             return True
+        if user.get('has_profile_iq_access') is False:
+            return False
     key_lower = (s3_key or '').lower()
     # Gen Pop is universal: the canonical underscore form (Gen_Pop_2026.csv)
     # AND the generational baseline skins ('Gen Pop 2026 - Gen Z.csv', ...)
@@ -17561,17 +17645,22 @@ def _require_profile_run_access(s3_key: str):
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
         return True, None
-    # Explicit umbrella deny (has_profile_iq_access default is True, so
-    # this only fires when admin has flipped it off for that user).
-    # Paid-only seats keep the flag off until they hold a file; an
-    # explicit allowed_runs list or complimentary title still opens
-    # those files.
+    # Regular seats: the Create / Edit User Profile IQ checkbox is the
+    # module switch. Paid-only seats keep the flag off until they hold
+    # a file; an explicit allowed_runs list or complimentary title
+    # still opens those files.
     explicit = (isinstance(user.get('allowed_runs'), list)
                 and '*' not in (user.get('allowed_runs') or []))
     has_gift = False
     try:
         import wallet as _w
         has_gift = bool(_w.complimentary_needles(user, 'profile_iq'))
+        if (not _w.is_paid_only_plan(user)
+                and not _w.profile_iq_module_enabled(user)):
+            return False, (jsonify({
+                'success': False,
+                'error': 'Profile IQ access not enabled for this user',
+            }), 403)
     except Exception:
         has_gift = False
     if (user.get('has_profile_iq_access') is False
@@ -28153,16 +28242,26 @@ def list_jobs():
             allowed_runs is None
             or (isinstance(allowed_runs, list) and '*' in allowed_runs)
         )
+        _module_off = False
         try:
             import wallet as _w
-            if _w.has_full_profile_catalog(u, session.get('username') or ''):
+            _uname_jobs = session.get('username') or ''
+            if (u is not None
+                    and not _w.is_paid_only_plan(u)
+                    and not _w.profile_iq_module_enabled(u, _uname_jobs)):
+                _module_off = True
+                has_all_access = False
+            elif _w.has_full_profile_catalog(u, _uname_jobs):
                 has_all_access = True
         except Exception:
             pass
-        # Only Prometheus-only seats are governed. Everyone else,
-        # including Jessie, sees the full catalog even if an old
-        # allowed_runs snapshot is still on the record.
-        if has_all_access:
+        # Only Prometheus-only seats are governed on FILES. A regular
+        # seat with Profile IQ turned off in Create / Edit User still
+        # hides the product even though the catalog is otherwise open.
+        if _module_off:
+            for e in job_list:
+                e['accessible'] = False
+        elif has_all_access:
             for e in job_list:
                 e['accessible'] = True
         else:

@@ -2843,12 +2843,35 @@ def has_full_profile_catalog(user, username: str = "") -> bool:
     for (plus any complimentary grant). Jessie, other staff, Kartel,
     and every regular dashboard seat see the full catalog even if an
     old allowed_runs snapshot is still on the record.
+
+    This is the FILE governor. It does not turn product modules on.
+    Admins still flip Profile IQ / Subscriber IQ / Flywheel / etc.
+    on Create User and Edit User via the has_*_iq_access flags.
     """
     if not isinstance(user, dict):
         return False
     if is_internal_staff_seat(user, username):
         return True
     return not is_paid_only_plan(user)
+
+
+def profile_iq_module_enabled(user, username: str = "") -> bool:
+    """True when this seat may open the Profile IQ product.
+
+    Separate from has_full_profile_catalog. Staff always have the
+    module. Regular seats follow the admin Create / Edit User
+    checkbox (default on). Prometheus-only seats follow the flag
+    that refresh_paid_only_product_flags sets when they hold a file.
+    """
+    if not isinstance(user, dict):
+        return False
+    if is_internal_staff_seat(user, username):
+        return True
+    if str(user.get("role") or "").strip().lower() == "super_admin":
+        return True
+    if is_paid_only_plan(user):
+        return bool(user.get("has_profile_iq_access"))
+    return user.get("has_profile_iq_access", True) is not False
 
 
 def is_paid_only_plan(user) -> bool:
@@ -3921,6 +3944,7 @@ __all__ = [
     "WBD_COMPANY_NAME", "is_wbd_company", "ensure_wbd_shared_wallet",
     "apply_prometheus_only_seat", "attach_wbd_seat",
     "is_internal_staff_seat", "has_full_profile_catalog",
+    "profile_iq_module_enabled",
     "is_paid_only_plan",
     "PUBLIC_SIGNUP_SOURCE", "is_public_signup_seat",
     "pays_retail_for_library_match", "already_owns_paid_run",

@@ -3035,6 +3035,9 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdSubscriberIQ"> Subscriber IQ
                                     </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdFlywheelIQ"> Flywheel
+                                    </label>
                                     <label style="display: none; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <!-- E-Commerce IQ removed from the dashboard; checkbox kept (hidden) so JS handlers that read cdEcommerceIQ.checked don't null-deref. -->
                                         <input type="checkbox" id="cdEcommerceIQ" checked> E-Commerce IQ
@@ -3132,20 +3135,12 @@
                                 </div>
                                 <div id="cdBehavioralCheckboxes" style="max-height: 150px; overflow-y: auto; margin-left: 0.5rem;"></div>
                             </div>
-                            <!-- Save / Delete buttons. Super_admin only per
-                                 Jenna 2026-08-25 - company defaults seed every
-                                 new user's product-access flags, so editing
-                                 them is effectively bulk product-access
-                                 grant. Backend endpoints
-                                 /api/admin/companies/.../defaults (PUT +
-                                 DELETE) are gated with @requires_super_admin. -->
+                            <!-- Save / Delete. 2026-09-29: any admin can
+                                 set company module defaults; Create User
+                                 reads the same flags. -->
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap;">
-                                {% if current_user_role == 'super_admin' %}
                                 <button class="btn btn-primary btn-small" onclick="saveCompanyDefaults()">Save Defaults</button>
                                 <button class="btn btn-secondary btn-small" onclick="deleteCompanyDefaults()">Remove Custom Defaults</button>
-                                {% else %}
-                                <span style="color: var(--text-secondary); font-size: 0.72rem;">Only a super admin can edit company defaults.</span>
-                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -3878,7 +3873,7 @@
                          hidden across every group so their .checked values
                          are still readable to JS without cluttering the UI. -->
                     <h4 style="margin: 0 0 0.4rem 0;">🎯 Dashboard Access</h4>
-                    <div class="access-section-subtitle" style="margin: 0 0 0.75rem 0;">Which products this user can open on the dashboard.</div>
+                    <div class="access-section-subtitle" style="margin: 0 0 0.75rem 0;">Turn products on or off for this user. File-level limits stay on Prometheus-only seats only.</div>
 
                     <div class="access-toolbar">
                         <div class="access-group-tabs" role="tablist">
@@ -4059,6 +4054,18 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasSubscriberIQAccess">
                                 <span style="font-weight: 600;">📊 SUBSCRIBER IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Flywheel IQ Access (2026-09-29). Live Features can
+                         hide the product globally; this is the per-user
+                         on/off that Create User / Edit User must expose. -->
+                    <div class="dashboard-access-item" data-access-group="core">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasFlywheelIQAccess">
+                                <span style="font-weight: 600;">🔁 FLYWHEEL</span>
                             </label>
                         </div>
                     </div>
@@ -6213,13 +6220,16 @@
         function addUserToCompany() {
             if (!_currentCompany) return;
             showAdminTab('users');
-            setTimeout(() => {
-                showAddUserModal();
-                setTimeout(() => {
-                    const companyInput = document.getElementById('newCompany');
-                    if (companyInput) companyInput.value = _currentCompany;
-                }, 100);
-            }, 200);
+            Promise.resolve(showAddUserModal()).then(function() {
+                const companyInput = document.getElementById('newCompany');
+                if (companyInput) companyInput.value = _currentCompany;
+                if (typeof applyCompanyDefaultsToUserForm === 'function') {
+                    applyCompanyDefaultsToUserForm(_currentCompany);
+                }
+                if (typeof openEditModalDashboardAccess === 'function') {
+                    openEditModalDashboardAccess();
+                }
+            });
         }
 
         function toggleCompanyReport() {
@@ -6398,6 +6408,10 @@
                 if (d) {
                     document.getElementById('cdProfileIQ').checked = d.has_profile_iq_access !== false;
                     document.getElementById('cdSubscriberIQ').checked = !!d.has_subscriber_iq_access;
+                    var cdFly = document.getElementById('cdFlywheelIQ');
+                    if (cdFly) cdFly.checked = !!d.has_flywheel_iq_access;
+                    var cdFly = document.getElementById('cdFlywheelIQ');
+                    if (cdFly) cdFly.checked = !!d.has_flywheel_iq_access;
                     document.getElementById('cdEcommerceIQ').checked = d.has_ecommerce_iq_access !== false; // Default true (matches backend)
                     // cdImpactIQ was removed on 2026-09-09 (Impact IQ sunset);
                     // null-guard the write so this loader doesn't crash.
@@ -6469,6 +6483,8 @@
                 allowed_behavioral_categories: behs,
                 has_profile_iq_access: document.getElementById('cdProfileIQ').checked,
                 has_subscriber_iq_access: document.getElementById('cdSubscriberIQ').checked,
+                has_flywheel_iq_access: !!(document.getElementById('cdFlywheelIQ') && document.getElementById('cdFlywheelIQ').checked),
+                has_flywheel_iq_access: !!(document.getElementById('cdFlywheelIQ') && document.getElementById('cdFlywheelIQ').checked),
                 has_ecommerce_iq_access: document.getElementById('cdEcommerceIQ').checked,
                 // cdImpactIQ removed 2026-09-09 (Impact IQ sunset); fall back to
                 // the historical default (true) when the DOM element is missing.
@@ -10425,6 +10441,10 @@
             document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            var flyAccessReset = document.getElementById('hasFlywheelIQAccess');
+            if (flyAccessReset) flyAccessReset.checked = false;
+            var flyAccessReset = document.getElementById('hasFlywheelIQAccess');
+            if (flyAccessReset) flyAccessReset.checked = false;
             document.getElementById('hasSFConversionAccess').checked = false;
             // 2026-09-03: SF Conversion granular per-journey grants (reset).
             populateSFConversionJourneysCheckboxes(null);
@@ -10556,13 +10576,12 @@
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
                 if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
-                // Collapsible group panels (2026-09-09): make sure every
-                // group starts CLOSED on Add User (fresh modal) and
-                // populate the summary chips so admin sees at-a-glance
-                // state before opening.
+                // Other groups start closed. Dashboard Access opens so
+                // admins can turn modules on or off without hunting.
                 document.querySelectorAll('#userModal .edit-modal-group.open').forEach(function(g) {
                     g.classList.remove('open');
                 });
+                if (typeof openEditModalDashboardAccess === 'function') openEditModalDashboardAccess();
                 if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
             } catch (_) { /* toolbar helpers are best-effort */ }
         }
@@ -10672,6 +10691,10 @@
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            var flyAccess = document.getElementById('hasFlywheelIQAccess');
+            if (flyAccess) flyAccess.checked = user.has_flywheel_iq_access === true;
+            var flyAccess = document.getElementById('hasFlywheelIQAccess');
+            if (flyAccess) flyAccess.checked = user.has_flywheel_iq_access === true;
             document.getElementById('hasEcommerceIQAccess').checked = user.has_ecommerce_iq_access !== false; // Default true (matches backend)
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
             // 2026-09-03: SF Conversion granular per-journey grants.
@@ -10902,12 +10925,10 @@
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
                 if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
-                // Collapsible group panels (2026-09-09): every group starts
-                // CLOSED on Edit modal open. Admin clicks the header of the
-                // section they need. Summary chips give at-a-glance state.
                 document.querySelectorAll('#userModal .edit-modal-group.open').forEach(function(g) {
                     g.classList.remove('open');
                 });
+                if (typeof openEditModalDashboardAccess === 'function') openEditModalDashboardAccess();
                 if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
             } catch (_) { /* toolbar helpers are best-effort */ }
             } catch (err) {
@@ -12419,6 +12440,57 @@
             el.classList.toggle('open');
         }
 
+        function openEditModalDashboardAccess() {
+            const el = document.getElementById('editGroupDashboard');
+            if (el) el.classList.add('open');
+        }
+
+        // When creating a user, seed the module checkboxes from that
+        // company's saved defaults so Add User matches Company Defaults.
+        async function applyCompanyDefaultsToUserForm(companyName) {
+            const name = String(companyName || '').trim();
+            if (!name) return;
+            try {
+                const resp = await fetch('/api/admin/companies/' + encodeURIComponent(name) + '/defaults', { credentials: 'same-origin' });
+                const data = await resp.json();
+                const d = data && data.defaults;
+                if (!d) return;
+                const setBox = function(id, on) {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = !!on;
+                };
+                setBox('hasProfileIQAccess', d.has_profile_iq_access !== false);
+                setBox('hasSubscriberIQAccess', !!d.has_subscriber_iq_access);
+                setBox('hasFlywheelIQAccess', !!d.has_flywheel_iq_access);
+                setBox('hasShareOfTimeAccess', d.has_share_of_time_access !== false);
+                setBox('hasShareOfTimeRunAccess', d.has_share_of_time_run_access !== false);
+                setBox('hasHedgeFundIQAccess', !!d.has_hedge_fund_iq_access);
+                setBox('hasRankersIQAccess', !!d.has_rankers_iq_access);
+                setBox('hasBrandPartnershipIQAccess', !!d.has_brand_partnership_iq_access);
+                setBox('hasJourneyIQAccess', !!d.has_journey_iq_access);
+                setBox('hasIntentIQAccess', d.has_intent_iq_access !== false);
+                setBox('hasBlueIQAccess', !!d.has_blue_iq_access);
+                setBox('hasBrandTrackingIQAccess', !!d.has_brand_tracking_iq_access);
+                setBox('hasTrendsIQAccess', !!d.has_trends_iq_access);
+                setBox('hasMicrodramasIQAccess', !!d.has_microdramas_iq_access);
+                setBox('hasChatbotProfileIQAccess', !!d.has_chatbot_profile_iq_access);
+                if (typeof syncShareOfTimeAccess === 'function') syncShareOfTimeAccess();
+                if (typeof _pmModeReflectMasterSwitch === 'function') _pmModeReflectMasterSwitch();
+                if (typeof updateEditModalGroupSummaries === 'function') updateEditModalGroupSummaries();
+                if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
+            } catch (_) { /* best-effort */ }
+        }
+
+        (function _wireCompanyDefaultsOnCreate() {
+            const el = document.getElementById('newCompany');
+            if (!el || el._moduleDefaultsWired) return;
+            el.addEventListener('change', function() {
+                if ((document.getElementById('editUsername') || {}).value) return;
+                applyCompanyDefaultsToUserForm(el.value);
+            });
+            el._moduleDefaultsWired = true;
+        })();
+
         // Wire once: any input change inside the userModal refreshes the
         // group-summary chips so the collapsed-view state stays truthful.
         (function _wireEditModalGroupSummaryRefresh() {
@@ -12591,6 +12663,7 @@
             const defaults = {
                 hasProfileIQAccess: true,
                 hasSubscriberIQAccess: false,
+                hasFlywheelIQAccess: false,
                 hasSFConversionAccess: false,
                 hasBrandPartnershipIQAccess: false,
                 hasJourneyIQAccess: false,
@@ -14959,6 +15032,8 @@
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_flywheel_iq_access: !!(document.getElementById('hasFlywheelIQAccess') && document.getElementById('hasFlywheelIQAccess').checked),
+                has_flywheel_iq_access: !!(document.getElementById('hasFlywheelIQAccess') && document.getElementById('hasFlywheelIQAccess').checked),
                 has_ecommerce_iq_access: document.getElementById('hasEcommerceIQAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
                 sf_conversion_journeys: getSFConversionJourneysAllowedPayload(),
