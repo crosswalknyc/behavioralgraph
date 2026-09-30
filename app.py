@@ -62199,51 +62199,80 @@ def _pm_send_output_email(kind, to_email, data):
         slide_note = (f" ({slides} slides)"
                       if isinstance(slides, int) and slides else '')
         subject_line = f"{title} is ready"
-        link_html = ''
-        if url.lower().startswith('https://'):
-            link_html = (
-                f'<p><a href="{_html.escape(url)}" '
-                'style="display:inline-block;background:#66d9ef;'
-                'color:#0a1929;padding:12px 24px;border-radius:6px;'
-                'text-decoration:none;font-weight:bold;margin-top:8px;">'
-                'Download the deck</a></p>')
-        body_html = _wrap_email_html(
-            f"<p>{_html.escape(title)}{slide_note} is ready.</p>"
-            f"{link_html}"
-            "<p>The link is good for 7 days. It is also waiting in the "
-            "chat on your dashboard.</p>"
-            "<p>Prometheus<br>Crosswalk</p>",
-            title="Your deck is ready")
         body_text = (
             f"{title}{slide_note} is ready.\n\n"
             + (f"Download the deck: {url}\n\n" if url else "")
             + "The link is good for 7 days. It is also waiting in the "
               "chat on your dashboard.\n\nPrometheus\nCrosswalk\n")
+        # Light design (Jenna 2026-09-30: "I prefer this design for
+        # emails moving forward"). Legacy shell only on render failure.
+        body_html = ''
+        try:
+            import prometheus_email_html as _peh
+            body_html = _peh.render_answer_email_html(
+                title,
+                f"{title}{slide_note} is ready.\n\n"
+                "The link is good for 7 days. It is also waiting in "
+                "the chat on your dashboard.\n\nPrometheus\nCrosswalk",
+                cta_url=(url if url.lower().startswith('https://')
+                         else None),
+                cta_text='Download the deck')
+        except Exception:
+            body_html = ''
+        if not body_html:
+            link_html = ''
+            if url.lower().startswith('https://'):
+                link_html = (
+                    f'<p><a href="{_html.escape(url)}" '
+                    'style="display:inline-block;background:#66d9ef;'
+                    'color:#0a1929;padding:12px 24px;border-radius:6px;'
+                    'text-decoration:none;font-weight:bold;'
+                    'margin-top:8px;">Download the deck</a></p>')
+            body_html = _wrap_email_html(
+                f"<p>{_html.escape(title)}{slide_note} is ready.</p>"
+                f"{link_html}"
+                "<p>The link is good for 7 days. It is also waiting in "
+                "the chat on your dashboard.</p>"
+                "<p>Prometheus<br>Crosswalk</p>",
+                title="Your deck is ready")
     else:
         reply = str((data or {}).get('reply') or '').strip()
         if not reply:
             return False
         subject_line = "Your read is ready"
-        reply_html = _html.escape(reply).replace('\n', '<br>')
-        body_html = _wrap_email_html(
-            f"<p>{reply_html}</p>"
-            "<p>The same read is attached as a PDF you can share. You "
-            "can also pick this up in the chat on your dashboard.</p>"
-            "<p>Prometheus<br>Crosswalk</p>",
-            title="Your read is ready")
-        body_text = (
+        _subj = str((data or {}).get('profile') or '').strip()
+        email_title = _subj or 'Your Crosswalk read'
+        mail_body = (
             f"{reply}\n\n"
             "The same read is attached as a PDF you can share. You can "
             "also pick this up in the chat on your "
-            "dashboard.\n\nPrometheus\nCrosswalk\n")
+            "dashboard.\n\nPrometheus\nCrosswalk")
+        body_text = mail_body + "\n"
+        # Light design (Jenna 2026-09-30: "I prefer this design for
+        # emails moving forward"). Legacy shell only on render failure.
+        body_html = ''
+        try:
+            import prometheus_email_html as _peh
+            body_html = _peh.render_answer_email_html(email_title,
+                                                      mail_body)
+        except Exception:
+            body_html = ''
+        if not body_html:
+            reply_html = _html.escape(reply).replace('\n', '<br>')
+            body_html = _wrap_email_html(
+                f"<p>{reply_html}</p>"
+                "<p>The same read is attached as a PDF you can share. "
+                "You can also pick this up in the chat on your "
+                "dashboard.</p>"
+                "<p>Prometheus<br>Crosswalk</p>",
+                title="Your read is ready")
         # The same words as a branded, shareable PDF (Jenna
         # 2026-09-30: "attach pdfs of the prometheus emails of what
         # the email body says"). Fail-safe: b'' means no attachment.
         try:
             import prometheus_email_pdf as _pep
-            _subj = str((data or {}).get('profile') or '').strip()
             pdf_bytes = _pep.render_answer_pdf(
-                _subj or 'Your Crosswalk read',
+                email_title,
                 reply + '\n\nPrometheus\nCrosswalk')
             if pdf_bytes:
                 _safe = re.sub(r'[^A-Za-z0-9]+', '_', _subj).strip('_')
