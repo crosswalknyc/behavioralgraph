@@ -37177,15 +37177,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var card = _aiqAudienceCard(key);
                 if (!card) return cards;
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var cat = String(card.category || 'AUDIENCE').toUpperCase();
+                var isDistrict = (cat === 'CONGRESSIONAL DISTRICT');
                 var all = _aiqAudienceCards();
-                var bps = all.map(function(c) { return Number(c.overlap_bp) || 0; });
+                // The overlap range that sets the tilt is read within the
+                // card's own family: a district's reach is small by
+                // geography, and letting it into the behavioral range
+                // would push every behavioral cohort to the top of it.
+                var pool = all.filter(function(c) {
+                    return (String(c.category || '').toUpperCase() === 'CONGRESSIONAL DISTRICT') === isDistrict;
+                });
+                if (!pool.length) pool = all;
+                var bps = pool.map(function(c) { return Number(c.overlap_bp) || 0; });
                 var minBp = Math.min.apply(null, bps), maxBp = Math.max.apply(null, bps);
                 var bp = Number(card.overlap_bp) || 0;
                 var norm = (maxBp - minBp) > 0 ? ((bp - minBp) / (maxBp - minBp)) : 0.5;
-                var share = Math.max(0.002, Math.min(0.95, bp / 100));
-                var cat = String(card.category || 'AUDIENCE').toUpperCase();
+                // A district holds a fraction of a percent of the exposed
+                // audience, so the floor sits low enough that each one
+                // keeps its own share instead of all landing on one value.
+                var share = Math.max(isDistrict ? 0.0005 : 0.002, Math.min(0.95, bp / 100));
                 var infoTilt = _iiqAudienceTilt(key, norm, true);
                 var tkTilt = _iiqAudienceTilt(key, norm, false);
+                if (isDistrict) {
+                    // District cards carry their research and action rates
+                    // as ratios to the campaign's own, so the cut reads the
+                    // district's rates rather than a generic overlap tilt.
+                    var ri = Number(card.research_index), ai = Number(card.action_index);
+                    if (isFinite(ri) && ri > 0) infoTilt = Math.max(0.55, Math.min(1.45, ri));
+                    if (isFinite(ai) && ai > 0) tkTilt = Math.max(0.45, Math.min(1.55, ai));
+                }
                 var VIEW_FIELDS = ['ext_view_count', 'views_total', 'lifetime_view_count'];
                 var ENG_FIELDS = { ext_engagement_count: 'ext_view_count', engagement_total: 'views_total',
                                    lifetime_engagement_count: 'lifetime_view_count' };
@@ -43698,6 +43718,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                 }
                 var bestRaw = _aiqScopeAssets(bestSrc);
+                // The cut is rebuilt from each asset's base row, which
+                // carries the platform counts but not the table's derived
+                // views_total / engagement_total. Re-derive them so a
+                // picked cohort never reads as zero views.
+                bestRaw = bestRaw.map(function (o) {
+                    if (!o || typeof o !== 'object' || !o._aiqAud) return o;
+                    if (o.ext_view_count != null || o.lifetime_view_count != null) {
+                        o.views_total = Number(o.ext_view_count || o.lifetime_view_count || 0);
+                    }
+                    if (o.ext_engagement_count != null || o.lifetime_engagement_count != null) {
+                        o.engagement_total = Number(o.ext_engagement_count || o.lifetime_engagement_count || 0);
+                    }
+                    return o;
+                });
                 var bestLabel = d.best_in_flight_window_label || 'YTD';
                 if (!cum.length && !bestRaw.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
 
