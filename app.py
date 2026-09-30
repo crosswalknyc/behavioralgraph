@@ -45533,6 +45533,19 @@ def _is_single_compound_audience(text: str) -> bool:
     if _is_explicit_combined_request(t):
         return True
 
+    # S1b (2026-09-30, jessie's Audible thread): "<audience noun>
+    # on/of <platform> for: <title list>" is ONE universe of that
+    # platform's listeners across the listed titles, never a batch.
+    # The identical text alternated answered / batch_draft four
+    # times on 2026-09-10 before the combine gate caught it.
+    if _re.search(
+        r'\b(?:listeners?|viewers?|watchers?|streamers?|readers?'
+        r'|players?|buyers?|renters?|subscribers?|fans?|users?)\s+'
+        r'(?:on|of|to|from)\s+[A-Za-z][\w .&+-]{1,40}?\s+'
+        r'(?:for|covering|across)\s*:',
+            t, _re.IGNORECASE):
+        return True
+
     # S1: audience relative clause - "<audience noun/pronoun> who ...".
     # A batch of independent subjects never says "anyone who watched X"
     # or "people who bought Y". This alone resolves the Blair Witch ask.
@@ -46950,6 +46963,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "the BASE audiences differ ('a Nike profile and a Adidas "
         "profile').\n\n"
 
+        "ANY-OF / ALL-OF TITLE LISTS = ONE build (HARD RULE, Jenna "
+        "2026-09-30, after 'watched any of A, B, C' asks were "
+        "declined or shattered into batches):\n"
+        "  * A request defining ONE audience by MULTIPLE titles, "
+        "books, films, or shows joined by any-of / or / all-of / "
+        "and ('people who watched any of X, Y, Z', 'listeners of "
+        "these audiobooks', 'watched A or B and any one of C, D, "
+        "E') is EXACTLY ONE new_build universe. Never a batch, "
+        "never a decline. Return a SINGLE JSON object.\n"
+        "  * Name it plainly for what it is ('Blair Witch + "
+        "Paranormal Franchise Crossover Viewers', 'Lady Miss "
+        "Jacqueline Audiobook Listeners'). Union (any-of) and "
+        "intersection (and) both stay one universe; capture the "
+        "logic in the universe description so the build scopes "
+        "membership correctly.\n"
+        "  * Seed EVERY listed title's clickstream slug variants "
+        "into the universe terms per the BRAND INPUT rules. No "
+        "title on the list is dropped.\n\n"
         "DEMOGRAPHIC + BEHAVIORAL PERSONA = ONE build (HARD RULE, Jenna "
         "2026-09-02, after a request for a SINGLE audience - 'age 18-44, "
         "high social-platform activity, mid-to-heavy female skew' - was "
@@ -52588,8 +52619,15 @@ def _parse_strategy_answer(answer, subject, draft):
 # generic error strings are documented partner behavior
 # (see partner-api-no-internal-terms.mdc).
 
-_CHATBOT_CALM_MESSAGE = ("Working on it. This one needs a closer look "
-                         "and will come back to you shortly.")
+# Jenna 2026-09-30 (verbatim): 'if prometheus can't figure out the
+# answer or an error happens have it show the user "Working on it.
+# Confirmed your task is in progress and I will email you when it
+# completes." then email me and jessie.' The sentence is a promise:
+# the ops email to jenna@ + jessie@ (below) carries the user + the
+# question so the answer actually gets delivered by email.
+_CHATBOT_CALM_MESSAGE = ("Working on it. Confirmed your task is in "
+                         "progress and I will email you when it "
+                         "completes.")
 _CHATBOT_ERROR_EMAIL_TO = ('jenna@crosswalknyc.com',
                            'jessie@crosswalknyc.com')
 _CHATBOT_ERROR_EMAIL_COOLDOWN_S = 900  # per route+signature, 15 minutes
@@ -52831,10 +52869,30 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
         subject_line = f"Chatbot error: {route}"
         if user_email:
             subject_line += f" ({str(user_email)[:80]})"
+        # Promise banner (Jenna 2026-09-30): when a real user saw the
+        # calm working-on-it line, the ops email states the promise so
+        # the answer actually goes out by email. System checks (health
+        # polls, no user question) skip the banner.
+        promise_block = ''
+        try:
+            _pl_np = payload if isinstance(payload, dict) else {}
+            if (user_email and not _pl_np.get('_no_promise')
+                    and not query_text.startswith('(system check')):
+                promise_block = (
+                    "PROMISE MADE: the user was shown 'Working on it. "
+                    "Confirmed your task is in\nprogress and I will "
+                    "email you when it completes.'\n"
+                    f"DELIVER THE ANSWER BY EMAIL TO: {user_email}\n"
+                    "(send it From Prometheus "
+                    "<prometheus@crosswalknyc.com>, signed Prometheus / "
+                    "Crosswalk)\n\n")
+        except Exception:
+            promise_block = ''
         body_text = (
             f"User: {user_email or '(unknown)'}\n"
             f"Question: {query_text}\n"
             f"\n"
+            f"{promise_block}"
             f"----- detail -----\n"
             f"Timestamp: {ts}\n"
             f"Route: {route}\n"
@@ -54812,6 +54870,18 @@ def api_synth_chat_interpret():
     if _pm_pricing_question(text):
         return jsonify({'success': False, 'guidance': True,
                         'error': _PM_PRICING_COPY})
+    # Work-order verbs (2026-09-30 Jenna): 'stop' / 'status' /
+    # 'how long' on the build surface must never draft a build.
+    _wo_intent = _pm_workorder_intent(text)
+    if _wo_intent:
+        _wo_reply = _pm_workorder_reply(user, text, _wo_intent)
+        if _wo_reply:
+            try:
+                _pm_ask_hint(outcome='workorder_' + _wo_intent)
+            except Exception:
+                pass
+            return jsonify({'success': False, 'guidance': True,
+                            'error': _wo_reply})
 
     # ------------------------------------------------------------------
     # INCIDENCE / SAMPLE-SIZE PRE-CHECK (2026-08-19): questions like
@@ -58854,6 +58924,260 @@ def _pm_status_reply_for_runs(runs):
     return '\n'.join(lines)
 
 
+
+
+# WORK-ORDER VERBS (2026-09-30 Jenna: "do all of them"). Status, ETA,
+# and cancel are account services: subjectless asks ("status?", "are
+# you still working on my report?", "how long will this take?",
+# "stop") answer deterministically from the caller's own runs on BOTH
+# chat surfaces, free, before any gate or model call. Evidence from
+# the ask log: emma's nine-turn work-order thread got an ETA shrug and
+# a page-analysis answer to "Are you still working on my report?";
+# jessie typed "stop" three times and got three page analyses.
+_PM_WO_WORK_NOUNS = (
+    r"(?:report|profile|build|run|pull|file|request|order|job|"
+    r"deliverable|csv|deck|cut|analysis)")
+
+_PM_WO_STATUS_RES = (
+    re.compile(r"^\s*(?:status|any\s+updates?|progress|"
+               r"status\s+update|what(?:'s|\s+is)\s+the\s+status)"
+               r"\s*[?.!]*\s*$", re.I),
+    re.compile(r"^\s*are\s+you\s+still\s+working(?:\s+on\s+"
+               r"(?:it|that|this|my\s+[\w ]{1,40}|the\s+[\w ]{1,40}))?"
+               r"\s*[?.!]*\s*$", re.I),
+    re.compile(r"^\s*(?:is|are)\s+(?:it|that|this|they|my\s+"
+               + _PM_WO_WORK_NOUNS + r"s?)\s+(?:done|ready|"
+               r"finished|complete[d]?)(?:\s+yet)?\s*[?.!]*\s*$",
+               re.I),
+    re.compile(r"^\s*where(?:'s|\s+is)\s+(?:my|the)\s+"
+               r"[\w ]{0,30}?" + _PM_WO_WORK_NOUNS +
+               r"\s*[?.!]*\s*$", re.I),
+    re.compile(r"^\s*did\s+(?:it|my\s+" + _PM_WO_WORK_NOUNS +
+               r")\s+(?:finish|complete|land|go\s+through)"
+               r"(?:\s+yet)?\s*[?.!]*\s*$", re.I),
+)
+
+_PM_WO_ETA_RES = (
+    re.compile(r"^\s*(?:what(?:'s|\s+is)\s+the\s+)?eta"
+               r"\s*[?.!]*\s*$", re.I),
+    re.compile(r"^\s*how\s+much\s+longer(?:\s+(?:will|does|is)\s+"
+               r"(?:it|this|that)[\w ]{0,20})?\s*[?.!]*\s*$", re.I),
+    re.compile(r"\bhow\s+long\s+(?:will|does|do|should)\s+"
+               r"(?:it|this|that|the\s+(?:build|run|report|profile|"
+               r"pull)|my\s+[\w ]{1,30}?)\s*.{0,40}?\btake\b", re.I),
+    re.compile(r"\bwhen\s+will\s+(?:it|that|this|my\s+[\w ]{1,40}|"
+               r"the\s+[\w ]{1,40})\s+be\s+"
+               r"(?:done|ready|finished|complete)\b", re.I),
+)
+
+_PM_WO_CANCEL_RE = re.compile(
+    r"^\s*(?:please\s+|ok(?:ay)?[,\s]+|never\s*mind[,\s]+|"
+    r"actually[,\s]+)?"
+    r"(?:stop|cancel|abort|kill)\b"
+    r"(?!\s+(?:showing|sending|giving|telling|asking|using|"
+    r"putting|adding|including|counting|saying|repeating)\b)"
+    r"(?P<tail>(?:\s+(?:it|that|this|everything|all|the|my))?"
+    r"[\w .&'-]{0,50}?)\s*[.!]*\s*$", re.I)
+
+
+def _pm_workorder_intent(text):
+    """'status' | 'eta' | 'cancel' | None. Anchored, short, and
+    subjectless-friendly so real analysis questions never match."""
+    t = str(text or '').strip()
+    if not t or len(t) > 90 or '\n' in t:
+        return None
+    if _PM_WO_CANCEL_RE.match(t) and '?' not in t:
+        return 'cancel'
+    for rx in _PM_WO_ETA_RES:
+        if rx.search(t):
+            return 'eta'
+    for rx in _PM_WO_STATUS_RES:
+        if rx.match(t):
+            return 'status'
+    return None
+
+
+def _pm_user_runs(user, limit=40, active=False, status=None):
+    """The caller's runs from the build engine, newest first. [] on
+    any listener trouble so the ask falls through to normal routing."""
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return []
+    uid = (user.get('email') or user.get('username') or '').strip()
+    if not uid and not status:
+        return []
+    try:
+        import requests as _rq
+        params = {'limit': limit}
+        if uid and status is None:
+            params['user'] = uid
+        if active:
+            params['active'] = 1
+        if status:
+            params['status'] = status
+        resp = _rq.get(
+            f"{SYNTH_QUEUE_URL}/synth/list", params=params,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET}, timeout=12)
+        if resp.status_code != 200:
+            return []
+        docs = resp.json() or []
+        return [d for d in docs if isinstance(d, dict)]
+    except Exception:
+        return []
+
+
+def _pm_typical_build_minutes():
+    """Median wall minutes of recently completed builds, or None.
+    Honest ETA basis: measured durations, never a made-up promise."""
+    docs = _pm_user_runs({}, limit=60, status='complete')
+    mins = []
+    for d in docs:
+        try:
+            q = datetime.fromisoformat(
+                str(d.get('queued_at') or '').replace('Z', '+00:00'))
+            u = datetime.fromisoformat(
+                str(d.get('updated_at') or '').replace('Z', '+00:00'))
+            m = (u - q).total_seconds() / 60.0
+            if 3 <= m <= 360:
+                mins.append(m)
+        except Exception:
+            continue
+    if not mins:
+        return None
+    mins.sort()
+    return mins[len(mins) // 2]
+
+
+def _pm_eta_line(doc, typical=None):
+    """Plain remaining-time sentence for one active run, or ''."""
+    try:
+        typical = typical or _pm_typical_build_minutes()
+        if not typical:
+            return ''
+        q = datetime.fromisoformat(
+            str(doc.get('queued_at') or '').replace('Z', '+00:00'))
+        elapsed = (datetime.now(timezone.utc) - q).total_seconds() / 60.0
+        remaining = typical - elapsed
+        if elapsed > 2 * typical:
+            return ("It is taking longer than a typical build. It "
+                    "finishes on its own and the completion email "
+                    "goes out the moment it lands.")
+        if remaining <= 4:
+            return "Expect it within the next few minutes."
+        return (f"Recent builds like this one finish in about "
+                f"{int(round(typical))} minutes; this one has roughly "
+                f"{int(round(remaining))} minutes to go.")
+    except Exception:
+        return ''
+
+
+def _pm_cancel_target(user, text):
+    """(doc, others) - the active run the cancel names, or the only
+    active run. doc None when nothing matches / nothing active."""
+    active = _pm_user_runs(user, active=True)
+    if not active:
+        return None, []
+    m = _PM_WO_CANCEL_RE.match(str(text or '').strip())
+    tail = (m.group('tail') or '').strip() if m else ''
+    tail = re.sub(r'^(?:it|that|this|everything|all|the|my)\b\s*', '',
+                  tail, flags=re.I).strip()
+    tail = re.sub(r'\b(?:build|run|profile|pull|report|request|job)s?'
+                  r'\s*$', '', tail, flags=re.I).strip()
+    if tail:
+        want = {w for w in _normalize_for_match(tail).split()
+                if w not in _PM_BASE_GENERIC_TOKENS}
+        for doc in active:
+            subj = {w for w in _normalize_for_match(
+                        str(doc.get('subject') or '')).split()
+                    if w not in _PM_BASE_GENERIC_TOKENS}
+            if want and subj and (want <= subj or subj <= want):
+                return doc, [d for d in active if d is not doc]
+        return None, active
+    if len(active) == 1:
+        return active[0], []
+    return None, active
+
+
+def _pm_workorder_reply(user, text, intent):
+    """Deterministic answer for a work-order verb, or None to fall
+    through to normal routing. Never raises."""
+    try:
+        if intent == 'cancel':
+            doc, others = _pm_cancel_target(user, text)
+            if doc is None and not others:
+                return ("Nothing is building for your account right "
+                        "now, so there is nothing to stop. If you "
+                        "meant something else, say the word and I "
+                        "will take care of it.")
+            if doc is None and others:
+                names = ', '.join(
+                    str(d.get('subject') or 'unnamed')
+                    for d in others[:4])
+                return (f"You have more than one build going: "
+                        f"{names}. Say 'cancel' plus the name and I "
+                        f"will stop that one.")
+            run_id = str(doc.get('run_id') or '')
+            subj = str(doc.get('subject') or 'that build')
+            try:
+                import requests as _rq
+                resp = _rq.post(
+                    f"{SYNTH_QUEUE_URL}/synth/cancel/{run_id}",
+                    headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET},
+                    timeout=12)
+                ok = resp.status_code == 200
+                st = (resp.json() or {}).get('status', '') if ok else ''
+            except Exception:
+                ok, st = False, ''
+            if ok and st == 'cancelled':
+                return (f"Stopped. {subj} was cancelled before it "
+                        f"started and the credits come back to your "
+                        f"balance automatically. Nothing else was "
+                        f"touched.")
+            if ok:
+                return (f"Stopping {subj} now. It unwinds at the next "
+                        f"safe point and the credits come back to "
+                        f"your balance automatically. Nothing else "
+                        f"was touched.")
+            _chatbot_error_email(
+                'pm/cancel',
+                f'cancel request did not reach the engine '
+                f'(run {run_id}, subject {subj})',
+                user_email=(user.get('email') or user.get('username')),
+                payload={'question': text[:300], 'run_id': run_id})
+            return _CHATBOT_CALM_MESSAGE
+        # status / eta share the same data
+        active = _pm_user_runs(user, active=True)
+        if intent == 'eta':
+            if active:
+                lead = _pm_status_reply_for_runs(active[:1])
+                eta = _pm_eta_line(active[0])
+                return (lead + ('\n' + eta if eta else '')).strip()
+            typical = _pm_typical_build_minutes()
+            if typical:
+                return (f"Nothing is building for your account right "
+                        f"now. For reference, a typical build "
+                        f"finishes in about {int(round(typical))} "
+                        f"minutes end to end.")
+            return ("Nothing is building for your account right now. "
+                    "Ask for any audience and I will kick one off.")
+        # status
+        if active:
+            lead = _pm_status_reply_for_runs(active[:3])
+            eta = _pm_eta_line(active[0])
+            return (lead + ('\n' + eta if eta else '')).strip()
+        recent = _pm_user_runs(user, limit=6)
+        for doc in recent:
+            st = str(doc.get('status') or '').lower()
+            if st == 'complete':
+                return _pm_status_reply_for_runs([doc])
+        return ("Nothing is building for your account right now. "
+                "Everything you have run is already live in the "
+                "Select Profile dropdown. Ask for any audience and I "
+                "will kick off a new one.")
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 # DELIVERY + FEEDBACK INTERCEPTS (2026-09-28, the W39 weekly review):
 # "please email david carter@... when it is ready" and "the key art is
 # from an older series, please replace it" each burned a full paid
@@ -58863,8 +59187,11 @@ def _pm_status_reply_for_runs(runs):
 _PM_EMAIL_ADDR_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w{2,}")
 _PM_EMAIL_WHEN_READY_RE = re.compile(
     # '.' stays inside the spans: addresses carry dots
-    # (david.carter@spe.sony.com).
-    r"\b(?:e-?mail|send)\b[^?!\n]{0,80}?\bwhen\b[^?!\n]{0,30}?"
+    # (david.carter@spe.sony.com). 2026-09-30: notify / tell /
+    # ping / alert / let me know / update me all register the
+    # ready-notification, same as email.
+    r"\b(?:e-?mail|send|notify|tell|ping|alert|update|let\s+me\s+know)\b"
+    r"[^?!\n]{0,80}?\bwhen\b[^?!\n]{0,30}?"
     r"\b(?:ready|done|finish(?:e[sd])?|complete[sd]?|lands?|arrives?)\b",
     re.IGNORECASE)
 
@@ -61587,16 +61914,15 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                          'subject': res.get('subject'),
                          'base': base.get('s3_key')})
             _pm_ask_hint(outcome='held')
-            # Clarify + suggest instead of a dead end (Jenna
-            # 2026-09-22): the ops email above keeps the signal; the
-            # user gets the two honest paths (derive the missing
-            # cohort cut, or read what the file measures today).
-            _h_reply, _h_chips = _pm_held_read_clarify(
-                text, res.get('subject') or base.get('subject'))
+            # Calm promise instead of a dead end (Jenna 2026-09-30:
+            # when Prometheus can't figure out the answer, the user
+            # sees the working-on-it promise and the answer arrives
+            # by email). The ops email above carries the findings and
+            # the user's question so the answer gets delivered.
             return {
                 'success': True, 'action': 'answer',
-                'reply': _h_reply,
-                'followups': _h_chips, 'offer_deck': False,
+                'reply': _CHATBOT_CALM_MESSAGE,
+                'followups': [], 'offer_deck': False,
                 'deck_angle': None, '_held': True, '_family': fam0,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
@@ -62551,6 +62877,233 @@ def _pm_year_package_reply(subject, years, have, missing):
     return '\n'.join(lines), chips
 
 
+
+
+# CHALLENGED-NUMBER HEADS-UP (2026-09-30 Jenna: consistency guard).
+# When a reader questions a delivered figure ("seems very high", "why
+# is this smaller than the previous analysis", "how is this
+# calculated"), the answer still generates normally - the analysis
+# prompt carries the reconcile instructions - and ops hears about it
+# in the background so a genuine inconsistency never dies in a chat
+# session. Evidence: sonytv challenged the Apple TV+ subscriber read
+# and a Dark Matter season-over-season contradiction in the same week.
+_PM_CHALLENGE_RES = (
+    re.compile(r"\bseems?\s+(?:too\s+|very\s+|really\s+|way\s+too\s+)?"
+               r"(?:high|low|off|wrong|inflated|small|big|large)\b", re.I),
+    re.compile(r"\b(?:number|figure|count|value|read|projection)s?\s+"
+               r"(?:looks?|seems?|feels?)\b", re.I),
+    re.compile(r"\bhow\s+(?:is|was|did|are|were)\s+"
+               r"(?:this|that|it|these|those|the\s+[\w %#]{1,30}?)\s+"
+               r"(?:calculated|derived|measured|computed|determined|"
+               r"arrived\s+at)\b", re.I),
+    re.compile(r"\b(?:doesn'?t|does\s+not|didn'?t|did\s+not)\s+"
+               r"(?:match|line\s+up\s+with|square\s+with|agree\s+"
+               r"with)\b", re.I),
+    re.compile(r"\bwhy\s+(?:is|was|does|did|are|were)\b.{0,70}?"
+               r"\b(?:higher|lower|bigger|smaller|larger|different)\s+"
+               r"than\b", re.I),
+    re.compile(r"\b(?:very|extremely|surprisingly|unusually|"
+               r"impossibly)\s+(?:high|low)\b", re.I),
+    re.compile(r"\bcan'?t\s+be\s+right\b|\bdouble[- ]check\s+"
+               r"(?:this|that|the)\b", re.I),
+)
+
+
+def _pm_challenge_headsup(user, text):
+    """Fire-and-continue ops email when a reader challenges a figure.
+    Never blocks or changes the answer path. Never raises."""
+    try:
+        t = str(text or '')
+        if len(t) < 12 or not any(
+                rx.search(t) for rx in _PM_CHALLENGE_RES):
+            return
+        _chatbot_error_email(
+            'pm/number-challenged',
+            'reader challenged a delivered figure (the answer still '
+            'generated normally; review for consistency): ' + t[:400],
+            user_email=(user.get('email') or user.get('username')),
+            payload={'question': t[:400], '_no_promise': True})
+    except Exception:
+        pass
+
+
+def _pm_trajectory_files(subject, years):
+    """{year: s3_key} for shelf files carrying the subject's tokens
+    and that year in the display name. Newest catalog entry wins."""
+    toks = [w for w in re.findall(r'[a-z0-9]+', str(subject).lower())
+            if len(w) >= 3]
+    out = {}
+    try:
+        for ent in (_profile_catalog_for_chat() or []):
+            name = str(ent.get('display_name') or ent.get('s3_key')
+                       or '').lower()
+            key = str(ent.get('s3_key') or '').strip()
+            if not key or not toks or not all(t in name for t in toks):
+                continue
+            for y in years:
+                if str(y) in name and y not in out:
+                    out[y] = key
+    except Exception:
+        traceback.print_exc()
+    return out
+
+
+def _pm_trajectory_metrics(s3_key):
+    """Headline metrics from one year file: us_audience, sample,
+    female_pct, u25_pct, top streaming (name, bp). None on trouble."""
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+    except Exception:
+        return None
+    cols = {re.sub(r'[^a-z]', '', str(c).lower()): c for c in df.columns}
+
+    def col(*needles):
+        for norm, orig in cols.items():
+            if all(n in norm for n in needles):
+                return orig
+        return None
+    c_col = col('column')
+    c_val = col('value')
+    c_bp = col('brandpenetration')
+    c_raw = col('raw')
+    c_proj = col('projection')
+    if not all((c_col, c_val, c_bp)):
+        return None
+
+    def num(v):
+        try:
+            return float(re.sub(r'[%,$]', '', str(v)))
+        except Exception:
+            return None
+    out = {}
+    up = df[c_col].astype(str).str.strip().str.upper()
+    vals = df[c_val].astype(str).str.strip()
+    ss = df[(up == 'SAMPLE SIZE')]
+    if len(ss) and c_proj:
+        out['us_audience'] = num(ss.iloc[0][c_proj])
+    if len(ss) and c_raw:
+        out['sample'] = num(ss.iloc[0][c_raw])
+    g = df[(up == 'GENDER') & (vals.str.upper() == 'FEMALE')]
+    if len(g):
+        out['female_pct'] = num(g.iloc[0][c_bp])
+    a = df[up == 'AGE']
+    u25 = 0.0
+    seen_u25 = False
+    for _, r in a.iterrows():
+        lab = str(r[c_val]).strip()
+        if lab in ('13-17', '18-24', 'UNDER 18', '13 TO 17', '18 TO 24'):
+            v = num(r[c_bp])
+            if v is not None:
+                u25 += v
+                seen_u25 = True
+    if seen_u25:
+        out['u25_pct'] = u25
+    s = df[up.isin(('STREAMING/PLATFORM', 'STREAMING VIDEO'))].copy()
+    if len(s):
+        s['_bp'] = s[c_bp].map(num)
+        s = s[(s['_bp'].notna()) & (s['_bp'] < 99.5)]
+        if len(s):
+            top = s.sort_values('_bp', ascending=False).iloc[0]
+            out['top_stream'] = (str(top[c_val]).strip(),
+                                 float(top['_bp']))
+    return out or None
+
+
+def _pm_trajectory_reply(username, subject, years, text):
+    """Deterministic multi-year series answer from the shelf's year
+    files: headline trend, per-year lines, and the answer CSV. None
+    when fewer than 2 year files load cleanly (the ask then falls
+    through to normal routing)."""
+    files = _pm_trajectory_files(subject, years)
+    series = []
+    for y in sorted(files):
+        m = _pm_trajectory_metrics(files[y])
+        if m and m.get('us_audience'):
+            m['year'] = y
+            series.append(m)
+    if len(series) < 2:
+        return None
+    first, last = series[0], series[-1]
+    lines = [f"{subject}, year over year:"]
+    prev = None
+    for m in series:
+        aud = int(m['us_audience'])
+        line = f"- {m['year']}: {aud:,} US audience"
+        if prev:
+            d = (aud - prev) / prev * 100.0
+            line += f" ({'up' if d >= 0 else 'down'} {abs(d):.1f}%)"
+        prev = aud
+        lines.append(line)
+    net = ((last['us_audience'] - first['us_audience'])
+           / first['us_audience'] * 100.0)
+    lines.append('')
+    lines.append(
+        f"Net: {'up' if net >= 0 else 'down'} {abs(net):.1f}% from "
+        f"{first['year']} to {last['year']}.")
+    comp_bits = []
+    if first.get('female_pct') and last.get('female_pct'):
+        comp_bits.append(
+            f"female share moved {first['female_pct']:.1f}% to "
+            f"{last['female_pct']:.1f}%")
+    if first.get('u25_pct') and last.get('u25_pct'):
+        comp_bits.append(
+            f"under-25 share moved {first['u25_pct']:.1f}% to "
+            f"{last['u25_pct']:.1f}%")
+    if comp_bits:
+        lines.append("Composition: " + "; ".join(comp_bits) + ".")
+    tops = [m['top_stream'][0] for m in series if m.get('top_stream')]
+    if tops:
+        if len(set(tops)) == 1:
+            lines.append(f"{tops[0]} led streaming in every year.")
+        else:
+            lines.append(
+                "Streaming leader by year: "
+                + ", ".join(f"{m['year']} {m['top_stream'][0]}"
+                            for m in series if m.get('top_stream'))
+                + ".")
+    reply = "\n".join(lines)
+    payload = {'success': True, 'action': 'answer', 'reply': reply,
+               'followups': [], 'offer_deck': False, 'deck_angle': None}
+    try:
+        hdr = ['Year', 'US Audience', 'Female %', 'Under-25 %',
+               'Top Streaming Platform', 'Top Platform %']
+        rows = []
+        for m in series:
+            ts = m.get('top_stream') or ('', '')
+            rows.append([
+                m['year'], int(m['us_audience']),
+                (f"{m['female_pct']:.1f}" if m.get('female_pct')
+                 else ''),
+                (f"{m['u25_pct']:.1f}" if m.get('u25_pct') else ''),
+                ts[0], (f"{ts[1]:.1f}" if ts[0] else '')])
+        buf = io.StringIO()
+        _w = csv.writer(buf)
+        _w.writerow(hdr)
+        _w.writerows(rows)
+        csv_text = buf.getvalue()
+        safe = re.sub(r'[^A-Za-z0-9]+', '_', str(subject)).strip('_')
+        fname = (f"{safe}_Year_Over_Year_"
+                 f"{series[0]['year']}_{series[-1]['year']}.csv")
+        s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
+                             Body=csv_text.encode('utf-8'),
+                             ContentType='text/csv')
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key,
+                    'ResponseContentDisposition':
+                        f'attachment; filename="{fname}"'},
+            ExpiresIn=7 * 24 * 3600)
+        _pm_file_stash_write(username, url, fname, s3_key,
+                             subject=subject, question=text)
+        payload['file_link'] = {'url': url, 'label': f"Download {fname}"}
+        payload['followups'] = ['Email me this file']
+    except Exception:
+        traceback.print_exc()
+    return payload
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
@@ -62586,6 +63139,23 @@ def api_synth_chat_analyze():
     # things cost gets the answer, free, no model call.
     if _pm_pricing_question(text):
         return jsonify({'success': True, 'reply': _PM_PRICING_COPY})
+    # Challenged-number heads-up (2026-09-30): fire-and-continue;
+    # the answer path is untouched.
+    _pm_challenge_headsup(user, text)
+    # Work-order verbs (2026-09-30 Jenna): status / ETA / cancel
+    # answer from the caller's own runs, free, before any gate.
+    _wo_intent = _pm_workorder_intent(text)
+    if _wo_intent:
+        _wo_reply = _pm_workorder_reply(user, text, _wo_intent)
+        if _wo_reply:
+            try:
+                _pm_ask_hint(outcome='workorder_' + _wo_intent)
+            except Exception:
+                pass
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _wo_reply, 'followups': [],
+                'offer_deck': False, 'deck_angle': None})
     # Prometheus tier gate (2026-08-26): pulls_only users without the
     # pay-as-you-go opt-in get Jenna's offer instead of any analysis
     # flow. Runs before every branch so no analysis path leaks.
@@ -62639,6 +63209,19 @@ def api_synth_chat_analyze():
                             'followups': _my_chips,
                             'offer_deck': False, 'deck_angle': None,
                             'build_required': True})
+                    elif len(_have_y) >= 2:
+                        # Every year is on the shelf (2026-09-30):
+                        # answer the series deterministically from the
+                        # year files - same ask, same route, same
+                        # numbers, every time.
+                        _tj = _pm_trajectory_reply(
+                            (session.get('username')
+                             or user.get('username') or ''),
+                            _my_subj, _have_y, text)
+                        if _tj:
+                            _pm_ask_hint(outcome='answered',
+                                         subject=_my_subj)
+                            return jsonify(_tj)
         except Exception:
             traceback.print_exc()
     # ---- Brand Partnership Valuation flow (Jenna 2026-09-16) ----
