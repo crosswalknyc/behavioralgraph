@@ -583,9 +583,17 @@ def _s3_client():
             try:
                 import boto3  # type: ignore
                 from botocore.config import Config  # type: ignore
+                # Timeouts, because the default is none: a stalled
+                # upload of the 22 MB view payload sat in ssl.sendall
+                # for five hours on 2026-09-29 and held the gate that
+                # ran it. Sixty seconds without a byte moving is a dead
+                # connection; botocore retries it on a fresh one.
                 _S3_CLIENT = boto3.client(
                     's3', region_name='us-east-2',
-                    config=Config(max_pool_connections=64))
+                    config=Config(max_pool_connections=64,
+                                  connect_timeout=20, read_timeout=60,
+                                  retries={'max_attempts': 3,
+                                           'mode': 'standard'}))
             except Exception as e:
                 logger.debug("trends_iq: boto3 unavailable (%s)", e)
                 return None
@@ -721,12 +729,30 @@ def _cache_put(filters: dict, payload: dict) -> None:
     s3 = _s3_client()
     if s3 is None:
         return
+    body = b''
     try:
-        s3.put_object(Bucket=S3_CACHE_BUCKET, Key=_cache_key(filters),
-                       Body=json.dumps(payload).encode('utf-8'),
-                       ContentType='application/json')
+        import io
+        body = json.dumps(payload).encode('utf-8')
+        # Multipart through the transfer manager rather than one
+        # put_object: a 22 MB body over a slow or stalling uplink (the
+        # residential lane runs on a laptop) goes up in 8 MB parts,
+        # each with its own timeout and retry, instead of one send that
+        # can hang. The cache is an optimisation; a failed write costs
+        # the next reader a recompute, never a wrong value.
+        try:
+            from boto3.s3.transfer import TransferConfig  # type: ignore
+            tcfg = TransferConfig(multipart_threshold=8 * 1024 * 1024,
+                                  multipart_chunksize=8 * 1024 * 1024,
+                                  max_concurrency=4)
+        except Exception:
+            tcfg = None
+        s3.upload_fileobj(io.BytesIO(body), S3_CACHE_BUCKET,
+                          _cache_key(filters),
+                          ExtraArgs={'ContentType': 'application/json'},
+                          **({'Config': tcfg} if tcfg else {}))
     except Exception as e:
-        logger.debug("trends_iq cache put failed: %s", e)
+        logger.warning("trends_iq cache put failed (%d bytes): %s",
+                       len(body), e)
 
 
 def invalidate_live_compute_view_caches() -> int:
@@ -11318,6 +11344,40 @@ def _merge_streaming_depth(primary: list[dict], extension: list[dict],
     return merged
 
 
+def _seed_carried_chart_rows(slug: str, snap: Optional[dict], state,
+                             keywords) -> list[dict]:
+    """The chart's rows from the archived snapshot the reader carries
+    the service's positions from, for a day whose own capture is
+    empty. Only rows that resolve to a chart position are seeded; the
+    rest of the rail still comes from the depth list."""
+    try:
+        from scripts.trends_scrapers.stream_estimates import (
+            published_chart_source, published_chart_index,
+            published_rank_for)
+        src, day = published_chart_source(slug, snap)
+        if not src or not day:
+            return []
+        index = published_chart_index(slug, snap)
+        rows = _snapshot_items_for_geo(src, state, keywords=keywords)
+        out: list[dict] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            cat = str(row.get('category_display') or '').strip().lower()
+            kind = 'film' if cat.startswith(('film', 'movie')) else (
+                'tv' if cat.startswith('tv') else '')
+            if published_rank_for(index, kind, str(row.get('title') or '')):
+                out.append(dict(row))
+        if out:
+            logger.warning("%s: day's capture is empty; seeded %d chart "
+                           "row(s) from the archived snapshot of %s",
+                           slug, len(out), day)
+        return out
+    except Exception:
+        logger.exception("%s: carried chart seed failed (non-fatal)", slug)
+        return []
+
+
 def _stamp_published_ranks(slug: str, snap: dict, *row_lists) -> int:
     """Mark every row that sits on this service's own published chart.
 
@@ -11456,6 +11516,16 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             else:
                 continue
         items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+        if not items:
+            # The day's capture is empty (an auth wall, a chooser it
+            # could not clear) and the rail would be the depth list
+            # alone, which carries none of the chart's titles. For a
+            # service that publishes a chart, seed the chart's rows
+            # from the archived snapshot the reader carries the
+            # positions from, so the positions have rows to attach
+            # to. The stamp below marks each with the day it came
+            # from. Board invariant I2, 2026-09-29 (Disney+).
+            items = _seed_carried_chart_rows(slug, snap, state, keywords)
         # 220 covers the deepest snapshot shape in the fleet: the
         # JustWatch-native platforms (Paramount+ / Peacock) write a
         # 100-film + 100-show zipper into `national`.

@@ -8664,6 +8664,25 @@ def published_chart_index(slug: str,
     out = _published_chart_index_one(slug, snap)
     if out or slug not in _PUBLISHED_CHARTS:
         return out
+    prior, day = published_chart_source(slug, snap)
+    if not prior:
+        return {}
+    idx = _published_chart_index_one(slug, prior)
+    return {k: tuple(v) + (day,) for k, v in idx.items()}
+
+
+def published_chart_source(slug: str, snap: Optional[dict]
+                           ) -> tuple[Optional[dict], Optional[str]]:
+    """The snapshot the service's chart is read from today: `(snap,
+    None)` when today's own capture carries it, `(archived, day)` for
+    the most recent archived one inside `_CHART_CARRY_DAYS`, and
+    `(None, None)` when there is none. The render uses the archived
+    snapshot to seed the chart's rows when the day's capture is empty
+    (an auth wall leaves nothing for the positions to attach to)."""
+    if slug not in _PUBLISHED_CHARTS:
+        return None, None
+    if _published_chart_index_one(slug, snap):
+        return snap, None
     # Where the archived chart lives. A chart scraped by a sibling
     # (disneyplus_top10, peacock_top10, hulu_popular, ...) is merged
     # into `latest/<service>.json` only, never into that day's dated
@@ -8687,11 +8706,11 @@ def published_chart_index(slug: str,
             logger.warning("%s: no published chart in today's snapshot; "
                            "carrying the chart archived %d day(s) back (%s)",
                            slug, back, day)
-            return {k: tuple(v) + (day,) for k, v in idx.items()}
+            return prior, day
     logger.warning("%s: no published chart today and none archived in "
                    "the last %d days; the rail renders without one",
                    slug, _CHART_CARRY_DAYS)
-    return {}
+    return None, None
 
 
 def _published_chart_index_one(slug: str,

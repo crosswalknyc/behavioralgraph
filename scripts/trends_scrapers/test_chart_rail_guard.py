@@ -235,11 +235,17 @@ def test_archive_walk_back() -> None:
 
     # HBO Max on 2026-09-25: today's earlier capture is movies-only
     # too, so "the previous capture" cannot cover the series chart.
-    # Yesterday's has Lanterns at #1.
+    # Yesterday's has Lanterns at #1. Days are RELATIVE to the day the
+    # test runs: the walk-back window is measured from today, and the
+    # first version of this test pinned 2026-09-24 and went red on its
+    # own five days later.
+    from datetime import date as _date, timedelta as _td
+    _d1 = (_date.today() - _td(days=1)).isoformat()
+    _d2 = (_date.today() - _td(days=2)).isoformat()
     archive = {
-        '2026-09-25': [row('Supergirl', 'Film', 'Top 10 Movies Today')],
-        '2026-09-24': [row('Supergirl', 'Film', 'Top 10 Movies Today'),
-                       row('Lanterns', 'TV', 'Top 10 Series Today', 1)],
+        _d1: [row('Supergirl', 'Film', 'Top 10 Movies Today')],
+        _d2: [row('Supergirl', 'Film', 'Top 10 Movies Today'),
+              row('Lanterns', 'TV', 'Top 10 Series Today', 1)],
     }
 
     class FakeS3:
@@ -271,15 +277,15 @@ def test_archive_walk_back() -> None:
           ['Lanterns'])
     check('marked stale', out[-1].get(guard.STALE_FIELD), True)
     check('and saying which day it came from',
-          out[-1].get(guard.STALE_DAY_FIELD), '2026-09-24')
+          out[-1].get(guard.STALE_DAY_FIELD), _d2)
     check('today\'s movie chart untouched',
           [r['title'] for r in out if r['category_display'] == 'Film'],
           ['Supergirl'])
     check('it stopped at the first day that had it',
-          fake.asked[-1].split('/')[1], '2026-09-24')
+          fake.asked[-1].split('/')[1], _d2)
 
     # Nothing in the window carries it.
-    archive.pop('2026-09-24')
+    archive.pop(_d2)
     fake2 = FakeS3()
     _base._s3_client = lambda: fake2
     try:
