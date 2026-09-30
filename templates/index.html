@@ -30416,6 +30416,57 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-header { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
             #trendsIQView .tiq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
             #trendsIQView .tiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+            /* Rankers methodology disclosure (2026-09-30, Jenna).
+               Hidden on Trends, which shares this view. */
+            #trendsIQView .tiq-methodology { display: none; }
+            #trendsIQView[data-tiq-product="rankers"] .tiq-methodology {
+                display: block;
+                margin: 0.55rem 0 0;
+                max-width: 104ch;
+            }
+            #trendsIQView .tiq-methodology > summary {
+                list-style: none;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: .16em;
+                text-transform: uppercase !important;
+                color: #7C878A;
+                padding: 0.15rem 0;
+                user-select: none;
+            }
+            #trendsIQView .tiq-methodology > summary::-webkit-details-marker { display: none; }
+            #trendsIQView .tiq-methodology > summary::before {
+                content: '';
+                width: 0; height: 0;
+                border-left: 4px solid #C7F23E;
+                border-top: 3.5px solid transparent;
+                border-bottom: 3.5px solid transparent;
+                transition: transform .15s ease;
+            }
+            #trendsIQView .tiq-methodology[open] > summary::before { transform: rotate(90deg); }
+            #trendsIQView .tiq-methodology > summary:hover { color: #9AA09B; }
+            #trendsIQView .tiq-methodology ul {
+                margin: 0.5rem 0 0;
+                padding-left: 1.1rem;
+                list-style: disc;
+            }
+            #trendsIQView .tiq-methodology li {
+                font-style: italic;
+                font-size: 11.5px;
+                line-height: 1.65;
+                color: #7C878A;
+                margin: 0 0 0.4rem;
+            }
+            #trendsIQView .tiq-methodology li:last-child { margin-bottom: 0; }
+            body[data-theme="light"] #trendsIQView .tiq-methodology > summary,
+            body[data-theme="light"] #trendsIQView .tiq-methodology li { color: #5C6560; }
+            body[data-theme="light"] #trendsIQView .tiq-methodology > summary::before {
+                border-left-color: #5E7E12;
+            }
             #trendsIQView .tiq-filter-bar {
                 /* All five controls (Window, As-of date, Today button,
                    Lens, Apply) sit on a single row so the filter box
@@ -31415,6 +31466,16 @@ https://www.instagram.com/p/..."></textarea>
             <div class="tiq-header" style="position: relative;">
                 <h2 class="tiq-title" id="trendsIQTitle">Trends.<span>Culture trends tracker</span></h2>
                 <p class="tiq-subtitle">Who and what are trending across media search, news, and retail right now.</p>
+                <!-- Rankers only (Trends shares this view and shows its
+                     own subtitle). Collapsed by default. -->
+                <details class="tiq-methodology no-uppercase" id="tiqRankersMethodology">
+                    <summary>Methodology</summary>
+                    <ul>
+                        <li>1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.</li>
+                        <li>We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). We have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.</li>
+                        <li>Multipliers from accounts to viewers vary based on genre and platform and are available upon request.</li>
+                    </ul>
+                </details>
                 <!--
                     Trends IQ ships its own HOVER ON/OFF toggle in the top-
                     right of the header. Wires to the same global
