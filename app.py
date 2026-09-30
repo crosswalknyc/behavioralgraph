@@ -59405,6 +59405,27 @@ def _pm_page_clarify_subject(text, page_subject):
     return ''
 
 
+def _pm_ask_names_its_audiences(text):
+    """True when the ask already names who it is about.
+
+    A two-cut request, or a total-universe cut named alongside
+    another audience, is not a guess about the open profile.
+    Casey Pearson, 2026-09-29: hours by genre and platform, total
+    universe and Paramount+ subscribers, was asked twice whether
+    she meant the open Paramount+ profile.
+    """
+    t = str(text or '')
+    if re.search(
+            r"\b(two|both)\b.{0,80}\b(cuts?|audiences?|views?)\b",
+            t, re.I):
+        return True
+    has_tu = bool(re.search(
+        r"\btotal universe\b|\bsubscribers active on streaming\b",
+        t, re.I))
+    has_other = bool(re.search(r"\band\b", t, re.I))
+    return has_tu and has_other
+
+
 def _pm_open_screen_confirm(text, ctx):
     """Ask before an answer is attached to the profile open on screen.
 
@@ -59424,6 +59445,10 @@ def _pm_open_screen_confirm(text, ctx):
     """
     page = str((ctx.get('primary') or {}).get('name') or '').strip()
     if not page:
+        return None
+    # The ask already names its audiences. Do not reduce it to the
+    # profile that happens to be open.
+    if _pm_ask_names_its_audiences(text):
         return None
     named = ''
     try:
