@@ -46425,6 +46425,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (host) host.innerHTML = iiqRenderQ4(s.data);
                 }
             };
+            // Nested post rows under each creator sort on their own
+            // header click (Jenna 2026-09-30). One state shared by every
+            // creator so the whole page reads the same way.
+            window.iiqQ4PostSort = function(key) {
+                var s = window._iiqQ4;
+                var ps = s.postSort || (s.postSort = { key: 'views', dir: 'desc' });
+                if (ps.key === key) {
+                    ps.dir = (ps.dir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    ps.key = key;
+                    ps.dir = (key === 'post' || key === 'platform') ? 'asc' : 'desc';
+                }
+                if (s.data) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ4(s.data);
+                }
+            };
             window.iiqQ4Sort = function(key) {
                 var s = window._iiqQ4;
                 if (s.sortKey === key) {
@@ -46582,11 +46599,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + '</tr>';
                     if (_q4Open) {
                         var _bflRow = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page';
-                        var posts = (r.assets || []).slice().sort(function(a, b) { return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); });
-                        var pg = 'display:grid; grid-template-columns: minmax(0,1fr) 190px 78px 70px 74px 80px 48px; gap:0.6rem; align-items:center; padding:0.3rem 0.5rem; font-size:0.74rem;';
+                        // Sortable post rows + Posted column on every
+                        // campaign except GOAT (frozen). GOAT keeps the
+                        // views-desc list it shipped with.
+                        var _pSortable = (typeof window._iiqShowPostedCol === 'function') ? window._iiqShowPostedCol() : false;
+                        var _ps = (window._iiqQ4.postSort || { key: 'views', dir: 'desc' });
+                        var _pKey = _pSortable ? _ps.key : 'views';
+                        var _pSign = (_pSortable && _ps.dir === 'asc') ? 1 : -1;
+                        var _pVal = function(c, k) {
+                            var pv0 = Number(c.ext_view_count) || 0;
+                            if (k === 'post')     return String(c.note || c.action_label || c.url || '').toLowerCase();
+                            if (k === 'platform') return String(c.channel || '').toLowerCase() + ' ' + String(c.asset_type || '').toLowerCase();
+                            if (k === 'posted')   return String(c.posted_date || '').slice(0, 10);
+                            if (k === 'eng')      return pv0 > 0 ? Math.min(60, (Number(c.ext_engagement_count) || 0) / pv0 * 100) : -1;
+                            if (k === 'info')     return Number(iiqAssetFunnelProjection(c).info_pct) || 0;
+                            if (k === 'ticket')   return Number(iiqAssetFunnelProjection(c).ticket_pct) || 0;
+                            return pv0;
+                        };
+                        var posts = (r.assets || []).slice().sort(function(a, b) {
+                            var av = _pVal(a, _pKey), bv = _pVal(b, _pKey);
+                            var rr = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
+                            if (rr === 0) return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0);
+                            return rr * _pSign;
+                        });
+                        var pg = _pSortable
+                            ? 'display:grid; grid-template-columns: minmax(0,1fr) 150px 92px 78px 70px 74px 80px 48px; gap:0.6rem; align-items:center; padding:0.3rem 0.5rem; font-size:0.74rem;'
+                            : 'display:grid; grid-template-columns: minmax(0,1fr) 190px 78px 70px 74px 80px 48px; gap:0.6rem; align-items:center; padding:0.3rem 0.5rem; font-size:0.74rem;';
+                        var _pH = function(key, label, align) {
+                            var al = align === 'right' ? 'text-align:right;' : '';
+                            if (!_pSortable) return '<div style="' + al + '">' + label + '</div>';
+                            var on = (_ps.key === key);
+                            var arrow = on ? (_ps.dir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                            return '<div onclick="event.stopPropagation(); iiqQ4PostSort(\'' + key + '\')" style="' + al + ' cursor:pointer; user-select:none; white-space:nowrap;' + (on ? ' color:#E9E8E1;' : '') + '" title="Click to sort by ' + label.toLowerCase() + '. Click again to flip direction.">' + label + '<span style="opacity:' + (on ? '1' : '0.35') + '; margin-left:0.2rem;">' + arrow + '</span></div>';
+                        };
                         html += '<tr class="iiq-q4-posts"><td colspan="8" style="padding:0.15rem 0.5rem 0.55rem 1.6rem; border-bottom:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.015);">';
                         html += '<div style="' + pg + ' color: var(--text-secondary); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em;">'
-                            + '<div>Post</div><div>Platform</div><div style="text-align:right;">Views</div><div style="text-align:right;">Eng %</div><div style="text-align:right;">Info-seek %</div><div style="text-align:right;">' + escapeHtml(_bflRow) + ' %</div><div style="text-align:right;">Link</div></div>';
+                            + _pH('post', 'Post', 'left')
+                            + _pH('platform', 'Platform', 'left')
+                            + (_pSortable ? _pH('posted', 'Posted', 'left') : '')
+                            + _pH('views', 'Views', 'right')
+                            + _pH('eng', 'Eng %', 'right')
+                            + _pH('info', 'Info-seek %', 'right')
+                            + _pH('ticket', escapeHtml(_bflRow) + ' %', 'right')
+                            + '<div style="text-align:right;">Link</div></div>';
                         posts.forEach(function(c) {
                             var pv = Number(c.ext_view_count) || 0;
                             var pe = pv > 0 ? Math.min(60, (Number(c.ext_engagement_count) || 0) / pv * 100) : 0;
@@ -46594,10 +46649,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var label = String(c.note || c.action_label || c.url || '').trim();
                             var pre = r.talent + ' - ';
                             if (label.indexOf(pre) === 0) label = label.slice(pre.length);
-                            var plat = String(c.channel || '') + (c.asset_type ? ' \u00b7 ' + String(c.asset_type).replace(/ \(.*\)$/, '') : '') + (c.posted_date ? ' \u00b7 ' + c.posted_date : '');
+                            var plat = String(c.channel || '') + (c.asset_type ? ' \u00b7 ' + String(c.asset_type).replace(/ \(.*\)$/, '') : '') + ((!_pSortable && c.posted_date) ? ' \u00b7 ' + c.posted_date : '');
                             html += '<div style="' + pg + ' border-top:1px solid rgba(255,255,255,0.04);">'
                                 + '<div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
                                 + '<div style="color: var(--text-secondary); font-size:0.7rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(plat) + '">' + escapeHtml(plat) + '</div>'
+                                + (_pSortable ? '<div style="color:#cbd5e1; font-size:0.72rem; white-space:nowrap;" title="Posted ' + escapeHtml(String(c.posted_date || '').slice(0, 10)) + '">' + escapeHtml((window._iiqFmtPosted ? window._iiqFmtPosted(c.posted_date) : String(c.posted_date || '').slice(0, 10)) || '-') + '</div>' : '')
                                 + '<div style="text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(pv) + '</div>'
                                 + '<div style="text-align:right; color:#fb923c; font-variant-numeric: tabular-nums;">' + pe.toFixed(1) + '%</div>'
                                 + '<div style="text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + Number(pp.info_pct || 0).toFixed(2) + '%</div>'
