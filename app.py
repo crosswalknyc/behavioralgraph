@@ -54752,7 +54752,36 @@ def _ask_logged(surface):
                     view = 'profileIQ'
             except Exception:
                 pass
-            resp = fn(*args, **kwargs)
+            try:
+                resp = fn(*args, **kwargs)
+            except Exception:
+                # 2026-09-30 (Jenna: "make sure they are all being
+                # emailed to me with the replies so I can troubleshoot
+                # in real time"): a route that died mid-request used to
+                # skip the ask log AND the question email, leaving only
+                # the ops failure note. Record and email the ask first,
+                # then re-raise so the calm guard still answers the
+                # user with the working-on-it promise.
+                if question:
+                    try:
+                        import render_usage_log as _rul
+                        _rul.record_ask(
+                            user=(session.get('username') or 'unknown'),
+                            view=view, question=question,
+                            surface=surface, route='unknown',
+                            outcome='error',
+                            ms=int((time.time() - t0) * 1000),
+                            mode=mode, subject=None,
+                            stages=getattr(_g, '_pm_ask_stages', None))
+                    except Exception:
+                        pass
+                    try:
+                        _pm_watch_notify(
+                            session.get('username') or '', question,
+                            {'reply': _CHATBOT_CALM_MESSAGE}, None)
+                    except Exception:
+                        pass
+                raise
             try:
                 if not question:
                     return resp
