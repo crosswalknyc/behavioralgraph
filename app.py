@@ -62178,15 +62178,19 @@ def _pm_send_output_email(kind, to_email, data):
     """Email the finished OUTPUT of a long task to the requester.
 
     Owned first-party voice, no internal vocabulary. `kind` is 'read'
-    or 'deck': a read carries the read itself in the body, a deck
-    carries its title and a download link. Reuses the same SES path
-    the rest of the chatbot uses (us-east-2, jenna@crosswalknyc.com).
-    The send runs on a daemon thread; never raises."""
+    or 'deck': a read carries the read itself in the body plus a
+    branded PDF of the same words the recipient can take and share
+    (Jenna 2026-09-30); a deck carries its title and a download link.
+    Sent From Prometheus with Jenna BCC'd, Reply-To Jenna, per the
+    standing send rules. The send runs on a daemon thread; never
+    raises, and a PDF render failure ships the email without the
+    attachment."""
     import html as _html
     to_email = _pm_clean_notify_email(to_email)
     if not to_email:
         return False
     kind = 'deck' if str(kind) == 'deck' else 'read'
+    pdf_bytes, pdf_name = b'', ''
     if kind == 'deck':
         title = str((data or {}).get('title')
                     or (data or {}).get('filename') or 'Your deck')[:200]
@@ -62208,13 +62212,13 @@ def _pm_send_output_email(kind, to_email, data):
             f"{link_html}"
             "<p>The link is good for 7 days. It is also waiting in the "
             "chat on your dashboard.</p>"
-            "<p>Crosswalk IQ</p>",
+            "<p>Prometheus<br>Crosswalk</p>",
             title="Your deck is ready")
         body_text = (
             f"{title}{slide_note} is ready.\n\n"
             + (f"Download the deck: {url}\n\n" if url else "")
             + "The link is good for 7 days. It is also waiting in the "
-              "chat on your dashboard.\n\nCrosswalk IQ\n")
+              "chat on your dashboard.\n\nPrometheus\nCrosswalk\n")
     else:
         reply = str((data or {}).get('reply') or '').strip()
         if not reply:
@@ -62223,25 +62227,60 @@ def _pm_send_output_email(kind, to_email, data):
         reply_html = _html.escape(reply).replace('\n', '<br>')
         body_html = _wrap_email_html(
             f"<p>{reply_html}</p>"
-            "<p>You can also pick this up in the chat on your "
-            "dashboard.</p>"
-            "<p>Crosswalk IQ</p>",
+            "<p>The same read is attached as a PDF you can share. You "
+            "can also pick this up in the chat on your dashboard.</p>"
+            "<p>Prometheus<br>Crosswalk</p>",
             title="Your read is ready")
         body_text = (
             f"{reply}\n\n"
-            "You can also pick this up in the chat on your "
-            "dashboard.\n\nCrosswalk IQ\n")
+            "The same read is attached as a PDF you can share. You can "
+            "also pick this up in the chat on your "
+            "dashboard.\n\nPrometheus\nCrosswalk\n")
+        # The same words as a branded, shareable PDF (Jenna
+        # 2026-09-30: "attach pdfs of the prometheus emails of what
+        # the email body says"). Fail-safe: b'' means no attachment.
+        try:
+            import prometheus_email_pdf as _pep
+            _subj = str((data or {}).get('profile') or '').strip()
+            pdf_bytes = _pep.render_answer_pdf(
+                _subj or 'Your Crosswalk read',
+                reply + '\n\nPrometheus\nCrosswalk')
+            if pdf_bytes:
+                _safe = re.sub(r'[^A-Za-z0-9]+', '_', _subj).strip('_')
+                pdf_name = ((_safe + '_Read.pdf') if _safe
+                            else 'Crosswalk_Read.pdf')
+        except Exception:
+            pdf_bytes, pdf_name = b'', ''
 
     def _send():
         try:
+            from email.mime.application import MIMEApplication as _MApp
+            from email.mime.multipart import MIMEMultipart as _MMul
+            from email.mime.text import MIMEText as _MTxt
+            msg = _MMul('mixed')
+            msg['Subject'] = subject_line[:200]
+            msg['From'] = 'Prometheus <prometheus@crosswalknyc.com>'
+            msg['To'] = to_email
+            msg['Reply-To'] = 'jenna@crosswalknyc.com'
+            alt = _MMul('alternative')
+            alt.attach(_MTxt(body_text, 'plain', 'utf-8'))
+            alt.attach(_MTxt(body_html, 'html', 'utf-8'))
+            msg.attach(alt)
+            if pdf_bytes and pdf_name:
+                att = _MApp(pdf_bytes, _subtype='pdf')
+                att.add_header('Content-Disposition', 'attachment',
+                               filename=pdf_name)
+                msg.attach(att)
+            dests = [to_email]
+            if to_email.lower() != 'jenna@crosswalknyc.com':
+                dests.append('jenna@crosswalknyc.com')
             ses = boto3.client('ses', region_name='us-east-2')
-            ses.send_email(
-                Source='Crosswalk IQ <jenna@crosswalknyc.com>',
-                Destination={'ToAddresses': [to_email]},
-                Message={'Subject': {'Data': subject_line[:200]},
-                         'Body': {'Html': {'Data': body_html},
-                                  'Text': {'Data': body_text}}})
-            print(f"[pm-notify] output email sent to {to_email} ({kind})")
+            ses.send_raw_email(
+                Source='Prometheus <prometheus@crosswalknyc.com>',
+                Destinations=dests,
+                RawMessage={'Data': msg.as_string()})
+            print(f"[pm-notify] output email sent to {to_email} ({kind}"
+                  + (", pdf attached" if pdf_bytes else "") + ")")
         except Exception as e:
             print(f"[pm-notify] SES send failed: {e}")
 
