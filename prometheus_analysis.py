@@ -3834,6 +3834,10 @@ THE ARC (14 to 20 slides, in this shape)
 
 Omit slides the data cannot carry (no live events means no second-screen slide; no avid cut means no avid tier tile). Never pad: a 14-slide deck that is all signal beats a 20-slide deck with filler.
 
+HEADLINES FIT THE PAGE
+- Every "title" is ONE sentence of 12 words or fewer, plain words, full stop. The cover title included: one clause, one idea. Two figures in one title is one too many; move the second figure to a stat or the intro.
+- "sub" and "intro" stay under 30 words. Card "head" under 8 words; card "body" under 28 words; tile "label" under 10 words; bar row "label" under 4 words; "big" is a figure, never a sentence.
+
 SLIDE TYPES (exact JSON shapes)
 - cover: {"type":"cover","eyebrow":"SUBJECT  \\u00b7  PREPARED FOR PARTNER  \\u00b7  CONTEXT","title":...,"intro":...,"stats":[{"big","label"}x3],"accent_index":1}
 - argument: {"type":"argument","ground":"dark"|"light","eyebrow","title","sub","cards":[{"head","body"}x4]}
