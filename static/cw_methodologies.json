@@ -1382,6 +1382,33 @@
         ]
       },
       {
+        "title": "How These Numbers Are Counted",
+        "paragraphs": [
+          {
+            "text": "• We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.• 1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.• We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.• Multipliers from accounts to viewers are available upon request.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.",
+                "bold": false
+              },
+              {
+                "text": "• 1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.",
+                "bold": false
+              },
+              {
+                "text": "• We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.",
+                "bold": false
+              },
+              {
+                "text": "• Multipliers from accounts to viewers are available upon request.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
         "title": "Notes on Interpretation",
         "paragraphs": [
           {
