@@ -797,10 +797,16 @@ def _collect_streaming(max_items: Optional[int] = None) -> list[dict]:
                     if it.get(_f) and not e.get(_f):
                         e[_f] = it[_f]
                 if hit:
-                    pos, chart_name, group = hit
+                    # A carried chart (published_chart_source) rides a
+                    # 4th element, the day it was archived. Never a
+                    # strict 3-unpack here: that crashed the whole
+                    # nightly on 2026-09-30 and froze the board a day.
+                    pos, chart_name, group = hit[0], hit[1], hit[2]
                     e['published_rank']  = pos
                     e['published_chart'] = chart_name
                     e['published_group'] = group
+                    if len(hit) > 3 and hit[3]:
+                        e['published_stale_from'] = hit[3]
                     _lab = f'{chart_name} #{pos}'
                     if _lab not in e['chart_labels']:
                         e['chart_labels'].append(_lab)
@@ -908,10 +914,12 @@ def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
             hit = published_rank_for(pub_index, bare_kind, title) \
                 if pub_index else None
             if charted and hit:
-                pos, chart_name, group = hit
+                pos, chart_name, group = hit[0], hit[1], hit[2]
                 e['published_rank'] = pos
                 e['published_chart'] = chart_name
                 e['published_group'] = group
+                if len(hit) > 3 and hit[3]:
+                    e['published_stale_from'] = hit[3]
                 lab = f'{chart_name} #{pos}'
                 if lab not in e['chart_labels']:
                     e['chart_labels'].append(lab)
