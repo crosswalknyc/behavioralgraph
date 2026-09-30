@@ -13202,108 +13202,42 @@ def cron_netflix_ranker_daily():
     ingest = {}
     results = {}
     try:
+        # 2026-09-30: phases 0a-0c and 1 live in migration/netflix_ranker_ingest
+        # (shared with the box-side backfill runner). Phase 0b enriches ONE
+        # calendar day per INSERT so a long cron outage never produces a
+        # single query over the whole backlog (the 83-day gap after the
+        # July host suspension needed >80 GiB in one shot). A wall-clock
+        # budget returns before the caller's 600s timeout; whatever is left
+        # is picked up on the next run. Phase 1 also fills any day that is
+        # present in netflix.netflix but missing from netflix_ranker_daily.
+        from netflix_ranker_ingest import (
+            ingest_backlog as _nfx_ingest_backlog,
+            missing_ranker_days as _nfx_missing_ranker_days,
+            aggregate_days as _nfx_aggregate_days,
+        )
+        _nfx_log = lambda m: print(f'[Netflix Ranker Cron] {m}')
+        try:
+            ingest_budget_s = float(request.args.get('budget', 420))
+        except (TypeError, ValueError):
+            ingest_budget_s = 420.0
+        ingest_budget_s = max(30.0, min(ingest_budget_s, 540.0))
+
         conn = _ch_connect()
         cur = conn.cursor()
 
-        # ── Phase 0: ingest (incremental, skippable) ─────────────────────────
+        # ── Phase 0: ingest (incremental, day-chunked, skippable) ────────────
         if not skip_ingest:
-            # 0a: append new raw clickstream rows
-            print('[Netflix Ranker Cron] Phase 0a: appending clickstream...')
-            cur.execute("""
-                INSERT INTO netflix.netflix_clickstream
-                    (UID, URL, VISIT_TS, TIME_COMPUTED, BROWSER, PLATFORM)
-                SELECT UID, URL, VISIT_TS, false AS TIME_COMPUTED, BROWSER, PLATFORM
-                FROM clickstream.clickstream_final
-                WHERE URL LIKE '%netflix.com/watch/%'
-                  AND VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix_clickstream)
-            """)
-            ingest['clickstream'] = 'ok'
-
-            # 0b: enrich new rows into netflix_all (window fn only over new rows)
-            print('[Netflix Ranker Cron] Phase 0b: enriching into netflix_all...')
-            cur.execute("""
-                INSERT INTO netflix.netflix_all
-                SELECT
-                    cs.UID,
-                    cs.VISIT_TS,
-                    cs.URL,
-                    CASE
-                        WHEN next_ts IS NULL
-                          OR dateDiff('minute', cs.VISIT_TS, next_ts) > 210
-                        THEN NULL
-                        ELSE toString(dateDiff('second', cs.VISIT_TS, next_ts))
-                    END AS TIME_ON_PAGE,
-                    ud.DMA,
-                    m.NAME_OF_SHOW,
-                    m.SEASON,
-                    m.EPISODE,
-                    m.EPISODE_NAME,
-                    m.RUN_TIME,
-                    m.GENRE,
-                    m.CAST,
-                    m.AGE_RATING,
-                    m.YEAR_RELEASED,
-                    m.TYPE,
-                    m.AVAILABLE
-                FROM (
-                    SELECT
-                        UID, VISIT_TS, URL, BROWSER, PLATFORM,
-                        leadInFrame(VISIT_TS) OVER (
-                            PARTITION BY UID
-                            ORDER BY VISIT_TS
-                            ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING
-                        ) AS next_ts
-                    FROM netflix.netflix_clickstream
-                    WHERE VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix_all)
-                ) cs
-                JOIN netflix.netflix_url_map m
-                    ON concat('https://www.netflix.com/title/',
-                              splitByChar('?', splitByString('/watch/', cs.URL)[2])[1]) = m.URL
-                LEFT JOIN (
-                    SELECT UID, DMA FROM (
-                        SELECT UID, max(DMA) AS DMA
-                        FROM userdata.user_data_sanitized
-                        GROUP BY UID
-                    ) WHERE DMA != ''
-                ) ud ON cs.UID = ud.UID
-            """)
-            ingest['netflix_all'] = 'ok'
-
-            # 0c: filter AVAILABLE='TRUE' rows into netflix
-            print('[Netflix Ranker Cron] Phase 0c: filtering into netflix...')
-            cur.execute("""
-                INSERT INTO netflix.netflix
-                SELECT * FROM netflix.netflix_all
-                WHERE AVAILABLE = 'TRUE'
-                  AND VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix)
-            """)
-            ingest['netflix'] = 'ok'
-            print('[Netflix Ranker Cron] Phase 0 complete.')
+            ingest = _nfx_ingest_backlog(cur, time_budget_s=ingest_budget_s,
+                                         log=_nfx_log)
 
         # ── Phase 1: aggregate into netflix_ranker_daily ──────────────────────
-        for d in target_dates:
-            d_str = d.strftime('%Y-%m-%d')
-            cur.execute(
-                f"SELECT count() FROM netflix.netflix_ranker_daily WHERE DAY = '{d_str}'"
-            )
-            existing = cur.fetchone()[0]
-            if existing:
-                results[d_str] = f'skipped (already has {existing} rows)'
-                continue
-            cur.execute(f"""
-                INSERT INTO netflix.netflix_ranker_daily
-                SELECT
-                    toDate(VISIT_TS) AS DAY,
-                    ifNull(NAME_OF_SHOW, '') AS NAME_OF_SHOW,
-                    ifNull(SEASON, '') AS SEASON,
-                    ifNull(EPISODE, '') AS EPISODE,
-                    EPISODE_NAME, TYPE, GENRE, RUN_TIME,
-                    count() AS VIEW_COUNT
-                FROM netflix.netflix
-                WHERE AVAILABLE = 'TRUE' AND toDate(VISIT_TS) = '{d_str}'
-                GROUP BY DAY, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, TYPE, GENRE, RUN_TIME
-            """)
-            results[d_str] = 'inserted'
+        if not date_param:
+            seen = set(target_dates)
+            for d in _nfx_missing_ranker_days(cur):
+                if d not in seen:
+                    target_dates.append(d)
+                    seen.add(d)
+        results = _nfx_aggregate_days(cur, sorted(target_dates), log=_nfx_log)
 
         return jsonify({'success': True, 'ingest': ingest, 'days': results})
     except Exception as e:
@@ -57268,11 +57202,13 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
         return None
 
 
-def _existing_match_charge_credits(user, s3_key, username=""):
+def _existing_match_charge_credits(user, s3_key, username="",
+                                   subject_name=""):
     """Credits to charge when handing back an existing catalog file.
 
     Full-access seats stay 0 unless the billing subject has its own
-    Profile IQ sticker (Kartel $275): every reuse is a pull. Prometheus-
+    Profile IQ sticker (Kartel $275) AND they never paid to run this
+    profile. A reuse of a file they already built is free. Prometheus-
     only seats pay the retail Profile pull unless they already bought
     this key. Staff never pay this way.
     """
@@ -57283,11 +57219,10 @@ def _existing_match_charge_credits(user, s3_key, username=""):
         live = ((data.get('users') or {}).get(uname) or user)
         if not _w.charges_profile_for_library_match(live, uname, data):
             return 0
-        # Prometheus-only already-paid files stay free. Kartel (and any
-        # other profile_pull_usd company) pays the sticker every time.
-        if _w.pays_retail_for_library_match(live, uname):
-            if _w.already_owns_paid_run(live, data, s3_key, username=uname):
-                return 0
+        if _w.already_paid_for_profile(
+                live, data, s3_key=s3_key,
+                subject_name=subject_name, username=uname):
+            return 0
         return int(_V1_CREDITS.get('new_build', CREDITS_PROFILE_ANALYSIS))
     except Exception:
         traceback.print_exc()
@@ -57313,7 +57248,10 @@ def _apply_existing_match_retail_price(draft, user, username=""):
         except (TypeError, ValueError):
             return 0
     key = str(draft.get('existing_match_s3_key') or '').strip()
-    cr = _existing_match_charge_credits(user, key, username=username)
+    subj = str(draft.get('existing_match_display_name')
+               or draft.get('subject') or '').strip()
+    cr = _existing_match_charge_credits(
+        user, key, username=username, subject_name=subj)
     draft['estimated_credits'] = cr
     draft['base_credits'] = cr
     usd = 0.0
@@ -57332,7 +57270,8 @@ def _charge_existing_match_or_402(user, username, ex_key, subject_name,
     """Take the retail Profile charge for a catalog match, or return
     a 402 Flask response. None means they already own it or this seat
     does not pay for library files. True means the charge landed."""
-    price = _existing_match_charge_credits(user, ex_key, username=username)
+    price = _existing_match_charge_credits(
+        user, ex_key, username=username, subject_name=subject_name)
     if price <= 0 or not username:
         return None
     if not has_credits_for(username, price, pull_type=pull_type):
@@ -65539,21 +65478,9 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0,
     cut_each = _v1_tool_price_usd(
         'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username)
     if d == 'existing_match':
-        # Default is $0 library reuse. Prometheus-only seats and
-        # companies with a Profile IQ sticker (Kartel $275) pay the
-        # same price as a fresh pull.
-        if username:
-            try:
-                import wallet as _w
-                data = load_users()
-                user = (data.get('users') or {}).get(username) or {}
-                if _w.charges_profile_for_library_match(
-                        user, username, data):
-                    return _v1_tool_price_usd(
-                        'api_chatbot_profile_iq_build',
-                        _V1_USD_FALLBACK['new_build'], username)
-            except Exception:
-                traceback.print_exc()
+        # Default $0. /check and /run quote the Profile sticker only
+        # after _existing_match_charge_credits says this seat still
+        # owes for the file (Kartel unpaid catalog, Prometheus-only).
         return 0.0
     if d == 'subscriber_iq':
         base = _v1_tool_price_usd(
@@ -70577,7 +70504,9 @@ def api_v1_profiles_check():
     price = conclusion['price']
     if decision == 'existing_match':
         _em_cr = _existing_match_charge_credits(
-            user, ex_key, user.get('username') or '')
+            user, ex_key, user.get('username') or '',
+            subject_name=(draft.get('existing_match_display_name')
+                          or draft.get('subject') or ''))
         if _em_cr > 0:
             price = _em_cr
 
@@ -70780,7 +70709,10 @@ def api_v1_profiles_run():
     _v1_run_cuts = conclusion['cuts']
     price = conclusion['price']
     if decision == 'existing_match':
-        _em_cr = _existing_match_charge_credits(user, ex_key, username)
+        _em_cr = _existing_match_charge_credits(
+            user, ex_key, username,
+            subject_name=(draft.get('existing_match_display_name')
+                          or draft.get('subject') or ''))
         if _em_cr > 0:
             price = _em_cr
 
