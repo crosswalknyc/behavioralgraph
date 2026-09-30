@@ -65919,8 +65919,9 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                              f"pm_deck_{job_id}.pptx")
         static_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'static')
-        deck_builder.render_insights_deck(plan, local,
-                                          static_dir=static_dir)
+        deck_builder.render_insights_deck(
+            plan, local, static_dir=static_dir,
+            photo_subject=str(subject or p_meta.get('name') or ''))
         s3_key = f"{_PM_DECK_FILE_PREFIX}{job_id}/{fname}"
         with open(local, 'rb') as fh:
             s3_client.put_object(

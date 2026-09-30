@@ -468,6 +468,10 @@ def _wikimedia_thumb_candidates(url: str) -> list[str]:
     thumbnail sizes so we degrade gracefully as sizes miss."""
     if "upload.wikimedia.org" not in url:
         return [url]
+    # The wiki summary API returns URLs carrying ?utm_* params; the
+    # thumb path must be built from the bare file path or Wikimedia
+    # rejects every candidate with HTTP 400 (2026-09-30).
+    url = url.split("?", 1)[0].split("#", 1)[0]
     m = re.match(
         r"^(https?://upload\.wikimedia\.org/wikipedia/[^/]+)/"
         r"(?:thumb/)?([a-z0-9])/([a-z0-9]{2})/([^/]+?)(?:/(\d+)px-.+)?$",

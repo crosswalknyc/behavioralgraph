@@ -4232,6 +4232,8 @@ THE ARC (14 to 20 slides, in this shape)
 
 Omit slides the data cannot carry (no live events means no second-screen slide; no avid cut means no avid tier tile). Never pad: a 14-slide deck that is all signal beats a 20-slide deck with filler.
 
+ART DIRECTION. Set a top-level "image_subject": the one person, brand, or title the deck is about, spelled exactly as publicly known, and "image_kind": one of "person", "title", "brand". The renderer places real photography of that subject under a dark scrim on the cover, the first big statement page, and the close. Set "photo": false on any of those slides that must stay type-only.
+
 HEADLINES FIT THE PAGE
 - Every "title" is ONE sentence of 12 words or fewer, plain words, full stop. The cover title included: one clause, one idea. Two figures in one title is one too many; move the second figure to a stat or the intro.
 - "sub" and "intro" stay under 30 words. Card "head" under 8 words; card "body" under 28 words; tile "label" under 10 words; bar row "label" under 4 words; "big" is a figure, never a sentence.
@@ -4610,6 +4612,13 @@ def enforce_insights_plan(plan, subject):
             r'[^A-Za-z0-9_]+', '_',
             str(plan.get('filename_stem') or '')).strip('_')[:60],
     }
+    # Art direction rides through (2026-09-30 deck photography).
+    out['image_subject'] = scrub_user_text(
+        str(plan.get('image_subject') or '')).strip()[:80]
+    _ik = str(plan.get('image_kind') or '').strip().lower()
+    if _ik not in ('person', 'title', 'brand'):
+        _ik = ''
+    out['image_kind'] = _ik
     slides = []
     for sl in (plan.get('slides') or [])[:22]:
         if not isinstance(sl, dict):
@@ -4619,6 +4628,8 @@ def enforce_insights_plan(plan, subject):
             continue
         cleaned = _clean_deck_value(subject, sl)
         cleaned['type'] = stype
+        if sl.get('photo') is False:
+            cleaned['photo'] = False
         slides.append(cleaned)
     out['slides'] = slides
     return out
