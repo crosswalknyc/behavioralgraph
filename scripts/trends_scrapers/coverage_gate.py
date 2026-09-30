@@ -1456,6 +1456,26 @@ def run_gate(dry_run: bool = False) -> dict[str, Any]:
     if still_missing:
         _send_still_missing_alert(still_missing)
 
+    # Board gate (2026-09-29). Research prices a blank title at its own
+    # level, not at its chart seat: a blank #4 on a Top 10 lands below
+    # #5, and a bracketed chart row re-targeted here can land below the
+    # catalog floor. On the nightly this is caught because run_all ends
+    # with the board gate, but a standalone coverage_gate run left Prime
+    # Video, Paramount+ and Peacock inverted for hours (2026-09-30
+    # 02:54 UTC). The gate is cheap when clean (one audit of the view
+    # already in hand) and re-seats every chart when it is not.
+    if not dry_run:
+        try:
+            from scripts.trends_scrapers import board_invariants as bi
+            bres = bi.gate(payload2, alert=False)
+            summary['board_violations'] = bres.get('violations')
+            summary['board_fixed'] = bres.get('fixed', 0)
+            logger.info("coverage_gate: board gate -> %s violation(s) "
+                        "left, %s fixed", bres.get('violations'),
+                        bres.get('fixed', 0))
+        except Exception:
+            logger.exception("coverage_gate: board gate failed (non-fatal)")
+
     return summary
 
 
