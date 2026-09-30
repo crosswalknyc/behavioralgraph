@@ -86,6 +86,25 @@ def _is_bullets(block):
                                for ln in lines)
 
 
+def _expand_blocks(blocks):
+    """A header line stacked directly on its table rows or bullets (no
+    blank line between) splits into header block + content block so
+    both render with their full treatment."""
+    out = []
+    for b in blocks:
+        lines = [ln for ln in b.split("\n") if ln.strip()]
+        if len(lines) >= 2:
+            first = lines[0].strip()
+            rest = "\n".join(lines[1:])
+            if _is_header(first) and (_split_table(rest)
+                                      or _is_bullets(rest)):
+                out.append(first)
+                out.append(rest)
+                continue
+        out.append(b)
+    return out
+
+
 def _bold_lead(text):
     """Bold a bullet's first sentence when more text follows it."""
     m = re.match(r"^(.{8,140}?[.!?])\s+(\S.*)$", text, re.DOTALL)
@@ -114,8 +133,9 @@ def render_answer_email_html(title, body_text, date_label=None,
 def _render(title, body_text, date_label, table_highlight_prefix,
             cta_url, cta_text, eyebrow):
     parts = []
-    blocks = [b.strip() for b in
-              re.split(r"\n\s*\n", _clean(body_text)) if b.strip()]
+    blocks = _expand_blocks(
+        [b.strip() for b in
+         re.split(r"\n\s*\n", _clean(body_text)) if b.strip()])
     for i, block in enumerate(blocks):
         if (i == len(blocks) - 1) and block.lower() in _SIG:
             parts.append(

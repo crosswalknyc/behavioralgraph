@@ -138,6 +138,25 @@ def _is_bullets(block):
                                for ln in lines)
 
 
+def _expand_blocks(blocks):
+    """A header line stacked directly on its table rows or bullets (no
+    blank line between) splits into header block + content block so
+    both render with their full treatment."""
+    out = []
+    for b in blocks:
+        lines = [ln for ln in b.split("\n") if ln.strip()]
+        if len(lines) >= 2:
+            first = lines[0].strip()
+            rest = "\n".join(lines[1:])
+            if _is_header(first) and (_split_table(rest)
+                                      or _is_bullets(rest)):
+                out.append(first)
+                out.append(rest)
+                continue
+        out.append(b)
+    return out
+
+
 def _split_table(block):
     """(rows, n_fields) when every line shares one ' / ' shape."""
     lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
@@ -321,8 +340,9 @@ def _render(title, body_text, date_label, table_highlight_prefix):
                             bulletColor=body_c, bulletFontSize=9,
                             leftIndent=14)
 
-    blocks = [b.strip() for b in
-              re.split(r"\n\s*\n", _clean(body_text)) if b.strip()]
+    blocks = _expand_blocks(
+        [b.strip() for b in
+         re.split(r"\n\s*\n", _clean(body_text)) if b.strip()])
     i = 0
     while i < len(blocks):
         block = blocks[i]
