@@ -94,20 +94,17 @@ def site_index():
     return send_from_directory(SITE_DIR, "index.html")
 
 
-# Panel app download (Jenna 2026-09-24: "if someone clicks join the
-# panel have them download this"). The installer lives in the public
-# crosswalk-downloads bucket; /site/join is the canonical link so the
-# file can move without touching the site.
-PANEL_APP_DOWNLOAD_URL = (
-    "https://crosswalk-downloads.s3.us-east-2.amazonaws.com/"
-    "panel/latest/CalvinKleinInsights-Mac.pkg.zip")
+# Panel app chooser. Mac and Windows installers are public files:
+#   panel/latest/CrosswalkPanel-1.0.0.pkg
+#   panel/latest/CrosswalkPanel-Setup-1.0.0.exe
+# The links live on site/join.html.
 
 
 @site_bp.route("/site/join")
 @site_bp.route("/site/join-the-panel")
 def site_join_panel():
-    print("[site] panel app download")
-    return redirect(PANEL_APP_DOWNLOAD_URL, code=302)
+    print("[site] panel app chooser")
+    return send_from_directory(SITE_DIR, "join.html")
 
 
 @site_bp.route("/site/<path:subpath>")
