@@ -21939,6 +21939,56 @@ https://www.instagram.com/p/..."></textarea>
             }
             #prometheusLauncher .pm-launcher-avatar { width: 28px; height: 28px; }
         }
+        /* Subscriber IQ standing counting note (2026-09-30, Jenna).
+           One copy under every tab. Recessive by design: it is
+           reference the reader consults, not a finding. */
+        #subiqCountingNote {
+            margin: 2.25rem 0 0.5rem;
+            padding: 1.1rem 0 0;
+            border-top: 1px solid #2C4148;
+            font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            text-transform: none;
+        }
+        #subiqCountingNote .subiq-note-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: #7C878A;
+            margin-bottom: 0.6rem;
+        }
+        #subiqCountingNote .subiq-note-eyebrow::before {
+            content: '';
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #C7F23E;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        #subiqCountingNote .subiq-note-list {
+            margin: 0;
+            padding-left: 1.1rem;
+            list-style: disc;
+        }
+        #subiqCountingNote .subiq-note-list li {
+            font-size: 11.5px;
+            line-height: 1.65;
+            color: #7C878A;
+            margin: 0 0 0.45rem;
+            max-width: 104ch;
+        }
+        #subiqCountingNote .subiq-note-list li:last-child { margin-bottom: 0; }
+        body[data-theme="light"] #subiqCountingNote {
+            border-top-color: #D8D6CC;
+        }
+        body[data-theme="light"] #subiqCountingNote .subiq-note-eyebrow,
+        body[data-theme="light"] #subiqCountingNote .subiq-note-list li {
+            color: #5C6560;
+        }
+        body[data-theme="light"] #subiqCountingNote .subiq-note-eyebrow::before {
+            background: #5E7E12;
+        }
         #prometheusWidget {
             position: fixed; right: 22px; bottom: 22px; width: 480px;
             /* 2026-09-24 (Jenna: 'make the prometheus window taller.
@@ -28602,6 +28652,20 @@ https://www.instagram.com/p/..."></textarea>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Standing counting note. Sits outside the tab
+                             panels so it renders under whichever one is
+                             open, and inside the profile-loaded region so
+                             it never shows on the empty state. -->
+                        <div id="subiqCountingNote" class="no-uppercase">
+                            <div class="subiq-note-eyebrow">How these numbers are counted</div>
+                            <ul class="subiq-note-list">
+                                <li>We track no touchpoint to a streaming service for the trailing 6 months to determine subscription/reactivation.</li>
+                                <li>1 second of watch is considered a view. If you push pause and start again and only watch 1 second the next time for a total of 2 seconds it still counts as 2 views.</li>
+                                <li>We add Amazon Prime Video into our viewership numbers. APV is responsible for between 40% - 80% of the overall total views (dependent on platform). In the dashboard on the Rankers tab we have this broken out so you can see the difference but this will make the views higher than what you may get directly from the streaming services since they only have visibility into their platform.</li>
+                                <li>Multipliers from accounts to viewers are available upon request.</li>
+                            </ul>
                         </div>
 
                     </div>
@@ -35340,7 +35404,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // stable without a frontend deploy per new category.
             var _IIQ_MTA_CATEGORY_ORDER = [
                 'GENRE', 'STUDIO', 'TALENT', 'SPORT', 'DEMO',
-                'SEGMENT', 'LIFESTAGE', 'INCOME', 'AGE'
+                'SEGMENT', 'LIFESTAGE', 'INCOME', 'AGE',
+                'GOAL', 'INTEREST', 'LIFESTYLE', 'CONGRESSIONAL DISTRICT'
             ];
 
             function _iiqMTARenderAudienceDropdown(d, currentSlug) {
@@ -35361,7 +35426,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 function _renderOption(o) {
                     var label = escapeHtml(o.label);
                     if (o.slug && Number(o.overlap_bp) > 0) {
-                        label += ' (' + Number(o.overlap_bp).toFixed(1) + '%)';
+                        var _ob = Number(o.overlap_bp);
+                        label += ' (' + (_ob < 1 ? _ob.toFixed(2) : _ob.toFixed(1)) + '%)';
                     } else if (o.slug && o.size) {
                         label += ' (n=' + Number(o.size).toLocaleString() + ')';
                     }
@@ -37183,6 +37249,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (_iiqGoatMode()) {
                         try { _iiqRenderAudienceTable(); } catch (e) { }
                         try { _iiqRenderTrendModule(); } catch (e) { }
+                    } else if (_iiqDistrictMode()) {
+                        try { _iiqRenderAudienceTable(); } catch (e) { }
                     }
                 }
                 // Question views share one asset cache.
@@ -38049,6 +38117,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (c === 'DEMO')                     return '\ud83d\udc65'; // people bust
                 if (c === 'FRANCHISE' || c === 'STUDIO') return '\ud83c\udfaf'; // target
                 if (c === 'GENRE')                    return '\u2728';        // sparkles
+                if (c === 'CONGRESSIONAL DISTRICT')   return '\ud83c\udfdb'; // classical building
                 if (c === 'PLATFORM' || c === 'AUDIENCE' || c === 'MOVIEGOING_FREQ') return '\ud83d\udd0d'; // magnifier
                 return '\u2022';                                              // bullet fallback
             }
@@ -38330,6 +38399,211 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // when no audiences array or no assets in view. Every count
             // flows through _iiqCountJitter so no round-zero trailing
             // digits ship (no-round-numbers-in-deliverables.mdc).
+            // ================================================================
+            // === Audiences page: penetration by congressional district ======
+            // ================================================================
+            // A campaign whose audience cards carry congressional districts
+            // (Be Good Influence, Jenna 2026-09-30) gets a district table on
+            // the Audiences page: every House campaign the push supports,
+            // ranked by penetration (adults reached in the district divided
+            // by all adults in the district), with state, seat, named-in-a-
+            // post and search filters. Clicking a row sets the audience
+            // filter beside the title to that district so every other page
+            // reads for it. GOAT keeps its own page; nothing here runs there.
+            window._iiqDistrictTable = window._iiqDistrictTable || { key: 'penetration', dir: 'desc', state: '', named: '', seat: '', q: '' };
+            function _iiqDistrictCards() {
+                var aud = window.__intentIQ && window.__intentIQ.audiences;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var cards = (aud && Array.isArray(aud.cards) && (!aud.title_slug || aud.title_slug === slug)) ? aud.cards : [];
+                return cards.filter(function (c) {
+                    return String(c.category || '').toUpperCase() === 'CONGRESSIONAL DISTRICT' && Number(c.adults_18_plus) > 0;
+                });
+            }
+            function _iiqDistrictMode() {
+                try { return !_iiqGoatMode() && _iiqDistrictCards().length > 0; } catch (e) { return false; }
+            }
+            window._iiqDistrictMode = _iiqDistrictMode;
+            window.iiqDistrictTableSort = function(key) {
+                var s = window._iiqDistrictTable;
+                if (s.key === key) s.dir = (s.dir === 'desc') ? 'asc' : 'desc';
+                else { s.key = key; s.dir = (key === 'district' || key === 'candidate') ? 'asc' : 'desc'; }
+                try { _iiqRenderAudienceTable(); } catch (e) {}
+            };
+            window.iiqDistrictSetFilter = function(name, value) {
+                window._iiqDistrictTable[name] = String(value == null ? '' : value);
+                try { _iiqRenderAudienceTable(); } catch (e) {}
+            };
+            window.iiqDistrictClearFilters = function() {
+                var s = window._iiqDistrictTable;
+                s.state = ''; s.named = ''; s.seat = ''; s.q = '';
+                try { _iiqRenderAudienceTable(); } catch (e) {}
+            };
+            window.iiqDistrictPick = function(key) {
+                var cur = (typeof window._aiqAudienceKey === 'function') ? window._aiqAudienceKey() : '';
+                if (typeof window._aiqSetAudience === 'function') window._aiqSetAudience(cur === key ? '' : key);
+                try { _iiqRenderAudienceTable(); } catch (e) {}
+            };
+            function _iiqDistrictTh(label, key, align, tip) {
+                var s = window._iiqDistrictTable;
+                var arrow = (s.key === key) ? (s.dir === 'desc' ? ' <span style="color:#C7F23E;">\u25be</span>' : ' <span style="color:#C7F23E;">\u25b4</span>') : '';
+                var tipAttr = tip ? (' title="' + escapeHtml(tip) + '"') : '';
+                var tipGlyph = tip ? ' <span style="color:#797F81; font-weight:400; font-size:0.68rem;">(?)</span>' : '';
+                return '<th style="text-align:' + (align === 'right' ? 'right' : 'left') + '; padding:0.55rem 0.75rem; font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; border-bottom:1px solid #27393D; cursor:pointer; user-select:none; white-space:nowrap;" onclick="iiqDistrictTableSort(\'' + key + '\')"' + tipAttr + '>'
+                    + escapeHtml(label) + tipGlyph + arrow + '</th>';
+            }
+            function _iiqDistrictSelect(name, current, options, allLabel) {
+                var html = '<select onchange="iiqDistrictSetFilter(\'' + name + '\', this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-primary); font-size: 0.74rem; padding: 0.3rem 0.5rem; border-radius: 6px; font-family: inherit;">';
+                html += '<option value=""' + (current ? '' : ' selected') + '>' + escapeHtml(allLabel) + '</option>';
+                options.forEach(function (o) {
+                    var v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o;
+                    html += '<option value="' + escapeHtml(v) + '"' + (current === v ? ' selected' : '') + '>' + escapeHtml(l) + '</option>';
+                });
+                return html + '</select>';
+            }
+            function _iiqRenderDistrictTable(host) {
+                var all = _iiqDistrictCards();
+                if (!all.length) { host.style.display = 'none'; host.innerHTML = ''; return; }
+                var s = window._iiqDistrictTable;
+                var activeKey = (typeof window._aiqAudienceKey === 'function') ? window._aiqAudienceKey() : '';
+                var states = {};
+                all.forEach(function (c) { if (c.state) states[c.state] = 1; });
+                var stateList = Object.keys(states).sort();
+                var namedAll = all.filter(function (c) { return !!c.named_in_post; }).length;
+                var openAll = all.filter(function (c) { return String(c.seat_status || '') === 'open seat'; }).length;
+                // National penetration, read back from any card's index.
+                var natPen = 0;
+                for (var i = 0; i < all.length; i++) {
+                    var ix = Number(all[i].index_vs_national) || 0, pp = Number(all[i].penetration_pct) || 0;
+                    if (ix > 0 && pp > 0) { natPen = pp * 100 / ix; break; }
+                }
+                var q = String(s.q || '').toLowerCase();
+                var rows = all.filter(function (c) {
+                    if (s.state && c.state !== s.state) return false;
+                    if (s.named === 'named' && !c.named_in_post) return false;
+                    if (s.named === 'unnamed' && c.named_in_post) return false;
+                    if (s.seat && String(c.seat_status || '') !== s.seat) return false;
+                    if (q) {
+                        var hay = (String(c.district_label || '') + ' ' + String(c.candidate || '') + ' ' + String(c.opponent || '') + ' ' + String(c.state || '')).toLowerCase();
+                        if (hay.indexOf(q) < 0) return false;
+                    }
+                    return true;
+                });
+                var dir = s.dir === 'asc' ? 1 : -1;
+                var num = function (f) { return function (a, b) { return ((Number(a[f]) || 0) - (Number(b[f]) || 0)) * dir; }; };
+                var str = function (f) { return function (a, b) { var x = String(a[f] || '').toLowerCase(), y = String(b[f] || '').toLowerCase(); return (x < y ? -1 : (x > y ? 1 : 0)) * dir; }; };
+                var cmps = { district: str('district_label'), candidate: str('candidate'), adults: num('adults_18_plus'), reached: num('reached'),
+                             penetration: num('penetration_pct'), researched: num('researched_pct'), action: num('action_pct') };
+                rows.sort(cmps[s.key] || cmps.penetration);
+
+                var tAdults = 0, tReached = 0, tRes = 0, tActed = 0;
+                rows.forEach(function (c) { tAdults += Number(c.adults_18_plus) || 0; tReached += Number(c.reached) || 0; tRes += Number(c.researched) || 0; tActed += Number(c.acted) || 0; });
+                var tPen = tAdults > 0 ? (tReached / tAdults * 100) : 0;
+
+                var headerHtml = '<thead><tr>'
+                    + _iiqDistrictTh('District', 'district', 'left')
+                    + _iiqDistrictTh('Campaign', 'candidate', 'left', 'The candidate the push supports and the seat.')
+                    + _iiqDistrictTh('Adults in district', 'adults', 'right', 'All adults 18 and over living in the district.')
+                    + _iiqDistrictTh('Adults reached', 'reached', 'right', 'Adults in the district the campaign\u2019s posts reached.')
+                    + _iiqDistrictTh('Penetration', 'penetration', 'right', 'Adults reached divided by all adults in the district. The line under it is the multiple of the campaign\u2019s national penetration.')
+                    + _iiqDistrictTh('Researched', 'researched', 'right', 'Of the adults reached in the district, the share who searched the issue, opened news or explainer coverage, or visited an advocacy or government site within 14 days.')
+                    + _iiqDistrictTh('Action page', 'action', 'right', 'Of the adults reached in the district, the share who reached a petition, contact-your-representative form, voter registration or donation page within 14 days.')
+                    + '</tr></thead>';
+                var bodyHtml;
+                if (!rows.length) {
+                    bodyHtml = '<tbody><tr><td colspan="7" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No district matches these filters. <a href="#" onclick="iiqDistrictClearFilters(); return false;" style="color:#C7F23E;">Clear filters</a>.</td></tr></tbody>';
+                } else {
+                    bodyHtml = '<tbody>' + rows.map(function (c) {
+                        var key = String(c.subject_key || '');
+                        var isActive = activeKey && activeKey === key;
+                        var pen = Number(c.penetration_pct) || 0;
+                        var mult = natPen > 0 ? (pen / natPen) : 0;
+                        var seat = String(c.seat_status || '');
+                        var seatTxt = seat === 'open seat' ? 'Open seat' : (seat === 'district tbd' ? 'District to be set' : 'Challenger');
+                        var opp = String(c.opponent || '');
+                        var oppTxt = '';
+                        if (seat === 'open seat') oppTxt = opp.replace(/^Open seat \((.*)\)$/, 'Open seat, $1 retiring');
+                        else if (seat === 'district tbd') oppTxt = opp;
+                        else if (opp && opp !== 'Incumbent') oppTxt = 'vs. ' + opp;
+                        else oppTxt = 'vs. the incumbent';
+                        var namedChip = c.named_in_post
+                            ? '<span title="A creator post named this district\u2019s incumbent." style="display:inline-block; margin-left:0.4rem; padding:1px 7px; font-size:0.6rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background: rgba(199,242,62,0.14); color:#C7F23E; border:1px solid rgba(199,242,62,0.35); vertical-align:middle;">Named in a post</span>'
+                            : (c.statewide_post ? '<span title="A state-wide creator post reached this district." style="display:inline-block; margin-left:0.4rem; padding:1px 7px; font-size:0.6rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; border-radius:9999px; background: rgba(183,179,216,0.14); color:#B7B3D8; border:1px solid rgba(183,179,216,0.35); vertical-align:middle;">State-wide post</span>' : '');
+                        var rowStyle = 'cursor:pointer; transition: background 0.12s ease;' + (isActive ? ' background: rgba(199,242,62,0.08); box-shadow: inset 3px 0 0 #C7F23E;' : '');
+                        var td = function (inner, right) { return '<td style="padding: 0.7rem 0.75rem; border-bottom:1px solid #182528; vertical-align:middle;' + (right ? ' text-align:right; font-variant-numeric: tabular-nums;' : '') + '">' + inner + '</td>'; };
+                        return '<tr onclick="iiqDistrictPick(' + JSON.stringify(key).replace(/"/g, '&quot;') + ')" style="' + rowStyle + '" onmouseover="if(!this.getAttribute(\'data-active\'))this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="if(!this.getAttribute(\'data-active\'))this.style.background=\'\'"' + (isActive ? ' data-active="1"' : '') + '>'
+                            + td('<div style="display:flex; align-items:center; gap:0.6rem;">'
+                                + '<div style="flex: 0 0 24px; width:24px; height:24px; border-radius:4px; background:#15252A; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">' + _iiqAudienceGlyph(c.category) + '</div>'
+                                + '<div style="min-width:0;"><div style="color: var(--text-primary); font-size:0.85rem; font-weight:700; line-height:1.25; white-space:nowrap;">' + escapeHtml(String(c.district_label || c.district_code || '')) + '</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; line-height:1.25; margin-top:0.1rem;">' + escapeHtml(seatTxt) + '</div></div></div>')
+                            + td('<div style="color: var(--text-primary); font-size:0.85rem; font-weight:600; line-height:1.25; white-space:nowrap;">' + escapeHtml(String(c.candidate || '')) + namedChip + '</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; line-height:1.25; margin-top:0.1rem;">' + escapeHtml(oppTxt) + '</div>')
+                            + td('<div style="color: var(--text-primary); font-size:0.85rem;">' + Number(c.adults_18_plus).toLocaleString() + '</div>', true)
+                            + td('<div style="color: var(--text-primary); font-size:0.85rem; font-weight:600;">' + Number(c.reached).toLocaleString() + '</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">' + (Number(c.overlap_bp) || 0).toFixed(2) + '% of everyone reached</div>', true)
+                            + td('<div style="color: var(--text-primary); font-size:0.95rem; font-weight:700;">' + pen.toFixed(2) + '%</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">' + (mult ? (mult.toFixed(1) + 'x national') : '') + '</div>', true)
+                            + td('<div style="color: var(--text-primary); font-size:0.85rem; font-weight:600;">' + (Number(c.researched_pct) || 0).toFixed(1) + '%</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">' + Number(c.researched || 0).toLocaleString() + ' adults</div>', true)
+                            + td('<div style="color: var(--text-primary); font-size:0.85rem; font-weight:600;">' + (Number(c.action_pct) || 0).toFixed(2) + '%</div>'
+                                + '<div style="color:#797F81; font-size:0.7rem; margin-top:0.1rem;">' + Number(c.acted || 0).toLocaleString() + ' adults</div>', true)
+                            + '</tr>';
+                    }).join('') + '</tbody>';
+                }
+                var sortLabels = { district: 'district', candidate: 'campaign', adults: 'adults in district', reached: 'adults reached', penetration: 'penetration', researched: 'researched', action: 'action page' };
+                var dirLabel = (s.key === 'district' || s.key === 'candidate') ? (s.dir === 'asc' ? 'A to Z' : 'Z to A') : (s.dir === 'desc' ? 'highest first' : 'lowest first');
+                var activeCard = null;
+                for (var j = 0; j < all.length; j++) if (String(all[j].subject_key || '') === activeKey) activeCard = all[j];
+                var lead = all.slice().sort(function (a, b) { return (Number(b.penetration_pct) || 0) - (Number(a.penetration_pct) || 0); })[0];
+                var intro = 'Ranked by ' + escapeHtml(sortLabels[s.key] || s.key) + ', ' + escapeHtml(dirLabel) + '. '
+                    + all.length + ' House campaigns. ' + namedAll + ' had a post that named the incumbent, and those districts run '
+                    + (lead ? (Math.round((Number(lead.penetration_pct) || 0) / (natPen || 1)) + 'x') : 'far above') + ' the campaign\u2019s national penetration. '
+                    + (activeCard ? ('Every page is reading for ' + escapeHtml(String(activeCard.district_label || '')) + '. Click the row again to clear. ')
+                                  : 'Click a row to read every page for that district. ')
+                    + 'Click any header to re-sort.';
+                var filters = '<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin: 0.7rem 0 0.2rem;">'
+                    + '<span style="font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; font-weight:600;">Filter</span>'
+                    + _iiqDistrictSelect('state', s.state, stateList, 'All states')
+                    + _iiqDistrictSelect('seat', s.seat, [['vs incumbent', 'Challenger races'], ['open seat', 'Open seats (' + openAll + ')']], 'All seats')
+                    + _iiqDistrictSelect('named', s.named, [['named', 'Named in a post (' + namedAll + ')'], ['unnamed', 'Not named in a post']], 'All districts')
+                    + '<input type="search" value="' + escapeHtml(s.q || '') + '" placeholder="District, candidate or opponent" onchange="iiqDistrictSetFilter(\'q\', this.value)" onkeydown="if(event.key===\'Enter\'){iiqDistrictSetFilter(\'q\', this.value);}" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-primary); font-size: 0.74rem; padding: 0.3rem 0.55rem; border-radius: 6px; font-family: inherit; min-width: 220px;">'
+                    + ((s.state || s.seat || s.named || s.q) ? '<a href="#" onclick="iiqDistrictClearFilters(); return false;" style="font-size:0.7rem; color:#C7F23E;">Clear</a>' : '')
+                    + '</div>';
+                var subhead = '<div class="iiq-support-meta">' + rows.length + ' of ' + all.length + ' districts \u00b7 ' + tReached.toLocaleString() + ' adults reached \u00b7 ' + tPen.toFixed(2) + '% of ' + tAdults.toLocaleString() + ' adults</div>';
+                var footer = rows.length
+                    ? '<div style="display:flex; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; padding: 0.55rem 0.75rem 0.3rem; color:#797F81; font-size:0.7rem;">'
+                        + '<div>Districts in view: ' + tReached.toLocaleString() + ' adults reached, ' + tRes.toLocaleString() + ' researched the issue, ' + tActed.toLocaleString() + ' reached an action page.</div>'
+                        + '<div>National penetration ' + natPen.toFixed(2) + '% of US adults.</div>'
+                        + '</div>'
+                    : '';
+                host.className = 'iiq-support-card';
+                host.removeAttribute('style');
+                host.innerHTML = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
+                    + '<div style="min-width:0;">'
+                    +   '<div class="iiq-support-eyebrow">Audiences</div>'
+                    +   '<div class="iiq-support-title">How deep the campaign reached into each district it supports.</div>'
+                    +   '<div class="iiq-support-intro">' + intro + '</div>'
+                    +   '<details class="iiq-help-details">'
+                    +     '<summary><span>How to read this.</span></summary>'
+                    +     '<div class="iiq-help-body">'
+                    +       '<p><b>Penetration.</b> Adults in the district the campaign reached, divided by every adult 18 and over who lives there. 1.00% means one adult in a hundred saw a post. The line under it compares the district to the campaign\u2019s national penetration; 3x means three times as deep as the country as a whole.</p>'
+                    +       '<p><b>Named in a post.</b> A creator post named this district\u2019s incumbent. Those posts travel much harder inside the district, so penetration and the action-page rate both run higher there.</p>'
+                    +       '<p><b>Researched.</b> Of the adults reached in the district, the share who searched the issue, opened news or explainer coverage, or visited an advocacy or government site within 14 days.</p>'
+                    +       '<p><b>Action page.</b> Of the adults reached in the district, the share who reached a petition, contact-your-representative form, voter registration or donation page within 14 days. Reaching the page is the count.</p>'
+                    +       '<p><b>Filter and sort.</b> Cut by state, seat type or named-in-a-post, or search a name. Click a header to sort. Click a row and every other page reads for that district; click it again to go back to everyone reached.</p>'
+                    +       '<div class="iiq-help-close">Default sort is penetration, highest first. Districts do not overlap, so the totals in view add up.</div>'
+                    +     '</div>'
+                    +   '</details>'
+                    + '</div>'
+                    + subhead
+                    + '</div>'
+                    + filters
+                    + '<div style="overflow-x:auto;">'
+                    + '<table class="iiq-support-table">' + headerHtml + bodyHtml + '</table>'
+                    + '</div>'
+                    + footer;
+                host.style.display = '';
+            }
+
             function _iiqRenderAudienceTable() {
                 var host = document.getElementById('iiqAudienceTableSection');
                 if (!host) return;
@@ -38338,6 +38612,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // cohorts are the audience filter beside the title
                 // (2026-09-23) and this slab does not draw.
                 if (_iiqGoatMode()) { try { _iiqGoatRenderAudienceTable(host); } catch (_ge) { host.style.display = 'none'; host.innerHTML = ''; } return; }
+                // A campaign that supports congressional districts (Be Good
+                // Influence, 2026-09-30) ranks penetration by district here.
+                if (_iiqDistrictMode()) { try { _iiqRenderDistrictTable(host); } catch (_de) { host.style.display = 'none'; host.innerHTML = ''; } return; }
                 host.style.display = 'none';
                 host.innerHTML = '';
                 return;
@@ -130397,8 +130674,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'q_q2',           label: 'Paid vs Organic', panel: 'drawer', sub: 'questions', q: 'q2',           legacyOnly: true, organicLabel: 'Daily activity' },
             { id: 'l_assets',       label: 'Performance',     panel: 'drawer', sub: 'assets',    legacyOnly: true, supersededBy: 'q_q2' },
             { id: 'assets',      label: 'Performance', ids: ['iiqAssetTableSection'] },
-            // The campaign-level audience read. The slab only draws on
-            // GOAT (Jenna 2026-09-24), so the tab only appears there.
+            // The campaign-level audience read. The slab draws on GOAT
+            // (Jenna 2026-09-24) and on any campaign whose audience cards
+            // carry congressional districts (Be Good Influence,
+            // 2026-09-30), so the tab only appears there.
             { id: 'audiences',   label: 'Audiences',   ids: ['iiqAudienceTableSection'] },
             // Surface and Leaks have no tab of their own. Where the
             // cohort landed is what the attribution cuts are dividing up,
@@ -130496,7 +130775,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // every asset-driven view reads the asset set cut to the cohort
         // (window._aiqSetAudience). Options come from the title's cohorts.
         var _AIQ_AUD_ORDER = ['GENRE', 'STUDIO', 'TALENT', 'SPORT', 'DEMO', 'GOAL', 'INTEREST', 'LIFESTYLE',
-                              'PLATFORM', 'FRANCHISE', 'SEGMENT', 'LIFESTAGE', 'INCOME', 'AGE'];
+                              'PLATFORM', 'FRANCHISE', 'SEGMENT', 'LIFESTAGE', 'INCOME', 'AGE',
+                              'CONGRESSIONAL DISTRICT'];
         function _aiqAudienceControl(wrap) {
             var row = wrap.querySelector('.aiq-controls .iiq-selector-row');
             if (!row) return;
@@ -130522,7 +130802,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var opt = function (c) {
                     var label = String(c.display || c.subject_key || '');
                     var bp = Number(c.overlap_bp) || 0;
-                    if (bp > 0) label += ' (' + bp.toFixed(1) + '% of exposed)';
+                    if (bp > 0) label += ' (' + (bp < 1 ? bp.toFixed(2) : bp.toFixed(1)) + '% of exposed)';
                     return '<option value="' + esc(c.subject_key) + '">' + esc(label) + '</option>';
                 };
                 var buckets = {};
