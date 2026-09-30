@@ -47181,7 +47181,10 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "`assumptions`.\n"
         "RELATIVE WINDOWS BIND (HARD RULE - 2026-08-24): when the "
         "request states a relative window ('trailing 60 days', 'last "
-        "90 days', 'past 3 months'), you MUST compute the concrete "
+        "90 days', 'past 3 months', 'over the last three years', "
+        "'past two years' - worded durations count, and years convert "
+        "to trailing months: three years = trailing 36 months), you "
+        "MUST compute the concrete "
         "dates from the CURRENT DATE above, put them in `date_range`, "
         "set `date_range_explicit` to true, and echo the window in the "
         "confirmation. NEVER fall back to the default window when a "
@@ -57392,6 +57395,73 @@ def _charge_existing_match_or_402(user, username, ex_key, subject_name,
     return True
 
 
+_PM_RECENT_BUILDS_KEY = 'system/usage/recent_builds.json'
+
+
+def _pm_recent_build_guard(username, subject, ws='', we=''):
+    """Same user re-approving the same subject within 30 minutes is a
+    duplicate, not a second order (smclain, Trinity Tatum x2,
+    2026-09-29: a 6-day window drift ran two full builds). Returns the
+    earlier entry when this enqueue should be blocked, else records
+    this one and returns None. A window that moved more than 21 days
+    on either end is a correction and is allowed through. Fail-open:
+    any storage trouble means no block."""
+    try:
+        norm = re.sub(r'[^a-z0-9]+', ' ',
+                      str(subject or '').lower()).strip()
+        username = str(username or '').strip()
+        if not norm or not username:
+            return None
+        now = time.time()
+        try:
+            _r = s3_client.get_object(Bucket=S3_BUCKET,
+                                      Key=_PM_RECENT_BUILDS_KEY)
+            doc = json.loads(_r['Body'].read().decode('utf-8'))
+        except Exception:
+            doc = {}
+        entries = [e for e in (doc.get('entries') or [])
+                   if isinstance(e, dict)
+                   and now - float(e.get('t') or 0) < 86400]
+
+        def _d(s):
+            try:
+                return datetime.strptime(str(s)[:10], '%Y-%m-%d')
+            except Exception:
+                return None
+
+        hit = None
+        for e in entries:
+            if e.get('u') != username or e.get('s') != norm:
+                continue
+            if now - float(e.get('t') or 0) > 1800:
+                continue
+            ws0, we0 = _d(e.get('ws')), _d(e.get('we'))
+            ws1, we1 = _d(ws), _d(we)
+            if ws0 and we0 and ws1 and we1:
+                drift = max(abs((ws1 - ws0).days),
+                            abs((we1 - we0).days))
+                if drift > 21:
+                    continue
+            hit = e
+            break
+        if hit is None:
+            entries.append({'u': username, 's': norm,
+                            'ws': str(ws or '')[:10],
+                            'we': str(we or '')[:10], 't': now})
+            try:
+                s3_client.put_object(
+                    Bucket=S3_BUCKET, Key=_PM_RECENT_BUILDS_KEY,
+                    Body=json.dumps(
+                        {'entries': entries[-200:]}).encode('utf-8'),
+                    ContentType='application/json')
+            except Exception:
+                pass
+        return hit
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 @app.route('/api/brief-chat/approve', methods=['POST'])
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
@@ -57738,6 +57808,28 @@ def api_synth_chat_approve():
                 payload['quoted_estimate'] = _q_est
     except Exception:
         pass
+
+    # A re-approve of the same subject minutes later is a duplicate,
+    # not a second order (smclain, Trinity Tatum x2, 2026-09-29).
+    # Blocked BEFORE the queue post, so nothing is charged. A window
+    # that moved materially is a correction and still builds.
+    if decision == 'new_build':
+        _dup_dr = (draft.get('date_range')
+                   if isinstance(draft.get('date_range'), dict) else {})
+        _dup = _pm_recent_build_guard(
+            _approve_username, spec.get('name'),
+            ws=_dup_dr.get('start') or '', we=_dup_dr.get('end') or '')
+        if _dup is not None:
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': (f"{spec.get('name', 'That profile')} is "
+                          "already building from your request a few "
+                          "minutes ago, so I did not start a second "
+                          "copy or charge you again. It lands in "
+                          "Select Profile when it finishes. Ask me "
+                          "for a status update any time."),
+            })
 
     try:
         import requests as _requests
@@ -59434,7 +59526,7 @@ _PM_FILE_ASK_RE = re.compile(
     re.I)
 
 _PM_CLARIFY_TURN_RE = re.compile(
-    r"do you want this on |which audience should i use", re.I)
+    r"(?:do|did) you want this on |which audience should i use", re.I)
 
 
 def _pm_clarify_answer_merge(history, text):
@@ -59477,6 +59569,16 @@ def _pm_clarify_answer_merge(history, text):
             break
     if not orig or orig.strip().lower() == t.lower():
         return ''
+    # A bare yes / no / something-else / open-on-screen answer (typos
+    # included: scott, "open on sceren", 2026-09-29) re-runs the
+    # original question clean - gluing "Audience: no" onto it would
+    # read as an audience named no.
+    tl = t.lower().strip(' .!?')
+    if tl in ('yes', 'yep', 'yeah', 'correct', 'sure', 'no', 'nope',
+              'neither', 'something else', 'not that', 'the screen',
+              'on screen', 'whats open', "what's open",
+              'use the screen') or tl.startswith('open on'):
+        return orig
     return f"{orig}\n\nAudience: {t}"
 
 
