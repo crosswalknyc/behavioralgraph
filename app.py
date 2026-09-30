@@ -59591,6 +59591,39 @@ def _pm_screen_bind_verdict(text, page, base, page_key=''):
     return 'away'
 
 
+_PM_VIEW_DEIXIS_RE = re.compile(
+    r"\bthis\s+(?:campaign|window|screen|page|view|board|leaderboard|"
+    r"journey|study|chart|table|data|dashboard|report)\b"
+    r"|\bon\s+(?:this|the)\s+screen\b"
+    r"|\bthese\s+(?:numbers|results|rows|trends)\b", re.I)
+
+_PM_CAMPAIGN_ASK_RE = re.compile(
+    r"\b(?:campaigns?|attribution|roas|ad\s+spend)\b", re.I)
+
+
+def _pm_view_owns_ask(text, ctx):
+    """True when the on-screen view owns this ask (2026-09-30 Jenna:
+    "What drove conversion in this campaign window?" on the
+    Attribution view must ground in the campaign on screen, never
+    disambiguate between profiles). The view context only exists when
+    the user is on a data-bearing non-profile view, so Profile IQ
+    asks never land here."""
+    if not isinstance(ctx, dict):
+        return False
+    vc = ctx.get('view_context') or {}
+    view_id = str(vc.get('view_id') or '').strip()
+    if not view_id:
+        return False
+    t = str(text or '')
+    if _PM_VIEW_DEIXIS_RE.search(t):
+        return True
+    if view_id == 'intentIQ' and (
+            _PM_CAMPAIGN_ASK_RE.search(t)
+            or re.search(r"\bconversions?\b", t, re.I)):
+        return True
+    return False
+
+
 def _pm_open_screen_confirm(text, ctx):
     """Route an ask against the profile open on screen.
 
@@ -60768,6 +60801,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # silently - it asks a grounded confirm with the remembered
         # referent(s) as chips. Only for underspecified asks: an ask
         # that names its own subject keeps the steer-to-build reply.
+        # A campaign ask never disambiguates between profiles
+        # (2026-09-30 Jenna). Reaching this rung means no campaign is
+        # on screen: say what to open instead of offering audience
+        # names from memory.
+        if _PM_CAMPAIGN_ASK_RE.search(str(text or '')):
+            _pm_ask_hint(outcome='campaign_clarify')
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': ('Which campaign is this about? Open it in '
+                          'the Attribution IQ tab and ask from there, '
+                          'or give me the campaign name and its '
+                          'window.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None})
         try:
             import prometheus_memory as pmm
             _named = (subj_hint
@@ -63227,7 +63274,26 @@ def api_synth_chat_analyze():
     # Open profile is not the subject until the user says so
     # (2026-09-28). Mode chips stay commands on the view already open.
     # Yes re-sends with bind_subject, which returns above this point.
-    if isinstance(ctx, dict) and not str(body.get('mode') or '').strip():
+    # View-grounded asks stay on the view (2026-09-30 Jenna: the
+    # Attribution view's own chip "What drove conversion in this
+    # campaign window?" asked "Do you mean for Paw Patrol Series
+    # Viewers, or Obsession?"). When the open view carries the data
+    # the ask points at, the answer grounds in that view; the
+    # open-profile verdict and the profile-subject generate ladder
+    # never run on it.
+    _vc_owns = False
+    try:
+        _vc_owns = _pm_view_owns_ask(text, ctx)
+    except Exception:
+        traceback.print_exc()
+    if _vc_owns:
+        if _route in ('generate', 'memory_confirm'):
+            _route = ''
+        _pm_ask_hint(route='view_grounded',
+                     subject=str(((ctx or {}).get('view_context')
+                                  or {}).get('view_title') or ''))
+    if isinstance(ctx, dict) and not _vc_owns \
+            and not str(body.get('mode') or '').strip():
         # An answer to the which-audience clarify is consumed here:
         # merge it into the question that triggered the clarify and
         # never re-ask (Casey Pearson, 2026-09-29).
