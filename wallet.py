@@ -3013,6 +3013,41 @@ def pays_retail_for_library_match(user, username: str = "") -> bool:
     return is_paid_only_plan(user)
 
 
+def subject_profile_pull_usd(subject) -> float:
+    """Company or user Profile IQ sticker. Kartel is 275. 0 means
+    the global catalog price applies (or no override is set)."""
+    if not isinstance(subject, dict):
+        return 0.0
+    try:
+        usd = float(subject.get("profile_pull_usd") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return usd if usd > 0 else 0.0
+
+
+def charges_profile_for_library_match(user, username: str = "",
+                                      users_data=None) -> bool:
+    """True when a catalog reuse should bill the Profile IQ sticker.
+
+    Prometheus-only seats already pay retail. A company with its own
+    profile_pull_usd (Kartel $275) also pays that sticker on every
+    Partner API or Prometheus reuse, the same as a fresh pull.
+    Staff never pay this way."""
+    if not isinstance(user, dict):
+        return False
+    if is_internal_staff_seat(user, username):
+        return False
+    if pays_retail_for_library_match(user, username):
+        return True
+    subject = user
+    if isinstance(users_data, dict):
+        try:
+            subject, _kind, _key = resolve_billing_subject(user, users_data)
+        except Exception:
+            subject = user
+    return subject_profile_pull_usd(subject) > 0
+
+
 def already_owns_paid_run(user, users_data, s3_key,
                           username: str = "") -> bool:
     """True when this seat or its company wallet already holds this
@@ -4062,7 +4097,10 @@ __all__ = [
     "profile_iq_module_enabled",
     "is_paid_only_plan",
     "PUBLIC_SIGNUP_SOURCE", "is_public_signup_seat",
-    "pays_retail_for_library_match", "already_owns_paid_run",
+    "pays_retail_for_library_match",
+    "subject_profile_pull_usd",
+    "charges_profile_for_library_match",
+    "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
     "attach_paid_only_seat", "attach_paid_only_company",
     "company_paid_runs", "grant_company_paid_runs",

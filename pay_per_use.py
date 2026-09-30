@@ -74,6 +74,11 @@ OFFER_MESSAGE = 'Not subscribed to this feature. Turn it on for pay as you go?'
 # Session = contiguous analysis activity; this much quiet ends it.
 SESSION_IDLE_S = 30 * 60
 
+# How far back the sweeper reads ppu_calls. 3 UTC days dropped
+# closed sessions that Render missed (deploy, idle worker). 30 days
+# still bills those without rescanning the whole prefix.
+PPU_SWEEP_DAYS = 30
+
 # Where the sweep's idempotency stamps (one per closed session) live.
 SESSIONS_PREFIX = 'system/usage/ppu_sessions/'
 
@@ -306,10 +311,10 @@ def _client():
 
 
 def _list_ppu_rows(s3, now_dt) -> list:
-    """All pay-per-use usage rows from the trailing 3 UTC days.
+    """All pay-per-use usage rows from the trailing PPU_SWEEP_DAYS.
     Bodies are cached per key (rows never change once written)."""
     rows = []
-    for back in range(3):
+    for back in range(PPU_SWEEP_DAYS):
         day = (now_dt - timedelta(days=back)).strftime('%Y_%m_%d')
         prefix = f"{render_usage_log.PPU_CALLS_PREFIX}{day}/"
         try:
@@ -354,7 +359,7 @@ def _sessions_from_rows(rows: list) -> list:
     SESSION_IDLE_S (or a logout marker) splits sessions."""
     by_user = {}
     for r in rows:
-        email = str(r.get('user_email') or '').strip().lower()
+        email = str(r.get('user_email') or r.get('user') or '').strip().lower()
         if not email:
             continue
         by_user.setdefault(email, []).append(r)
@@ -492,7 +497,8 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
     if billed <= 0:
         return
     email = str(summary.get('user_email') or '').strip().lower()
-    if not email:
+    named = str(summary.get('user') or '').strip()
+    if not email and not named:
         return
     try:
         # Lazy imports: pay_per_use.py is imported early by app.py, so
@@ -504,13 +510,31 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
         print(f"[pay-per-use] wallet deduction unavailable: {e}")
         return
 
-    # Find the dashboard username by email match.
+    # Find the dashboard username by email, then by username (some
+    # rows only stamp the login name).
     users_data = load_users() or {}
     target_username = None
     for uname, u in (users_data.get('users') or {}).items():
-        if str((u or {}).get('email') or '').strip().lower() == email:
+        if email and str((u or {}).get('email') or '').strip().lower() == email:
             target_username = uname
             break
+    if not target_username and named:
+        if named in (users_data.get('users') or {}):
+            target_username = named
+        else:
+            low = named.lower()
+            for uname, u in (users_data.get('users') or {}).items():
+                if str(uname).lower() == low:
+                    target_username = uname
+                    break
+                if email and str(uname).lower() == email:
+                    target_username = uname
+                    break
+    if not target_username and email:
+        for uname in (users_data.get('users') or {}):
+            if str(uname).lower() == email:
+                target_username = uname
+                break
     if not target_username:
         return
 

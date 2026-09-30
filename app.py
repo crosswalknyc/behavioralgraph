@@ -57271,19 +57271,23 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
 def _existing_match_charge_credits(user, s3_key, username=""):
     """Credits to charge when handing back an existing catalog file.
 
-    Full-access seats stay 0 (library reuse is free). Prometheus-only
-    seats pay the retail Profile pull unless they already bought this
-    key. Staff never pay this way.
+    Full-access seats stay 0 unless the billing subject has its own
+    Profile IQ sticker (Kartel $275): every reuse is a pull. Prometheus-
+    only seats pay the retail Profile pull unless they already bought
+    this key. Staff never pay this way.
     """
     try:
         import wallet as _w
         uname = str(username or (user or {}).get('username') or '').strip()
-        if not _w.pays_retail_for_library_match(user, uname):
-            return 0
         data = load_users()
         live = ((data.get('users') or {}).get(uname) or user)
-        if _w.already_owns_paid_run(live, data, s3_key, username=uname):
+        if not _w.charges_profile_for_library_match(live, uname, data):
             return 0
+        # Prometheus-only already-paid files stay free. Kartel (and any
+        # other profile_pull_usd company) pays the sticker every time.
+        if _w.pays_retail_for_library_match(live, uname):
+            if _w.already_owns_paid_run(live, data, s3_key, username=uname):
+                return 0
         return int(_V1_CREDITS.get('new_build', CREDITS_PROFILE_ANALYSIS))
     except Exception:
         traceback.print_exc()
@@ -65535,6 +65539,21 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0,
     cut_each = _v1_tool_price_usd(
         'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username)
     if d == 'existing_match':
+        # Default is $0 library reuse. Prometheus-only seats and
+        # companies with a Profile IQ sticker (Kartel $275) pay the
+        # same price as a fresh pull.
+        if username:
+            try:
+                import wallet as _w
+                data = load_users()
+                user = (data.get('users') or {}).get(username) or {}
+                if _w.charges_profile_for_library_match(
+                        user, username, data):
+                    return _v1_tool_price_usd(
+                        'api_chatbot_profile_iq_build',
+                        _V1_USD_FALLBACK['new_build'], username)
+            except Exception:
+                traceback.print_exc()
         return 0.0
     if d == 'subscriber_iq':
         base = _v1_tool_price_usd(
