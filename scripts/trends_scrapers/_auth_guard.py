@@ -207,10 +207,16 @@ _SITES: dict[str, dict[str, Any]] = {
         'label': 'Starz',
         'app_url': 'https://www.starz.com/us/en/',
         'hosts': ['starz.com', 'www.starz.com'],
+        # 'playlist' is the Starz nav item for the account's saved list
+        # (its "My List"). Measured 2026-09-29: it renders on the
+        # signed-in home even for an account with no watch history
+        # (when no "continue watching" rail exists) and never on the
+        # anonymous home, which leads with the "$5/mo ... claim today"
+        # offer instead.
         'signed_in': ['continue watching', 'my list', 'keep watching',
-                      'because you watched'],
+                      'because you watched', 'playlist'],
         'signed_out': ['start your subscription', 'sign up now',
-                       'choose your plan', 'get starz'],
+                       'choose your plan', 'get starz', 'claim today'],
     },
     'mgmplus.com': {
         'label': 'MGM+',
@@ -249,7 +255,17 @@ _SITES: dict[str, dict[str, Any]] = {
     },
     'audible.com': {
         'label': 'Audible',
-        'app_url': 'https://www.audible.com/',
+        # The bare home page never paints a signed-in rail in headless
+        # Chrome (measured 2026-09-29: 'unknown', no rail either way),
+        # and Audible's own /signin link forces a fresh password step
+        # (openid.pape.max_auth_age=900) even when the shared Amazon
+        # session is valid. But the podcasts browse page (the page the
+        # scrapers actually read) hydrates a signed-in rail straight
+        # off that Amazon session, so it is the honest probe: signed in
+        # shows 'wish list' / 'your library', anonymous shows neither
+        # (reads 'unknown', so a logged-out visitor is still refused).
+        # This is the same reasoning as music.amazon.com/podcasts.
+        'app_url': 'https://www.audible.com/ep/podcasts',
         'hosts': ['audible.com', 'www.audible.com', 'amazon.com'],
         'signed_in': ['your library', 'continue listening',
                       'your credits', 'wish list'],

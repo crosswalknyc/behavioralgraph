@@ -191,7 +191,17 @@ _R = {
         "two_step": True,
         "success_url_substr": ["music.amazon.com"],
     },
-    "audible.com": {  # Amazon auth
+    "audible.com": {  # Amazon SSO - reuses the amazon.com profile session
+        # Audible shares the Amazon account session. When the profile
+        # is signed into Amazon (amazon.com proves signed in), the
+        # session_verdict on Audible's app page (/ep/podcasts, set in
+        # _auth_guard) already reads signed_in off that shared session,
+        # so attempt_login short-circuits to "already" and donates the
+        # Audible cookie set (which carries the shared Amazon auth
+        # cookies) with NO password step. The password path below is a
+        # last resort only reached if the Amazon session itself is
+        # dead; Amazon then forces a passkey / code wall (needs_human),
+        # never a silent password. Measured 2026-09-29.
         "login_url": "https://www.audible.com/signin",
         "user_sel": ['input#ap_email', 'input[type="email"]'],
         "continue_sel": ['input#continue', '#continue'],
@@ -201,15 +211,21 @@ _R = {
         "success_url_substr": ["audible.com/library", "audible.com/?",
                                "audible.com/home"],
     },
-    "xbox.com": {  # Microsoft account (login.live.com), two-step + "stay signed in?"
-        "login_url": "https://www.xbox.com/en-US/play",
-        "user_sel": ['input[type="email"]', 'input#i0116'],
-        "continue_sel": ['input#idSIButton9', '#idSIButton9',
-                         'button[type="submit"]'],
-        "pass_sel": ['input[type="password"]', 'input#i0118'],
-        "submit_sel": ['input#idSIButton9', '#idSIButton9',
-                       'button[type="submit"]'],
-        "two_step": True,
+    "xbox.com": {
+        # Microsoft account. Measured 2026-09-29: xbox.com/en-US/play
+        # carries only a SIGN IN link, no form, which is why the old
+        # recipe "could not find the username field". The real form is
+        # the MSA auth round trip, which redirects to login.live.com.
+        # Modern MSA defaults to a passkey (a WebAuthn security window
+        # that stalls forever headless), so the flow blocks WebAuthn to
+        # force the code / password fork, then steps through
+        # "Other ways to sign in" -> "Use your password" -> password ->
+        # "Stay signed in?". Driven by `_xbox_flow` because none of that
+        # fits the generic email-then-password shape.
+        "login_url": ("https://www.xbox.com/en-US/auth/msa?action=logIn"
+                      "&returnUrl=https%3A%2F%2Fwww.xbox.com%2Fen-US%2Fplay"),
+        "flow": "xbox",
+        "block_webauthn": True,
         "success_url_substr": ["xbox.com/en-US/play", "xbox.com/play"],
     },
     "peacocktv.com": {
@@ -220,12 +236,47 @@ _R = {
         "success_url_substr": ["/browse", "/watch", "/account"],
     },
     "britbox.com": {
-        "login_url": "https://www.britbox.com/us/account/signin",
-        "user_sel": ['input[type="email"]', 'input[name="email"]',
-                     'input[name="username"]'],
-        "pass_sel": ['input[type="password"]', 'input[name="password"]'],
-        "submit_sel": ['button[type="submit"]'],
+        # Measured 2026-09-29: the old /us/account/signin is a 404 page
+        # ("Page not found") that carries no form, which is why the
+        # username field was never found. /us/account/login redirects
+        # to account.britbox.com/signin, where a single-step form holds
+        # both fields: email #email, password #pwd, submit
+        # button[name="signin_submit"]. An invisible reCAPTCHA sits on
+        # the page but does not gate the submit.
+        "login_url": "https://www.britbox.com/us/account/login",
+        "user_sel": ['input#email', 'input[type="email"]',
+                     'input[name="email"]', 'input[name="username"]'],
+        "pass_sel": ['input#pwd', 'input[type="password"]',
+                     'input[name="password"]'],
+        "submit_sel": ['button[name="signin_submit"]', 'button[type="submit"]'],
         "success_url_substr": ["/us/home", "/us/account"],
+    },
+    "open.spotify.com": {
+        # Measured 2026-09-29: accounts.spotify.com defaults to an
+        # email-then-emailed-code flow (no password field until you
+        # click "Log in with a password"). The direct password route
+        # renders both fields at once and sends no code, so the generic
+        # email+password fill works against it. open.spotify.com is not
+        # an _auth_guard site, so signed-in is proven by the account
+        # widget (present only when logged in), not by a rail: the
+        # anonymous web player also renders "Your Library" and podcast
+        # rails, so the login / signup controls are the tell.
+        "login_url": ("https://accounts.spotify.com/en/login"
+                      "?allow_password=1&method=password"
+                      "&continue=https%3A%2F%2Fopen.spotify.com%2F"),
+        "user_sel": ['input#username', 'input[data-testid="login-username"]',
+                     'input[autocomplete="username"]'],
+        "pass_sel": ['input#password', 'input[data-testid="login-password"]',
+                     'input[type="password"]'],
+        "submit_sel": ['button[data-testid="login-button"]',
+                       'button[type="submit"]'],
+        "verify_url": "https://open.spotify.com/",
+        "verify_ok_sel": ['[data-testid="user-widget-link"]',
+                          'button[data-testid="user-widget-button"]',
+                          '[data-testid="user-widget-avatar"]'],
+        "verify_bad_sel": ['[data-testid="login-button"]',
+                           '[data-testid="signup-button"]'],
+        "success_url_substr": ["open.spotify.com"],
     },
     "mgmplus.com": {
         "login_url": "https://www.mgmplus.com/login",
@@ -334,15 +385,49 @@ def _source_for(domain: str) -> str:
 # ────────────────────────────────────────────────────────────────────
 # Detection helpers
 # ────────────────────────────────────────────────────────────────────
-_CHALLENGE_SELECTORS = [
+# A one-time-code entry screen is always a wall - if these fields are
+# present, a texted / emailed code is being asked for.
+_OTP_SELECTORS = [
     'input[autocomplete="one-time-code"]',
     'input[name*="otp" i]', 'input[id*="otp" i]',
     'input[name*="code" i]', 'input[id*="code" i]',
-    'iframe[src*="recaptcha"]', 'iframe[src*="hcaptcha"]',
-    'iframe[src*="arkoselabs"]', 'iframe[src*="funcaptcha"]',
-    'iframe[title*="captcha" i]', 'iframe[src*="datadome"]',
-    '#px-captcha', '[id*="captcha" i]',
 ]
+
+# A captcha only counts as a wall when it is an INTERACTIVE, visible
+# widget (a "I'm not a robot" checkbox, or a challenge popup a person
+# has to solve). An INVISIBLE reCAPTCHA (size=invisible) runs a passive
+# risk score with no widget and is not a wall, so the BritBox and
+# Spotify login pages, which both embed one, are not misread as
+# needs_human. Measured 2026-09-29: both ship the invisible anchor
+# iframe only. This never tries to defeat a captcha; it only refuses to
+# treat a passive one as a challenge.
+_INTERACTIVE_CAPTCHA_JS = r"""() => {
+  const big = e => {
+    const b = e.getBoundingClientRect();
+    const shown = e.checkVisibility
+      ? e.checkVisibility({visibilityProperty: true, opacityProperty: true})
+      : (b.width > 0 && b.height > 0);
+    return shown && b.width >= 100 && b.height >= 50;
+  };
+  for (const f of document.querySelectorAll('iframe')) {
+    const src = f.src || '';
+    if (!/recaptcha|hcaptcha|arkoselabs|funcaptcha|datadome|turnstile/i.test(src)) continue;
+    if (/[?&]size=invisible/.test(src)) continue;
+    if (big(f)) return true;
+  }
+  // Widget containers (PerimeterX press-and-hold, hCaptcha/Arkose
+  // wrappers). The invisible reCAPTCHA badge wrapper
+  // (.grecaptcha-badge, 256x60) also matches [class*="captcha"], so a
+  // container is skipped when it is a badge or only wraps an invisible
+  // anchor.
+  for (const c of document.querySelectorAll('#px-captcha, [id*="captcha" i], [class*="captcha" i]')) {
+    if (/badge/i.test(c.className || '')) continue;
+    const inner = c.querySelectorAll('iframe');
+    if (inner.length && Array.from(inner).every(f => /[?&]size=invisible/.test(f.src || ''))) continue;
+    if (big(c)) return true;
+  }
+  return false;
+}"""
 _CHALLENGE_TEXT = [
     "verify it's you", "verify your identity", "one-time", "one time passcode",
     "authenticator", "approve the sign", "approve this request",
@@ -357,6 +442,8 @@ _ERROR_TEXT = [
     "couldn't sign you in", "cannot find an account", "we cannot find",
     "no account found", "invalid email or password",
     "that password is incorrect",
+    "incorrect email address or password",  # Spotify, measured 2026-09-29
+    "incorrect username or password",
 ]
 
 
@@ -383,15 +470,30 @@ def _page_text(page) -> str:
             return ""
 
 
+def _interactive_captcha(page) -> bool:
+    """True only if a visible, interactive captcha widget is up.
+
+    An invisible reCAPTCHA (the passive risk-score kind both BritBox
+    and Spotify embed on their sign-in pages) returns False here, so it
+    never trips the wall detector. Never raises.
+    """
+    try:
+        return bool(page.evaluate(_INTERACTIVE_CAPTCHA_JS))
+    except Exception:
+        return False
+
+
 def _challenge_reason(page) -> str | None:
     """Return a short reason string if a 2FA/CAPTCHA/verify wall is on
     the page, else None."""
-    for sel in _CHALLENGE_SELECTORS:
+    for sel in _OTP_SELECTORS:
         try:
             if page.query_selector(sel):
                 return f"verification step detected ({sel})"
         except Exception:
             continue
+    if _interactive_captcha(page):
+        return "verification step detected (interactive captcha)"
     text = _page_text(page)
     for phrase in _CHALLENGE_TEXT:
         if phrase in text:
@@ -511,6 +613,10 @@ def session_verdict(page, domain: str, recipe: dict, *,
                 return "unknown", f"could not open the app page: {e}"
         return guard.settle_and_judge(page, domain, settle_ms=3000,
                                       budget_ms=budget_ms)
+    # A non-guard domain that renders a full app to anonymous visitors
+    # (Spotify) is proven by its account controls, not by the URL.
+    if recipe.get("verify_ok_sel"):
+        return _element_signed_in(page, recipe, navigate=navigate)
     if navigate:
         try:
             page.goto(recipe["login_url"], wait_until="domcontentloaded",
@@ -629,6 +735,154 @@ def _click_first(page, selectors) -> bool:
     return False
 
 
+def _qs(page, sel) -> bool:
+    try:
+        return page.query_selector(sel) is not None
+    except Exception:
+        return False
+
+
+def _click_text(page, text: str, *, timeout_ms: int = 4000) -> bool:
+    """Click the first visible control matching `text`. Never raises."""
+    for getter in (lambda: page.get_by_role("button", name=text, exact=False),
+                   lambda: page.get_by_text(text, exact=False)):
+        try:
+            loc = getter()
+            if loc.count() == 0:
+                continue
+            loc.first.click(timeout=timeout_ms)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _element_signed_in(page, recipe: dict, *,
+                       navigate: bool = True) -> tuple[str, str]:
+    """Prove a NON-guard domain's session by DOM controls, not by URL.
+
+    Some surfaces (open.spotify.com) render a fully populated app to an
+    anonymous visitor, so "off the login page with no password field"
+    is not proof. The account widget is present only when signed in and
+    the login / signup controls only when signed out, so the recipe
+    names both and this reads them.
+    """
+    ok = recipe.get("verify_ok_sel") or []
+    bad = recipe.get("verify_bad_sel") or []
+    url = recipe.get("verify_url") or recipe.get("login_url")
+    if navigate and url:
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        except Exception as e:
+            return "unknown", f"could not open the app page: {e}"
+        page.wait_for_timeout(4000)
+    for s in ok:
+        try:
+            page.wait_for_selector(s, timeout=5000, state="attached")
+            break
+        except Exception:
+            continue
+    has_ok = any(_qs(page, s) for s in ok)
+    has_bad = any(_qs(page, s) for s in bad)
+    if has_ok and not has_bad:
+        return "signed_in", "account widget present"
+    if has_bad:
+        return "signed_out", "login control present"
+    return "unknown", "no account widget rendered"
+
+
+# ────────────────────────────────────────────────────────────────────
+# WebAuthn suppression
+#
+# Microsoft accounts default to a passkey: a WebAuthn security window
+# that never resolves in headless Chrome, so the login stalls. Hiding
+# the WebAuthn API makes the site fall back to its code / password
+# fork, which is what the Xbox flow steps through. Injected before any
+# navigation on the page.
+# ────────────────────────────────────────────────────────────────────
+_BLOCK_WEBAUTHN_JS = (
+    "try{Object.defineProperty(window,'PublicKeyCredential',"
+    "{get:()=>undefined,configurable:true});}catch(e){}"
+    "try{Object.defineProperty(Navigator.prototype,'credentials',"
+    "{get:()=>undefined,configurable:true});}catch(e){}")
+
+
+# ────────────────────────────────────────────────────────────────────
+# Custom per-site login flows
+#
+# Registered by name on a recipe ("flow": "xbox") and dispatched from
+# `attempt_login` in place of the generic email-then-password fill. A
+# flow returns ("submitted", detail) once it has entered the single
+# password and cleared any "stay signed in?" step, after which the
+# shared result classification (error / challenge / guard verdict) runs
+# exactly as it does for a generic recipe. Any other status
+# ("needs_human", "auth_failed", "error") short-circuits with a reason.
+# A flow enters the password AT MOST ONCE so nothing gets locked out.
+# ────────────────────────────────────────────────────────────────────
+_XBOX_PASS_SEL = ['input#passwordEntry', 'input[name="passwd"]',
+                  'input#i0118', 'input[type="password"]']
+_XBOX_NEXT_SEL = ['button[data-testid="primaryButton"]', 'input#idSIButton9',
+                  '#idSIButton9', 'button[type="submit"]']
+
+
+def _xbox_reach_password(page) -> bool:
+    """Walk the MSA fork to the password field. Never raises.
+
+    With WebAuthn hidden, MSA lands on "Get a code to sign in" after the
+    email step. "Other ways to sign in" -> "Sign in another way" ->
+    "Use your password" reveals the password field.
+    """
+    for _ in range(4):
+        if any(_qs(page, s) for s in _XBOX_PASS_SEL):
+            return True
+        if _click_text(page, "Use your password"):
+            page.wait_for_timeout(2500)
+            continue
+        if (_click_text(page, "Sign in another way")
+                or _click_text(page, "Other ways to sign in")):
+            page.wait_for_timeout(2000)
+            _click_text(page, "Use your password")
+            page.wait_for_timeout(2500)
+            continue
+        if _click_text(page, "Show more options"):
+            page.wait_for_timeout(1500)
+            _click_text(page, "Use your password")
+            page.wait_for_timeout(2500)
+            continue
+        break
+    return any(_qs(page, s) for s in _XBOX_PASS_SEL)
+
+
+def _xbox_flow(page, username: str, password: str) -> tuple[str, str]:
+    if not _fill_first(page, ['input#usernameEntry', 'input[type="email"]',
+                              'input#i0116'], username):
+        return "needs_human", (_challenge_reason(page)
+                               or "could not find the Microsoft email field")
+    _click_first(page, _XBOX_NEXT_SEL)
+    page.wait_for_timeout(3500)
+    reason = _challenge_reason(page)
+    if reason:
+        return "needs_human", reason
+    if not _xbox_reach_password(page):
+        return "needs_human", (_challenge_reason(page)
+                               or "could not reach the Microsoft password step")
+    if not _fill_first(page, _XBOX_PASS_SEL, password):
+        return "needs_human", "could not find the Microsoft password field"
+    _click_first(page, _XBOX_NEXT_SEL)
+    page.wait_for_timeout(_SETTLE_MS)
+    # "Stay signed in?" keeps the session alive in the persistent
+    # profile. Clicking the primary button (Yes) persists it.
+    text = _page_text(page)
+    if "stay signed in" in text or "don't show this again" in text:
+        if not _click_first(page, _XBOX_NEXT_SEL):
+            _click_text(page, "Yes")
+        page.wait_for_timeout(_SETTLE_MS)
+    return "submitted", "entered the Microsoft password"
+
+
+_FLOWS = {"xbox": _xbox_flow}
+
+
 def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
                   force_login: bool = False) -> tuple[str, str]:
     """Try to end up logged in for `domain` in the given persistent
@@ -651,6 +905,15 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
 
     page = ctx.new_page()
     _try_stealth(page)
+
+    # Hide WebAuthn before any navigation so a passkey-first provider
+    # (Microsoft) falls back to the code / password fork instead of
+    # stalling on a security window that never resolves headless.
+    if recipe.get("block_webauthn"):
+        try:
+            page.add_init_script(_BLOCK_WEBAUTHN_JS)
+        except Exception as e:
+            logger.debug("%s: could not inject webauthn block: %s", domain, e)
 
     # 1) Is the persistent session good? Judged by the SAME content
     #    classification the scrapers and --verify apply, on the app
@@ -700,32 +963,46 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
     #    clickable.
     if _dismiss_consent(page):
         logger.info("%s: acknowledged a consent sheet over the form", domain)
-    if not _fill_first(page, recipe["user_sel"], username):
-        # Some sites gate the email box behind a cookie/consent wall.
-        reason = _challenge_reason(page)
-        if reason and headed:
-            return _wait_for_human(page, recipe, reason)
-        return ("needs_human", reason or "could not find the username field")
 
-    if recipe.get("two_step"):
-        _click_first(page, recipe.get("continue_sel", []))
-        page.wait_for_timeout(2500)
+    flow = _FLOWS.get(recipe.get("flow") or "")
+    if flow:
+        # Site-specific walk (Microsoft passkey fork). Enters the password
+        # at most once; anything short of "submitted" is final.
+        try:
+            status, detail = flow(page, username, password)
+        except Exception as e:
+            return "error", f"login flow failed: {e}"
+        if status != "submitted":
+            return (_wait_for_human(page, recipe, detail)
+                    if headed and status == "needs_human"
+                    else (status, detail))
+    else:
+        if not _fill_first(page, recipe["user_sel"], username):
+            # Some sites gate the email box behind a cookie/consent wall.
+            reason = _challenge_reason(page)
+            if reason and headed:
+                return _wait_for_human(page, recipe, reason)
+            return ("needs_human", reason or "could not find the username field")
 
-    # A challenge can appear right after the email step (Amazon/MS).
-    reason = _challenge_reason(page)
-    if reason:
-        return _wait_for_human(page, recipe, reason) if headed \
-            else ("needs_human", reason)
+        if recipe.get("two_step"):
+            _click_first(page, recipe.get("continue_sel", []))
+            page.wait_for_timeout(2500)
 
-    if not _fill_first(page, recipe["pass_sel"], password):
+        # A challenge can appear right after the email step (Amazon/MS).
         reason = _challenge_reason(page)
         if reason:
             return _wait_for_human(page, recipe, reason) if headed \
                 else ("needs_human", reason)
-        return "needs_human", "could not find the password field"
 
-    _click_first(page, recipe["submit_sel"])
-    page.wait_for_timeout(_SETTLE_MS)
+        if not _fill_first(page, recipe["pass_sel"], password):
+            reason = _challenge_reason(page)
+            if reason:
+                return _wait_for_human(page, recipe, reason) if headed \
+                    else ("needs_human", reason)
+            return "needs_human", "could not find the password field"
+
+        _click_first(page, recipe["submit_sel"])
+        page.wait_for_timeout(_SETTLE_MS)
 
     # 3) Classify the result. Order matters: a rejected password must be
     # caught BEFORE any retry (there is no retry - one attempt only).
@@ -743,6 +1020,20 @@ def attempt_login(ctx, domain: str, recipe: dict, *, headed: bool,
         # Let the redirect chain finish before asking for the app.
         page.wait_for_timeout(2500)
         verdict, detail = session_verdict(page, domain, recipe)
+        if verdict == "signed_in":
+            return "success", f"password login succeeded ({detail})"
+        reason = _challenge_reason(page)
+        if reason:
+            return _wait_for_human(page, recipe, reason) if headed \
+                else ("needs_human", reason)
+        return "needs_human", (f"login did not reach a signed-in state "
+                               f"({verdict}: {detail})")
+
+    # Element-verified domains (Spotify): the account widget is the
+    # proof, on the app page, after the redirect chain settles.
+    if recipe.get("verify_ok_sel"):
+        page.wait_for_timeout(2500)
+        verdict, detail = _element_signed_in(page, recipe)
         if verdict == "signed_in":
             return "success", f"password login succeeded ({detail})"
         reason = _challenge_reason(page)
