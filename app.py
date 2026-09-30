@@ -61418,6 +61418,85 @@ def _pm_panel_refund(panel_charge):
         traceback.print_exc()
 
 
+def _pm_panel_fact_response(pm_user, ppu, text, base):
+    """Panel facts (2026-09-30, Jenna: "lets now do the panel-fact
+    queries upgrades"): a factual ask the shipped base file answers
+    exactly - a demo share, a named brand's reach, a category top
+    list, the audience size - returns the file's own numbers in one
+    step. Byte-consistent with the dashboard, reads only what already
+    shipped, and anything the file cannot answer exactly returns None
+    so the full read runs unchanged. Never raises."""
+    import prometheus_analysis as pma
+    import insights_ledger as il
+    key = str((base or {}).get('s3_key') or '')
+    if not key.lower().endswith('.csv'):
+        return None
+    try:
+        fact = pma.detect_panel_fact(text)
+    except Exception:
+        traceback.print_exc()
+        return None
+    if not fact:
+        return None
+    try:
+        df, _etag = pma.load_profile_df(s3_client, S3_BUCKET, key)
+        meta = pma._profile_meta(df, (base or {}).get('subject') or '')
+        gmap = (pma.load_genpop_map(s3_client, S3_BUCKET)
+                if fact.get('kind') == 'brand' else {})
+        ans = pma.answer_panel_fact(fact, df, meta, gmap)
+    except Exception:
+        traceback.print_exc()
+        return None
+    if not ans or not ans.get('reply'):
+        return None
+    subj = meta.get('name') or (base or {}).get('subject') or ''
+    _pm_ask_hint(route='panel_fact', outcome='answered', subject=subj)
+    # Answered from what already shipped: metered, never free
+    # (2026-09-14).
+    try:
+        _pm_meter_answer('panel_fact', ppu)
+    except Exception:
+        traceback.print_exc()
+    try:
+        _pm_remember_ask(pm_user, text, subject=subj,
+                         route='panel_fact')
+    except Exception:
+        traceback.print_exc()
+    chips = list(ans.get('followups') or [])[:2]
+    entry_kw = dict(
+        subject=subj, metric_family=ans.get('family') or '',
+        question=text, route='panel_fact',
+        metrics=ans.get('metrics') or [], reply=ans['reply'],
+        followups=chips, base_profile_key=key,
+        breakdown=ans.get('breakdown'),
+        window_label=str(meta.get('window') or ''),
+        derivation='exact values read from the shipped base profile')
+    try:
+        il.persist(**entry_kw)
+    except Exception:
+        traceback.print_exc()
+    file_payload = {}
+    try:
+        entry = il.make_entry(**entry_kw)
+        if entry.get('breakdown') or entry.get('metrics'):
+            file_payload = _pm_answer_file_payload(
+                entry,
+                auto_save=bool(_PM_FILE_ASK_RE.search(str(text or ''))),
+                username=pm_user, question=text)
+            if file_payload and 'Email me this file' not in chips:
+                chips.append('Email me this file')
+    except Exception:
+        traceback.print_exc()
+    try:
+        _pm_csv_point(subj, text, ans.get('family'))
+    except Exception:
+        traceback.print_exc()
+    return jsonify({
+        'success': True, 'action': 'answer', 'reply': ans['reply'],
+        'followups': chips, 'offer_deck': False, 'deck_angle': None,
+        'profile': subj, **file_payload})
+
+
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   anchors_block='', charge_done=False,
                                   ctx=None, digest_block='',
@@ -61799,6 +61878,20 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': led.get('subject') or subj_hint or None})
+    # PANEL FACTS (2026-09-30, Jenna: "lets now do the panel-fact
+    # queries upgrades"): a factual ask the base file answers exactly
+    # returns the file's own numbers now instead of riding the full
+    # read. Comparison pairs and charged research reports never take
+    # this path; a miss falls through unchanged.
+    if not _two and panel_charge is None:
+        _pf_resp = None
+        try:
+            _pf_resp = _pm_panel_fact_response(_pm_user, _pm_ppu,
+                                               text, base)
+        except Exception:
+            traceback.print_exc()
+        if _pf_resp is not None:
+            return _pf_resp
     # No stored read to replay: this is a FRESH generation, which
     # runs the full operating loop (corpus retrieval, live research,
     # examples-as-foundation) and can take tens of seconds. By
