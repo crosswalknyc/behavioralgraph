@@ -90,6 +90,18 @@ def _add_to_users_allowed_runs(s3, s3_key: str, category: Optional[str]) -> dict
         counts["skipped"] = 0
         users = doc.get("users", {})
         for uname, u in users.items():
+            if not isinstance(u, dict):
+                continue
+            # Prometheus self-serve / WBD: they only receive files
+            # they paid to pull (grant_runs_to_user). Fleet
+            # registration must not fill their catalog.
+            aan = u.get("auto_access_new") or {}
+            if aan.get("profile_iq") is False:
+                counts["skipped"] += 1
+                continue
+            if str(u.get("plan") or "").strip() == "prometheus_self_serve":
+                counts["skipped"] += 1
+                continue
             runs = u.get("allowed_runs", ["*"])
             if not isinstance(runs, list) or "*" in runs:
                 continue  # sees everything already

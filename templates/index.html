@@ -79242,6 +79242,35 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 });
                 return out;
             },
+            // Rankers renders trendsIQView, so it serializes the same
+            // state and adds the board on screen plus that board's
+            // leading rows, which is what the Rankers chips name. Tab
+            // keys map onto card keys in two shapes ('fast' ->
+            // fast_trending, 'searches' -> trending_searches), so both
+            // are tried. The previous serializer read the Talent
+            // Ranker leaderboard and went with it on 2026-09-15.
+            cultureRankerIQ: function() {
+                var out = _pmViewSerializers.trendsIQ();
+                if (!out) return null;
+                var st = window.__trendsIQ || {};
+                var tab = String(st.activeTab || '');
+                out.board = tab || 'Rankers';
+                var c = ((st.lastData || {}).cards) || {};
+                var group = c[tab + '_trending'] || c['trending_' + tab];
+                var rows = null;
+                if (Array.isArray(group)) {
+                    rows = group;
+                } else if (group && typeof group === 'object') {
+                    var k0 = Object.keys(group)[0];
+                    var e = k0 ? (group[k0] || {}) : {};
+                    rows = e.rows || e.items ||
+                        (Array.isArray(e) ? e : null);
+                }
+                if (Array.isArray(rows) && rows.length) {
+                    out.top_rows = rows.slice(0, 10);
+                }
+                return out;
+            },
             microdramasIQ: function() {
                 var mq = window.__microdramasIQ || {};
                 var d = mq.allData || mq.lastData || mq.compData;

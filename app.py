@@ -61138,7 +61138,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
-        led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras)
+        led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras,
+        switch_page=switch_page)
     _sync_held = bool(payload.get('_held'))
     if panel_charge and (_sync_held or not payload.get('success')):
         # The paid report never delivered: reverse the charge.
@@ -61187,7 +61188,7 @@ def _pm_verify_prior_entries(res, family, led):
 
 def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                            anchors_block, led, pm_user, pm_ppu,
-                           stage_cb=None):
+                           stage_cb=None, switch_page=None):
     """Fresh generated read - the operating loop (2026-08-27, Jenna:
     "it truly needs to be really smart"). Request-context free so it
     runs identically inline and inside a background read job.
