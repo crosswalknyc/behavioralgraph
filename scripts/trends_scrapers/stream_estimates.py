@@ -8637,6 +8637,7 @@ _CHART_CARRY_DAYS = 5
 _CHART_ARCHIVE_SOURCES: dict[str, tuple[str, ...]] = {
     'disneyplus':    ('disneyplus_top10',),
     'peacock':       ('peacock_top10',),
+    'primevideo':    ('primevideo_top10',),
     'paramountplus': ('paramountplus_top',),
     'hulu':          ('hulu_popular',),
     'starz':         ('starz_top10',),

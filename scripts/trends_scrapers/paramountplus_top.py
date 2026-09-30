@@ -8,6 +8,22 @@ publishes one of its own on each browse page, and this reads it.
 No session. The rails are on the public browse pages and render the
 same signed out as signed in.
 
+Residential only (2026-09-29)
+-----------------------------
+paramountplus.com resolves the storefront off the request IP and
+redirects rather than refusing. From the Hetzner build box the two
+URLs below land on `/de/browse/` and `/de/movies/`: a complete German
+page titled "Alle Serien auf Paramount+ Deutschland" whose rails are
+"Derzeit beliebt", "Kürzlich hinzugefügt" and "Am meisten gesucht",
+and which has no `most+watched` section at all. So the run read 0
+rows every morning from the day it was added, and the only capture
+that ever succeeded came from the operator's Mac. Same failure class
+as Plex Live TV, where a datacenter address gets a complete lineup for
+the wrong country at HTTP 200. This now runs from the residential
+lane (`local_residential_run.RESIDENTIAL_SCRAPERS`), and `_assert_us`
+raises rather than parse a country-prefixed page, so a misplaced run
+fails loudly instead of publishing nothing.
+
 Identified by the rail's own slug
 ---------------------------------
 The rail sits in an element whose ID is `most+watched`, which is
@@ -37,16 +53,25 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from . import _chart_rail_guard as _guard
+from ._auth_guard import GeoMismatchError
 from ._base import run_scraper
 
 logger = logging.getLogger(__name__)
 
 
 HOMEPAGE = 'https://www.paramountplus.com/'
+
+# A country-prefixed path is Paramount+'s own verdict that the visitor
+# is outside the US: `/de/browse/`, `/gb/movies/`, `/ca/...`. The US
+# storefront has no prefix.
+_COUNTRY_PREFIX_RE = re.compile(
+    r'^https?://(?:www\.)?paramountplus\.com/[a-z]{2}(?:-[a-z]{2})?/', re.I)
 
 # (page label, url, the kind everything on that page is, chart name)
 CHART_PAGES = [
@@ -59,11 +84,20 @@ CHART_PAGES = [
 # The rail's CMS slug, which is the stable identifier.
 RAIL_SLUG = 'most+watched'
 
+# Both charts, spelled the way the rows stamp them. One coming back
+# empty while the other is whole is a page that never finished
+# rendering, not Paramount+ publishing an empty chart; see
+# `_chart_rail_guard`.
+_EXPECTED_CHARTS = tuple(c.lower() for _l, _u, _k, c in CHART_PAGES)
+
 _DEPTH = 16
 _MIN_HEALTHY = 6
 
 _S3_BUCKET = 'dashboard-inputs'
-_S3_LATEST = 'trends_iq_snapshots/latest/paramountplus_top10.json'
+# The snapshot `run_scraper('paramountplus_top', ...)` writes. This read
+# `paramountplus_top10.json` until 2026-09-29, a key nothing ever wrote,
+# so the previous-capture fallback below could never find one.
+_S3_LATEST = 'trends_iq_snapshots/latest/paramountplus_top.json'
 
 
 # Find the rail by its slug, then read its tiles in document order,
@@ -106,7 +140,31 @@ _COLLECT_JS = r"""() => {
 }"""
 
 
+def _assert_us(page, label: str) -> None:
+    """Refuse a storefront Paramount+ served for another country.
+
+    The redirect is the platform's own verdict on where the request
+    came from, and it is far more stable than the page copy. Raising
+    here escapes `render_pages`, which re-raises this type rather than
+    logging it, so nothing downstream ever counts a German page as a
+    US read of 0 rows.
+    """
+    try:
+        url = page.url or ''
+    except Exception:
+        url = ''
+    m = _COUNTRY_PREFIX_RE.match(url)
+    if m:
+        cc = url.split('paramountplus.com/', 1)[1].split('/', 1)[0]
+        raise GeoMismatchError(
+            f'paramountplus_top {label}: Paramount+ redirected to its '
+            f'{cc.upper()} storefront ({url}), which carries no Most '
+            f'Watched rail. Nothing was published. This scraper runs '
+            f'from the residential Mac, not the build box.')
+
+
 def _hook(page, label):
+    _assert_us(page, label)
     for _ in range(10):
         try:
             page.mouse.wheel(0, 1100)
@@ -169,11 +227,15 @@ def _previous() -> dict:
 # its catalog, and the chart belongs in it.
 #
 # Ordering matters and is the one fragile thing here. `paramountplus`
-# rewrites that file from JustWatch every night, so this has to run
-# AFTER it or the chart is silently dropped. `run_all.SCRAPERS` places
-# it immediately after for that reason. The merge is idempotent: chart
-# rows are keyed by title and replaced rather than appended, so a
-# second run in the same night does not double them.
+# rewrites that file from JustWatch every night on the build box, and
+# since 2026-09-29 this runs from the residential lane hours later, so
+# the order holds in practice but is not enforced by a list the way it
+# was when both sat in `run_all.SCRAPERS`. If the JustWatch pull ever
+# lands AFTER this one, Paramount+ renders that day with no chart and
+# the board's own carry reads this snapshot's archive
+# (`_CHART_ARCHIVE_SOURCES['paramountplus']`). The merge is
+# idempotent: chart rows are keyed by collection and replaced rather
+# than appended, so a second run in the same day does not double them.
 _MERGE_KEY = 'trends_iq_snapshots/latest/paramountplus.json'
 
 
@@ -219,7 +281,8 @@ def _merge_into_service_snapshot(rows: list[dict]) -> None:
         logger.warning("paramountplus_top: merge write failed (%s)", e)
 
 
-def fetch() -> dict[str, Any]:
+def _render() -> list[dict]:
+    """Both charts, one render of both pages."""
     from ._playwright import render_pages
 
     rendered = render_pages(
@@ -234,13 +297,38 @@ def fetch() -> dict[str, Any]:
         logger.info("paramountplus_top %s: %r -> %d row(s)",
                     label, chart, len(got))
         rows.extend(got)
+    return rows
+
+
+def fetch() -> dict[str, Any]:
+    rows = _render()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Each chart is its own page, so one of them empty is a page that
+    # did not finish rendering rather than an empty chart, and the row
+    # floor below counts across both. Render once more, then carry the
+    # still-absent chart from the last capture or the dated archive,
+    # marked stale.
+    unresolved: list[str] = []
+    if rows and _guard.missing_rails(rows, _EXPECTED_CHARTS):
+        rows = _guard.rerender_recovered(
+            rows, _render(), _EXPECTED_CHARTS, label='paramountplus_top')
+        rows, unresolved = _guard.carry_missing(
+            rows, _previous().get('national'), _EXPECTED_CHARTS,
+            label='paramountplus_top', archive_source='paramountplus_top')
 
     if len(rows) >= _MIN_HEALTHY:
         _merge_into_service_snapshot(rows)
-        return {'national': rows,
-                'chart_captured_at': datetime.now(timezone.utc).isoformat(),
-                'chart_rails': [c for _l, _u, _k, c in CHART_PAGES],
-                'chart_positions': len(rows)}
+        out = {'national': rows,
+               'chart_captured_at': now,
+               'chart_rails': sorted({str(r.get('collection') or '')
+                                      for r in rows} - {''}),
+               'chart_positions': len(rows)}
+        if unresolved:
+            out['charts_unresolved'] = unresolved
+        if any(r.get(_guard.STALE_FIELD) for r in rows):
+            out['stale_from_previous'] = True
+        return out
 
     # Never publish a short read over a good one.
     prev = _previous()

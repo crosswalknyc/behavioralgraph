@@ -89,6 +89,7 @@
     "podcast_charts.py",
     "price_service_provenance.py",
     "primevideo.py",
+    "primevideo_top10.py",
     "profile_streaming_section.py",
     "reddit.py",
     "refresh_after_donation.py",

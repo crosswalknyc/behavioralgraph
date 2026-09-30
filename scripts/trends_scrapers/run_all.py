@@ -159,13 +159,14 @@ SCRAPERS = [
     # - so they run fine from Hetzner's datacenter IP. No residential
     # hop, no donated session, no cookie-donation domain.
     ('paramountplus', 'scripts.trends_scrapers.paramountplus', 'Paramount+', 'streaming'),
-    # Paramount+'s OWN Most Watched rails, for shows and for films.
-    # The line above fills the catalog from JustWatch, which carries no
-    # Paramount+ ranking at all. MUST stay immediately after it: this
-    # folds the chart into the same snapshot the line above rewrites
-    # each night, so running it first would have the chart overwritten.
-    # No session needed; the rails are on the public browse pages.
-    ('paramountplus_top', 'scripts.trends_scrapers.paramountplus_top', 'Paramount+ Most Watched', 'streaming'),
+    # Paramount+'s OWN Most Watched rails (`paramountplus_top`) are NOT
+    # here any more (2026-09-29). paramountplus.com resolves the
+    # storefront off the request IP and from this box redirects to
+    # /de/browse/, a German page with no Most Watched rail, so the
+    # scraper read 0 rows every morning from the day it was added. It
+    # runs from the residential lane now (`local_residential_run`) and
+    # merges its chart into the snapshot the line above writes, hours
+    # after it. Same split Peacock has.
     ('peacock',       'scripts.trends_scrapers.peacock',       'Peacock',    'streaming'),
     # AMC+ (2026-09-14). Same JustWatch path as Paramount+ / Peacock,
     # single package `acp`. The Apple TV channel package `aat` is a

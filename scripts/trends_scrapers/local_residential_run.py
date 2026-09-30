@@ -90,6 +90,22 @@ RESIDENTIAL_SCRAPERS = [
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
     ('netflix',       'Netflix'),
+    # Prime Video's OWN Top 10 in the US and Top 10 with subscriptions,
+    # off the signed-in storefront (2026-09-29). `primevideo` on the
+    # build box pulls the catalog from the storefront blob and has
+    # never seen the Top 10 rails hydrate for an anonymous visitor;
+    # with the donated Amazon session from this Mac they render ten
+    # deep. Folded into the snapshot the build box wrote, hours after
+    # it, the same split Peacock has.
+    ('primevideo_top10', 'Prime Video Top 10'),
+    # Paramount+'s OWN Most Watched Shows / Most Watched Movies
+    # (moved here 2026-09-29). No session needed, but paramountplus.com
+    # resolves the storefront off the request IP: from Hetzner it
+    # redirects to /de/browse/, a German page with no Most Watched
+    # rail, and read 0 rows every morning since it was added. Same
+    # failure Plex has. The catalog pull (`paramountplus`, JustWatch)
+    # stays on the build box; this merges into its snapshot afterward.
+    ('paramountplus_top', 'Paramount+ Most Watched'),
     # Hulu (2026-07): moved here after the Hetzner cron kept returning
     # 0 items even with donated cookies - Hulu's WAF fingerprints the
     # datacenter IP even before the cookie check runs. From the Mac's
