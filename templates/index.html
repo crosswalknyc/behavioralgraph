@@ -32490,6 +32490,7 @@ https://www.instagram.com/p/..."></textarea>
             /* Assets page: one horizontal row per asset. */
             #intentIQView #iiqAssetGrid.iiq-asset-rows { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: clip; background: rgba(255,255,255,0.02); }
             #intentIQView .iiq-asset-row { display: grid; grid-template-columns: minmax(240px, 2.4fr) minmax(120px, 1.2fr) 0.8fr 0.7fr 0.8fr 0.8fr 56px; gap: 0.8rem; align-items: center; padding: 0.6rem 0.9rem 0.6rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06); border-left: 3px solid transparent; transition: background 0.15s ease, box-shadow 0.4s ease, transform 0.2s ease; }
+            #intentIQView .iiq-asset-row.has-posted { grid-template-columns: minmax(240px, 2.4fr) 96px minmax(120px, 1.2fr) 0.8fr 0.7fr 0.8fr 0.8fr 56px; }
             #intentIQView .iiq-asset-row:last-child { border-bottom: 0; }
             #intentIQView .iiq-asset-row:hover { background: rgba(255,255,255,0.035); }
             #intentIQView .iiq-asset-row.is-head { font-size: 0.6rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); padding-top: 0.5rem; padding-bottom: 0.5rem; background: rgba(255,255,255,0.03); }
@@ -32515,6 +32516,7 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-asset-row .iiq-asset-open { font-size: 0.7rem; text-align: right; }
             @media (max-width: 1100px) {
                 #intentIQView .iiq-asset-row { grid-template-columns: minmax(200px, 2fr) minmax(100px, 1fr) 0.8fr 0.7fr 0.8fr 0.8fr 48px; gap: 0.5rem; }
+                #intentIQView .iiq-asset-row.has-posted { grid-template-columns: minmax(200px, 2fr) 84px minmax(100px, 1fr) 0.8fr 0.7fr 0.8fr 0.8fr 48px; }
             }
             #intentIQView .iiq-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.85rem 1rem; }
             #intentIQView .iiq-card-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem; }
@@ -37930,6 +37932,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // no title picked or no assets loaded. Every visible count
             // flows through _iiqCountJitter so no round-zero trailing
             // digits ship (no-round-numbers-in-deliverables.mdc).
+            // Posted date as it reads in the asset lists: 'Sep 3, 2026'.
+            // Sorting uses the raw ISO string, so this is display only.
+            window._iiqFmtPosted = function (d) {
+                var s = String(d || '').slice(0, 10);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+                var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return M[parseInt(s.slice(5, 7), 10) - 1] + ' ' + parseInt(s.slice(8, 10), 10) + ', ' + s.slice(0, 4);
+            };
+            // The Posted column ships on every campaign except GOAT,
+            // which is frozen (goat-is-frozen.mdc).
+            window._iiqShowPostedCol = function () {
+                var s = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                return s !== 'goat';
+            };
             function _iiqRenderAssetTable() {
                 var host = document.getElementById('iiqAssetTableSection');
                 if (!host) return;
@@ -42530,6 +42546,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var e = Number(c.ext_engagement_count) || 0;
                     switch (sortBy) {
                         case 'asset':      return String(c.posted_date || '');
+                        case 'posted':     return String(c.posted_date || '');
                         case 'views':      return v;
                         case 'rate':       return v > 0 ? e / v : -1;
                         case 'info':       return c._proj ? Number(c._proj.info_pct) || 0 : -1;
@@ -42583,6 +42600,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqConvShortLabel(3))
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
+                        var _showPosted = window._iiqShowPostedCol ? window._iiqShowPostedCol() : false;
+                        var _rowCls = _showPosted ? ' has-posted' : '';
                         var rowsHtml = cards.map(function(c) {
                             var v = Number(c.ext_view_count)||0;
                             var e = Number(c.ext_engagement_count)||0;
@@ -42609,12 +42628,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             // One horizontal row per asset: name, views with
                             // its share-of-top bar, then the four rates, then
                             // the link. Numbers right-aligned, tabular.
-                            return '<div class="iiq-asset-row" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left-color: ' + edgeColor + ';">'
+                            return '<div class="iiq-asset-row' + _rowCls + '" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left-color: ' + edgeColor + ';">'
                                 + '<div style="min-width:0;">'
                                     + '<div class="iiq-asset-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>'
                                     + '<div class="iiq-asset-sub">' + escapeHtml(sub) + '</div>'
                                     + (chips ? '<div class="iiq-asset-chips">' + chips + '</div>' : '')
                                 + '</div>'
+                                + (_showPosted ? '<div class="num" style="color:#cbd5e1; font-size:0.8rem; white-space:nowrap;" title="Posted ' + escapeHtml(String(c.posted_date || '').slice(0, 10)) + '">' + escapeHtml(window._iiqFmtPosted(c.posted_date) || '-') + '</div>' : '')
                                 + '<div title="Total impressions - how many times the asset was seen">'
                                     + '<div class="num" style="text-align:left; color:#fff; font-size:0.95rem;">' + fmtCompact(v) + '</div>'
                                     + '<div class="iiq-asset-bar" title="' + barPct.toFixed(1) + '% of top performer"><div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div></div>'
@@ -42645,8 +42665,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 return t.bottom_funnel_label ? (t.bottom_funnel_label + ' %') : 'Ticketing %';
                             } catch (e) { return 'Ticketing %'; }
                         })();
-                        var rowHead = '<div class="iiq-asset-row is-head">'
+                        var rowHead = '<div class="iiq-asset-row is-head' + _rowCls + '">'
                             + _hd('asset', 'Asset', '', 'Sort by posted date')
+                            + (_showPosted ? _hd('posted', 'Posted', 'num', 'Sort by posted date, newest first') : '')
                             + _hd('views', 'Views', '')
                             + _hd('engagement', 'Engagement', 'num')
                             + _hd('rate', 'Eng. rate', 'num', 'Sort by engagement rate')
@@ -44532,8 +44553,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var slugLocal = window.__intentIQQ2Slug || '';
                         var s = window._iiqQ2AssetsSort;
                         var barMetric = window._iiqQ2AssetsBarMetric || 'views';
+                        var showPosted = window._iiqShowPostedCol ? window._iiqShowPostedCol() : false;
+                        var gridCols = showPosted ? '240px 92px 1fr 80px 80px 70px 70px 52px' : '240px 1fr 80px 80px 70px 70px 52px';
                         function _val(b, k) {
                             if (k === 'asset')  return String(b.action_label || b.asset_type || ('Asset #' + b.asset_id)).toLowerCase();
+                            if (k === 'posted') return String(b.posted_date || '').slice(0, 10);
                             if (k === 'views')  return Number(b.views_total)      || 0;
                             if (k === 'eng')    return Number(b.engagement_total) || 0;
                             if (k === 'info')   return iiqAssetFunnelProjection(b.src || b).info_pct;
@@ -44573,14 +44597,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var alignS = (align === 'right') ? 'text-align:right;' : '';
                             var colorS = color ? ('color:' + color + ';') : '';
                             var underline = isBarSource ? 'text-decoration: underline; text-underline-offset: 3px;' : '';
-                            return '<div data-iiq-q2sort="' + key + '" onclick="window.iiqQ2AssetsSortBy(\'' + key + '\')" style="cursor:pointer; user-select:none; ' + alignS + colorS + underline + '" title="Click to sort and display in bars">'
+                            var tip = (key === 'asset' || key === 'posted') ? 'Click to sort' : 'Click to sort and display in bars';
+                            return '<div data-iiq-q2sort="' + key + '" onclick="window.iiqQ2AssetsSortBy(\'' + key + '\')" style="cursor:pointer; user-select:none; ' + alignS + colorS + underline + '" title="' + tip + '">'
                                 +    label
                                 +    ' <span style="opacity:' + arrowOp + '; font-size:0.8em;">' + arrow + '</span>'
                                 +  '</div>';
                         }
                         var barColHeaderStyle = barColColor ? 'color:' + barColColor + ';' : '';
-                        var headerHtml = '<div class="iiq-q2-asset-head" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px 52px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
+                        var headerHtml = '<div class="iiq-q2-asset-head" style="display:grid; grid-template-columns: ' + gridCols + '; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
                             + _hdr('asset',  'Asset', 'left',  null)
+                            + (showPosted ? _hdr('posted', 'Posted', 'left', null) : '')
                             + '<div style="' + barColHeaderStyle + '" title="Bar length = ' + barColLabel + ' relative to the top asset. Click a numeric header to switch the bar metric.">' + barColLabel + ' bar</div>'
                             + _hdr('views',  'Views',       'right', null)
                             + _hdr('eng',    'Eng',         'right', null)
@@ -44599,8 +44625,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             var pct = maxBar > 0 ? Math.min(100, barValue / maxBar * 100) : 0;
                             var proj  = iiqAssetFunnelProjection(src);
                             var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
-                            return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px 52px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
+                            return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: ' + gridCols + '; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
                                 +   '<div style="font-size:0.78rem; color:#e2e8f0; line-height:1.3; overflow-wrap:anywhere;">' + escapeHtml(label) + '</div>'
+                                +   (showPosted ? '<div style="font-size:0.76rem; color:#cbd5e1; white-space:nowrap;" title="Posted ' + escapeHtml(String(b.posted_date || '').slice(0, 10)) + '">' + escapeHtml(window._iiqFmtPosted(b.posted_date) || '-') + '</div>' : '')
                                 +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + barColor + ';"></div></div>'
                                 +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
@@ -44621,7 +44648,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             s.key = key;
                             s.dir = (key === 'asset') ? 'asc' : 'desc';
                         }
-                        if (key !== 'asset') {
+                        if (key !== 'asset' && key !== 'posted') {
                             window._iiqQ2AssetsBarMetric = key;
                         }
                         var tbl = document.getElementById('iiqQ2AssetTable');

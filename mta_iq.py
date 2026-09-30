@@ -936,9 +936,17 @@ def _compute_slice_impl(*, slug: str,
                           display_name: Optional[str] = None,
                           conversion_noun: Optional[str] = None,
                           bottom_funnel_label: Optional[str] = None,
-                          terminology: Optional[dict] = None) -> dict:
+                          terminology: Optional[dict] = None,
+                          proj_factor: Optional[float] = None) -> dict:
     """Fit + build the flat coefficient/journeys/co-exposure payload for a
     single cohort slice (overall panel or one audience filter).
+
+    ``proj_factor`` (2026-09-30): US people per exposed panelist for this
+    campaign. Defaults to the standard US_PROJECTION_FACTOR. A campaign
+    whose exposure footprint is known (brand_config.exposed_reach_us on
+    the title) passes reach / n_panel so the paths nest, the attribution
+    splits and every cohort slice ladder to the campaign's real reach
+    instead of the title-type panel band.
 
     Every input is already the SLICED cohort (X_freq / X_bin / y are the
     rows for the panelists in this cohort). Standardization runs on the
@@ -1146,6 +1154,7 @@ def _compute_slice_impl(*, slug: str,
             conv_rate=float(conv_rate),
             rows=rows,
             slice_salt=slice_salt,
+            proj_factor=proj_factor,
         )
     except Exception as e:
         logger.warning("MTA: paths compute failed for %s / %s: %s",
@@ -1360,6 +1369,20 @@ def compute_mta_coefficients(campaign_slug: str,
     # and drives the journeys + co-exposure blocks.
     X_bin = (X_freq > 0).astype(np.float32)
 
+    # Campaign-level projection factor (2026-09-30). When the title
+    # carries brand_config.exposed_reach_us (US people the campaign
+    # reached, derived at ingest from the placement views), every
+    # US-projected count in the paths nest ladders to that reach:
+    # factor = reach / n_panel. Cohort slices reuse the same factor so
+    # their share of the nest equals their share of the exposed panel.
+    proj_factor: Optional[float] = None
+    try:
+        _reach_hint = float(((overview.get("brand_config") or {}).get("exposed_reach_us")) or 0)
+        if _reach_hint > 0 and n_panel > 0:
+            proj_factor = _reach_hint / float(n_panel)
+    except (TypeError, ValueError):
+        proj_factor = None
+
     # ---- Overall slice ----
     overall_payload = _compute_slice_impl(
         slug=slug,
@@ -1375,6 +1398,7 @@ def compute_mta_coefficients(campaign_slug: str,
         conversion_noun=conversion_noun,
         bottom_funnel_label=bottom_funnel_label,
         terminology=term,
+        proj_factor=proj_factor,
     )
 
     # ---- Audience slices ----
@@ -1455,6 +1479,7 @@ def compute_mta_coefficients(campaign_slug: str,
             conversion_noun=conversion_noun,
             bottom_funnel_label=bottom_funnel_label,
             terminology=term,
+            proj_factor=proj_factor,
         )
         audiences_out[aud_slug] = aud_payload
 
@@ -2321,7 +2346,8 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
                           conversion_noun: str, bottom_funnel_label: str,
                           terminology: Optional[dict], n_panel: int,
                           conv_rate: float, rows: list[dict],
-                          slice_salt: str = "overall") -> dict:
+                          slice_salt: str = "overall",
+                          proj_factor: Optional[float] = None) -> dict:
     """Build the paths-to-conversion payload for a single slice.
 
     Called from _compute_slice_impl for both the overall panel and every
@@ -2339,8 +2365,9 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     subj = slug + "|" + slice_salt
 
     # ---------- Stage counts (US-projected) ----------
+    factor = float(proj_factor) if proj_factor and proj_factor > 0 else US_PROJECTION_FACTOR
     exposed_pop = _messy_count(subj, "exposed_us",
-                                 int(round(n_panel * US_PROJECTION_FACTOR)))
+                                 int(round(n_panel * factor)))
     # Funnel rates. Sitting film + brand in slightly different bands so
     # a brand campaign whose "convert" event is a site visit does not
     # read like a film's ticket-purchase rate.
@@ -2601,7 +2628,7 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
         "conversion_noun":      paths_conversion_noun,
         "us_gen_pop":           US_GEN_POP,
         "panel_sample":         int(n_panel),
-        "us_projection_factor": round(US_PROJECTION_FACTOR, 2),
+        "us_projection_factor": round(factor, 2),
         "nest":                 nest,
         "forks":                forks,
         "where":                where,
