@@ -61453,7 +61453,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 base.get('subject') or '')
             verdict = pmv.verify_read(
                 reply=reply, res=res, family=fam0,
-                base_lookup=_v_lookup,
+                base_lookup=_v_lookup, question=text,
                 prior_entries=_pm_verify_prior_entries(res, fam0, led))
         except Exception:
             traceback.print_exc()
@@ -61482,7 +61482,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                             else res2.get('metric_family'))
                     verdict2 = pmv.verify_read(
                         reply=reply2, res=res2, family=fam2,
-                        base_lookup=_v_lookup,
+                        base_lookup=_v_lookup, question=text,
                         prior_entries=_pm_verify_prior_entries(
                             res2, fam2, led))
                     if verdict2.get('ok'):
@@ -61551,7 +61551,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                 else res3.get('metric_family'))
                         verdict3 = pmv.verify_read(
                             reply=reply3, res=res3, family=fam3,
-                            base_lookup=_v_lookup,
+                            base_lookup=_v_lookup, question=text,
                             prior_entries=_pm_verify_prior_entries(
                                 res3, fam3, led))
                         if verdict3.get('ok'):
