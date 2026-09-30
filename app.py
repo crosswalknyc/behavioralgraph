@@ -2796,7 +2796,56 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         except Exception as _ar_e:
             print(f"[wallet] auto-reload skipped: {_ar_e}")
 
+    if outcome.get('ok') and credits_used and int(credits_used) > 0:
+        try:
+            _stamp_paid_profile_after_consume(
+                username, description, pull_type)
+        except Exception:
+            traceback.print_exc()
+
     return outcome['ok']
+
+
+_PAID_PROFILE_PULL_HINTS = (
+    'profile analysis',
+    'chatbot profile',
+    'profile iq',
+    'profile build',
+    'profile cut',
+)
+
+
+def _stamp_paid_profile_after_consume(username, description, pull_type):
+    """Remember a Profile IQ pull this seat already paid for.
+
+    Catalog reuse later is free only when this stamp (or a matching
+    wallet / credit-history row) says they ran the file. A full
+    catalog allow-list is not payment.
+    """
+    blob = f"{pull_type or ''} {description or ''}".lower()
+    if not any(h in blob for h in _PAID_PROFILE_PULL_HINTS):
+        return
+    uname = str(username or '').strip()
+    if not uname:
+        return
+
+    def _stamp(data):
+        user = (data.get('users') or {}).get(uname)
+        if not user:
+            return None
+        import wallet as _w
+        rec = user
+        try:
+            subj, _kind, _key = _w.resolve_billing_subject(user, data)
+            if isinstance(subj, dict):
+                rec = subj
+        except Exception:
+            rec = user
+        if not _w.record_paid_profile(rec, subject_name=description or ''):
+            return None
+        return data
+
+    _users_cas_mutate(_stamp)
 
 
 def refund_credit(username, credits=1, reason=''):

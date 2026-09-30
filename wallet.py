@@ -3027,12 +3027,11 @@ def subject_profile_pull_usd(subject) -> float:
 
 def charges_profile_for_library_match(user, username: str = "",
                                       users_data=None) -> bool:
-    """True when a catalog reuse should bill the Profile IQ sticker.
-
-    Prometheus-only seats already pay retail. A company with its own
-    profile_pull_usd (Kartel $275) also pays that sticker on every
-    Partner API or Prometheus reuse, the same as a fresh pull.
-    Staff never pay this way."""
+    """True when this seat is in the class that pays for a catalog
+    file they have not already bought. Prometheus-only seats pay
+    retail. A company with its own profile_pull_usd (Kartel $275)
+    pays that sticker only when they did not already run that
+    profile. Staff never pay this way."""
     if not isinstance(user, dict):
         return False
     if is_internal_staff_seat(user, username):
@@ -3046,6 +3045,189 @@ def charges_profile_for_library_match(user, username: str = "",
         except Exception:
             subject = user
     return subject_profile_pull_usd(subject) > 0
+
+
+_PAID_PROFILE_KEY = "paid_profile_keys"
+_PROFILE_DATE_STAMP_RE = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}.*$")
+
+
+def fold_profile_label(value: str) -> str:
+    """Compare-key for a profile name or S3 file. Drops path, .csv,
+    and the dated filename stamp so a reuse matches the original
+    pull."""
+    s = str(value or "").strip().replace("\\", "/")
+    s = s.rsplit("/", 1)[-1]
+    if s.lower().endswith(".csv"):
+        s = s[:-4]
+    s = _PROFILE_DATE_STAMP_RE.sub("", s)
+    s = re.sub(r"\([^)]*\)", " ", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s.lower())
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def subject_from_usage_description(desc: str) -> str:
+    """Folded subject from a wallet or credit-history description."""
+    s = str(desc or "").strip()
+    if not s or s.upper().startswith("REFUND"):
+        return ""
+    if "] - " in s:
+        s = s.split("] - ", 1)[1]
+    elif s.lower().startswith("profile build - "):
+        s = s[16:]
+    elif s.lower().startswith("profile cut - "):
+        s = s[14:]
+    elif " - " in s:
+        head, tail = s.split(" - ", 1)
+        hl = head.lower()
+        if "profile" in hl or "chatbot" in hl:
+            s = tail
+    return fold_profile_label(s)
+
+
+def profile_labels_match(left: str, right: str) -> bool:
+    a = fold_profile_label(left)
+    b = fold_profile_label(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    longer, shorter = (a, b) if len(a) >= len(b) else (b, a)
+    return len(shorter) >= 12 and longer.startswith(shorter)
+
+
+def paid_profile_keys(rec) -> list:
+    if not isinstance(rec, dict):
+        return []
+    out = []
+    seen = set()
+    for raw in rec.get(_PAID_PROFILE_KEY) or []:
+        tok = fold_profile_label(raw)
+        if tok and tok not in seen:
+            seen.add(tok)
+            out.append(tok)
+    return out
+
+
+def record_paid_profile(rec, s3_key: str = "",
+                        subject_name: str = "") -> bool:
+    """Remember a profile this wallet already paid to run."""
+    if not isinstance(rec, dict):
+        return False
+    add = []
+    for raw in (s3_key, subject_name):
+        tok = fold_profile_label(raw) if raw else ""
+        if tok:
+            add.append(tok)
+    if not add:
+        return False
+    cur = list(rec.get(_PAID_PROFILE_KEY) or [])
+    seen = {fold_profile_label(x) for x in cur}
+    wrote = False
+    for tok in add:
+        if tok not in seen:
+            cur.append(tok)
+            seen.add(tok)
+            wrote = True
+    if wrote:
+        rec[_PAID_PROFILE_KEY] = cur[-2000:]
+    return wrote
+
+
+def _add_paid_token(seen: set, out: list, tok: str) -> None:
+    tok = fold_profile_label(tok)
+    if tok and tok not in seen:
+        seen.add(tok)
+        out.append(tok)
+
+
+def paid_profile_tokens(user, users_data=None) -> list:
+    """Every profile this seat (or its company wallet) already paid
+    to run. Built from the paid_profile_keys stamp plus wallet and
+    credit-history descriptions. Does not use allowed_runs: a full
+    catalog list is not proof of payment."""
+    out = []
+    seen = set()
+    if isinstance(user, dict):
+        for tok in paid_profile_keys(user):
+            _add_paid_token(seen, out, tok)
+        for h in user.get("credit_usage_history") or []:
+            if str(h.get("pull_type") or "").lower() == "refund":
+                continue
+            try:
+                used = float(h.get("credits_used") or 0)
+            except (TypeError, ValueError):
+                used = 0.0
+            if used <= 0 and not h.get("wallet_charged_usd"):
+                continue
+            _add_paid_token(seen, out,
+                            subject_from_usage_description(
+                                h.get("description")))
+    if not isinstance(users_data, dict) or not isinstance(user, dict):
+        return out
+    try:
+        subject, kind, cname = resolve_billing_subject(user, users_data)
+    except Exception:
+        return out
+    if isinstance(subject, dict):
+        for tok in paid_profile_keys(subject):
+            _add_paid_token(seen, out, tok)
+        for t in subject.get("wallet_transactions") or []:
+            if str(t.get("kind") or "") != "deduct":
+                continue
+            try:
+                if float(t.get("amount_usd") or 0) >= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            _add_paid_token(seen, out,
+                            subject_from_usage_description(
+                                t.get("description")))
+    if kind == "company" and cname:
+        for _uname, member in company_members(cname, users_data):
+            if member is user:
+                continue
+            for h in member.get("credit_usage_history") or []:
+                if str(h.get("pull_type") or "").lower() == "refund":
+                    continue
+                try:
+                    used = float(h.get("credits_used") or 0)
+                except (TypeError, ValueError):
+                    used = 0.0
+                if used <= 0 and not h.get("wallet_charged_usd"):
+                    continue
+                _add_paid_token(seen, out,
+                                subject_from_usage_description(
+                                    h.get("description")))
+    return out
+
+
+def already_paid_for_profile(user, users_data, s3_key="",
+                             subject_name="", username: str = "") -> bool:
+    """True when this seat already paid to run this profile.
+
+    Prometheus-only seats use the explicit paid-key list. Kartel (and
+    any profile_pull_usd company) uses the paid-profile stamp plus
+    wallet / credit history. A catalog * list is not a prior payment.
+    """
+    if not isinstance(user, dict):
+        return False
+    if pays_retail_for_library_match(user, username):
+        return already_owns_paid_run(
+            user, users_data, s3_key, username=username)
+    if not charges_profile_for_library_match(user, username, users_data):
+        return False
+    wanted = [w for w in (
+        fold_profile_label(s3_key),
+        fold_profile_label(subject_name),
+        subject_from_usage_description(subject_name),
+    ) if w]
+    if not wanted:
+        return False
+    for tok in paid_profile_tokens(user, users_data):
+        for w in wanted:
+            if profile_labels_match(w, tok):
+                return True
+    return False
 
 
 def already_owns_paid_run(user, users_data, s3_key,
@@ -4100,6 +4282,9 @@ __all__ = [
     "pays_retail_for_library_match",
     "subject_profile_pull_usd",
     "charges_profile_for_library_match",
+    "fold_profile_label", "subject_from_usage_description",
+    "profile_labels_match", "paid_profile_keys", "record_paid_profile",
+    "paid_profile_tokens", "already_paid_for_profile",
     "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
     "attach_paid_only_seat", "attach_paid_only_company",
