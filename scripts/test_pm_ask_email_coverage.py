@@ -98,4 +98,14 @@ print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURE(S): {FAILURES}")
     sys.exit(1)
+# Jenna 2026-09-30: bcc liz on all prometheus questions.
+_wn = open(os.path.join(ROOT, 'prometheus_watch_notify.py'),
+           encoding='utf-8').read()
+check("question emails BCC Liz",
+      "_BCC = 'liz@crosswalknyc.com'" in _wn
+      and "Destinations=[_TO, _BCC]" in _wn)
+check("Liz rides as BCC only, never in the To header",
+      "msg['To'] = _TO" in _wn and "msg['To'] = _BCC" not in _wn
+      and "msg['Bcc']" not in _wn)
+
 print("ALL CHECKS PASSED")
