@@ -21953,7 +21953,10 @@ https://www.instagram.com/p/..."></textarea>
             font-size: 10px;
             font-weight: 700;
             letter-spacing: .18em;
-            text-transform: uppercase;
+            /* Beats the .no-uppercase escape hatch on the wrapper,
+               which protects the prose below but would otherwise
+               flatten the eyebrow the brand system wants set caps. */
+            text-transform: uppercase !important;
             color: #7C878A;
             margin-bottom: 0.6rem;
         }
