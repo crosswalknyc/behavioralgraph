@@ -1071,9 +1071,12 @@
       $('m-unlimited').checked = !!u.unlimited;
       $('m-paying').checked = !!u.paying_customer;
       $('m-mode').value = u.billing_mode || 'prepay_only';
+      const floor = Number(u.top_up_min_custom_usd || 5000);
+      window._subjectTopUpMin = floor;
       $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
+      $('m-ar-amount').min = floor;
       $('m-ar-amount').value = Math.max(
-        5000, Number(u.auto_reload_amount_usd || 5000));
+        floor, Number(u.auto_reload_amount_usd || floor));
       $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
       const ppf = $('profile-pull-fields');
       if (ppf) {
@@ -1358,7 +1361,9 @@
         auto_reload_threshold_usd:
           Number($('m-ar-threshold').value || 500),
         auto_reload_amount_usd:
-          Math.max(5000, Number($('m-ar-amount').value || 5000)),
+          Math.max(Number(window._subjectTopUpMin || 5000),
+            Number($('m-ar-amount').value ||
+              window._subjectTopUpMin || 5000)),
         monthly_invoice_limit_usd:
           Number($('m-mi-limit').value || 5000),
       };

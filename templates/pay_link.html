@@ -206,8 +206,8 @@
 
   <div class="ar-row">
     <input type="checkbox" id="arOn" checked>
-    <label for="arOn">Automatically add $5,000 when the balance
-      drops below $500.
+    <label for="arOn">Automatically add ${{ '{:,.0f}'.format(ar_amount_usd|default(5000)) }} when the balance
+      drops below ${{ '{:,.0f}'.format(ar_threshold_usd|default(500)) }}.
       <span class="hint">The card you use is saved on this account.
         You can uncheck this, or turn it off later in the account.</span>
     </label>
@@ -236,10 +236,18 @@
   var TOKEN   = {{ token|tojson }};
   var MIN     = {{ min_usd|tojson }};
   var LOCKED  = {{ (amount_locked and amount_usd)|tojson }};
+  var PACKS   = {{ (pack_sizes or [5000, 10000, 15000])|tojson }};
   var amtEl   = document.getElementById('amt');
   var payBtn  = document.getElementById('payBtn');
   var errEl   = document.getElementById('err');
   var presets = document.getElementById('presets');
+  if (presets && PACKS && PACKS.length) {
+    presets.innerHTML = PACKS.map(function (p) {
+      var n = Number(p);
+      return '<button type="button" data-v="' + n + '">$' +
+        n.toLocaleString('en-US') + '</button>';
+    }).join('');
+  }
 
   function showErr(msg) {
     errEl.textContent = msg;

@@ -889,9 +889,11 @@
       const defs = s.auto_reload_defaults || {};
       $('ar-threshold').value = s.auto_reload_threshold_usd
         || defs.threshold_usd || 500;
-      $('ar-amount').value = s.auto_reload_amount_usd
-        || defs.amount_usd || 5000;
-      if (!s.has_card_on_file) {
+        const minAdd = Number(s.top_up_min_custom_usd || 5000);
+        $('ar-amount').min = minAdd;
+        $('ar-amount').value = s.auto_reload_amount_usd
+        || defs.amount_usd || minAdd;
+        if (!s.has_card_on_file) {
         $('ar-enabled').disabled = true;
         $('ar-enabled-hint').textContent = 'Add a card first.';
       } else {
@@ -1086,15 +1088,18 @@
     $('btn-save-autoreload').addEventListener('click', async () => {
       const enabled = $('ar-enabled').checked;
       const threshold = Number($('ar-threshold').value || 500);
-      const amount = Number($('ar-amount').value || 5000);
+      const minAdd = Number(
+        (currentState && currentState.top_up_min_custom_usd) || 5000);
+      const amount = Number($('ar-amount').value || minAdd);
       if (enabled && (!currentState || !currentState.has_card_on_file)) {
         showBanner('error',
           'Add a card on file before enabling auto-reload.');
         return;
       }
-      if (amount < 5000 || amount > 100000) {
+      if (amount < minAdd || amount > 100000) {
         showBanner('error',
-          'Add amount must be at least $5,000.');
+          'Add amount must be at least $' +
+          minAdd.toLocaleString('en-US') + '.');
         return;
       }
       if (threshold < 0 || threshold > 10000) {

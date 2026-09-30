@@ -136,6 +136,48 @@ def _resolve_caller_billing_subject():
     }
 
 
+def _call_top_up_min(wallet_mod, subject=None, subject_key=""):
+    """Subject-aware add-funds floor. Stubs that only accept
+    zero args still work."""
+    fn = getattr(wallet_mod, "top_up_min_custom", None)
+    if not callable(fn):
+        return 5000.0
+    try:
+        return float(fn(subject, subject_key=subject_key))
+    except TypeError:
+        try:
+            return float(fn())
+        except TypeError:
+            return 5000.0
+
+
+def _call_pack_sizes(wallet_mod, subject=None, subject_key=""):
+    fn = getattr(wallet_mod, "top_up_pack_sizes", None)
+    if not callable(fn):
+        return [5000.0, 10000.0, 15000.0]
+    try:
+        out = fn(subject, subject_key=subject_key)
+        return [float(x) for x in out]
+    except TypeError:
+        try:
+            return [float(x) for x in fn()]
+        except TypeError:
+            return [5000.0, 10000.0, 15000.0]
+
+
+def _call_auto_reload_amount(wallet_mod, subject=None, subject_key=""):
+    fn = getattr(wallet_mod, "auto_reload_amount", None)
+    if not callable(fn):
+        return _call_top_up_min(wallet_mod, subject, subject_key)
+    try:
+        return float(fn(subject, subject_key=subject_key))
+    except TypeError:
+        try:
+            return float(fn(subject))
+        except TypeError:
+            return _call_top_up_min(wallet_mod, subject, subject_key)
+
+
 def _require_login():
     """Return (username, user_dict) or a (jsonify_response, 401) tuple."""
     uname, u = _current_user_record()
@@ -234,7 +276,8 @@ def wallet_state():
         "billing_mode": wallet.billing_mode(subject),
         "auto_reload_threshold_usd":
             wallet.auto_reload_threshold(subject),
-        "auto_reload_amount_usd": wallet.auto_reload_amount(subject),
+        "auto_reload_amount_usd": _call_auto_reload_amount(
+            wallet, subject, ctx["subject_key"]),
         "monthly_invoice_limit_usd":
             wallet.monthly_invoice_limit(subject),
         "has_card_on_file": wallet.has_card_on_file(subject),
@@ -244,8 +287,10 @@ def wallet_state():
         },
         "transactions": list(subject.get(
             "wallet_transactions", []))[:100],
-        "top_up_packs_usd": wallet.top_up_pack_sizes(),
-        "top_up_min_custom_usd": wallet.top_up_min_custom(),
+        "top_up_packs_usd": _call_pack_sizes(
+            wallet, subject, ctx["subject_key"]),
+        "top_up_min_custom_usd": _call_top_up_min(
+            wallet, subject, ctx["subject_key"]),
         "dashboard_locked": wallet.dashboard_view_locked(
             u, ctx["users_data"], subject=subject),
         "opening_topup_usd": (
@@ -253,9 +298,13 @@ def wallet_state():
             or (wallet.OPENING_TOPUP_MIN_USD
                 if wallet.requires_card_to_view(u) else 0.0)),
         "stats": wallet.wallet_stats(subject),
-        "auto_reload_defaults": (pricing.get("auto_reload_defaults")
-                                 or {"threshold_usd": 500.0,
-                                     "amount_usd": 5000.0}),
+        "auto_reload_defaults": {
+            "threshold_usd": float(
+                (pricing.get("auto_reload_defaults") or {}).get(
+                    "threshold_usd", 500.0) or 500.0),
+            "amount_usd": _call_top_up_min(
+                wallet, subject, ctx["subject_key"]),
+        },
         "stripe_enabled": billing.is_enabled(),
         "stripe_publishable_key": billing.publishable_key(),
         # Company-shared wallet context (Jenna 2026-09-09).
@@ -416,21 +465,20 @@ def wallet_auto_reload():
 
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get("enabled"))
+    min_usd = _call_top_up_min(wallet, subject, ctx["subject_key"])
     try:
         threshold = float(body.get("threshold_usd") or 500)
-        amount = float(body.get("amount_usd") or wallet.TOP_UP_MIN_USD)
+        amount = float(body.get("amount_usd") or min_usd)
     except (TypeError, ValueError):
         return jsonify({"error": "invalid_amounts"}), 400
 
-    # Bounds. Threshold 0-10K, amount 100-10K, and threshold < amount
-    # (nonsense to top up by less than the threshold — you'd just
-    # trip again on the very next pull).
+    # Bounds. Threshold 0-10K, amount subject's floor-100K.
     if threshold < 0 or threshold > 10_000:
         return jsonify({"error": "threshold_out_of_range",
                         "min": 0, "max": 10000}), 400
-    if amount < wallet.TOP_UP_MIN_USD or amount > 100_000:
+    if amount < min_usd or amount > 100_000:
         return jsonify({"error": "amount_out_of_range",
-                        "min": wallet.TOP_UP_MIN_USD,
+                        "min": min_usd,
                         "max": 100000}), 400
 
     if enabled and not wallet.has_card_on_file(subject):
@@ -634,13 +682,14 @@ def create_checkout_session():
         amt = float(body.get("amount_usd") or 0)
     except (TypeError, ValueError):
         return jsonify({"error": "invalid_amount"}), 400
-    if amt < wallet.top_up_min_custom():
+    min_usd = _call_top_up_min(wallet, subject, ctx["subject_key"])
+    if amt < min_usd:
         if not wallet.opening_checkout_allowed(
                 amt, amount_locked=False, user=ctx["user"],
                 users_data=ctx["users_data"]):
             return jsonify({
                 "error": "below_minimum",
-                "min_usd": wallet.top_up_min_custom(),
+                "min_usd": min_usd,
             }), 400
     if amt > 100_000:
         return jsonify({"error": "above_maximum"}), 400
@@ -1536,7 +1585,7 @@ def admin_set_billing_mode(target_username):
                     v = float(body[k])
                     if v >= 0:
                         if k == "auto_reload_amount_usd":
-                            v = max(wallet.TOP_UP_MIN_USD, v)
+                            v = max(_call_top_up_min(wallet, u), v)
                         u[k] = v
                 except (TypeError, ValueError):
                     pass
@@ -1676,7 +1725,7 @@ def admin_billing_config(target_username):
                     v = float(body[k])
                     if v >= 0:
                         if k == "auto_reload_amount_usd":
-                            v = max(wallet.TOP_UP_MIN_USD, v)
+                            v = max(_call_top_up_min(wallet, u), v)
                         u[k] = v
                 except (TypeError, ValueError):
                     pass
@@ -1786,7 +1835,10 @@ def admin_companies_billing():
                 "wallet_lifetime_spend_usd", 0.0) or 0.0),
             "auto_reload_threshold_usd":
                 wallet.auto_reload_threshold(c),
-            "auto_reload_amount_usd": wallet.auto_reload_amount(c),
+            "auto_reload_amount_usd": _call_auto_reload_amount(
+                wallet, c, cname),
+            "top_up_min_custom_usd": _call_top_up_min(
+                wallet, c, cname),
             "monthly_invoice_limit_usd":
                 wallet.monthly_invoice_limit(c),
             "has_card_on_file": wallet.has_card_on_file(c),
@@ -1875,7 +1927,8 @@ def admin_company_billing_config(company_name):
                     v = float(body[k])
                     if v >= 0:
                         if k == "auto_reload_amount_usd":
-                            v = max(wallet.TOP_UP_MIN_USD, v)
+                            v = max(_call_top_up_min(
+                                wallet, c, company_name), v)
                         c[k] = v
                 except (TypeError, ValueError):
                     pass
@@ -2680,7 +2733,9 @@ def _apply_topup_auto_reload(rec: dict, md) -> None:
     flag = wallet.parse_auto_reload_flag(md)
     if flag is None:
         return
-    wallet.apply_auto_reload_preference(rec, flag)
+    subject_key = str((md or {}).get("subject_key") or "")
+    wallet.apply_auto_reload_preference(
+        rec, flag, subject_key=subject_key)
 
 
 def _handle_checkout_session_completed(event: dict):
@@ -3237,14 +3292,19 @@ def admin_create_payment_link(target_username):
             amt = None
         elif amt > payment_links.MAX_AMOUNT_USD:
             return jsonify({"error": "above_maximum"}), 400
-        elif amt < wallet.top_up_min_custom():
+        elif amt < _call_top_up_min(
+                wallet, ctx.get("subject"),
+                ctx.get("subject_key") or ""):
             locked = bool(body.get("lock_amount"))
+            min_usd = _call_top_up_min(
+                wallet, ctx.get("subject"),
+                ctx.get("subject_key") or "")
             if not wallet.opening_checkout_allowed(
                     amt, amount_locked=locked, user=ctx["user"],
                     users_data=None):
                 return jsonify({
                     "error": "below_minimum",
-                    "min_usd": wallet.top_up_min_custom(),
+                    "min_usd": min_usd,
                 }), 400
 
     existing = payment_links.find_reusable(
@@ -3496,6 +3556,19 @@ def public_pay_page(token):
             subline="Please try again shortly.", token=""), 503
 
     import wallet  # type: ignore
+    subject_kind = str(rec.get("subject_kind") or "user")
+    subject_key = str(rec.get("subject_key") or "")
+    subject = {}
+    try:
+        from app import load_users  # type: ignore
+        data = load_users() or {}
+        if subject_kind == "company":
+            subject = (data.get("companies") or {}).get(subject_key) or {}
+        else:
+            _found, subject = _lookup_user_record(data, subject_key)
+            subject = subject or {}
+    except Exception:
+        subject = {}
     return render_template(
         "pay_link.html",
         ok=True,
@@ -3503,7 +3576,14 @@ def public_pay_page(token):
         display_name=str(rec.get("display_name") or ""),
         amount_usd=rec.get("amount_usd"),
         amount_locked=bool(rec.get("amount_locked")),
-        min_usd=wallet.top_up_min_custom(),
+        min_usd=_call_top_up_min(wallet, subject, subject_key),
+        pack_sizes=_call_pack_sizes(wallet, subject, subject_key),
+        ar_amount_usd=_call_auto_reload_amount(
+            wallet, subject, subject_key),
+        ar_threshold_usd=(
+            wallet.auto_reload_threshold(subject)
+            if callable(getattr(wallet, "auto_reload_threshold", None))
+            else 500.0),
     )
 
 
@@ -3533,6 +3613,17 @@ def public_pay_checkout(token):
     if "enable_auto_reload" in body:
         enable_ar = bool(body.get("enable_auto_reload"))
 
+    # Load the subject first so Excel's $500 floor applies before
+    # the amount check.
+    from app import load_users  # type: ignore
+    data = load_users()
+    if subject_kind == "company":
+        subject = (data.get("companies") or {}).get(subject_key) or {}
+        cust_name = subject_key
+        cust_email = str(subject.get("billing_email") or "")
+    else:
+        found_key, subject = _lookup_user_record(data, subject_key)
+
     # Amount: locked links ignore the body entirely.
     preset = rec.get("amount_usd")
     if rec.get("amount_locked") and preset:
@@ -3546,25 +3637,17 @@ def public_pay_checkout(token):
                 amt = float(raw)
             except (TypeError, ValueError):
                 return jsonify({"error": "invalid_amount"}), 400
-    if amt < wallet.top_up_min_custom():
+    min_usd = _call_top_up_min(wallet, subject, subject_key)
+    if amt < min_usd:
         if not wallet.opening_checkout_allowed(
                 amt, amount_locked=bool(rec.get("amount_locked")),
                 user=None):
             return jsonify({"error": "below_minimum",
-                            "min_usd": wallet.top_up_min_custom()}), 400
+                            "min_usd": min_usd}), 400
     if amt > payment_links.MAX_AMOUNT_USD:
         return jsonify({"error": "above_maximum"}), 400
 
-    # Load the subject record so we can reuse / persist its Stripe
-    # customer id. Read straight from users.json - there is no session.
-    from app import load_users  # type: ignore
-    data = load_users()
-    if subject_kind == "company":
-        subject = (data.get("companies") or {}).get(subject_key) or {}
-        cust_name = subject_key
-        cust_email = str(subject.get("billing_email") or "")
-    else:
-        found_key, subject = _lookup_user_record(data, subject_key)
+    if subject_kind != "company":
         if not found_key or not subject:
             return jsonify({"error": "account_not_found"}), 404
         subject_key = found_key

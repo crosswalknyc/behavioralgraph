@@ -195,6 +195,11 @@ TOP_UP_MIN_USD = 5000.0
 # one-time $500 card + top-up. Regular Add Funds stays at $5,000.
 # Admin amount-locked payment links may also mint at this floor.
 OPENING_TOPUP_MIN_USD = 500.0
+# Excel Sports Management (Jenna 2026-09-29): this company only.
+# Auto-reload and Add Funds floor is $500. Any amount over $500 is
+# allowed. Everyone else stays on the $5,000 floor.
+EXCEL_SPORTS_COMPANY = "Excel Sports Management"
+EXCEL_TOP_UP_MIN_USD = 500.0
 
 
 # ---------------------------------------------------------------------------
@@ -1536,16 +1541,53 @@ def metered_answer_usd() -> float:
     return val if val > 0 else 2.10
 
 
-def top_up_pack_sizes() -> list:
-    """Preset USD amounts on the Add funds page. Always the locked
-    $5k / $10k / $15k set so a stale pricing.json cannot bring back
-    $250 / $500 buttons."""
+def _norm_company_token(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(name or "").strip().lower())
+
+
+def is_excel_sports_subject(subject=None, subject_key: str = "") -> bool:
+    """True for the Excel Sports Management company wallet or a
+    seat whose company field is that name."""
+    excel = _norm_company_token(EXCEL_SPORTS_COMPANY)
+    if excel and _norm_company_token(subject_key) == excel:
+        return True
+    if not isinstance(subject, dict):
+        return False
+    for k in ("name", "company", "display_name"):
+        if _norm_company_token(subject.get(k)) == excel:
+            return True
+    return False
+
+
+def top_up_pack_sizes(subject=None, subject_key: str = "") -> list:
+    """Preset USD amounts on the Add funds page.
+
+    Global: locked $5k / $10k / $15k. Excel Sports: $500 / $1,000 /
+    $1,500 (same 1x / 2x / 3x shape on their $500 floor).
+    """
+    floor = top_up_min_custom(subject, subject_key=subject_key)
+    if floor + 1e-9 < TOP_UP_MIN_USD:
+        return [float(floor), float(floor * 2), float(floor * 3)]
     return [float(x) for x in TOP_UP_PACKS_USD]
 
 
-def top_up_min_custom() -> float:
-    """Minimum amount a user can add. $5,000; nothing lower. Custom
-    amounts above $5,000 are allowed."""
+def top_up_min_custom(subject=None, subject_key: str = "") -> float:
+    """Minimum amount a user can add.
+
+    $5,000 globally; nothing lower. Custom amounts above the floor
+    are allowed. Excel Sports Management is $500 (Jenna 2026-09-29).
+    A stored top_up_min_usd at or above the $500 opening floor is
+    honored so a company can keep that exception without a rename
+    match.
+    """
+    if is_excel_sports_subject(subject, subject_key):
+        return float(EXCEL_TOP_UP_MIN_USD)
+    try:
+        v = float((subject or {}).get("top_up_min_usd") or 0)
+    except (TypeError, ValueError):
+        v = 0.0
+    if v >= OPENING_TOPUP_MIN_USD:
+        return round(v, 2)
     return float(TOP_UP_MIN_USD)
 
 
@@ -1744,12 +1786,14 @@ def billing_mode(user: dict) -> str:
     return "prepay_only"
 
 
-def apply_auto_reload_preference(rec: dict, enabled: bool) -> None:
+def apply_auto_reload_preference(rec: dict, enabled: bool,
+                                 subject_key: str = "") -> None:
     """Turn auto-reload on or off on a billed subject.
 
     On: billing_mode=auto_reload, fill missing threshold ($500) and
-    lift any add amount below the $5,000 floor. Off: prepay_only.
-    monthly_invoice is left alone. Always marks paying_customer.
+    lift any add amount below this subject's add-funds floor. Off:
+    prepay_only. monthly_invoice is left alone. Always marks
+    paying_customer.
     """
     if not isinstance(rec, dict):
         return
@@ -1769,8 +1813,9 @@ def apply_auto_reload_preference(rec: dict, enabled: bool) -> None:
             amt = float(rec.get("auto_reload_amount_usd"))
         except (TypeError, ValueError):
             amt = 0.0
-        if amt < TOP_UP_MIN_USD:
-            rec["auto_reload_amount_usd"] = float(TOP_UP_MIN_USD)
+        floor = top_up_min_custom(rec, subject_key=subject_key)
+        if amt < floor:
+            rec["auto_reload_amount_usd"] = float(floor)
     else:
         rec["billing_mode"] = "prepay_only"
 
@@ -1805,11 +1850,13 @@ def auto_reload_threshold(user: dict) -> float:
                  .get("threshold_usd", 500.0))
 
 
-def auto_reload_amount(user: dict) -> float:
+def auto_reload_amount(user: dict, subject_key: str = "") -> float:
     """How much to charge on an auto-reload trigger. Never below
-    the $5,000 add-funds floor."""
+    this subject's add-funds floor ($5,000 globally, $500 for
+    Excel Sports Management)."""
+    floor = top_up_min_custom(user, subject_key=subject_key)
     if not user:
-        return float(TOP_UP_MIN_USD)
+        return float(floor)
     v = user.get("auto_reload_amount_usd")
     try:
         amt = float(v)
@@ -1818,10 +1865,12 @@ def auto_reload_amount(user: dict) -> float:
     if amt <= 0:
         try:
             amt = float(load_pricing().get("auto_reload_defaults", {})
-                        .get("amount_usd", TOP_UP_MIN_USD) or 0)
+                        .get("amount_usd", floor) or 0)
         except (TypeError, ValueError):
-            amt = float(TOP_UP_MIN_USD)
-    return max(float(TOP_UP_MIN_USD), amt)
+            amt = float(floor)
+        if amt + 1e-9 < floor:
+            amt = float(floor)
+    return max(float(floor), amt)
 
 
 def monthly_invoice_limit(user: dict) -> float:
@@ -2143,7 +2192,7 @@ def wallet_can_absorb(user: dict, amount_usd: float) -> tuple:
 # Auto-reload trigger evaluation (post-deduction hook)
 # ---------------------------------------------------------------------------
 
-def needs_auto_reload(user: dict) -> tuple:
+def needs_auto_reload(user: dict, subject_key: str = "") -> tuple:
     """After a deduction, decide whether we should fire an auto-reload
     charge against the saved card.
 
@@ -2162,7 +2211,7 @@ def needs_auto_reload(user: dict) -> tuple:
         return False, 0.0
     if wallet_balance(user) > auto_reload_threshold(user):
         return False, 0.0
-    return True, auto_reload_amount(user)
+    return True, auto_reload_amount(user, subject_key=subject_key)
 
 
 def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
@@ -2187,7 +2236,8 @@ def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
     result = {"fired": False, "amount_usd": 0.0,
               "payment_intent_id": "", "error": ""}
     try:
-        should, amount = needs_auto_reload(subject_snapshot)
+        should, amount = needs_auto_reload(
+            subject_snapshot, subject_key=subject_key)
         if not should or amount <= 0:
             return result
         try:
@@ -2391,7 +2441,10 @@ def ensure_company_record(users_data: dict, company_name: str,
                 rec["auto_reload_threshold_usd"] = 500.0
             if not isinstance(rec.get("auto_reload_amount_usd"),
                               (int, float)):
-                rec["auto_reload_amount_usd"] = float(TOP_UP_MIN_USD)
+                rec["auto_reload_amount_usd"] = float(
+                    top_up_min_custom(rec, subject_key=name))
+    if is_excel_sports_subject(rec, name):
+        rec.setdefault("top_up_min_usd", EXCEL_TOP_UP_MIN_USD)
     if seed_user and isinstance(seed_user, dict):
         email = str(seed_user.get("email") or "").strip()
         if email and not str(rec.get("billing_email") or "").strip():
@@ -3117,7 +3170,10 @@ def admin_billing_row_for_user(username: str, user: dict,
         "wallet_lifetime_spend_usd": float(subject.get(
             "wallet_lifetime_spend_usd", 0.0) or 0.0),
         "auto_reload_threshold_usd": auto_reload_threshold(subject),
-        "auto_reload_amount_usd": auto_reload_amount(subject),
+        "auto_reload_amount_usd": auto_reload_amount(
+            subject, subject_key=key),
+        "top_up_min_custom_usd": top_up_min_custom(
+            subject, subject_key=key),
         "monthly_invoice_limit_usd": monthly_invoice_limit(subject),
         "has_card_on_file": has_card_on_file(subject),
         "card_brand": str(subject.get(
@@ -3981,6 +4037,8 @@ __all__ = [
     "metered_answer_usd",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",
+    "EXCEL_SPORTS_COMPANY", "EXCEL_TOP_UP_MIN_USD",
+    "is_excel_sports_subject",
     "OPENING_TOPUP_MIN_USD", "opening_topup_usd",
     "requires_card_to_view", "dashboard_view_locked",
     "opening_funding_unmet", "access_window_expired",
