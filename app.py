@@ -59426,6 +59426,60 @@ def _pm_ask_names_its_audiences(text):
     return has_tu and has_other
 
 
+_PM_FILE_ASK_RE = re.compile(
+    r"\b(?:as|in|into|to)\s+(?:a\s+|an\s+)?(?:csv|spreadsheet|excel|xlsx?)\b"
+    r"|\b(?:provide|give|send|export|download|output)\b[^.?!]{0,40}"
+    r"\b(?:csv|spreadsheet|excel|xlsx?)\b"
+    r"|\bcsv\s+(?:file|format|output|export)\b",
+    re.I)
+
+_PM_CLARIFY_TURN_RE = re.compile(
+    r"do you want this on |which audience should i use", re.I)
+
+
+def _pm_clarify_answer_merge(history, text):
+    """When the previous agent turn asked which audience the ask is
+    about, this turn is the answer. Merge it back into the question
+    that triggered the clarify so the original ask is not lost.
+
+    Casey Pearson, 2026-09-29: hours by genre and platform, two cuts,
+    as a csv. Her answer to the which-audience prompt was routed as a
+    brand new ask, the original question fell away, and the confirm
+    fired again. Returns the merged question, or '' when this turn is
+    not a clarify answer."""
+    t = str(text or '').strip()
+    if not t or len(t) > 240 or '?' in t:
+        return ''
+    turns = [h for h in (history or []) if isinstance(h, dict)]
+    last_agent = ''
+    idx = -1
+    for i in range(len(turns) - 1, -1, -1):
+        role = str(turns[i].get('role') or '').lower()
+        if role in ('agent', 'assistant'):
+            last_agent = str(turns[i].get('text')
+                             or turns[i].get('content') or '')
+            idx = i
+            break
+        if role == 'user':
+            break
+    if not last_agent or not _PM_CLARIFY_TURN_RE.search(last_agent):
+        return ''
+    orig = ''
+    for i in range(idx - 1, -1, -1):
+        role = str(turns[i].get('role') or '').lower()
+        if role != 'user':
+            continue
+        cand = str(turns[i].get('text')
+                   or turns[i].get('content') or '').strip()
+        if len(cand) >= 25 and cand.lower() not in (
+                'something else', 'yes', 'no'):
+            orig = cand
+            break
+    if not orig or orig.strip().lower() == t.lower():
+        return ''
+    return f"{orig}\n\nAudience: {t}"
+
+
 def _pm_open_screen_confirm(text, ctx):
     """Ask before an answer is attached to the profile open on screen.
 
@@ -61207,6 +61261,46 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
     _pm_remember_ask(pm_user, text, subject=res.get('subject'),
                      cohort=res.get('cohort'), route='generated')
+    # The ask requested a file (2026-09-29, Casey Pearson: "Provide
+    # output as a csv" produced no file). Build the CSV from the same
+    # numbers the reply shipped with, upload it, and hand back
+    # download_url so the browser saves it automatically. The ledger
+    # reply stays clean; the chip still serves repeats.
+    _file_payload = {}
+    try:
+        if _PM_FILE_ASK_RE.search(str(text or '')) and (
+                res.get('breakdown') or res.get('metrics')):
+            _fe = {'subject': res.get('subject'),
+                   'cohort': res.get('cohort'), 'question': text,
+                   'metrics': res.get('metrics'),
+                   'breakdown': res.get('breakdown'),
+                   'ws': res.get('window_start'),
+                   'we': res.get('window_end'),
+                   'wl': res.get('window_label')}
+            _fn, _fcsv = pma.build_generated_csv(_fe)
+            _frng = ''
+            if _fe.get('ws') and _fe.get('we'):
+                _frng = (f"{_fmt_study_date(_fe['ws'])} - "
+                         f"{_fmt_study_date(_fe['we'])}")
+            elif _fe.get('wl'):
+                _frng = str(_fe['wl'])
+            _fcsv = _stamp_csv_text(_fcsv, _frng)
+            _fn = _pm_csv_task_filename(_fe) or _fn
+            _fkey = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{_fn}"
+            s3_client.put_object(Bucket=S3_BUCKET, Key=_fkey,
+                                 Body=_fcsv.encode('utf-8'),
+                                 ContentType='text/csv')
+            _furl = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': S3_BUCKET, 'Key': _fkey,
+                        'ResponseContentDisposition':
+                            f'attachment; filename="{_fn}"'},
+                ExpiresIn=7 * 24 * 3600)
+            _file_payload = {'download_url': _furl, 'filename': _fn}
+            reply += (f"\n\n{_fn} is saving to your browser "
+                      "downloads now.")
+    except Exception:
+        traceback.print_exc()
     _pm_ask_hint(
         outcome=('corrected' if _pm_auto_corrected else 'answered'),
         subject=res.get('subject'))
@@ -61217,7 +61311,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         'profile': res.get('subject'),
         '_family': fam0,
         '_verify': _verify_stamp,
-        '_stages_ms': stages}
+        '_stages_ms': stages,
+        **_file_payload}
 
 
 _PM_READ_PREFIX = 'system/prometheus_reads/'
@@ -62791,9 +62886,20 @@ def api_synth_chat_analyze():
     # (2026-09-28). Mode chips stay commands on the view already open.
     # Yes re-sends with bind_subject, which returns above this point.
     if isinstance(ctx, dict) and not str(body.get('mode') or '').strip():
-        _osc = _pm_open_screen_confirm(text, ctx)
-        if _osc is not None:
-            return _osc
+        # An answer to the which-audience clarify is consumed here:
+        # merge it into the question that triggered the clarify and
+        # never re-ask (Casey Pearson, 2026-09-29).
+        _ca_merged = _pm_clarify_answer_merge(history, text)
+        if _ca_merged:
+            text = _ca_merged
+            try:
+                _pm_ask_hint(route='clarify_answer_merge')
+            except Exception:
+                pass
+        else:
+            _osc = _pm_open_screen_confirm(text, ctx)
+            if _osc is not None:
+                return _osc
     if _route == 'generate':
         if _route_d.get('why') == 'no_ctx_data_ask':
             return _pm_generate_metrics_response(user, text, history)
