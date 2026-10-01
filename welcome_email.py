@@ -1,8 +1,12 @@
-"""Prometheus welcome email: login-page split (Option B).
+"""Prometheus welcome email: spotlight (2026-10-01, Jenna).
 
-Graphite header, Off-White form, olive button. Table-based, 600px,
-Outlook-safe. From Prometheus. Used by admin create-user and by
-seat-provision scripts.
+Near-black card, one amethyst and orchid light behind the headline,
+tiny tracked labels over large values, one Signal Green pill. Centred.
+Table-based, 600px, Outlook-safe. From Prometheus. Used by admin
+create-user and by seat-provision scripts.
+
+The glow rides as a background image with bgcolor behind it, so a
+client that drops background images still gets the right ground.
 """
 from __future__ import annotations
 
@@ -15,6 +19,11 @@ LOGIN_URL_DEFAULT = "https://dashboard.crosswalknyc.com/login"
 LOGO_URL = (
     "https://dashboard.crosswalknyc.com/static/"
     "crosswalk-logo-white-transparent.png"
+)
+# The spotlight behind the headline. Hosted, never inlined: data URIs
+# are stripped by a good share of mail clients.
+GLOW_URL = (
+    "https://dashboard.crosswalknyc.com/static/welcome-spotlight.png"
 )
 FROM_ADDR = "Prometheus <prometheus@crosswalknyc.com>"
 REPLY_TO = "jenna@crosswalknyc.com"
@@ -34,12 +43,12 @@ def render_welcome_text(first_name: str, username: str, password: str,
     who = (first_name or "").strip() or "there"
     url = login_url or _login_url()
     return (
-        f"Hi {who},\n\n"
-        "Your Crosswalk login is ready.\n\n"
-        f"Login: {url}\n"
+        "You're in.\n\n"
+        f"Hi {who}. Your workspace is open.\n\n"
         f"Username: {username}\n"
         f"Password: {password}\n\n"
-        "You can change the password after you sign in.\n\n"
+        f"Sign in: {url}\n\n"
+        "You can change the password once you are in.\n\n"
         "Prometheus\n"
         "Crosswalk\n"
     )
@@ -52,6 +61,8 @@ def render_welcome_html(first_name: str, username: str, password: str,
     pw = html.escape(password or "")
     url = html.escape(login_url or _login_url(), quote=True)
     logo = html.escape(LOGO_URL, quote=True)
+    glow = html.escape(GLOW_URL, quote=True)
+    f = "Helvetica,Arial,sans-serif"
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -59,46 +70,67 @@ def render_welcome_html(first_name: str, username: str, password: str,
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Your Crosswalk login is ready.</title>
 </head>
-<body style="margin:0;padding:0;background:#D8D6CD;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#D8D6CD;">
+<body style="margin:0;padding:0;background:#060B0C;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#060B0C;">
+  <tr><td align="center" style="padding:34px 8px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+       style="width:600px;max-width:600px;">
   <tr>
-    <td align="center" style="padding:24px 8px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:#E9E8E1;">
-  <tr>
-    <td style="background:#0C1618;padding:28px 40px 32px;font-family:Helvetica,Arial,sans-serif;">
-      <img src="{logo}" alt="Crosswalk" width="148" height="22" style="display:block;border:0;">
-      <div style="margin:22px 0 0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#E9E8E1;font-weight:500;">
-        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#C7F23E;margin-right:8px;vertical-align:middle;"></span>
-        <span style="color:#9AA09B;margin-right:6px;">01</span> Account
-      </div>
-      <div style="margin:10px 0 0;font-size:28px;line-height:1.12;font-weight:800;letter-spacing:-0.02em;color:#E9E8E1;">Your Crosswalk login is ready.</div>
-    </td>
-  </tr>
-  <tr>
-    <td style="padding:32px 40px 40px;font-family:Helvetica,Arial,sans-serif;">
-      <div style="width:40px;height:3px;background:#8E3FA8;border-radius:999px;"></div>
-      <div style="margin:16px 0 0;font-size:15px;line-height:1.5;color:#5C6560;">Hi {who}. Your account is on the dashboard. Use these details to sign in.</div>
-      <div style="margin:22px 0 0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#888C89;font-weight:600;">Username</div>
-      <div style="margin:6px 0 0;padding:12px 14px;background:#FFFFFF;border:1px solid rgba(59,61,56,0.32);border-radius:6px;font-size:15px;font-weight:700;color:#0C1618;">{user}</div>
-      <div style="margin:14px 0 0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#888C89;font-weight:600;">Password</div>
-      <div style="margin:6px 0 0;padding:12px 14px;background:#FFFFFF;border:1px solid rgba(59,61,56,0.32);border-radius:6px;font-size:15px;font-weight:700;color:#0C1618;">{pw}</div>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0;">
-        <tr>
-          <td style="background:#5E7E12;border-radius:6px;text-align:center;">
-            <a href="{url}" style="display:block;padding:12px 16px;font-size:14px;font-weight:700;color:#E9E8E1;text-decoration:none;">Open Crosswalk</a>
-          </td>
-        </tr>
+    <td align="center" background="{glow}" bgcolor="#080E10"
+        style="padding:44px 44px 48px;font-family:{f};background-color:#080E10;
+               background-image:url({glow});background-size:cover;
+               background-position:center;">
+
+      <img src="{logo}" alt="Crosswalk" width="124" height="18"
+           style="display:block;border:0;margin:0 auto;">
+
+      <div style="height:96px;line-height:96px;font-size:0;">&nbsp;</div>
+
+      <div style="font-size:52px;line-height:0.94;font-weight:900;
+                  letter-spacing:-0.045em;color:#E9E8E1;text-align:center;">
+        You&rsquo;re in.</div>
+      <div style="margin:16px 0 0;font-size:14px;color:#9AA09B;text-align:center;">
+        Hi {who}. Your workspace is open.</div>
+
+      <div style="height:54px;line-height:54px;font-size:0;">&nbsp;</div>
+
+      <div style="font-size:9px;font-weight:700;letter-spacing:0.22em;
+                  text-transform:uppercase;color:#6F7A7D;text-align:center;">Username</div>
+      <div style="margin:7px 0 0;font-size:21px;font-weight:800;
+                  letter-spacing:-0.02em;color:#E9E8E1;text-align:center;">{user}</div>
+
+      <div style="height:22px;line-height:22px;font-size:0;">&nbsp;</div>
+
+      <div style="font-size:9px;font-weight:700;letter-spacing:0.22em;
+                  text-transform:uppercase;color:#6F7A7D;text-align:center;">Password</div>
+      <div style="margin:7px 0 0;font-size:21px;font-weight:800;
+                  letter-spacing:-0.02em;color:#E9E8E1;text-align:center;">{pw}</div>
+
+      <div style="height:38px;line-height:38px;font-size:0;">&nbsp;</div>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+             align="center" style="margin:0 auto;">
+        <tr><td style="background:#C7F23E;border-radius:999px;">
+          <a href="{url}" style="display:block;padding:14px 38px;font-size:13px;
+             font-weight:800;letter-spacing:0.02em;color:#0C1618;
+             text-decoration:none;">Sign in</a>
+        </td></tr>
       </table>
-      <div style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#888C89;">You can change the password after you sign in.</div>
-      <div style="margin:28px 0 0;padding-top:20px;border-top:1px solid #C9C6BA;font-size:13px;line-height:1.5;color:#5C6560;">
-        Prometheus<br>Crosswalk
-      </div>
-      <div style="margin:16px 0 0;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#888C89;">Crosswalk / Behavioral Intelligence Engine</div>
+
+      <div style="margin:18px 0 0;font-size:12px;line-height:1.55;color:#6F7A7D;
+                  text-align:center;">
+        You can change the password once you are in.</div>
+
+      <div style="height:72px;line-height:72px;font-size:0;">&nbsp;</div>
+
+      <div style="font-size:11px;line-height:1.6;color:#6F7A7D;text-align:center;">
+        Prometheus<br>Crosswalk</div>
+
     </td>
   </tr>
 </table>
-    </td>
-  </tr>
+  </td></tr>
 </table>
 </body>
 </html>"""
