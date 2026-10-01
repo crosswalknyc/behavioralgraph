@@ -483,35 +483,48 @@
             "bold": false
           }
         ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "Viewership",
+        "paragraphs": [
+          {
+            "text": "• Any play over zero seconds counts as a view. Each press of play or device switch opens a new session, so a one second watch, a pause, and another one second watch count as two views, not one.• Viewing through Prime Video Channels is included in the total. Depending on the service, the Prime Video lane accounts for 40% to 80% of total views; the Rankers tab breaks this out by storefront.• Our total runs higher than a service's own figure because Channels playback happens inside the Prime Video player, not the service's app. The service sees that lane only through Amazon's reports, and a licensor whose title sits inside the channel does not see it at all. Crosswalk observes the viewer at the device level regardless of who billed them, so both lanes are counted.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Any play over zero seconds counts as a view. Each press of play or device switch opens a new session, so a one second watch, a pause, and another one second watch count as two views, not one.",
+                "bold": false
+              },
+              {
+                "text": "• Viewing through Prime Video Channels is included in the total. Depending on the service, the Prime Video lane accounts for 40% to 80% of total views; the Rankers tab breaks this out by storefront.",
+                "bold": false
+              },
+              {
+                "text": "• Our total runs higher than a service's own figure because Channels playback happens inside the Prime Video player, not the service's app. The service sees that lane only through Amazon's reports, and a licensor whose title sits inside the channel does not see it at all. Crosswalk observes the viewer at the device level regardless of who billed them, so both lanes are counted.",
+                "bold": false
+              }
+            ]
+          }
+        ]
       },
       {
-        "text": "• A subscription or a reactivation counts only as a 1 second watch of the show, attributed to the initial view after the subscription or reactivation.• 1 second of watch is considered a view. Push pause and start again, and 1 second the next time, for a total of 2 seconds, still counts as 2 views.• No touchpoint to a streaming service for the trailing 6 months qualifies someone's subscription or reactivation as a valid subscription or a reactivation to be counted.• Amazon Prime Video is added into viewership. It is responsible for 40% to 80% of the overall total views, depending on the platform. The Rankers tab breaks this out. The total runs higher than a number from the streaming services directly, because they only have visibility into their platform.• Multipliers from accounts to viewers are available upon request.",
-        "is_list": false,
-        "runs": [
+        "title": "Subscriptions",
+        "paragraphs": [
           {
-            "text": "• A subscription or a reactivation counts only as a 1 second watch of the show, attributed to the initial view after the subscription or reactivation.",
-            "bold": false
-          },
-          {
-            "text": "• 1 second of watch is considered a view. Push pause and start again, and 1 second the next time, for a total of 2 seconds, still counts as 2 views.",
-            "bold": false
-          },
-          {
-            "text": "• No touchpoint to a streaming service for the trailing 6 months qualifies someone's subscription or reactivation as a valid subscription or a reactivation to be counted.",
-            "bold": false
-          },
-          {
-            "text": "• Amazon Prime Video is added into viewership. It is responsible for 40% to 80% of the overall total views, depending on the platform. The Rankers tab breaks this out. The total runs higher than a number from the streaming services directly, because they only have visibility into their platform.",
-            "bold": false
-          },
-          {
-            "text": "• Multipliers from accounts to viewers are available upon request.",
-            "bold": false
+            "text": "• A sign-up counts as a new subscription or a reactivation only if the viewer had no touchpoint with that service in the trailing six months.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• A sign-up counts as a new subscription or a reactivation only if the viewer had no touchpoint with that service in the trailing six months.",
+                "bold": false
+              }
+            ]
           }
         ]
       }
-    ],
-    "subs": []
+    ]
   },
   {
     "title": "Platforms Accessed via Amazon Prime Video",
