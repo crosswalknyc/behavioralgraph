@@ -183795,6 +183795,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window._initMobileSidebarCollapse = function () {
                 document.querySelectorAll('.persistent-sidebar').forEach(function (sb) {
                     if (sb._mobileCollapseInit) return;
+                    // Profile IQ v4 (Jenna's rework) ships its own responsive
+                    // library drawer + open/close controls. The legacy collapse
+                    // below would add mobile-collapsed and hide its profile tree
+                    // and search ("no profiles" + stuck empty library), so skip it.
+                    if (sb.id === 'piqProfileSidebar' || sb.closest('.piq-v4') || sb.querySelector('.piq-picker-top')) return;
                     var header = sb.querySelector('.sidebar-header-section');
                     var h3 = header && header.querySelector('h3');
                     if (!h3) return;
