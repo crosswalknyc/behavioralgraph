@@ -55302,6 +55302,19 @@ def api_synth_chat_interpret():
         return jsonify(_chatbot_calm_payload())
 
     history = body.get('history') or []
+    return _pm_interpret_core(user, body, text, history)
+
+
+def _pm_interpret_core(user, body, text, history):
+    """The interpret surface for an already-gated user.
+
+    Split out of ``api_synth_chat_interpret`` (2026-10-01, Prometheus
+    Phase 1) so the same body runs for a session caller on the legacy
+    route and for any caller of ``prometheus.service.ask`` (dashboard
+    widget, standalone app, API key). Gates (mode, funds) and the body
+    parse stay with the callers; everything from here down is the
+    surface itself and returns a Flask response exactly as before.
+    """
 
     # ------------------------------------------------------------------
     # PRICING QUESTIONS (2026-09-23 Jenna): the flat rate card, never
@@ -55373,7 +55386,8 @@ def api_synth_chat_interpret():
             try:
                 import prometheus_memory as _pmm_route
                 return bool(_pmm_route.recent_referents(
-                    (session.get('username') or '').strip(), k=1))
+                    (session.get('username') or user.get('username')
+                     or '').strip(), k=1))
             except Exception:
                 return False
 
@@ -64272,6 +64286,19 @@ def api_synth_chat_analyze():
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
+    return _pm_analyze_core(user, body, text, history)
+
+
+def _pm_analyze_core(user, body, text, history):
+    """The analyze surface for an already-gated user.
+
+    Split out of ``api_synth_chat_analyze`` (2026-10-01, Prometheus
+    Phase 1) so the same body runs for a session caller on the legacy
+    route and for any caller of ``prometheus.service.ask``. The mode
+    gate and body parse stay with the callers; the funds, tier, and
+    usage gates below are part of the surface and run for everyone.
+    Returns a Flask response exactly as before.
+    """
     # Pricing questions (2026-09-23 Jenna): the flat rate card, served
     # before the tier and funds gates - a drained account asking what
     # things cost gets the answer, free, no model call.
@@ -66579,6 +66606,13 @@ def api_synth_chat_deck():
     except Exception as e:
         _chatbot_error_email('brief-chat/deck', e)
         return jsonify(_chatbot_calm_payload())
+    return _pm_deck_core(user, body)
+
+
+def _pm_deck_core(user, body):
+    """The deck surface for an already-gated user. Split out of
+    ``api_synth_chat_deck`` (2026-10-01, Prometheus Phase 1); the
+    tier, funds, and usage gates below run for every caller."""
     # Prometheus tier gate (2026-08-26): decks are an analysis-tier
     # feature. pulls_only users without pay-as-you-go get the offer.
     _gate_resp = _pm_access_gate(user)
@@ -73448,6 +73482,18 @@ try:
         print("✅ Pay-per-use session sweep started")
 except Exception as _ppu_boot_err:
     print(f"⚠️ Pay-per-use sweep failed to start: {_ppu_boot_err}")
+
+# Prometheus package surface (2026-10-01, Jenna: standalone app, API,
+# and dashboard on one brain and one wallet). Binds the handful of
+# host capabilities the package declares and registers
+# /api/prometheus/v1/*. Runs last so every helper above is defined.
+# A failure here logs and leaves the legacy chat routes untouched.
+try:
+    import sys as _pm_pkg_sys
+    import prometheus as _prometheus_pkg
+    _prometheus_pkg.init_app(app, _pm_pkg_sys.modules[__name__])
+except Exception as _pm_pkg_err:
+    print(f"⚠️ Prometheus surface not registered: {_pm_pkg_err}")
 
 # Print startup completion message
 print("=" * 60)
