@@ -472,6 +472,517 @@
     "subs": []
   },
   {
+    "title": "How We Measure a View",
+    "intro": [
+      {
+        "text": "How a view is composed, and what has to be true before a subscription or a reactivation is counted.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "How a view is composed, and what has to be true before a subscription or a reactivation is counted.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "• A subscription or a reactivation counts only as a 1 second watch of the show, attributed to the initial view after the subscription or reactivation.• 1 second of watch is considered a view. Push pause and start again, and 1 second the next time, for a total of 2 seconds, still counts as 2 views.• No touchpoint to a streaming service for the trailing 6 months qualifies someone's subscription or reactivation as a valid subscription or a reactivation to be counted.• Amazon Prime Video is added into viewership. It is responsible for 40% to 80% of the overall total views, depending on the platform. The Rankers tab breaks this out. The total runs higher than a number from the streaming services directly, because they only have visibility into their platform.• Multipliers from accounts to viewers are available upon request.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "• A subscription or a reactivation counts only as a 1 second watch of the show, attributed to the initial view after the subscription or reactivation.",
+            "bold": false
+          },
+          {
+            "text": "• 1 second of watch is considered a view. Push pause and start again, and 1 second the next time, for a total of 2 seconds, still counts as 2 views.",
+            "bold": false
+          },
+          {
+            "text": "• No touchpoint to a streaming service for the trailing 6 months qualifies someone's subscription or reactivation as a valid subscription or a reactivation to be counted.",
+            "bold": false
+          },
+          {
+            "text": "• Amazon Prime Video is added into viewership. It is responsible for 40% to 80% of the overall total views, depending on the platform. The Rankers tab breaks this out. The total runs higher than a number from the streaming services directly, because they only have visibility into their platform.",
+            "bold": false
+          },
+          {
+            "text": "• Multipliers from accounts to viewers are available upon request.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": []
+  },
+  {
+    "title": "Platforms Accessed via Amazon Prime Video",
+    "intro": [
+      {
+        "text": "Amazon Prime Video Channels: what viewership and subscriber data a channel partner actually receives",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Amazon Prime Video Channels: what viewership and subscriber data a channel partner actually receives",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "The short version",
+        "paragraphs": [
+          {
+            "text": "Amazon publishes the reporting spec for Prime Video Channels, and it is more granular than most people assume. Every channel partner, anywhere in the world, gets episode-level viewing (streams, unique streamers, minutes) plus aggregate subscription, conversion and retention numbers. Larger partners negotiate deeper tiers, down to a daily, one-row-per-stream feed keyed to a stable pseudonymous customer ID. What no partner ever receives is the customer's identity, because Amazon remains the merchant of record. The real question for any Channels partner is not \"do you get viewership\" but \"which tier did you negotiate.\"",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Amazon publishes the reporting spec for Prime Video Channels, and it is more granular than most people assume. Every channel partner, anywhere in the world, gets episode-level viewing (streams, unique streamers, minutes) plus aggregate subscription, conversion and retention numbers. Larger partners negotiate deeper tiers, down to a daily, one-row-per-stream feed keyed to a stable pseudonymous customer ID. What no partner ever receives is the customer's identity, because Amazon remains the merchant of record. The real question for any Channels partner is not \"do you get viewership\" but \"which tier did you negotiate.\"",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "What Crosswalk adds: additive and complementary",
+        "paragraphs": [
+          {
+            "text": "A Channels partner gets from Amazon a detailed, aggregate picture of its own channel (episode-level viewing, subscriptions, conversion and retention by offer; Tier 1 partners get a daily session feed under an encrypted ID). It gets no identity, no demographics, no view of the same customer outside the channel, no cross-partner benchmark, and a licensor whose title sits inside the channel gets even less. Additive means Amazon does not give the partner this at any tier, so Crosswalk is the only source. Complementary means Amazon reports it for the partner's own channel and Crosswalk validates, extends or puts it in market context.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A Channels partner gets from Amazon a detailed, aggregate picture of its own channel (episode-level viewing, subscriptions, conversion and retention by offer; Tier 1 partners get a daily session feed under an encrypted ID). It gets no identity, no demographics, no view of the same customer outside the channel, no cross-partner benchmark, and a licensor whose title sits inside the channel gets even less. Additive means Amazon does not give the partner this at any tier, so Crosswalk is the only source. Complementary means Amazon reports it for the partner's own channel and Crosswalk validates, extends or puts it in market context.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Additive: Crosswalk supplies what Amazon does not",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Additive: Crosswalk supplies what Amazon does not",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Who the viewer is. Age, gender, household composition, income, interests and brands, indexed to US gen pop (Profile IQ). Amazon supplies no demographics.• What else they watch. The same audience's viewing across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows a partner only its own channel.• Market context. How the title or channel ranks against other titles, channels and franchises. Amazon has no cross-partner benchmark.• Platform-level First View and franchise acquisition and retention comparisons. Amazon stops at the channel.• Portable audiences. Segments defined off Amazon's encrypted ID that can be used for planning and activation anywhere, since Amazon's ID never leaves Amazon.• Lane visibility for licensors. A studio whose title sits inside a channel (WBD's Gilmore Girls on Peacock via Amazon) sees at best one aggregate number from the platform. Crosswalk measures the title across platforms and splits the Peacock app from Prime Video (see Part 2).",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Who the viewer is. Age, gender, household composition, income, interests and brands, indexed to US gen pop (Profile IQ). Amazon supplies no demographics.",
+                "bold": false
+              },
+              {
+                "text": "• What else they watch. The same audience's viewing across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows a partner only its own channel.",
+                "bold": false
+              },
+              {
+                "text": "• Market context. How the title or channel ranks against other titles, channels and franchises. Amazon has no cross-partner benchmark.",
+                "bold": false
+              },
+              {
+                "text": "• Platform-level First View and franchise acquisition and retention comparisons. Amazon stops at the channel.",
+                "bold": false
+              },
+              {
+                "text": "• Portable audiences. Segments defined off Amazon's encrypted ID that can be used for planning and activation anywhere, since Amazon's ID never leaves Amazon.",
+                "bold": false
+              },
+              {
+                "text": "• Lane visibility for licensors. A studio whose title sits inside a channel (WBD's Gilmore Girls on Peacock via Amazon) sees at best one aggregate number from the platform. Crosswalk measures the title across platforms and splits the Peacock app from Prime Video (see Part 2).",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Complementary: Amazon reports it, Crosswalk extends",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Complementary: Amazon reports it, Crosswalk extends",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Title and episode viewership. Amazon is a census of the partner's channel; Crosswalk is a panel estimate. Use Amazon's Content Usage to calibrate Crosswalk, and Crosswalk to carry the same title onto platforms with no report.• Conversion and retention. Amazon gives actuals by offer for Channels; Subscriber IQ gives the same curves for direct-to-consumer and other storefronts, so the partner can compare Channels against its own app.• First and last title (Premium). Amazon shows the within-channel path; Crosswalk shows what the viewer did before arriving and after leaving.• Geography. Tier 1 DMA rows cross-check against Crosswalk's census-matched DMA shares.• Device. Amazon device class by episode lines up with Crosswalk's device and app capture.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Title and episode viewership. Amazon is a census of the partner's channel; Crosswalk is a panel estimate. Use Amazon's Content Usage to calibrate Crosswalk, and Crosswalk to carry the same title onto platforms with no report.",
+                "bold": false
+              },
+              {
+                "text": "• Conversion and retention. Amazon gives actuals by offer for Channels; Subscriber IQ gives the same curves for direct-to-consumer and other storefronts, so the partner can compare Channels against its own app.",
+                "bold": false
+              },
+              {
+                "text": "• First and last title (Premium). Amazon shows the within-channel path; Crosswalk shows what the viewer did before arriving and after leaving.",
+                "bold": false
+              },
+              {
+                "text": "• Geography. Tier 1 DMA rows cross-check against Crosswalk's census-matched DMA shares.",
+                "bold": false
+              },
+              {
+                "text": "• Device. Amazon device class by episode lines up with Crosswalk's device and app capture.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "What Amazon actually provides, in detail",
+        "paragraphs": [
+          {
+            "text": "The reference material behind Part 1: the three tiers, what each report contains, what no tier contains, and how licensed content inside a channel is treated.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The reference material behind Part 1: the three tiers, what each report contains, what no tier contains, and how licensed content inside a channel is treated.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "The three reporting tiers at a glance",
+        "paragraphs": [
+          {
+            "text": "Contractual (base tier)",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Contractual (base tier)",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Who gets it: Standard for all Channels partners, globally (Amazon notes availability still varies by agreement; confirm in Slate).• Cadence: Usage and Subscriptions: weekly and monthly. Conversion and Retention, Financial: monthly.• Level of detail: Title, season and episode, by offer. Aggregated across all customers; no customer-level rows.• What is in it: Content Usage: streams, customers streamed, minutes streamed and ad minutes streamed, by series or movie title, season number, episode number and episode name, for VOD and Just After Broadcast (JAB).• Live Streaming Usage: the same four measures per live or linear channel.• Subscriptions: active, new, cancelled and auto-renew-off subscriptions by offer.• Conversion and Retention: trial-to-paid conversion and a 12-month survival curve for each monthly start cohort, by offer.• Financial: monthly.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Who gets it: Standard for all Channels partners, globally (Amazon notes availability still varies by agreement; confirm in Slate).",
+                "bold": false
+              },
+              {
+                "text": "• Cadence: Usage and Subscriptions: weekly and monthly. Conversion and Retention, Financial: monthly.",
+                "bold": false
+              },
+              {
+                "text": "• Level of detail: Title, season and episode, by offer. Aggregated across all customers; no customer-level rows.",
+                "bold": false
+              },
+              {
+                "text": "• What is in it: Content Usage: streams, customers streamed, minutes streamed and ad minutes streamed, by series or movie title, season number, episode number and episode name, for VOD and Just After Broadcast (JAB).",
+                "bold": false
+              },
+              {
+                "text": "• Live Streaming Usage: the same four measures per live or linear channel.",
+                "bold": false
+              },
+              {
+                "text": "• Subscriptions: active, new, cancelled and auto-renew-off subscriptions by offer.",
+                "bold": false
+              },
+              {
+                "text": "• Conversion and Retention: trial-to-paid conversion and a 12-month survival curve for each monthly start cohort, by offer.",
+                "bold": false
+              },
+              {
+                "text": "• Financial: monthly.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Premium",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Premium",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Who gets it: US only. Depends on the partner's licensing agreement with Amazon.• Cadence: Weekly and monthly per the spec (confirm cadence in contract).• Level of detail: Episode by device class. Subscriber behavior as aggregates and cohorts, still no customer rows.• What is in it: Device-level viewership by episode.• Engagement scorecard: subscription length, cancellations, weekend vs weekday streaming, average titles and episodes per subscriber.• First-and-Last VOD Title: the first title a customer streamed (including during a free trial), whether that stream coincided with conversion to a paid offer, and the last title streamed before cancel.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Who gets it: US only. Depends on the partner's licensing agreement with Amazon.",
+                "bold": false
+              },
+              {
+                "text": "• Cadence: Weekly and monthly per the spec (confirm cadence in contract).",
+                "bold": false
+              },
+              {
+                "text": "• Level of detail: Episode by device class. Subscriber behavior as aggregates and cohorts, still no customer rows.",
+                "bold": false
+              },
+              {
+                "text": "• What is in it: Device-level viewership by episode.",
+                "bold": false
+              },
+              {
+                "text": "• Engagement scorecard: subscription length, cancellations, weekend vs weekday streaming, average titles and episodes per subscriber.",
+                "bold": false
+              },
+              {
+                "text": "• First-and-Last VOD Title: the first title a customer streamed (including during a free trial), whether that stream coincided with conversion to a paid offer, and the last title streamed before cancel.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Daily Anonymized (Tier 1, persistent ID)",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Daily Anonymized (Tier 1, persistent ID)",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Who gets it: Global. Mainly provided to Tier 1 partners.• Cadence: Daily.• Level of detail: Session level: one row per stream, keyed to an encrypted customer ID. The closest thing to a subscriber panel.• What is in it: Encrypted customer ID, stream timestamp, device class and subclass, DMA, seconds viewed, title, season, episode.• The ID stays constant for as long as the customer keeps the same Amazon account, including through cancel and re-subscribe, so churn and return can be followed over time.• No PII of any kind.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Who gets it: Global. Mainly provided to Tier 1 partners.",
+                "bold": false
+              },
+              {
+                "text": "• Cadence: Daily.",
+                "bold": false
+              },
+              {
+                "text": "• Level of detail: Session level: one row per stream, keyed to an encrypted customer ID. The closest thing to a subscriber panel.",
+                "bold": false
+              },
+              {
+                "text": "• What is in it: Encrypted customer ID, stream timestamp, device class and subclass, DMA, seconds viewed, title, season, episode.",
+                "bold": false
+              },
+              {
+                "text": "• The ID stays constant for as long as the customer keeps the same Amazon account, including through cancel and re-subscribe, so churn and return can be followed over time.",
+                "bold": false
+              },
+              {
+                "text": "• No PII of any kind.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "The two base-tier reports that matter most, explained",
+        "paragraphs": [
+          {
+            "text": "Content Usage (weekly and monthly). For every episode, and separately for every subscription plan, four numbers: Total Customers Streamed (unique people who played it), Total Number of Streams (play sessions: a valid stream is anything over 0 seconds through the Prime interface, and pressing play again or switching device starts a new one), Total Minutes Streamed (non-ad minutes) and Total Ad Minutes Streamed. So \"how many people, how many times, how many minutes\" per episode. There is no completion rate; minutes divided by customers against runtime is the proxy. Because the stream threshold is 0 seconds, stream counts run well above any viewer definition Crosswalk uses.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Content Usage (weekly and monthly). For every episode, and separately for every subscription plan, four numbers: Total Customers Streamed (unique people who played it), Total Number of Streams (play sessions: a valid stream is anything over 0 seconds through the Prime interface, and pressing play again or switching device starts a new one), Total Minutes Streamed (non-ad minutes) and Total Ad Minutes Streamed. So \"how many people, how many times, how many minutes\" per episode. There is no completion rate; minutes divided by customers against runtime is the proxy. Because the stream threshold is 0 seconds, stream counts run well above any viewer definition Crosswalk uses.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Conversion and Retention (monthly). A cohort survival table. Each row is the group of customers who started one offer in one month (the \"Subscription Start Period\"): the number of signups, the share who converted from Free Trial to paid (Amazon calls paid \"Hard Offer\"), then Month 1 through Month 12 as the percentage of the original signups still subscribed. Amazon's sample row: 29,753 signups, 75.9% converted, 40.3% retained at month 1, 6.5% at month 12. Aggregate only. The spec's sample cohorts start in late 2021, so the report has existed in this form since at least then; the public documentation describing all nine Channels reports was published February 2025. Amazon's own conversion rate, churn rate and net adds formulas are computed from the Subscriptions report, not this one.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Conversion and Retention (monthly). A cohort survival table. Each row is the group of customers who started one offer in one month (the \"Subscription Start Period\"): the number of signups, the share who converted from Free Trial to paid (Amazon calls paid \"Hard Offer\"), then Month 1 through Month 12 as the percentage of the original signups still subscribed. Amazon's sample row: 29,753 signups, 75.9% converted, 40.3% retained at month 1, 6.5% at month 12. Aggregate only. The spec's sample cohorts start in late 2021, so the report has existed in this form since at least then; the public documentation describing all nine Channels reports was published February 2025. Amazon's own conversion rate, churn rate and net adds formulas are computed from the Subscriptions report, not this one.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Is there a fee? None is published. Slate access and the Contractual reports are a term of the Channels licensing agreement, not a priced product. Premium, the Daily Anonymized feed and the Analytics API are also described only as dependent on the licensing agreement, so they are negotiated terms rather than a rate card. AMC itself is free to Amazon advertisers, but some AMC datasets are sold as paid features; confirm which applies to Prime Video Channel Insights.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Is there a fee? None is published. Slate access and the Contractual reports are a term of the Channels licensing agreement, not a priced product. Premium, the Daily Anonymized feed and the Analytics API are also described only as dependent on the licensing agreement, so they are negotiated terms rather than a rate card. AMC itself is free to Amazon advertisers, but some AMC datasets are sold as paid features; confirm which applies to Prime Video Channel Insights.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Beyond the Slate reports",
+        "paragraphs": [
+          {
+            "text": "• Analytics API Suite. For eligible partners. Programmatic access to content and subscription performance data, including a daily Subscription Event Log, so the numbers land in a warehouse instead of being downloaded by hand.• Amazon Marketing Cloud, Prime Video Channel Insights. Launched late 2025. Enrollment and streaming analytics for audience analysis, measurement and activation inside a clean room: aggregated outputs only, row-level data does not leave (confirm thresholds).",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Analytics API Suite. For eligible partners. Programmatic access to content and subscription performance data, including a daily Subscription Event Log, so the numbers land in a warehouse instead of being downloaded by hand.",
+                "bold": false
+              },
+              {
+                "text": "• Amazon Marketing Cloud, Prime Video Channel Insights. Launched late 2025. Enrollment and streaming analytics for audience analysis, measurement and activation inside a clean room: aggregated outputs only, row-level data does not leave (confirm thresholds).",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "What is not available, at any tier",
+        "paragraphs": [
+          {
+            "text": "• Who the customer is. No name, email, postal address, Amazon account ID or payment details. Amazon is the merchant of record and keeps the billing relationship.• Any way to match a Channels subscriber into the partner's own CRM, first-party data or ad platforms. The encrypted ID is Amazon's and resolves only inside Amazon systems.• Demographics. No age, gender, income, ethnicity or household composition. Geography stops at DMA, and DMA is only in the Tier 1 feed.• Anything outside the partner's own channel. No view of what the same customer watches on other channels, on Prime Video's included catalog, or on other apps and devices.• Customer-level rows below Tier 1 (Contractual and Premium are aggregates and cohorts only), and Premium reporting outside the United States.• Real time. The base tier is weekly and monthly, Tier 1 is daily; both arrive after a processing lag (confirm the lag per tier).• Per-partner terms. Amazon does not disclose which partner is on which tier, and Apple, NBCUniversal, Paramount and Warner Bros. Discovery have not said publicly what they receive.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Who the customer is. No name, email, postal address, Amazon account ID or payment details. Amazon is the merchant of record and keeps the billing relationship.",
+                "bold": false
+              },
+              {
+                "text": "• Any way to match a Channels subscriber into the partner's own CRM, first-party data or ad platforms. The encrypted ID is Amazon's and resolves only inside Amazon systems.",
+                "bold": false
+              },
+              {
+                "text": "• Demographics. No age, gender, income, ethnicity or household composition. Geography stops at DMA, and DMA is only in the Tier 1 feed.",
+                "bold": false
+              },
+              {
+                "text": "• Anything outside the partner's own channel. No view of what the same customer watches on other channels, on Prime Video's included catalog, or on other apps and devices.",
+                "bold": false
+              },
+              {
+                "text": "• Customer-level rows below Tier 1 (Contractual and Premium are aggregates and cohorts only), and Premium reporting outside the United States.",
+                "bold": false
+              },
+              {
+                "text": "• Real time. The base tier is weekly and monthly, Tier 1 is daily; both arrive after a processing lag (confirm the lag per tier).",
+                "bold": false
+              },
+              {
+                "text": "• Per-partner terms. Amazon does not disclose which partner is on which tier, and Apple, NBCUniversal, Paramount and Warner Bros. Discovery have not said publicly what they receive.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Does Amazon give partners a First View figure?",
+        "paragraphs": [
+          {
+            "text": "Only inside the partner's own channel, and only at the Premium tier or above. Crosswalk's First View is the count of people whose first-ever stream on a platform was a given title (for example, the 3,148,627 first-ever Roku Channel users whose first title was The Spiderwick Chronicles). Amazon has no report at that platform level.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Only inside the partner's own channel, and only at the Premium tier or above. Crosswalk's First View is the count of people whose first-ever stream on a platform was a given title (for example, the 3,148,627 first-ever Roku Channel users whose first title was The Spiderwick Chronicles). Amazon has no report at that platform level.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Base tier: no. The Contractual tier reports new subscriptions by offer, but does not say which title the new subscriber watched first or what brought them in.• Premium: within the channel. The First-and-Last VOD Title report shows the first title each customer streamed within the channel, whether it was during a free trial, and whether that first stream coincided with conversion to a paid offer. That is a channel-level first view, US only, contract dependent.• Tier 1: derivable, still within the channel. Because the feed is session level with a persistent ID, a partner can compute its own first-stream-per-customer figure daily. Still bounded by the channel: it is the first thing they watched on your channel, not on Prime Video.• Platform level: no, at any tier. Amazon never tells a partner whether the customer was new to Prime Video or to Amazon, or what they watched on other channels before arriving. A title's value as a front door to the platform (the Spiderwick argument) cannot be shown from Amazon reporting alone.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Base tier: no. The Contractual tier reports new subscriptions by offer, but does not say which title the new subscriber watched first or what brought them in.",
+                "bold": false
+              },
+              {
+                "text": "• Premium: within the channel. The First-and-Last VOD Title report shows the first title each customer streamed within the channel, whether it was during a free trial, and whether that first stream coincided with conversion to a paid offer. That is a channel-level first view, US only, contract dependent.",
+                "bold": false
+              },
+              {
+                "text": "• Tier 1: derivable, still within the channel. Because the feed is session level with a persistent ID, a partner can compute its own first-stream-per-customer figure daily. Still bounded by the channel: it is the first thing they watched on your channel, not on Prime Video.",
+                "bold": false
+              },
+              {
+                "text": "• Platform level: no, at any tier. Amazon never tells a partner whether the customer was new to Prime Video or to Amazon, or what they watched on other channels before arriving. A title's value as a front door to the platform (the Spiderwick argument) cannot be shown from Amazon reporting alone.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Licensed content inside a Channel: who sees what",
+        "paragraphs": [
+          {
+            "text": "Example: WBD licenses Gilmore Girls to Peacock, and Peacock is sold as an Amazon Channel. Three parties, one viewing lane. Who sees it?",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Example: WBD licenses Gilmore Girls to Peacock, and Peacock is sold as an Amazon Channel. Three parties, one viewing lane. Who sees it?",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Amazon reports only to its contracting partner. The Channels reports go to the channel operator (Peacock). WBD is not a party to the Peacock and Amazon agreement and receives nothing from Amazon for that lane. Amazon's Terms of Use say it shares non-identifiable viewing history with \"video content providers offering subscription services through Prime Video add-on subscriptions,\" meaning the channel, not the channel's licensors.• Peacock itself sees the Channels lane only through Amazon's reports. Playback happens inside the Prime Video app and player, so Peacock has no first-party telemetry on those sessions. For most partners that means aggregate episode-level usage; only a Tier 1 partner gets session rows.• What WBD gets depends on the WBD and Peacock license, not on Amazon. Licensors typically receive aggregate title-level performance (hours or views per title, often quarterly) for the service in total. A lane split (Peacock app vs Amazon vs other storefronts) is unusual and exists only if negotiated. Amazon's General Terms bind the partner to use information obtained under the agreement only for that agreement's purposes, so Peacock would normally pass its own derived aggregates, not Amazon's reports.• Not all platforms, and not the whole lane. There is no industry standard. Netflix publishes semiannual hours viewed per title but gives licensors little beyond it. The 2023 WGA and SAG-AFTRA agreements force the major services (Peacock, Max, Prime Video, Netflix and others) to report quarterly hours viewed for high-budget programs, but to the guilds under confidentiality, not to licensors. Performance-based license deals now specify metrics, cadence, format and audit rights; that is where a licensor gets lane detail, if at all.• Crosswalk implication. A licensor sees its title on a platform as one aggregate number, if that, and cannot see who watched, through which storefront, or what else they watch. Crosswalk observes the viewer at the device level regardless of who billed them. Peacock app vs Prime Video is a deterministic split (different hosts and URLs). Inside Prime Video, the play URL names the title but not the entitlement, so the Peacock lane is assigned by catalog rights (the title is on Prime Video only through the Peacock add-on in the window) or by the household's channel sign-up and manage-channel signals. Titles reachable by two routes at once without an entitlement signal stay attributed to Prime Video, not to Peacock.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Amazon reports only to its contracting partner. The Channels reports go to the channel operator (Peacock). WBD is not a party to the Peacock and Amazon agreement and receives nothing from Amazon for that lane. Amazon's Terms of Use say it shares non-identifiable viewing history with \"video content providers offering subscription services through Prime Video add-on subscriptions,\" meaning the channel, not the channel's licensors.",
+                "bold": false
+              },
+              {
+                "text": "• Peacock itself sees the Channels lane only through Amazon's reports. Playback happens inside the Prime Video app and player, so Peacock has no first-party telemetry on those sessions. For most partners that means aggregate episode-level usage; only a Tier 1 partner gets session rows.",
+                "bold": false
+              },
+              {
+                "text": "• What WBD gets depends on the WBD and Peacock license, not on Amazon. Licensors typically receive aggregate title-level performance (hours or views per title, often quarterly) for the service in total. A lane split (Peacock app vs Amazon vs other storefronts) is unusual and exists only if negotiated. Amazon's General Terms bind the partner to use information obtained under the agreement only for that agreement's purposes, so Peacock would normally pass its own derived aggregates, not Amazon's reports.",
+                "bold": false
+              },
+              {
+                "text": "• Not all platforms, and not the whole lane. There is no industry standard. Netflix publishes semiannual hours viewed per title but gives licensors little beyond it. The 2023 WGA and SAG-AFTRA agreements force the major services (Peacock, Max, Prime Video, Netflix and others) to report quarterly hours viewed for high-budget programs, but to the guilds under confidentiality, not to licensors. Performance-based license deals now specify metrics, cadence, format and audit rights; that is where a licensor gets lane detail, if at all.",
+                "bold": false
+              },
+              {
+                "text": "• Crosswalk implication. A licensor sees its title on a platform as one aggregate number, if that, and cannot see who watched, through which storefront, or what else they watch. Crosswalk observes the viewer at the device level regardless of who billed them. Peacock app vs Prime Video is a deterministic split (different hosts and URLs). Inside Prime Video, the play URL names the title but not the entitlement, so the Peacock lane is assigned by catalog rights (the title is on Prime Video only through the Peacock add-on in the window) or by the household's channel sign-up and manage-channel signals. Titles reachable by two routes at once without an entitlement signal stay attributed to Prime Video, not to Peacock.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Reading the reports correctly",
+        "paragraphs": [
+          {
+            "text": "• \"Total Customers Streamed\" is unique within the report period, so weekly uniques cannot be summed into a monthly figure; use the monthly report. A valid stream is anything over 0 seconds and ad minutes are separate from content minutes, so do not treat streams as views; use customers and minutes.• VOD and JAB (Just After Broadcast) are separate values. Every report is keyed by offer (monthly, annual, trial, bundle), so blending needs an offer map per partner.• The Tier 1 encrypted ID is per Amazon account, not per person (household sharing applies); treat it as an account panel. Confirm how Amazon assigns DMA (billing address vs IP) before joining to Crosswalk's census-based DMA shares.• Data-use terms. Amazon partner agreements typically restrict sharing reports with third parties. Before any Channels data is joined to Crosswalk data, the partner needs to confirm their contract allows it.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• \"Total Customers Streamed\" is unique within the report period, so weekly uniques cannot be summed into a monthly figure; use the monthly report. A valid stream is anything over 0 seconds and ad minutes are separate from content minutes, so do not treat streams as views; use customers and minutes.",
+                "bold": false
+              },
+              {
+                "text": "• VOD and JAB (Just After Broadcast) are separate values. Every report is keyed by offer (monthly, annual, trial, bundle), so blending needs an offer map per partner.",
+                "bold": false
+              },
+              {
+                "text": "• The Tier 1 encrypted ID is per Amazon account, not per person (household sharing applies); treat it as an account panel. Confirm how Amazon assigns DMA (billing address vs IP) before joining to Crosswalk's census-based DMA shares.",
+                "bold": false
+              },
+              {
+                "text": "• Data-use terms. Amazon partner agreements typically restrict sharing reports with third parties. Before any Channels data is joined to Crosswalk data, the partner needs to confirm their contract allows it.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     "title": "PROFILE IQ",
     "intro": [],
     "subs": [
