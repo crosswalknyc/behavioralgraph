@@ -48766,6 +48766,8 @@ _SG_WINDOW_ONLY_WORDS = {
     'april', 'may', 'jun', 'june', 'jul', 'july', 'aug', 'august',
     'sep', 'sept', 'september', 'oct', 'october', 'nov', 'november',
     'dec', 'december',
+    'by', 'based', 'on', 'want', 'different', 'instead', 'each',
+    'every',
 }
 
 
@@ -48858,12 +48860,138 @@ def _sg_quarter_cut_to_refresh(draft, cal, text):
     return True
 
 
+# Plural / generic quarter asks ('I want cuts by Quarter based on
+# dates', 'quarterly cuts', 'split it by quarters') name no specific
+# quarter. Jenna 2026-10-01 (Bria's Starz reply): these bind the
+# quarterly deliverable set instead of falling through as an unknown
+# cut the strategist defers on.
+_SG_QTRS_PLURAL_RE = re.compile(
+    r"\b(?:cuts?|splits?|breakdowns?|reads?|ranges?|files?|pulls?)\s+"
+    r"(?:by|per|for\s+each|into)\s+(?:calendar\s+)?quarters?\b"
+    r"|\bby\s+(?:calendar\s+)?quarters\b"
+    r"|\bquarterly\s+(?:cuts?|splits?|breakdowns?|reads?|files?|"
+    r"deliverables?|date\s+ranges?|profiles?)\b"
+    r"|\bquarter(?:ly)?\s+(?:date\s+range\s+)?cuts?\b"
+    r"|\beach\s+(?:calendar\s+)?quarter\b"
+    r"|\bevery\s+(?:calendar\s+)?quarter\b",
+    re.IGNORECASE)
+
+
+def _sg_recent_quarters(today, n=4):
+    """The n most recent COMPLETE calendar quarters, oldest first, as
+    quarter-cut dicts. A generic 'by quarter' ask on a trailing-12
+    profile means exactly these."""
+    cy = today.year
+    cq = (today.month - 1) // 3 + 1
+    cq -= 1                       # the current quarter is incomplete
+    if cq == 0:
+        cy, cq = cy - 1, 4
+    out = []
+    for _ in range(max(1, int(n))):
+        cal = _sg_calendar_quarter(cq, str(cy), today)
+        out.append({'label': f"Q{cal['q']} {cal['year']}",
+                    'q': cal['q'], 'year': cal['year'],
+                    'start': cal['start'], 'end': cal['end']})
+        cq -= 1
+        if cq == 0:
+            cy, cq = cy - 1, 4
+    out.reverse()
+    return out
+
+
+def _sg_parse_quarter_cut_list(text, today):
+    """Quarter-cut list from one message. Specific quarters named in
+    the text win ('Q2 2026 and Q3 2026'); a generic plural ask ('cuts
+    by quarter', 'quarterly cuts') enumerates the four most recent
+    complete calendar quarters. None when the text asks for
+    neither."""
+    t = str(text or '')
+    specs, seen = [], set()
+    for m in _SG_QTR_RE.finditer(t):
+        qn, qy = _sg_qtr_parts(m)
+        cal = _sg_calendar_quarter(qn, qy, today)
+        key = (cal['q'], cal['year'])
+        if key not in seen:
+            seen.add(key)
+            specs.append({'label': f"Q{cal['q']} {cal['year']}",
+                          'q': cal['q'], 'year': cal['year'],
+                          'start': cal['start'], 'end': cal['end']})
+    if specs:
+        return specs
+    if _SG_QTRS_PLURAL_RE.search(t):
+        return _sg_recent_quarters(today)
+    return None
+
+
+def _sg_bind_quarter_cuts(draft, quarters, text, decision):
+    """Bind a multi-quarter ask. Every quarter ships as its own dated
+    deliverable '{Subject} - Q{n} {year}' derived off the finished
+    national parent (the worker fans spec.quarter_cuts out as window
+    re-reads of that parent). On an existing-parent decision the
+    FIRST quarter becomes the primary job - the same re-route a
+    single-quarter ask takes - and the rest ride quarter_cuts; on a
+    fresh build the base TU + avid keep their own window and ALL
+    quarters ride quarter_cuts."""
+    quarters = [q for q in (quarters or [])
+                if isinstance(q, dict) and q.get('label')
+                and q.get('start') and q.get('end')]
+    if not quarters:
+        return False
+    dec = str(draft.get('decision') or decision or '').strip().lower()
+    rest = quarters
+    if dec in ('derive_cut', 'cut_needs_parent', 'existing_match',
+               'time_shifted_refresh'):
+        first = quarters[0]
+        cal = {'q': first.get('q'), 'year': first.get('year'),
+               'start': first['start'], 'end': first['end']}
+        if not cal['q'] or not cal['year']:
+            try:
+                _fs = str(first['start'])
+                cal['q'] = (int(_fs[5:7]) - 1) // 3 + 1
+                cal['year'] = int(_fs[:4])
+            except (TypeError, ValueError):
+                cal['q'], cal['year'] = 1, 2026
+        # The converter gates on a quarter naming in the current
+        # message; a plural ask IS that naming, so hand it the
+        # resolved label.
+        _sg_quarter_cut_to_refresh(draft, cal, first['label'])
+        _sg_apply_quarter(draft, cal,
+                          str(draft.get('decision') or decision))
+        rest = quarters[1:]
+    draft['quarter_cuts'] = [
+        {'label': str(q['label']).upper(), 'start': q['start'],
+         'end': q['end']} for q in rest]
+    try:
+        draft['estimated_credits'] = int(
+            draft.get('estimated_credits')
+            or draft.get('base_credits') or 5) \
+            + ADDON_CUT_CREDITS * len(rest)
+    except (TypeError, ValueError):
+        pass
+    labels = ', '.join(q['label'] for q in quarters)
+    _append_identity_echo(
+        draft, f"quarterly deliverables: {labels} (each quarter "
+               f"ships as its own file)")
+    try:
+        print(f"[quarter-cuts] bound {len(quarters)} quarterly "
+              f"deliverables ({labels}); primary decision="
+              f"{draft.get('decision')}")
+    except Exception:
+        pass
+    return True
+
+
 def _sg_guard_fiscal_quarter(draft, text, history, decision,
                              allow_ask):
     hay = _sg_haystack(text, history)
     mq = _SG_QTR_RE.search(hay)
     fiscal = bool(_SG_FISCAL_RE.search(hay))
-    if not mq and not fiscal:
+    # A generic plural quarter ask carries no specific quarter; only
+    # the CURRENT message may bind it (history mentions never fan out
+    # deliverables the user did not just ask for).
+    plural = (None if mq else
+              _SG_QTRS_PLURAL_RE.search(str(text or '')))
+    if not mq and not fiscal and not plural:
         return None
     # A 'calendar' reply resolves a pending fiscal-vs-calendar ask.
     if fiscal and re.search(r"\bcalendar\b", str(text or ''),
@@ -48922,11 +49050,30 @@ def _sg_guard_fiscal_quarter(draft, text, history, decision,
         _append_identity_echo(draft, f"window read as {lbl}")
         return None
     if mq:
+        # Multiple SPECIFIC quarters named in the current message
+        # ('Q1 2026 and Q2 2026 cuts') ship one deliverable per
+        # quarter, same as a plural ask.
+        specs, seen_q = [], set()
+        for m2 in _SG_QTR_RE.finditer(str(text or '')):
+            _qn2, _qy2 = _sg_qtr_parts(m2)
+            c2 = _sg_calendar_quarter(_qn2, _qy2, today)
+            k2 = (c2['q'], c2['year'])
+            if k2 not in seen_q:
+                seen_q.add(k2)
+                specs.append({'label': f"Q{c2['q']} {c2['year']}",
+                              'q': c2['q'], 'year': c2['year'],
+                              'start': c2['start'], 'end': c2['end']})
+        if len(specs) >= 2:
+            _sg_bind_quarter_cuts(draft, specs, text, decision)
+            return None
         _qn, _qy = _sg_qtr_parts(mq)
         cal = _sg_calendar_quarter(_qn, _qy, today)
         _sg_quarter_cut_to_refresh(draft, cal, text)
         _sg_apply_quarter(draft, cal,
                           str(draft.get('decision') or decision))
+    elif plural:
+        _sg_bind_quarter_cuts(draft, _sg_recent_quarters(today),
+                              text, decision)
     return None
 
 
@@ -52704,6 +52851,33 @@ def _parse_strategy_answer(answer, subject, draft):
     if low in ('both', 'both of them') and len(recs) == 2:
         return list(recs), []
 
+    # Quarter cuts (Jenna 2026-10-01; Bria's Starz reply 'I want
+    # different cuts. I want cuts by Quarter based on dates.'):
+    # quarter vocabulary in the picker reply binds quarterly
+    # deliverables instead of falling through as an unknown cut.
+    from datetime import date as _dt_date
+    qlist = _sg_parse_quarter_cut_list(t, _dt_date.today())
+    if qlist:
+        draft['quarter_cuts'] = [
+            {'label': q['label'], 'start': q['start'],
+             'end': q['end']} for q in qlist]
+        t = _SG_QTRS_PLURAL_RE.sub(' ', t)
+        t = _SG_QTR_RE.sub(' ', t)
+        t = _re.sub(r'\b(i|want|different|the|a|an|cut|cuts|split|'
+                    r'splits|based|on|by|dates?|date|ranges?|'
+                    r'quarters?|quarterly|calendar|instead|please|'
+                    r'also|and|of|it|them|each|every)\b', ' ', t,
+                    flags=_re.IGNORECASE)
+        t = _re.sub(r'[,&+.!]', ' ', t)
+        t = ' '.join(t.split())
+        low = t.lower()
+        # A quarters-only reply is fully parsed; a mixed reply
+        # ('1 and quarterly cuts') still carries picks to resolve.
+        if len(t) <= 2 and not _re.search(r'\b[1-9]\b', t) \
+                and not _re.search(
+                    r'\b(first|second|third|fourth)\b', low):
+            return [], []
+
     nums = [int(n) for n in _re.findall(r'\b([1-9])\b', t)]
     for w, n in (('first', 1), ('second', 2), ('third', 3),
                  ('fourth', 4)):
@@ -53325,22 +53499,30 @@ def api_synth_chat_clarify():
         approval card. Base ALWAYS covers the national TU + avid;
         every cut is +ADDON_CUT_CREDITS derived from that parent."""
         cuts = draft.get('addon_cuts') or []
-        total = base_credits + ADDON_CUT_CREDITS * len(cuts)
+        qcuts = [q for q in (draft.get('quarter_cuts') or [])
+                 if isinstance(q, dict) and q.get('label')]
+        n_all = len(cuts) + len(qcuts)
+        total = base_credits + ADDON_CUT_CREDITS * n_all
         draft['estimated_credits'] = total
         draft.pop('strategist_recs', None)
-        if cuts:
+        if cuts or qcuts:
             cut_lines = "\n".join(
-                f"  - {c.get('label') or c.get('cut_id')} "
-                f"(+{ADDON_CUT_CREDITS} credits)" for c in cuts)
-            msg = (f"Locked in {len(cuts)} cut"
-                   f"{'s' if len(cuts) != 1 else ''}:\n{cut_lines}\n\n"
+                [f"  - {c.get('label') or c.get('cut_id')} "
+                 f"(+{ADDON_CUT_CREDITS} credits)" for c in cuts]
+                + [f"  - {q['label']} quarter read "
+                   f"({_ew_format_label(q.get('start'), q.get('end'))})"
+                   f" (+{ADDON_CUT_CREDITS} credits)" for q in qcuts])
+            msg = (f"Locked in {n_all} cut"
+                   f"{'s' if n_all != 1 else ''}:\n{cut_lines}\n\n"
                    f"Total: {total} credits (base {base_credits} "
                    f"covers the national {_pm_universe_phrase(draft)} "
                    f"+ avid; "
-                   f"{len(cuts)} x {ADDON_CUT_CREDITS} for the cuts, "
+                   f"{n_all} x {ADDON_CUT_CREDITS} for the cuts, "
                    "each derived from that national parent so the "
-                   "numbers ladder up). Review the brief below and "
-                   "approve to queue.")
+                   "numbers ladder up"
+                   + (" - every quarter ships as its own dated file"
+                      if qcuts else "")
+                   + "). Review the brief below and approve to queue.")
         else:
             msg = (f"No add-on cuts - just the national "
                    f"{_pm_universe_phrase(draft)} + avid. Review the "
@@ -57235,6 +57417,27 @@ def _spec_from_draft(draft):
             _clean_cuts.append(_cc)
         if _clean_cuts:
             spec['addon_cuts'] = _clean_cuts
+    # Quarter cuts (2026-10-01 Jenna; Bria's 'cuts by Quarter based
+    # on dates' ask): each entry ships as its own dated deliverable
+    # off the finished parent - the worker fans them out as window
+    # re-reads, so the numbers stay anchored to the same universe.
+    _qcuts = draft.get('quarter_cuts') or []
+    if isinstance(_qcuts, list) and _qcuts:
+        _clean_q = []
+        for q in _qcuts:
+            if not isinstance(q, dict):
+                continue
+            _ql = str(q.get('label') or '').strip().upper()
+            _qs = str(q.get('start') or '').strip()
+            _qe = str(q.get('end') or '').strip()
+            if not (re.fullmatch(r'Q[1-4] (?:20)?\d{2}', _ql)
+                    and re.fullmatch(r'\d{4}-\d{2}-\d{2}', _qs)
+                    and re.fullmatch(r'\d{4}-\d{2}-\d{2}', _qe)
+                    and _qs < _qe):
+                continue
+            _clean_q.append({'label': _ql, 'start': _qs, 'end': _qe})
+        if _clean_q:
+            spec['quarter_cuts'] = _clean_q[:8]
     # If Claude proposed clickstream_signals at interpret time (for a
     # platform/retailer behavioral cohort), thread them into a partial
     # persona_doc so the synth engine can use them for BRAND INPUT even
