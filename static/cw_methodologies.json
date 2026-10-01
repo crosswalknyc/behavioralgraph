@@ -545,11 +545,27 @@
         "title": "The short version",
         "paragraphs": [
           {
-            "text": "Amazon publishes the reporting spec for Prime Video Channels, and it is more granular than most people assume. Every channel partner, anywhere in the world, gets episode-level viewing (streams, unique streamers, minutes) plus aggregate subscription, conversion and retention numbers. Larger partners negotiate deeper tiers, down to a daily, one-row-per-stream feed keyed to a stable pseudonymous customer ID. What no partner ever receives is the customer's identity, because Amazon remains the merchant of record. The real question for any Channels partner is not \"do you get viewership\" but \"which tier did you negotiate.\"",
+            "text": "• Amazon publishes the Prime Video Channels reporting spec, and it is more granular than most assume.• Every partner, in every market, gets episode level viewing (streams, unique streamers, minutes) plus subscription, conversion and retention by offer.• Larger partners negotiate deeper tiers, down to a daily per stream feed under a stable pseudonymous customer ID.• No partner ever receives the customer's identity. Amazon is the merchant of record.• The question is not \"do you get viewership\" but \"which tier did you negotiate.\"",
             "is_list": false,
             "runs": [
               {
-                "text": "Amazon publishes the reporting spec for Prime Video Channels, and it is more granular than most people assume. Every channel partner, anywhere in the world, gets episode-level viewing (streams, unique streamers, minutes) plus aggregate subscription, conversion and retention numbers. Larger partners negotiate deeper tiers, down to a daily, one-row-per-stream feed keyed to a stable pseudonymous customer ID. What no partner ever receives is the customer's identity, because Amazon remains the merchant of record. The real question for any Channels partner is not \"do you get viewership\" but \"which tier did you negotiate.\"",
+                "text": "• Amazon publishes the Prime Video Channels reporting spec, and it is more granular than most assume.",
+                "bold": false
+              },
+              {
+                "text": "• Every partner, in every market, gets episode level viewing (streams, unique streamers, minutes) plus subscription, conversion and retention by offer.",
+                "bold": false
+              },
+              {
+                "text": "• Larger partners negotiate deeper tiers, down to a daily per stream feed under a stable pseudonymous customer ID.",
+                "bold": false
+              },
+              {
+                "text": "• No partner ever receives the customer's identity. Amazon is the merchant of record.",
+                "bold": false
+              },
+              {
+                "text": "• The question is not \"do you get viewership\" but \"which tier did you negotiate.\"",
                 "bold": false
               }
             ]
@@ -560,11 +576,23 @@
         "title": "What Crosswalk adds: additive and complementary",
         "paragraphs": [
           {
-            "text": "A Channels partner gets from Amazon a detailed, aggregate picture of its own channel (episode-level viewing, subscriptions, conversion and retention by offer; Tier 1 partners get a daily session feed under an encrypted ID). It gets no identity, no demographics, no view of the same customer outside the channel, no cross-partner benchmark, and a licensor whose title sits inside the channel gets even less. Additive means Amazon does not give the partner this at any tier, so Crosswalk is the only source. Complementary means Amazon reports it for the partner's own channel and Crosswalk validates, extends or puts it in market context.",
+            "text": "• A partner sees its own channel in detail: episode level viewing, subscriptions, conversion and retention by offer.• It cannot see who the customer is, what they watch elsewhere, or how the channel ranks against anyone else. A licensor whose title sits inside the channel sees less again.• Additive: Amazon does not provide it at any tier; Crosswalk is the only source.• Complementary: Amazon reports it for the partner's channel; Crosswalk validates it, extends it and adds market context.",
             "is_list": false,
             "runs": [
               {
-                "text": "A Channels partner gets from Amazon a detailed, aggregate picture of its own channel (episode-level viewing, subscriptions, conversion and retention by offer; Tier 1 partners get a daily session feed under an encrypted ID). It gets no identity, no demographics, no view of the same customer outside the channel, no cross-partner benchmark, and a licensor whose title sits inside the channel gets even less. Additive means Amazon does not give the partner this at any tier, so Crosswalk is the only source. Complementary means Amazon reports it for the partner's own channel and Crosswalk validates, extends or puts it in market context.",
+                "text": "• A partner sees its own channel in detail: episode level viewing, subscriptions, conversion and retention by offer.",
+                "bold": false
+              },
+              {
+                "text": "• It cannot see who the customer is, what they watch elsewhere, or how the channel ranks against anyone else. A licensor whose title sits inside the channel sees less again.",
+                "bold": false
+              },
+              {
+                "text": "• Additive: Amazon does not provide it at any tier; Crosswalk is the only source.",
+                "bold": false
+              },
+              {
+                "text": "• Complementary: Amazon reports it for the partner's channel; Crosswalk validates it, extends it and adds market context.",
                 "bold": false
               }
             ]
@@ -580,7 +608,7 @@
             ]
           },
           {
-            "text": "• Who the viewer is. Age, gender, household composition, income, interests and brands, indexed to US gen pop (Profile IQ). Amazon supplies no demographics.• What else they watch. The same audience's viewing across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows a partner only its own channel.• Market context. How the title or channel ranks against other titles, channels and franchises. Amazon has no cross-partner benchmark.• Platform-level First View and franchise acquisition and retention comparisons. Amazon stops at the channel.• Portable audiences. Segments defined off Amazon's encrypted ID that can be used for planning and activation anywhere, since Amazon's ID never leaves Amazon.• Lane visibility for licensors. A studio whose title sits inside a channel (WBD's Gilmore Girls on Peacock via Amazon) sees at best one aggregate number from the platform. Crosswalk measures the title across platforms and splits the Peacock app from Prime Video (see Part 2).",
+            "text": "• Who the viewer is. Age, gender, household composition, income, interests and brands, indexed to US gen pop (Profile IQ). Amazon supplies no demographics.• What else they watch. The same audience across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows only the partner's channel.• Market context. How the title or channel ranks against other titles, channels and franchises. Amazon has no cross-partner benchmark.• Platform-level First View and franchise acquisition and retention comparisons. Amazon stops at the channel.• Portable audiences. Segments defined off Amazon's encrypted ID that can be used for planning and activation anywhere, since Amazon's ID never leaves Amazon.• Lane visibility for licensors. A studio whose title sits inside a channel (WBD's Gilmore Girls on Peacock via Amazon) sees at best one aggregate number from the platform. Crosswalk measures the title across platforms and splits the Peacock app from Prime Video (see Part 2).",
             "is_list": false,
             "runs": [
               {
@@ -588,7 +616,7 @@
                 "bold": false
               },
               {
-                "text": "• What else they watch. The same audience's viewing across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows a partner only its own channel.",
+                "text": "• What else they watch. The same audience across every platform, including competitors and Prime Video's included catalog (Prometheus, behavior graph). Amazon shows only the partner's channel.",
                 "bold": false
               },
               {
