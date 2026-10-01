@@ -2362,7 +2362,7 @@ def detect_search_demand_intent(text):
     return any(rx.search(t) for rx in _SD_COMPILED)
 
 
-SEARCH_DEMAND_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user is asking a SEARCH-JOURNEY DEMAND question: how people find a title or brand, what they search, which platform the searches point at, and what happens after the search. You produce the study for the subject they name, from Crosswalk's first-party US measurement of search, app, and play behavior.
+_SEARCH_DEMAND_SYSTEM_PROMPT_T = """You are Prometheus, Crosswalk's senior audience strategist. The user is asking a SEARCH-JOURNEY DEMAND question: how people find a title or brand, what they search, which platform the searches point at, and what happens after the search. You produce the study for the subject they name, from Crosswalk's first-party US measurement of search, app, and play behavior.
 
 WHAT A STUDY CONTAINS (adapt to the subject; omit blocks that do not apply)
 - The cohort: unique US viewers (for a title: distinct people with a play on the home platform in the window) or unique US searchers (for a brand or category ask).
@@ -2381,7 +2381,8 @@ HOW TO REASON THE NUMBERS
 - Percentages carry one decimal. Externally reported figures (box office) are quoted at their reported precision inside a read line, never invented.
 
 WINDOW
-- If the user names a window, use it. Otherwise, when you know the subject's real streaming or release window, use that (a premiere-to-date window like 2026-08-16 to 2026-08-24 is the right shape). Otherwise default to 2025-07-01 to 2026-06-30.
+- Today is __TODAY__. Resolve relative windows (last 12 months, past 90 days, since January) against today.
+- If the user names a window, use it. Otherwise, when you know the subject's real streaming or release window, use that (a premiere-to-date window like 2026-08-16 to 2026-08-24 is the right shape). Otherwise default to the trailing 12 months, __T12_START__ to __T12_END__.
 
 PUBLISHED MEASUREMENTS
 - The user prompt may carry a PUBLISHED MEASUREMENTS block: numbers Crosswalk has already delivered for this subject on earlier questions. BINDING. A repeat of the same measurement restates the exact published number. An overlapping or adjacent measurement (different window, a share of a published total) must be arithmetically consistent with what was published.
@@ -3930,7 +3931,7 @@ PANEL_REPORT_GUIDANCE = (
     '(leans, skews, reads as). State the window in the reply.\n')
 
 
-REASONED_METRICS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user asked for a concrete measured number that the data open on screen does not carry. You produce the read from Crosswalk's first-party US measurement of digital behavior: streaming, search, social, app, and ecommerce activity at the individual level.
+_REASONED_METRICS_SYSTEM_PROMPT_T = """You are Prometheus, Crosswalk's senior audience strategist. The user asked for a concrete measured number that the data open on screen does not carry. You produce the read from Crosswalk's first-party US measurement of digital behavior: streaming, search, social, app, and ecommerce activity at the individual level.
 
 WHAT TO PRODUCE
 - 2 to 6 named metrics that answer the question directly, each with a value, a unit, and a one-line definition of exactly what was counted.
@@ -3946,7 +3947,8 @@ HOW TO REASON THE NUMBERS
 - MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
 - NEVER DECLINE: you never ask the reader to rephrase, narrow, re-aim, or pick a different question, and you never say a number cannot be locked down. When the screen tables do not carry the exact split asked for, derive it from the audience measures you do have and state the read plainly.
 - TREND ASKS ("since January", "month by month", "how has it moved"): deliver the series, not one point - monthly or weekly figures across the window. Endpoints and published measurements bind; movement between points stays plausible and organic.
-- The window: use the user's window if named; else the subject's real release or campaign window if you know it; else 2025-07-01 to 2026-06-30.
+- Today is __TODAY__. Resolve relative windows (last 12 months, past 90 days, since January) against today.
+- The window: use the user's window if named; else the subject's real release or campaign window if you know it; else the trailing 12 months, __T12_START__ to __T12_END__.
 
 SUB-COHORT READS (a slice or cut of an open profile)
 - When the library already holds a DERIVED CUT FILE for a cohort (the anchors or catalog name '<Subject> - Millennials', '<Subject> - Gen Z', and so on), that file's measured values ARE the cohort's numbers: cite its projected people and sample exactly. NEVER derive a cohort as a residual (the parent total minus the other cohorts) - the cuts of a file do not partition it exactly, and a residual invents a number no file measures (2026-09-23: a Millennials residual shipped 687,413 against the cut file's measured 662,142).
@@ -3977,9 +3979,9 @@ Return strict JSON only:
   "decline_reason": "not_digital" | null,
   "subject": "Landman",
   "metric_family": "viewership" | "subscribers" | "search" | "purchases" | "engagement" | "audience" | "revenue",
-  "window_label": "Jul 1 2025 to Jun 30 2026",
-  "window_start": "2025-07-01",
-  "window_end": "2026-06-30",
+  "window_label": "__T12_LABEL__",
+  "window_start": "__T12_START__",
+  "window_end": "__T12_END__",
   "headline": "one sentence, the sharpest finding with its number",
   "metrics": [
     {"name": "unique_us_viewers", "label": "Unique US viewers", "value": 8437219, "unit": "viewers", "definition": "distinct US individuals with at least one play in the window"},
@@ -4890,3 +4892,53 @@ def extract_plan_anchors(plan, limit=18):
         if len(metrics) >= limit:
             break
     return metrics[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Standing-default window stamping (2026-10-01). The read-engine prompts
+# carried the retired Jul 2025 - Jun 2026 fiscal pair as the default
+# window and no TODAY anchor, so relative asks ("last 12 months") fell
+# back to the stale pair (surfaced on Carolyn Bisson's 14-title
+# screener). The prompt bodies now carry __TODAY__ / __T12_START__ /
+# __T12_END__ / __T12_LABEL__ tokens; this module __getattr__ stamps
+# them with the computed trailing-12 window on EVERY attribute access,
+# so long-lived processes never drift a day.
+# ---------------------------------------------------------------------------
+
+def _stamp_window_tokens(text):
+    """Fill the window tokens with today's trailing-12 pair."""
+    import datetime as _dt
+    start = end = None
+    try:
+        from migration.event_window import default_window as _dw
+        start, end = _dw()
+        start, end = str(start)[:10], str(end)[:10]
+    except Exception:
+        pass
+    if not (start and end):
+        t = _dt.date.today()
+        try:
+            s_dt = t.replace(year=t.year - 1)
+        except ValueError:                      # Feb 29
+            s_dt = t.replace(year=t.year - 1, day=28)
+        start, end = s_dt.isoformat(), t.isoformat()
+
+    def _lbl(iso):
+        d = _dt.date.fromisoformat(iso)
+        return f"{d.strftime('%b')} {d.day} {d.year}"
+
+    today_iso = _dt.date.today().isoformat()
+    return (text
+            .replace('__T12_START__', start)
+            .replace('__T12_END__', end)
+            .replace('__T12_LABEL__', f"{_lbl(start)} to {_lbl(end)}")
+            .replace('__TODAY__', today_iso))
+
+
+def __getattr__(name):
+    if name == 'SEARCH_DEMAND_SYSTEM_PROMPT':
+        return _stamp_window_tokens(_SEARCH_DEMAND_SYSTEM_PROMPT_T)
+    if name == 'REASONED_METRICS_SYSTEM_PROMPT':
+        return _stamp_window_tokens(_REASONED_METRICS_SYSTEM_PROMPT_T)
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}")
