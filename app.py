@@ -5420,122 +5420,93 @@ def gmail_test():
 # EMAIL SENDING (uses Gmail API if connected, falls back to SMTP)
 # ============================================================================
 
-def send_welcome_email_async(email, username, password, role):
+def send_welcome_email_async(email, username, password, role, first_name=None):
     """Send welcome email in background thread (non-blocking)."""
     def _send():
         try:
-            send_welcome_email_sync(email, username, password, role)
+            send_welcome_email_sync(
+                email, username, password, role, first_name=first_name)
         except Exception as e:
-            print(f"❌ Background email failed: {e}")
+            print(f"Background email failed: {e}")
     
     thread = threading.Thread(target=_send, daemon=True)
     thread.start()
     return True, "Email queued for sending"
 
-def send_welcome_email_sync(email, username, password, role):
-    """Send welcome email with login credentials (blocking). Uses Gmail API if available, falls back to SMTP."""
+def send_welcome_email_sync(email, username, password, role, first_name=None):
+    """Send welcome email with login credentials (blocking).
+
+    SES from Prometheus first. Gmail/SMTP keep the same HTML if SES
+    is not available on this host.
+    """
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
-    
-    app_url = os.environ.get('APP_URL', 'https://behavioralgraph.onrender.com')
-    
-    # Build email content
-    text = f"""
-Welcome to Crosswalk's IQ Laboratory!
+    import welcome_email as _welcome
 
-Your account has been created. Here are your login details:
+    who = (first_name or "").strip() or str(username or "").strip()
+    login_url = _welcome._login_url()
+    text = _welcome.render_welcome_text(who, username, password, login_url)
+    html = _welcome.render_welcome_html(who, username, password, login_url)
 
-Username: {username}
-Password: {password}
-Role: {role}
+    try:
+        mid = _welcome.send_welcome(email, who, username, password, login_url)
+        print(f"Welcome email sent via SES to {email} for {username} mid={mid}")
+        return True, "Email sent via SES"
+    except Exception as e:
+        print(f"SES welcome send failed for {email}: {e}; trying Gmail/SMTP")
 
-Login URL: {app_url}/login
-
-You can change your password after logging in by going to your profile settings.
-
-If you have any questions, please contact your administrator.
-
-Best regards,
-Crosswalk IQ Team
-    """
-    
-    body = f"""
-        <div class="email-header">🎉 Welcome to Crosswalk IQ</div>
-        <p>Your account has been created. Here are your login details:</p>
-        <div class="email-card">
-            <div class="email-card-title">Login details</div>
-            <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
-            <div style="margin: 10px 0;"><span class="email-label">Password</span><br><span class="email-value">{password}</span></div>
-            <div style="margin: 10px 0;"><span class="email-label">Role</span><br><span class="email-value">{role.upper()}</span></div>
-        </div>
-        <p><a href="{app_url}/login" class="email-btn">Login Now →</a></p>
-        <p>You can change your password after logging in if you'd like.</p>
-        <p style="font-size: 12px; color: #8892b0;">If you have any questions, please contact your administrator.</p>
-    """
-    html = _wrap_email_html(body)
-    
-    # Try Gmail API first (if connected)
     tokens = load_gmail_tokens()
     if tokens and tokens.get('access_token'):
-        print(f"📧 Sending email via Gmail API to {email}...")
+        print(f"Sending welcome via Gmail API to {email}...")
         success, message = send_email_via_gmail(
             email,
-            "🎉 Welcome to Crosswalk's IQ Laboratory",
+            _welcome.SUBJECT,
             html,
             text
         )
         if success:
             return True, "Email sent via Gmail"
-        else:
-            print(f"⚠️ Gmail API failed: {message}, trying SMTP...")
-    
-    # Fall back to SMTP
+        print(f"Gmail API failed: {message}, trying SMTP...")
+
     smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
     smtp_port = int(os.environ.get('SMTP_PORT', 587))
     smtp_user = os.environ.get('SMTP_USER', '')
     smtp_password = os.environ.get('SMTP_PASSWORD', '')
     from_email = os.environ.get('FROM_EMAIL', smtp_user)
-    
+
     if not smtp_user or not smtp_password:
-        print(f"⚠️ SMTP not configured - skipping welcome email for {username}")
+        print(f"SMTP not configured - skipping welcome email for {username}")
         return False, "Email not configured. Connect Gmail in Admin settings."
-    
+
     try:
-        # Create message
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = "🎉 Welcome to Crosswalk's IQ Laboratory"
+        msg['Subject'] = _welcome.SUBJECT
         msg['From'] = from_email
         msg['To'] = email
-        
-        part1 = MIMEText(text, 'plain')
-        part2 = MIMEText(html, 'html')
-        msg.attach(part1)
-        msg.attach(part2)
-        
-        # Send email with timeout
-        print(f"📧 Sending email via SMTP to {email}...")
+        msg.attach(MIMEText(text, 'plain'))
+        msg.attach(MIMEText(html, 'html'))
+        print(f"Sending welcome via SMTP to {email}...")
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(from_email, email, msg.as_string())
-        
-        print(f"✅ Welcome email sent to {email} for user {username}")
+        print(f"Welcome email sent to {email} for user {username}")
         return True, "Email sent successfully"
-        
     except smtplib.SMTPAuthenticationError as e:
-        print(f"❌ SMTP authentication failed for {email}: {e}")
+        print(f"SMTP authentication failed for {email}: {e}")
         return False, "SMTP authentication failed - check credentials"
     except smtplib.SMTPException as e:
-        print(f"❌ SMTP error for {email}: {e}")
+        print(f"SMTP error for {email}: {e}")
         return False, f"SMTP error: {str(e)}"
     except Exception as e:
-        print(f"❌ Failed to send welcome email to {email}: {e}")
+        print(f"Failed to send welcome email to {email}: {e}")
         return False, str(e)
 
-def send_welcome_email(email, username, password, role):
+def send_welcome_email(email, username, password, role, first_name=None):
     """Send welcome email - uses async to avoid blocking."""
-    return send_welcome_email_async(email, username, password, role)
+    return send_welcome_email_async(
+        email, username, password, role, first_name=first_name)
 
 @app.route('/api/admin/users', methods=['POST'])
 @requires_admin
@@ -5757,7 +5728,9 @@ def create_user():
         # Send welcome email if requested and email provided
         email_status = None
         if send_welcome and email:
-            email_sent, email_message = send_welcome_email(email, username, password, role)
+            email_sent, email_message = send_welcome_email(
+                email, username, password, role,
+                first_name=data['users'][username].get('first_name'))
             email_status = 'sent' if email_sent else f'failed: {email_message}'
         
         response = {
