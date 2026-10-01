@@ -1389,6 +1389,153 @@ def _load_subiq_index(s3_client, subiq_bucket):
         return _xmod_subiq_index_cache['index'] or {}
 
 
+_deliv_index_cache = {'ts': 0.0, 'data': None}
+
+
+def _load_deliverable_indexes(s3_client, bucket):
+    """Per-product shipped-deliverable indexes for the cross-module
+    block: Digital Journey IQ runs, Attribution IQ campaigns, Brand
+    Partnership IQ studies, Flywheel studies. Jenna 2026-10-01:
+    "it should pull in attribution iq, pretty much everything it can
+    considering all of that our corpus" - everything Prometheus has
+    already shipped is corpus, so existence plus headline numbers
+    ride every analyze call and answers stay consistent with
+    delivered work. One cached load per TTL; any store that cannot
+    load contributes an empty list, never an error."""
+    now = time.time()
+    with _xmod_lock:
+        c = _deliv_index_cache
+        if c['data'] is not None and now - c['ts'] < _XMOD_INDEX_TTL_S:
+            return c['data']
+    data = {'journey_iq': [], 'attribution_iq': [],
+            'brand_partnership_iq': [], 'flywheel': []}
+    if s3_client is not None and bucket:
+        def _j(key, default):
+            try:
+                resp = s3_client.get_object(Bucket=bucket, Key=key)
+                return json.loads(resp['Body'].read().decode('utf-8'))
+            except Exception:
+                return default
+        try:
+            data['journey_iq'] = list(
+                (_j('journey-iq/_index.json', {}) or {}).get('runs')
+                or [])[-150:]
+        except Exception:
+            pass
+        try:
+            data['attribution_iq'] = list(
+                (_j('intent/registry.json', {}) or {}).get('titles')
+                or [])[-150:]
+        except Exception:
+            pass
+        try:
+            meta = _j('system/brand_partnership_iq_metadata.json', {})
+            if isinstance(meta, dict):
+                data['brand_partnership_iq'] = [
+                    {'key': k,
+                     'display_name': str((v or {}).get('display_name')
+                                         or k)}
+                    for k, v in meta.items() if isinstance(v, dict)
+                ][-150:]
+        except Exception:
+            pass
+        try:
+            resp = s3_client.list_objects_v2(
+                Bucket=bucket, Prefix='flywheel/', MaxKeys=300)
+            data['flywheel'] = [
+                o['Key'] for o in resp.get('Contents') or []
+                if str(o.get('Key') or '').lower().endswith('.csv')]
+        except Exception:
+            pass
+    with _xmod_lock:
+        if any(data.values()) or _deliv_index_cache['data'] is None:
+            _deliv_index_cache.update(ts=now, data=data)
+        return _deliv_index_cache['data'] or data
+
+
+def _xmod_deliverable_lines(deliv, local_subject, local_key):
+    """Compact (line, module) pairs for shipped deliverables whose
+    subject matches the resolved ask subject. Containment both ways on
+    the folded title key, so 'Nip/Tuck' matches the journey named
+    'Nip/Tuck on Prime Video' and the campaign 'Nip/Tuck S1 Launch'."""
+    out = []
+    if not local_key:
+        return out
+
+    def _match(name):
+        k = _xmod_title_key(name)
+        if not k:
+            return False
+        return k == local_key or local_key in k or k in local_key
+
+    for r in list(reversed(deliv.get('journey_iq') or [])):
+        name = str(r.get('project_name') or r.get('target') or '')
+        if not _match(name):
+            continue
+        win = ''
+        if r.get('start_date') and r.get('end_date'):
+            win = f" ({r['start_date']} to {r['end_date']})"
+        kp = ''
+        try:
+            tu = int(r.get('total_users') or 0)
+            if tu > 0:
+                kp = f": {tu:,} conversions"
+                cp = r.get('conversion_pct')
+                if cp is not None:
+                    kp += f" at {float(cp):.1f}% conversion"
+        except (TypeError, ValueError):
+            pass
+        out.append((f"DIGITAL JOURNEY IQ: a journey read exists - "
+                    f"{name}{win}{kp}. Any answer about this path "
+                    f"must agree with that read.", 'journey_iq'))
+        if sum(1 for _l, m in out if m == 'journey_iq') >= 2:
+            break
+
+    for t in list(reversed(deliv.get('attribution_iq') or [])):
+        name = str(t.get('display_name') or t.get('slug') or '')
+        if not _match(name):
+            continue
+        bits = [f"ATTRIBUTION IQ: a campaign read exists - {name}"]
+        if t.get('conversion_event'):
+            bits.append(f"conversion: {t['conversion_event']}")
+        try:
+            ac = int(t.get('asset_count') or 0)
+            if ac > 0:
+                bits.append(f"{ac} assets tracked")
+        except (TypeError, ValueError):
+            pass
+        od = str(t.get('opening_date') or '')[:10]
+        if od:
+            bits.append(f"opened {od}")
+        out.append((', '.join(bits) + '. Attribution numbers in an '
+                    'answer must agree with that campaign.',
+                    'attribution_iq'))
+        if sum(1 for _l, m in out if m == 'attribution_iq') >= 2:
+            break
+
+    for b in list(reversed(deliv.get('brand_partnership_iq') or [])):
+        name = str(b.get('display_name') or '')
+        if not _match(name):
+            continue
+        out.append((f"BRAND PARTNERSHIP IQ: a partnership study "
+                    f"exists - {name}.", 'brand_partnership_iq'))
+        break
+
+    fw_n = 0
+    for k in deliv.get('flywheel') or []:
+        nm = str(k)[len('flywheel/'):]
+        nm = nm[:-4] if nm.lower().endswith('.csv') else nm
+        nm = nm.replace('_', ' ').strip()
+        if not _match(nm):
+            continue
+        out.append((f"FLYWHEEL: a flywheel study exists - {nm}.",
+                    'flywheel'))
+        fw_n += 1
+        if fw_n >= 2:
+            break
+    return out
+
+
 def _load_trends_payload(trends_reader):
     """Latest cached national Trends payload via the injected reader
     (trends_iq._cache_get on the default filters). Never computes a
@@ -1562,7 +1709,9 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
 
     Returns (block_str, matched_modules). block_str is '' when nothing
     matched or the subject could not be resolved; matched_modules is a
-    list drawn from ('subscriber_iq', 'trends', 'profile_library').
+    list drawn from ('subscriber_iq', 'trends', 'profile_library',
+    'journey_iq', 'attribution_iq', 'brand_partnership_iq',
+    'flywheel').
     Existence checks run against TTL-cached indexes; fetches run in
     parallel under the hard time budget - on timeout we ship whatever
     finished, never blocking the analysis."""
@@ -1583,7 +1732,8 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
         anchors = _load_title_anchors(s3_client, bucket)
         catalog = _load_catalog_names(s3_client, bucket)
         subiq_index = _load_subiq_index(s3_client, subiq_bucket)
-        return anchors, catalog, subiq_index
+        deliv = _load_deliverable_indexes(s3_client, bucket)
+        return anchors, catalog, subiq_index, deliv
 
     lines = []
     modules = []
@@ -1593,7 +1743,7 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
             fut_idx = ex.submit(_indexes)
             fut_trends = ex.submit(_load_trends_payload, trends_reader)
             remaining = max(0.2, time_budget_s - (time.time() - started))
-            anchors, catalog, subiq_index = fut_idx.result(
+            anchors, catalog, subiq_index, deliv = fut_idx.result(
                 timeout=remaining)
 
             local_subject = subject
@@ -1652,6 +1802,22 @@ def build_cross_module_block(s3_client, bucket, ctx, text,
                 lines.append("PROFILE LIBRARY: related profiles: "
                              + '; '.join(related[:4]) + '.')
                 modules.append('profile_library')
+
+            # --- Shipped deliverables: Digital Journey IQ,
+            # Attribution IQ, Brand Partnership IQ, Flywheel
+            # (2026-10-01 Jenna: "it should pull in attribution iq,
+            # pretty much everything it can considering all of that
+            # our corpus"). Everything already delivered for this
+            # subject rides the context so fresh answers stay
+            # consistent with shipped work.
+            try:
+                for ln, mod in _xmod_deliverable_lines(
+                        deliv, local_subject, local_key):
+                    lines.append(ln)
+                    if mod not in modules:
+                        modules.append(mod)
+            except Exception:
+                pass
 
             # --- Trends (skip when that view is already open) ---
             if active_view != 'trendsIQ':
