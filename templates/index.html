@@ -18767,7 +18767,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown,
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
-            flex: 1 1 0 !important;
+            flex: 1 0 auto !important;
             min-width: 0 !important;
             margin: 0 !important;
             justify-content: center !important;
@@ -18794,6 +18794,35 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
             color: #5C6560 !important;
+        }
+
+        /* ---- 11c. Drop the Export button's envelope + chevron glyphs ----------
+           The parked Export control reads "📥 EXPORT ▾". On phones we want a
+           clean "EXPORT" label, so zero the button text and redraw it via
+           ::after (the onclick + dropdown wiring stay intact). */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn {
+            font-size: 0 !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn::after {
+            content: "EXPORT";
+            font-size: 11px !important;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* ---- 16b. v4 data cards: extend to the screen's right edge -------------
+           Trim the 32px right gutter so cards reach the edge (the ~36px left
+           gutter stays so cards clear the fixed 36px LIBRARY rail), and fit the
+           5-column data tables on a phone so Gen Pop / Index stop clipping off
+           the right. Header + rows share the grid so they stay aligned.
+           Mobile-only; desktop is untouched. */
+        #dashboardView.piq-v4 .dashboard-tab-content {
+            padding-right: 8px !important;
+        }
+        #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row {
+            grid-template-columns: 56px minmax(0, 1fr) 46px 52px 44px !important;
+            gap: 6px !important;
         }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
