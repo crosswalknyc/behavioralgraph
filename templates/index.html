@@ -18842,22 +18842,42 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            fits edge-to-edge on a phone (header + rows share this grid, so
            they stay aligned). */
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row {
-            grid-template-columns: 44px minmax(0, 1fr) 42px 46px 34px !important;
-            gap: 6px !important;
+            grid-template-columns: 46px minmax(0, 1fr) 44px 48px 38px !important;
+            gap: 4px !important;
         }
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row.head {
-            font-size: 8px !important;
-            letter-spacing: 0.04em !important;
+            font-size: 7.5px !important;
+            letter-spacing: 0.03em !important;
         }
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .key {
-            font-size: 9px !important;
-            letter-spacing: 0.03em !important;
+            font-size: 8.5px !important;
+            letter-spacing: 0.02em !important;
         }
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .name,
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .pct,
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .gp,
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .idx {
-            font-size: 11px !important;
+            font-size: 10px !important;
+        }
+        /* Break long segment / category words so they wrap inside their own
+           column instead of spilling over the next one (fixes e.g.
+           "BACHELOR'S" overlapping the Profile value). */
+        #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .key,
+        #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .name {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+        }
+        /* Key Differentiators table: keep the columns comfortable and let the
+           whole table scroll sideways when it can't fully fit. Header + data
+           rows both live in #demoDifferentiators, so they scroll together. */
+        #dashboardView.piq-v4 #demoDifferentiators {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        #dashboardView.piq-v4 #demoDifferentiators .piq-data-row {
+            min-width: 340px !important;
         }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
