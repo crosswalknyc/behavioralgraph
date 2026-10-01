@@ -53670,11 +53670,35 @@ def api_synth_chat_clarify():
             tail = (" One more thing below." if nxt == 'subiq_upsell'
                     else " Review the brief below and approve to "
                          "queue.")
+            # Every date variable that governs the read is confirmed
+            # here, before approval (2026-10-01 Jenna, after a tracker
+            # shipped with an unexplained "Exclusion Window: 0" and
+            # the requester read the correct file as a build error):
+            # the measurement window, the 30-day signup credit tail
+            # with its concrete end date, and why the exclusion window
+            # reads 0 days.
+            shown_end = subiq.get('through_date') or end
+            try:
+                _credit_end = (datetime.strptime(
+                    str(shown_end)[:10], '%Y-%m-%d')
+                    + timedelta(days=30)).strftime('%Y-%m-%d')
+            except (ValueError, TypeError):
+                _credit_end = None
+            _plat_name = str(subiq.get('platform')
+                             or data.get('platform')
+                             or '').strip() or 'the platform'
+            terms = (" New signups are credited through "
+                     + (f"{_credit_end} (30 days past the last date)"
+                        if _credit_end else
+                        "30 days past the last date")
+                     + f". Viewers who already had {_plat_name} are "
+                       f"split out inside the read, so the tracker's "
+                       f"exclusion window reads 0 days. Approving "
+                       f"locks these dates.")
             return jsonify({'success': True, 'draft': draft,
                             'message': f"{note} {lbl} measures "
-                                       f"{start} to "
-                                       f"{subiq.get('through_date') or end}."
-                                       f"{tail}",
+                                       f"{start} to {shown_end}."
+                                       f"{terms}{tail}",
                             'next_step': nxt})
 
         # Direct dates in the answer always win (any kind).
