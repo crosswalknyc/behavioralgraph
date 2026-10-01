@@ -18719,6 +18719,20 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             box-shadow: none !important;
         }
         #toolbarContent .toolbar-section { display: none !important; }
+        /* Jenna's v4 re-shows the DATA + ANALYSIS TOOLS pill rows
+           (`#dashboardView.piq-v4 .toolbar-section` / `.dashboard-tabs` use
+           display:flex !important, which outranks the rule above). On phones
+           every one of those tabs already lives inside the single "Data &
+           Analysis Tools" dropdown, so the pill rows are redundant. Hide them
+           for v4 too. #toolbarContent can sit under #dashboardView OR the
+           sticky #piqStickyChrome, and we need 2 ids so this beats the v4
+           rule regardless of source order. The dropdown + Select Profile
+           button are direct children of #toolbarContent (not .toolbar-section)
+           so they stay. */
+        :is(#dashboardView, #piqStickyChrome) #toolbarContent .toolbar-section,
+        :is(#dashboardView, #piqStickyChrome) #toolbarContent .dashboard-tabs {
+            display: none !important;
+        }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
         #chatWidget { display: none !important; }
