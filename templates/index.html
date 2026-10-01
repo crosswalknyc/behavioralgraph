@@ -18698,15 +18698,19 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             background-repeat: no-repeat !important;
             background-position: right 0.85rem center !important;
             background-size: 1.15rem 1.15rem !important;
-            color: var(--text-primary, #e6f1ff);
+            /* Match the CATEGORY / SEGMENT / PROFILE header font: muted
+               slate-gray, medium weight, wider tracking. 16px stays to keep
+               iOS from zooming on focus. */
+            color: #9AA09B;
             border: 1px solid var(--border-color, #2a3a4a);
             border-radius: 8px;
             padding: 0.65rem 2.4rem 0.65rem 0.7rem;
             font-size: 16px;
-            font-weight: 700;
+            font-weight: 500;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.1em;
         }
+        body[data-theme="light"] .mobile-tools-nav { color: #5C6560; }
         .mobile-tools-nav:hover,
         .mobile-tools-nav:focus,
         .mobile-tools-nav:active {
@@ -18732,6 +18736,64 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome) #toolbarContent .toolbar-section,
         :is(#dashboardView, #piqStickyChrome) #toolbarContent .dashboard-tabs {
             display: none !important;
+        }
+
+        /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
+           v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
+           Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
+           On phones we: (a) give the "Data & Analysis Tools" dropdown its own
+           full-width row with breathing room beneath it; (b) drop the redundant
+           "Select Profile" button (the LIBRARY rail on the left opens the picker
+           now); and (c) let the remaining four controls share one line - Data
+           Cuts first (its order:8 already leads Export/Hover/US% at order:10) -
+           with the muted, letter-spaced, uppercase header font. Mobile-only;
+           desktop is untouched. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent {
+            column-gap: 8px !important;
+            row-gap: 0 !important;
+        }
+        /* (a) dropdown gets its own row + vertical padding beneath it */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #mobileToolsNav {
+            flex: 1 0 100% !important;
+            margin: 0 0 12px 0 !important;
+        }
+        /* (b) remove Select Profile - the LIBRARY rail opens the picker */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #piqChangeProfileBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #piqChangeProfileBtn {
+            display: none !important;
+        }
+        /* (c) the four controls share one line and shrink to fit */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashViewDeltasBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn {
+            width: 100% !important;
+            justify-content: center !important;
+        }
+        /* match the CATEGORY / SEGMENT / PROFILE header font treatment */
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashViewDeltasBtn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
+        :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
+            color: #9AA09B !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.1em !important;
+            text-transform: uppercase !important;
+            font-size: 11px !important;
+            padding: 0.5rem 0.4rem !important;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashViewDeltasBtn,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
+            color: #5C6560 !important;
         }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
