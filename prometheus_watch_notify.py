@@ -29,7 +29,25 @@ _REPLY_TO = 'jenna@crosswalknyc.com'
 
 # Immediate replies that mean the real answer is still being written.
 # The finished job sends the actual answer, so these are not emailed.
-_PLACEHOLDER_PREFIXES = ('On it.',)
+_PLACEHOLDER_PREFIXES = ('On it.', 'Already on it')
+
+
+def is_placeholder(payload):
+    """True when the finished job will email the real answer, so this
+    response never sends. Covers the plain ack (text in 'reply'), the
+    guidance shape (text in 'error'), and any payload that carries a
+    read_job_id - the background read emails on completion either way
+    (2026-10-01; cbisson's 14-title ask emailed 'ANSWER True' because
+    the guidance-wrapped ack rode 'error' and slipped the skip)."""
+    if not isinstance(payload, dict):
+        return False
+    if payload.get('read_job_id'):
+        return True
+    for field in ('reply', 'error'):
+        v = payload.get(field)
+        if isinstance(v, str) and v.startswith(_PLACEHOLDER_PREFIXES):
+            return True
+    return False
 
 
 def user_record(doc, username):
@@ -74,7 +92,8 @@ def answer_text(payload):
     draft. '' for a placeholder that the finished job will replace."""
     if not isinstance(payload, dict):
         return ''
-    reply = str(payload.get('reply') or '').strip()
+    reply = payload.get('reply')
+    reply = reply.strip() if isinstance(reply, str) else ''
     if reply:
         if reply.startswith(_PLACEHOLDER_PREFIXES):
             return ''
@@ -103,8 +122,19 @@ def answer_text(payload):
             lines.append(f"Credits on approval: {credits}")
         return '\n'.join(lines)[:4000]
     if payload.get('success') is False:
-        return str(payload.get('guidance') or payload.get('error')
-                   or 'Could not answer.')[:1000]
+        # Guidance shape (2026-10-01): 'guidance' is a boolean FLAG in
+        # the house shape and the words ride in 'error'. Only text
+        # fields ever email - str(True) under ANSWER was the defect
+        # Jenna flagged on cbisson's 14-title ask. 'error' first (house
+        # shape), then 'guidance' for any legacy payload that carried
+        # the words there, then 'message'.
+        for field in ('error', 'guidance', 'message'):
+            v = payload.get(field)
+            if isinstance(v, str) and v.strip():
+                if v.strip().startswith(_PLACEHOLDER_PREFIXES):
+                    return ''
+                return v.strip()[:6000]
+        return 'Could not answer.'
     return ''
 
 
@@ -180,10 +210,9 @@ def notify(username, record, question, payload, subject=None):
     try:
         if not str(username or '').strip() and not (record or {}).get('email'):
             return
-        answer = answer_text(payload)
-        if isinstance(payload, dict) and str(
-                payload.get('reply') or '').startswith(_PLACEHOLDER_PREFIXES):
+        if is_placeholder(payload):
             return
+        answer = answer_text(payload)
         # Caller already moved this off the request. Send here so the
         # note is not left on a second thread that can die first.
         _send(username, record, question, answer, subject)

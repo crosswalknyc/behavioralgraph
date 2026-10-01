@@ -81,6 +81,43 @@ check("plain answers pass through",
       pwn.answer_text({'reply': 'Obsession reached 19,847,331 viewers.'})
       .startswith('Obsession reached'))
 
+# 4b. Guidance shape (2026-10-01, cbisson's 14-title ask): 'guidance'
+#     is a boolean FLAG and the words ride in 'error'. The email must
+#     carry the words, never str(True), and the guidance-wrapped ack
+#     (text in 'error', read_job_id attached) must skip entirely -
+#     the finished job emails the real answer.
+_guid_ack = {'success': False, 'guidance': True, 'analysis_read': True,
+             'error': ('On it. This one takes a real look at the data, '
+                       'so give me a moment.'),
+             'read_job_id': 'abc123def456'}
+check("guidance-wrapped ack is skipped (job emails the real answer)",
+      pwn.is_placeholder(_guid_ack))
+_guid_answer = {'success': False, 'guidance': True,
+                'error': 'Nip/Tuck reaches 1,482,113 US viewers.'}
+check("guidance answer emails the words in 'error'",
+      pwn.answer_text(_guid_answer)
+      == 'Nip/Tuck reaches 1,482,113 US viewers.')
+check("boolean guidance flag never emails as 'True'",
+      pwn.answer_text(_guid_answer) != 'True'
+      and pwn.answer_text({'success': False, 'guidance': True})
+      == 'Could not answer.')
+check("guidance ack without a job id still skips on the error text",
+      pwn.is_placeholder({'success': False, 'guidance': True,
+                          'error': 'On it. Working through the data.'})
+      and pwn.answer_text({'success': False, 'guidance': True,
+                           'error': 'On it. Working through the data.'})
+      == '')
+check("dedupe ack ('Already on it') is skipped",
+      pwn.is_placeholder({'success': True,
+                          'reply': 'Already on it - that exact read '
+                                   'is running now.'}))
+check("finished read payload (no job id) still emails",
+      not pwn.is_placeholder({'success': True, 'action': 'answer',
+                              'reply': 'The 14 titles pull 14,318,627 '
+                                       'unique viewers.'}))
+check("boolean reply never emails as 'True'",
+      pwn.answer_text({'success': True, 'reply': True}) == '')
+
 # 5. Addressing: to Jenna, from Prometheus.
 check("note goes to Jenna", pwn._TO == 'jenna@crosswalknyc.com')
 check("note comes from Prometheus",
