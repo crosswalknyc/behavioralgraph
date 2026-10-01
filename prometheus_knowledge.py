@@ -181,7 +181,8 @@ _NAMING_RX = re.compile(
 _UNIVERSE_RX = re.compile(
     r'\b(avid|casual|total universe|\bTU\b|cuts?|parent profile|subset|'
     r'under[- ]18|parents of|co[- ]?view\w*|season \d{1,2}|franchise|'
-    r'universe|tiers?|superfans?)\b',
+    r'universe|tiers?|superfans?|defin(?:ition|ed|e)|who counts|'
+    r'what counts|who is in|qualif\w+|membership)\b',
     re.IGNORECASE)
 _CATEGORY_RX = re.compile(
     r'\b(categor(?:y|ies)|taxonomy|filed|classif\w+|what kind of profile)\b',

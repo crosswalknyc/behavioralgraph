@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "63692efaff90d3517b64451e482fb5f38b81b7829971cfeca62c0c1c1631595c",
+ "content_hash": "d941af48a194a89dbfdd7ad09c01797fb96c30edfea362d50f18a9f5f8552339",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -76,7 +76,7 @@
   {
    "id": "tu_avid_subset",
    "decided": "2026-08-24",
-   "statement": "The Total Universe is the subject's full engager pool and IS the casual audience; the Avid Fan cut is a strict subset of it (the highest-intensity tier). An avid count never exceeds the TU count; avid and casual are never two separate pools.",
+   "statement": "The Total Universe is the subject's full engager pool and IS the casual audience; the Avid Fan cut is a strict subset of it (the highest-intensity tier). For a platform or content subject, the Total Universe is everyone who used or viewed that exact thing 1 or more times in the window and the Avid cut is those at 4 or more times. An avid count never exceeds the TU count; avid and casual are never two separate pools.",
    "match_terms": [
     "avid",
     "casual",
@@ -231,8 +231,8 @@
   },
   {
    "id": "engager_definition",
-   "decided": "2026-05-28",
-   "statement": "An Engager had at least one digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned channels. Engagers index at or above the US average on digital behaviors; composition explains the deviations.",
+   "decided": "2026-10-01",
+   "statement": "The audience definition depends on the subject. For a subject that is not content and not a platform (talent, brands, personas), an Engager had at least one digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned channels. For a platform or content subject (a streaming or social platform, app, show, movie, game, song, podcast), the audience is based on observed consumption of that exact thing: the Total Universe is everyone who used or viewed it 1 or more times in the window, and the Avid cut is those at 4 or more times. Playing a game, listening to a song, watching a show or movie, using a social or streaming platform, or purchasing from a specific brand each count as the touchpoint to that exact thing. Engagers index at or above the US average on digital behaviors; composition explains the deviations.",
    "match_terms": [
     "engager",
     "engagers",
@@ -240,7 +240,11 @@
     "touchpoint",
     "who counts",
     "qualify",
-    "membership"
+    "membership",
+    "defined",
+    "consumption",
+    "what counts",
+    "who is in"
    ],
    "sources": [
     "crosswalk-audience-vetting-framework.mdc"
@@ -284,5 +288,5 @@
    ]
   }
  ],
- "generated_at": "2026-09-15T02:03:04Z"
+ "generated_at": "2026-10-01T16:48:14Z"
 }

@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "b6f999170123feae06df0358ba539b24af2b288b5bbf267715c1c2bc73455083",
- "examples_hash": "4f40a3c8e85e71352c7a7c210a9e22413915636c9ec1842315c46b83808c3783",
+ "content_hash": "0a3c0ba27cfe3015a91d61dee5f55de6b41644633fdbbf893f87a4135c95a7a7",
+ "examples_hash": "91f2c305c1dd55dc00340e821fc9d0e7c8a1aa7e3687c74e2e147d30eca8d5cc",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -59,7 +59,7 @@
   {
    "key": "boundaries",
    "title": "BOUNDARIES",
-   "text": "Crosswalk measures digital behavior at the individual level: streaming, search, social, app, and ecommerce activity. An Engager had at least one digital touchpoint with the subject in the trailing 12 months. Behavior with no digital trace (linear or over-the-air TV tune-in, physical in-store purchases, foot traffic, terrestrial radio) has no measured read: say we measure digital behavior and offer the nearest digital read instead. A generated read runs for a subject already in the library (the open profile, a catalog profile, or a Subscriber IQ run). A subject with no base anywhere runs as a full commissioned read: quoted first, confirmed, then produced, in the same voice and attribution as every other read; it never runs before the quote is accepted. Numbers already delivered for a subject are binding: repeat them exactly and keep adjacent figures arithmetically consistent. Deliver the cohort the user asked for; the shape or coverage of the underlying data is never part of an answer."
+   "text": "Crosswalk measures digital behavior at the individual level: streaming, search, social, app, and ecommerce activity. An Engager had at least one digital touchpoint with the subject in the trailing 12 months; for a platform or content subject (a streaming or social platform, app, show, movie, game, song, podcast) the audience is observed consumption of that exact thing, 1 or more uses or views in window for the Total Universe and 4 or more for Avid. Behavior with no digital trace (linear or over-the-air TV tune-in, physical in-store purchases, foot traffic, terrestrial radio) has no measured read: say we measure digital behavior and offer the nearest digital read instead. A generated read runs for a subject already in the library (the open profile, a catalog profile, or a Subscriber IQ run). A subject with no base anywhere runs as a full commissioned read: quoted first, confirmed, then produced, in the same voice and attribution as every other read; it never runs before the quote is accepted. Numbers already delivered for a subject are binding: repeat them exactly and keep adjacent figures arithmetically consistent. Deliver the cohort the user asked for; the shape or coverage of the underlying data is never part of an answer."
   },
   {
    "key": "window",
@@ -74,7 +74,7 @@
   },
   "universes": {
    "title": "UNIVERSE DEFINITIONS",
-   "text": "The Total Universe (TU) is the subject's full engager pool: everyone with at least one digital touchpoint with the subject in the trailing 12 months. The casual audience IS the Total Universe; every fan belongs to it. The Avid Fan cut is a strict subset of the Total Universe (its highest-intensity tier), so an avid count never exceeds the TU count and avid reads describe the intense core of the same pool. Gender, age, geo, and behavioral cuts are slices of their parent: a cut's audience count is its share of the parent's, and a cut carries the parent's category and framing. A viewers universe is defined by having watched the title, so the platforms that carry it jointly account for roughly all of that audience, while platforms that do not carry it still read at organic rates. A viewers universe for a kids or preschool title reads as parents and co-viewing adults unless under-18 viewers was explicitly chosen. A series viewers read covers all seasons unless a season is named; a franchise film read covers the whole franchise unless one film is named."
+   "text": "The Total Universe (TU) is the subject's full engager pool. For talent, brands, and personas that is everyone with at least one digital touchpoint with the subject in the trailing 12 months across search, social, media, ecommerce, or owned channels. For a platform or content subject (a streaming or social platform, app, show, movie, game, song, podcast) the audience is based on observed consumption of that exact thing: the Total Universe is everyone who used or viewed it 1 or more times in the window, and the Avid cut is those at 4 or more times. Playing a game, listening to a song, watching a show or movie, using a social or streaming platform, or purchasing from a specific brand each count as the touchpoint to that exact thing. The casual audience IS the Total Universe; every fan belongs to it. The Avid Fan cut is a strict subset of the Total Universe (its highest-intensity tier), so an avid count never exceeds the TU count and avid reads describe the intense core of the same pool. Gender, age, geo, and behavioral cuts are slices of their parent: a cut's audience count is its share of the parent's, and a cut carries the parent's category and framing. A viewers universe is defined by having watched the title, so the platforms that carry it jointly account for roughly all of that audience, while platforms that do not carry it still read at organic rates. A viewers universe for a kids or preschool title reads as parents and co-viewing adults unless under-18 viewers was explicitly chosen. A series viewers read covers all seasons unless a season is named; a franchise film read covers the whole franchise unless one film is named."
   },
   "categories": {
    "title": "CATEGORY TAXONOMY",
@@ -119,10 +119,10 @@
  },
  "examples": {
   "audience_sizing": {
-   "subject": "The God Of The Woods Readers",
-   "title": "The God Of The Woods Readers | Full Total Universe split into generational bands | Sep 18 2025 to Sep 18 2026",
-   "q": "i want to know the % of the god of the woods audience by generation indexed vs. gen pop",
-   "text": "Millennials carry half the file at 687,413 projected US people, 49.8% of the 1,381,390 reader audience, with Gen X the second block at 475,815.\n\nMillennials, projected US people: 687,413, Gen X, projected US people: 475,815, Gen Z, projected US people: 130,574.\n\nGeneration mix, Sep 18 2025 to Sep 18 2026 (share of the audience's projected US people)\n- Millennials: 49.8% share. 687,413 projected US people; the 25-34 and 35-44 bands are the spine of the file\n- Gen X: 34.4% share. 475,815 projected US people; 45-54 at 21.6% and 55-64 at 12.8% carry this block\n- Gen Z: 9.5% share. 130,574 projected US people; 18-24 ..."
+   "subject": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles)",
+   "title": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles) | US viewers of franchise titles on The Roku Channel, matched to the Spiderwick window | Sep 29 2023 to Sep 29 2026",
+   "q": "I have a new set of queries. I want to add comparison points for this analysis: The Spiderwick Chronicles brought\n3.1 million new users to The Roku Channel. September 2023 to September 2026. What other Franchises have aired on Roku and what was the audience size., demographics, and impact",
+   "text": "On The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles) - US viewers of franchise titles on The Roku Channel, matched to the Spiderwick window:\n\nNaruto is the only franchise on The Roku Channel that acquires at a higher new-to-app rate than The Spiderwick Chronicles: 2,913,742 first-ever Roku Channel users, 22.7% of its 12,846,317 viewers, against Spiderwick's 21.4%.\n\nUnique US viewers across the franchise benchmark set: 38,371,849, First-ever Roku Channel users acquired across the set: 11,978,078, Naruto first-ever Roku Channel users: 2,913,742.\n\nFranchise title on The Roku Channel ..."
   },
   "category_demand": {
    "subject": "Paw Patrol Series",
@@ -142,6 +142,12 @@
    "q": "Which specific Shark Tank brand categories (CPG, pet, beauty, travel) show the highest purchase index among engagers for a category-level sponsorship pitch?",
    "text": "Pet products are the standout purchase category for Shark Tank engagers. Ranked by purchase index against the US general population, matched brand for brand on the same data behind the credit and investment reads already delivered (American Express 289, Apple Credit 347, E-Trade 636):\n\n1. Pets, index 177. The deepest lift of the four, and it is show-made: tank-alumni brands carry it (Maev 3.3% pen, Little Hunter 3.2% pen, Maxbone 2.7% pen, each running several times its national baseline).\n2. Beauty and wellness, index 127. Broad lift across 300+ matched brands, with the sharpest signals on premium and niche ..."
   },
+  "talent_value": {
+   "subject": "Dark Matter Season 2",
+   "title": "Dark Matter Season 2 | Aug 28 2026 to Sep 27 2026",
+   "q": "How many signups did Dark Matter Season 2 drive on Apple TV?",
+   "text": "Dark Matter Season 2 drove 238,417 new US Apple TV signups in the first 31 days of the season, 12.7% of every signup the service took in that window.\n\nMEASURED READ (Aug 28 2026 to Sep 27 2026)\n- Attributed new US signups: 238,417 (new paid US Apple TV accounts activated in the window whose first title played within 72 hours of activation was a Dark Matter Season 2 episode)\n- Share of all new US signups: 12.7% (attributed Dark Matter Season 2 signups as a share of all new paid US Apple TV signups in the window)\n- Total new US Apple TV signups: 1,877,299 (all new paid US Apple TV accounts activated between Aug 28 ..."
+  },
   "white_space": {
    "subject": "Hotel Transylvania",
    "title": "Hotel Transylvania | Parents of kids 4-7 | Jul 1 2025 to Jun 30 2026",
@@ -149,5 +155,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-09-15T02:03:04Z"
+ "generated_at": "2026-10-01T16:48:14Z"
 }
