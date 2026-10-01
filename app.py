@@ -48699,8 +48699,20 @@ def _sg_guard_universe_mode(draft, text, hay, allow_ask):
     return None
 
 
-# Guard 4: fiscal vs calendar periods.
-_SG_QTR_RE = re.compile(r"\b[qQ]([1-4])\s*(?:of\s+)?((?:20)?\d{2})?\b")
+# Guard 4: fiscal vs calendar periods. 'Q2 2026' (year optional) or
+# digit-first '2Q 2026' (year required there: a bare '3 q' in running
+# text is not a quarter; Bria's 2026-10-01 Apple TV+ ask used the
+# digit-first spelling).
+_SG_QTR_RE = re.compile(
+    r"\b(?:[qQ]\s*([1-4])\b\s*(?:of\s+)?((?:20)?\d{2})?"
+    r"|([1-4])\s*[qQ]\s*(?:of\s+)?((?:20)?\d{2}))\b")
+
+
+def _sg_qtr_parts(mq):
+    """(quarter, year_txt) from a _SG_QTR_RE match, either spelling."""
+    if mq.group(1):
+        return int(mq.group(1)), mq.group(2)
+    return int(mq.group(3)), mq.group(4)
 _SG_FISCAL_RE = re.compile(r"\bfiscal\b|\bfy\s?(?:20)?\d{2}\b",
                            re.IGNORECASE)
 
@@ -48739,6 +48751,113 @@ def _sg_apply_quarter(draft, cal, decision, note=''):
     _append_identity_echo(draft, f"window read as {lbl}")
 
 
+# Generic audience nouns may ride a window-only cut label without
+# making it a cohort: the source universe already defines who they
+# are ('Apple TV+ Q2 2026 viewers' is the quarter read).
+_SG_WINDOW_ONLY_WORDS = {
+    'q', 'quarter', 'quarterly', 'quarters', 'calendar', 'fiscal',
+    'window', 'date', 'dates', 'range', 'ranges', 'cut', 'cuts',
+    'only', 'of', 'the', 'a', 'an', 'for', 'in', 'to', 'through',
+    'thru', 'from', 'and', 'period', 'periods', 'month', 'months',
+    'year', 'data', 'activity', 'read', 'file', 'profile',
+    'existing', 'viewers', 'users', 'subscribers', 'customers',
+    'fans', 'audience', 'members', 'watchers', 'shoppers',
+    'jan', 'january', 'feb', 'february', 'mar', 'march', 'apr',
+    'april', 'may', 'jun', 'june', 'jul', 'july', 'aug', 'august',
+    'sep', 'sept', 'september', 'oct', 'october', 'nov', 'november',
+    'dec', 'december',
+}
+
+
+def _sg_window_only_label(lbl):
+    """True when a cut label is nothing but time-window vocabulary
+    ('Q2 2026', '2Q 2026 quarterly cut', or 'Q2 2026, Apr 1 to
+    Jun 30, 2026' after a window echo) - i.e. the 'cut' IS the
+    window, not a cohort."""
+    toks = re.split(r"[^a-z0-9]+", str(lbl or '').lower())
+    for t in toks:
+        if not t or t.isdigit():
+            continue
+        if re.fullmatch(r"q[1-4]|[1-4]q", t):
+            continue
+        if t not in _SG_WINDOW_ONLY_WORDS:
+            return False
+    return True
+
+
+def _sg_quarter_cut_to_refresh(draft, cal, text):
+    """A 'cut' of an existing profile whose cohort content is nothing
+    but a time window IS a window re-read, not a cohort cut (Jenna
+    2026-10-01; Bria's 'cut the existing Apple TV+ profile by
+    quarter, i.e. 2Q 2026' ask). Re-route it to time_shifted_refresh
+    on the quarter dates and name the deliverable
+    '{Subject} - Q{n} {year}' per the '{Subject} - {Cut}' naming
+    rule: the source file stays untouched and the quarter ships as
+    its own deliverable. An existing_match whose CURRENT message
+    names a quarter gets the same treatment (handing back the
+    standing file would ignore the asked window) unless the matched
+    file already IS that quarter's read. A refresh keeps its decision
+    and gains the name suffix. Demo / behavioral / skin cuts are
+    never re-routed; their window keeps riding cut_date_range as
+    before. Runs BEFORE _sg_apply_quarter so the window lands on
+    engine_date_range for the re-routed decision."""
+    dec = str(draft.get('decision') or '').strip().lower()
+    if dec not in ('derive_cut', 'cut_needs_parent', 'existing_match',
+                   'time_shifted_refresh'):
+        return False
+    # Only a quarter named in the CURRENT message may re-route a
+    # decision; a stale history mention still binds dates via the
+    # legacy paths but never flips anything.
+    if not _SG_QTR_RE.search(str(text or '')):
+        return False
+    q_lbl = f"Q{cal['q']} {cal['year']}"
+    qpat = (rf"\bq\s*{cal['q']}\s*(?:of\s+)?{cal['year']}\b"
+            rf"|\b{cal['q']}\s*q\s*(?:of\s+)?{cal['year']}\b")
+    if dec in ('derive_cut', 'cut_needs_parent'):
+        d_type = str(draft.get('derive_type') or '').strip().lower()
+        if d_type not in ('', 'other', 'addon', 'addon_cut',
+                          'addon_cuts', 'behavioral'):
+            return False
+        if draft.get('addon_cuts') or draft.get('compound_cut') \
+                or draft.get('region_dmas') \
+                or draft.get('region_label'):
+            return False
+        lbl = str(draft.get('cut_label_clean')
+                  or draft.get('cut_label')
+                  or draft.get('cut_label_guess') or '')
+        if not _sg_window_only_label(lbl):
+            return False
+    if dec == 'existing_match':
+        disp = str(draft.get('existing_match_display_name') or '')
+        if re.search(qpat, disp, re.IGNORECASE):
+            return False  # the match already IS this quarter's read
+    base = str(draft.get('subject') or draft.get('name')
+               or draft.get('existing_match_display_name')
+               or '').strip()
+    if not base:
+        return False
+    if dec != 'time_shifted_refresh':
+        draft['decision'] = 'time_shifted_refresh'
+    for k in ('derive_type', 'cut_label', 'cut_label_clean',
+              'cut_label_guess', 'cut_date_range',
+              'cut_window_label'):
+        draft.pop(k, None)
+    if not re.search(qpat, base, re.IGNORECASE):
+        base = f"{base} - {q_lbl}"
+        draft['subject'] = base
+        draft['name'] = base
+        draft.pop('file_stem', None)
+    _append_identity_echo(
+        draft, f"quarter read ships as its own file: {base} "
+               f"(source file untouched)")
+    try:
+        print(f"[quarter-cut] window-only cut re-routed to a window "
+              f"re-read: {base!r} ({cal['start']} to {cal['end']})")
+    except Exception:
+        pass
+    return True
+
+
 def _sg_guard_fiscal_quarter(draft, text, history, decision,
                              allow_ask):
     hay = _sg_haystack(text, history)
@@ -48771,8 +48890,8 @@ def _sg_guard_fiscal_quarter(draft, text, history, decision,
             _append_identity_echo(draft, f"window read as {lbl}")
             return None
         if mq:
-            cal = _sg_calendar_quarter(int(mq.group(1)), mq.group(2),
-                                       today)
+            _qn, _qy = _sg_qtr_parts(mq)
+            cal = _sg_calendar_quarter(_qn, _qy, today)
             q_lbl = (f"calendar Q{cal['q']} {cal['year']}: "
                      f"{_ew_format_label(cal['start'], cal['end'])}")
             if allow_ask:
@@ -48783,7 +48902,9 @@ def _sg_guard_fiscal_quarter(draft, text, history, decision,
                     f"{q_lbl}, or reply with the fiscal quarter's "
                     f"exact dates (for example 'Apr 28 to Jul 27, "
                     f"2026').")}
-            _sg_apply_quarter(draft, cal, decision,
+            _sg_quarter_cut_to_refresh(draft, cal, text)
+            _sg_apply_quarter(draft, cal,
+                              str(draft.get('decision') or decision),
                               note='calendar dates used')
             return None
         if allow_ask:
@@ -48801,9 +48922,11 @@ def _sg_guard_fiscal_quarter(draft, text, history, decision,
         _append_identity_echo(draft, f"window read as {lbl}")
         return None
     if mq:
-        cal = _sg_calendar_quarter(int(mq.group(1)), mq.group(2),
-                                   today)
-        _sg_apply_quarter(draft, cal, decision)
+        _qn, _qy = _sg_qtr_parts(mq)
+        cal = _sg_calendar_quarter(_qn, _qy, today)
+        _sg_quarter_cut_to_refresh(draft, cal, text)
+        _sg_apply_quarter(draft, cal,
+                          str(draft.get('decision') or decision))
     return None
 
 
@@ -50505,6 +50628,10 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         # mode - everything bindable binds with an echo, nothing asks.
         _apply_semantic_guards(spec_draft, prompt_text,
                                allow_ask=False, decision=_dn)
+        # Guards may re-route the decision (window-only quarter cut
+        # -> window re-read, 2026-10-01); keep the local in step so
+        # the credit + minute estimates price the real path.
+        _dn = str(spec_draft.get('decision') or _dn or '').strip() or _dn
         _guard_future_window(spec_draft, decision=_dn,
                              allow_ask=False)
         spec_draft['estimated_credits'] = int(
@@ -55547,6 +55674,11 @@ def api_synth_chat_interpret():
                 'guidance': True,
                 'error': _sg_ask['question'],
             })
+        # A guard may re-route the decision (a window-only 'quarter
+        # cut' of an existing profile becomes a window re-read,
+        # 2026-10-01); downstream gates read the live value.
+        decision_str = str(spec_draft.get('decision')
+                           or decision_str or '').strip()
 
         # Event-scoped window resolution (2026-08-24 Rosie O'Donnell /
         # Jimmy Kimmel Live defect): when the ask ties the audience to
