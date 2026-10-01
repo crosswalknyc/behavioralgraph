@@ -238,12 +238,108 @@ def test_band_levels_the_reading() -> None:
         se.published_chart_index = orig_index
 
 
+def test_seat_just_under_cap_stays_under() -> None:
+    print('a reading a few views under the cap is never drawn over it')
+    cap = 857142
+    original = se._platform_daily_cap_for
+    se._platform_daily_cap_for = lambda slug: cap if slug == 'tubi' else original(slug)
+    try:
+        researched = {
+            'fast_film:seeking persephone': entry(
+                857123, tubi={'us_estimate': 857123}),
+            'fast_film:men in black': entry(
+                834505, tubi={'us_estimate': 834505}),
+        }
+        se._reclamp_carried_to_platform_ceiling(researched)
+        top = researched['fast_film:seeking persephone']['by_platform']['tubi']['us_estimate']
+        second = researched['fast_film:men in black']['by_platform']['tubi']['us_estimate']
+        check('top seat is under the cap', top < cap, True)
+        check('top seat keeps a margin for the digit draw', cap - top >= 100, True)
+        check('second seat is still below the first', second < top, True)
+        again = se._reclamp_carried_to_platform_ceiling(researched)
+        check('a second pass is a no-op', again, 0)
+    finally:
+        se._platform_daily_cap_for = original
+
+
+# ---------------------------------------------------------------------------
+# Stamps follow the chart the service shows now
+# ---------------------------------------------------------------------------
+
+def test_restamp_follows_current_chart() -> None:
+    print("the store's chart stamps follow the chart the service shows now")
+    orig_read = se._read_snapshot
+    orig_index = se.published_chart_index
+    orig_slugs = se._charted_slugs
+    orig_label = se.published_chart_label
+    try:
+        se._charted_slugs = lambda: [('netflix', 'Netflix')]
+        se._read_snapshot = lambda name, *a, **k: {'us_films': [{'title': 'x'}]}
+        se.published_chart_label = lambda slug: 'Netflix Top 10 US'
+        idx = {'film:unabomber': (1, 'Netflix Top 10 US', 'us_films'),
+               'unabomber': (1, 'Netflix Top 10 US', 'us_films'),
+               'film:widower til death do us part': (2, 'Netflix Top 10 US', 'us_films'),
+               'widower til death do us part': (2, 'Netflix Top 10 US', 'us_films'),
+               'film:breadwinner': (3, 'Netflix Top 10 US', 'us_films'),
+               'breadwinner': (3, 'Netflix Top 10 US', 'us_films')}
+        se.published_chart_index = lambda slug, snap: idx if slug == 'netflix' else {}
+        researched = {
+            # Last week's #2, now #3.
+            'film:breadwinner': dict(entry(1, netflix={'us_estimate': 1}),
+                                     display_title='The Breadwinner',
+                                     published_rank=2,
+                                     published_chart='Netflix Top 10 US',
+                                     published_group='us_films'),
+            # New this week, never stamped; stored under two keys.
+            'film:widower til death do us part': dict(
+                entry(1, netflix={'us_estimate': 1}),
+                display_title="The Widower: 'Til Death Do Us Part"),
+            'title:widower til death do us part': dict(
+                entry(1, netflix={'us_estimate': 1}),
+                display_title="The Widower: 'Til Death Do Us Part"),
+            # Left the chart this week.
+            'film:demon slayer': dict(entry(1, netflix={'us_estimate': 1}),
+                                      display_title='Demon Slayer',
+                                      published_rank=3,
+                                      published_chart='Netflix Top 10 US',
+                                      published_group='us_films'),
+            # Stamped by another service's chart: not ours to touch.
+            'tv:gilmore girls': dict(entry(1, netflix={'us_estimate': 1}),
+                                     display_title='Gilmore Girls',
+                                     published_rank=4,
+                                     published_chart='Prime Video Top 10',
+                                     published_group=''),
+        }
+        res = se._restamp_published_ranks(researched)
+        check('moved and new entrants stamped', res['stamped'], 3)
+        check('the departed title cleared', res['cleared'], 1)
+        check('Breadwinner now reads #3',
+              researched['film:breadwinner']['published_rank'], 3)
+        check('new entrant stamped on its kind key',
+              researched['film:widower til death do us part']['published_rank'], 2)
+        check('and on its title key',
+              researched['title:widower til death do us part']['published_rank'], 2)
+        check('Demon Slayer carries no stamp',
+              'published_rank' in researched['film:demon slayer'], False)
+        check("another service's stamp untouched",
+              researched['tv:gilmore girls']['published_rank'], 4)
+        again = se._restamp_published_ranks(researched)
+        check('a second pass is a no-op', (again['stamped'], again['cleared']), (0, 0))
+    finally:
+        se._read_snapshot = orig_read
+        se.published_chart_index = orig_index
+        se._charted_slugs = orig_slugs
+        se.published_chart_label = orig_label
+
+
 def main() -> int:
     test_preferred_sibling()
     test_mirror_across()
     test_cap_seats_spaced()
+    test_seat_just_under_cap_stays_under()
     test_rank_band_is_a_noop_on_positions()
     test_band_levels_the_reading()
+    test_restamp_follows_current_chart()
     if _FAILURES:
         print(f'\n{len(_FAILURES)} check(s) failed: {_FAILURES}')
         return 1

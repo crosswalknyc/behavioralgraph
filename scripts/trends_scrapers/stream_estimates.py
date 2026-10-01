@@ -7518,8 +7518,18 @@ def _reclamp_carried_to_platform_ceiling(researched: dict[str, dict]
                 room -= 110 if prev >= 10_000 else 11
                 if tgt > room:
                     tgt = room
+            # The same margin against the cap itself: a reading 19
+            # under the cap, left where it was and then given natural
+            # digits, came out 39 OVER it (Tubi, 2026-10-01) and the
+            # second ceiling pass had to clamp what the first had just
+            # "spaced".
+            tgt = min(tgt, cap - (110 if cap >= 10_000 else 11))
             tgt = _ensure_non_zero_last_digit(
                 max(1, tgt), norm, f'{slug}|ceilclamp')
+            while tgt >= cap:
+                tgt = _ensure_non_zero_last_digit(
+                    max(1, tgt - (111 if cap >= 10_000 else 7)),
+                    norm, f'{slug}|ceilclamp|under')
             if tgt != v or any(e[3] != tgt for e in entries):
                 fixed += _apply(entries, tgt, cap, why)
             prev = tgt
@@ -7683,6 +7693,88 @@ def _mirror_sibling_readings(researched: dict[str, dict],
     return moved
 
 
+def _restamp_published_ranks(researched: dict[str, dict]) -> dict:
+    """Bring every stored entry's chart stamp up to the chart the
+    service is publishing NOW.
+
+    The collector stamps `published_rank` / `published_chart` /
+    `published_group` on an entry when the nightly run builds the
+    store. A chart that moves during the day (Netflix publishes a new
+    Top 10 at 09:10 UTC, the residential captures land mid-afternoon)
+    leaves the store carrying last week's positions: on 2026-10-01
+    The Breadwinner sat at #3 on the page with `published_rank=2` in
+    the store, and the six new entrants carried no stamp at all. The
+    render stamps its rows from the snapshot and is right; everything
+    that reads the store (`chart_entry_sync.preferred`, the coverage
+    gate's cap targets, the board's chart grouping) was reading the
+    old chart.
+
+    Per service: every entry in its key family whose title is on the
+    current chart takes that position; an entry stamped with THIS
+    service's chart whose title has left it loses the stamp. A stamp
+    from another service's chart is never touched here (one entry
+    carries one stamp; the service whose chart it names owns it).
+
+    Returns `{'stamped': n, 'cleared': n}`.
+    """
+    out = {'stamped': 0, 'cleared': 0}
+    for slug, _label in _charted_slugs():
+        snap = _read_snapshot(published_chart_snapshot(slug))
+        if not snap:
+            continue
+        index = published_chart_index(slug, snap)
+        if not index:
+            continue
+        label = published_chart_label(slug) or ''
+        prefix = published_chart_key_prefix(slug)
+        for key, it in (researched or {}).items():
+            if not isinstance(it, dict):
+                continue
+            if prefix:
+                if not key.startswith(prefix):
+                    continue
+                bare = key[len(prefix):]
+            else:
+                if key.startswith(('fast_', 'fast_channel:')):
+                    continue
+                bare = key
+            kind, _, norm = bare.partition(':')
+            if not norm or kind not in ('film', 'tv', 'title'):
+                continue
+            title = it.get('display_title') or norm
+            hit = None
+            for k in ((kind,) if kind != 'title' else ('film', 'tv')):
+                hit = published_rank_for(index, k, title) \
+                    or published_rank_for(index, k, norm)
+                if hit:
+                    break
+            mine = (it.get('published_chart') or '') == label and label
+            if hit:
+                pos, chart_name, group = hit[0], hit[1], (hit[2] if len(hit) > 2 else '')
+                if (it.get('published_rank') != pos
+                        or it.get('published_chart') != chart_name
+                        or (it.get('published_group') or '') != (group or '')):
+                    if it.get('published_rank') and not mine \
+                            and it.get('published_chart'):
+                        # Stamped by another service's chart; that
+                        # service owns the stamp.
+                        continue
+                    it['published_rank'] = pos
+                    it['published_chart'] = chart_name
+                    it['published_group'] = group
+                    if len(hit) > 3 and hit[3]:
+                        it['published_stale_from'] = hit[3]
+                    else:
+                        it.pop('published_stale_from', None)
+                    out['stamped'] += 1
+            elif mine and it.get('published_rank'):
+                for f in ('published_rank', 'published_chart',
+                          'published_group', 'published_stale_from'):
+                    it.pop(f, None)
+                out['cleared'] += 1
+    return out
+
+
 def _finalize_published_charts(researched: dict[str, dict],
                                target_date_iso: str) -> dict:
     """The closing sequence every writer of the store runs last.
@@ -7690,6 +7782,7 @@ def _finalize_published_charts(researched: dict[str, dict],
     Order matters and is the same everywhere (the nightly estimator,
     the residential re-price, any backfill):
 
+      0. chart stamps brought up to the chart the service shows now,
       1. ceiling re-check with seat spacing (I4),
       2. published-chart coherence, written across siblings (I1, I3),
       3. rank bands applied to readings, not positions (I5),
@@ -7702,6 +7795,7 @@ def _finalize_published_charts(researched: dict[str, dict],
     """
     out: dict = {}
     for name, fn in (
+            ('stamps', lambda: _restamp_published_ranks(researched)),
             ('ceiling', lambda: _reclamp_carried_to_platform_ceiling(researched)),
             ('coherence', lambda: _enforce_published_chart_coherence(
                 researched, target_date_iso)),

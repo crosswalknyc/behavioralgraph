@@ -309,8 +309,15 @@ def _run_fixer() -> int:
             [sys.executable, '-m',
              'scripts.trends_scrapers.residential_chart_pricing', '--all'],
             cwd=repo, capture_output=True, text=True, timeout=60 * 60)
-        if proc.stdout:
-            logger.info('[board fixer] %s', proc.stdout.strip()[-2000:])
+        # Both streams, and to stdout as well as the logger: the fixer
+        # logs its per-chart outcome (and any failed model call) on
+        # stderr, and a run of it that silently did nothing was
+        # invisible when only stdout travelled (2026-10-01).
+        for name, text in (('stdout', proc.stdout), ('stderr', proc.stderr)):
+            text = (text or '').strip()
+            if text:
+                logger.info('[board fixer %s] %s', name, text[-6000:])
+                print(f'[board fixer {name}]\n{text[-6000:]}', flush=True)
         return proc.returncode
     except Exception:
         logger.exception('board invariants: fixer failed to run')
@@ -331,22 +338,42 @@ def gate(payload: Optional[dict] = None, *, fix: bool = True,
         return {'violations': -1, 'error': 'no view'}
     first = audit(payload)
     logger.info('board invariants (before): %d violation(s)', first['violations'])
+    print(f"board invariants (before): {first['violations']} violation(s)",
+          flush=True)
     if first['violations'] == 0:
         return first
     logger.info('\n' + format_report(first))
     result = first
     if fix:
+        # Blanks are fixable too. The fixer's set pass prices every
+        # title on a chart and its catalog sizing prices every row
+        # under one, so a rail whose chart moved during the day (the
+        # six new Netflix entrants on 2026-10-01 rendered empty cells
+        # from 09:10 UTC until the next pass) is closed here rather
+        # than reported and left for tonight. I2 is the one invariant
+        # no pass can fix: a service that published no chart.
         fixable = (len(first['I1_chart_order']) + len(first['I3_catalog_under'])
-                   + len(first['I4_cap_seats']) + len(first['I5_rail_order']))
+                   + len(first['I4_cap_seats']) + len(first['I5_rail_order'])
+                   + len(first['I6_blanks']))
         if fixable:
             rc = _run_fixer()
             logger.info('board invariants: fixer exited %d; re-auditing', rc)
+            print(f'board invariants: fixer exited {rc}; re-auditing',
+                  flush=True)
             again = _fresh_view()
-            if again is not None:
+            if again is None:
+                logger.error('board invariants: the view could not be '
+                             'recomputed after the fixer; reporting the '
+                             'pre-fix audit')
+                print('board invariants: view recompute failed after the '
+                      'fixer; the report below is PRE-fix', flush=True)
+            else:
                 result = audit(again)
                 result['fixed'] = first['violations'] - result['violations']
                 logger.info('board invariants (after): %d violation(s), %d fixed',
                             result['violations'], result['fixed'])
+                print(f"board invariants (after): {result['violations']} "
+                      f"violation(s), {result['fixed']} fixed", flush=True)
     if result['violations'] and alert:
         try:
             from scripts.trends_scrapers.run_guard import send_alert
