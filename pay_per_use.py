@@ -52,6 +52,10 @@ call, mirrored to a pay-per-use prefix), so the sweep below - which
 runs in every gunicorn worker - reads the shared S3 truth, claims each
 closed session with a conditional-put idempotency stamp, and emails
 the summary exactly once no matter how many workers sweep in parallel.
+Wallet debit is a separate settlement on that stamp. A deploy that
+kills the worker after the email stamp still retries the debit on
+the next sweep until it lands. The wallet row is keyed by session
+start so a retry never charges twice.
 """
 from __future__ import annotations
 
@@ -472,7 +476,81 @@ def _claim_stamp(s3, key: str, summary: dict) -> bool:
         return False
 
 
-def _apply_ppu_wallet_deduction(summary: dict) -> None:
+def _read_stamp(s3, key: str):
+    """Parsed session stamp, or None when missing / unreadable."""
+    try:
+        body = s3.get_object(
+            Bucket=render_usage_log.S3_BUCKET, Key=key)['Body'].read()
+        rec = json.loads(body)
+        return rec if isinstance(rec, dict) else None
+    except Exception:
+        return None
+
+
+def _patch_stamp(s3, key: str, fields: dict) -> None:
+    """Merge fields onto an existing stamp. Last write wins on the
+    settlement flags. Never raises."""
+    try:
+        cur = _read_stamp(s3, key) or {}
+        cur.update(fields or {})
+        s3.put_object(
+            Bucket=render_usage_log.S3_BUCKET, Key=key,
+            Body=json.dumps(cur).encode('utf-8'),
+            ContentType='application/json')
+    except Exception as e:
+        print(f"[pay-per-use] stamp patch failed: {e}")
+
+
+def _wallet_already_settled(stamp: dict) -> bool:
+    if not isinstance(stamp, dict):
+        return False
+    if stamp.get('wallet_deducted') is True:
+        return True
+    return str(stamp.get('wallet_status') or '') in ('deducted', 'skipped')
+
+
+def _iter_session_stamps(s3, now_dt):
+    """Yield (key, stamp) for session stamps in the sweep window."""
+    for back in range(PPU_SWEEP_DAYS):
+        day = (now_dt - timedelta(days=back)).strftime('%Y_%m_%d')
+        prefix = f"{SESSIONS_PREFIX}{day}/"
+        try:
+            paginator = s3.get_paginator('list_objects_v2')
+            for page in paginator.paginate(
+                    Bucket=render_usage_log.S3_BUCKET, Prefix=prefix):
+                for obj in page.get('Contents') or []:
+                    key = obj['Key']
+                    rec = _read_stamp(s3, key)
+                    if rec:
+                        yield key, rec
+        except Exception as e:
+            print(f"[pay-per-use] stamp list {prefix} failed: {e}")
+
+
+def _lookup_ppu_username(users_data: dict, email: str, named: str):
+    """Dashboard username for a session email / login name, or None."""
+    users = users_data.get('users') or {}
+    if email:
+        for uname, u in users.items():
+            if str((u or {}).get('email') or '').strip().lower() == email:
+                return uname
+    if named:
+        if named in users:
+            return named
+        low = named.lower()
+        for uname, u in users.items():
+            if str(uname).lower() == low:
+                return uname
+            if email and str(uname).lower() == email:
+                return uname
+    if email:
+        for uname in users:
+            if str(uname).lower() == email:
+                return uname
+    return None
+
+
+def _apply_ppu_wallet_deduction(summary: dict) -> dict:
     """Deduct a closed Prometheus session's billed_usd from the user's
     wallet, when applicable (Jenna 2026-09-08).
 
@@ -487,19 +565,24 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
     from Prometheus - their sessions are already covered by their
     internal allowance and by-design don't route through the wallet.
 
-    Fail-safe: any import/lookup/deduct error becomes a print statement.
-    Never raises.
+    Returns a status dict:
+      {'status': 'deducted'|'skipped'|'failed', 'reason': str, ...}
+
+    Fail-safe: any import/lookup/deduct error becomes a print statement
+    and a 'failed' result so the next sweep retries. Never raises.
     """
     try:
         billed = round(float(summary.get('billed_usd') or 0.0), 2)
     except (TypeError, ValueError):
         billed = 0.0
     if billed <= 0:
-        return
+        return {'status': 'skipped', 'reason': 'billed_zero',
+                'amount': billed}
     email = str(summary.get('user_email') or '').strip().lower()
     named = str(summary.get('user') or '').strip()
     if not email and not named:
-        return
+        return {'status': 'failed', 'reason': 'no_identity',
+                'amount': billed}
     try:
         # Lazy imports: pay_per_use.py is imported early by app.py, so
         # we defer the app + wallet imports until sweep time to avoid
@@ -508,41 +591,29 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
         import wallet as _wallet  # type: ignore
     except Exception as e:
         print(f"[pay-per-use] wallet deduction unavailable: {e}")
-        return
+        return {'status': 'failed', 'reason': f'unavailable:{e}',
+                'amount': billed}
 
-    # Find the dashboard username by email, then by username (some
-    # rows only stamp the login name).
     users_data = load_users() or {}
-    target_username = None
-    for uname, u in (users_data.get('users') or {}).items():
-        if email and str((u or {}).get('email') or '').strip().lower() == email:
-            target_username = uname
-            break
-    if not target_username and named:
-        if named in (users_data.get('users') or {}):
-            target_username = named
-        else:
-            low = named.lower()
-            for uname, u in (users_data.get('users') or {}).items():
-                if str(uname).lower() == low:
-                    target_username = uname
-                    break
-                if email and str(uname).lower() == email:
-                    target_username = uname
-                    break
-    if not target_username and email:
-        for uname in (users_data.get('users') or {}):
-            if str(uname).lower() == email:
-                target_username = uname
-                break
+    target_username = _lookup_ppu_username(users_data, email, named)
     if not target_username:
-        return
+        print(f"[pay-per-use] wallet deduction deferred, user not "
+              f"found ({email or named})")
+        return {'status': 'failed', 'reason': 'user_not_found',
+                'amount': billed}
 
     outcome = {'billed': billed}
 
     def _apply(data):
         u = (data.get('users') or {}).get(target_username)
         if not u:
+            outcome['unbilled_reason'] = 'user_missing_on_fresh'
+            return None
+        if _wallet.is_internal_staff_seat(u, target_username):
+            outcome['unbilled_reason'] = 'staff'
+            return None
+        if _wallet.is_unlimited(u) or u.get('unlimited'):
+            outcome['unbilled_reason'] = 'unlimited'
             return None
         # Company-shared wallet routing (Jenna 2026-09-09): resolve the
         # billing subject so a Prometheus session by a member of a
@@ -554,6 +625,7 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
         subject, subject_kind, subject_key = (
             _wallet.resolve_billing_subject(u, data or {}))
         if not _wallet.is_paying_customer(subject):
+            outcome['unbilled_reason'] = 'not_paying'
             return None
         # Per-member spend scope (Jenna 2026-09-09): only fires when
         # the subject is a company. Solo wallets have no scope concept.
@@ -598,15 +670,19 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
                           or u.get('username')
                           or target_username
                           or '')
+        job_id = str(summary.get('session_start', '') or '')
+        already = _wallet.existing_wallet_deduct(
+            subject, tool_key='prometheus', job_id=job_id)
         _wallet.apply_wallet_deduct(
             subject, billed,
             description=(f"Prometheus session ({summary.get('asks', 0)} "
                          f"asks, {summary.get('active_seconds', 0):.0f}s "
                          f"active)"),
             tool_key='prometheus',
-            job_id=str(summary.get('session_start', '') or ''),
+            job_id=job_id,
             billed_via_username=billed_via)
         outcome['committed'] = True
+        outcome['already'] = bool(already)
         outcome['subject_kind'] = subject_kind
         outcome['subject_key'] = subject_key
         return data
@@ -615,10 +691,20 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
         _users_cas_mutate(_apply)
     except Exception as e:
         print(f"[pay-per-use] wallet deduction CAS failed: {e}")
-        return
+        return {'status': 'failed', 'reason': f'cas:{e}',
+                'amount': billed}
 
     if not outcome.get('committed'):
-        return
+        reason = outcome.get('unbilled_reason') or 'not_committed'
+        if reason in ('staff', 'unlimited', 'not_paying',
+                      'not_scoped_and_not_paying'):
+            print(f"[pay-per-use] wallet deduction skipped "
+                  f"({reason}) for {email or named}")
+            return {'status': 'skipped', 'reason': reason,
+                    'amount': billed}
+        print(f"[pay-per-use] wallet deduction deferred "
+              f"({reason}) for {email or named}")
+        return {'status': 'failed', 'reason': reason, 'amount': billed}
 
     # Post-CAS: fire auto-reload if applicable. Fresh subject snapshot.
     # When the deduct hit a company wallet, auto-reload keys off the
@@ -636,6 +722,55 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
     except Exception as e:
         print(f"[pay-per-use] auto-reload skipped: {e}")
 
+    print(f"[pay-per-use] wallet deducted ${billed:.2f} from "
+          f"{outcome.get('subject_kind')}:{outcome.get('subject_key')} "
+          f"via {email or named}"
+          f"{' (already logged)' if outcome.get('already') else ''}")
+    return {
+        'status': 'deducted',
+        'reason': 'already' if outcome.get('already') else 'ok',
+        'amount': billed,
+        'subject_kind': outcome.get('subject_kind'),
+        'subject_key': outcome.get('subject_key'),
+    }
+
+
+def _settle_ppu_wallet(s3, key: str, summary: dict) -> dict:
+    """Charge the wallet for this stamp, or mark it skipped.
+
+    Safe to call on every sweep. Already-settled stamps no-op.
+    A failed debit leaves the stamp pending so the next worker retries.
+    """
+    stamp = _read_stamp(s3, key) or (summary or {})
+    if _wallet_already_settled(stamp):
+        return {'status': str(stamp.get('wallet_status') or 'deducted')}
+    payload = dict(stamp)
+    payload.update(summary or {})
+    try:
+        result = _apply_ppu_wallet_deduction(payload)
+    except Exception as e:
+        print(f"[pay-per-use] wallet deduction skipped: {e}")
+        return {'status': 'failed', 'reason': str(e)}
+    status = str((result or {}).get('status') or 'failed')
+    now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    if status == 'deducted':
+        _patch_stamp(s3, key, {
+            'wallet_deducted': True,
+            'wallet_status': 'deducted',
+            'wallet_amount_usd': (result or {}).get('amount'),
+            'wallet_subject_kind': (result or {}).get('subject_kind'),
+            'wallet_subject_key': (result or {}).get('subject_key'),
+            'wallet_settled_at': now_iso,
+        })
+    elif status == 'skipped':
+        _patch_stamp(s3, key, {
+            'wallet_deducted': False,
+            'wallet_status': 'skipped',
+            'wallet_skip_reason': (result or {}).get('reason') or '',
+            'wallet_settled_at': now_iso,
+        })
+    return result or {'status': 'failed'}
+
 
 def sweep_closed_sessions(now: float = None, s3=None, send=None) -> list:
     """Close idle pay-per-use sessions and email each summary exactly
@@ -643,12 +778,17 @@ def sweep_closed_sessions(now: float = None, s3=None, send=None) -> list:
     any worker can run this; the conditional-put stamp guarantees a
     session is claimed - and emailed - by exactly one sweeper.
 
+    Wallet debit is settled on every sweep until it lands. The email
+    stamp is not the debit. A worker that dies after claiming the
+    stamp still has the next sweep charge the wallet.
+
     Returns the summaries THIS call emailed (empty on repeat runs)."""
     now = time.time() if now is None else float(now)
     now_dt = datetime.fromtimestamp(now, tz=timezone.utc)
     s3 = s3 or _client()
     send = send or (lambda subj, body: send_email(subj, body))
     emailed = []
+    settled_keys = set()
     try:
         rows = _list_ppu_rows(s3, now_dt)
         for sess in _sessions_from_rows(rows):
@@ -657,22 +797,35 @@ def sweep_closed_sessions(now: float = None, s3=None, send=None) -> list:
             if not closed:
                 continue
             summary = _summarize(sess)
-            if not _claim_stamp(s3, _stamp_key(sess), summary):
+            key = _stamp_key(sess)
+            claimed = _claim_stamp(s3, key, summary)
+            if claimed:
+                subject, body = build_session_email(summary)
+                try:
+                    send(subject, body)
+                except Exception as e:
+                    print(f"[pay-per-use] summary email failed: {e}")
+                emailed.append(summary)
+            try:
+                _settle_ppu_wallet(s3, key, summary)
+            except Exception as _wd_e:
+                print(f"[pay-per-use] wallet deduction skipped: {_wd_e}")
+            settled_keys.add(key)
+        # Stamps whose call rows aged out of the window, or whose
+        # first debit died after the email claim, still settle here.
+        for key, stamp in _iter_session_stamps(s3, now_dt):
+            if key in settled_keys:
                 continue
-            subject, body = build_session_email(summary)
+            if _wallet_already_settled(stamp):
+                continue
             try:
-                send(subject, body)
-            except Exception as e:
-                print(f"[pay-per-use] summary email failed: {e}")
-            emailed.append(summary)
-            # Wallet deduction (Jenna 2026-09-08). If this session's
-            # user is a paying customer, deduct billed_usd from their
-            # wallet in real time and fire auto-reload if the balance
-            # drops below their threshold. Runs AFTER the stamp so a
-            # retry never double-charges. Never blocks the sweep -
-            # any error is logged and the email still lands.
+                billed = float(stamp.get('billed_usd') or 0.0)
+            except (TypeError, ValueError):
+                billed = 0.0
+            if billed <= 0:
+                continue
             try:
-                _apply_ppu_wallet_deduction(summary)
+                _settle_ppu_wallet(s3, key, stamp)
             except Exception as _wd_e:
                 print(f"[pay-per-use] wallet deduction skipped: {_wd_e}")
     except Exception as e:

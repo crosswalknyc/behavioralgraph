@@ -2003,6 +2003,34 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def existing_wallet_deduct(subject: dict, *, tool_key: str = "",
+                           job_id: str = ""):
+    """Return the deduct row for this (tool, job_id) when one exists.
+
+    Used so a Prometheus session that already hit the wallet is not
+    charged again when the closer retries after a deploy or a failed
+    stamp write. Empty job_id never matches (those rows are not
+    idempotent).
+    """
+    if not isinstance(subject, dict):
+        return None
+    jid = str(job_id or "").strip()
+    if not jid:
+        return None
+    tk = str(tool_key or "").strip()
+    for txn in subject.get("wallet_transactions") or []:
+        if not isinstance(txn, dict):
+            continue
+        if str(txn.get("kind") or "") != "deduct":
+            continue
+        if str(txn.get("job_id") or "").strip() != jid:
+            continue
+        if tk and str(txn.get("tool") or "").strip() != tk:
+            continue
+        return txn
+    return None
+
+
 def apply_wallet_deduct(subject: dict, amount_usd: float, *,
                         description: str = "",
                         tool_key: str = "",
@@ -2026,6 +2054,11 @@ def apply_wallet_deduct(subject: dict, amount_usd: float, *,
     the wallet moves by -amount. May take balance negative for
     monthly_invoice mode (caller enforces the limit).
 
+    A non-empty `job_id` is idempotent for this subject + tool: a
+    retry returns the existing row and does not move the balance.
+    That is what keeps a Prometheus session from charging twice
+    when the closer runs again after a deploy.
+
     Callers with atomicity requirements MUST invoke this inside the
     same _users_cas_mutate closure that reads the subject record,
     so a concurrent top-up gets folded in on retry.
@@ -2033,6 +2066,10 @@ def apply_wallet_deduct(subject: dict, amount_usd: float, *,
     amt = round(float(amount_usd), 2)
     if amt <= 0:
         return {}
+    existing = existing_wallet_deduct(
+        subject, tool_key=tool_key, job_id=job_id)
+    if existing:
+        return existing
     old = wallet_balance(subject)
     new = round(old - amt, 2)
     subject["wallet_balance_usd"] = new
@@ -4267,6 +4304,7 @@ __all__ = [
     "parse_auto_reload_flag",
     "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
+    "existing_wallet_deduct",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
     "try_auto_reload",
