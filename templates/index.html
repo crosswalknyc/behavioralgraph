@@ -81265,6 +81265,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             extra.fw_inputs || extra.fw_confirm)) &&
                 !_pmBpiqIntent(text) && !_pmJiqIntent(text) &&
                 !_pmFwIntent(text)) {
+                // No profile open. An analyze-MODE ask (exec summary,
+                // personas, whitespace, new consumers, convergences,
+                // LinkedIn, full read) genuinely needs data open, so it
+                // keeps the nudge. A plain question or follow-up does
+                // NOT (Jenna 2026-10-01: Carolyn's catalog follow-up
+                // "what do the numbers mean?" was dead-ended here even
+                // though the read was one turn up in the thread). Hand
+                // it to the interpret flow so the server router answers
+                // it from the thread and the banked read.
+                if (!mode && !_pmModeForText(text)) {
+                    return 'reroute';
+                }
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
