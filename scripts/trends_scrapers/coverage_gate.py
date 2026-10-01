@@ -425,10 +425,13 @@ def collect_missing(payload: dict,
     # row onto the entry it reads, and the snapshot is a large object.
     _keys: dict = {}
 
-    def stored_keys() -> set:
+    def stored_keys() -> dict:
+        # The items themselves (membership tests work the same on a
+        # dict), so a capped row can be resolved onto the sibling the
+        # page reads rather than the first key that exists.
         if 'v' not in _keys:
-            _keys['v'] = set(((se._read_snapshot('stream_estimates') or {})
-                              .get('items') or {}))
+            _keys['v'] = dict(((se._read_snapshot('stream_estimates') or {})
+                               .get('items') or {}))
         return _keys['v']
 
     for path, rank, it in _walk_rendered(cards):
@@ -588,7 +591,15 @@ def _collect_cap_target(se, stored_keys, cap_by_key: dict,
 
     candidates = _entry_key_candidates(se, kind, title, artist)
     known = stored_keys()
-    entry_key = next((k for k in candidates if k in known), candidates[0])
+    entry_key = None
+    if isinstance(known, dict):
+        try:
+            from scripts.trends_scrapers import chart_entry_sync as _ces
+            entry_key = _ces.preferred(known, candidates, platform_key)
+        except Exception:
+            entry_key = None
+    if not entry_key:
+        entry_key = next((k for k in candidates if k in known), candidates[0])
     # Price under the kind of the entry the row actually reads, so the
     # result merges into that entry instead of creating a sibling key
     # that would then win the annotator's lookup.

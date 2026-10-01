@@ -5303,6 +5303,22 @@ def _derived_rail_row_from_self(row: dict, child_slug: str) -> None:
         _stamp_derived_rail_block(row, child_slug, dict(blk))
 
 
+def _preferred_entry_key(items_lookup: dict, order: list,
+                         platform_key: str) -> Optional[str]:
+    """Which of a title's sibling keys this row reads. Delegates to
+    `chart_entry_sync.preferred` so the render, the pricing passes
+    and the coverage gate resolve the same entry; falls back to the
+    first key present if that module is unavailable."""
+    try:
+        from scripts.trends_scrapers import chart_entry_sync as _ces
+        return _ces.preferred(items_lookup, order, platform_key)
+    except Exception:
+        for k in order:
+            if items_lookup.get(k):
+                return k
+        return None
+
+
 def _annotate_streaming_with_streams(streaming_trending: dict,
                                        estimates: dict) -> None:
     """Attach per-platform `us_streams` to every Film/TV row: Netflix
@@ -5343,13 +5359,19 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                     order = [f'title:{norm}', f'film:{norm}', f'tv:{norm}']
                 entry = None
                 kind_hint = 'title'
-                for k in order:
-                    entry = items_lookup.get(k)
-                    if entry:
-                        # First key that resolved wins; use its kind
-                        # (drop the `<kind>:` prefix).
-                        kind_hint = k.split(':', 1)[0]
-                        break
+                # The ONE sibling every pass writes and the page reads
+                # (chart_entry_sync.preferred): the entry carrying a
+                # published chart position first, then one with a
+                # reading for this service, then the first present in
+                # the row's own kind order. "First key that exists"
+                # rendered a per-item number on the Netflix chart while
+                # the chart's kind key held the levelled one
+                # (2026-10-01).
+                chosen = _preferred_entry_key(items_lookup, order,
+                                              platform_key)
+                if chosen:
+                    entry = items_lookup.get(chosen)
+                    kind_hint = chosen.split(':', 1)[0]
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
@@ -11565,9 +11587,14 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
         # them. That mark is the only thing downstream may treat as a
         # rank: the render pass seats those rows in the service's
         # order and never moves them, and a row without the mark has
-        # no published position at all. Depth-extension rows below
-        # never carry one, which is correct, because they arrive in a
-        # popularity order that is not the service's own.
+        # no published position at all. Stamped once here for the
+        # service's own rows and again after the depth merge below:
+        # a depth row's ORDER is never a position, but a depth row
+        # can be a title the service charts that the day's capture
+        # did not carry (Prime Video's #7 The Pendragon Cycle on
+        # 2026-10-01), and the pricing passes treat it as charted,
+        # so the page has to as well or it renders as catalog above
+        # the chart's floor.
         _stamp_published_ranks(slug, snap, items, films, tv)
 
         # Depth extension merge (Jenna 2026-09-09: every list carries
@@ -11593,6 +11620,8 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                 r['rank'] = i
             if merged_flat:
                 items = merged_flat
+            # Second stamp: depth rows that are on the chart.
+            _stamp_published_ranks(slug, snap, items, films, tv)
 
         # Enrich Film + TV rows with an `image` field via iTunes Search.
         # Cached at module scope so subsequent renders (same title, same

@@ -206,7 +206,8 @@ def reprice(se, *, slugs: Optional[list[str]] = None,
     # finally puts the shared list back before it is written.
     in_scope = [s for s, _l in se._charted_slugs()]
     stats = {'charts': 0, 'titles': 0, 'skipped': 0, 'rails': 0,
-             'moved': 0, 'held': 0, 'reclamped': 0, 'written': False,
+             'moved': 0, 'held': 0, 'reclamped': 0, 'banded': 0,
+             'mirrored': 0, 'written': False,
              'target_date': target_date_iso}
     try:
         if dry_run:
@@ -232,17 +233,23 @@ def reprice(se, *, slugs: Optional[list[str]] = None,
         stats['titles'] = cs.get('titles', 0)
         stats['skipped'] = cs.get('skipped', 0)
 
-        stats['reclamped'] = se._reclamp_carried_to_platform_ceiling(
-            items) or 0
-
-        pc = se._enforce_published_chart_coherence(items, target_date_iso)
+        # The same closing sequence the nightly estimator runs: ceiling
+        # seats, coherence written across sibling keys, rank bands
+        # applied to readings, sibling mirror, ceiling again.
+        fin = se._finalize_published_charts(items, target_date_iso)
+        pc = fin.get('coherence') or {}
+        stats['reclamped'] = ((fin.get('ceiling') or 0)
+                              + (fin.get('ceiling_after') or 0))
         stats['rails'] = pc.get('rails', 0)
         stats['moved'] = pc.get('moved', 0)
         stats['held'] = pc.get('held', 0)
+        stats['banded'] = fin.get('bands') or 0
+        stats['mirrored'] = fin.get('mirror') or 0
     finally:
         se._charted_slugs = original
 
-    if not (stats['titles'] or stats['moved'] or stats['reclamped']):
+    if not (stats['titles'] or stats['moved'] or stats['reclamped']
+            or stats['banded'] or stats['mirrored']):
         logger.info('every declared chart already descends against the '
                     'order it is showing; nothing written')
         return stats

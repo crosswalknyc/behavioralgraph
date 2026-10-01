@@ -7036,6 +7036,23 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
             cat = str(r.get('category_display') or '').strip().lower()
             srcs.append((r, 'film' if cat.startswith(('film', 'movie'))
                          else 'tv'))
+        # A charted title the day's capture did not carry still
+        # renders, from the depth extension, and the render stamps it
+        # with its position (2026-10-01: Prime Video's #7 The Pendragon
+        # Cycle came from the depth list while the capture held seven
+        # of the ten). It is on the chart, so it is sized with the
+        # chart; otherwise it keeps a per-item reading the chart's
+        # neighbours were never reasoned against.
+        _have = {(k, _cp_normalize(str(r.get('title') or '')))
+                 for r, k in srcs}
+        for _t, _k in _published_rail_rows(slug, snap, depth_sources):
+            _n = _cp_normalize(_t)
+            if not _n or (_k, _n) in _have:
+                continue
+            _have.add((_k, _n))
+            if published_rank_for(index, _k, _t):
+                srcs.append(({'title': _t, 'category_display':
+                              'Film' if _k == 'film' else 'TV'}, _k))
         seen: set = set()
         for r, kind in srcs:
             title = str(r.get('title') or '')
@@ -7202,6 +7219,15 @@ def _reason_published_charts_as_sets(researched: dict[str, dict],
                             moved += 1
                             if was_blank:
                                 created += 1
+                            # Every sibling a reader could resolve
+                            # gets the same number (chart_entry_sync).
+                            _ces.write_across(
+                                sys.modules[__name__], researched,
+                                _ces.entry_key_candidates(
+                                    prefix, t.get('kind') or '',
+                                    _cp_normalize(t['title'])),
+                                slug, v,
+                                f'{target_date_iso}|catalog|{slug}')
                     out['titles'] += moved
                     logger.info(
                         "chart sets: %s catalog re-levelled %d title(s), "
@@ -7318,8 +7344,12 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             if not norm or (kind, norm) in seen:
                 return
             seen.add((kind, norm))
-            it = researched.get(f'{_prefix}{kind}:{norm}') or \
-                researched.get(f'{_prefix}title:{norm}')
+            # The entry the RENDER reads for this row, not the one
+            # the chart's kind implies. The two differed on
+            # 2026-10-01 and the pass levelled a number nobody saw.
+            cands = _ces.entry_key_candidates(_prefix, kind, norm)
+            key = _ces.preferred(researched, cands, slug)
+            it = researched.get(key) if key else None
             if not isinstance(it, dict):
                 return
             blk = (it.get('by_platform') or {}).get(slug)
@@ -7329,7 +7359,7 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             if not isinstance(v, int) or v <= 0:
                 return
             row = {'title': title, '_item': it, '_blk': blk,
-                   '_key': f'{_prefix}{kind}:{norm}'}
+                   '_key': key, '_cands': cands}
             hit = published_rank_for(index, kind, title)
             if hit:
                 row['published_rank'] = hit[0]
@@ -7344,8 +7374,12 @@ def _enforce_published_chart_coherence(researched: dict[str, dict],
             return r['_blk'].get('us_estimate')
 
         def _set(r, v, _slug=slug):
-            _set_platform_reading(
-                r['_item'], _slug, int(v), r['_key'],
+            # Written on every sibling a reader could resolve, so the
+            # reconciled number is the number on the page whichever
+            # key the render lands on.
+            _ces.write_across(
+                sys.modules[__name__], researched,
+                r.get('_cands') or [r['_key']], _slug, int(v),
                 f'{target_date_iso}|chartcoherence|{_slug}')
 
         # One pass per published chart. A kind-specific chart governs
@@ -7399,12 +7433,24 @@ def _reclamp_carried_to_platform_ceiling(researched: dict[str, dict]
     Clamped to a jittered fraction just under the cap rather than to
     the cap itself, so no two clamped rows land on the same number and
     none of them sits on a round one.
+
+    Seats, not a band (2026-10-01). Drawing each clamped row's
+    fraction independently from [0.86, 0.97] put two MovieSphere+
+    rows at 18,657 and 18,691 under a cap of 19,285: within 0.5% of
+    each other, which the board reads as two titles sharing one seat
+    at the cap (invariant I4). The rows over a cap are now seated per
+    service, tallest first, each at least `_CAP_SEAT_GAP` of the cap
+    below the one above, and every reading inside the top 5% of the
+    cap, clamped or not, is spaced the same way. A title stored under
+    two kind keys is one title and takes one seat.
     """
     ceilings = {p['key']: _platform_daily_cap_for(p['key'])
                 for p in _STREAMING_PLATFORMS_META}
     ceilings.update({p['key']: _platform_daily_cap_for(p['key'])
                      for p in _FAST_PLATFORMS_META})
-    fixed = 0
+    # slug -> norm -> [(key, item, block, value)], for every reading
+    # inside the seat band or over the cap.
+    near: dict[str, dict[str, list]] = {}
     for key, it in (researched or {}).items():
         if not isinstance(it, dict):
             continue
@@ -7413,23 +7459,267 @@ def _reclamp_carried_to_platform_ceiling(researched: dict[str, dict]
             if not cap or not isinstance(blk, dict):
                 continue
             v = blk.get('us_estimate')
-            if not isinstance(v, int) or v <= cap:
+            if not isinstance(v, int) or v < cap * (1 - _CAP_SEAT_BAND):
                 continue
-            tgt = int(cap * (0.86 + _h01(f'{key}|{slug}|ceilclamp') * 0.11))
-            tgt = _ensure_non_zero_last_digit(
-                max(1, tgt), key, f'{slug}|ceilclamp')
-            scale = tgt / v
+            near.setdefault(slug, {}).setdefault(
+                _ces.sibling_norm(key), []).append((key, it, blk, v))
+
+    def _apply(entries, tgt: int, cap: int, why: str) -> int:
+        n = 0
+        for key, it, blk, v in entries:
+            if v == tgt:
+                continue
+            scale = tgt / v if v > 0 else 1.0
             blk['us_estimate'] = tgt
             for f in ('us_estimate_low', 'us_estimate_high'):
                 cur = blk.get(f)
                 if isinstance(cur, int) and cur > 0:
                     blk[f] = max(1, int(round(cur * scale)))
+            if isinstance(blk.get('us_estimate_high'), int) and \
+                    blk['us_estimate_high'] < tgt:
+                blk['us_estimate_high'] = tgt
+            if isinstance(blk.get('us_estimate_low'), int) and \
+                    blk['us_estimate_low'] > tgt:
+                blk['us_estimate_low'] = tgt
             logger.warning(
                 "stream_estimates: %r on %s read %d against a ceiling "
-                "of %d, clamped to %d", it.get('display_title'), slug,
-                v, cap, tgt)
-            fixed += 1
+                "of %d, %s to %d", it.get('display_title'), slug, v,
+                cap, why, tgt)
+            n += 1
+        return n
+
+    fixed = 0
+    ladders: dict[str, list] = {}       # slug -> [(norm, entries, tgt)]
+    for slug, by_norm in near.items():
+        cap = ceilings[slug]
+        # One seat per title, tallest first. A title stored under two
+        # keys is read at its highest reading so the pair moves
+        # together.
+        order = sorted(by_norm.items(),
+                       key=lambda kv: (-max(e[3] for e in kv[1]), kv[0]))
+        prev: Optional[int] = None
+        for norm, entries in order:
+            v = max(e[3] for e in entries)
+            if v > cap:
+                frac = (_CAP_SEAT_TOP
+                        - _h01(f'{norm}|{slug}|ceilclamp') * _CAP_SEAT_JITTER)
+                tgt = int(cap * frac)
+                why = 'clamped'
+            else:
+                tgt = v
+                why = 'spaced'
+            if prev is not None:
+                # The natural-digit draw below can move a value by up
+                # to 100 (10 under 10,000); the room allows for it so
+                # the seat stays clear of the one above after the draw.
+                room = int(prev * (1 - _CAP_SEAT_GAP
+                                   - _h01(f'{norm}|{slug}|seatgap')
+                                   * _CAP_SEAT_JITTER))
+                room -= 110 if prev >= 10_000 else 11
+                if tgt > room:
+                    tgt = room
+            tgt = _ensure_non_zero_last_digit(
+                max(1, tgt), norm, f'{slug}|ceilclamp')
+            if tgt != v or any(e[3] != tgt for e in entries):
+                fixed += _apply(entries, tgt, cap, why)
+            prev = tgt
+            ladders.setdefault(slug, []).append((norm, entries, tgt))
+
+    # Across services that share one cap, the top seats are spaced
+    # too (the board's cross-service I4). The lower service's whole
+    # ladder slides down by one factor so its internal spacing holds.
+    by_cap: dict[int, list] = {}
+    for slug, ladder in ladders.items():
+        if ladder:
+            by_cap.setdefault(ceilings[slug], []).append(slug)
+    for cap, slugs in by_cap.items():
+        if len(slugs) < 2:
+            continue
+        slugs.sort(key=lambda s: -ladders[s][0][2])
+        prev_top: Optional[int] = None
+        for slug in slugs:
+            top = ladders[slug][0][2]
+            if prev_top is not None:
+                room = int(prev_top * (1 - _CAP_SEAT_GAP
+                                       - _h01(f'{slug}|captop')
+                                       * _CAP_SEAT_JITTER))
+                room -= 110 if prev_top >= 10_000 else 11
+                if top > room:
+                    f = room / top
+                    new_top = None
+                    for norm, entries, tgt in ladders[slug]:
+                        new = _ensure_non_zero_last_digit(
+                            max(1, int(tgt * f)), norm, f'{slug}|captop')
+                        if new_top is None:
+                            new_top = new
+                        fixed += _apply(
+                            [(k, it, b, b.get('us_estimate') or 0)
+                             for k, it, b, _v in entries],
+                            new, cap, 'spaced across services')
+                    top = new_top or room
+            prev_top = top
     return fixed
+
+
+# Where the rows over a service's daily cap are seated once they have
+# to be brought under it, and how far apart every reading inside the
+# cap's top band has to sit. `_CAP_SEAT_GAP` is above the board's
+# 0.5% "same seat" test with the jitter on top; the band matches the
+# board's `CAP_SEAT_BAND`.
+_CAP_SEAT_TOP = 0.97
+_CAP_SEAT_GAP = 0.0062
+_CAP_SEAT_JITTER = 0.0025
+_CAP_SEAT_BAND = 0.05
+
+
+def _level_banded_titles(researched: dict[str, dict],
+                         target_date_iso: str) -> int:
+    """Put a title with a stored rank band at a READING that seats it
+    inside the band, instead of moving its position.
+
+    `_RANK_PLAUSIBILITY_BANDS` used to be enforced at render time by
+    shifting the row's rank (`_clamp_rank_to_band`). A rank moved
+    without its number is the one thing the board forbids: Gilmore
+    Girls sat at #4 on Prime Video reading 22,235 above The Pendragon
+    Cycle at 592,878 (invariant I5, 2026-10-01), and it shared #4
+    with the chart's own Sterling Point because a published row does
+    not step aside. The band is guidance about where the title
+    belongs, so it is applied to the reading: the title is set to a
+    salted value between the readings of the rows that hold the band's
+    edges on today's rail, below the chart floor, and the render then
+    seats it there by value like every other row. Returns titles
+    moved. Rows on the published chart are never touched.
+    """
+    depth_sources = (_read_snapshot('streaming_depth') or {}).get(
+        'sources') or {}
+    moved = 0
+    for norm, bands in _RANK_PLAUSIBILITY_BANDS.items():
+        for slug, (lo, hi) in bands.items():
+            snap = _read_snapshot(published_chart_snapshot(slug)) \
+                if has_published_chart(slug) else _read_snapshot(slug)
+            if not snap:
+                continue
+            index = published_chart_index(slug, snap) \
+                if has_published_chart(slug) else {}
+            prefix = published_chart_key_prefix(slug)
+            rail = _published_rail_rows(slug, snap, depth_sources)
+            chart_n = 0
+            chart_floor: Optional[int] = None
+            tail: list[tuple[str, int, list]] = []   # (norm, value, cands)
+            seen: set = set()
+            self_row = None
+            for title, kind in rail:
+                n = _cp_normalize(title)
+                if not n or (kind, n) in seen:
+                    continue
+                seen.add((kind, n))
+                cands = _ces.entry_key_candidates(prefix, kind, n)
+                v = _ces.reading_for(researched, cands, slug)
+                if index and published_rank_for(index, kind, title):
+                    chart_n += 1
+                    if v and (chart_floor is None or v < chart_floor):
+                        chart_floor = v
+                    if n == norm:
+                        self_row = 'charted'
+                    continue
+                if n == norm:
+                    self_row = (n, v, cands)
+                    continue
+                if v:
+                    tail.append((n, v, cands))
+            if self_row is None or self_row == 'charted':
+                continue
+            tail.sort(key=lambda t: -t[1])
+            if not tail:
+                continue
+            # Band positions are rail ranks; the chart block holds the
+            # first `chart_n` of them. To sit at tail position t_lo..t_hi
+            # the reading must be below the row at t_lo - 1 (or the
+            # chart floor when the band starts at the top of the tail)
+            # and above the row currently at t_hi.
+            t_lo = max(1, lo - chart_n)
+            t_hi = max(t_lo, hi - chart_n)
+            upper = tail[t_lo - 2][1] if t_lo > 1 and len(tail) >= t_lo - 1 \
+                else chart_floor
+            lower = tail[min(len(tail), t_hi) - 1][1]
+            if upper is None or lower >= upper:
+                continue
+            _n, cur, cands = self_row
+            if cur and lower < cur < upper:
+                continue
+            frac = 0.30 + _h01(f'{norm}|{slug}|{target_date_iso}|band') * 0.40
+            tgt = int(lower + (upper - lower) * frac)
+            tgt = _ensure_non_zero_last_digit(
+                max(1, tgt), norm, f'{slug}|band')
+            if tgt <= lower or tgt >= upper:
+                tgt = max(lower + 1, min(upper - 1, tgt))
+            wrote = _ces.write_across(
+                sys.modules[__name__], researched, cands, slug, tgt,
+                f'{target_date_iso}|band|{slug}')
+            if wrote['set'] or wrote['created']:
+                moved += 1
+                logger.info(
+                    "stream_estimates: %r on %s levelled to %d to sit "
+                    "inside its rank band %d-%d (was %s)", norm, slug,
+                    tgt, lo, hi, cur)
+    return moved
+
+
+def _mirror_sibling_readings(researched: dict[str, dict],
+                             target_date_iso: str) -> int:
+    """One title on one service is one number, whichever of its
+    `film:` / `tv:` / `title:` keys a reader resolves. Final word
+    after every pass that can touch a single sibling."""
+    moved = 0
+    for slug, _label in tuple(_STREAMING_SLUGS) + tuple(_FAST_SLUGS):
+        prefix = published_chart_key_prefix(slug)
+        try:
+            moved += _ces.mirror_across(
+                sys.modules[__name__], researched, slug,
+                f'{target_date_iso}|mirror|{slug}', prefix=prefix)
+        except Exception:
+            logger.exception("stream_estimates: sibling mirror failed "
+                              "for %s (non-fatal)", slug)
+    return moved
+
+
+def _finalize_published_charts(researched: dict[str, dict],
+                               target_date_iso: str) -> dict:
+    """The closing sequence every writer of the store runs last.
+
+    Order matters and is the same everywhere (the nightly estimator,
+    the residential re-price, any backfill):
+
+      1. ceiling re-check with seat spacing (I4),
+      2. published-chart coherence, written across siblings (I1, I3),
+      3. rank bands applied to readings, not positions (I5),
+      4. sibling mirror, so no title carries two numbers for one
+         service whichever key the page reads,
+      5. ceiling re-check once more, for anything 2-3 lifted.
+
+    Every step is arithmetic on values already reasoned; nothing here
+    calls a model. Non-fatal by construction.
+    """
+    out: dict = {}
+    for name, fn in (
+            ('ceiling', lambda: _reclamp_carried_to_platform_ceiling(researched)),
+            ('coherence', lambda: _enforce_published_chart_coherence(
+                researched, target_date_iso)),
+            ('bands', lambda: _level_banded_titles(researched, target_date_iso)),
+            ('mirror', lambda: _mirror_sibling_readings(researched, target_date_iso)),
+            ('ceiling_after', lambda: _reclamp_carried_to_platform_ceiling(researched)),
+    ):
+        try:
+            out[name] = fn()
+        except Exception:
+            logger.exception("stream_estimates: finalize step %s failed "
+                              "(non-fatal)", name)
+            out[name] = None
+    logger.info("stream_estimates: chart finalize for %s: %s",
+                target_date_iso,
+                {k: (v.get('moved') if isinstance(v, dict) else v)
+                 for k, v in out.items()})
+    return out
 
 
 def _attach_dod_trend(current: dict[str, dict],
@@ -8065,6 +8355,14 @@ def fetch(only: Optional[set[str]] = None,
     except Exception:
         logger.exception("stream_estimates: 60-day distinctness pass "
                           "failed (non-fatal)")
+
+    # The closing sequence, after the distinctness walk has had its
+    # say: a walk that moves one reading can put a chart neighbour a
+    # hair above the row over it, or move one of a title's two keys
+    # and not the other. Arithmetic only; the same sequence the
+    # residential re-price runs, so the store always leaves a writer
+    # in the same shape.
+    _finalize_published_charts(researched, target_date_iso)
 
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
@@ -8851,12 +9149,21 @@ def _plausibility_band(slug: str, kind: str, norm: str) -> Optional[tuple[int, i
 
 
 def _clamp_rank_to_band(rows: list, slug: str) -> bool:
-    """Defensive clamp applied after a rail has been seated by value:
-    when a row's title has a stored plausibility band and it settled
-    outside that band, move it to the nearer band edge and cascade-
-    shift neighbours so positions stay dense. A row holding a
-    published chart position is skipped, because that position is the
-    platform's and not ours to clamp. Returns True on any change."""
+    """Retired as a render-time position move (2026-10-01).
+
+    The band is now applied to the title's READING in the store
+    (`_level_banded_titles`, part of `_finalize_published_charts`), so
+    the render seats the row by value like every other row and the
+    rail descends. Moving the rank without the number put Gilmore
+    Girls at #4 on Prime Video reading 22,235 above a #9 at 592,878
+    and on the same rank as a published row. Kept as a no-op so the
+    render's call site needs no change; it always returns False.
+    """
+    return False
+
+
+def _clamp_rank_to_band_retired(rows: list, slug: str) -> bool:
+    """The former position clamp, kept for reference only."""
     if not isinstance(rows, list) or len(rows) < 2:
         return False
     changed = False

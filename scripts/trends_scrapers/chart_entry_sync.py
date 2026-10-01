@@ -102,6 +102,124 @@ def _block_for(researched: dict, key: str, slug: str) -> Optional[dict]:
     return blk if isinstance(blk, dict) else None
 
 
+def preferred(researched: dict, candidates: list[str],
+              slug: str = '') -> Optional[str]:
+    """The ONE entry a row on `slug` reads and every pass writes.
+
+    Order of preference, over the candidates that exist:
+
+      1. an entry the collector stamped with a published chart position
+         (`published_rank`): the chart passes level that entry, so it
+         is the one the page must render;
+      2. an entry that already carries a positive reading for this
+         service;
+      3. the first candidate present, in the caller's kind order.
+
+    This is what makes the render, the coverage gate and the chart
+    passes agree. On 2026-10-01 the Netflix films panel rendered
+    `title:demon slayer ... castle i` (718,707, a per-item reading)
+    while the coherence pass had levelled `film:demon slayer ...
+    castle i` (359,365, the chart's #3), because the render took the
+    first key that existed and the pass took the chart's kind. Both
+    now ask this function.
+    """
+    hit = present(researched, candidates)
+    if not hit:
+        return None
+
+    def _charted(k: str) -> bool:
+        pr = (researched.get(k) or {}).get('published_rank')
+        return isinstance(pr, int) and pr > 0
+
+    def _reads(k: str) -> bool:
+        if not slug:
+            return True
+        v = (_block_for(researched, k, slug) or {}).get('us_estimate')
+        return isinstance(v, int) and v > 0
+
+    # A chart-stamped entry that reads for this service, then any
+    # entry that reads for it, then a chart-stamped one without a
+    # block (the passes will give it one), then the first present.
+    for k in hit:
+        if _charted(k) and _reads(k):
+            return k
+    for k in hit:
+        if _reads(k):
+            return k
+    for k in hit:
+        if _charted(k):
+            return k
+    return hit[0]
+
+
+def sibling_norm(key: str) -> str:
+    """`film:foo` / `tv:foo` / `title:foo` / `fast_tv:foo` -> `foo`."""
+    return key.split(':', 1)[1] if ':' in key else key
+
+
+def mirror_across(se, researched: dict, slug: str, salt: str,
+                  prefix: str = '') -> int:
+    """Last word on sibling agreement for one service.
+
+    For every title stored under more than one kind key, every
+    sibling that carries a reading for `slug` is set to the reading
+    of the preferred sibling (see `preferred`). Siblings without a
+    block for the service are left alone: a block is created only by
+    the passes that reason a value, never by a mirror. Returns the
+    number of readings moved.
+
+    Runs after every pass that can touch a single sibling (the
+    per-item research, the 60-day distinctness walk, the coverage
+    gate's cap pass) so the store never carries two numbers for one
+    title on one service, whichever key a reader resolves.
+    """
+    fam = _FAMILY.get(prefix, _FAMILY[''])
+    groups: dict[str, list[str]] = {}
+    for k, it in (researched or {}).items():
+        if not isinstance(it, dict) or ':' not in k:
+            continue
+        kind, norm = k.split(':', 1)
+        if prefix:
+            if not kind.startswith(prefix):
+                continue
+            kind = kind[len(prefix):]
+        elif kind.startswith('fast_'):
+            continue
+        if kind not in fam or not norm:
+            continue
+        if _block_for(researched, k, slug) is None:
+            continue
+        groups.setdefault(norm, []).append(k)
+    moved = 0
+    for norm, keys in groups.items():
+        if len(keys) < 2:
+            continue
+        cands = [f'{prefix}{kd}:{norm}' for kd in fam]
+        lead = preferred(researched, [c for c in cands if c in keys], slug)
+        if not lead:
+            continue
+        v = (_block_for(researched, lead, slug) or {}).get('us_estimate')
+        if not isinstance(v, int) or v <= 0:
+            continue
+        for k in keys:
+            if k == lead:
+                continue
+            blk = _block_for(researched, k, slug)
+            if blk is None or blk.get('us_estimate') == v:
+                continue
+            basis = blk.get('est_basis')
+            if se._set_platform_reading(researched[k], slug, v, k, salt):
+                moved += 1
+            else:
+                # A block whose old reading is 0 cannot be scaled; set
+                # it outright so the sibling still agrees.
+                blk['us_estimate'] = v
+                moved += 1
+            if basis is not None:
+                blk['est_basis'] = basis
+    return moved
+
+
 def reading_for(researched: dict, candidates: list[str],
                 slug: str) -> Optional[int]:
     """This service's current reading on the first entry that has one."""
