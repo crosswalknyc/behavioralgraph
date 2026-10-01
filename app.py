@@ -53818,10 +53818,11 @@ def api_synth_chat_clarify():
                      + (f"{_credit_end} (30 days past the last date)"
                         if _credit_end else
                         "30 days past the last date")
-                     + f". Viewers who already had {_plat_name} are "
-                       f"split out inside the read, so the tracker's "
-                       f"exclusion window reads 0 days. Approving "
-                       f"locks these dates.")
+                     + f". Standard exclusion window: viewers "
+                       f"already on {_plat_name} in the 6 months "
+                       f"(180 days) before your start date are split "
+                       f"out and never counted as new signups. "
+                       f"Approving locks these dates.")
             return jsonify({'success': True, 'draft': draft,
                             'message': f"{note} {lbl} measures "
                                        f"{start} to {shown_end}."

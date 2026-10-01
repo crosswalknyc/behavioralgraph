@@ -7940,13 +7940,18 @@ def run_synthetic_attribution(config: dict) -> dict:
 
     # Resolve to the params dict write_output expects
     p = dict(config)
-    # Window defaults (2026-09-25, Dark Matter S2 on Apple TV+): the
-    # wizard-composed config carries neither field, and write_output
-    # reads both for its header rows. Synthetic runs model the
-    # pre-existing base via pre_existing_pct, so there is no
-    # pre-campaign exclusion filter (0); the attribution window is the
-    # standard 30 days the dashboard displays.
-    p.setdefault('exclusion_days', 0)
+    # Window defaults. The standard exclusion window on EVERY
+    # Subscriber IQ deliverable is 180 days (6 months prior; Jenna
+    # 2026-10-01 - Bria's Outlander: Blood of My Blood report shipped
+    # 0 and was corrected in place; every other report in the fleet
+    # carries 180). On synthetic runs the modeled pre-existing base
+    # (pre_existing_pct) is what operationalizes that definition:
+    # viewers already on the platform in the 6 months before the
+    # window are split out and never counted as new signups. The
+    # attribution window is the standard 30 days the dashboard
+    # displays. A caller may pass a different exclusion_days only
+    # when the user explicitly asks for one.
+    p.setdefault('exclusion_days', 180)
     p.setdefault('attribution_window', 30)
     p['episode_dates'] = episode_dates
     p['tracking_mode'] = p.get('tracking_mode') or ('episode' if episode_dates else None)
