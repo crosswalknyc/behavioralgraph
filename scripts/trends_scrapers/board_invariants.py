@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 
 CAP_SEAT_BAND = 0.05        # within 5% of the service's daily cap
 CAP_SEAT_TIGHT = 0.005      # and within 0.5% of each other
+MAX_FIX_ATTEMPTS = 3        # fixer passes per gate while still converging
 
 _SECTIONS = (('streaming_trending', 'streaming'), ('fast_trending', 'fast'))
 
@@ -355,25 +356,43 @@ def gate(payload: Optional[dict] = None, *, fix: bool = True,
         fixable = (len(first['I1_chart_order']) + len(first['I3_catalog_under'])
                    + len(first['I4_cap_seats']) + len(first['I5_rail_order'])
                    + len(first['I6_blanks']))
-        if fixable:
+        # Up to MAX_FIX_ATTEMPTS passes, continuing only while a pass
+        # still reduces the count. The nightly on 2026-10-01 went
+        # 37 -> 7 -> 7: a second attempt that changes nothing is a
+        # defect in the fixer and gets reported, not retried forever;
+        # a pass that is still converging gets to finish the job.
+        attempt = 0
+        while fixable and attempt < MAX_FIX_ATTEMPTS:
+            attempt += 1
             rc = _run_fixer()
-            logger.info('board invariants: fixer exited %d; re-auditing', rc)
-            print(f'board invariants: fixer exited {rc}; re-auditing',
-                  flush=True)
+            logger.info('board invariants: fixer attempt %d exited %d; '
+                        're-auditing', attempt, rc)
+            print(f'board invariants: fixer attempt {attempt} exited {rc}; '
+                  f're-auditing', flush=True)
             again = _fresh_view()
             if again is None:
                 logger.error('board invariants: the view could not be '
                              'recomputed after the fixer; reporting the '
-                             'pre-fix audit')
+                             'last audit')
                 print('board invariants: view recompute failed after the '
-                      'fixer; the report below is PRE-fix', flush=True)
-            else:
-                result = audit(again)
-                result['fixed'] = first['violations'] - result['violations']
-                logger.info('board invariants (after): %d violation(s), %d fixed',
-                            result['violations'], result['fixed'])
-                print(f"board invariants (after): {result['violations']} "
-                      f"violation(s), {result['fixed']} fixed", flush=True)
+                      'fixer; the report below predates this attempt',
+                      flush=True)
+                break
+            before_n = result['violations']
+            result = audit(again)
+            result['fixed'] = first['violations'] - result['violations']
+            result['fix_attempts'] = attempt
+            logger.info('board invariants (after attempt %d): %d violation(s), '
+                        '%d fixed so far', attempt, result['violations'],
+                        result['fixed'])
+            print(f"board invariants (after attempt {attempt}): "
+                  f"{result['violations']} violation(s), {result['fixed']} "
+                  f"fixed so far", flush=True)
+            fixable = (len(result['I1_chart_order']) + len(result['I3_catalog_under'])
+                       + len(result['I4_cap_seats']) + len(result['I5_rail_order'])
+                       + len(result['I6_blanks']))
+            if result['violations'] >= before_n:
+                break   # no progress: another identical pass will not help
     if result['violations'] and alert:
         try:
             from scripts.trends_scrapers.run_guard import send_alert

@@ -22,6 +22,13 @@ that survives is reported once.
 Usage:
     python3 -m scripts.trends_scrapers.chart_moved_watch
     python3 -m scripts.trends_scrapers.chart_moved_watch --no-gate
+
+Scheduled (installed 2026-10-01) in root's crontab on the build server:
+    25 * * * *  cd /root/finished_codes/bg-webapp && set -a &&
+                . /root/finished_codes/.env.trends_scrapers && set +a;
+                /usr/bin/python3 -m scripts.trends_scrapers.chart_moved_watch
+                >> /var/log/chart_moved_watch.log 2>&1
+Log rotates daily via /etc/logrotate.d/chart_moved_watch (14 kept).
 """
 from __future__ import annotations
 
