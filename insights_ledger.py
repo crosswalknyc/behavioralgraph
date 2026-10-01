@@ -561,21 +561,103 @@ def _enforce_ledger_coherence(doc, skey, entry):
         print(f"[insights-ledger] coherence pass skipped: {e}")
 
 
-def _record_entry_now(entry):
+# Breakdown dimensions whose rows are standalone subjects in their
+# own right (a list read over titles or brands). Demo buckets,
+# platforms, and channel splits stay parent-only.
+_LIST_DIMENSIONS = {'title', 'titles', 'show', 'shows', 'film', 'films',
+                    'movie', 'movies', 'series', 'ip', 'content title',
+                    'brand', 'brands'}
+
+# "4,169,463 social engagers, 181,374 Prime Video viewers" -> pairs.
+_NOTE_COUNT_RE = re.compile(
+    r'([\d][\d,]{3,})\s+([A-Za-z][A-Za-z /-]{2,40}?)(?=[,.;]|$)')
+
+
+def _derive_list_subentries(entry):
+    """Child entries per breakdown row when a read covers an explicit
+    list of titles or brands (2026-10-01, Jenna: list asks become
+    first-class). A later ask about one title then replays the number
+    the client already saw instead of drawing a fresh, slightly
+    different one. Children carry the row's exact counts (parsed from
+    the row note where present) plus its share and penetration; they
+    never carry a breakdown of their own, so derivation cannot
+    recurse. Never raises."""
     try:
-        _put_entry_object(entry)
+        bd = entry.get('breakdown') or {}
+        rows = bd.get('rows') or []
+        dim = str(bd.get('dimension') or '').strip().lower()
+        if dim not in _LIST_DIMENSIONS or len(rows) < 2:
+            return []
+        basis = str(bd.get('share_basis') or '').strip()
+        children = []
+        for row in rows[:16]:
+            label = str(row.get('label') or '').strip()
+            if len(label) < 2:
+                continue
+            metrics = []
+            note = str(row.get('note') or '')
+            for num, what in _NOTE_COUNT_RE.findall(note)[:4]:
+                try:
+                    val = int(num.replace(',', ''))
+                except ValueError:
+                    continue
+                name = re.sub(r'[^a-z0-9_]+', '_',
+                              what.strip().lower()).strip('_')[:48]
+                if not name or val <= 0:
+                    continue
+                metrics.append({
+                    'name': name, 'label': what.strip()[:90],
+                    'value': val, 'unit': 'count',
+                    'definition': (f'{label} slice of the set read: '
+                                   f'{entry.get("q") or ""}')[:220]})
+            for fld, nm, lbl in (
+                    ('share_pct', 'share_of_set_pct', 'Share of set'),
+                    ('penetration_pct', 'penetration_pct',
+                     'Penetration')):
+                v = row.get(fld)
+                if isinstance(v, (int, float)):
+                    metrics.append({
+                        'name': nm, 'label': lbl, 'value': float(v),
+                        'unit': 'pct', 'definition': basis[:220]})
+            if not metrics:
+                continue
+            children.append(make_entry(
+                subject=label, metric_family=entry.get('family'),
+                question=f"{label}: {entry.get('q') or ''}"[:300],
+                route='list_subentry', metrics=metrics,
+                window_start=entry.get('ws'),
+                window_end=entry.get('we'),
+                window_label=entry.get('wl'),
+                reply=note[:400],
+                base_profile_key=entry.get('base'),
+                cohort=entry.get('cohort'),
+                derivation=f"derived from list read {entry.get('k')}",
+                provenance=entry.get('prov')))
+        return children
     except Exception as e:
-        print(f"[insights-ledger] entry put failed: {e}")
-    skey = subject_key(entry.get('subject'))
+        print(f"[insights-ledger] list subentry derivation failed: {e}")
+        return []
+
+
+def _record_entry_now(entry):
+    batch = [entry] + _derive_list_subentries(entry)
+    for e in batch:
+        try:
+            _put_entry_object(e)
+        except Exception as err:
+            print(f"[insights-ledger] entry put failed: {err}")
 
     def mutate(doc):
-        subj = doc['subjects'].setdefault(
-            skey, {'subject': entry.get('subject') or skey, 'entries': []})
-        _enforce_ledger_coherence(doc, skey, entry)
-        ents = subj.get('entries') or []
-        ents = [e for e in ents if not _supersedes(entry, e)]
-        ents.append(entry)
-        subj['entries'] = ents[-MAX_ENTRIES_PER_SUBJECT:]
+        for e in batch:
+            skey = subject_key(e.get('subject'))
+            subj = doc['subjects'].setdefault(
+                skey, {'subject': e.get('subject') or skey,
+                       'entries': []})
+            _enforce_ledger_coherence(doc, skey, e)
+            ents = subj.get('entries') or []
+            ents = [x for x in ents if not _supersedes(e, x)]
+            ents.append(e)
+            subj['entries'] = ents[-MAX_ENTRIES_PER_SUBJECT:]
         doc['updated'] = entry['ts']
         return doc
 
@@ -583,6 +665,57 @@ def _record_entry_now(entry):
         _update_index(mutate)
     except Exception as e:
         print(f"[insights-ledger] index update failed: {e}")
+
+
+def retract(subject=None, question=None, key=None):
+    """Pull delivered entries out of replay (operator correction,
+    2026-10-01). Matching index rows are removed so no future ask
+    replays or anchors to the corrected numbers; the per-entry audit
+    objects stay on S3. A retracted list read also takes its derived
+    children with it. The question match scans every subject: a
+    correction often targets an entry that was filed under the wrong
+    subject, so the stamped subject is a hint, never a scope.
+    Returns the number of index rows removed."""
+    del subject  # precision comes from qn / key; see docstring
+    qn = normalize_question(question) if question else ''
+    if not qn and not key:
+        return 0
+    removed = {'n': 0}
+
+    def _hit(e):
+        if key and e.get('k') == key:
+            return True
+        return bool(qn) and e.get('qn') == qn
+
+    def mutate(doc):
+        subjects = doc.get('subjects') or {}
+        gone = set()
+        for sk in list(subjects.keys()):
+            ents = (subjects.get(sk) or {}).get('entries') or []
+            keep = []
+            for e in ents:
+                if _hit(e):
+                    gone.add(str(e.get('k') or ''))
+                    removed['n'] += 1
+                else:
+                    keep.append(e)
+            subjects[sk]['entries'] = keep
+        if gone:
+            for sk, sub in subjects.items():
+                ents = sub.get('entries') or []
+                keep = [e for e in ents
+                        if not any(f"list read {k}" in
+                                   str(e.get('derivation') or '')
+                                   for k in gone if k)]
+                removed['n'] += len(ents) - len(keep)
+                sub['entries'] = keep
+        return doc if removed['n'] else None
+
+    try:
+        _update_index(mutate)
+    except Exception as e:
+        print(f"[insights-ledger] retract failed: {e}")
+    return removed['n']
 
 
 def persist(*, subject, metric_family, question, route, metrics,
@@ -1165,13 +1298,38 @@ def _topical_overlap_ok(entry, qn, floor=0.34):
         return True
 
 
+_AUDIENCE_CLAUSE_RX = re.compile(
+    r'\b(?:who|that)\s+(?:watch|view|stream|listen|play|subscribe)'
+    r'[a-z]*\s+[^,.?;]*', re.IGNORECASE)
+
+_ANNUAL_ASK_RX = re.compile(
+    r'\b(annual(?:ly)?|yearly|full[- ]year|whole year|12[- ]months?|'
+    r'year to date|ytd)\b', re.IGNORECASE)
+
+
+def _entry_span_days(e):
+    """Window span in days, or None when the entry has no window."""
+    try:
+        ws = datetime.strptime(str(e.get('ws') or ''), '%Y-%m-%d')
+        we = datetime.strptime(str(e.get('we') or ''), '%Y-%m-%d')
+        return max(0, (we - ws).days) + 1
+    except Exception:
+        return None
+
+
 def find_semantic(entries, question):
     """Meaning-level replay candidate: the best stored read whose
     (family, cohort, slice dimension) matches the ask. Overlapping
     age ranges bind the closest stored cohort; at equal cohort
     distance, provenance rank wins (delivered_artifact > operator >
-    distilled), then recency."""
-    fam = family_from_question(question)
+    distilled), then recency.
+
+    The family verb is read with audience-qualifier relative clauses
+    stripped (2026-10-01): in "top toy categories for parents of kids
+    4-7 who watch paw patrol" the watching names the audience, not
+    the metric, and must not steer the ask into the viewership
+    family away from the stored purchases table."""
+    fam = family_from_question(_AUDIENCE_CLAUSE_RX.sub(' ', str(question or '')))
     qn = normalize_question(question)
     qsig = cohort_signature(question)
     q_years = _years_in(qn)
@@ -1187,6 +1345,14 @@ def find_semantic(entries, question):
         # unconstrained, as before.
         if q_years and not _window_covers(e, q_years):
             continue
+        # An annual-phrased ask ("annual viewership", "full year")
+        # carries no digits, so the year gate above never sees it;
+        # it must not replay a read banked on a much shorter window
+        # (2026-10-01: a July answer served for an annual ask).
+        if _ANNUAL_ASK_RX.search(qn or ''):
+            span = _entry_span_days(e)
+            if span is not None and span < 300:
+                continue
         if fam:
             if e.get('family') not in _family_compat(fam):
                 continue

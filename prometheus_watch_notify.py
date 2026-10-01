@@ -138,7 +138,21 @@ def answer_text(payload):
     return ''
 
 
-def _html(who, label, email, when, subject, question, answer):
+def _correct_link(username, question, answer, subject):
+    """Signed correction link (2026-10-01 learning loop). '' on any
+    failure; the email still sends without it."""
+    try:
+        import prometheus_corrections as pmc
+        _cid, url = pmc.stash_context(username, question, answer,
+                                      subject=subject or '')
+        return url or ''
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
+def _html(who, label, email, when, subject, question, answer,
+          correct_url=''):
     ink, body, muted, olive, off = (
         '#0C1618', '#5C6560', '#888C89', '#5E7E12', '#E9E8E1')
     def block(title, text):
@@ -165,7 +179,15 @@ def _html(who, label, email, when, subject, question, answer):
         f"{subj}"
         f"{block('Question', question)}"
         f"{block('Answer', answer or 'No written answer on this step.')}"
-        f"<div style='margin-top:28px;color:{ink}'>Prometheus<br>"
+        + ((f"<div style='margin:20px 0 0'><a href='{correct_url}' "
+            f"style='display:inline-block;background:{ink};"
+            f"color:{off};text-decoration:none;border-radius:10px;"
+            f"padding:10px 18px;font-size:14px;font-weight:600'>"
+            f"Correct this answer</a>"
+            f"<div style='color:{muted};font-size:12px;margin-top:6px'>"
+            f"A correction retires this answer and holds for every "
+            f"future ask like it.</div></div>") if correct_url else '')
+        + f"<div style='margin-top:28px;color:{ink}'>Prometheus<br>"
         f"<span style='color:{muted}'>Crosswalk</span></div>"
         f"</div></body></html>")
 
@@ -183,14 +205,18 @@ def _send(username, record, question, answer, subject):
     when = datetime.now(timezone.utc).strftime('%b %d, %Y %I:%M %p UTC')
     subj_line = str(subject or '').strip()
     mail_subject = f"{label}: {who} asked Prometheus"
+    correct_url = _correct_link(username, question, answer, subj_line)
     text = (
         f"{who} at {label} asked Prometheus a question.\n"
         f"{email}\n{when}\n"
         + (f"Open profile: {subj_line}\n" if subj_line else '')
         + f"\nQUESTION\n{question.strip()}\n\nANSWER\n"
-        f"{(answer or 'No written answer on this step.').strip()}\n\n"
-        f"Prometheus\nCrosswalk")
-    html = _html(who, label, email, when, subj_line, question, answer)
+        f"{(answer or 'No written answer on this step.').strip()}\n"
+        + (f"\nCorrect this answer: {correct_url}\n"
+           if correct_url else '')
+        + f"\nPrometheus\nCrosswalk")
+    html = _html(who, label, email, when, subj_line, question, answer,
+                 correct_url=correct_url)
     msg = MIMEMultipart('alternative')
     msg['Subject'] = mail_subject[:180]
     msg['From'] = _FROM

@@ -78294,22 +78294,60 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // "3 builds in motion" phantom, 2026-08-20). If the health
                 // fetch fails, render with no count rather than a wrong one.
                 var histLenAtFetch = synthChatHistory.length;
-                fetch('/api/brief-chat/health', { credentials: 'same-origin' })
+                // Proactive openers (2026-10-01) ride the same open:
+                // raced against 2.5s so a cold cache never delays the
+                // greeting (the fetch still completes server-side and
+                // warms the cache for the next open).
+                var _pmProP = Promise.race([
+                    fetch('/api/prometheus/proactive', { credentials: 'same-origin' })
+                        .then(function(r) { return r.ok ? r.json() : null; })
+                        .catch(function() { return null; }),
+                    new Promise(function(res) { setTimeout(function() { res(null); }, 2500); })
+                ]);
+                var _pmHealthP = fetch('/api/brief-chat/health', { credentials: 'same-origin' })
                     .then(function(r) { return r.ok ? r.json() : null; })
-                    .catch(function() { return null; })
-                    .then(function(d) {
+                    .catch(function() { return null; });
+                Promise.all([_pmHealthP, _pmProP])
+                    .then(function(both) {
+                        var d = both[0];
+                        var pro = both[1];
                         var running = 0;
                         var q = d && d.queue && d.queue.queue;
                         if (q) {
                             running = (parseInt(q.pending, 10) || 0) +
                                       (parseInt(q.running, 10) || 0);
                         }
-                        _synthChatRenderWelcomeBubble(running, histLenAtFetch, force);
+                        _synthChatRenderWelcomeBubble(running, histLenAtFetch, force, pro);
                     });
             } catch (_) {}
         }
 
-        function _synthChatRenderWelcomeBubble(running, histLenAtFetch, force) {
+        function _pmProactiveChipsHtml(pro, pillHot) {
+            // Buttons for the per-account openers. Label and send text
+            // are server strings: HTML-escape for the markup and
+            // JS-escape for the inline onclick payload.
+            try {
+                var items = (pro && pro.chips) || [];
+                var html = '';
+                for (var i = 0; i < Math.min(items.length, 3); i++) {
+                    var it = items[i] || {};
+                    var lbl = String(it.label || '');
+                    var snd = String(it.send || '');
+                    if (!lbl || !snd) continue;
+                    var js = snd.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    var attr = ("synthChatChipSend('" + js + "')")
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    var vis = lbl.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    html += '<button type="button" onclick="' + attr +
+                        '" style="' + pillHot + '">' + vis + '</button>';
+                }
+                return html;
+            } catch (_) { return ''; }
+        }
+
+        function _synthChatRenderWelcomeBubble(running, histLenAtFetch, force, pro) {
             try {
                 var box = document.getElementById('synthChatMessages');
                 if (!box) return;
@@ -78337,6 +78375,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var _pmHotLight = !!(document.body && document.body.getAttribute('data-theme') === 'light');
                 var pillHot = 'background: rgba(139,92,246,0.16); border: 1px solid rgba(139,92,246,0.5); color: ' + (_pmHotLight ? '#6d28d9' : '#c4b5fd') + '; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 var chips = '';
+                // Per-account openers lead (2026-10-01 proactive mode).
+                try { chips += _pmProactiveChipsHtml(pro, pillHot); } catch (_) {}
                 // Page-aware starters (2026-08-20): when a profile is
                 // open on the dashboard, analysis leads the greeting.
                 var _pmCtxW = null;

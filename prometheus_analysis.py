@@ -589,6 +589,88 @@ def build_cut_divergence(parent_df, parent_meta, cut_df, cut_meta,
 # gen pop indexes, the full demo block, a purchase-family index table)
 # plus the fully rendered digest text stamped with the profile ETag,
 # norms version, Gen Pop ETag, and a hash of the digest-rendering code.
+# ---------------------------------------------------------------------------
+# Named-entity exact rows (2026-10-01, Jenna: "do flavor 1 and 2" -
+# deep corpus reach). The digest keeps each category's top rows, so a
+# question naming a mid-tail brand, title, or person used to reason
+# blind even though the exact cell exists in the shipped file. This
+# block hands the model the verbatim rows for every entity the
+# question names, with the Gen Pop baseline alongside, and instructs
+# it to use them as stated.
+
+# Single-token brand names that are also everyday English words match
+# only when the question carries the Capitalized form, so 'our target
+# demo' never pulls Target's rows while 'how big is Target here' does.
+# Multi-token and distinctive names match case-blind.
+_ENTITY_COMMON_WORDS = {
+    'target', 'apple', 'gap', 'coach', 'shell', 'ring', 'mint',
+    'total', 'boost', 'sonic', 'subway', 'dove', 'tide', 'crest',
+    'glad', 'bounce', 'bounty', 'prime', 'max', 'peacock', 'sprint',
+    'uber', 'chime', 'mars', 'vans', 'guess', 'gain', 'all'}
+
+
+def build_named_entity_rows(df, genpop_map, text, limit=8,
+                            max_rows_per_entity=4):
+    """Verbatim base-file rows for entities the question names.
+    Returns '' when the question names nothing the file carries.
+    Never raises."""
+    try:
+        if df is None or not str(text or '').strip():
+            return ''
+        bp_col = _bp_col(df)
+        if bp_col is None:
+            return ''
+        qn = (' ' + re.sub(r'[^a-z0-9]+', ' ',
+                           str(text).lower()).strip() + ' ')
+        raw = str(text)
+        by_ent = {}
+        for _, row in df.iterrows():
+            cat = _norm_cat(row.get('Column'))
+            if cat in METADATA_COLS or cat in DEMO_COLS:
+                continue
+            val = str(row.get('Value') or '').strip()
+            if len(val) < 3:
+                continue
+            ent_sp = re.sub(r'[^a-z0-9]+', ' ', val.lower()).strip()
+            if len(ent_sp) < 3 or f' {ent_sp} ' not in qn:
+                continue
+            if (' ' not in ent_sp
+                    and ent_sp in _ENTITY_COMMON_WORDS
+                    and val not in raw
+                    and val.capitalize() not in raw
+                    and val.title() not in raw):
+                continue
+            bp = _parse_bp(row.get(bp_col))
+            if bp is None:
+                continue
+            gp = genpop_map.get((cat, _norm_brand(val))) \
+                if genpop_map else None
+            by_ent.setdefault(val, []).append((cat, bp, gp))
+        if not by_ent:
+            return ''
+        ranked = sorted(by_ent.items(),
+                        key=lambda kv: -max(r[1] for r in kv[1]))
+        lines = []
+        for val, rows in ranked[:limit]:
+            rows = sorted(rows, key=lambda r: -r[1])
+            for cat, bp, gp in rows[:max_rows_per_entity]:
+                bits = f"- {val} | {cat}: {bp:.4f}% of this audience"
+                if gp is not None and gp >= 0.01:
+                    bits += (f" | gen pop {gp:.4f}%"
+                             f" | {bp / gp:.1f}x")
+                lines.append(bits)
+        if not lines:
+            return ''
+        return ('EXACT ROWS FOR ENTITIES THIS QUESTION NAMES '
+                '(verbatim cells from the base file; these are '
+                'measured values - quote them as stated, never '
+                're-derive or round them away):\n'
+                + '\n'.join(lines[:limit * max_rows_per_entity]))
+    except Exception as e:
+        print(f"[prometheus] named-entity rows failed: {e}")
+        return ''
+
+
 # get_digest_bundle serves the stored digest only when every stamp
 # matches what a live build would use right now, so the precomputed
 # path produces exactly the text the live-CSV path would; any mismatch
@@ -2462,6 +2544,27 @@ def _clip_text(text, limit):
     return (cut[:sp] if sp > 0 else cut).rstrip(' ,;:-') + '.'
 
 
+def _clip_label(text, limit=120):
+    """Length-bound a subject / cohort label without cutting mid-word
+    or stranding an open parenthetical (2026-10-01: a 14-title list
+    subject shipped as '...Almost Heroes, Nip/T' - the raw [:120]
+    slice cut inside a title). If the cut lands inside an unbalanced
+    '(...)', the whole parenthetical is dropped so a list subject
+    collapses to its clean stem ('14-title catalog set')."""
+    t = str(text or '').strip()
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    if cut.count('(') > cut.count(')'):
+        stem = cut[:cut.rfind('(')].rstrip(' ,;:-')
+        if len(stem) >= 8:
+            return stem
+    m = max(cut.rfind(' '), cut.rfind(','))
+    if m >= int(limit * 0.4):
+        cut = cut[:m]
+    return cut.rstrip(' ,;:-(')
+
+
 def _messy(subject, kpi, value):
     """Deterministic messy count: last digit 1-9, never ends in 0
     (no-round-numbers rule). Idempotent for a given (subject, kpi,
@@ -2521,7 +2624,7 @@ def enforce_demand_coherence(data):
         raise ValueError('study payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
     out = {
-        'subject': subj[:120],
+        'subject': _clip_label(subj),
         'platform': str(data.get('platform') or '').strip()[:80],
         'rival': (str(data.get('rival') or '').strip()[:80] or None),
         'window_label': str(data.get('window_label') or '').strip()[:80],
@@ -2939,7 +3042,12 @@ def build_not_quantifiable_reply(text, gate):
 _GENERATE_INTENT_RX = re.compile(
     r'\b(how many|how much|what (share|percent|percentage|fraction)|'
     r'count of|number of|volume of|what(?:\'| i)s the (reach|audience|'
-    r'viewership|size))\b', re.IGNORECASE)
+    r'viewership|size)|'
+    # A named window is quantity phrasing (2026-10-01 eval wave):
+    # "unique viewers for the trailing 90 days" is a count ask.
+    r'trailing \d{1,3}[\s-]?(?:day|week|month)s?|'
+    r'(?:last|past) \d{1,3}[\s-]?(?:day|week|month)s?)\b',
+    re.IGNORECASE)
 
 _GENERATE_NOUN_RX = re.compile(
     r'\b(view(?:ed|ers|ership|ing)?|watch(?:ed|ing)?|stream(?:ed|s|ing|'
@@ -2947,7 +3055,22 @@ _GENERATE_NOUN_RX = re.compile(
     r'search(?:ed|es|ers)?|quer(?:y|ies)|bought|buy(?:ers)?|'
     r'purchas(?:ed|es|ers)?|shopp(?:ed|ers)|download(?:s|ed)?|'
     r'install(?:s|ed)?|users?|accounts?|sessions?|plays?|listen(?:ed|'
-    r'ers|ing)?|engag(?:ed|ement)|visit(?:s|ed|ors)?|audience|reach)\b',
+    r'ers|ing)?|engag(?:ed|ement)|visit(?:s|ed|ors)?|audience|reach|'
+    r'universe|cuts?)\b',
+    re.IGNORECASE)
+
+# Movement / refresh phrasings (2026-10-01): "what moved since my
+# last read", the quarter-end wrap, and the tracker-mover follow-up
+# are metric asks by construction - they are the house proactive
+# openers - and need no quantity phrasing or behavior noun. Build/
+# pull exclusions still run first.
+_METRIC_REFRESH_RX = re.compile(
+    r"\bwhat(?:'s| is| has)? (?:moved|changed|shifted)\b"
+    r"|\bsince (?:my|our|the) last (?:read|ask|pull|look)\b"
+    r"|\bquarter[\s-]?(?:end|close) read\b"
+    r"|\bbiggest (?:shifts|movers|changes)\b"
+    r"|\bbehind the (?:move|jump|spike|drop|surge)\b"
+    r"|\blatest tracked week\b",
     re.IGNORECASE)
 
 _GENERATE_EXCLUDE_RX = re.compile(
@@ -3002,6 +3125,8 @@ def detect_generate_intent(text):
     if _GENERATE_EXCLUDE_RX.search(t):
         return False
     if _METRIC_KPI_RX.search(t):
+        return True
+    if _METRIC_REFRESH_RX.search(t):
         return True
     return bool(_GENERATE_INTENT_RX.search(t) and _GENERATE_NOUN_RX.search(t))
 
@@ -4484,7 +4609,7 @@ def enforce_metrics_coherence(data):
         raise ValueError('measurement payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
     out = {
-        'subject': subj[:120],
+        'subject': _clip_label(subj),
         'metric_family': str(data.get('metric_family')
                              or 'audience').strip().lower()[:32],
         'window_label': str(data.get('window_label') or '').strip()[:80],
@@ -4523,7 +4648,7 @@ def enforce_metrics_coherence(data):
                         'definition': definition})
         if len(metrics) >= 8:
             break
-    out['cohort'] = str(data.get('cohort') or '').strip()[:120]
+    out['cohort'] = _clip_label(data.get('cohort'))
     out['breakdown'] = _coherent_breakdown(data.get('breakdown'))
     if out['breakdown']:
         # Breakdown-primary reads keep the context stats to a preamble.

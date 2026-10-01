@@ -233,6 +233,106 @@ def hostmap_mapping_health():
         print(f"hostmap-mapping health route failed: {e}")
         return jsonify({'ok': False}), 503
 
+
+def _pm_correct_page(title, body_html):
+    return (
+        "<html><head><title>" + title + "</title>"
+        "<meta name='viewport' content='width=device-width,"
+        "initial-scale=1'></head>"
+        "<body style='margin:0;background:#E9E8E1;font-family:"
+        "Helvetica,Arial,sans-serif;color:#5C6560'>"
+        "<div style='max-width:640px;margin:0 auto;padding:40px 24px'>"
+        "<div style='font-size:11px;letter-spacing:.12em;"
+        "text-transform:uppercase;color:#5E7E12;font-weight:600'>"
+        "Prometheus</div>"
+        f"<h1 style='font-size:22px;color:#0C1618;font-weight:700;"
+        f"margin:10px 0 18px'>{title}</h1>"
+        f"{body_html}"
+        "</div></body></html>")
+
+
+def _pm_correct_esc(text):
+    return (str(text or '').replace('&', '&amp;').replace('<', '&lt;')
+            .replace('>', '&gt;'))
+
+
+@app.route('/prometheus/correct', methods=['GET', 'POST'])
+def prometheus_correct():
+    """Email correction loop (2026-10-01). The signed link from a
+    per-ask question email lands here; a submitted correction retires
+    the delivered answer from replay and holds as a standing decision
+    for every future ask like it."""
+    try:
+        import prometheus_corrections as pmc
+        cid = str((request.values.get('id') or '')).strip()
+        tok = str((request.values.get('t') or '')).strip()
+        if not cid or not pmc.verify(cid, tok):
+            return _pm_correct_page(
+                'This link is not valid.',
+                "<div>The correction link could not be verified. "
+                "Use the link from the original email.</div>"), 403
+        ctx = pmc.load_context(cid)
+        if not isinstance(ctx, dict):
+            return _pm_correct_page(
+                'Nothing to correct here.',
+                "<div>This correction context is gone.</div>"), 404
+        q_esc = _pm_correct_esc(ctx.get('question'))
+        a_esc = _pm_correct_esc(ctx.get('answer'))
+        if request.method == 'POST':
+            res = pmc.apply_correction(
+                cid, request.form.get('correction') or '')
+            if not res or res.get('empty'):
+                return _pm_correct_page(
+                    'Nothing was saved.',
+                    "<div>The correction box was empty. Go back and "
+                    "write what the answer should have said.</div>")
+            if res.get('already'):
+                return _pm_correct_page(
+                    'Already corrected.',
+                    "<div>This answer was corrected earlier. The "
+                    "correction is in force.</div>")
+            n = int(res.get('retracted') or 0)
+            return _pm_correct_page(
+                'Correction saved.',
+                "<div>The delivered answer is retired"
+                + (f" ({n} stored read{'s' if n != 1 else ''} "
+                   f"pulled from replay)" if n else '')
+                + " and the correction now holds for every future "
+                "ask like it.</div>")
+        box = (
+            "<div style='font-size:11px;letter-spacing:.08em;"
+            "text-transform:uppercase;color:#5E7E12;font-weight:600;"
+            "margin:18px 0 6px'>{t}</div>"
+            "<div style='background:#fff;border-radius:12px;"
+            "padding:14px 16px;color:#0C1618;font-size:14px;"
+            "line-height:1.5;white-space:pre-wrap'>{b}</div>")
+        form = (
+            f"<form method='POST' action='/prometheus/correct"
+            f"?id={cid}&t={tok}'>"
+            + box.format(t='Question', b=q_esc)
+            + box.format(t='Answer as delivered', b=a_esc[:3000])
+            + "<div style='font-size:11px;letter-spacing:.08em;"
+            "text-transform:uppercase;color:#5E7E12;font-weight:600;"
+            "margin:18px 0 6px'>What it should have said</div>"
+            "<textarea name='correction' rows='6' required "
+            "style='width:100%;box-sizing:border-box;border:none;"
+            "border-radius:12px;padding:14px 16px;font-size:14px;"
+            "font-family:inherit;color:#0C1618'></textarea>"
+            "<button type='submit' style='margin-top:14px;"
+            "background:#0C1618;color:#E9E8E1;border:none;"
+            "border-radius:10px;padding:12px 22px;font-size:14px;"
+            "font-weight:600;cursor:pointer'>Save correction</button>"
+            "<div style='color:#888C89;font-size:12px;margin-top:8px'>"
+            "Saving retires this answer and applies your correction "
+            "to every future ask like it.</div></form>")
+        return _pm_correct_page('Correct this answer.', form)
+    except Exception:
+        traceback.print_exc()
+        return _pm_correct_page(
+            'Something went wrong.',
+            "<div>The correction could not be processed. Try the "
+            "link again in a minute.</div>"), 500
+
 # ----------------------------------------------------------------------------
 # App version / build identifier
 # ----------------------------------------------------------------------------
@@ -58477,6 +58577,28 @@ def api_synth_chat_history():
     return jsonify({'success': ok})
 
 
+@app.route('/api/prometheus/proactive', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('prometheus/proactive')
+def api_prometheus_proactive():
+    """Per-account openers for the chat welcome bubble (2026-10-01
+    proactive mode). Read-only; computed from the account's recent
+    asks plus the measured tracker movers; cached an hour per
+    account. Session-authenticated dashboard users only."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    uname = user.get('username') or user.get('email') or 'anon'
+    try:
+        import prometheus_proactive as _ppro
+        out = _ppro.suggestions(uname)
+        return jsonify({'success': True,
+                        'chips': (out or {}).get('chips') or []})
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': True, 'chips': []})
+
+
 @app.route('/api/brief-chat/active-runs', methods=['GET'])
 @app.route('/api/synth-chat/active-runs', methods=['GET'])  # legacy alias
 @requires_auth
@@ -60741,8 +60863,11 @@ def _pm_open_screen_confirm(text, ctx):
                      subject=page)
         return None
     if verdict == 'away':
-        _pm_ask_hint(route='screen_detach', outcome='answered_away',
-                     subject=page)
+        # No subject stamp (2026-10-01, Jenna): the answer is away
+        # from the page, so the page is NOT what this ask is about.
+        # Stamping it mis-filed a 14-title catalog ask under the open
+        # profile and fed a false pair into cross-session memory.
+        _pm_ask_hint(route='screen_detach', outcome='answered_away')
         return {'route': 'away'}
     yes = f'Yes, {page}'
     _opts = [{'label': yes, 'subject': page}]
@@ -62464,11 +62589,42 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     stages['subiq'] = int((time.monotonic() - _t_stage) * 1000)
+    # Exact rows for question-named entities (2026-10-01, Jenna: deep
+    # corpus reach). The digest keeps top rows per category; a named
+    # mid-tail brand's verbatim cells ride the prompt from the full
+    # base file with Gen Pop baselines so the model quotes measured
+    # values instead of re-deriving them.
+    entity_rows_block = ''
+    _t_stage = time.monotonic()
+    try:
+        _er_key = str(base.get('s3_key') or '')
+        if _er_key.lower().endswith('.csv'):
+            _er_df, _ = pma.load_profile_df(s3_client, S3_BUCKET,
+                                            _er_key)
+            entity_rows_block = pma.build_named_entity_rows(
+                _er_df, pma.load_genpop_map(s3_client, S3_BUCKET),
+                text)
+    except Exception:
+        traceback.print_exc()
+    stages['entity_rows'] = int((time.monotonic() - _t_stage) * 1000)
+    # Measured daily signals (2026-10-01, Jenna: flavor 1). Aggregate
+    # tracker counts for subjects the ask names - templated, read-
+    # only, never row-level. Fail-safe to ''.
+    measured_block = ''
+    _t_stage = time.monotonic()
+    try:
+        import panel_fact_store as _pfs
+        measured_block = _pfs.measured_signals_block(
+            text, extra_names=[str(base.get('subject') or '')])
+    except Exception:
+        traceback.print_exc()
+    stages['measured'] = int((time.monotonic() - _t_stage) * 1000)
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=led.get('block'),
         profile_rows_block=digest_block)
-    extra_blocks = [b for b in (subiq_block, neighbor_block,
+    extra_blocks = [b for b in (entity_rows_block, measured_block,
+                                subiq_block, neighbor_block,
                                 examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
     # Paid research report on a no-base subject (2026-09-14): the
@@ -65143,6 +65299,36 @@ def api_synth_chat_analyze():
         if _board_block:
             xmod_block = (f"{xmod_block}\n\n{_board_block}"
                           if xmod_block else _board_block)
+    except Exception:
+        traceback.print_exc()
+    # Exact rows for question-named entities (2026-10-01, Jenna:
+    # deep corpus reach): verbatim cells from the open profile's full
+    # file for any brand / title the question names, with Gen Pop
+    # baselines. Closes the digest's mid-tail gap on screen asks.
+    try:
+        _er_key = str((ctx.get('primary') or {}).get('s3_key') or '')
+        if _er_key.lower().endswith('.csv'):
+            _er_df, _ = pma.load_profile_df(s3_client, S3_BUCKET,
+                                            _er_key)
+            _er_block = pma.build_named_entity_rows(
+                _er_df, pma.load_genpop_map(s3_client, S3_BUCKET),
+                text)
+            if _er_block:
+                xmod_block = (f"{xmod_block}\n\n{_er_block}"
+                              if xmod_block else _er_block)
+    except Exception:
+        traceback.print_exc()
+    # Measured daily signals (2026-10-01, Jenna: flavor 1) for
+    # subjects the on-screen ask names. Fail-safe to ''.
+    try:
+        import panel_fact_store as _pfs
+        _ms_block = _pfs.measured_signals_block(
+            text,
+            extra_names=[str((p_meta.get('name')
+                              if ctx.get('primary') else '') or '')])
+        if _ms_block:
+            xmod_block = (f"{xmod_block}\n\n{_ms_block}"
+                          if xmod_block else _ms_block)
     except Exception:
         traceback.print_exc()
     _pm_ask_stage('anchors', t0=_t_anchors)
