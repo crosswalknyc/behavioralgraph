@@ -63023,6 +63023,7 @@ def _pm_send_output_email(kind, to_email, data):
         return False
     kind = 'deck' if str(kind) == 'deck' else 'read'
     pdf_bytes, pdf_name = b'', ''
+    csv_bytes, csv_name = b'', ''
     if kind == 'deck':
         title = str((data or {}).get('title')
                     or (data or {}).get('filename') or 'Your deck')[:200]
@@ -63074,30 +63075,6 @@ def _pm_send_output_email(kind, to_email, data):
         subject_line = "Your read is ready"
         _subj = str((data or {}).get('profile') or '').strip()
         email_title = _subj or 'Your Crosswalk read'
-        mail_body = (
-            f"{reply}\n\n"
-            "The same read is attached as a PDF you can share. You can "
-            "also pick this up in the chat on your "
-            "dashboard.\n\nPrometheus\nCrosswalk")
-        body_text = mail_body + "\n"
-        # Light design (Jenna 2026-09-30: "I prefer this design for
-        # emails moving forward"). Legacy shell only on render failure.
-        body_html = ''
-        try:
-            import prometheus_email_html as _peh
-            body_html = _peh.render_answer_email_html(email_title,
-                                                      mail_body)
-        except Exception:
-            body_html = ''
-        if not body_html:
-            reply_html = _html.escape(reply).replace('\n', '<br>')
-            body_html = _wrap_email_html(
-                f"<p>{reply_html}</p>"
-                "<p>The same read is attached as a PDF you can share. "
-                "You can also pick this up in the chat on your "
-                "dashboard.</p>"
-                "<p>Prometheus<br>Crosswalk</p>",
-                title="Your read is ready")
         # The same words as a branded, shareable PDF (Jenna
         # 2026-09-30: "attach pdfs of the prometheus emails of what
         # the email body says"). Fail-safe: b'' means no attachment.
@@ -63112,6 +63089,73 @@ def _pm_send_output_email(kind, to_email, data):
                             else 'Crosswalk_Read.pdf')
         except Exception:
             pdf_bytes, pdf_name = b'', ''
+        # The raw data rides along as a CSV (Jenna 2026-10-01: the
+        # read email "should also always have a .csv file"). Built
+        # from the SAME ledger entry the reply shipped from - the
+        # exact file the download chip would produce - so the attached
+        # numbers match the chat numbers exactly. Fail-safe: no banked
+        # entry or a build failure ships the email without the file.
+        try:
+            _q = str((data or {}).get('question') or '').strip()
+            _entry = None
+            if _q:
+                import insights_ledger as _il
+                import prometheus_analysis as _pma
+                _led = _il.consult(subject=_subj or None, question=_q)
+                _entry = (_led or {}).get('exact')
+                if _entry is None:
+                    _entry = (_il.consult(question=_q)
+                              or {}).get('exact')
+            if _entry and (_entry.get('breakdown')
+                           or _entry.get('metrics')):
+                _cf, _ct = _pma.build_generated_csv(_entry)
+                _rng = ''
+                try:
+                    if _entry.get('ws') and _entry.get('we'):
+                        _rng = (f"{_fmt_study_date(_entry['ws'])} - "
+                                f"{_fmt_study_date(_entry['we'])}")
+                    elif _entry.get('wl'):
+                        _rng = str(_entry['wl'])
+                except Exception:
+                    _rng = ''
+                _ct = _stamp_csv_text(_ct, _rng)
+                csv_name = _pm_csv_task_filename(_entry) or _cf
+                csv_bytes = _ct.encode('utf-8')
+        except Exception:
+            csv_bytes, csv_name = b'', ''
+        if pdf_bytes and csv_bytes:
+            _attach_note = ("The read is attached as a PDF you can "
+                            "share, and the data behind it is attached "
+                            "as a CSV. You can also pick this up in "
+                            "the chat on your dashboard.")
+        elif csv_bytes:
+            _attach_note = ("The data behind this read is attached as "
+                            "a CSV. You can also pick this up in the "
+                            "chat on your dashboard.")
+        else:
+            _attach_note = ("The same read is attached as a PDF you "
+                            "can share. You can also pick this up in "
+                            "the chat on your dashboard.")
+        mail_body = (
+            f"{reply}\n\n"
+            f"{_attach_note}\n\nPrometheus\nCrosswalk")
+        body_text = mail_body + "\n"
+        # Light design (Jenna 2026-09-30: "I prefer this design for
+        # emails moving forward"). Legacy shell only on render failure.
+        body_html = ''
+        try:
+            import prometheus_email_html as _peh
+            body_html = _peh.render_answer_email_html(email_title,
+                                                      mail_body)
+        except Exception:
+            body_html = ''
+        if not body_html:
+            reply_html = _html.escape(reply).replace('\n', '<br>')
+            body_html = _wrap_email_html(
+                f"<p>{reply_html}</p>"
+                f"<p>{_html.escape(_attach_note)}</p>"
+                "<p>Prometheus<br>Crosswalk</p>",
+                title="Your read is ready")
 
     def _send():
         try:
@@ -63132,6 +63176,11 @@ def _pm_send_output_email(kind, to_email, data):
                 att.add_header('Content-Disposition', 'attachment',
                                filename=pdf_name)
                 msg.attach(att)
+            if csv_bytes and csv_name:
+                attc = _MApp(csv_bytes, _subtype='csv')
+                attc.add_header('Content-Disposition', 'attachment',
+                                filename=csv_name)
+                msg.attach(attc)
             dests = [to_email]
             if to_email.lower() != 'jenna@crosswalknyc.com':
                 dests.append('jenna@crosswalknyc.com')
@@ -63141,7 +63190,8 @@ def _pm_send_output_email(kind, to_email, data):
                 Destinations=dests,
                 RawMessage={'Data': msg.as_string()})
             print(f"[pm-notify] output email sent to {to_email} ({kind}"
-                  + (", pdf attached" if pdf_bytes else "") + ")")
+                  + (", pdf attached" if pdf_bytes else "")
+                  + (", csv attached" if csv_bytes else "") + ")")
         except Exception as e:
             print(f"[pm-notify] SES send failed: {e}")
 
@@ -63283,7 +63333,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_watch_notify(pm_user, text, payload,
                              payload.get('profile'))
             if not held:
-                _pm_flush_notify(job_id, 'read', payload)
+                _pm_flush_notify(job_id, 'read',
+                                 {**payload, 'question': text})
             else:
                 _pm_notify_delete(job_id)
                 # A held research report never delivered: the charge
@@ -63391,8 +63442,10 @@ def api_synth_chat_notify_when_done():
     if kind == 'read' and st in ('done', 'held', 'error'):
         sent = False
         if st == 'done':
-            sent = _pm_send_output_email('read', email,
-                                         status.get('payload') or {})
+            sent = _pm_send_output_email(
+                'read', email,
+                {**(status.get('payload') or {}),
+                 'question': str(status.get('question') or '')})
         return jsonify({'success': True, 'already_done': True,
                         'sent': bool(sent)})
     if kind == 'deck' and st in ('done', 'error'):

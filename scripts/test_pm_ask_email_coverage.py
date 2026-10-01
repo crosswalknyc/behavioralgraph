@@ -131,6 +131,34 @@ check("crosswalk account labels by company",
       pwn.watched_label('emma@crosswalknyc.com', 'Crosswalk')
       == 'Crosswalk')
 
+# 7. Read output email always carries the raw data as a CSV (Jenna
+#    2026-10-01: Carolyn's email had the PDF but not the raw data;
+#    "should also always have a .csv file"). Built from the same
+#    ledger entry as the download chip so file and chat match.
+m_out = re.search(r"def _pm_send_output_email\(kind, to_email, data\):"
+                  r"(.*?)\n    def _send\(\):", APP, re.DOTALL)
+check("_pm_send_output_email body found", bool(m_out))
+out_body = m_out.group(1) if m_out else ''
+check("read email builds the CSV from the banked ledger entry",
+      "_il.consult(" in out_body
+      and "_pma.build_generated_csv(" in out_body)
+check("csv build is fail-safe (email still ships without it)",
+      "csv_bytes, csv_name = b'', ''" in out_body)
+check("body copy names the CSV when attached",
+      "attached \"\n                            \"as a CSV" in out_body
+      or "attached as \"\n" in out_body
+      or "as a CSV" in out_body)
+m_send = re.search(r"def _pm_send_output_email.*?def _send\(\):(.*?)"
+                   r"\n    threading\.Thread", APP, re.DOTALL)
+check("send attaches the CSV alongside the PDF",
+      m_send is not None and "_subtype='csv'" in m_send.group(1)
+      and "filename=csv_name" in m_send.group(1))
+check("finished-read flush passes the question for the CSV lookup",
+      re.search(r"_pm_flush_notify\(job_id, 'read',\s*\n\s*"
+                r"\{\*\*payload, 'question': text\}\)", APP) is not None)
+check("already-finished notify send passes the question too",
+      "'question': str(status.get('question') or '')}" in APP)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURE(S): {FAILURES}")
