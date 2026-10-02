@@ -8717,6 +8717,23 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                     'error': 'no reasoning model available'}
 
 
+def _pm_claude_data(system_prompt, user_prompt, **kw):
+    """The parsed JSON object from _pm_claude_json, or {} on any
+    failure. _pm_claude_json returns the transport envelope
+    ({'success', 'data', 'model'}); the chip intake parsers and the
+    synthesis modules (journey / flywheel / brand partnership /
+    attribution) expect the object itself. Until 2026-10-02 they read
+    the envelope, so every guided pull answered 'Almost there - I
+    still need ...' no matter what the user typed (Bria, Babylon 5 on
+    Prime Video) and the research step raised 'returned no
+    primitives'."""
+    result = _pm_claude_json(system_prompt, user_prompt, **kw)
+    if isinstance(result, dict) and result.get('success'):
+        data = result.get('data')
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
 _PM_INTENT_HYDRATE_CACHE = {}
 
 
@@ -15528,7 +15545,7 @@ def _pm_bpiq_status_write(job_id, payload):
 def _pm_bpiq_parse(text, usage_extras=None):
     """One small model call: free text -> the valuation inputs."""
     from migration.bpiq_synthesis import PARSE_SYSTEM_PROMPT
-    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+    parsed = _pm_claude_data(PARSE_SYSTEM_PROMPT, str(text or ''),
                              max_tokens=1200, temperature=0.0,
                              surface='bpiq_parse',
                              usage_extras=usage_extras)
@@ -15583,7 +15600,7 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
 
         def _cj(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
-            return _pm_claude_json(system, user_prompt, **kw)
+            return _pm_claude_data(system, user_prompt, **kw)
 
         payload = synthesize(inputs, _cj, tools=tools,
                              created_by=username or 'prometheus')
@@ -15712,7 +15729,7 @@ def _pm_jiq_status_write(job_id, payload):
 
 def _pm_jiq_parse(text, usage_extras=None):
     from migration.journey_synthesis import PARSE_SYSTEM_PROMPT
-    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+    parsed = _pm_claude_data(PARSE_SYSTEM_PROMPT, str(text or ''),
                              max_tokens=1200, temperature=0.0,
                              surface='jiq_parse',
                              usage_extras=usage_extras)
@@ -15769,7 +15786,7 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 
         def _cj(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
-            return _pm_claude_json(system, user_prompt, **kw)
+            return _pm_claude_data(system, user_prompt, **kw)
 
         payload = synthesize(inputs, _cj, tools=tools,
                              created_by=username or 'prometheus')
@@ -15901,7 +15918,7 @@ def _pm_fw_status_write(job_id, payload):
 
 def _pm_fw_parse(text, usage_extras=None):
     from migration.flywheel_synthesis import PARSE_SYSTEM_PROMPT
-    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+    parsed = _pm_claude_data(PARSE_SYSTEM_PROMPT, str(text or ''),
                              max_tokens=1200, temperature=0.0,
                              surface='fw_parse',
                              usage_extras=usage_extras)
@@ -15955,7 +15972,7 @@ def _pm_run_fw_job(job_id, username, inputs, extras):
 
         def _cf(system, user_prompt, **kw):
             kw.setdefault('usage_extras', extras)
-            return _pm_claude_json(system, user_prompt, **kw)
+            return _pm_claude_data(system, user_prompt, **kw)
 
         csv_text, study_name, summary = synthesize(
             inputs, _cf, tools=tools,
@@ -16055,7 +16072,7 @@ def _pm_aiq_parse(text, usage_extras=None):
     whenever it finds tagged lines (the model never guesses tags)."""
     from migration.attribution_synthesis import (PARSE_SYSTEM_PROMPT,
                                                  parse_url_lines)
-    parsed = _pm_claude_json(PARSE_SYSTEM_PROMPT, str(text or ''),
+    parsed = _pm_claude_data(PARSE_SYSTEM_PROMPT, str(text or ''),
                              max_tokens=2500, temperature=0.0,
                              surface='aiq_parse',
                              usage_extras=usage_extras)
