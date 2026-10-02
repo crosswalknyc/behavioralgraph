@@ -6114,6 +6114,27 @@ def _pm_interpret_core(user, body, text, history):
                     'error': guidance_msg,
                 }), 400
 
+        # Entity core (2026-10-02 S6): a fresh build named for a
+        # measure around an entity ('Appeal of the Spiderwick
+        # Franchise') is renamed to the entity before the catalog
+        # matchers run, so the existing profile is found and no
+        # wrapper ever becomes a Total Universe name.
+        try:
+            from prometheus import guards as _pg_core
+            _ec_dec = str(spec_draft.get('decision') or '')
+            _ec_subj = str(spec_draft.get('subject') or '').strip()
+            if _ec_subj and _ec_dec in ('new_build', 'cut_needs_parent', ''):
+                _ec_core = _pg_core.entity_core(_ec_subj)
+                if _ec_core and _ec_core != _ec_subj:
+                    print(f"[synth-chat interpret] entity core "
+                          f"{_ec_subj!r} -> {_ec_core!r}")
+                    spec_draft['subject'] = _ec_core
+                    for _ec_k in ('name', 'deliverable_name'):
+                        if str(spec_draft.get(_ec_k) or '').strip() == _ec_subj:
+                            spec_draft[_ec_k] = _ec_core
+        except Exception:
+            traceback.print_exc()
+
         # Subscriber IQ intent net (2026-08-26): typo-tolerant
         # deterministic routing for Subscriber IQ asks the interpret
         # step misread ('subscriber aqcuisiont', 'first watch', 'what
@@ -6173,6 +6194,18 @@ def _pm_interpret_core(user, body, text, history):
         except Exception as _uq_err:
             print(f"[synth-chat interpret] qualifier-gate error: "
                   f"{_uq_err}")
+
+        # Resolvable entity (2026-10-02 S6): a fresh chat build of a
+        # subject the catalog does not carry runs the same ladder the
+        # partner API runs (catalog collapse, near-miss suggestion,
+        # model attestation, live evidence for the exact name). A
+        # subject that does not resolve gets an honest question with
+        # the likely intended name as a chip; no brief is drafted.
+        # Fail-open on errors and timeouts; off under
+        # PM_CHAT_SUBJECT_VERIFY=0 for hermetic runs.
+        _sv_block = _pm_chat_subject_verify(spec_draft, candidates, text)
+        if _sv_block is not None:
+            return _sv_block
 
         # Intersect-cut promoter (2026-08-19). Same logic that runs in
         # the batch check path: if the prompt is a cut of an existing
@@ -11315,6 +11348,78 @@ _PM_REPORT_ASK_RE = re.compile(
     r'|full (analysis|read)|research (report|read))\b', re.I)
 
 
+_PM_UNRESOLVED_SUBJECT_COPY = (
+    "I could not find {subj} as a brand, person, or title, so I have "
+    "not set up a build for it. Check the spelling, or tell me who or "
+    "what it is (a website or the platform it lives on is enough) and "
+    "I will set up the brief.")
+
+
+def _pm_chat_subject_verify(spec_draft, candidates, text):
+    """Run the subject-verification ladder on a fresh chat build.
+    Returns a guidance response when the subject does not resolve,
+    else None (2026-10-02 S6). Never raises; any failure is None."""
+    try:
+        if os.environ.get('PM_CHAT_SUBJECT_VERIFY', '1') == '0':
+            return None
+        dec = str((spec_draft or {}).get('decision') or '')
+        if dec not in ('new_build', 'cut_needs_parent'):
+            return None
+        subj = str(spec_draft.get('subject') or '').split(' - ', 1)[0].strip()
+        if not subj:
+            return None
+        if spec_draft.get('_persona_universe') or spec_draft.get(
+                'ask_ip_scope') or spec_draft.get('clarify_question'):
+            return None
+        verify = getattr(_H, '_v1_subject_verified', None)
+        if not callable(verify):
+            return None
+        ok, _subj, suggest = verify(spec_draft, dec, None,
+                                    candidates=candidates)
+        if ok:
+            return None
+        _pm_ask_hint(route='subject_unresolved', outcome='asked_subject',
+                     subject=subj)
+        chips = []
+        if suggest and str(suggest).strip().lower() != subj.lower():
+            chips.append(f"Build a profile for {str(suggest).strip()}")
+        copy = _PM_UNRESOLVED_SUBJECT_COPY.format(subj=subj)
+        if chips:
+            copy += f" Did you mean {str(suggest).strip()}?"
+        payload = {'success': False, 'guidance': True, 'error': copy}
+        if chips:
+            payload['followups'] = chips
+        return jsonify(payload), 400
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _pm_entity_core_bind(subj):
+    """(core, library_subject_or_'') for a build-subject candidate.
+    The core strips measure wrappers and audience tails
+    (prometheus.guards.entity_core); the library subject is the
+    catalog entry the core resolves to, when there is one
+    (2026-10-02 S6)."""
+    try:
+        from prometheus import guards as _pg
+        core = _pg.entity_core(subj)
+    except Exception:
+        core = str(subj or '').strip()
+    if not core:
+        return '', ''
+    if core != str(subj or '').strip():
+        print(f"[pm-entity] {subj!r} -> core {core!r}")
+    lib = ''
+    try:
+        hit = _pm_library_match(core)
+        if hit and hit.get('subject'):
+            lib = str(hit['subject'])
+    except Exception:
+        traceback.print_exc()
+    return core, lib
+
+
 def _pm_plausible_subject(subj):
     """A subject string that is only ordinary words, or starts or ends
     on a connective, is not a subject (2026-10-02, 'Three Actually
@@ -12607,6 +12712,22 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     or '').strip()
         if _bf_subj and not _pm_plausible_subject(_bf_subj):
             _bf_subj = ''
+        # Entity core (2026-10-02 S6): 'Appeal of the Spiderwick
+        # Franchise' is a question about Spiderwick, not a subject.
+        # Collapse to the entity; when the library already carries
+        # it, answer on that base instead of offering a build.
+        _bf_core, _bf_lib = _pm_entity_core_bind(_bf_subj)
+        if _bf_lib and not bind_subject:
+            _pm_ask_hint(route='entity_core_bind', subject=_bf_lib)
+            # The metric request's own subject is the wrapper; hand
+            # the library subject down so the base resolves on it.
+            _bf_mr = (dict(mr, subject=_bf_lib)
+                      if isinstance(metric_request, dict) else None)
+            return _pm_generate_metrics_response(
+                user, text, history, metric_request=_bf_mr,
+                prefer_catalog=True, bind_subject=_bf_lib,
+                bind_cohort=bind_cohort, switch_page=switch_page)
+        _bf_subj = _bf_core
         if (_bf_subj and not isinstance(panel_confirm, dict)
                 and not _pm_looks_report_ask(text)):
             try:
@@ -12643,6 +12764,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                      or '').strip()
         if subj_name and not _pm_plausible_subject(subj_name):
             subj_name = ''
+        subj_name = _pm_entity_core_bind(subj_name)[0]
         if isinstance(panel_confirm, dict) and not subj_name:
             subj_name = str(panel_confirm.get('subject') or '').strip()
         if subj_name:

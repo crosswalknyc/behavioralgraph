@@ -225,6 +225,74 @@ def subject_reads_as_fragment(subject):
     return False
 
 
+# A measure or topic wrapped around an entity is not the entity
+# (2026-10-02 S6, Liz: 'Run a profile on Appeal of the Spiderwick
+# Franchise' drafted a build named exactly that while The Spiderwick
+# Chronicles sat in the library). The Total Universe is always the
+# clean subject name; the measure is the question, the audience noun
+# is a cut or nothing.
+_ENTITY_WRAPPER_RX = re.compile(
+    r"^\s*(?:the\s+)?(?:(?:future|overall|long[- ]term|current|total"
+    r"|general|broader|wider|likely|potential|predicted|projected)\s+)*"
+    r"(?:appeal|impact|influence|growth|rise|fall|decline|popularity"
+    r"|awareness|performance|reach|value|audience|fanbase|fan base"
+    r"|fandom|engagement|effect|success|strength|health|momentum"
+    r"|trajectory|potential|demand|interest|sentiment|buzz|perception"
+    r"|footprint|size|scale|resonance|lift|halo|affinity|loyalty"
+    r"|viewership|readership|listenership|following|future|outlook"
+    r"|prospects|forecast|opportunity|case)"
+    r"\s+(?:of|for|in|around|behind|with|among)\s+(?:(?-i:the)\s+)?", re.I)
+# A cohort clause after the entity is a cut, not part of the name.
+_ENTITY_COHORT_RX = re.compile(
+    r"\s+(?:among|within|across|amongst)\s+.+$", re.I)
+_ENTITY_CONNECTIVE_TAIL = {'of', 'for', 'and', 'or', 'the', 'a', 'an',
+                           'in', 'on', 'with', 'to', 'by', 'from'}
+_ENTITY_TAIL_RX = re.compile(
+    r"\s+(?:franchise|universe|fandom|fanbase|fan base|fans|audience"
+    r"|brand|property|ip)\s*$", re.I)
+# Real titles that end on a tail word and must keep it.
+_ENTITY_TAIL_KEEP = re.compile(
+    r"\b(?:steven universe|cinematic universe|extended universe"
+    r"|miss universe|fenty beauty by rihanna)\s*$", re.I)
+
+
+def entity_core(subject):
+    """Strip measure wrappers and bare audience tails from a build
+    subject. 'Appeal of the Spiderwick Franchise' -> 'Spiderwick';
+    'The future of the Yellowstone universe' -> 'Yellowstone';
+    'Steven Universe' and 'Taylor Swift' come back untouched. Returns
+    '' when nothing entity-shaped is left. Never raises."""
+    try:
+        s = str(subject or '').strip()
+        if not s:
+            return ''
+        prev = None
+        while prev != s:
+            prev = s
+            s = _ENTITY_WRAPPER_RX.sub('', s, count=1).strip()
+        if len(s.split()) >= 2:
+            s = _ENTITY_COHORT_RX.sub('', s).strip() or s
+        if not _ENTITY_TAIL_KEEP.search(s):
+            toks = s.split()
+            if len(toks) >= 2:
+                s2 = _ENTITY_TAIL_RX.sub('', s).strip()
+                if s2 and len(s2.split()) >= 1:
+                    s = s2
+        s = s.strip(' ,.;:-')
+        if not s:
+            return ''
+        low = [w for w in re.sub(r'[^a-z0-9 ]+', ' ', s.lower()).split()]
+        if low and low[-1] in _ENTITY_CONNECTIVE_TAIL:
+            return ''
+        if not low or all(w in _FRAGMENT_TOKENS or w in _NUMBER_WORDS
+                          or w in ('the', 'a', 'an', 'of', 'and', 'or')
+                          for w in low):
+            return ''
+        return s
+    except Exception:
+        return str(subject or '').strip()
+
+
 def subiq_is_explicit_pull(text):
     """True when the ask plainly orders a Subscriber IQ build. A
     question that only mentions churn / reactivated / new viewers
