@@ -29366,6 +29366,28 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #ecommerceIQView .bp-cover h2 { color: #0C1618; }
 
         /* ---- Broadsheet head ---- */
+        /* ---- Open-partnership tabs (Profile IQ chips) ---- */
+        #ecommerceIQView #bpTabsBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+            padding: 12px 3rem 10px 4.5rem; flex: 0 0 auto; border-bottom: 1px solid var(--bp-rule, #3B3D38); }
+        #ecommerceIQView .bp-tab { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+            background: #15252A; border: 1px solid #3B3D38; border-radius: 6px; color: #9AA09B;
+            padding: 6px 10px; font-family: 'Inter 18pt', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+        #ecommerceIQView .bp-tab:hover { color: #E9E8E1; }
+        #ecommerceIQView .bp-tab.is-active { background: rgba(199, 242, 62, 0.06);
+            border-color: rgba(199, 242, 62, 0.35); color: #C7F23E; }
+        #ecommerceIQView .bp-tab-name { white-space: nowrap; }
+        #ecommerceIQView .bp-tab-x { background: transparent; border: 0; padding: 0; cursor: pointer;
+            color: inherit; font-size: 12px; line-height: 1; opacity: 0.7; width: 16px; height: 16px; }
+        #ecommerceIQView .bp-tab-x:hover { opacity: 1; }
+        #ecommerceIQView .bp-tab-close-all { margin-left: auto; flex-shrink: 0; padding: 6px 11px; cursor: pointer;
+            border: 1px solid rgba(255,107,107,0.35); border-radius: 6px; background: rgba(255,107,107,0.08);
+            color: #ff6b6b; font-size: 9.5px; font-weight: 600; letter-spacing: .12em;
+            text-transform: uppercase; font-family: inherit; }
+        #ecommerceIQView .bp-tab-close-all:hover { background: rgba(255,107,107,0.18); border-color: rgba(255,107,107,0.55); }
+        body[data-theme="light"] #ecommerceIQView .bp-tab { background: #FFFFFF; border-color: #C9C6BA; color: #5C6560; }
+        body[data-theme="light"] #ecommerceIQView .bp-tab.is-active { background: rgba(94, 126, 18, 0.08);
+            border-color: rgba(94, 126, 18, 0.4); color: #5E7E12; }
         /* Left padding clears the fixed Library rail. */
         #ecommerceIQView .bp-wrap { width: 100%; max-width: none; margin: 0; padding: 0 3rem 3rem 4.5rem;
             flex: 0 0 auto; }
@@ -29467,6 +29489,7 @@ https://www.instagram.com/p/..."></textarea>
                          null-deref. -->
                     <div id="ecomIQEmptyState" class="dashboard-empty-state" style="display: none;"></div>
                     <div id="ecomIQDashboardPanels" style="display: none;"></div>
+                    <div id="bpTabsBar" style="display: none;"></div>
                     <!-- Brand Partnership Valuation empty state -->
                     <div id="bpiqEmptyState" class="dashboard-empty-state" style="display: none;">
                         <div class="bp-cover">
@@ -73503,11 +73526,120 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Filter input applies to whichever tree is shown
         };
 
-        function _bpiqLastKeyName() {
+        // ── Brand Partnership IQ open tabs ──────────────────────
+        // Same shape Profile IQ uses: the open set and the active one
+        // are kept per user in localStorage.
+        var _bpOpenTabs = [];
+        var _bpActiveTab = null;
+        function _bpTabKeySuffix() {
             try {
-                return 'bpiqLastKey' + ((typeof currentUsername !== 'undefined' && currentUsername) ? '_' + currentUsername : '');
-            } catch (_e) { return 'bpiqLastKey'; }
+                return (typeof currentUsername !== 'undefined' && currentUsername) ? '_' + currentUsername : '';
+            } catch (_e) { return ''; }
         }
+        function _bpSaveTabs() {
+            try {
+                var k = _bpTabKeySuffix();
+                localStorage.setItem('bpiqOpenTabs' + k, JSON.stringify(_bpOpenTabs));
+                localStorage.setItem('bpiqActiveTab' + k, _bpActiveTab || '');
+            } catch (_e) {}
+        }
+        (function _bpLoadTabs() {
+            try {
+                var k = _bpTabKeySuffix();
+                var t = JSON.parse(localStorage.getItem('bpiqOpenTabs' + k) || '[]');
+                _bpOpenTabs = Array.isArray(t) ? t.filter(function (x) { return x && x.key; }) : [];
+                _bpActiveTab = localStorage.getItem('bpiqActiveTab' + k) || null;
+                var legacy = localStorage.getItem('bpiqLastKey' + k);
+                if (!_bpOpenTabs.length && legacy) {
+                    _bpOpenTabs = [{ key: legacy, label: '' }];
+                    _bpActiveTab = legacy;
+                }
+                if (legacy) localStorage.removeItem('bpiqLastKey' + k);
+            } catch (_e) { _bpOpenTabs = []; _bpActiveTab = null; }
+        })();
+        function _bpLabelForKey(key) {
+            var row = document.querySelector('#bpiqProfileTree [data-bpiq-key="' + String(key).replace(/"/g, '\\"') + '"] span');
+            return row ? (row.textContent || '').trim() : '';
+        }
+        function _bpAddTab(key) {
+            if (!key) return;
+            var label = _bpLabelForKey(key);
+            var found = false;
+            for (var i = 0; i < _bpOpenTabs.length; i++) {
+                if (_bpOpenTabs[i].key === key) {
+                    if (label) _bpOpenTabs[i].label = label;
+                    found = true; break;
+                }
+            }
+            if (!found) _bpOpenTabs.push({ key: key, label: label });
+            _bpActiveTab = key;
+            _bpSaveTabs();
+            _bpRenderTabs();
+        }
+        function _bpResetToEmpty() {
+            _bpiqState.s3_key = null;
+            var panels = document.getElementById('bpiqDashboardPanels');
+            var empty = document.getElementById('bpiqEmptyState');
+            if (panels) panels.style.display = 'none';
+            if (empty) empty.style.display = '';
+            document.querySelectorAll('#bpiqProfileTree .profile-tree-item.active').forEach(function (el) {
+                el.classList.remove('active');
+            });
+        }
+        function _bpCloseTab(key) {
+            var idx = -1;
+            for (var i = 0; i < _bpOpenTabs.length; i++) {
+                if (_bpOpenTabs[i].key === key) { idx = i; break; }
+            }
+            if (idx === -1) return;
+            _bpOpenTabs.splice(idx, 1);
+            if (_bpActiveTab === key) {
+                var next = _bpOpenTabs[idx] || _bpOpenTabs[idx - 1] || null;
+                _bpActiveTab = next ? next.key : null;
+                if (_bpActiveTab) selectBpiqResult(_bpActiveTab);
+                else _bpResetToEmpty();
+            }
+            _bpSaveTabs();
+            _bpRenderTabs();
+        }
+        function _bpCloseAllTabs() {
+            if (!_bpOpenTabs.length) return;
+            if (!confirm('Close all open Brand Partnership IQ tabs?')) return;
+            _bpOpenTabs = [];
+            _bpActiveTab = null;
+            _bpSaveTabs();
+            _bpRenderTabs();
+            _bpResetToEmpty();
+        }
+        function _bpRenderTabs() {
+            var bar = document.getElementById('bpTabsBar');
+            if (!bar) return;
+            if (!_bpOpenTabs.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            bar.style.display = 'flex';
+            var html = '';
+            _bpOpenTabs.forEach(function (t) {
+                var full = String(t.label || _bpLabelForKey(t.key) || t.key);
+                var name = full.length > 32 ? full.slice(0, 30).trim() + '\u2026' : full;
+                var safe = String(t.key).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+                html += '<span class="bp-tab' + (t.key === _bpActiveTab ? ' is-active' : '')
+                     + '" data-bp-tab="' + safe + '" title="' + full.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">'
+                     + '<span class="bp-tab-name">' + name.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>'
+                     + '<button type="button" class="bp-tab-x" data-bp-close="' + safe + '" aria-label="Close">\u00d7</button></span>';
+            });
+            html += '<button type="button" class="bp-tab-close-all" data-bp-close-all="1" title="Close all open tabs">Close all tabs</button>';
+            bar.innerHTML = html;
+        }
+        document.addEventListener('click', function (ev) {
+            if (!ev.target.closest) return;
+            if (ev.target.closest('[data-bp-close-all]')) { ev.stopPropagation(); _bpCloseAllTabs(); return; }
+            var x = ev.target.closest('[data-bp-close]');
+            if (x) { ev.stopPropagation(); _bpCloseTab(x.getAttribute('data-bp-close')); return; }
+            var tab = ev.target.closest('[data-bp-tab]');
+            if (tab) {
+                var key = tab.getAttribute('data-bp-tab');
+                if (key && key !== _bpiqState.s3_key) selectBpiqResult(key);
+            }
+        });
 
         function loadBpiqProfiles() {
             var tree = document.getElementById('bpiqProfileTree');
@@ -73576,10 +73708,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     });
                     tree.innerHTML = html;
                     var panels = document.getElementById('bpiqDashboardPanels');
-                    var last = null;
-                    try { last = localStorage.getItem(_bpiqLastKeyName()); } catch (_e) {}
-                    if (last && (!panels || panels.style.display === 'none')
-                        && files.some(function(f) { return f.key === last; })) {
+                    var known = {};
+                    files.forEach(function(f) { known[f.key] = true; });
+                    _bpOpenTabs = _bpOpenTabs.filter(function(t) { return known[t.key]; });
+                    _bpOpenTabs.forEach(function(t) { t.label = _bpLabelForKey(t.key) || t.label; });
+                    if (_bpActiveTab && !known[_bpActiveTab]) {
+                        _bpActiveTab = _bpOpenTabs.length ? _bpOpenTabs[_bpOpenTabs.length - 1].key : null;
+                    }
+                    _bpSaveTabs();
+                    _bpRenderTabs();
+                    var last = _bpActiveTab;
+                    if (last && (!panels || panels.style.display === 'none')) {
                         selectBpiqResult(last);
                     } else if (_bpiqState.s3_key) {
                         tree.querySelectorAll('.profile-tree-item').forEach(function(el) {
@@ -73646,7 +73785,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // _bpiqState alongside the s3_key for round-trip
                     // back to the export endpoint.
                     _bpiqState.s3_key    = key;
-                    try { localStorage.setItem(_bpiqLastKeyName(), key); } catch (_e) {}
+                    _bpAddTab(key);
                     _bpiqState.image_url = resp.image_url || '';
                     _bpiqState.category  = resp.category  || '';
                     // Thread admin-managed category onto the data object
