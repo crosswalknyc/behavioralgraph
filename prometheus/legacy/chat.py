@@ -9762,6 +9762,55 @@ _PM_APPROVE_NO_DRAFT_COPY = (
     "will set up the brief for you to approve.")
 
 
+from prometheus import kpi_definitions as _kpi  # noqa: E402
+
+
+def _pm_kpi_view(body_or_ctx):
+    """(view_id, on_screen_labels) from a request body or a validated
+    page context. Profile IQ when nothing else is open."""
+    src_ = body_or_ctx if isinstance(body_or_ctx, dict) else {}
+    pc = src_.get('page_context') if 'page_context' in src_ else src_
+    pc = pc if isinstance(pc, dict) else {}
+    vc = pc.get('view_context') if isinstance(pc.get('view_context'), dict) \
+        else {}
+    vid = str(vc.get('view_id') or pc.get('view') or 'profileIQ')
+    try:
+        labels = _kpi.on_screen_labels(vc.get('data') or {})
+    except Exception:
+        labels = []
+    return vid, labels
+
+
+def _pm_kpi_definition_for(text, body):
+    """The glossary entry a definition-shaped ask names, or None."""
+    try:
+        if not _kpi.is_definition_ask(text):
+            return None
+        vid, labels = _pm_kpi_view(body)
+        return _kpi.find_definition(text, vid, labels)
+    except Exception:
+        return None
+
+
+def _pm_kpi_prompt_extras(text, history, ctx, led_block):
+    """Append the thread number bank and the view glossary to the
+    binding block on a reconcile or definition ask. Never raises."""
+    try:
+        if not (_kpi.is_reconcile_ask(text) or _kpi.is_definition_ask(text)):
+            return led_block
+        vid, labels = _pm_kpi_view(ctx)
+        parts = [str(led_block or '').strip()]
+        nb = _kpi.numbers_block(history)
+        if nb:
+            parts.append(nb)
+        db = _kpi.view_definitions_block(vid, labels)
+        if db:
+            parts.append(db)
+        return '\n\n'.join(p for p in parts if p)
+    except Exception:
+        return led_block
+
+
 def _pm_last_agent_asked(history):
     """True when the most recent agent turn in the thread ended on a
     question, so a bare confirm word is an answer to it."""
@@ -10950,6 +10999,14 @@ def _pm_screen_bind_verdict(text, page, base, page_key=''):
     if base and str(base.get('source') or '') == 'catalog' \
             and str(base.get('s3_key') or '') != str(page_key or ''):
         return 'confirm'
+    # A challenged figure or a definition ask is about what is on
+    # the screen and what this thread already said (2026-10-02 S4):
+    # the reconcile ask stays on the page, never re-derives away.
+    try:
+        if _kpi.is_reconcile_ask(t) or _kpi.is_definition_ask(t):
+            return 'page'
+    except Exception:
+        pass
     # The ask names the page outright: the page, silently.
     try:
         page_toks = [w for w in _H._normalize_for_match(
@@ -14699,6 +14756,19 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _PM_APPROVE_NO_DRAFT_COPY, 'followups': [],
             'offer_deck': False, 'deck_angle': None})
+    # KPI definition lookup (2026-10-02 S4): "how is penetration
+    # calculated?" / "what counts as an avid fan?" answer from the
+    # house glossary, free, no model call. Only when the ask names a
+    # KPI the glossary carries; anything else falls through with the
+    # view's definitions riding the prompt (see the prompt assembly).
+    _kpi_defn = _pm_kpi_definition_for(text, body)
+    if _kpi_defn:
+        _pm_ask_hint(route='kpi_definition', outcome='answered',
+                     subject=_kpi_defn['label'])
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
+            'offer_deck': False, 'deck_angle': None})
     # Prometheus tier gate (2026-08-26): pulls_only users without the
     # pay-as-you-go opt-in get Jenna's offer instead of any analysis
     # flow. Runs before every branch so no analysis path leaks.
@@ -15876,6 +15946,12 @@ def _pm_analyze_core(user, body, text, history):
         except Exception:
             traceback.print_exc()
     _led_block = _led.get('block') or ''
+    # Thread number bank + view glossary (2026-10-02 S4): on a
+    # "why is this different" / "how is this calculated" ask, every
+    # figure already stated in this thread and the open view's KPI
+    # definitions ride the binding block, so the answer names the
+    # earlier figure and the definition instead of re-deriving.
+    _led_block = _pm_kpi_prompt_extras(text, history, ctx, _led_block)
     user_prompt = pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
