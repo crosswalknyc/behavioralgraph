@@ -17,9 +17,12 @@ every other answered ask is metered - including answers served from
 the library with no fresh model call, which bill the flat
 metered_answer_usd rate through the same session sweep.
 
-This module is PURE math + state. It does not touch Stripe. It does
-not send emails. Callers (app.py routes, pay_per_use.py session close)
-wire it into their own flows.
+This module is PURE math + state. It does not touch Stripe. Callers
+(app.py routes, pay_per_use.py session close) wire it into their own
+flows. The one exception: try_auto_reload, after a live card charge
+credits the wallet, fires the same top-up receipt + internal notice
+as the webhook. The webhook often arrives after the dollars already
+landed and used to skip the email as a duplicate (Kartel 2026-10-02).
 
 Public surface:
 
@@ -2251,8 +2254,104 @@ def needs_auto_reload(user: dict, subject_key: str = "") -> tuple:
     return True, auto_reload_amount(user, subject_key=subject_key)
 
 
+def claim_topup_notice(subject_kind: str, subject_key: str,
+                       stripe_ref: str) -> bool:
+    """First caller for this credit txn wins the receipt email.
+
+    Stamps `topup_emails_sent_at` on the matching topup / auto_reload
+    row. Returns True when this caller should send. Returns False
+    when another caller already claimed it.
+
+    Fail-open: a missing txn, a CAS miss, or an import failure
+    returns True so a notice is not dropped. Never raises.
+    """
+    ref = str(stripe_ref or "").strip()
+    if not ref:
+        return True
+    claimed = {"ok": False, "already": False}
+    try:
+        from app import _users_cas_mutate  # type: ignore
+    except Exception:
+        return True
+
+    def _apply(data):
+        if not isinstance(data, dict):
+            return None
+        if str(subject_kind or "") == "company":
+            subj = (data.get("companies") or {}).get(subject_key)
+        else:
+            subj = (data.get("users") or {}).get(subject_key)
+        if not isinstance(subj, dict):
+            return None
+        for t in list(subj.get("wallet_transactions") or []):
+            if not isinstance(t, dict):
+                continue
+            if str(t.get("kind") or "") not in ("topup", "auto_reload"):
+                continue
+            refs = {
+                str(t.get("stripe_ref") or "").strip(),
+                str(t.get("stripe_payment_intent") or "").strip(),
+                str(t.get("stripe_checkout_session") or "").strip(),
+            }
+            if ref not in refs:
+                continue
+            if t.get("topup_emails_sent_at"):
+                claimed["already"] = True
+                return None
+            t["topup_emails_sent_at"] = _now_iso()
+            claimed["ok"] = True
+            return data
+        return None
+
+    try:
+        _users_cas_mutate(_apply)
+    except Exception:
+        return True
+    if claimed["already"]:
+        return False
+    return True
+
+
+def _notify_auto_reload_emails(*, subject_kind: str, subject_key: str,
+                               subject_after: dict, amount_usd: float,
+                               stripe_ref: str,
+                               billed_via_username: str = "") -> None:
+    """Fire the buyer receipt + jenna/liz/czarina notice.
+
+    Never raises. Import and SES failures print and swallow so a
+    charge that already landed is not rolled back.
+    """
+    try:
+        from billing_routes import _emit_topup_emails_safe  # type: ignore
+    except Exception as e:
+        print(f"[wallet] auto-reload email module unavailable: {e}")
+        return
+    snap = subject_after if isinstance(subject_after, dict) else {}
+    try:
+        _emit_topup_emails_safe(
+            subject_kind=subject_kind,
+            subject_key=subject_key,
+            subject_after=snap,
+            amount_usd=amount_usd,
+            new_balance_usd=wallet_balance(snap),
+            stripe_ref=stripe_ref,
+            kind="auto_reload",
+            metadata={
+                "purpose": "auto_reload",
+                "subject_kind": subject_kind,
+                "subject_key": subject_key,
+                "dashboard_username": billed_via_username or "",
+                "billed_via_username": billed_via_username or "",
+            },
+        )
+    except Exception as e:
+        print(f"[wallet] auto-reload email dispatch failed "
+              f"(non-fatal): {e}")
+
+
 def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
-                    subject_kind: str = "user") -> dict:
+                    subject_kind: str = "user",
+                    billed_via_username: str = "") -> dict:
     """Post-CAS-write hook: fire the Stripe auto-reload charge when
     needed and credit the wallet.
 
@@ -2309,6 +2408,8 @@ def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
                     "subject_kind": subject_kind,
                     "subject_key": subject_key,
                     "idempotency_key": idem,
+                    "dashboard_username": billed_via_username or "",
+                    "billed_via_username": billed_via_username or "",
                 },
             )
         except _billing.BillingError as e:
@@ -2348,12 +2449,34 @@ def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
                 kind="auto_reload")
             return data
 
-        _users_cas_mutate(_apply)
+        final = _users_cas_mutate(_apply)
+        applied = final is not None
         result.update({
-            "fired": True,
+            "fired": applied,
             "amount_usd": amount,
             "payment_intent_id": pi_id,
         })
+        if not applied:
+            # Webhook credited first. That handler sends the notice
+            # when it lands the dollars, or the skip path sends it
+            # when this function already did the credit.
+            return result
+        snap = subject_snapshot
+        if isinstance(final, dict):
+            if subject_kind == "company":
+                snap = ((final.get("companies") or {}).get(subject_key)
+                        or snap)
+            else:
+                snap = ((final.get("users") or {}).get(subject_key)
+                        or snap)
+        _notify_auto_reload_emails(
+            subject_kind=subject_kind,
+            subject_key=subject_key,
+            subject_after=snap if isinstance(snap, dict) else {},
+            amount_usd=amount,
+            stripe_ref=pi_id,
+            billed_via_username=billed_via_username,
+        )
         return result
     except Exception as e:
         result["error"] = f"unexpected: {e}"
@@ -4306,7 +4429,8 @@ __all__ = [
     "monthly_invoice_limit", "has_card_on_file",
     "existing_wallet_deduct",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
-    "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
+    "should_charge_wallet", "wallet_can_absorb",     "needs_auto_reload",
+    "claim_topup_notice",
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",

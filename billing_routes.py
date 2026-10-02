@@ -2281,6 +2281,26 @@ def admin_company_charge_card(company_name):
         return jsonify({
             "success": True, "payment_intent_id": pi_id,
             "note": "already_recorded"})
+    try:
+        from app import load_users  # type: ignore
+        after = ((load_users() or {}).get("companies") or {}
+                 ).get(company_name) or company
+    except Exception:
+        after = company
+    _emit_topup_emails_safe(
+        subject_kind="company",
+        subject_key=company_name,
+        subject_after=after,
+        amount_usd=amt,
+        new_balance_usd=float(after.get("wallet_balance_usd") or 0.0),
+        stripe_ref=pi_id,
+        kind="admin_charge",
+        metadata={
+            "purpose": "admin_topup",
+            "subject_kind": "company",
+            "subject_key": company_name,
+        },
+    )
     return jsonify({
         "success": True,
         "payment_intent_id": pi_id,
@@ -2575,6 +2595,20 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
         print(f"[billing] receipt email module unavailable: {e}")
         return
     try:
+        # One notice per Stripe payment. try_auto_reload and the
+        # webhook can both see the same charge; the first claimer
+        # sends, the second no-ops (Kartel 2026-10-02).
+        if stripe_ref:
+            try:
+                import wallet as _wallet_claim  # type: ignore
+                if not _wallet_claim.claim_topup_notice(
+                        subject_kind, subject_key, stripe_ref):
+                    print(f"[billing] top-up email already sent for "
+                          f"{subject_kind}:{subject_key} ({stripe_ref})")
+                    return
+            except Exception as e:
+                print(f"[billing] top-up email claim skipped "
+                      f"(sending anyway): {e}")
         info = _resolve_buyer_info(
             metadata, subject_kind, subject_key, subject_after)
         # Fill missing card metadata from the subject record when the
@@ -2930,22 +2964,30 @@ def _handle_payment_intent_succeeded(event: dict):
             subject.get("wallet_balance_usd") or 0.0)
         credited["rec_snapshot"] = subject
 
-    # Emails (Jenna 2026-09-09). Whoever actually lands the dollars
-    # sends the receipt. Hosted Checkout used to credit on BOTH
-    # payment_intent.succeeded and checkout.session.completed, so
-    # wallet_topup emails were skipped here to avoid a double send.
-    # Those two events are now one payment: if this handler credited,
-    # it emails; if the checkout handler already credited, we skip.
+    # Emails (Jenna 2026-09-09). Hosted Checkout used to credit on
+    # BOTH payment_intent.succeeded and checkout.session.completed,
+    # so wallet_topup emails were skipped here to avoid a double
+    # send. Those two events are now one payment: the first handler
+    # that lands the dollars emails. auto_reload is different: the
+    # inline try_auto_reload path often credits first, this webhook
+    # then skips, and the notice used to never go out (Kartel
+    # 2026-10-02). Always try the notice on auto_reload; the claim
+    # stamp inside _emit_topup_emails_safe drops a second send.
     # SKIP admin_custom_charge because the inline admin route sends
     # the emails on the acting-admin thread.
-    if (not credited["skipped"]
-            and purpose in ("auto_reload", "monthly_invoice",
-                            "wallet_topup")):
+    email_now = False
+    email_kind = ""
+    if purpose == "auto_reload":
+        email_now = True
+        email_kind = "auto_reload"
+    elif (not credited["skipped"]
+          and purpose in ("monthly_invoice", "wallet_topup")):
+        email_now = True
         email_kind = {
-            "auto_reload": "auto_reload",
             "monthly_invoice": "monthly_invoice",
             "wallet_topup": "topup",
         }[purpose]
+    if email_now:
         _emit_topup_emails_safe(
             subject_kind=subject_kind,
             subject_key=subject_key,

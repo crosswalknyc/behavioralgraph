@@ -2868,8 +2868,10 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             else:
                 _post = (_post_data.get('users') or {}
                          ).get(_subject_key) or {}
-            _wallet.try_auto_reload(_subject_key, _post,
-                                    subject_kind=_subject_kind)
+            _wallet.try_auto_reload(
+                _subject_key, _post,
+                subject_kind=_subject_kind,
+                billed_via_username=username)
         except Exception as _ar_e:
             print(f"[wallet] auto-reload skipped: {_ar_e}")
 
