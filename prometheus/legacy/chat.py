@@ -5309,6 +5309,10 @@ _PM_GATE_TASK_MESSAGE = (
     "I read that as a task, not a profile to build. Which audience "
     "should this be on? Name the show, brand, or person (one line is "
     "enough) and I will take it from there.")
+_PM_GATE_REPEAT_MESSAGE = (
+    "I asked for that already and did not read your answer well, so I "
+    "will not ask again. I am passing this to the team and will email "
+    "you the read.")
 _PM_GATE_RETRY_BUDGET_S = 45
 _PM_GATE_HELD = frozenset({'empty', 'faulted'})
 
@@ -5376,6 +5380,11 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
             return resp, payload, status_code, outcome, (extra or None)
 
         held = result in _PM_GATE_HELD
+        # The same clarify twice in a row is the no-repeat contract
+        # for every flow (the guided intakes catch it earlier in
+        # _pm_intake_resolve; this covers profile builds, Subscriber
+        # IQ and cuts).
+        repeat = result == 'clarified_repeat'
         mismatched = False
         try:
             from prometheus import guards as _pg
@@ -5385,7 +5394,7 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
                 mismatched = True
         except Exception:
             pass
-        if not held and not mismatched:
+        if not held and not mismatched and not repeat:
             return resp, payload, status_code, outcome, (extra or None)
 
         # 1. one retry on the answer surface
@@ -5425,6 +5434,25 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
                       'interpret step drafted a new profile build; the '
                       'user was asked which audience instead of being '
                       'shown the build card.')
+        elif repeat:
+            new_payload = dict(payload)
+            for k in ('answer', 'message', 'text', 'markdown', 'html',
+                      'followups'):
+                new_payload.pop(k, None)
+            # Drop the collect flags so the widget does not re-arm the
+            # same question.
+            for k in [k for k in new_payload if str(k).endswith('_collect')]:
+                new_payload.pop(k, None)
+            new_payload['reply'] = _PM_GATE_REPEAT_MESSAGE
+            new_payload['success'] = True
+            new_payload['gate'] = 'repeat'
+            new_status = 200
+            extra['gate'] = 'repeat'
+            told = _PM_GATE_REPEAT_MESSAGE
+            reason = ('The same clarifying question was about to go out '
+                      'twice in a row, so the user was told the read '
+                      'will come by email. Please read the thread and '
+                      'send it.')
         else:
             new_payload = dict(payload)
             for k in ('answer', 'message', 'text', 'markdown', 'html'):
@@ -9182,10 +9210,14 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     if propose_fn:
         try:
             prop = propose_fn(parsed)
-            if prop and len(prop) == 2 and prop[1]:
-                field, value = prop
+            # (field, value) or (field, value, display); the display
+            # form lets a falsy value ("daily tracking off") ride.
+            if prop and len(prop) in (2, 3) and (
+                    prop[1] or (len(prop) == 3 and prop[2])):
+                field, value = prop[0], prop[1]
+                display = prop[2] if len(prop) == 3 else value
                 parsed[field] = value
-                parsed['_proposed'] = {'field': field, 'value': value}
+                parsed['_proposed'] = {'field': field, 'value': display}
                 if complete_fn(parsed):
                     try:
                         _pm_ask_hint(outcome='intake_proposed_field',
@@ -9258,7 +9290,11 @@ def _pm_intake_flow_table():
     from prometheus.intake_reader import (keyword_parse_journey,
                                           propose_journey_field,
                                           keyword_parse_flywheel,
-                                          propose_flywheel_field)
+                                          propose_flywheel_field,
+                                          keyword_parse_brand_partnership,
+                                          propose_brand_partnership_field,
+                                          keyword_parse_attribution,
+                                          propose_attribution_field)
     return {
         'digital_journey': (
             _pm_jiq_parse, _pm_jiq_inputs_complete,
@@ -9274,11 +9310,13 @@ def _pm_intake_flow_table():
         'brand_partnership': (
             _pm_bpiq_parse, _pm_bpiq_inputs_complete,
             ('brand_partner', 'qualifier', 'event_start', 'event_end'),
-            _PM_BPIQ_ASK_COPY, None, None),
+            _PM_BPIQ_ASK_COPY, keyword_parse_brand_partnership,
+            propose_brand_partnership_field),
         'attribution': (
             _pm_aiq_parse, _pm_aiq_inputs_complete,
             ('campaign_name', 'urls', 'conversion_event'),
-            _PM_AIQ_ASK_COPY, None, None),
+            _PM_AIQ_ASK_COPY, keyword_parse_attribution,
+            propose_attribution_field),
     }
 
 
@@ -14904,18 +14942,25 @@ def _pm_analyze_core(user, body, text, history):
             'bpiq_job_id': _bpiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('bpiq_inputs'):
+        from prometheus.intake_reader import (
+            keyword_parse_brand_partnership,
+            propose_brand_partnership_field)
         _parsed, _bfault = _pm_intake_resolve(
             'brand_partnership', text, history, _pm_bpiq_parse,
             _pm_bpiq_inputs_complete,
             ('brand_partner', 'qualifier', 'event_start', 'event_end'),
-            _PM_BPIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+            _PM_BPIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
+            fallback_fn=keyword_parse_brand_partnership,
+            propose_fn=propose_brand_partnership_field)
         if _bfault and not _pm_bpiq_inputs_complete(_parsed):
             return jsonify(_pm_intake_fault_payload())
         if _pm_bpiq_inputs_complete(_parsed):
-            _parsed.pop('missing', None)
+            _breply = _pm_intake_finish_confirm(
+                _parsed, _pm_bpiq_confirm_reply(_parsed),
+                'Run the valuation')
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': _pm_bpiq_confirm_reply(_parsed),
+                'reply': _breply,
                 'bpiq_confirm_payload': _parsed,
                 'followups': ['Run the valuation', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
@@ -14984,18 +15029,24 @@ def _pm_analyze_core(user, body, text, history):
             'aiq_job_id': _aiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('aiq_inputs'):
+        from prometheus.intake_reader import (keyword_parse_attribution,
+                                              propose_attribution_field)
         _aparsed, _afault = _pm_intake_resolve(
             'attribution', text, history, _pm_aiq_parse,
             _pm_aiq_inputs_complete,
             ('campaign_name', 'urls', 'conversion_event'),
-            _PM_AIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+            _PM_AIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
+            fallback_fn=keyword_parse_attribution,
+            propose_fn=propose_attribution_field)
         if _afault and not _pm_aiq_inputs_complete(_aparsed):
             return jsonify(_pm_intake_fault_payload())
         if _pm_aiq_inputs_complete(_aparsed):
-            _aparsed.pop('missing', None)
+            _areply = _pm_intake_finish_confirm(
+                _aparsed, _pm_aiq_confirm_reply(_aparsed),
+                'Start tracking')
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': _pm_aiq_confirm_reply(_aparsed),
+                'reply': _areply,
                 'aiq_confirm_payload': _aparsed,
                 'followups': ['Start tracking', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})

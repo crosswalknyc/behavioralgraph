@@ -463,12 +463,346 @@ def merge_missing(primary, secondary, required):
     out = dict(primary or {})
     sec = secondary or {}
     optional = ('journey_kind', 'start_behavior', 'captured_action',
-                'start_date', 'end_date')
+                'start_date', 'end_date',
+                # brand partnership
+                'pre_start', 'pre_end', 'post_start', 'post_end',
+                'audience',
+                # attribution
+                'end_tracking_date')
     for k in tuple(required) + optional:
         if not out.get(k) and sec.get(k):
             out[k] = sec[k]
+    # A tri-state the model left unread (None) takes the rules read
+    # even when that read is False ("daily tracking off").
+    if out.get('daily_refresh') is None \
+            and sec.get('daily_refresh') is not None:
+        out['daily_refresh'] = sec['daily_refresh']
     out['missing'] = [k for k in required if not out.get(k)]
     return out
+
+
+# ---------------------------------------------------------------------
+# Dates: "Apr 2024 - Dec 2024", "April 1, 2024 to December 31, 2024",
+# "2024-04-01 through 2024-12-31", "post through Jun 2025".
+# ---------------------------------------------------------------------
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    ('january', 'february', 'march', 'april', 'may', 'june', 'july',
+     'august', 'september', 'october', 'november', 'december'))}
+for _m, _i in list(_MONTHS.items()):
+    _MONTHS[_m[:3]] = _i
+_MONTHS['sept'] = 9
+_MON_RX = (r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
+           r'jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|'
+           r'oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)')
+_DATE_RX = (r'(?:(?P<iso>\d{4}-\d{2}-\d{2})|'
+            r'(?P<mon>' + _MON_RX + r')\.?\s*(?:(?P<day>\d{1,2})(?:st|nd|rd|th)?,?\s*)?'
+            r'(?P<year>(?:19|20)\d{2}))')
+_RANGE_SEP = r'\s*(?:-|–|—|to|through|thru|until|till)\s*'
+_DATE_RANGE = re.compile(_DATE_RX + _RANGE_SEP
+                         + _DATE_RX.replace('(?P<', '(?P<b_'), re.I)
+_SHORT_RANGE = re.compile(  # "Apr-Dec 2024", "Apr to Dec 2024"
+    r'\b(?P<m1>' + _MON_RX + r')\.?' + _RANGE_SEP + r'(?P<m2>' + _MON_RX
+    + r')\.?\s+(?P<year>(?:19|20)\d{2})\b', re.I)
+_SINGLE_DATE = re.compile(_DATE_RX, re.I)
+
+
+def _days_in_month(y, m):
+    if m == 12:
+        return 31
+    import datetime as _dt
+    return (_dt.date(y, m + 1, 1) - _dt.date(y, m, 1)).days
+
+
+def _to_iso(iso, mon, day, year, end=False):
+    if iso:
+        return iso
+    if not (mon and year):
+        return None
+    m = _MONTHS.get(mon.lower().rstrip('.'))
+    if not m:
+        return None
+    y = int(year)
+    if day:
+        d = max(1, min(int(day), _days_in_month(y, m)))
+    else:
+        d = _days_in_month(y, m) if end else 1
+    return f'{y:04d}-{m:02d}-{d:02d}'
+
+
+def find_date_ranges(text):
+    """Every (start_iso, end_iso, span) range in the text, in order."""
+    t = str(text or '')
+    out = []
+    for m in _DATE_RANGE.finditer(t):
+        s = _to_iso(m.group('iso'), m.group('mon'), m.group('day'),
+                    m.group('year'))
+        e = _to_iso(m.group('b_iso'), m.group('b_mon'), m.group('b_day'),
+                    m.group('b_year'), end=True)
+        if s and e and s <= e:
+            out.append((s, e, m.span()))
+    for m in _SHORT_RANGE.finditer(t):
+        if any(a <= m.start() < b for _, _, (a, b) in out):
+            continue
+        s = _to_iso(None, m.group('m1'), None, m.group('year'))
+        e = _to_iso(None, m.group('m2'), None, m.group('year'), end=True)
+        if s and e and s <= e:
+            out.append((s, e, m.span()))
+    out.sort(key=lambda r: r[2][0])
+    return out
+
+
+_WINDOW_LABEL = re.compile(
+    r'\b(?P<label>campaign|event|pre|post|baseline|before|after|'
+    r'measurement)\b(?:\s+window)?\s*(?:was|is|ran|runs|of|:)?\s*$', re.I)
+
+
+def _label_before(text, pos):
+    lead = text[max(0, pos - 40):pos]
+    m = _WINDOW_LABEL.search(lead)
+    if not m:
+        return None
+    lab = m.group('label').lower()
+    return {'campaign': 'event', 'event': 'event', 'measurement': 'event',
+            'pre': 'pre', 'baseline': 'pre', 'before': 'pre',
+            'post': 'post', 'after': 'post'}[lab]
+
+
+def find_windows(text):
+    """{'event_start','event_end','pre_*','post_*'} from the labelled
+    ranges; the first unlabelled range is the campaign."""
+    t = str(text or '')
+    out = {}
+    unlabelled = []
+    for s, e, (a, b) in find_date_ranges(t):
+        lab = _label_before(t, a)
+        if lab and f'{lab}_start' not in out:
+            out[f'{lab}_start'], out[f'{lab}_end'] = s, e
+        else:
+            unlabelled.append((s, e))
+    if 'event_start' not in out and unlabelled:
+        out['event_start'], out['event_end'] = unlabelled.pop(0)
+    if 'post_start' not in out and unlabelled:
+        out['post_start'], out['post_end'] = unlabelled.pop(0)
+    # "post through Jun 2025": an end only.
+    m = re.search(r'\bpost(?:\s+window)?\s+(?:through|thru|until|till|to)'
+                  r'\s+' + _DATE_RX, t, re.I)
+    if m and 'post_end' not in out:
+        e = _to_iso(m.group('iso'), m.group('mon'), m.group('day'),
+                    m.group('year'), end=True)
+        if e:
+            out['post_end'] = e
+            if out.get('event_end'):
+                out['post_start'] = out['event_end']
+    return out
+
+
+# ---------------------------------------------------------------------
+# Brand Partnership: brand being valued + partner (talent / show /
+# event / franchise) + campaign window.
+# ---------------------------------------------------------------------
+_CAPS_RUN = r"[A-Z0-9][\w.&'+-]*(?:\s+[A-Z0-9][\w.&'+-]*){0,5}"
+_BP_X = re.compile(
+    r'(?P<a>' + _CAPS_RUN + r')'
+    r'(?:\s*(?:×|\+|&)\s*|\s+(?:x|X|and|with)\s+)'
+    r'(?P<b>' + _CAPS_RUN + r')')
+_BP_LABELLED = {
+    'brand_partner': re.compile(
+        r'\b(?:brand(?:\s+being\s+valued)?|advertiser|sponsor)\s*(?:is|:|=)'
+        r'\s*(?P<v>[^,.;\n]{2,60})', re.I),
+    'qualifier': re.compile(
+        r'\b(?:partner|talent|show|series|event|franchise|property)\s*'
+        r'(?:is|:|=)\s*(?P<v>[^,.;\n]{2,60})', re.I),
+    'audience': re.compile(
+        r'\b(?:audience|measure(?:d)?\s+against|against)\s*(?:is|:|=|of)?'
+        r'\s*(?P<v>[^,.;\n]{3,60})', re.I),
+}
+_BP_PREP = re.compile(
+    r'\b(?:valu(?:e|ation\s+of|ing)|measure|price|partnership\s+(?:of|for))'
+    r'\s+(?:the\s+)?(?P<brand>' + _CAPS_RUN + r')'
+    r'(?:\s+(?:partnership|deal|sponsorship|campaign|integration))?'
+    r'\s+(?:with|on|and|x|×)\s+(?P<partner>' + _CAPS_RUN + r')')
+_BP_NOISE = {'brand', 'partnership', 'valuation', 'campaign', 'window',
+             'pull', 'run', 'the', 'a', 'an', 'value', 'please', 'post',
+             'pre', 'through', 'optional', 'audience'}
+
+
+def _bp_clean(v):
+    v = _clean(v)
+    v = re.sub(r'^(?:the|a|an)\s+', '', v, flags=re.I)
+    v = re.sub(r'\s*(?:,|;|\(|-)\s*$', '', v).strip()
+    return v or None
+
+
+def _bp_is_name(v):
+    if not v:
+        return False
+    toks = re.sub(r'[^a-z0-9 ]+', ' ', v.lower()).split()
+    if not toks or all(w in _BP_NOISE for w in toks):
+        return False
+    if re.search(r'\d{4}', v) or v.lower() in _PLATFORM_NAMES_LOW:
+        return False
+    return True
+
+
+def keyword_parse_brand_partnership(text):
+    """Brand Partnership brief -> brand_partner / qualifier / event
+    window (+ pre / post / audience when stated), best effort."""
+    t = str(text or '')
+    out = {'brand_partner': None, 'qualifier': None,
+           'event_start': None, 'event_end': None,
+           'pre_start': None, 'pre_end': None,
+           'post_start': None, 'post_end': None, 'audience': None,
+           'notes': None}
+    out.update({k: v for k, v in find_windows(t).items()})
+    for k, rx in _BP_LABELLED.items():
+        m = rx.search(t)
+        if m:
+            v = _bp_clean(m.group('v'))
+            if v and (k == 'audience' or _bp_is_name(v)):
+                out[k] = v
+    # Strip dates so the pair readers do not swallow a window.
+    bare = _DATE_RANGE.sub(' ', t)
+    bare = _SHORT_RANGE.sub(' ', bare)
+    bare = _SINGLE_DATE.sub(' ', bare)
+    if not (out['brand_partner'] and out['qualifier']):
+        m = _BP_PREP.search(bare)
+        if m:
+            b, p = _bp_clean(m.group('brand')), _bp_clean(m.group('partner'))
+            if _bp_is_name(b) and _bp_is_name(p):
+                out['brand_partner'] = out['brand_partner'] or b
+                out['qualifier'] = out['qualifier'] or p
+    if not (out['brand_partner'] and out['qualifier']):
+        for m in _BP_X.finditer(bare):
+            a, b = _bp_clean(m.group('a')), _bp_clean(m.group('b'))
+            if not (_bp_is_name(a) and _bp_is_name(b)):
+                continue
+            # The ask copy's example is "Glen Powell x RAM Trucks":
+            # partner x brand.
+            out['qualifier'] = out['qualifier'] or a
+            out['brand_partner'] = out['brand_partner'] or b
+            break
+    out['missing'] = [k for k in ('brand_partner', 'qualifier',
+                                  'event_start', 'event_end')
+                      if not out.get(k)]
+    return out
+
+
+def propose_brand_partnership_field(parsed):
+    """A campaign with a start and no end is running: propose today as
+    the end. Never proposes the brand, the partner, or a start."""
+    p = parsed or {}
+    required = ('brand_partner', 'qualifier', 'event_start', 'event_end')
+    missing = [k for k in required if not p.get(k)]
+    if missing != ['event_end']:
+        return None
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    if str(p.get('event_start')) > today:
+        return None
+    return 'event_end', today, f'through today ({today})'
+
+
+# ---------------------------------------------------------------------
+# Attribution: campaign name + tagged URLs + conversion + daily
+# tracking on/off (+ stop date when on).
+# ---------------------------------------------------------------------
+_URL_LINE = re.compile(
+    r'(?P<url>https?://[^\s,;]+)'
+    r'(?:[\s,;|]+(?P<tag>paid|organic)\b)?'
+    r'(?:[\s,;|]+(?P<label>[^\n]{1,80}))?', re.I)
+_AIQ_NAME = re.compile(
+    r'(?:\bcampaign(?:\s+name)?\s*(?:is|:|=|called|named)\s*'
+    r'(?P<v1>[^,.;\n]{2,80}))|'
+    r'(?:\bthe\s+(?P<v2>[^,.;\n]{2,60}?)\s+campaign\b)|'
+    r'(?:^\s*(?P<v3>[^,.;\n]{2,60}?)\s+campaign\b)', re.I | re.M)
+_AIQ_CONV = re.compile(
+    r'\bconversion(?:\s+event)?\s*(?:is|:|=|counts?\s+as)\s*'
+    r'(?P<v>[^\n]{3,160}?)(?:\.\s|\.$|\n|$)', re.I)
+_AIQ_CONV_VERB = re.compile(
+    r'\b(?:what\s+counts|counts?\s+as\s+a\s+conversion|a\s+conversion\s+is)'
+    r'\s*(?:is|:)?\s*(?P<v>[^\n]{3,160}?)(?:\.\s|\.$|\n|$)', re.I)
+_AIQ_DAILY_ON = re.compile(
+    r'\bdaily(?:\s+tracking|\s+refresh(?:es)?)?\s*(?:is\s+)?(?:on|yes|'
+    r'enabled|through|thru|until|till|to)\b|\btrack(?:ing)?\s+(?:it\s+)?'
+    r'daily\b|\bevery\s+(?:day|morning)\b', re.I)
+_AIQ_DAILY_OFF = re.compile(
+    r'\bdaily(?:\s+tracking|\s+refresh(?:es)?)?\s*(?:is\s+)?(?:off|no)\b|'
+    r'\bno\s+daily\b|\bone[- ]time\b|\bjust\s+once\b|\bsingle\s+read\b|'
+    r'\bone\s+read\b', re.I)
+_AIQ_STOP = re.compile(
+    r'\b(?:through|thru|until|till|stop(?:s|ping)?\s+(?:on\s+)?|'
+    r'ends?\s+(?:on\s+)?|to)\s+' + _DATE_RX, re.I)
+
+
+def parse_tagged_urls(text):
+    """[{'url','tag','label'}] from the message lines; tag is the
+    user's own word (paid / organic) or None when absent."""
+    out, seen = [], set()
+    for line in str(text or '').splitlines():
+        for m in _URL_LINE.finditer(line):
+            url = m.group('url').rstrip('.,;)')
+            if url in seen:
+                continue
+            seen.add(url)
+            tag = (m.group('tag') or '').lower() or None
+            label = _clean(m.group('label') or '') or None
+            if label and tag is None:
+                # "url Hero spot paid" - tag after the label
+                mt = re.search(r'\b(paid|organic)\b\s*$', label, re.I)
+                if mt:
+                    tag = mt.group(1).lower()
+                    label = _clean(label[:mt.start()]) or None
+            out.append({'url': url, 'tag': tag, 'label': label})
+    return out
+
+
+def keyword_parse_attribution(text):
+    t = str(text or '')
+    out = {'campaign_name': None, 'urls': [], 'conversion_event': None,
+           'daily_refresh': None, 'end_tracking_date': None,
+           'notes': None}
+    m = _AIQ_NAME.search(t)
+    if m:
+        v = _clean(m.group('v1') or m.group('v2') or m.group('v3') or '')
+        v = re.sub(r'^(?:the|a|an)\s+', '', v, flags=re.I).strip(' "\'')
+        if v and not v.lower().startswith('http'):
+            out['campaign_name'] = v
+    urls = parse_tagged_urls(t)
+    if urls:
+        out['urls'] = urls
+    m = _AIQ_CONV.search(t) or _AIQ_CONV_VERB.search(t)
+    if m:
+        v = _clean(m.group('v')).strip(' "\'')
+        if v:
+            out['conversion_event'] = v
+    if _AIQ_DAILY_OFF.search(t):
+        out['daily_refresh'] = False
+    elif _AIQ_DAILY_ON.search(t):
+        out['daily_refresh'] = True
+        ms = _AIQ_STOP.search(t)
+        if ms:
+            out['end_tracking_date'] = _to_iso(
+                ms.group('iso'), ms.group('mon'), ms.group('day'),
+                ms.group('year'), end=True)
+    out['missing'] = [k for k in ('campaign_name', 'urls',
+                                  'conversion_event') if not out.get(k)]
+    return out
+
+
+def propose_attribution_field(parsed):
+    """Name, tagged URLs and conversion in hand, daily tracking never
+    mentioned: propose a one-time read (the no-charge default). Never
+    proposes a stop date (that is money) or a tag (that is the user's
+    own word)."""
+    p = parsed or {}
+    urls = [u for u in (p.get('urls') or [])
+            if isinstance(u, dict) and u.get('url')
+            and str(u.get('tag') or '').lower() in ('paid', 'organic')]
+    if not (p.get('campaign_name') and urls and p.get('conversion_event')):
+        return None
+    if p.get('daily_refresh') is None:
+        return 'daily_refresh', False, 'off (a one-time read, no daily tracking)'
+    return None
 
 
 # ---------------------------------------------------------------------
@@ -488,6 +822,10 @@ FIELD_LABELS = {
     'subject': 'the title', 'platform': 'the platform',
     'conversion_event': 'the end step', 'captured_action':
     'the starting point', 'ecosystem': 'the ecosystem',
+    'brand_partner': 'the brand', 'qualifier': 'the partner',
+    'event_start': 'the campaign start', 'event_end': 'the campaign end',
+    'campaign_name': 'the campaign name', 'urls': 'the campaign URLs',
+    'daily_refresh': 'daily tracking',
 }
 
 
