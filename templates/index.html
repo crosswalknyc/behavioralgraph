@@ -186611,6 +186611,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         box-shadow: 8px 12px 28px rgba(0, 0, 0, 0.32);
     }
     #journeyIQView #jiqLibraryRail { display: flex; }
+    /* The rail is fixed at the left edge, so the content clears it. */
+    #journeyIQView { padding-left: 40px !important; }
     #jiqLibraryRail.is-hidden { display: none !important; }
     #jiqLibraryRail:hover { width: 40px; }
     #jiqLibraryRail .jiq-rail-dot {
