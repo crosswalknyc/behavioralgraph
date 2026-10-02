@@ -18,10 +18,19 @@ Covers:
 import os
 import re
 import sys
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-APP = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+APP = open(str(_pm_app_path()), encoding='utf-8').read()
 PMA = open(os.path.join(ROOT, 'prometheus_analysis.py'),
            encoding='utf-8').read()
 
@@ -58,6 +67,7 @@ check("banner names the Prometheus sender",
 start = APP.index('_PM_WO_WORK_NOUNS = (')
 end = APP.index('def _pm_user_runs(')
 ns = {'re': re}
+_pm_host_for(ns)
 exec(compile(APP[start:end], 'wo', 'exec'), ns)
 intent = ns['_pm_workorder_intent']
 
@@ -152,6 +162,7 @@ check("challenged-numbers section in analysis prompt",
 ch_start = APP.index('_PM_CHALLENGE_RES = (')
 ch_end = APP.index('def _pm_challenge_headsup')
 ns2 = {'re': re}
+_pm_host_for(ns2)
 exec(compile(APP[ch_start:ch_end], 'ch', 'exec'), ns2)
 ch = ns2['_PM_CHALLENGE_RES']
 for t in ("The Apple TV+ number seems very high",

@@ -12,11 +12,20 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parents[1]
-_APP = ROOT / "app.py"
+_APP = _pm_app_path()
 if not _APP.exists():
-    _APP = ROOT / "bg-webapp" / "app.py"
+    _APP = _pm_app_path()
 SRC = _APP.read_text()
 
 FAIL = 0
@@ -47,12 +56,13 @@ class _S3Stub:
 
 
 m = re.search(
-    r"(_PM_RECENT_BUILDS_KEY = .*?)\n\n\n@app\.route", SRC, re.S)
+    r"(_PM_RECENT_BUILDS_KEY = .*?)\n\n\n@(?:_H\.)?app\.route", SRC, re.S)
 check("guard helper present", m is not None)
 stub = _S3Stub()
 ns = {"re": re, "time": time, "json": json, "datetime": datetime,
       "s3_client": stub, "S3_BUCKET": "b",
       "traceback": __import__("traceback")}
+_pm_host_for(ns)
 exec(m.group(1), ns)
 guard = ns["_pm_recent_build_guard"]
 
@@ -109,6 +119,7 @@ m2 = re.search(
     r"(_PM_FILE_ASK_RE = re\.compile.*?)\ndef _pm_open_screen_confirm",
     SRC, re.S)
 ns2 = {"re": re}
+_pm_host_for(ns2)
 exec(m2.group(1), ns2)
 merge = ns2["_pm_clarify_answer_merge"]
 

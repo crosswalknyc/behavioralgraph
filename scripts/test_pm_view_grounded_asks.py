@@ -4,11 +4,20 @@ profile names (Jenna 2026-09-30, Attribution view chip defect)."""
 import re
 import sys
 from pathlib import Path
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parents[1]
-_APP = ROOT / "app.py"
+_APP = _pm_app_path()
 if not _APP.exists():
-    _APP = ROOT / "bg-webapp" / "app.py"
+    _APP = _pm_app_path()
 SRC = _APP.read_text()
 
 FAIL = 0
@@ -28,6 +37,7 @@ m = re.search(r"(_PM_VIEW_DEIXIS_RE = re\.compile.*?)\n\n\ndef "
               r"_pm_open_screen_confirm", SRC, re.S)
 check("helpers present", m is not None)
 ns = {"re": re}
+_pm_host_for(ns)
 exec(m.group(1), ns)
 owns = ns["_pm_view_owns_ask"]
 

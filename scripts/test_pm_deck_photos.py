@@ -8,6 +8,15 @@ import os
 import struct
 import sys
 import zlib
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -186,7 +195,7 @@ check('photo opt-out survives the plan clean',
 check('plan prompt carries the art direction section',
       'ART DIRECTION' in pma.INSIGHTS_DECK_SYSTEM_PROMPT
       and 'image_subject' in pma.INSIGHTS_DECK_SYSTEM_PROMPT)
-app_src = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+app_src = open(str(_pm_app_path()), encoding='utf-8').read()
 check('deck job passes the subject for photography',
       'photo_subject=str(subject' in app_src)
 

@@ -7,6 +7,15 @@ synthetic profile frame; source checks pin the app.py wiring."""
 import os
 import re
 import sys
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -167,7 +176,7 @@ for fact in ({'kind': 'demo', 'column': 'GENDER', 'bucket': 'FEMALE'},
           repr((a or {}).get('reply')))
 
 # ------------------------- app.py wiring ---------------------------
-app_src = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+app_src = open(str(_pm_app_path()), encoding='utf-8').read()
 check('wiring: response helper defined',
       'def _pm_panel_fact_response(' in app_src)
 seg = app_src[app_src.index('def _pm_panel_fact_response('):]

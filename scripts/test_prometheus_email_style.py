@@ -9,6 +9,15 @@ in app.py. No network, no SES.
 import re
 import sys
 from pathlib import Path
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -98,8 +107,8 @@ check("PDF handles bullets", "_is_bullets" in PSRC
 check("PDF handles label/value tables", "if n == 2:" in PSRC)
 
 # ---- app wiring --------------------------------------------------------
-APP = (ROOT / "app.py").read_text(encoding="utf-8")
-m = re.search(r"def _pm_send_output_email\(.*?\n(?=def |@app\.route)",
+APP = (_pm_app_path()).read_text(encoding="utf-8")
+m = re.search(r"def _pm_send_output_email\(.*?\n(?=def |@(?:_H\.)?app\.route)",
               APP, re.DOTALL)
 FN = m.group(0) if m else ""
 check("read branch renders the light email html",

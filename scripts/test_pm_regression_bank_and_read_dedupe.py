@@ -11,10 +11,19 @@ import hashlib
 import os
 import re
 import sys
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SRC = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+SRC = open(str(_pm_app_path()), encoding='utf-8').read()
 
 FAIL = 0
 
@@ -47,6 +56,7 @@ m = re.search(r"(_PM_REGRESSION_CASES_KEY = 'system.*?)\n\n\ndef "
               r"_pm_bank_regression_case", SRC, re.S)
 check('pure helpers extractable', m is not None)
 ns = {'re': re, 'hashlib': hashlib}
+_pm_host_for(ns)
 exec(m.group(1), ns)
 qkey = ns['_pm_regression_q_key']
 compact = ns['_pm_compact_for_bank']

@@ -9,11 +9,20 @@ import sys
 import types
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+# Legacy-move shim (2026-10-01): the Prometheus code lives in
+# bg-webapp/prometheus/legacy/chat.py; read app.py + legacy as one source.
+import os as _pm_os, sys as _pm_sys
+_pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
+while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
+    _pm_r = _pm_os.path.dirname(_pm_r)
+_pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
+from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parent.parent
-_APP = ROOT / "app.py"
+_APP = _pm_app_path()
 if not _APP.exists():
-    _APP = ROOT / "bg-webapp" / "app.py"
+    _APP = _pm_app_path()
 SRC = _APP.read_text(encoding="utf-8")
 
 start = SRC.index("_PM_WRONG_ANSWER_RES = (")
@@ -26,6 +35,7 @@ fake_mem.recall = lambda user, k=12: list(fake_mem._RECS)
 sys.modules["prometheus_memory"] = fake_mem
 
 ns = {"re": re, "datetime": datetime, "timezone": timezone}
+_pm_host_for(ns)
 exec(block, ns)
 
 WRONG = ns["_PM_WRONG_ANSWER_RES"]
@@ -127,7 +137,7 @@ check("refusal retry wired",
       "refusal_retry" in SRC and
       "Your previous draft declined to answer" in SRC)
 
-PMA = (_APP.parent / "prometheus_analysis.py").read_text(encoding="utf-8")
+PMA = (Path(__file__).resolve().parents[1] / "prometheus_analysis.py").read_text(encoding="utf-8")
 check("never-decline in both prompts",
       PMA.count("NEVER DECLINE") == 2)
 
