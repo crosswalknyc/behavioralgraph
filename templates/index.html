@@ -73430,6 +73430,51 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }).catch(function() {});
         };
 
+        // Lays out the Target vs. Control card and its two connector
+        // arrows. The card and top arrow sit at a fixed offset from the
+        // Target lift box; the Control row is pushed down so the bottom
+        // arrow's tip lands on the card's outer edge.
+        function _bpiqLayoutNetLift() {
+            var wrap = document.getElementById('bpiqKpiAndLiftWrap');
+            var netLiftCard = document.getElementById('bpiqNetLiftCard');
+            var innerCard = document.getElementById('bpiqNetLiftInner');
+            var targetLiftBox = document.getElementById('bpiqKpiLift');
+            var controlLiftBox = document.getElementById('bpiqKpiGenPopLift');
+            var controlRow = document.getElementById('bpiqGenPopKpiRow');
+            var svg = document.getElementById('bpiqConnectorArrows');
+            if (!wrap || !netLiftCard || !innerCard || !targetLiftBox || !controlLiftBox || !controlRow || !svg) return;
+            if (netLiftCard.style.display === 'none') return;
+            var tBox = targetLiftBox.closest('.tab-section');
+            var cBox = controlLiftBox.closest('.tab-section');
+            if (!tBox || !cBox) return;
+            var ARROW = 30, ENTRY = 24;
+            controlRow.style.marginTop = '';
+            if (getComputedStyle(wrap).flexDirection !== 'row') {
+                innerCard.style.marginTop = '';
+                svg.innerHTML = '';
+                return;
+            }
+            var wrapRect = wrap.getBoundingClientRect();
+            var tRect = tBox.getBoundingClientRect();
+            innerCard.style.marginTop = Math.max(0, tRect.top + ENTRY + ARROW - wrapRect.top) + 'px';
+            var innerRect = innerCard.getBoundingClientRect();
+            var cRect = cBox.getBoundingClientRect();
+            var bottomY = innerRect.bottom + ARROW;
+            var shift = bottomY + ENTRY - cRect.bottom;
+            if (shift > 0) controlRow.style.marginTop = shift + 'px';
+            var cardRect = netLiftCard.getBoundingClientRect();
+            innerRect = innerCard.getBoundingClientRect();
+            var innerMidX = (innerRect.left + innerRect.right) / 2 - cardRect.left;
+            var innerTop = innerRect.top - cardRect.top;
+            var innerBottom = innerRect.bottom - cardRect.top;
+            var arrowX = -8;
+            var topY = innerTop - ARROW;
+            var botY = innerBottom + ARROW;
+            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker></defs>' +
+                '<path d="M' + arrowX + ',' + topY + ' L' + innerMidX + ',' + topY + ' L' + innerMidX + ',' + innerTop + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>' +
+                '<path d="M' + arrowX + ',' + botY + ' L' + innerMidX + ',' + botY + ' L' + innerMidX + ',' + innerBottom + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>';
+        }
+
         function _bpiqFmtLift(v) {
             if (v === null || v === undefined) return '-';
             if (v === Infinity || v === 'Infinity' || v === 'inf') return '∞';
@@ -74003,41 +74048,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var ppNet  = (postPct - prePct) - (gpPostPct - gpPrePct);
                     var ppSign = ppNet >= 0 ? '+' : '−';
                     document.getElementById('bpiqNetLiftPp').textContent = ppSign + Math.abs(ppNet).toFixed(2) + ' pp';
-                    setTimeout(function() {
-                        var wrap = document.getElementById('bpiqKpiAndLiftWrap');
-                        var targetLiftBox = document.getElementById('bpiqKpiLift');
-                        var controlLiftBox = document.getElementById('bpiqKpiGenPopLift');
-                        var innerCard = document.getElementById('bpiqNetLiftInner');
-                        if (!wrap || !targetLiftBox || !controlLiftBox || !innerCard) return;
-                        var wrapRect = wrap.getBoundingClientRect();
-                        var tBox = targetLiftBox.closest('.tab-section');
-                        var cBox = controlLiftBox.closest('.tab-section');
-                        if (!tBox || !cBox) return;
-                        var tRect = tBox.getBoundingClientRect();
-                        var cRect = cBox.getBoundingClientRect();
-                        var midY = (tRect.top + tRect.bottom + cRect.top + cRect.bottom) / 4;
-                        var cardH = innerCard.offsetHeight;
-                        var desiredTop = midY - wrapRect.top - cardH / 2;
-                        innerCard.style.marginTop = Math.max(0, desiredTop) + 'px';
-                        var svg = document.getElementById('bpiqConnectorArrows');
-                        if (svg) {
-                            var cardRect = netLiftCard.getBoundingClientRect();
-                            var innerRect = innerCard.getBoundingClientRect();
-                            var innerMidX = (innerRect.left + innerRect.right) / 2 - cardRect.left;
-                            var innerTop = innerRect.top - cardRect.top;
-                            var innerBottom = innerRect.bottom - cardRect.top;
-                            var arrowX = -8;
-                            var topY = innerTop - 30;
-                            var bottomY = innerBottom + 30;
-                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker></defs>' +
-                                '<path d="M' + arrowX + ',' + topY + ' L' + innerMidX + ',' + topY + ' L' + innerMidX + ',' + innerTop + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>' +
-                                '<path d="M' + arrowX + ',' + bottomY + ' L' + innerMidX + ',' + bottomY + ' L' + innerMidX + ',' + innerBottom + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>';
-                        }
-                    }, 50);
+                    _bpiqLayoutNetLift();
+                    setTimeout(_bpiqLayoutNetLift, 50);
+                    if (document.fonts && document.fonts.ready) document.fonts.ready.then(_bpiqLayoutNetLift);
+                    if (!window._bpiqNetLiftRO && window.ResizeObserver) {
+                        window._bpiqNetLiftRO = new ResizeObserver(function() {
+                            if (window._bpiqNetLiftRaf) return;
+                            window._bpiqNetLiftRaf = requestAnimationFrame(function() {
+                                window._bpiqNetLiftRaf = 0;
+                                _bpiqLayoutNetLift();
+                            });
+                        });
+                        ['bpiqNetLiftInner', 'bpiqKpiAndLiftWrap'].forEach(function(id) {
+                            var el = document.getElementById(id);
+                            if (el) window._bpiqNetLiftRO.observe(el);
+                        });
+                    }
                 }
             } else {
                 if (deltaRow) deltaRow.style.display = 'none';
                 if (netLiftCard) netLiftCard.style.display = 'none';
+                var gpRow = document.getElementById('bpiqGenPopKpiRow');
+                if (gpRow) gpRow.style.marginTop = '';
                 var npp = document.getElementById('bpiqNetLiftPp');
                 if (npp) npp.textContent = '';
             }
@@ -74139,7 +74171,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
                     + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
-                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Consumer Lift</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">&nbsp;<br>Consumer Lift</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
                     + '</div>';
