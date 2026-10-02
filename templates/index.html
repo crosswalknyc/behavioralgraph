@@ -22650,7 +22650,7 @@ https://www.instagram.com/p/..."></textarea>
             <div id="pmThreadRail" style="position:absolute; top:0; left:0; bottom:0; width:222px; background:#15252A; border-right:1px solid rgba(233,232,225,0.14); z-index:5; transform:translateX(-105%); transition:transform 0.18s ease; display:flex; flex-direction:column;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.85rem 0.75rem 0.5rem;">
                     <span style="font-size:0.62rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#7C878A;">Chats &amp; Tasks</span>
-                    <button type="button" onclick="pmNewChat()" style="background:rgba(199,242,62,0.14); border:1px solid rgba(199,242,62,0.45); color:#C7F23E; border-radius:999px; padding:0.22rem 0.7rem; font-size:0.68rem; font-weight:700; cursor:pointer; font-family:inherit;">+ New chat</button>
+                    <button type="button" onclick="pmNewChat()" title="New chat (Option/Alt+N, or Cmd/Ctrl+Shift+O)" style="background:rgba(199,242,62,0.14); border:1px solid rgba(199,242,62,0.45); color:#C7F23E; border-radius:999px; padding:0.22rem 0.7rem; font-size:0.68rem; font-weight:700; cursor:pointer; font-family:inherit;">+ New chat</button>
                 </div>
                 <div id="pmThreadList" style="flex:1; overflow-y:auto; padding:0 0.4rem 0.6rem;"></div>
             </div>
@@ -77597,6 +77597,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
                     synthChatHistory = (d && d.history) || [];
+                    window._pmLastActivityAt = Date.now();
+                    // Idle rotation (2026-10-01 Jenna): the server
+                    // parked the thread you left and opened a fresh
+                    // one; show it in the rail.
+                    if (d && d.rotated) {
+                        try { _pmThreadsLoad(); } catch (_) {}
+                    }
                     try { _pmDedupeHistoryJobs(); } catch (_) {}
                     synthChatRerender();
                     // Resume polling for the most-recent still-running job
@@ -77627,9 +77634,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 clearInterval(window.__synthChatIdleTimer);
                 window.__synthChatIdleTimer = null;
             }
+            try {
+                var _pmIn = document.getElementById('synthChatInput');
+                if (_pmIn) _pmIn.addEventListener('focus', _pmIdleCheck);
+            } catch (_) {}
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible') {
                     _synthChatRefreshQueueBadge();
+                    _pmIdleCheck();
                     // Tab-return welcome DISABLED (2026-09-02 Jenna
                     // directive): returning to the tab after 30+ min
                     // away no longer re-offers the day starters - that
@@ -78018,7 +78030,50 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (s) s.value = '';
             synthChatRerender();
         }
+        // Idle rotation (2026-10-01 Jenna): "if you've been gone for a
+        // while and come back it should open a new thread like ChatGPT
+        // or Claude and move the tired thread to the side bar." The
+        // server owns the decision (it also runs on every page load);
+        // this asks it when a tab comes back after a long gap. Mirrors
+        // _PM_IDLE_NEW_THREAD_SECONDS in app.py.
+        var _PM_IDLE_NEW_THREAD_MS = 2 * 60 * 60 * 1000;
+        var _pmIdleCheckAt = 0;
+        function _pmIdleCheck() {
+            var last = window._pmLastActivityAt || 0;
+            if (!last || Date.now() - last < _PM_IDLE_NEW_THREAD_MS) return;
+            if (Date.now() - _pmIdleCheckAt < 60000) return;
+            _pmIdleCheckAt = Date.now();
+            fetch('/api/brief-chat/history', { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d || !d.rotated) return;
+                    window._pmLastActivityAt = Date.now();
+                    _pmAdoptHistory([]);
+                    try { _pmThreadsLoad(); } catch (_) {}
+                }).catch(function () {});
+        }
+        // New chat shortcut (2026-10-01 Jenna: "the button with N").
+        // Option/Alt+N while the chat is open; Cmd/Ctrl+Shift+O from
+        // anywhere (ChatGPT's key) opens the chat too. Cmd+N / Ctrl+N
+        // belong to the browser (new window) and a page cannot take
+        // them; the standalone app wires Cmd+N itself.
+        document.addEventListener('keydown', function (e) {
+            var w = document.getElementById('prometheusWidget');
+            if (!w) return;
+            var open = w.classList.contains('pm-on');
+            var altN = e.code === 'KeyN' && e.altKey
+                && !e.metaKey && !e.ctrlKey && !e.shiftKey;
+            var shiftO = e.code === 'KeyO' && e.shiftKey
+                && (e.metaKey || e.ctrlKey) && !e.altKey;
+            if (!(shiftO || (altN && open))) return;
+            e.preventDefault();
+            if (!open && typeof window.prometheusExpand === 'function') {
+                window.prometheusExpand();
+            }
+            pmNewChat();
+        });
         function pmNewChat() {
+            window._pmLastActivityAt = Date.now();
             fetch('/api/brief-chat/threads/new', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
@@ -78035,6 +78090,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function pmSwitchThread(tid) {
             if (_pmThreadsIdx && _pmThreadsIdx.active === tid) return;
+            window._pmLastActivityAt = Date.now();
             // Persist the current thread before leaving it.
             try {
                 fetch('/api/brief-chat/history', {
@@ -83266,6 +83322,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return data;
         }
         async function _synthChatFetchJson(url, body, signal) {
+            window._pmLastActivityAt = Date.now();
             var _req = _pmV1Request(url, body);
             async function _once() {
                 var r = await fetch(_req.url, {

@@ -9866,19 +9866,7 @@ def api_synth_chat_threads_new():
         return err
     uname = session.get('username') or ''
     idx = _load_threads_index(uname)
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    tid = uuid.uuid4().hex[:10]
-    idx.setdefault('threads', []).append(
-        {'id': tid, 'title': 'New chat', 'created': now,
-         'updated': now, 'turns': 0})
-    # Bound growth: the oldest empty-or-stale threads roll off.
-    if len(idx['threads']) > _PM_MAX_THREADS:
-        idx['threads'] = sorted(
-            idx['threads'], key=lambda t: str(t.get('updated') or ''),
-            reverse=True)[:_PM_MAX_THREADS]
-    idx['active'] = tid
-    _pm_s3_put_json(_pm_threads_index_key(uname), idx)
-    _pm_s3_put_json(_pm_thread_key(uname, tid), [])
+    tid = _pm_new_thread_into(uname, idx)
     return jsonify({'success': True, 'active': tid,
                     'threads': sorted(idx['threads'],
                                       key=lambda t: str(t.get('updated') or ''),
@@ -9898,6 +9886,11 @@ def api_synth_chat_threads_activate():
     if not any(t.get('id') == tid for t in idx.get('threads', [])):
         return jsonify({'success': False, 'error': 'unknown thread'}), 404
     idx['active'] = tid
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    for t in idx.get('threads', []):
+        if t.get('id') == tid:
+            t['opened'] = now
+            break
     _pm_s3_put_json(_pm_threads_index_key(uname), idx)
     history = _pm_s3_json(_pm_thread_key(uname, tid), [])
     return jsonify({'success': True, 'active': tid, 'history': history})
@@ -50406,6 +50399,99 @@ def _load_synth_chat_history(username):
         return []
 
 
+# Idle rotation (2026-10-01 Jenna: "if you've been gone for a while
+# and come back it should open a new thread like ChatGPT or Claude
+# and move the tired thread to the side bar"). A thread with turns
+# that nobody has written to or opened for this long stays in the
+# rail and a fresh New chat becomes active on the next history load.
+_PM_IDLE_NEW_THREAD_SECONDS = 2 * 3600
+
+
+def _pm_parse_iso(s):
+    try:
+        s = str(s or '').strip()
+        if not s:
+            return None
+        if s.endswith('Z'):
+            s = s[:-1] + '+00:00'
+        d = datetime.fromisoformat(s)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return d
+    except Exception:
+        return None
+
+
+def _pm_history_has_running_job(history):
+    """True when the newest build in this thread is still polling;
+    rotation waits so the finished status lands where it started."""
+    terminal = ('complete', 'error', 'failed')
+    for t in reversed(list(history or [])):
+        meta = t.get('meta') if isinstance(t, dict) else None
+        if not isinstance(meta, dict) or not meta.get('run_id'):
+            continue
+        return str(meta.get('status') or 'queued').lower() not in terminal
+    return False
+
+
+def _pm_new_thread_into(username, idx):
+    """Make a fresh New chat the active thread and persist. An active
+    thread that is still empty is reused so the rail never stacks
+    blank chats. Returns the active thread id."""
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    threads = idx.setdefault('threads', [])
+    act = next((t for t in threads if t.get('id') == idx.get('active')),
+               None)
+    if act and not act.get('turns') \
+            and act.get('title') in (None, '', 'New chat'):
+        act['updated'] = now
+        _pm_s3_put_json(_pm_threads_index_key(username), idx)
+        _pm_s3_put_json(_pm_thread_key(username, act['id']), [])
+        return act['id']
+    tid = uuid.uuid4().hex[:10]
+    threads.append({'id': tid, 'title': 'New chat', 'created': now,
+                    'updated': now, 'turns': 0})
+    # Bound growth: the oldest empty-or-stale threads roll off.
+    if len(threads) > _PM_MAX_THREADS:
+        idx['threads'] = sorted(
+            threads, key=lambda t: str(t.get('updated') or ''),
+            reverse=True)[:_PM_MAX_THREADS]
+    idx['active'] = tid
+    _pm_s3_put_json(_pm_threads_index_key(username), idx)
+    _pm_s3_put_json(_pm_thread_key(username, tid), [])
+    return tid
+
+
+def _pm_rotate_idle_thread(username):
+    """Park the active thread and open a fresh one when it has been
+    idle past _PM_IDLE_NEW_THREAD_SECONDS. Idle counts from the later
+    of the last save and the last open from the rail. Returns the
+    parked thread's title, or None when nothing moved."""
+    try:
+        idx = _load_threads_index(username)
+        tid = idx.get('active')
+        th = next((t for t in idx.get('threads', [])
+                   if t.get('id') == tid), None)
+        if not th or not th.get('turns'):
+            return None
+        stamps = [d for d in (_pm_parse_iso(th.get('updated')),
+                              _pm_parse_iso(th.get('opened')))
+                  if d is not None]
+        if not stamps:
+            return None
+        idle = (datetime.now(timezone.utc) - max(stamps)).total_seconds()
+        if idle < _PM_IDLE_NEW_THREAD_SECONDS:
+            return None
+        if _pm_history_has_running_job(
+                _pm_s3_json(_pm_thread_key(username, tid), [])):
+            return None
+        _pm_new_thread_into(username, idx)
+        return str(th.get('title') or 'New chat')
+    except Exception as e:
+        print(f"[synth-chat] idle rotation skipped for {username}: {e}")
+        return None
+
+
 def _save_synth_chat_history(username, history):
     try:
         # Trim to last 200 turns to bound growth
@@ -58586,8 +58672,13 @@ def api_synth_chat_history():
         return err
     uname = user.get('username') or user.get('email') or 'anon'
     if request.method == 'GET':
-        return jsonify({'success': True,
-                         'history': _load_synth_chat_history(uname)})
+        rotated_from = _pm_rotate_idle_thread(uname)
+        out = {'success': True,
+               'history': _load_synth_chat_history(uname)}
+        if rotated_from is not None:
+            out['rotated'] = True
+            out['rotated_from'] = rotated_from
+        return jsonify(out)
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -62432,7 +62523,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'stage': 'reading the data',
             'question': text[:300], 'started_at': time.time()})
         _pm_read_inflight_mark(_pm_user, text, job_id)
-        _pm_job_bind_thread(job_id)
+        _pm_job_bind_thread(job_id, _pm_user)
         threading.Thread(
             target=_pm_run_read_job,
             args=(job_id, _pm_user, _pm_read_extras, text,
@@ -63070,8 +63161,16 @@ def _pm_req_thread_set(body):
         _PM_REQ_THREAD.tid = ''
 
 
-def _pm_job_bind_thread(job_id):
+def _pm_job_bind_thread(job_id, username=None):
     tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
+    if not tid and username:
+        # Dashboard launch (2026-10-01): pin the thread that is active
+        # now, so idle rotation while the job runs never moves the
+        # finished read or deck into the fresh chat.
+        try:
+            tid = str(_load_threads_index(username).get('active') or '')
+        except Exception:
+            tid = ''
     if tid and job_id:
         _PM_JOB_THREAD[job_id] = tid
     return tid or None
@@ -63109,8 +63208,15 @@ def _pm_save_thread_or_active(username, tid, history):
             if th.get('id') == tid:
                 th['updated'] = _pm_iso_now()
                 th['turns'] = len(trimmed)
+                if th.get('title') in (None, '', 'New chat'):
+                    th['title'] = _pm_thread_title_from(trimmed)
                 break
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
+    except Exception:
+        traceback.print_exc()
+    try:
+        import prometheus_watch as _pmw
+        _pmw.on_history_saved(username, trimmed, load_users)
     except Exception:
         traceback.print_exc()
     return True
@@ -66761,7 +66867,7 @@ def _pm_deck_core(user, body):
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
-    _pm_job_bind_thread(job_id)
+    _pm_job_bind_thread(job_id, username)
     t = threading.Thread(target=_pm_run_deck_job,
                          args=(job_id, username, ctx, history[-14:], angle,
                                _charge_user, deck_subject, deck_partner),
