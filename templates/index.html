@@ -111462,7 +111462,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var _jiqMusicActiveSlug = '';
         var _jiqMusicActiveStage = 'universe';
         var _jiqMusicKindFilter = 'all';
-        var _jiqMusicQuery = '';
 
         function _jiqMusicCatalogObj() {
             return (typeof _JIQ_MUSIC_CATALOG !== 'undefined' && _JIQ_MUSIC_CATALOG)
@@ -111776,86 +111775,72 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var bar = document.getElementById('jiqMusicTabBar');
             if (!bar) return;
             var entries = _jiqMusicEntries();
-            var q = String(_jiqMusicQuery || '').toLowerCase();
             var vis = entries.filter(function(t) {
                 var kind = (t.meta && t.meta.kind) || '';
                 if (_jiqMusicKindFilter === 'Film' && kind !== 'Film') return false;
                 if (_jiqMusicKindFilter === 'Series' && kind !== 'Series') return false;
-                if (q && String((t.meta && t.meta.title) || '').toLowerCase().indexOf(q) < 0) return false;
                 return true;
             });
-            if (!_jiqMusicActiveSlug && vis[0]) _jiqMusicActiveSlug = vis[0].slug;
+            if (!_jiqMusicActiveSlug || !vis.some(function(row) { return row.slug === _jiqMusicActiveSlug; })) {
+                _jiqMusicActiveSlug = (vis[0] && vis[0].slug) || (entries[0] && entries[0].slug) || '';
+            }
             var t = _jiqMusicGet(_jiqMusicActiveSlug) || vis[0] || {};
             var stages = _jiqMusicStages(t);
             if (!stages.some(function(s) { return s.id === _jiqMusicActiveStage; })) {
                 _jiqMusicActiveStage = stages[0].id;
             }
             var kinds = [
-                { id: 'all', label: 'All' },
+                { id: 'all', label: 'All titles' },
                 { id: 'Film', label: 'Film' },
                 { id: 'Series', label: 'Series' }
             ];
-            bar.className = 'jiq-ufc-tabbar';
+            bar.className = 'jiq-ufc-tabbar jiq-music-navbar';
             bar.style.display = '';
             bar.innerHTML =
-                '<div class="jiq-ufc-pills jiq-music-kind">' + kinds.map(function(k) {
-                    return '<button type="button" data-kind="' + k.id + '"'
-                        + (_jiqMusicKindFilter === k.id ? ' class="is-on"' : '') + '>'
-                        + k.label + '</button>';
+                '<div class="jiq-music-nav">'
+                + '<label>Kind<select id="jiqMusicKind">'
+                + kinds.map(function(k) {
+                    return '<option value="' + k.id + '"'
+                        + (_jiqMusicKindFilter === k.id ? ' selected' : '') + '>'
+                        + k.label + '</option>';
                 }).join('')
-                + '<input type="search" id="jiqMusicFind" class="jiq-music-find" placeholder="Find a title" value="'
-                + _jiqMusicEsc(_jiqMusicQuery) + '"></div>'
-                + '<div class="jiq-ufc-pills jiq-music-titles">' + vis.map(function(row) {
+                + '</select></label>'
+                + '<label>Title<select id="jiqMusicTitlePick">'
+                + vis.map(function(row) {
                     var slug = row.slug;
                     var title = (row.meta && row.meta.title) || slug;
-                    return '<button type="button" data-slug="' + _jiqMusicEsc(slug) + '"'
-                        + (slug === _jiqMusicActiveSlug ? ' class="is-on"' : '') + '>'
-                        + _jiqMusicEsc(title) + '</button>';
-                }).join('') + '</div>'
-                + '<div class="jiq-ufc-pills jiq-music-stages">' + stages.map(function(s) {
-                    return '<button type="button" data-stage="' + s.id + '"'
-                        + (s.id === _jiqMusicActiveStage ? ' class="is-on"' : '') + '>'
-                        + _jiqMusicEsc(s.label) + '</button>';
-                }).join('') + '</div>';
-            Array.prototype.forEach.call(bar.querySelectorAll('[data-kind]'), function(btn) {
-                btn.addEventListener('click', function() {
-                    _jiqMusicKindFilter = btn.getAttribute('data-kind') || 'all';
-                    var still = _jiqMusicEntries().some(function(row) {
-                        if (row.slug !== _jiqMusicActiveSlug) return false;
-                        var kind = (row.meta && row.meta.kind) || '';
-                        if (_jiqMusicKindFilter === 'Film') return kind === 'Film';
-                        if (_jiqMusicKindFilter === 'Series') return kind === 'Series';
-                        return true;
-                    });
-                    if (!still) {
-                        var next = _jiqMusicEntries().filter(function(row) {
-                            var kind = (row.meta && row.meta.kind) || '';
-                            if (_jiqMusicKindFilter === 'Film') return kind === 'Film';
-                            if (_jiqMusicKindFilter === 'Series') return kind === 'Series';
-                            return true;
-                        })[0];
-                        if (next) _jiqMusicActiveSlug = next.slug;
-                    }
+                    return '<option value="' + _jiqMusicEsc(slug) + '"'
+                        + (slug === _jiqMusicActiveSlug ? ' selected' : '') + '>'
+                        + _jiqMusicEsc(title) + '</option>';
+                }).join('')
+                + '</select></label>'
+                + '<label>Stage<select id="jiqMusicStage" data-stage="dropdown">'
+                + stages.map(function(s) {
+                    return '<option value="' + s.id + '"'
+                        + (s.id === _jiqMusicActiveStage ? ' selected' : '') + '>'
+                        + _jiqMusicEsc(s.label) + '</option>';
+                }).join('')
+                + '</select></label>'
+                + '</div>';
+            var kindEl = document.getElementById('jiqMusicKind');
+            var titleEl = document.getElementById('jiqMusicTitlePick');
+            var stageEl = document.getElementById('jiqMusicStage');
+            if (kindEl) {
+                kindEl.addEventListener('change', function() {
+                    _jiqMusicKindFilter = kindEl.value || 'all';
                     renderJourneyIqMusicCatalog({ umbrella: true, slug: _jiqMusicActiveSlug });
                 });
-            });
-            Array.prototype.forEach.call(bar.querySelectorAll('[data-slug]'), function(btn) {
-                btn.addEventListener('click', function() {
-                    _jiqMusicActiveSlug = btn.getAttribute('data-slug') || '';
+            }
+            if (titleEl) {
+                titleEl.addEventListener('change', function() {
+                    _jiqMusicActiveSlug = titleEl.value || '';
                     renderJourneyIqMusicCatalog({ umbrella: true, slug: _jiqMusicActiveSlug });
                 });
-            });
-            Array.prototype.forEach.call(bar.querySelectorAll('[data-stage]'), function(btn) {
-                btn.addEventListener('click', function() {
-                    _jiqMusicActiveStage = btn.getAttribute('data-stage') || 'universe';
+            }
+            if (stageEl) {
+                stageEl.addEventListener('change', function() {
+                    _jiqMusicActiveStage = stageEl.value || 'universe';
                     renderJourneyIqMusicCatalog({ umbrella: true, slug: _jiqMusicActiveSlug });
-                });
-            });
-            var find = document.getElementById('jiqMusicFind');
-            if (find) {
-                find.addEventListener('input', function() {
-                    _jiqMusicQuery = find.value || '';
-                    _jiqMusicPaintTabs();
                 });
             }
         }
@@ -186769,21 +186754,39 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqMusicCatalogCard .jiq-frag-detours { margin: 0 34px; padding-bottom: 34px; }
     #jiqMusicCatalogCard .jiq-clip-strip { margin: 0 34px 28px; }
     #jiqMusicCatalogCard .jiq-frag-read { margin-left: 0; }
-    .jiq-music-kind { align-items: center; width: 100%; }
-    .jiq-music-titles {
-        flex-wrap: nowrap; overflow-x: auto; width: 100%;
-        padding: 2px 0 8px; -webkit-overflow-scrolling: touch;
+    #jiqMusicTabBar.jiq-music-navbar {
+        display: flex; flex-wrap: nowrap; justify-content: flex-start;
+        gap: 12px; padding: 4px 0 12px;
     }
-    .jiq-music-titles button { flex: 0 0 auto; white-space: nowrap; }
-    .jiq-music-stages { width: 100%; }
-    .jiq-music-find {
-        flex: 1 1 180px; min-width: 140px; max-width: 280px;
-        border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03);
-        color: #E9E8E1; border-radius: 6px; padding: 7px 12px; font-size: 12px;
+    .jiq-music-nav {
+        display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+        width: 100%;
     }
-    body[data-theme="light"] .jiq-music-find {
-        border-color: #C9C6BA; background: #FFFFFF; color: #0C1618;
+    .jiq-music-nav label {
+        display: flex; flex-direction: column; gap: 6px;
+        font-size: 10px; font-weight: 500; letter-spacing: .14em;
+        text-transform: uppercase; color: #7C878A;
     }
+    .jiq-music-nav select {
+        appearance: none; -webkit-appearance: none;
+        min-width: 132px; border: 1px solid rgba(255,255,255,.12);
+        background: rgba(255,255,255,.03)
+            url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='%239AA09B' d='M0 0l5 6 5-6z'/></svg>")
+            no-repeat right 12px center;
+        color: #E9E8E1; border-radius: 6px; padding: 8px 32px 8px 12px;
+        font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .jiq-music-nav select:focus {
+        outline: none; border-color: #C7F23E;
+    }
+    #jiqMusicTitlePick { min-width: 240px; max-width: 420px; width: 36vw; }
+    #jiqMusicStage { min-width: 180px; }
+    body[data-theme="light"] .jiq-music-nav select {
+        border-color: #C9C6BA; background-color: #FFFFFF; color: #0C1618;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='%235C6560' d='M0 0l5 6 5-6z'/></svg>");
+        background-repeat: no-repeat; background-position: right 12px center;
+    }
+    body[data-theme="light"] .jiq-music-nav select:focus { border-color: #5E7E12; }
 
     .jiq-music-table { width: 100%; border-collapse: collapse; }
     .jiq-music-table th { text-align: left; font-size: 10px; letter-spacing: 0.08em;
