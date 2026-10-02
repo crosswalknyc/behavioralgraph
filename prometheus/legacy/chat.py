@@ -8736,6 +8736,13 @@ def _pm_claude_data(system_prompt, user_prompt, **kw):
 
 _PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
 
+# Agent turns that are part of an open intake: the ask copy, a stall,
+# or a confirm card. A user correction sent after any of these still
+# belongs to the same brief.
+_PM_INTAKE_AGENT_PREFIXES = (
+    _PM_INTAKE_STALL_PREFIX.lower(), 'happy to build', 'happy to run',
+    'happy to set up', "here's the", 'here is the')
+
 _PM_INTAKE_FAULT_REPLY = ('Got it. I have what you sent and I am lining '
                           'it up now. I will email you when it is '
                           'complete.')
@@ -8763,10 +8770,10 @@ def _pm_intake_prior_user_turns(history, ask_copy, limit=4):
                 break
             continue
         norm = ' '.join(txt.split()).lower()
-        if norm.startswith(_PM_INTAKE_STALL_PREFIX.lower()):
-            continue
         if ask and norm[:80] == ask[:80]:
             break
+        if norm.startswith(_PM_INTAKE_AGENT_PREFIXES):
+            continue
         break
     return list(reversed(out))
 
@@ -8780,7 +8787,8 @@ def _pm_intake_last_agent_stalled(history):
 
 
 def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
-                       required, ask_copy, user=None, usage_extras=None):
+                       required, ask_copy, user=None, usage_extras=None,
+                       fallback_fn=None, propose_fn=None, alert=True):
     """Parse a guided-intake message the way a person would read it.
 
     Returns ``(parsed, fault)``. Three layers, cheapest first:
@@ -8827,11 +8835,57 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
             if (sum(1 for k in required if again.get(k))
                     > sum(1 for k in required if parsed.get(k))):
                 parsed = again
-    substantive = len(text.split()) >= 10
+    combined_text = '\n\n'.join(prior + [text]) if prior else text
+    substantive = len(combined_text.split()) >= 10
+    # Deterministic second reader (2026-10-02): plain rules over the
+    # same words (quoted or named title, platform names, end-step
+    # verbs) fill ONLY what the model left empty. It would have read
+    # Carolyn's brief on the first message even with the parser bug.
+    if fallback_fn and substantive:
+        try:
+            from prometheus.intake_reader import merge_missing
+            kw = fallback_fn(combined_text) or {}
+            if isinstance(kw, dict):
+                before = sum(1 for k in required if parsed.get(k))
+                merged = merge_missing(parsed, kw, required)
+                after = sum(1 for k in required if merged.get(k))
+                if after > before:
+                    merged['_read_by'] = 'model+rules'
+                    parsed = merged
+                if complete_fn(parsed):
+                    try:
+                        _pm_ask_hint(outcome='intake_rules_completed',
+                                     subject=flow)
+                    except Exception:
+                        pass
+                    return parsed, False
+        except Exception:
+            traceback.print_exc()
+    # Confirm instead of interrogate (2026-10-02): two of three in
+    # hand and the third obvious -> propose it on the confirm card
+    # instead of asking the user to type it again.
+    if propose_fn:
+        try:
+            prop = propose_fn(parsed)
+            if prop and len(prop) == 2 and prop[1]:
+                field, value = prop
+                parsed[field] = value
+                parsed['_proposed'] = {'field': field, 'value': value}
+                if complete_fn(parsed):
+                    try:
+                        _pm_ask_hint(outcome='intake_proposed_field',
+                                     subject=flow)
+                    except Exception:
+                        pass
+                    return parsed, False
+                parsed.pop(field, None)
+                parsed.pop('_proposed', None)
+        except Exception:
+            traceback.print_exc()
     found = sum(1 for k in required if parsed.get(k))
     fault = bool(substantive
                  and (found == 0 or _pm_intake_last_agent_stalled(history)))
-    if fault:
+    if fault and alert:
         try:
             _pm_ask_hint(outcome='intake_fault', subject=flow)
         except Exception:
@@ -8857,10 +8911,115 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     return parsed, fault
 
 
+def _pm_intake_finish_confirm(parsed, reply, run_label):
+    """Append the proposed-field note (if any) to the confirm reply
+    and strip private resolver keys from the payload the widget echoes
+    back on approve."""
+    prop = parsed.pop('_proposed', None) if isinstance(parsed, dict) else None
+    if isinstance(parsed, dict):
+        parsed.pop('_read_by', None)
+        parsed.pop('missing', None)
+    if prop and prop.get('field'):
+        try:
+            from prometheus.intake_reader import proposed_note
+            reply = reply + proposed_note(prop['field'], prop['value'],
+                                          run_label=run_label)
+        except Exception:
+            traceback.print_exc()
+    return reply
+
+
 def _pm_intake_fault_payload():
     return {'success': True, 'action': 'answer',
             'reply': _PM_INTAKE_FAULT_REPLY,
             'followups': [], 'offer_deck': False, 'deck_angle': None}
+
+
+def _pm_intake_flow_table():
+    """flow -> (parse_fn, complete_fn, required, ask_copy, fallback_fn,
+    propose_fn). One place the analyze branches and the canary share."""
+    from prometheus.intake_reader import (keyword_parse_journey,
+                                          propose_journey_field,
+                                          keyword_parse_flywheel,
+                                          propose_flywheel_field)
+    return {
+        'digital_journey': (
+            _pm_jiq_parse, _pm_jiq_inputs_complete,
+            ('subject', 'platform', 'conversion_event'),
+            _PM_JIQ_ASK_COPY, keyword_parse_journey,
+            propose_journey_field),
+        'flywheel': (
+            _pm_fw_parse, _pm_fw_inputs_complete,
+            ('subject', 'captured_action', 'ecosystem',
+             'conversion_event'),
+            _PM_FW_ASK_COPY, keyword_parse_flywheel,
+            propose_flywheel_field),
+        'brand_partnership': (
+            _pm_bpiq_parse, _pm_bpiq_inputs_complete,
+            ('brand_partner', 'qualifier', 'event_start', 'event_end'),
+            _PM_BPIQ_ASK_COPY, None, None),
+        'attribution': (
+            _pm_aiq_parse, _pm_aiq_inputs_complete,
+            ('campaign_name', 'urls', 'conversion_event'),
+            _PM_AIQ_ASK_COPY, None, None),
+    }
+
+
+@_H.app.route('/api/internal/intake-canary', methods=['POST'])
+def api_internal_intake_canary():
+    """Run one known-complete brief through a guided intake on THIS
+    deployment, exactly as the analyze route would, with no user, no
+    thread write, no charge, no ops alert (2026-10-02 Jenna: the test
+    suite catches code regressions; this catches model or transport
+    changes). Shared-secret auth: ``X-Synth-Auth`` must equal the
+    build server's SYNTH_QUEUE_SECRET, so only the nightly canary on
+    the build server can call it. Never a dashboard surface.
+
+    Reports two verdicts per brief: ``model_complete`` (the model read
+    alone, the signal the canary alerts on) and ``complete`` (after
+    the rules reader and any proposal, what the user would see).
+    """
+    import hmac as _hmac
+    secret = str(getattr(_H, 'SYNTH_QUEUE_SECRET', '') or '')
+    given = str(request.headers.get('X-Synth-Auth') or '')
+    if not secret or not _hmac.compare_digest(secret, given):
+        return jsonify({'error': 'not found'}), 404
+    body = request.get_json(silent=True) or {}
+    flow = str(body.get('flow') or '').strip()
+    text = str(body.get('text') or '').strip()
+    history = body.get('history') or []
+    table = _pm_intake_flow_table()
+    if flow not in table or not text:
+        return jsonify({'error': 'flow and text required',
+                        'flows': sorted(table)}), 400
+    parse_fn, complete_fn, required, ask_copy, fb, pr = table[flow]
+    t0 = time.time()
+    try:
+        model_parsed = parse_fn(text, usage_extras=None) or {}
+    except Exception as e:
+        traceback.print_exc()
+        model_parsed = {'_error': f'{type(e).__name__}: {e}'[:300]}
+    model_complete = bool(isinstance(model_parsed, dict)
+                          and complete_fn(model_parsed))
+    parsed, fault = _pm_intake_resolve(
+        flow, text, history, parse_fn, complete_fn, required, ask_copy,
+        user=None, usage_extras=None, fallback_fn=fb, propose_fn=pr,
+        alert=False)
+    return jsonify({
+        'success': True, 'flow': flow,
+        'model_complete': model_complete,
+        'model_found': [k for k in required if model_parsed.get(k)]
+        if isinstance(model_parsed, dict) else [],
+        'model_error': (model_parsed.get('_error')
+                        if isinstance(model_parsed, dict) else None),
+        'complete': bool(complete_fn(parsed)),
+        'fault': bool(fault),
+        'read_by': parsed.get('_read_by') or 'model',
+        'proposed': parsed.get('_proposed'),
+        'found': [k for k in required if parsed.get(k)],
+        'missing': [k for k in required if not parsed.get(k)],
+        'elapsed_s': round(time.time() - t0, 2),
+    })
 
 
 _PM_INTENT_HYDRATE_CACHE = {}
@@ -14625,19 +14784,25 @@ def _pm_analyze_core(user, body, text, history):
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('fw_inputs'):
+        from prometheus.intake_reader import (keyword_parse_flywheel,
+                                              propose_flywheel_field)
         _fparsed, _ffault = _pm_intake_resolve(
             'flywheel', text, history, _pm_fw_parse,
             _pm_fw_inputs_complete,
             ('subject', 'captured_action', 'ecosystem',
              'conversion_event'),
-            _PM_FW_ASK_COPY, user=user, usage_extras=_pm_ppu)
+            _PM_FW_ASK_COPY, user=user, usage_extras=_pm_ppu,
+            fallback_fn=keyword_parse_flywheel,
+            propose_fn=propose_flywheel_field)
         if _ffault and not _pm_fw_inputs_complete(_fparsed):
             return jsonify(_pm_intake_fault_payload())
         if _pm_fw_inputs_complete(_fparsed):
-            _fparsed.pop('missing', None)
+            _freply = _pm_intake_finish_confirm(
+                _fparsed, _pm_fw_confirm_reply(_fparsed),
+                'Run the flywheel')
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': _pm_fw_confirm_reply(_fparsed),
+                'reply': _freply,
                 'fw_confirm_payload': _fparsed,
                 'followups': ['Run the flywheel', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
@@ -14697,18 +14862,24 @@ def _pm_analyze_core(user, body, text, history):
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('jiq_inputs'):
+        from prometheus.intake_reader import (keyword_parse_journey,
+                                              propose_journey_field)
         _jparsed, _jfault = _pm_intake_resolve(
             'digital_journey', text, history, _pm_jiq_parse,
             _pm_jiq_inputs_complete,
             ('subject', 'platform', 'conversion_event'),
-            _PM_JIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+            _PM_JIQ_ASK_COPY, user=user, usage_extras=_pm_ppu,
+            fallback_fn=keyword_parse_journey,
+            propose_fn=propose_journey_field)
         if _jfault and not _pm_jiq_inputs_complete(_jparsed):
             return jsonify(_pm_intake_fault_payload())
         if _pm_jiq_inputs_complete(_jparsed):
-            _jparsed.pop('missing', None)
+            _jreply = _pm_intake_finish_confirm(
+                _jparsed, _pm_jiq_confirm_reply(_jparsed),
+                'Run the journey')
             return jsonify({
                 'success': True, 'action': 'answer',
-                'reply': _pm_jiq_confirm_reply(_jparsed),
+                'reply': _jreply,
                 'jiq_confirm_payload': _jparsed,
                 'followups': ['Run the journey', 'Cancel'],
                 'offer_deck': False, 'deck_angle': None})
@@ -17422,6 +17593,7 @@ _EXPORTS = (
     'api_synth_chat_rebind_window',
     'api_synth_chat_status',
     'api_synth_chat_threads',
+    'api_internal_intake_canary',
     'api_synth_chat_threads_activate',
     'api_synth_chat_threads_delete',
     'api_synth_chat_threads_new',
