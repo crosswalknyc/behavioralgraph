@@ -1250,6 +1250,57 @@ _TOPIC_STOP = {'give', 'show', 'what', 'which', 'most', 'common',
                'each', 'segmented', 'split', 'versus', 'does'}
 
 
+# Asks that are never a verbatim replay, whatever the stored corpus
+# holds (2026-10-02 S5, from the real ask log): a cut / pull / build
+# command ("Let's do one cut of males only" replayed a USA Today read),
+# a generic screen ask ("Analyze the data on this screen" replayed a
+# Paw Patrol read banked days earlier), and a complaint ("thats not
+# what i asked for" replayed the very entry being rejected). Each of
+# these is a request about NOW, not a repeat of a stored question.
+_REPLAY_COMMAND_RX = re.compile(
+    r"\b(?:let'?s do|lets do|do (?:a|one|two|another)|add(?: a| another)?"
+    r"|make(?: me)?(?: a)?|create|build|run|pull|download|export|save"
+    r"|send|email|open|cut)\b"
+    r"(?:(?!\bwho\b).){0,40}?"
+    r"\b(?:cuts?|profiles?|builds?|csv|file|deck|report|audience"
+    r"|males? only|females? only|consumers|data cuts?)\b", re.I)
+_REPLAY_GENERIC_RX = re.compile(
+    r"^\W*(?:please\s+)?(?:analy[sz]e|summari[sz]e|read|explain|review"
+    r"|interpret|walk me through|tell me about)\s+"
+    r"(?:the\s+)?(?:data\s+)?(?:on\s+)?(?:this|the|my|whats|what'?s)"
+    r"(?:\s+(?:screen|page|view|data|open|profile|dashboard|here))*"
+    r"\W*$", re.I)
+_REPLAY_COMPLAINT_RX = re.compile(
+    r"\b(?:not what i (?:asked|wanted|meant)|that'?s? (?:wrong|not right"
+    r"|not it|incorrect)|wrong answer|try again|doesn'?t answer"
+    r"|didn'?t answer|still wrong)\b", re.I)
+_REPLAY_MIN_TOPIC_TOKENS = 2
+
+
+def replay_eligible(question):
+    """True when the ask is the kind of question a stored read can
+    answer verbatim. Commands, generic screen asks, complaints, and
+    asks with no distinctive topic words run fresh every time; their
+    stored neighbours still ride the constraint block. Never raises."""
+    try:
+        q = str(question or '').strip()
+        if not q:
+            return False
+        if _REPLAY_GENERIC_RX.search(q):
+            return False
+        if _REPLAY_COMPLAINT_RX.search(q):
+            return False
+        if _REPLAY_COMMAND_RX.search(q):
+            return False
+        qn = normalize_question(q)
+        toks = [w for w in qn.split()
+                if len(w) >= 4 and w not in _TOPIC_STOP
+                and w not in _DIM_STOP]
+        return len(toks) >= _REPLAY_MIN_TOPIC_TOKENS
+    except Exception:
+        return True
+
+
 def _topic_stem(w):
     for suf in ('ing', 'ers', 'er', 'ed', 'es', 's'):
         if w.endswith(suf) and len(w) - len(suf) >= 4:
@@ -1277,7 +1328,12 @@ def _topical_overlap_ok(entry, qn, floor=0.34):
             str(entry.get('cohort') or '')).split())
         toks = [w for w in toks if w not in subj_toks]
         if not toks:
-            return True  # nothing distinctive to judge on
+            # Only the dimension and cohort words remain; those are
+            # judged by _dimension_ok and the cohort distance. Asks
+            # with no question in them at all (commands, generic
+            # screen asks) never reach here: replay_eligible gates
+            # them in consult (2026-10-02 S5).
+            return True
         # 2026-10-02 audit: one or two topic tokens used to pass
         # unjudged, which is how a short ask replayed an unrelated
         # read. With little signal, every token must land.
@@ -1508,10 +1564,14 @@ def consult(subject=None, question=None, metric_family=None,
     Never raises; empty result on any failure.
     """
     empty = {'subject': None, 'skey': None, 'entries': [],
-             'block': '', 'exact': None}
+             'block': '', 'exact': None, 'match': None}
     try:
         doc = _load_index()
         subjects = doc.get('subjects') or {}
+        # Verbatim replay needs an ask a stored read can answer
+        # (2026-10-02 S5). Commands, generic screen asks, and
+        # complaints still get their history in the block.
+        _can_replay = replay_eligible(question)
         skey = _resolve_subject(doc, subject=subject, question=question)
         if not skey:
             # Exact-ask replay must not depend on subject resolution:
@@ -1524,7 +1584,9 @@ def consult(subject=None, question=None, metric_family=None,
                        if isinstance(e, dict)]
             return {'subject': bucket.get('subject'), 'skey': gkey,
                     'entries': entries, 'block': render_block(entries),
-                    'exact': _exact_if_fresh(gexact)}
+                    'exact': (_exact_if_fresh(gexact) if _can_replay
+                              else None),
+                    'match': 'exact' if _can_replay else None}
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
                    if isinstance(e, dict)]
@@ -1534,18 +1596,27 @@ def consult(subject=None, question=None, metric_family=None,
         if metric_family:
             key = entry_key(bucket.get('subject') or subject or '',
                             metric_family, window_start, window_end)
+        match = None
         exact = find_exact(entries, question=question, key=key)
+        if exact:
+            match = 'exact'
         if not exact:
             gkey, gexact = _find_exact_anywhere(subjects, question)
             if gexact:
                 exact = gexact
+                match = 'exact'
         if not exact:
             # Meaning-level replay (2026-08-27): same family + cohort +
             # slice dimension = the same read, whatever the wording.
             exact = find_semantic(entries, question)
+            if exact:
+                match = 'semantic'
+        if not _can_replay:
+            exact, match = None, None
+        exact = _exact_if_fresh(exact)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),
-                'exact': _exact_if_fresh(exact)}
+                'exact': exact, 'match': match if exact else None}
     except Exception as e:
         print(f"[insights-ledger] consult failed: {e}")
         return empty

@@ -10902,6 +10902,66 @@ _PM_CLARIFY_TURN_RE = re.compile(
     r"(?:do|did) you want this on |which audience should i use", re.I)
 
 
+_PM_CLARIFY_DECLINE_WORDS = frozenset((
+    'no', 'nope', 'neither', 'something else', 'not that', 'none',
+    'none of those', 'none of these', 'not those', 'not these',
+    'not that one', 'no thanks', 'not on screen', 'not the screen',
+    'not whats open', "not what's open", 'different audience',
+    'a different one'))
+
+# "answer this now: <question>" and its cousins (2026-10-02 S5, scott
+# on 2026-09-30 typed it after two open-screen questions and got the
+# question a third time). The prefix is a command: do not ask again.
+_PM_ANSWER_NOW_RE = re.compile(
+    r"^\W*(?:(?:just|please|ok|okay)[\s,]+)*"
+    r"(?:answer (?:this|it|me|the question)(?: now| already| please)?"
+    r"|stop asking(?: me)?(?: questions)?|don'?t ask(?: me)?(?: again)?"
+    r"|no (?:more )?questions|skip the question|just tell me)"
+    r"\s*[:,.!-]*\s*", re.I)
+
+
+def _pm_answer_now_strip(text):
+    """Return (clean_text, True) when the ask opens with an answer-now
+    command, else (text, False). Only strips when a real question is
+    left over."""
+    t = str(text or '')
+    m = _PM_ANSWER_NOW_RE.match(t)
+    if not m:
+        return t, False
+    rest = t[m.end():].strip()
+    if len(rest) < 8:
+        return t, False
+    return rest, True
+
+
+def _pm_answer_now_active():
+    try:
+        from flask import g as _g
+        return bool(getattr(_g, '_pm_answer_now', False))
+    except Exception:
+        return False
+
+
+def _pm_clarify_declined(history, text):
+    """True when the previous agent turn was the open-screen or
+    which-audience question and this turn turns it down ("no",
+    "neither", "something else"). The original ask then runs AWAY
+    from the page, never back into the same question (2026-10-02 S5)."""
+    tl = str(text or '').strip().lower().strip(' .!?')
+    if tl not in _PM_CLARIFY_DECLINE_WORDS:
+        return False
+    turns = [h for h in (history or []) if isinstance(h, dict)]
+    for i in range(len(turns) - 1, -1, -1):
+        role = str(turns[i].get('role') or '').lower()
+        if role in ('agent', 'assistant'):
+            last_agent = str(turns[i].get('text')
+                             or turns[i].get('content') or '')
+            return bool(_PM_CLARIFY_TURN_RE.search(last_agent))
+        if role == 'user':
+            return False
+    return False
+
+
 def _pm_clarify_answer_merge(history, text):
     """When the previous agent turn asked which audience the ask is
     about, this turn is the answer. Merge it back into the question
@@ -11190,6 +11250,11 @@ def _pm_open_screen_confirm(text, ctx):
     # points at it; general asks answer as if nothing were open; only
     # the cut-vs-parent tension still confirms.
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
+    if verdict == 'confirm' and _pm_answer_now_active():
+        # The reader said answer now: the thing on their screen is
+        # the answer's base, stated in the reply with the other file
+        # as a switch chip. No third question (2026-10-02 S5).
+        verdict = 'page'
     if verdict == 'page':
         _pm_ask_hint(route='screen_bind', outcome='bound_screen',
                      subject=page)
@@ -15417,6 +15482,17 @@ def _pm_analyze_core(user, body, text, history):
     # run actually matches the named subject; everything else falls
     # through untouched.
     _st_lane = _pm_status_lane(user, text)
+    # "answer this now: <question>" is a command, not part of the
+    # question (2026-10-02 S5). Strip it and remember it for the
+    # open-screen confirm, which then binds instead of asking again.
+    try:
+        _an_text, _an_flag = _pm_answer_now_strip(text)
+        if _an_flag:
+            from flask import g as _g_an
+            text = _an_text
+            _g_an._pm_answer_now = True
+    except Exception:
+        traceback.print_exc()
     if _st_lane:
         _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
         _pm_ask_hint(route='status_check', outcome=_st_outcome,
@@ -15642,7 +15718,18 @@ def _pm_analyze_core(user, body, text, history):
         # An answer to the which-audience clarify is consumed here:
         # merge it into the question that triggered the clarify and
         # never re-ask (Casey Pearson, 2026-09-29).
+        _ca_declined = _pm_clarify_declined(history, text)
         _ca_merged = _pm_clarify_answer_merge(history, text)
+        if _ca_merged and _ca_declined:
+            # "No" / "neither" / "something else" to the open-screen
+            # question: the original ask runs away from the page, the
+            # page rides as a switch chip, and the question is never
+            # asked again (2026-10-02 S5).
+            _pm_ask_hint(route='clarify_declined', outcome='answered_away')
+            return _pm_generate_metrics_response(
+                user, _ca_merged, history,
+                switch_page=str((ctx.get('primary') or {}).get('name')
+                                or '').strip())
         if _ca_merged:
             text = _ca_merged
             try:
