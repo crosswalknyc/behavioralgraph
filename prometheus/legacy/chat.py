@@ -31,6 +31,7 @@ import pandas as pd
 import boto3
 
 from prometheus.legacy import H as _H  # noqa: E402
+from prometheus import seams as _seams  # noqa: E402
 
 
 def _pm_correct_page(title, body_html):
@@ -5332,10 +5333,10 @@ def _pm_unpack_resp(resp):
         payload = actual.get_json(silent=True)
     except Exception:
         payload = None
-    if isinstance(payload, dict) and isinstance(payload.get('raw'), dict) \
-            and payload.get('surface') in ('interpret', 'analyze', 'deck'):
+    if _seams.schema_of(payload) == 'envelope' \
+            and isinstance(payload.get('raw'), dict):
         envelope = payload
-        payload = payload['raw']
+        payload = _seams.unwrap(payload)
     return actual, status_code, payload, envelope
 
 
@@ -8380,7 +8381,7 @@ def api_synth_chat_approve():
                            or draft.get('user_prompt')
                            or draft.get('subject')
                            or spec.get('name') or '').strip())[:4000]
-    payload = {
+    payload = _seams.tag_queue({
         'user_email': user.get('email') or user.get('username') or 'unknown',
         'username': _approve_username or (user.get('username') or ''),
         'prompt': _approve_prompt,
@@ -8388,7 +8389,7 @@ def api_synth_chat_approve():
         'email_to': email_to,
         'spec': spec,
         'decision': decision,
-    }
+    })
     if decision in ('derive_cut', 'time_shifted_refresh', 'cut_needs_parent'):
         payload['parent_s3_key'] = ex_key or ''
     if decision in ('derive_cut', 'cut_needs_parent'):
@@ -9052,12 +9053,13 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                             and _pm_resolved_model['name'] != m:
                         print(f"[prometheus] analysis model resolved: {m}")
                         _pm_resolved_model['name'] = m
-                return result
+                return _seams.tag_model(result)
             print(f"[prometheus] model {m} failed "
                   f"({str(result.get('error') or '')[:160]}); trying next")
             last = result
-    return last or {'success': False, 'status': 503,
-                    'error': 'no reasoning model available'}
+    return _seams.tag_model(
+        last or {'success': False, 'status': 503,
+                 'error': 'no reasoning model available'})
 
 
 def _pm_claude_data(system_prompt, user_prompt, **kw):
@@ -9071,10 +9073,10 @@ def _pm_claude_data(system_prompt, user_prompt, **kw):
     Prime Video) and the research step raised 'returned no
     primitives'."""
     result = _pm_claude_json(system_prompt, user_prompt, **kw)
-    if isinstance(result, dict) and result.get('success'):
-        data = result.get('data')
-        return data if isinstance(data, dict) else {}
-    return {}
+    if not isinstance(result, dict) or not result.get('success'):
+        return {}
+    data = _seams.unwrap(result)
+    return data if isinstance(data, dict) else {}
 
 
 _PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
@@ -13538,6 +13540,7 @@ def _pm_save_thread_or_active(username, tid, history):
 
 
 def _pm_read_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'read')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_READ_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -16179,6 +16182,7 @@ def _pm_analyze_core(user, body, text, history):
 
 
 def _pm_deck_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'deck')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_DECK_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -16229,6 +16233,7 @@ def _pm_bpiq_intent(text):
 
 
 def _pm_bpiq_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'bpiq')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_BPIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -16414,6 +16419,7 @@ def _pm_jiq_intent(text):
 
 
 def _pm_jiq_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'jiq')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_JIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -16603,6 +16609,7 @@ def _pm_fw_intent(text):
 
 
 def _pm_fw_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'fw')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_FW_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),
@@ -16753,6 +16760,7 @@ def _pm_aiq_stop_intent(text):
 
 
 def _pm_aiq_status_write(job_id, payload):
+    payload = _seams.tag_job(payload, 'aiq')
     _H.s3_client.put_object(
         Bucket=_H.S3_BUCKET, Key=f"{_PM_AIQ_JOB_PREFIX}{job_id}.json",
         Body=json.dumps(payload).encode('utf-8'),

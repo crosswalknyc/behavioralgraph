@@ -25,6 +25,8 @@ scrub of infrastructure words from ``text``.
 """
 import re
 
+from . import seams as _seams
+
 _JOB_KEYS = (
     ('read_job_id', 'read'),
     ('deck_job_id', 'deck'),
@@ -112,6 +114,7 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         text = text or 'Nothing came back for that one. Try asking it another way.'
 
     env = {
+        'schema': _seams.ENVELOPE,
         'success': kind not in ('error',),
         'kind': kind,
         'text': text,

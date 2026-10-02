@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from .host import host
 from . import understand
 from . import envelope
+from . import seams
 
 _SURFACES = ('interpret', 'analyze', 'deck')
 _ANALYZE_PASSTHROUGH = ('bind_subject', 'bind_cohort', 'overall_ranks',
@@ -602,9 +603,14 @@ def job_status(user, job_id, *, via='session'):
         status = str(payload.get('status') or 'running').lower()
         out = {'success': True, 'job': {'id': jid, 'type': jtype,
                                         'status': status}}
-        if status in ('done', 'complete', 'completed', 'ready'):
+        if status in ('done', 'complete', 'completed', 'ready', 'held'):
+            # The status document is transport; the read (or the deck
+            # link, or where the tool output landed) is the content.
+            # Wrapping the document itself handed API callers the
+            # user's own question as the result text (2026-10-02 RCA).
+            content = seams.unwrap(seams.tag_job(dict(payload), jtype))
             out['result'] = envelope.wrap(
-                payload, surface=('deck' if jtype == 'deck' else 'analyze'),
+                content, surface=('deck' if jtype == 'deck' else 'analyze'),
                 decision={'reason': 'job_result'}, via=via)
         elif status in ('error', 'failed'):
             out['result'] = {'kind': 'error', 'text': (

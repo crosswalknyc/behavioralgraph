@@ -177,6 +177,21 @@ def routing_table():
                     'client_actions': sorted(_rt.CLIENT_ACTIONS)})
 
 
+@bp.route('/schemas', methods=['GET'])
+@_guarded('prometheus/schemas')
+def schemas():
+    """The schema versions this build speaks on every seam (reply
+    envelope, model transport, job documents, queue payloads). A
+    client checks the envelope tag against this before trusting a
+    shape (2026-10-02 RCA W3)."""
+    user, via, err = _auth()
+    if err:
+        return err
+    from . import seams as _seams
+    return jsonify({'success': True, 'version': __version__,
+                    'schemas': _seams.versions()})
+
+
 @bp.route('/threads', methods=['GET'])
 @_guarded('prometheus/threads')
 def threads_list():

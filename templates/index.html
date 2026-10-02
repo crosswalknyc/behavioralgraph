@@ -83527,12 +83527,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             b.client = 'dashboard';
             return { url: '/api/prometheus/v1/ask', body: b };
         }
+        // The envelope carries its schema tag (pm.envelope.v1). The
+        // widget speaks v1; a newer major is unwrapped the same way
+        // and noted once so a silent shape change never passes as a
+        // blank reply (2026-10-02 RCA W3).
+        var _PM_ENVELOPE_SCHEMA = 'pm.envelope.v1';
+        var _pmSchemaNoted = false;
         function _pmV1Unwrap(data) {
-            if (data && typeof data === 'object' && data.kind &&
-                Object.prototype.hasOwnProperty.call(data, 'raw')) {
-                return data.raw;
+            if (!data || typeof data !== 'object') return data;
+            var tag = String(data.schema || '');
+            var isEnvelope = tag.indexOf('pm.envelope.') === 0 ||
+                (data.kind && Object.prototype.hasOwnProperty.call(data, 'raw'));
+            if (!isEnvelope) return data;
+            if (tag && tag !== _PM_ENVELOPE_SCHEMA && !_pmSchemaNoted) {
+                _pmSchemaNoted = true;
+                try { console.warn('[prometheus] envelope schema ' + tag +
+                                   ' (widget speaks ' + _PM_ENVELOPE_SCHEMA + ')'); }
+                catch (_) {}
             }
-            return data;
+            return Object.prototype.hasOwnProperty.call(data, 'raw') ? data.raw : data;
         }
         async function _synthChatFetchJson(url, body, signal) {
             window._pmLastActivityAt = Date.now();
