@@ -3440,6 +3440,47 @@ def _pm_subiq_platform_only_question(spec_draft, text):
     }
 
 
+def _pm_note_existing_subiq_read(spec_draft):
+    """Adds a plain note to a Subscriber IQ draft when the library
+    already holds a read for its title: 'X already has a Subscriber IQ
+    read (finished <date>); approving builds a fresh copy.'"""
+    if not isinstance(spec_draft, dict):
+        return
+    import prometheus_analysis as _pma
+    title = ''
+    for k in ('title', 'show', 'subject', 'name'):
+        v = spec_draft.get(k)
+        if isinstance(v, str) and v.strip():
+            title = v.strip()
+            break
+    if not title:
+        return
+    rows = _pma.match_subiq_shows(_H.s3_client, _H.SUBSCRIBER_S3_BUCKET,
+                                  title, limit=1)
+    if not rows:
+        return
+    show, _key, lm = rows[0]
+    when = ''
+    try:
+        from datetime import datetime as _dt
+        when = _dt.strptime(str(lm or '')[:16],
+                            '%Y-%m-%dT%H:%M').strftime('%b %-d, %Y')
+    except Exception:
+        when = ''
+    note = (f"{show} already has a Subscriber IQ read in the library"
+            + (f" (finished {when})" if when else '')
+            + ". Approving builds a fresh copy; to view the existing "
+            "one for free, open it from the Subscriber IQ tab.")
+    spec_draft['existing_subiq_show'] = show
+    spec_draft['existing_subiq_note'] = note
+    assumptions = spec_draft.get('assumptions')
+    if isinstance(assumptions, list):
+        if note not in assumptions:
+            assumptions.insert(0, note)
+    else:
+        spec_draft['assumptions'] = [note]
+
+
 def _pm_pricing_question(text):
     """True when the ask is about what things COST. Balance and usage
     asks ('how many credits do I have left'), category mentions
@@ -5368,6 +5409,60 @@ def _pm_interpret_core(user, body, text, history):
     if _pm_pricing_question(text):
         return jsonify({'success': False, 'guidance': True,
                         'error': _PM_PRICING_COPY})
+    # Subscriber IQ lookup (2026-10-02 Bria): "do you see the X
+    # Subscriber IQ?" reaching the build surface answers from the
+    # library instead of drafting a duplicate order.
+    try:
+        from prometheus import guards as _pg_lk
+        _lk_title = _pg_lk.subiq_lookup_title(text)
+    except Exception:
+        _lk_title = ''
+    if _lk_title:
+        _lk_reply, _lk_chips = _pm_subiq_lookup_answer(user, _lk_title)
+        try:
+            _pm_ask_hint(route='subiq_lookup', outcome='answered',
+                         subject=_lk_title if _lk_title != '*' else '')
+        except Exception:
+            pass
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _lk_reply, 'followups': _lk_chips})
+    # A question about reads the library already holds (compare two
+    # titles' first three days, which had more new accounts) answers
+    # from those reads instead of drafting a new order (2026-10-02
+    # Bria). Pull verbs still draft.
+    try:
+        from prometheus import guards as _pg_q
+        import prometheus_analysis as _pma_q
+        _lib_q = (not _pg_q.subiq_is_explicit_pull(text)
+                  and _pg_q.is_question_shaped(text)
+                  and bool(_pma_q.find_subiq_titles_in_text(
+                      _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, text)))
+    except Exception:
+        traceback.print_exc()
+        _lib_q = False
+    if _lib_q:
+        try:
+            _pm_ask_hint(route='subiq_library_answer')
+        except Exception:
+            pass
+        _lib_resp = _pm_generate_metrics_response(user, text, history)
+        try:
+            _lib_raw = _lib_resp.get_json(silent=True) or {}
+        except Exception:
+            _lib_raw = {}
+        if _lib_raw.get('success') and _lib_raw.get('reply'):
+            _out = {'success': False, 'guidance': True,
+                    'analysis_read': True,
+                    'error': str(_lib_raw['reply'])}
+            for _k in ('read_job_id', 'memory_confirm', 'panel_offer',
+                       'referent_clarify', 'file_link'):
+                if _lib_raw.get(_k):
+                    _out[_k] = _lib_raw[_k]
+            if _lib_raw.get('followups'):
+                _out['followups'] = [str(f) for f in _lib_raw['followups']
+                                     if f][:4]
+            return jsonify(_out)
+        return _lib_resp
     # Work-order verbs (2026-09-30 Jenna): 'stop' / 'status' /
     # 'how long' on the build surface must never draft a build.
     _wo_intent = _pm_workorder_intent(text)
@@ -6147,6 +6242,13 @@ def _pm_interpret_core(user, body, text, history):
                 return jsonify(_plat_q)
             _H._apply_subiq_guards(spec_draft, text)
             needs_date_clarification = False
+            # Already in the library (2026-10-02): the brief says so
+            # before anyone approves a second copy. An explicit pull
+            # still builds (a fresh window is a legitimate re-pull).
+            try:
+                _pm_note_existing_subiq_read(spec_draft)
+            except Exception:
+                traceback.print_exc()
         # Future-window guard (2026-08-25): runs AFTER every window
         # binder so it sees the final dates. Windows that spill past
         # today clamp to today with an echo; entirely-future windows
@@ -9166,6 +9268,66 @@ _PM_WO_CANCEL_RE = re.compile(
     r"putting|adding|including|counting|saying|repeating)\b)"
     r"(?P<tail>(?:\s+(?:it|that|this|everything|all|the|my))?"
     r"[\w .&'-]{0,50}?)\s*[.!]*\s*$", re.I)
+
+
+def _pm_subiq_lookup_answer(user, title):
+    """Answer "do you see the X Subscriber IQ?" from the library and
+    the caller's own runs (2026-10-02, Bria: the question drafted a
+    10-credit duplicate of a read finished twelve hours earlier).
+    Returns (reply, followups). Never charges, never drafts."""
+    import prometheus_analysis as _pma
+    title = str(title or '').strip()
+    rows = []
+    try:
+        if title == '*':
+            rows = _pma.list_subiq_shows(
+                _H.s3_client, _H.SUBSCRIBER_S3_BUCKET)[:5]
+        else:
+            rows = _pma.match_subiq_shows(
+                _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, title)
+    except Exception:
+        traceback.print_exc()
+        rows = []
+
+    def _when(lm):
+        try:
+            from datetime import datetime as _dt
+            d = _dt.strptime(str(lm or '')[:16], '%Y-%m-%dT%H:%M')
+            return d.strftime('%b %-d, %Y')
+        except Exception:
+            return ''
+
+    if rows:
+        if title == '*':
+            names = ', '.join(r[0] for r in rows)
+            return (f"The newest Subscriber IQ reads in the library are "
+                    f"{names}. Name one and I will pull it up, or open "
+                    f"any of them from the Subscriber IQ tab.",
+                    [f"Analyze {rows[0][0]}"])
+        show, _key, lm = rows[0]
+        when = _when(lm)
+        lead = (f"Yes. {show} is in the Subscriber IQ library"
+                + (f" (finished {when})." if when else "."))
+        if len(rows) > 1:
+            others = ', '.join(r[0] for r in rows[1:])
+            lead += f" {others} {'is' if len(rows) == 2 else 'are'} there too."
+        reply = (lead + " Open it from the Subscriber IQ tab, or ask me "
+                 "about it here. No credits to view it.")
+        return reply, [f"Analyze {show}",
+                       f"Top 3 insights on {show}"]
+    # Not in the library: still building?
+    try:
+        runs = _pm_status_matching_runs(user, title) if title != '*' else []
+    except Exception:
+        runs = []
+    if runs:
+        return _pm_status_reply_for_runs(runs), []
+    nice = title if title != '*' else 'that title'
+    return (f"I do not see a Subscriber IQ for {nice} yet. I can build "
+            f"it: {_H.CREDITS_SVOD} credits on approval, and it lands in "
+            f"the Subscriber IQ tab when it finishes.",
+            [f"Pull Subscriber IQ for {nice}"] if title != '*' else [])
+
 
 
 def _pm_workorder_intent(text):
@@ -14583,6 +14745,24 @@ def _pm_analyze_core(user, body, text, history):
                           'I will set up the email.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
+    # SUBSCRIBER IQ LOOKUP (2026-10-02 Bria): "Do you see the SWAT
+    # Exiles Season 1 Subscriber IQ?" is answered from the library and
+    # the caller's runs. It never reaches the Subscriber IQ build
+    # re-route below, so a read that already exists is never offered
+    # again for credits.
+    try:
+        from prometheus import guards as _pg_lk
+        _lk_title = _pg_lk.subiq_lookup_title(text)
+    except Exception:
+        _lk_title = ''
+    if _lk_title:
+        _lk_reply, _lk_chips = _pm_subiq_lookup_answer(user, _lk_title)
+        _pm_ask_hint(route='subiq_lookup', outcome='answered',
+                     subject=_lk_title if _lk_title != '*' else '')
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': _lk_reply,
+            'followups': _lk_chips, 'offer_deck': False,
+            'deck_angle': None})
     # STATUS-CHECK INTERCEPT (2026-09-28 Jenna): "is eastside golf
     # running?" answers from the caller's own runs. Fires only when a
     # run actually matches the named subject; everything else falls
@@ -14705,8 +14885,36 @@ def _pm_analyze_core(user, body, text, history):
     # build surface's promotion machinery: hand the widget a re-route.
     # The widget already respects action='build_profile' as "fall
     # through to the interpret flow"; route_hint makes it explicit.
-    if _route == 'subiq' or (_route == 'clarify'
-                             and _route_d.get('why') == 'subiq_fork'):
+    # A QUESTION about reads the library already holds answers from
+    # them (2026-10-02 Bria: "compare the first three days of Outlander
+    # Blood of My Blood Season 2 to the first three days of SWAT Exiles
+    # Season 1" was handed to the build flow and came back as a new
+    # 10-credit order). Only a question with no pull verb and at
+    # least one named library title stays here; everything else still
+    # re-routes to the Subscriber IQ build flow.
+    _subiq_answerable = False
+    if _route == 'subiq':
+        try:
+            from prometheus import guards as _pg_sq
+            import prometheus_analysis as _pma_sq
+            if (not _pg_sq.subiq_is_explicit_pull(text)
+                    and _pg_sq.is_question_shaped(text)
+                    and _pma_sq.find_subiq_titles_in_text(
+                        _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, text)):
+                _subiq_answerable = True
+        except Exception:
+            traceback.print_exc()
+    if _subiq_answerable:
+        _pm_ask_hint(route='subiq_library_answer')
+        if not ctx:
+            # No screen open: the reasoned-read path carries the
+            # named titles' Subscriber IQ evidence blocks itself.
+            return _pm_generate_metrics_response(user, text, history)
+        _route = 'analysis'
+        _route_d['route'] = 'analysis'
+        _route_d['why'] = 'subiq_library_answer'
+    elif _route == 'subiq' or (_route == 'clarify'
+                               and _route_d.get('why') == 'subiq_fork'):
         _pm_ask_hint(route='subiq_reroute', outcome='rerouted')
         return jsonify({
             'success': True, 'action': 'build_profile',

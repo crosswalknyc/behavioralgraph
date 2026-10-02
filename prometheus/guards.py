@@ -23,6 +23,15 @@ module, and the tests all run the same code.
     question that merely mentions new or reactivated viewers while
     reading the open Subscriber IQ page is a question, not a build.
 
+``subiq_lookup_title(text)``
+    "Do you see the SWAT Exiles Season 1 Subscriber IQ?" is a library
+    lookup, not an order. Returns the title named in an existence /
+    where-is / is-it-ready question about a Subscriber IQ read, else
+    ''. The caller answers from the library (and the caller's own
+    runs); nothing is drafted and nothing is charged (Bria,
+    2026-10-02: the question came back as a 10-credit build offer for
+    a read that had been finished for twelve hours).
+
 ``bare_reply_kind(text)``
     'affirm' | 'negative' | 'number' | 'none' | 'other' | None for a
     message that is only an acknowledgement, a pick, or a refusal.
@@ -127,6 +136,79 @@ def subiq_is_explicit_pull(text):
     if _SUBIQ_PRODUCT_RX.search(t) and not is_question_shaped(t):
         return True
     return False
+
+
+_SUBIQ_TAIL_RX = re.compile(
+    r'\s*(?:subscriber\s*iq|sub\s*iq|subiq)?'
+    r'(?:\s+(?:read|report|file|run|build|pull|results?|data|page|tab))*'
+    r'\s*$', re.I)
+_SUBIQ_LEAD_RX = re.compile(
+    r'^\s*(?:the|a|an|my|our|that|this)\s+', re.I)
+_SUBIQ_LOOKUP_RXS = (
+    # do you see / have / find ... the X Subscriber IQ?
+    re.compile(
+        r'^\s*(?:do|can|could|did)\s+(?:you|we|u)\s+'
+        r'(?:see|have|find|locate|show|pull\s+up|open|access|spot|'
+        r'already\s+have|still\s+have|have\s+access\s+to|see\s+a|'
+        r'see\s+the)\s+(?P<title>.+?)\s*\??\s*$', re.I),
+    # is there a Subscriber IQ for X / on X?
+    re.compile(
+        r'^\s*(?:is|are)\s+there\s+(?:a|an|any|the)?\s*'
+        r'(?:subscriber\s*iq|sub\s*iq|subiq)(?:\s+(?:read|report|file))?'
+        r'\s+(?:for|on|of|about)\s+(?P<title>.+?)\s*\??\s*$', re.I),
+    # is the X Subscriber IQ ready / there / live / done / in the library?
+    re.compile(
+        r'^\s*(?:is|has)\s+(?P<title>.+?)\s+'
+        r'(?:ready|there|live|done|finished|complete(?:d)?|available|'
+        r'up|posted|landed|back|in\s+(?:the\s+)?library|in\s+there|'
+        r'in\s+(?:the\s+)?(?:subscriber\s*iq\s+)?tab)(?:\s+yet)?'
+        r'\s*\??\s*$', re.I),
+    # where is / find the X Subscriber IQ?
+    re.compile(
+        r'^\s*(?:where\s+is|where\'?s|wheres|find|show\s+me|locate)\s+'
+        r'(?P<title>.+?)\s*\??\s*$', re.I),
+    # did / has the X Subscriber IQ land / come back / finish?
+    re.compile(
+        r'^\s*(?:did|has|have)\s+(?P<title>.+?)\s+'
+        r'(?:land(?:ed)?|come\s+back|finish(?:ed)?|complete(?:d)?|'
+        r'post(?:ed)?|show(?:ed)?\s+up|run(?:\s+yet)?|go\s+through)'
+        r'(?:\s+yet)?\s*\??\s*$', re.I),
+)
+
+
+def subiq_lookup_title(text):
+    """Title named in an existence / location / is-it-ready question
+    about a Subscriber IQ read, else ''. The product must be named in
+    the message (profile lookups have their own catalog paths), and an
+    explicit pull order never matches."""
+    t = str(text or '').strip()
+    if not t or len(t) > 200:
+        return ''
+    if not _SUBIQ_PRODUCT_RX.search(t):
+        return ''
+    if _SUBIQ_PULL_RX.search(t):
+        return ''
+    for rx in _SUBIQ_LOOKUP_RXS:
+        m = rx.match(t)
+        if not m:
+            continue
+        title = m.group('title').strip()
+        title = _SUBIQ_LEAD_RX.sub('', title).strip()
+        title = re.sub(r'^(?:subscriber\s*iq|sub\s*iq|subiq)\s+'
+                       r'(?:for|on|of|about)\s+', '', title, flags=re.I)
+        title = _SUBIQ_TAIL_RX.sub('', title).strip()
+        title = _SUBIQ_LEAD_RX.sub('', title).strip()
+        title = title.strip(' .,;:!?"\'')
+        if (not title or _SUBIQ_PRODUCT_RX.fullmatch(title)
+                or title.lower() in ('the', 'a', 'an', 'my', 'that', 'this',
+                                     'it', 'one')):
+            # "do you see the subscriber iq?" names no title; the
+            # caller lists what is there instead.
+            return '*'
+        if len(title.split()) > 10:
+            return ''
+        return title
+    return ''
 
 
 def subiq_question_not_build(text, has_ctx=False):

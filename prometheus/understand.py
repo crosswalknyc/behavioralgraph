@@ -245,6 +245,17 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
     except Exception:
         pass
 
+    # 2d. "Do you see the X Subscriber IQ?" is a library lookup. It is
+    #     answered from the library and the caller's runs on the
+    #     analyze surface, with or without data open (2026-10-02 Bria:
+    #     it drafted a 10-credit duplicate of a finished read).
+    try:
+        if guards.subiq_lookup_title(t):
+            d.update(surface='analyze', reason='subiq_lookup')
+            return d
+    except Exception:
+        pass
+
     # 3. Subscriber IQ asks are build requests, even with a profile open.
     #    A question ABOUT the open Subscriber IQ page, or about what
     #    the product can do, is a question (2026-10-02 audit: "Is that

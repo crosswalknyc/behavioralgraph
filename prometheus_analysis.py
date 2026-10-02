@@ -1487,7 +1487,10 @@ def _load_subiq_index(s3_client, subiq_bucket):
                     key = obj.get('Key') or ''
                     if (not key.endswith('.csv')
                             or key.startswith('historic/')
-                            or key.startswith('purgatory/')):
+                            or key.startswith('purgatory/')
+                            or key.startswith('_backups/')
+                            or '/_backups/' in key
+                            or '.pre_' in key):
                         continue
                     stem = key.rsplit('/', 1)[-1][:-4]
                     m = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
@@ -1499,12 +1502,119 @@ def _load_subiq_index(s3_client, subiq_bucket):
                 tk = _xmod_title_key(show)
                 if tk:
                     index[tk] = (show, key)
+            # Season-aware per-file list for the library lookup and
+            # the multi-title evidence path (2026-10-02): the title
+            # key collapses "Season 1" and "Season 2" of one show
+            # into a single slot, which is right for anchoring but
+            # wrong for "do you see the Season 1 read".
+            shows = []
+            for lm, show, key in reversed(entries):
+                try:
+                    lm_s = lm.strftime('%Y-%m-%dT%H:%MZ') if lm else ''
+                except Exception:
+                    lm_s = ''
+                shows.append((show, key, lm_s))
+            with _xmod_lock:
+                _xmod_subiq_index_cache['shows'] = shows
         except Exception:
             index = {}
     with _xmod_lock:
         if index or _xmod_subiq_index_cache['index'] is None:
             _xmod_subiq_index_cache.update(ts=now, index=index)
         return _xmod_subiq_index_cache['index'] or {}
+
+
+def list_subiq_shows(s3_client, subiq_bucket):
+    """Every Subscriber IQ file in the library as (show, s3_key,
+    last_modified_iso), newest first, one entry per file (season-aware).
+    Shares the index LIST and its TTL cache."""
+    _load_subiq_index(s3_client, subiq_bucket)
+    with _xmod_lock:
+        return list(_xmod_subiq_index_cache.get('shows') or [])
+
+
+_SUBIQ_NORM_DOTS_RE = re.compile(r'\b(?:[A-Za-z]\.){2,}')
+
+
+def _subiq_norm(s):
+    """Lowercase, 'S.W.A.T.' -> 'swat', punctuation to spaces, single
+    spaces. Season words normalized so 'season 1', 'S1', 'ssn 1' agree."""
+    t = str(s or '')
+    t = _SUBIQ_NORM_DOTS_RE.sub(lambda m: m.group(0).replace('.', ''), t)
+    t = t.lower()
+    t = re.sub(r'\b(?:ssn|sea|seas)\.?\s*(\d{1,2})\b', r'season \1', t)
+    t = re.sub(r'\bs(\d{1,2})\b(?!\d)', r'season \1', t)
+    t = re.sub(r'[^a-z0-9]+', ' ', t)
+    return re.sub(r'\s+', ' ', t).strip()
+
+
+_SUBIQ_LOOKUP_DROP = frozenset((
+    'the', 'a', 'an', 'my', 'our', 'read', 'report', 'file', 'run',
+    'build', 'pull', 'on', 'for', 'of', 'series', 'show', 'title',
+    'complete', 'ssn', 'latest', 'new', 'viewers', 'watchers',
+    'subscribers', 'audience', 'fans',
+))
+
+
+def match_subiq_shows(s3_client, subiq_bucket, phrase, limit=3):
+    """Library entries that answer a lookup for ``phrase``: exact
+    normalized name first, then every entry whose tokens contain all
+    the phrase's tokens (so 'SWAT Exiles' finds 'SWAT Exiles Season 1'
+    and 'SWAT Exiles Season 2'), then the reverse containment when the
+    phrase is more specific than the file name. Newest first, at most
+    ``limit``. [] when nothing in the library matches."""
+    want_full = _subiq_norm(phrase)
+    want = {w for w in want_full.split() if w not in _SUBIQ_LOOKUP_DROP}
+    if not want:
+        return []
+    exact, contains, contained = [], [], []
+    for show, key, lm in list_subiq_shows(s3_client, subiq_bucket):
+        have_full = _subiq_norm(show)
+        have = {w for w in have_full.split() if w not in _SUBIQ_LOOKUP_DROP}
+        if not have:
+            continue
+        if have_full == want_full or have == want:
+            exact.append((show, key, lm))
+        elif want <= have:
+            contains.append((show, key, lm))
+        elif have <= want and len(have) >= 2:
+            contained.append((show, key, lm))
+    out, seen = [], set()
+    for row in exact + contains + contained:
+        if row[0] in seen:
+            continue
+        seen.add(row[0])
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def find_subiq_titles_in_text(s3_client, subiq_bucket, text, limit=3):
+    """Every library title the message names (season-aware, whitespace
+    and punctuation tolerant), longest name first, one entry per show.
+    Used to answer compare / which-title questions from the library
+    instead of drafting a new build."""
+    t = ' ' + _subiq_norm(text) + ' '
+    if len(t) < 6:
+        return []
+    hits = []
+    for show, key, lm in list_subiq_shows(s3_client, subiq_bucket):
+        n = _subiq_norm(show)
+        if len(n) < 4:
+            continue
+        if (' ' + n + ' ') in t:
+            hits.append((len(n), show, key, lm))
+    hits.sort(key=lambda h: -h[0])
+    out, seen = [], set()
+    for _ln, show, key, lm in hits:
+        if show in seen:
+            continue
+        seen.add(show)
+        out.append((show, key, lm))
+        if len(out) >= limit:
+            break
+    return out
 
 
 _deliv_index_cache = {'ts': 0.0, 'data': None}
@@ -2246,6 +2356,23 @@ def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
     if s3_client is None or not subiq_bucket or parser is None:
         return '', None
     try:
+        # Several library titles named in one ask ("compare the first
+        # three days of X to Y", 2026-10-02): every named read rides
+        # the prompt so the comparison is answered from the data, on
+        # the screen path and the no-screen generated-read path alike.
+        named = find_subiq_titles_in_text(s3_client, subiq_bucket, text)
+        if len(named) >= 2:
+            blocks, shows = [], []
+            for show, key, _lm in named:
+                if skip_show and _subiq_norm(skip_show) == _subiq_norm(show):
+                    continue
+                parsed = _subiq_payload_cached(s3_client, subiq_bucket,
+                                               key, parser)
+                if parsed:
+                    blocks.append(render_subiq_evidence(parsed, show))
+                    shows.append(show)
+            if blocks:
+                return '\n\n'.join(blocks), shows[0]
         show, key = find_subiq_title(s3_client, subiq_bucket, text,
                                      subject_hint, prefer_text=prefer_text)
         if not key:
