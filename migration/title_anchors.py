@@ -180,6 +180,109 @@ def get_title_anchor(title):
         return None
 
 
+def window_days(window) -> int:
+    """Inclusive day count of a {start, end} ISO window. 0 when either
+    date is missing or invalid. Pure function (testable offline)."""
+    if not isinstance(window, dict):
+        return 0
+    try:
+        s = date.fromisoformat(str(window.get("start") or "").strip()[:10])
+        e = date.fromisoformat(str(window.get("end") or "").strip()[:10])
+    except (ValueError, TypeError):
+        return 0
+    return max(0, (e - s).days + 1)
+
+
+def window_relation(run_window, anchor_window, tolerance_days=10) -> str:
+    """How a run's window sits against the window that established the
+    anchor. Pure function (testable offline). Returns one of:
+
+      'comparable' - same span within tolerance (or either window is
+                     unknown): the anchor universe applies as-is.
+      'narrower'   - the run is a slice of a longer read (a premiere
+                     weekend of a season already read in full): the
+                     anchor universe is a CEILING, never the value.
+      'wider'      - the run covers more days than the establishing read
+                     (full season after a premiere-weekend read): the
+                     run researches freely and may raise the anchor.
+
+    Decided on span alone, not overlap: a Season 2 premiere weekend is
+    'narrower' than a Season 1 full-season read even though the dates
+    never touch, and that is the right call - a three-day slice of a
+    later season still cannot out-project an entire earlier one."""
+    rd, ad = window_days(run_window), window_days(anchor_window)
+    if rd <= 0 or ad <= 0:
+        return "comparable"
+    if rd < ad - tolerance_days:
+        return "narrower"
+    if rd > ad + tolerance_days:
+        return "wider"
+    return "comparable"
+
+
+def upgrade_title_anchor(title, product, us_viewers, sample_size=None,
+                         demos=None, s3_key=None, window=None, season=None):
+    """CAS-guarded REPLACE of a title's numeric anchor. Used only when a
+    run on a WIDER window than the establishing read finishes and
+    projects more viewers than the anchor holds: the whole-season read
+    is the better description of the title universe than a premiere
+    weekend, so it takes over (us_viewers, sample_size, demos, window,
+    season). Existing s3_keys are kept. A smaller us_viewers never
+    replaces a larger one. Returns the stored entry or None. Never
+    raises."""
+    key = title_key(title)
+    try:
+        new_uv = int(us_viewers or 0)
+    except (TypeError, ValueError):
+        new_uv = 0
+    if not key or new_uv <= 0 or product not in ("subscriber_iq",
+                                                 "profile_iq"):
+        return None
+    try:
+        try:
+            from migration.s3_json_state import update_json
+        except ImportError:
+            from s3_json_state import update_json
+
+        def _mutate(obj):
+            if not isinstance(obj, dict):
+                obj = {}
+            entry = obj.get(key)
+            if not isinstance(entry, dict):
+                entry = {"s3_keys": {}, "created_at": _now_iso()}
+            try:
+                cur_uv = int(entry.get("us_viewers") or 0)
+            except (TypeError, ValueError):
+                cur_uv = 0
+            if new_uv <= cur_uv:
+                return None  # never shrink an established universe
+            entry["title"] = str(title or "").split(" - ", 1)[0].strip()
+            entry["us_viewers"] = new_uv
+            if sample_size:
+                entry["sample_size"] = int(sample_size)
+            if isinstance(demos, dict) and demos:
+                entry["demos"] = demos
+            entry["source_product"] = product
+            if isinstance(window, dict) and window:
+                entry["window"] = window
+            if season is not None:
+                entry["season"] = season
+            entry.setdefault("s3_keys", {})
+            if s3_key:
+                entry["s3_keys"][product] = str(s3_key)
+            entry["upgraded_at"] = _now_iso()
+            entry["updated_at"] = entry["upgraded_at"]
+            obj[key] = entry
+            return obj
+
+        written = update_json(ANCHORS_BUCKET, ANCHORS_KEY, _mutate,
+                              default={})
+        return (written or {}).get(key)
+    except Exception as e:
+        print(f"[title-anchors] upgrade failed (non-fatal): {e}")
+        return None
+
+
 def record_title_anchor(title, product, us_viewers=None, sample_size=None,
                         demos=None, s3_key=None, window=None, season=None):
     """CAS-guarded write. First writer for a title establishes the

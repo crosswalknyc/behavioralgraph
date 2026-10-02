@@ -6873,6 +6873,29 @@ def _build_synthetic_panel(config: dict) -> dict:
             print(f"   📐 Reach from priors: {reach_us:,} US "
                   f"(base {base_us:,} × genre {genre_mult} × cadence {cadence_mult} × ep {ep_mult})")
 
+    # Sub-window ceiling (2026-10-02): a run whose window is a slice of
+    # the title's established universe (premiere weekend of a season
+    # already read end to end) can never project more viewers than the
+    # whole. Research reads the season total regardless of window, so
+    # this is the arithmetic backstop behind the context_note the caller
+    # also passes. Sits strictly under the ceiling via title-salted
+    # jitter (no pinning). Explicit override below still wins.
+    if config.get('reach_us_ceiling'):
+        try:
+            _ceil = int(config['reach_us_ceiling'])
+        except (TypeError, ValueError):
+            _ceil = 0
+        if _ceil > 0 and reach_us >= _ceil:
+            _h = int(_hashlib.md5(
+                f"{show_name}|ceiling|{_ceil}".encode()).hexdigest()[:6], 16)
+            _under = 0.03 + (_h % 1000) / 1000 * 0.09   # 3% to 12% under
+            _was = reach_us
+            reach_us = int(_ceil * (1 - _under))
+            reach_source = f'{reach_source}+ceiling'
+            print(f"   ⛔ Reach {_was:,} meets the title universe ceiling "
+                  f"{_ceil:,} (this window is a slice of a season already "
+                  f"read in full) -> {reach_us:,} US")
+
     # Explicit override always wins (CLI --reach-us flag)
     if config.get('reach_us_override'):
         reach_us = int(config['reach_us_override'])
