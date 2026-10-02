@@ -29734,7 +29734,7 @@ https://www.instagram.com/p/..."></textarea>
                         </div>
 
                         <!-- Valuation cards row: BEV, BLV, Conversion -->
-                        <div id="bpiqValuationRow" style="display: flex; gap: 4rem; margin-bottom: 1.5rem; align-items: stretch;">
+                        <div id="bpiqValuationRow" style="display: flex; gap: 5rem; margin-bottom: 1.5rem; align-items: stretch;">
                             <!-- 🤝 Brand Engagement Value -->
                             <div id="bpiqBevCard" class="tab-section" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: none; flex-direction: column;">
                                 <h3 style="margin: 0 0 0.35rem; font-size: 1.4rem; white-space: nowrap;">🤝 Brand Engagement Value</h3>
@@ -74534,17 +74534,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (!hideConv && convEl) {
                 convEl.innerHTML = '<div style="display:flex;gap:0.5rem;align-items:stretch;">'
                     + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
-                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Pre Conversions</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;">Pre Conversions</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
                     + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
-                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Post Conversions</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;">Post Conversions</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
                     + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
-                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">&nbsp;<br>Consumer Lift</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;">Consumer Lift</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
                     + '</div>';
@@ -75749,9 +75749,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var bevRateValue = (v.rates && v.rates.bev_per_user) || 0;
                 bevBody.innerHTML = _bpiqMathRow(
                     [
-                        { label: 'Post-Campaign Engaged Consumers',
+                        { label: '<span style="font-weight:700;color:var(--text-primary);">Post-Campaign Engaged Consumers</span>',
                           value: _bpiqFmtNum(bevCount) },
-                        { label: '× $/consumer rate &nbsp;'
+                        { label: '× $/consumer rate<br>'
                                  + _bpiqBenchHint(_bm.bev_per_user)
                                  + _bpiqScopeChip(),
                           value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer - recalculates Brand Engagement Value & Total Brand Value')
@@ -75773,9 +75773,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var blvRateValue = (v.rates && v.rates.blv_per_incr_user) || 0;
                 blvBody.innerHTML = _bpiqMathRow(
                     [
-                        { label: 'Incremental Consumers<br><span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span>',
+                        { label: '<span style="white-space:nowrap;"><span style="font-weight:700;color:var(--text-primary);">Incremental Consumers</span> <span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span></span>',
                           value: _bpiqFmtNum(blvCount) },
-                        { label: '× $/incremental-consumer rate &nbsp;'
+                        { label: '× $/incremental-consumer rate<br>'
                                  + _bpiqBenchHint(_bm.blv_per_incr_user)
                                  + _bpiqScopeChip(),
                           value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer - recalculates Brand Lift Value & Total Brand Value')
@@ -75800,9 +75800,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var convRateValue = (v.rates && v.rates.conv_value_per_user) || 0;
                     convValBody.innerHTML = _bpiqMathRow(
                         [
-                            { label: 'Post-Campaign Conversions',
+                            { label: '<span style="font-weight:700;color:var(--text-primary);">Post-Campaign Conversions</span>',
                               value: _bpiqFmtNum(convCount) },
-                            { label: '× Average Order Value (AOV) &nbsp;'
+                            { label: '× Average Order Value (AOV)<br>'
                                      + _bpiqBenchHint(_bm.conv_value_per_user)
                                      + _bpiqScopeChip(),
                               value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) - recalculates Conversion Value & Total Brand Value')
