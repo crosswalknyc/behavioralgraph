@@ -462,6 +462,14 @@ def check_baseline_share(summary: dict[str, Any],
 # single unlucky night is not.
 DIGIT_CHISQ_ALERT = float(os.environ.get("TRENDS_DIGIT_CHISQ_ALERT", "21.67"))
 DIGIT_ZERO_MIN_PCT = float(os.environ.get("TRENDS_DIGIT_ZERO_MIN_PCT", "7.0"))
+# A value below 100 has no "last digit" in the statistical sense: its
+# final digit IS the count. The long-tail rails (Wattpad stories with a
+# handful of reads, comics with a few dozen) legitimately bottom out at
+# 1 daily US reader, and on 2026-10-02 those 145 ones plus ~800 other
+# two-digit counts pushed digit 1 to 10.7% and tripped the alert on a
+# corpus whose counted values were evenly spread. Measure the digit
+# spread only where the digit is incidental to the magnitude.
+DIGIT_MIN_VALUE = int(os.environ.get("TRENDS_DIGIT_MIN_VALUE", "100"))
 
 
 def check_degraded_sources(summary: Optional[dict] = None) -> Optional[dict]:
@@ -536,15 +544,26 @@ def check_last_digit_distribution(values,
     the cheapest way to make values distinct is to skip digits. This
     watches for that. Returns the histogram and chi-square, or None if
     there was nothing to measure.
+
+    Values below DIGIT_MIN_VALUE (100) are not measured: a one- or
+    two-digit count has no incidental last digit, and the long-tail
+    rails legitimately floor at 1 reader.
     """
     try:
         counts = [0] * 10
         n = 0
+        skipped_small = 0
         for v in values:
             if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
                 continue
+            if v < DIGIT_MIN_VALUE:
+                skipped_small += 1
+                continue
             counts[v % 10] += 1
             n += 1
+        if skipped_small:
+            logger.info("run_guard: digit check left out %d value(s) "
+                        "below %d", skipped_small, DIGIT_MIN_VALUE)
         # Below a few thousand values the test is too noisy to act on.
         if n < 2_000:
             logger.info("run_guard: only %d values, skipping digit check", n)
@@ -569,7 +588,9 @@ def check_last_digit_distribution(values,
                 "should be evenly spread, because a real count is as "
                 "likely to end in one digit as another.\n\n"
                 f"{spread}\n\n"
-                f"  values measured : {n}\n"
+                f"  values measured : {n} "
+                f"(values of {DIGIT_MIN_VALUE} or more; "
+                f"{skipped_small} smaller counts left out)\n"
                 f"  chi-square      : {chisq:.2f} on 9 df "
                 f"(alerts above {chisq_alert:.2f})\n"
                 f"  ending in zero  : {zero_pct:.2f}% "

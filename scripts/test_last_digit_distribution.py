@@ -26,13 +26,20 @@ CHISQ_MAX = 21.67
 ZERO_MIN_PCT = 7.0
 ZERO_MAX_PCT = 13.0
 MIN_VALUES = 2_000
+# A one- or two-digit count has no incidental last digit: the digit IS
+# the count. Long-tail rails (Wattpad stories with a few reads, comics
+# with a few dozen) legitimately floor at 1 reader, and on 2026-10-02
+# those small counts alone pushed digit 1 past the alert line on a
+# corpus whose counted values were evenly spread. Same floor as
+# run_guard.DIGIT_MIN_VALUE; keep the two in step.
+MIN_VALUE = 100
 
 
 def digit_histogram(values):
     counts = [0] * 10
     n = 0
     for v in values:
-        if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+        if isinstance(v, bool) or not isinstance(v, int) or v < MIN_VALUE:
             continue
         counts[v % 10] += 1
         n += 1
@@ -125,6 +132,21 @@ def synthetic_cases():
         ok = False
     else:
         print("   caught, as intended")
+
+    # The 2026-10-02 false alarm: a long tail of one- and two-digit
+    # counts (hundreds of stories at 1 reader) on top of an evenly
+    # spread corpus. Those values have no incidental last digit and
+    # must not be measured.
+    print("\n--- synthetic control: a floor-pinned long tail changes nothing ---")
+    tail = [1] * 150 + [rng.randrange(2, 100) for _ in range(850)]
+    base_counts, base_n = digit_histogram(natural)
+    tail_counts, tail_n = digit_histogram(natural + tail)
+    if (base_counts, base_n) == (tail_counts, tail_n):
+        print("   PASS: %d small counts left out, histogram unchanged"
+              % len(tail))
+    else:
+        print("   BROKEN: small counts are being measured as digits")
+        ok = False
     return ok
 
 

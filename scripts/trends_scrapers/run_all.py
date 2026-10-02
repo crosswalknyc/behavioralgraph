@@ -518,9 +518,13 @@ def main(argv: list[str] | None = None) -> int:
     # A partial re-run (`--only ...`, the path a cookie donation takes)
     # queues behind a run already going rather than exiting: it waits
     # up to 30 minutes for the lock, and a contention that resolves is
-    # a log line, not an alert. The full nightly keeps the old
-    # behaviour, because two full passes over the same keys is the
-    # thing the lock exists to prevent and worth telling someone.
+    # a log line, not an alert. The full nightly waits too, up to an
+    # hour, because the hourly chart watch (chart_moved_watch) holds
+    # the same lock while it re-prices and verifies: a nightly that
+    # finds the watch mid-pass should queue behind it, not exit and
+    # leave the day's board unbuilt. If the hour runs out, two full
+    # passes over the same keys is the thing the lock exists to
+    # prevent, and that still alerts.
     raw = list(argv) if argv is not None else sys.argv[1:]
     partial = any(a == '--only' or a.startswith('--only=') for a in raw)
     if partial:
@@ -528,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
                        label="A partial Trends IQ re-run (--only)",
                        quiet=True)
     else:
-        lock_kw = {}
+        lock_kw = dict(wait_s=60 * 60)
 
     with RunLock(**lock_kw) as lock:
         if not lock.acquired:
