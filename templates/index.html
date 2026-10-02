@@ -106604,6 +106604,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         var _JIQ_ARROW_CONTEXT_TABS = {
             discovery: 1, journey_b: 1, journey_c: 1, churn: 1, segments: 1
         };
+        var _JIQ_ARROW_GENPOP = {
+            gender: { 'Male': 47.8859, 'Female': 49.5723, 'Another gender': 2.5418 },
+            age: { '18-24': 12.037, '25-34': 16.3845, '35-44': 16.7176, '45-54': 15.8313, '55+': 39.0296 },
+            ethnicity: {
+                'White': 57.7959,
+                'Hispanic / Latino': 17.9796,
+                'Hispanic or Latino': 17.9796,
+                'Black': 11.9178,
+                'Asian': 6.2158,
+                'Another race': 6.0908
+            },
+            income: {
+                'Under $50,000': 32.4357,
+                '$50,000 to $99,999': 29.637,
+                '$100,000 to $149,999': 16.8173,
+                '$150,000+': 21.11
+            }
+        };
 
         function _jiqArrowD() {
             return (typeof _JIQ_ARROW_DATA !== 'undefined' && _JIQ_ARROW_DATA) || {};
@@ -106638,6 +106656,94 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqArrowTabLink(tabId, label) {
             return '<button type="button" class="jiq-arrow-link" onclick="_jiqArrowActivateTab(\'' + tabId + '\')">'
                 + _jiqFragEsc(label) + '</button>';
+        }
+        function _jiqArrowDemoColors() {
+            var light = document.body && document.body.getAttribute('data-theme') === 'light';
+            return light
+                ? ['#5E7E12', '#8E3FA8', '#3358FF', '#3B3D38', '#888C89']
+                : ['#C7F23E', '#E682FF', '#3358FF', '#B7B3D8', '#9AA09B'];
+        }
+        function _jiqArrowPolar(cx, cy, r, deg) {
+            var a = (deg - 90) * Math.PI / 180;
+            return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+        }
+        function _jiqArrowAnnulus(cx, cy, r0, r1, a0, a1) {
+            var sweep = Math.max(0, Math.min(359.999, a1 - a0));
+            if (sweep < 0.2) return '';
+            var large = sweep > 180 ? 1 : 0;
+            var p0o = _jiqArrowPolar(cx, cy, r1, a0);
+            var p1o = _jiqArrowPolar(cx, cy, r1, a0 + sweep);
+            var p1i = _jiqArrowPolar(cx, cy, r0, a0 + sweep);
+            var p0i = _jiqArrowPolar(cx, cy, r0, a0);
+            return 'M' + p0o.x.toFixed(2) + ',' + p0o.y.toFixed(2)
+                + ' A' + r1 + ',' + r1 + ' 0 ' + large + ',1 ' + p1o.x.toFixed(2) + ',' + p1o.y.toFixed(2)
+                + ' L' + p1i.x.toFixed(2) + ',' + p1i.y.toFixed(2)
+                + ' A' + r0 + ',' + r0 + ' 0 ' + large + ',0 ' + p0i.x.toFixed(2) + ',' + p0i.y.toFixed(2)
+                + ' Z';
+        }
+        function _jiqArrowDemoLabel(raw) {
+            var map = {
+                '18-24': '18 to 24',
+                '25-34': '25 to 34',
+                '35-44': '35 to 44',
+                '45-54': '45 to 54',
+                'Hispanic / Latino': 'Hispanic or Latino'
+            };
+            return map[raw] || raw;
+        }
+        function _jiqArrowRing(slices, cx, cy, r0, r1, opacity) {
+            var colors = _jiqArrowDemoColors();
+            var a = 0;
+            return slices.map(function(s, i) {
+                var sweep = Math.max(0, Number(s.pct) || 0) * 3.6;
+                var d = _jiqArrowAnnulus(cx, cy, r0, r1, a, a + sweep);
+                var mid = a + sweep / 2;
+                a += sweep;
+                if (!d) return '';
+                var lab = '';
+                if ((Number(s.pct) || 0) >= 10) {
+                    var pt = _jiqArrowPolar(cx, cy, (r0 + r1) / 2, mid);
+                    var ink = (colors[i % colors.length] === '#C7F23E' || colors[i % colors.length] === '#5E7E12') ? '#0C1618' : '#E9E8E1';
+                    lab = '<text x="' + pt.x.toFixed(1) + '" y="' + pt.y.toFixed(1)
+                        + '" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="'
+                        + ink + '">' + _jiqFragEsc(_jiqArrowPct(s.pct)) + '</text>';
+                }
+                return '<path d="' + d + '" fill="' + colors[i % colors.length] + '" fill-opacity="'
+                    + opacity + '"></path>' + lab;
+            }).join('');
+        }
+        function _jiqArrowDemoDonut(title, key, block) {
+            var gp = _JIQ_ARROW_GENPOP[key] || {};
+            var slices = (block || []).map(function(r) {
+                var lab = r.label;
+                return {
+                    label: _jiqArrowDemoLabel(lab),
+                    pct: Number(r.pct) || 0,
+                    people: r.people,
+                    gp: Number(gp[lab] != null ? gp[lab] : gp[_jiqArrowDemoLabel(lab)]) || 0
+                };
+            });
+            var colors = _jiqArrowDemoColors();
+            var inner = _jiqArrowRing(slices.map(function(s) { return { pct: s.pct }; }), 140, 140, 56, 80, 1);
+            var outer = _jiqArrowRing(slices.map(function(s) { return { pct: s.gp }; }), 140, 140, 90, 114, 0.42);
+            var legend = slices.map(function(s, i) {
+                return '<div class="jiq-arrow-dleg-row">'
+                    + '<i style="background:' + colors[i % colors.length] + '"></i>'
+                    + '<span>' + _jiqFragEsc(s.label) + '</span>'
+                    + '<b>' + _jiqArrowPct(s.pct) + '</b>'
+                    + '<em>' + _jiqFragEsc(_jiqArrowNum(s.people)) + '</em>'
+                    + '<span class="gp">' + _jiqArrowPct(s.gp) + '</span></div>';
+            }).join('');
+            return '<div class="jiq-arrow-donut">'
+                + '<h5>' + _jiqFragEsc(title) + '</h5>'
+                + '<svg viewBox="0 0 280 280" width="280" height="280" aria-label="' + _jiqFragEsc(title) + '">'
+                + outer + inner
+                + '<text x="140" y="134" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">Arrow</text>'
+                + '<text x="140" y="154" text-anchor="middle" font-size="11" fill="#7C878A">vs Gen Pop</text>'
+                + '</svg>'
+                + '<div class="jiq-arrow-dleg-k"><span></span><span></span><span>Arrow</span><span>People</span><span>Gen Pop</span></div>'
+                + '<div class="jiq-arrow-dleg">' + legend + '</div>'
+                + '</div>';
         }
         function _jiqArrowBars(tables) {
             var html = (tables || []).map(function(t) {
@@ -106986,29 +107092,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ])
                 + _jiqArrowFoot();
         }
-        function _jiqArrowDemoTable(title, block, ageMap) {
-            var rows = (block || []).map(function(r) {
-                var lab = (ageMap && ageMap[r.label]) ? ageMap[r.label] : r.label;
-                if (lab === 'Hispanic / Latino') lab = 'Hispanic or Latino';
-                return '<tr><td>' + _jiqFragEsc(lab) + '</td><td class="r">' + _jiqFragEsc(_jiqArrowNum(r.people))
-                    + '</td><td class="r">' + _jiqFragEsc(_jiqArrowPct(r.pct))
-                    + '</td><td class="r jiq-arrow-pending">pending</td><td class="r jiq-arrow-pending">pending</td></tr>';
-            }).join('');
-            return '<table class="jiq-ufc-tbl"><thead><tr><th>' + _jiqFragEsc(title)
-                + '</th><th class="r">PEOPLE</th><th class="r">SHARE</th><th class="r">VS US</th><th class="r">VS PLUTO</th></tr></thead><tbody>'
-                + rows + '</tbody></table>';
-        }
         function _jiqArrowNestSegments() {
             var d = _jiqArrowD();
             var dem = d.demos || {};
             var x = d.cross || {};
-            var ageMap = { '18-24': '18 to 24', '25-34': '25 to 34', '35-44': '35 to 44', '45-54': '45 to 54' };
-            return _jiqArrowSec('07 WHO THEY ARE', 'Male, 25 to 34, and still on Netflix for The Flash.', 'Of the 6.01M who viewed Arrow. Share of viewers and exact count. Index columns pending from Jenna.')
-                + _jiqArrowDemoTable('GENDER', dem.gender)
-                + _jiqArrowDemoTable('AGE', dem.age, ageMap)
-                + _jiqArrowDemoTable('ETHNICITY', dem.ethnicity)
-                + _jiqArrowDemoTable('INCOME', dem.income)
-                + '<p class="jiq-arrow-pending jiq-arrow-ctx">Index vs US population and vs all Pluto users: pending the Crosswalk frame from Jenna. Counts add to 6,005,357 in each breakdown.</p>'
+            return _jiqArrowSec('07 WHO THEY ARE', 'Male, 25 to 34, and still on Netflix for The Flash.', 'Of the 6.01M who viewed Arrow. Inner ring is Arrow. Outer ring is Gen Pop, 18 and up.')
+                + '<div class="jiq-arrow-donuts">'
+                + _jiqArrowDemoDonut('GENDER', 'gender', dem.gender)
+                + _jiqArrowDemoDonut('AGE', 'age', dem.age)
+                + _jiqArrowDemoDonut('ETHNICITY', 'ethnicity', dem.ethnicity)
+                + _jiqArrowDemoDonut('INCOME', 'income', dem.income)
+                + '</div>'
                 + _jiqArrowSec('Where else they sat', 'Netflix and Prime Video still hold the rest of the Arrowverse.', 'Share of the 6.01M Arrow viewers. Rows overlap.')
                 + _jiqArrowBars([
                     { title: 'ALSO USED IN THE LAST 30 DAYS', rows: [
@@ -188115,6 +188209,47 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-barrow.is-hot .jiq-arrow-barlab,
     body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-barrow.is-hot .jiq-arrow-barval { color: #5E7E12; }
     body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-barrow.is-hot .jiq-arrow-bartrack i { background: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-donuts {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 28px 48px;
+        margin: 8px 34px 32px;
+    }
+    @media (max-width: 980px) {
+        #jiqArrowNestCard .jiq-arrow-donuts { grid-template-columns: 1fr; }
+    }
+    #jiqArrowNestCard .jiq-arrow-donut { text-align: center; }
+    #jiqArrowNestCard .jiq-arrow-donut h5 {
+        margin: 0 0 8px; font-size: 10.5px; font-weight: 700;
+        letter-spacing: .08em; text-transform: uppercase; color: #9AA09B;
+        word-spacing: 0.35em;
+    }
+    #jiqArrowNestCard .jiq-arrow-donut svg { display: block; margin: 0 auto; }
+    #jiqArrowNestCard .jiq-arrow-dleg-k,
+    #jiqArrowNestCard .jiq-arrow-dleg-row {
+        display: grid;
+        grid-template-columns: 10px minmax(0, 1fr) 3.6rem 5.6rem 3.8rem;
+        gap: 8px; align-items: center; text-align: left;
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-k {
+        margin: 10px 0 4px; font-size: 10px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase; color: #7C878A;
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-k span:nth-child(n+3) { text-align: right; }
+    #jiqArrowNestCard .jiq-arrow-dleg-row {
+        padding: 5px 0; font-size: 12px;
+        border-bottom: 1px solid rgba(233,232,225,.08);
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-row:last-child { border-bottom: 0; }
+    #jiqArrowNestCard .jiq-arrow-dleg-row i {
+        width: 10px; height: 10px; border-radius: 2px; display: block;
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-row b,
+    #jiqArrowNestCard .jiq-arrow-dleg-row em,
+    #jiqArrowNestCard .jiq-arrow-dleg-row .gp {
+        text-align: right; font-style: normal; font-variant-numeric: tabular-nums;
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-row b { font-weight: 800; }
+    #jiqArrowNestCard .jiq-arrow-dleg-row em,
+    #jiqArrowNestCard .jiq-arrow-dleg-row .gp { color: #9AA09B; font-weight: 600; }
 
     #jiqAnimCrNestCard {
         margin: 0 0 8px;
