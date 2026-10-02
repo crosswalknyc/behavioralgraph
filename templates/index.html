@@ -139928,8 +139928,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     chead.className = 'piq-chart-head';
                     card.insertBefore(chead, card.firstChild);
                 }
-                chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span>' +
-                    (window._piqV4HeadActions ? window._piqV4HeadActions(mod, window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : '') : (window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : ''));
+                // Rewriting on every pass swaps the buttons out from under
+                // a click (hover tooltips trigger a pass), so only on change.
+                var headKey = num + '|' + mod;
+                if (chead.dataset.piqHead !== headKey || !chead.querySelector('.piq-pop-btn')) {
+                    chead.innerHTML = '<span class="title">' + num + '  ·  ' + window._piqV4Esc(mod) + '</span>' +
+                        (window._piqV4HeadActions ? window._piqV4HeadActions(mod, window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : '') : (window._piqV4CsvBtn ? window._piqV4CsvBtn('demographic', mod) : ''));
+                    chead.dataset.piqHead = headKey;
+                }
             });
         };
         window._piqV4DressBehavioral = function() {
