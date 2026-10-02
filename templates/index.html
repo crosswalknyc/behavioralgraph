@@ -106631,30 +106631,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if ((tables || []).length > 1) return '<div class="jiq-arrow-pair">' + html + '</div>';
             return html;
         }
-        function _jiqArrowKeepBar(s) {
-            if (s.kept == null && !s.fullBar) return '';
-            var keepW = s.fullBar ? 100 : Math.max(0.6, Math.min(100, Number(s.kept)));
-            var verb = s.keepVerb || 'of them continued';
-            var line = s.fullBar ? '' : (_jiqArrowPct(s.kept) + ' ' + verb);
-            return '<div class="jiq-frag-track" aria-label="' + _jiqFragEsc(line || s.show || '') + '">'
-                + '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div></div>'
-                + (line ? '<div class="jiq-frag-foot"><span class="jiq-frag-kept">'
-                    + _jiqFragEsc(line) + '</span></div>' : '');
-        }
-        function _jiqArrowSpine(rows) {
-            return (rows || []).map(function(s, i, arr) {
-                var last = i === arr.length - 1;
-                return '<div class="jiq-frag-step' + (last ? ' is-terminal' : '') + (s.hot ? ' is-hot' : '') + '">'
-                    + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
-                    + '<div class="jiq-frag-line"><span class="jiq-frag-label">' + _jiqFragEsc(s.label) + '</span>'
-                    + '<span class="jiq-frag-count">' + _jiqFragEsc(s.show) + '</span></div>'
-                    + (s.doing ? '<div class="jiq-frag-doing">' + _jiqFragEsc(s.doing) + '</div>' : '')
-                    + _jiqArrowKeepBar(s)
-                    + '</div></div>';
-            }).join('');
-        }
         function _jiqArrowHFunnel(rows) {
-            return '<div class="jiq-arrow-hfunnel">' + (rows || []).map(function(s) {
+            var n = (rows || []).length;
+            var cls = n >= 6 ? ' is-6' : (n === 3 ? ' is-3' : '');
+            return '<div class="jiq-arrow-hfunnel' + cls + '">' + (rows || []).map(function(s) {
                 var keepW = s.fullBar ? 100 : (s.kept == null ? 0 : Math.max(0.6, Math.min(100, Number(s.kept))));
                 var verb = s.keepVerb || 'of them continued';
                 var line = (s.kept == null || s.fullBar) ? '' : (_jiqArrowPct(s.kept) + ' ' + verb);
@@ -106667,31 +106647,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (line ? '<div class="jiq-arrow-hpct">' + _jiqFragEsc(line) + '</div>' : '')
                     + '</div>';
             }).join('') + '</div>';
-        }
-        function _jiqArrowFunnel(funnel, labels, dest) {
-            return (funnel || []).map(function(step, i, arr) {
-                var spec = labels[i] || {};
-                var prev = i > 0 ? arr[i - 1] : null;
-                var prevSpec = i > 0 ? (labels[i - 1] || {}) : {};
-                var row = {
-                    label: spec.label || step.label,
-                    doing: spec.doing != null ? spec.doing : (step.doing || ''),
-                    show: _jiqArrowFig(step.people),
-                    hot: !!spec.hot
-                };
-                if (dest) {
-                    if (i === 0) row.fullBar = !!spec.fullBar;
-                    if (prev) {
-                        row.kept = prev.kept;
-                        row.keepVerb = prevSpec.keepVerb || 'of them continued';
-                    }
-                } else if (step.kept != null) {
-                    row.kept = step.kept;
-                    row.keepVerb = spec.keepVerb || 'of them continued';
-                }
-                if (spec.fullBar) row.fullBar = true;
-                return row;
-            });
         }
         function _jiqArrowPanelChip() {
             return 'US ONLY  ·  MAY 1 TO SEP 28, 2026  ·  UNIQUE PEOPLE';
@@ -106779,21 +106734,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         function _jiqArrowNestCase() {
             var d = _jiqArrowD();
-            var u = d.universe || {};
             var peers = d.peers || [];
-            var spine = (d.funnels || {}).spine || [];
-            var reach = _jiqArrowFunnel(spine.slice(1, 5), [
-                { label: 'Used Pluto in the last 12 months.', doing: 'Any Pluto app or site session.' },
-                { label: 'Used Pluto in this period.', doing: 'May 1 to Sep 28, 2026.' },
-                { label: 'Opened Arrow on Pluto.', doing: 'On demand title or the live channel.' },
-                { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true }
-            ], true);
-            var depth = _jiqArrowFunnel(spine.slice(4, 8), [
-                { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true, fullBar: true, keepVerb: 'of them returned' },
-                { label: 'Returned within 30 days.', doing: 'A second Arrow session.' },
-                { label: 'Viewed five or more episodes.', doing: 'On demand or live, same person.' },
-                { label: 'Finished Season 1.', doing: 'Twenty-three episodes.' }
-            ], true);
+            var reach = [
+                { show: '98.4M', label: 'Used Pluto in the last 12 months.', doing: 'Any Pluto app or site session.' },
+                { show: '63.2M', label: 'Used Pluto in this period.', doing: 'May 1 to Sep 28, 2026.', kept: 64.3 },
+                { show: '7.40M', label: 'Opened Arrow on Pluto.', doing: 'On demand title or the live channel.', kept: 11.7 },
+                { show: '6.01M', label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', kept: 81.2, hot: true }
+            ];
+            var depth = [
+                { show: '6.01M', label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true, fullBar: true },
+                { show: '3.51M', label: 'Returned within 30 days.', doing: 'A second Arrow session.', kept: 58.5, keepVerb: 'of them returned' },
+                { show: '2.32M', label: 'Viewed five or more episodes.', doing: 'On demand or live, same person.', kept: 66.1 },
+                { show: '1.10M', label: 'Finished Season 1.', doing: 'Twenty-three episodes.', kept: 47.3 }
+            ];
             var peerRows = peers.map(function(p) {
                 return {
                     label: p.title,
@@ -106883,17 +106836,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var d = _jiqArrowD();
             var ret = ((d.retention || {}).by_journey || {}).B || {};
             var j = d.journeys || {};
-            var rows = _jiqArrowFunnel(((d.funnels || {}).B) || [], [
-                { label: 'Learned Arrow was on Pluto', doing: 'Search, a clip, or YouTube. Not a Pluto user in the prior 12 months.' },
-                { label: 'Used Pluto', doing: 'First app or site session in 12 months.' },
-                { label: 'Opened Arrow', doing: 'On demand title or the live channel.' },
-                { label: 'Viewed Arrow', doing: 'Watched at least five minutes. Their first Pluto view was Arrow.', hot: true, keepVerb: 'of them returned' },
-                { label: 'Returned within 7 days', doing: 'A second Arrow session.' },
-                { label: 'Viewed five or more episodes', doing: 'On demand or live channel.' }
-            ]);
+            var rows = [
+                { show: '4.19M', label: 'Learned Arrow was on Pluto', doing: 'Search, a clip, or YouTube. Not a Pluto user in the prior 12 months.', kept: 52.2 },
+                { show: '2.19M', label: 'Used Pluto', doing: 'First app or site session in 12 months.', kept: 75.2 },
+                { show: '1.64M', label: 'Opened Arrow', doing: 'On demand title or the live channel.', kept: 76.0 },
+                { show: '1.25M', label: 'Viewed Arrow', doing: 'Watched at least five minutes. Their first Pluto view was Arrow.', kept: 33.1, keepVerb: 'of them returned', hot: true },
+                { show: '413K', label: 'Returned within 7 days', doing: 'A second Arrow session.', kept: 88.3 },
+                { show: '364K', label: 'Viewed five or more episodes', doing: 'On demand or live channel.' }
+            ];
             return _jiqArrowSec('03 NEW TO PLUTO', 'New-to-Pluto viewers searched where to watch, then came to Pluto for Arrow.', 'This tab covers only the 1.25M people whose first Pluto view was Arrow.')
                 + _jiqArrowSec('NEW TO PLUTO VIA ARROW  ·  HOW THEY GOT HERE', 'Each bar is the share of that step who continued to the next.', '')
-                + '<div class="jiq-ufc-spine">' + _jiqArrowSpine(rows) + '</div>'
+                + _jiqArrowHFunnel(rows)
                 + _jiqArrowRead('Return window on this tab is 7 days as published; the Overview and Returned tabs use 30 days.')
                 + _jiqArrowSec('AFTER THE FIRST VIEW', 'New-to-Pluto viewers binge less.', 'Share of the 1.25M whose first Pluto view was Arrow.')
                 + '<div class="jiq-ufc-figs is-4">'
@@ -106913,22 +106866,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqArrowNestInside() {
             var d = _jiqArrowD();
             var ret = ((d.retention || {}).by_journey || {}).A || {};
-            var aRows = _jiqArrowFunnel(((d.funnels || {}).A) || [], [
-                { label: 'Existing Pluto viewers', doing: 'Used Pluto Feb to Apr 2026 and again after May 1.', keepVerb: 'of them saw Arrow' },
-                { label: 'Saw Arrow on Pluto', doing: 'Home row, a "Because you watched" recommendation, or the Arrow live channel.' },
-                { label: 'Opened Arrow', doing: 'On demand title or the live channel.' },
-                { label: 'Viewed Arrow', doing: 'Watched at least five minutes. The 3.57M from the Overview.', hot: true, keepVerb: 'of them returned' },
-                { label: 'Returned within 7 days', doing: 'A second Arrow session.' },
-                { label: 'Viewed five or more episodes', doing: 'On demand or live channel.' }
-            ]);
-            var a2Rows = _jiqArrowFunnel(((d.funnels || {}).A2) || [], [
-                { label: 'New to Pluto, first view was another title', doing: 'The 100, Hart of Dixie, CSI, Survivor, or another title.', keepVerb: 'of them saw Arrow' },
-                { label: 'Saw Arrow later', doing: 'Home row after another title, or the live channel.' },
-                { label: 'Opened Arrow', doing: 'On demand title or the live channel.' },
-                { label: 'Viewed Arrow', doing: 'Watched at least five minutes.', hot: true }
-            ]);
+            var aRows = [
+                { show: '48.3M', label: 'Existing Pluto viewers', doing: 'Used Pluto Feb to Apr 2026 and again after May 1.', kept: 17.4, keepVerb: 'of them saw Arrow' },
+                { show: '8.42M', label: 'Saw Arrow on Pluto', doing: 'Home row, a "Because you watched" recommendation, or the Arrow live channel.', kept: 50.8 },
+                { show: '4.27M', label: 'Opened Arrow', doing: 'On demand title or the live channel.', kept: 83.6 },
+                { show: '3.57M', label: 'Viewed Arrow', doing: 'Watched at least five minutes. The 3.57M from the Overview.', kept: 51.6, keepVerb: 'of them returned', hot: true },
+                { show: '1.84M', label: 'Returned within 7 days', doing: 'A second Arrow session.', kept: 83.1 },
+                { show: '1.53M', label: 'Viewed five or more episodes', doing: 'On demand or live channel.' }
+            ];
+            var a2Rows = [
+                { show: '13.7M', label: 'New to Pluto, first view was another title', doing: 'The 100, Hart of Dixie, CSI, Survivor, or another title.', kept: 17.7, keepVerb: 'of them saw Arrow' },
+                { show: '2.42M', label: 'Saw Arrow later', doing: 'Home row after another title, or the live channel.', kept: 61.5 },
+                { show: '1.49M', label: 'Opened Arrow', doing: 'On demand title or the live channel.', kept: 79.8 },
+                { show: '1.19M', label: 'Viewed Arrow', doing: 'Watched at least five minutes.', hot: true }
+            ];
             return _jiqArrowSec('04 EXISTING PLUTO VIEWERS', 'The home row and the live channel did the work.', 'This funnel starts at people already using Pluto, not at US people. Each bar is the share of that step who continued to the next.')
-                + '<div class="jiq-ufc-spine">' + _jiqArrowSpine(aRows) + '</div>'
+                + _jiqArrowHFunnel(aRows)
                 + _jiqArrowRead('Return window on this tab is 7 days as published; the Overview and Returned tabs use 30 days.')
                 + _jiqArrowSec('AFTER THE FIRST VIEW', 'Arrow is additive. Existing viewers kept watching other titles.', 'Share of the 3.57M existing viewers.')
                 + '<div class="jiq-ufc-figs is-4">'
@@ -106939,7 +106892,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '</div>'
                 + _jiqArrowRead('3.01M (84.3%) stayed inside Pluto for something else. Arrow did not replace the rest of the service.')
                 + _jiqArrowSec('NEW TO PLUTO VIA ANOTHER TITLE', 'The 100 and Hart of Dixie launched the same day. New to Pluto, first view was not Arrow, then they opened Arrow.', '')
-                + '<div class="jiq-ufc-spine">' + _jiqArrowSpine(a2Rows) + '</div>'
+                + _jiqArrowHFunnel(a2Rows)
                 + _jiqArrowFoot();
         }
         function _jiqArrowNestWall() {
@@ -187995,8 +187948,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 18px 22px; margin: 8px 34px 28px;
     }
+    #jiqArrowNestCard .jiq-arrow-hfunnel.is-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #jiqArrowNestCard .jiq-arrow-hfunnel.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     @media (max-width: 980px) {
-        #jiqArrowNestCard .jiq-arrow-hfunnel { grid-template-columns: 1fr 1fr; }
+        #jiqArrowNestCard .jiq-arrow-hfunnel,
+        #jiqArrowNestCard .jiq-arrow-hfunnel.is-6,
+        #jiqArrowNestCard .jiq-arrow-hfunnel.is-3 { grid-template-columns: 1fr 1fr; }
     }
     #jiqArrowNestCard .jiq-arrow-hnum {
         font-size: 28px; font-weight: 800; letter-spacing: -.03em;
