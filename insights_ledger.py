@@ -1270,6 +1270,11 @@ def _topical_overlap_ok(entry, qn, floor=0.34):
                 and w not in _DIM_STOP]
         subj_toks = set(normalize_subject(
             str(entry.get('subject') or '')).split())
+        # The audience words are judged by cohort distance in
+        # find_semantic, not here: "parents of kids 4-7" in the ask is
+        # the cohort, not the topic.
+        subj_toks |= set(normalize_subject(
+            str(entry.get('cohort') or '')).split())
         toks = [w for w in toks if w not in subj_toks]
         if not toks:
             return True  # nothing distinctive to judge on
