@@ -14877,6 +14877,28 @@ def _pm_analyze_core(user, body, text, history):
                           if xmod_block else _ms_block)
     except Exception:
         traceback.print_exc()
+    # Subscriber IQ parity on the screen path (2026-10-02). The cross-
+    # module block carries one line for the open subject's acquisition
+    # read; the full block (signups, windows, cohorts, drivers) now
+    # rides too, for any indexed title the question names first and
+    # the open profile second. Skipped when that title's Subscriber IQ
+    # view is already on screen, since its payload is the page context.
+    try:
+        _vc = ctx.get('view_context') or {}
+        _open_show = ''
+        if str(_vc.get('view_id') or '') == 'subscriberIQ':
+            _open_show = str(((_vc.get('data') or {}).get('show')) or '')
+        _sq_block, _sq_show = pma.build_subiq_evidence_block(
+            _H.s3_client, _H.SUBSCRIBER_S3_BUCKET,
+            _H.parse_subscriber_iq_csv, text,
+            subject_hint=str((p_meta.get('name')
+                              if ctx.get('primary') else '') or ''),
+            prefer_text=True, skip_show=_open_show)
+        if _sq_block:
+            xmod_block = (f"{xmod_block}\n\n{_sq_block}"
+                          if xmod_block else _sq_block)
+    except Exception:
+        traceback.print_exc()
     _pm_ask_stage('anchors', t0=_t_anchors)
     # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
     # already delivered for this subject ride the prompt as binding

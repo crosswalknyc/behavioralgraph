@@ -2012,20 +2012,35 @@ def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
     return parsed
 
 
-def find_subiq_title(s3_client, subiq_bucket, text, subject_hint=''):
+def find_subiq_title(s3_client, subiq_bucket, text, subject_hint='',
+                     prefer_text=False):
     """(show, s3_key) when the subject hint or the ask names a title in
-    the Subscriber IQ index; (None, None) otherwise."""
+    the Subscriber IQ index; (None, None) otherwise.
+
+    The hint wins by default (generated reads pass the resolved base
+    subject). On the screen path the hint is the OPEN profile, so a
+    title the question names outranks it (prefer_text=True): with
+    Landman open, "how did Tulsa King's signups compare" must pull
+    Tulsa King's acquisition read, not Landman's again."""
     index = _load_subiq_index(s3_client, subiq_bucket)
     if not index:
         return None, None
-    tk = _xmod_title_key(subject_hint)
-    if tk and tk in index:
-        return index[tk]
-    shows = {show for show, _k in index.values()}
-    found = _xmod_subject_from_text(text, shows)
-    tk = _xmod_title_key(found)
-    if tk and tk in index:
-        return index[tk]
+
+    def _from_hint():
+        tk = _xmod_title_key(subject_hint)
+        return index.get(tk) if tk else None
+
+    def _from_text():
+        shows = {show for show, _k in index.values()}
+        tk = _xmod_title_key(_xmod_subject_from_text(text, shows))
+        return index.get(tk) if tk else None
+
+    order = (_from_text, _from_hint) if prefer_text \
+        else (_from_hint, _from_text)
+    for fn in order:
+        hit = fn()
+        if hit:
+            return hit
     return None, None
 
 
@@ -2185,17 +2200,21 @@ def render_subiq_evidence(parsed, show):
 
 
 def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
-                               subject_hint=''):
-    """The full Subscriber IQ evidence block for a generated read.
-    Returns (block, show); ('' , None) when no Subscriber IQ title
-    matches the ask or its base subject, or the file cannot be
+                               subject_hint='', prefer_text=False,
+                               skip_show=''):
+    """The full Subscriber IQ evidence block for a generated read or a
+    screen ask. Returns (block, show); ('' , None) when no Subscriber
+    IQ title matches the ask or its base subject, the matched title is
+    the one already on screen (skip_show), or the file cannot be
     parsed."""
     if s3_client is None or not subiq_bucket or parser is None:
         return '', None
     try:
         show, key = find_subiq_title(s3_client, subiq_bucket, text,
-                                     subject_hint)
+                                     subject_hint, prefer_text=prefer_text)
         if not key:
+            return '', None
+        if skip_show and _xmod_title_key(skip_show) == _xmod_title_key(show):
             return '', None
         parsed = _subiq_payload_cached(s3_client, subiq_bucket, key,
                                        parser)
