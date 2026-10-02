@@ -68,7 +68,10 @@ BAD_OUTCOMES = frozenset({'error', 'empty', 'faulted', 'clarified_repeat',
 # Outcomes that answered or moved the ask forward.
 GOOD_OUTCOMES = frozenset({
     'answered', 'opened', 'downloaded', 'status', 'panel_fact',
-    'memory_confirm', 'rerouted', 'forwarded'}) | BUILD_DECISIONS
+    'memory_confirm', 'rerouted', 'forwarded',
+    # deterministic lanes (2026-10-02 S3)
+    'in_library', 'not_found', 'approve_without_draft',
+    'workorder_status', 'workorder_eta', 'workorder_cancel'}) | BUILD_DECISIONS
 
 # Outcomes that depend on state the replay does not have: an empty
 # library, no active build, no recent read to export.

@@ -5555,6 +5555,7 @@ def _pm_interpret_core(user, body, text, history):
     # credit' once reached interpret and drafted a build brief.
     # ------------------------------------------------------------------
     if _pm_pricing_question(text):
+        _pm_ask_hint(route='pricing_fact', outcome='answered')
         return jsonify({'success': False, 'guidance': True,
                         'error': _PM_PRICING_COPY})
     # Subscriber IQ lookup (2026-10-02 Bria): "do you see the X
@@ -5623,6 +5624,25 @@ def _pm_interpret_core(user, body, text, history):
                 pass
             return jsonify({'success': False, 'guidance': True,
                             'error': _wo_reply})
+    # Subject-named status question (2026-10-02 S3 lanes): "is
+    # eastside golf running?" answers from the caller's runs and the
+    # library on this surface too. It drafted a fresh 5-credit build
+    # here while the analysis surface answered the same words.
+    _st_lane = _pm_status_lane(user, text)
+    if _st_lane:
+        _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
+        _pm_ask_hint(route='status_check', outcome=_st_outcome,
+                     subject=_st_subject)
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _st_reply, 'followups': _st_chips})
+    # Typed approval with no brief on screen (2026-10-02 S3 lanes):
+    # "approved" reaching this surface bare means the card is gone
+    # (reload, new tab). It used to become a build for a subject
+    # named "approved".
+    if _pm_approval_word(text):
+        _pm_ask_hint(route='command', outcome='approve_without_draft')
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _PM_APPROVE_NO_DRAFT_COPY})
 
     # ------------------------------------------------------------------
     # INCIDENCE / SAMPLE-SIZE PRE-CHECK (2026-08-19): questions like
@@ -9644,6 +9664,126 @@ def _pm_status_reply_for_runs(runs):
                      "this chat confirms the moment it finishes.")
             lines.append(line)
     return '\n'.join(lines)
+
+
+_PM_STATUS_LEAD_TOKENS = {'my', 'the', 'our', 'that', 'this'}
+
+
+def _pm_library_match(phrase):
+    """The catalog profile the phrase names (distinctive-token
+    containment either way, like the run match), or None."""
+    pt = [w for w in _H._normalize_for_match(phrase).split()
+          if w not in _PM_STATUS_TAIL_TOKENS]
+    if not pt:
+        return None
+    pset = set(pt)
+    best = None
+    try:
+        for entry in _profile_catalog_for_chat():
+            subj = str(entry.get('subject')
+                       or entry.get('display_name') or '').strip()
+            if not subj or ' - ' in subj:
+                continue
+            st = set(_H._normalize_for_match(subj).split())
+            if not st:
+                continue
+            if st <= pset or pset <= st:
+                score = len(st & pset)
+                if best is None or score > best[0]:
+                    best = (score, {
+                        'subject': subj,
+                        's3_key': str(entry.get('s3_key') or ''),
+                        'last_modified': str(entry.get('last_modified')
+                                             or ''),
+                    })
+    except Exception:
+        traceback.print_exc()
+    return best[1] if best else None
+
+
+def _pm_status_lane(user, text):
+    """Deterministic answer for a subject-named status question on
+    either chat surface (2026-10-02 S3 lanes). Returns
+    (reply, followups, outcome, subject) or None when the text is not
+    a status question. A status question never reaches the model: a
+    matching run reads its step, a library profile reads as finished,
+    anything else reads as not started with a build chip."""
+    phrase = _pm_status_ask_subject(text)
+    if not phrase:
+        return None
+    words = phrase.split()
+    while len(words) > 1 and words[0].lower() in _PM_STATUS_LEAD_TOKENS:
+        words.pop(0)
+    phrase = ' '.join(words)
+    try:
+        runs = _pm_status_matching_runs(user, phrase)
+    except Exception:
+        runs = []
+    if runs:
+        return (_pm_status_reply_for_runs(runs), [], 'answered',
+                str(runs[0].get('subject') or phrase))
+    lib = _pm_library_match(phrase)
+    if lib:
+        when = ''
+        try:
+            from datetime import datetime as _dt
+            d = _dt.strptime(str(lib.get('last_modified') or '')[:10],
+                             '%Y-%m-%d')
+            when = d.strftime('%b %-d, %Y')
+        except Exception:
+            when = ''
+        reply = (f"Nothing named {phrase} is building for your account "
+                 f"right now. {lib['subject']} is already in the library"
+                 + (f" (finished {when})." if when else ".")
+                 + " Open it from Select Profile, or ask me to read it "
+                 "here.")
+        return (reply, [f"Analyze {lib['subject']}"], 'in_library',
+                lib['subject'])
+    reply = (f"Nothing named {phrase} is building for your account, and "
+             f"it is not in the library yet. Say 'Build a profile for "
+             f"{phrase}' and I will set up the brief for you to approve.")
+    return (reply, [f"Build a profile for {phrase}"], 'not_found', phrase)
+
+
+# TYPED APPROVAL WITH NO BRIEF (2026-10-02 S3 lanes). The widget turns
+# "approved" into the Approve button while a brief is on screen; the
+# bare word only reaches this surface when the card is gone. Approval
+# vocabulary only - a plain "yes" can still answer a server question.
+_PM_APPROVAL_WORD_RE = re.compile(
+    r"^\s*(?:yes[,.!]?\s*)?(?:approved?|approve\s+(?:it|this|that|the\s+"
+    r"brief)|run\s+it|ship\s+it|proceed|start\s+(?:it|the\s+build)|"
+    r"looks\s+good[,.]?\s*(?:approve|run\s+it|go)|go\s+ahead(?:\s+and\s+"
+    r"(?:run|build)\s+it)?)\s*[.! ]*$", re.I)
+
+_PM_APPROVE_NO_DRAFT_COPY = (
+    "There is no brief waiting for approval in this thread, so there is "
+    "nothing to run yet. Tell me what you want (for example 'Build a "
+    "profile for Eastside Golf' or 'Compare Hulu and Peacock') and I "
+    "will set up the brief for you to approve.")
+
+
+def _pm_last_agent_asked(history):
+    """True when the most recent agent turn in the thread ended on a
+    question, so a bare confirm word is an answer to it."""
+    for h in reversed([h for h in (history or []) if isinstance(h, dict)]):
+        role = str(h.get('role') or '').lower()
+        if role in ('agent', 'assistant'):
+            txt = str(h.get('text') or h.get('content') or '').strip()
+            return txt.endswith('?')
+        if role == 'user':
+            return False
+    return False
+
+
+def _pm_approval_word(text):
+    """True when the message is approval vocabulary and nothing else."""
+    t = str(text or '')
+    try:
+        from prometheus import user_signal as _us
+        t = _us._DATE_RANGE_SUFFIX_RE.sub('', t)
+    except Exception:
+        pass
+    return bool(_PM_APPROVAL_WORD_RE.match(t))
 
 
 # WORK-ORDER VERBS (2026-09-30 Jenna: "do all of them"). Status, ETA,
@@ -14530,6 +14670,7 @@ def _pm_analyze_core(user, body, text, history):
     # before the tier and funds gates - a drained account asking what
     # things cost gets the answer, free, no model call.
     if _pm_pricing_question(text):
+        _pm_ask_hint(route='pricing_fact', outcome='answered')
         return jsonify({'success': True, 'reply': _PM_PRICING_COPY})
     # Challenged-number heads-up (2026-09-30): fire-and-continue;
     # the answer path is untouched.
@@ -14548,6 +14689,16 @@ def _pm_analyze_core(user, body, text, history):
                 'success': True, 'action': 'answer',
                 'reply': _wo_reply, 'followups': [],
                 'offer_deck': False, 'deck_angle': None})
+    # Typed approval with no brief on screen (2026-10-02 S3 lanes):
+    # bare "approved" / "run it" on a dashboard view is not an
+    # analysis ask. Skipped when this chat just asked a question, so
+    # a reply to that question still lands where it belongs.
+    if _pm_approval_word(text) and not _pm_last_agent_asked(history):
+        _pm_ask_hint(route='command', outcome='approve_without_draft')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _PM_APPROVE_NO_DRAFT_COPY, 'followups': [],
+            'offer_deck': False, 'deck_angle': None})
     # Prometheus tier gate (2026-08-26): pulls_only users without the
     # pay-as-you-go opt-in get Jenna's offer instead of any analysis
     # flow. Runs before every branch so no analysis path leaks.
@@ -15195,18 +15346,15 @@ def _pm_analyze_core(user, body, text, history):
     # running?" answers from the caller's own runs. Fires only when a
     # run actually matches the named subject; everything else falls
     # through untouched.
-    _status_phrase = _pm_status_ask_subject(text)
-    if _status_phrase:
-        _status_runs = _pm_status_matching_runs(user, _status_phrase)
-        if _status_runs:
-            _pm_ask_hint(route='status_check', outcome='answered',
-                         subject=str(_status_runs[0].get('subject')
-                                     or _status_phrase))
-            return jsonify({
-                'success': True, 'action': 'answer',
-                'reply': _pm_status_reply_for_runs(_status_runs),
-                'followups': [], 'offer_deck': False,
-                'deck_angle': None})
+    _st_lane = _pm_status_lane(user, text)
+    if _st_lane:
+        _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
+        _pm_ask_hint(route='status_check', outcome=_st_outcome,
+                     subject=_st_subject)
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _st_reply, 'followups': _st_chips,
+            'offer_deck': False, 'deck_angle': None})
     # CUT-REQUEST INTERCEPT (2026-09-28 Jenna): a cut request is a
     # build action - it never rides the analysis pass or replays from
     # the answer library. Parent named in the ask: hand straight to
