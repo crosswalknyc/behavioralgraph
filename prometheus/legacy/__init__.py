@@ -15,7 +15,7 @@ whatever the moved code already used.
 """
 from prometheus.host import HostNotBound
 
-__all__ = ['H', 'bind', 'exports', 'HostNotBound']
+__all__ = ['H', 'C', 'bind', 'bind_core', 'exports', 'HostNotBound']
 
 
 class _HostProxy:
@@ -54,10 +54,23 @@ class _HostProxy:
 
 H = _HostProxy()
 
+# ``C`` is the same proxy shape pointed at the legacy chat module itself
+# (2026-10-02 RCA W3). Families extracted out of chat.py (threads.py,
+# jobs.py, ...) read the helpers that still live in chat.py as
+# ``_C.<name>`` at call time, so a family never imports chat.py and
+# chat.py imports the families last. Tests that exec the legacy text
+# strip ``_C.`` exactly as they strip ``_H.`` (scripts/_pm_test_source).
+C = _HostProxy()
+
 
 def bind(mod):
     """Bind the host namespace (a module or any object with attributes)."""
     H._bind(mod)
+
+
+def bind_core(mod):
+    """Bind the legacy chat module as the core the families read from."""
+    C._bind(mod)
 
 
 def exports(module):

@@ -1,0 +1,240 @@
+{
+  "_about": "The schematic for taking prometheus/legacy/chat.py apart (2026-10-02 RCA W3). Every top-level function and constant in the legacy modules belongs to exactly one family; a name no rule claims fails scripts/test_pm_families.py until someone places it. Families move out of chat.py one at a time: a moved family lives in prometheus/legacy/<module>.py, reads chat.py through the C proxy, and chat.py re-exports its names. Rules are regexes on the name, first match wins; names lists are explicit overrides checked before the rules.",
+  "updated": "2026-10-02",
+  "families": [
+    {
+      "name": "threads",
+      "module": "threads",
+      "moved": true,
+      "purpose": "per-user thread index and the thread routes",
+      "names": [
+        "_load_threads_index",
+        "_pm_thread_key",
+        "_pm_threads_index_key",
+        "_pm_thread_title_from"
+      ],
+      "rules": [
+        "^api_synth_chat_threads"
+      ]
+    },
+    {
+      "name": "jobs",
+      "module": "jobs",
+      "moved": true,
+      "purpose": "job status documents (pm.job.v1), owner check, status routes the widget polls",
+      "names": [
+        "_pm_job_owner_ok",
+        "api_synth_chat_status",
+        "api_synth_chat_read_status"
+      ],
+      "rules": [
+        "_status_write$",
+        "^api_synth_chat_\\w+_status$"
+      ]
+    },
+    {
+      "name": "corrections",
+      "module": "corrections",
+      "moved": false,
+      "purpose": "operator correction pages, regression case banking, user-rejected grading",
+      "rules": [
+        "^_pm_correct",
+        "_regression_",
+        "^_pm_bank_",
+        "^_pm_wrong_answer",
+        "^_PM_WRONG_ANSWER",
+        "^_pm_prev_user_question",
+        "^_pm_replay_repeat_block",
+        "^_pm_reads_as_refusal",
+        "^_PM_FEEDBACK",
+        "_feedback"
+      ]
+    },
+    {
+      "name": "tools",
+      "module": "tools",
+      "moved": false,
+      "purpose": "Brand Partnership IQ, Digital Journey IQ, Flywheel, Attribution IQ intents, intake and kickoff",
+      "rules": [
+        "^_pm_(bpiq|jiq|fw|aiq)",
+        "^_PM_(BPIQ|JIQ|FW|AIQ)",
+        "^api_synth_chat_(bpiq|jiq|fw|aiq)",
+        "^_pm_workorder",
+        "^_pm_attribution",
+        "^_PM_ATTRIBUTION",
+        "^_pm_tool_",
+        "^_pm_intake",
+        "^_PM_INTAKE",
+        "^_pm_panel",
+        "^_PM_PANEL"
+      ]
+    },
+    {
+      "name": "deck",
+      "module": "deck",
+      "moved": false,
+      "purpose": "deck generation request and worker",
+      "rules": [
+        "^_pm_deck",
+        "^_PM_DECK",
+        "^api_synth_chat_deck",
+        "^_pm_build_deck",
+        "_slides?$"
+      ]
+    },
+    {
+      "name": "billing",
+      "module": "billing",
+      "moved": false,
+      "purpose": "pay-per-use sessions, metering, funds and access gates, pricing questions",
+      "rules": [
+        "^_pm_pricing",
+        "^_PM_PRICING",
+        "^_pm_meter",
+        "^_pm_ppu",
+        "^_PM_PPU",
+        "^api_synth_chat_pay_per_use",
+        "^_pm_funds_gate",
+        "^_pm_access_gate",
+        "^_pm_gate_",
+        "^_pm_charge",
+        "^_pm_credits?",
+        "^_PM_.*CREDITS",
+        "^_pm_usage_extras",
+        "^_pm_wallet"
+      ]
+    },
+    {
+      "name": "notify",
+      "module": "notify",
+      "moved": false,
+      "purpose": "emails to users and ops, notify-when-done, proactive nudges",
+      "rules": [
+        "^_pm_email",
+        "^_pm_notify",
+        "^api_synth_chat_notify",
+        "^api_prometheus_proactive",
+        "^_pm_proactive",
+        "_email$",
+        "^_pm_send_",
+        "^_pm_manual_look"
+      ]
+    },
+    {
+      "name": "ledger",
+      "module": "ledger",
+      "moved": false,
+      "purpose": "ask memory, history, remembered asks, usage ledger and ask log taxonomy",
+      "rules": [
+        "^_pm_remember",
+        "^_pm_history",
+        "^api_synth_chat_history",
+        "^_synth_chat_history",
+        "^_load_synth_chat_history",
+        "^_save_synth_chat_history",
+        "^_pm_new_thread_into",
+        "^_pm_memory",
+        "^_pm_ask_",
+        "^_ask_",
+        "^_ASK_",
+        "^_pm_asked_",
+        "^_pm_pop_pending_question",
+        "^_pm_pending_question",
+        "^_pm_note_"
+      ]
+    },
+    {
+      "name": "analyze",
+      "module": "analyze",
+      "moved": false,
+      "purpose": "the analyze surface: reads, measured metrics, CSV answers, read jobs, subscriber lookups, trajectories",
+      "rules": [
+        "^api_synth_chat_analyze",
+        "^_pm_analyze",
+        "^_PM_ANALYZE",
+        "^_pm_generate_metrics",
+        "^_pm_read_",
+        "^_PM_READ",
+        "^_pm_csv",
+        "^_pm_answer_file",
+        "^_pm_subiq",
+        "^_pm_trajectory",
+        "^_pm_year",
+        "^_pm_metric",
+        "^_pm_file_",
+        "^_pm_profile_",
+        "^_pm_shortlist",
+        "^_pm_view_",
+        "^_PM_VIEW",
+        "^_pm_open_screen",
+        "^_pm_base_",
+        "^_PM_BASE",
+        "^_pm_resolve_",
+        "^_pm_intent",
+        "^_pm_parse_",
+        "^_pm_correct_page$"
+      ]
+    },
+    {
+      "name": "intake",
+      "module": "intake",
+      "moved": false,
+      "purpose": "the build intake: interpret, clarify, rebind window, approve, spec from draft, candidates, rescue",
+      "rules": [
+        "^api_synth_chat_(interpret|clarify|rebind_window|approve|active_runs|health)",
+        "^api_internal_intake_canary",
+        "^_pm_interpret",
+        "^_spec_from_draft",
+        "^_synth_chat_interpret",
+        "^_pm_rescue",
+        "^_pm_run_",
+        "^_pm_runs?_",
+        "^_pm_active_runs",
+        "^_pm_approve",
+        "^_pm_candidates",
+        "^_pm_subject",
+        "^_pm_draft",
+        "^_pm_date",
+        "^_pm_window",
+        "^_pm_clarify",
+        "^_pm_rebind",
+        "^_pm_existing_match",
+        "^_pm_build",
+        "^_pm_cut",
+        "^_pm_duplicate",
+        "^_pm_dup_",
+        "^SYNTH_CHAT_",
+        "^_synth_chat_",
+        "^_estimate_run_minutes$",
+        "^_jitter_draft_est_sample$",
+        "^_profile_catalog_for_chat$",
+        "^_shortlist_profile_matches$"
+      ]
+    },
+    {
+      "name": "shared",
+      "module": "chat",
+      "moved": false,
+      "purpose": "cross-family helpers that stay in chat.py until the last family leaves: gate, S3 JSON, model transport, scrubbing, constants",
+      "rules": [
+        "^_synth_chat_gate",
+        "^_pm_s3_",
+        "^_pm_safe_user",
+        "^_pm_claude_",
+        "^_pm_scrub",
+        "^_pm_unpack_resp",
+        "^_pm_answer_gate",
+        "^_pm_draft_decision",
+        "^_EXPORTS$",
+        "^_PM_",
+        "^_pm_",
+        "^api_synth_chat_",
+        "^[A-Z_][A-Z0-9_]*$"
+      ],
+      "names": [
+        "_synth_chat_gate",
+        "_synth_chat_history_key"
+      ]
+    }
+  ]
+}
