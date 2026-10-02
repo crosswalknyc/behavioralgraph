@@ -339,7 +339,7 @@ def _txn_history_csv_response(rows, filename):
     w.writerow([
         "Date (UTC)", "Type", "Company", "User", "Email",
         "Description", "Pull Type", "Credits", "USD",
-        "Balance After", "Job ID",
+        "Balance After", "Job ID", "Stripe Ref",
     ])
     for r in rows or []:
         try:
@@ -358,6 +358,7 @@ def _txn_history_csv_response(rows, filename):
             usd,
             r.get("balance_after") or "",
             r.get("job_id") or "",
+            r.get("stripe_ref") or "",
         ])
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(filename or "history"))
     safe = (safe.strip("_") or "history")[:80]
@@ -1852,7 +1853,7 @@ def admin_companies_billing():
             "member_usernames": [u for u, _ in members],
             "billing_admin_usernames": list(admins),
             "wallet_transactions": list(c.get(
-                "wallet_transactions") or [])[:50],
+                "wallet_transactions") or [])[:500],
             # Company default spend scope (Jenna 2026-09-09). Members
             # whose company_spend_scope is 'inherit' fall through to
             # this list at spend time. See

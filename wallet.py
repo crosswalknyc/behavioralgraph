@@ -1991,15 +1991,39 @@ def wallet_stats(user: dict) -> dict:
 # Wallet writes (in-place, called under _users_cas_mutate)
 # ---------------------------------------------------------------------------
 
+_CREDIT_TXN_KINDS = ("topup", "auto_reload", "refund", "adjustment")
+
+
 def _append_txn(user: dict, txn: dict, cap: int = 500):
     """Insert a transaction record at the head of the user's
     wallet_transactions list, capped at `cap` entries. Preserves
-    audit history newest-first (same pattern as credit_usage_history)."""
+    audit history newest-first (same pattern as credit_usage_history).
+
+    Top-ups, auto-reloads, refunds, and adjustments are never dropped
+    to make room. Only usage rows age out when the list is full.
+    """
     hist = user.setdefault("wallet_transactions", [])
     if not isinstance(hist, list):
         hist = []
     hist.insert(0, txn)
-    user["wallet_transactions"] = hist[:cap]
+    if len(hist) <= cap:
+        user["wallet_transactions"] = hist
+        return
+    credits = [t for t in hist
+               if isinstance(t, dict)
+               and str(t.get("kind") or "") in _CREDIT_TXN_KINDS]
+    allow_deducts = max(0, cap - len(credits))
+    out = []
+    kept_deducts = 0
+    for t in hist:
+        kind = str((t or {}).get("kind") or "") if isinstance(t, dict) else ""
+        if kind in _CREDIT_TXN_KINDS:
+            out.append(t)
+            continue
+        if kept_deducts < allow_deducts:
+            out.append(t)
+            kept_deducts += 1
+    user["wallet_transactions"] = out[:cap]
 
 
 def _now_iso() -> str:
@@ -2121,7 +2145,7 @@ def apply_wallet_topup(user: dict, amount_usd: float, *,
         "amount_usd": amt,
         "balance_after_usd": new,
         "description": description or "Top up",
-        "job_id": "",
+        "job_id": str(stripe_ref or ""),
         "tool": "",
         "stripe_ref": stripe_ref,
     }
@@ -3659,7 +3683,7 @@ def admin_billing_row_for_user(username: str, user: dict,
         "card_last4": str(subject.get(
             "stripe_payment_method_last4") or ""),
         "wallet_transactions": list(subject.get(
-            "wallet_transactions") or [])[:50],
+            "wallet_transactions") or [])[:500],
         "billed_via_company": billed,
         "company_wallet_name": key if billed else "",
         "plan": str(user.get("plan") or ""),
@@ -3816,7 +3840,7 @@ def _history_identities(username, user) -> set:
 
 def _history_row(*, used_at="", kind="", company="", username="",
                  email="", description="", pull_type="", credits=0,
-                 usd=0.0, balance_after="", job_id=""):
+                 usd=0.0, balance_after="", job_id="", stripe_ref=""):
     try:
         usd_n = round(float(usd or 0), 2)
     except (TypeError, ValueError):
@@ -3837,6 +3861,7 @@ def _history_row(*, used_at="", kind="", company="", username="",
         "usd": usd_n,
         "balance_after": balance_after if balance_after != "" else "",
         "job_id": job_id or "",
+        "stripe_ref": stripe_ref or "",
     }
 
 
@@ -3905,6 +3930,11 @@ def _rows_from_wallet_txns(txns, *, company, default_username="",
             usd=usd_n,
             balance_after=bal_s,
             job_id=t.get("job_id") or "",
+            stripe_ref=(
+                str(t.get("stripe_ref") or "").strip()
+                or str(t.get("stripe_payment_intent") or "").strip()
+                or str(t.get("stripe_checkout_session") or "").strip()
+            ),
         ))
     return out
 
@@ -3978,12 +4008,22 @@ def collect_transaction_history(data, username="", scope="self",
     seen = set()
     out = []
     for row in rows:
-        key = (
-            (row.get("username") or "").lower(),
-            norm_usage_desc(row.get("description")),
-            str(row.get("job_id") or ""),
-            str(row.get("kind") or ""),
-        )
+        kind = str(row.get("kind") or "")
+        if kind in ("Top-up", "Auto-reload", "Refund", "Adjustment"):
+            key = (
+                kind,
+                row.get("used_at") or "",
+                str(row.get("usd") or ""),
+                str(row.get("stripe_ref") or row.get("job_id") or ""),
+                norm_usage_desc(row.get("description")),
+            )
+        else:
+            key = (
+                (row.get("username") or "").lower(),
+                norm_usage_desc(row.get("description")),
+                str(row.get("job_id") or ""),
+                kind,
+            )
         if key in seen:
             continue
         seen.add(key)

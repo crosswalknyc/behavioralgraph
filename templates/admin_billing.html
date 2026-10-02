@@ -758,7 +758,7 @@
         <div style="display:flex; justify-content:space-between;
                     align-items:center; gap:12px; margin: 0 0 12px 0;">
           <h3 style="margin: 0; font-size: 16px;">
-            Transaction history (last 50)
+            Transaction history
           </h3>
           <button type="button" class="secondary" id="m-txn-csv">
             Download CSV
@@ -1265,7 +1265,7 @@
       html += '<th style="text-align:right;">Amount</th>';
       html += '<th style="text-align:right;">Balance</th>';
       html += '</tr></thead><tbody>';
-      txns.slice(0, 50).forEach(t => {
+      txns.forEach(t => {
         const amt = Number(t.amount_usd || 0);
         const cls = amt >= 0 ? 'positive' : '';
         const sign = amt >= 0 ? '+' : '';
