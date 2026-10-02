@@ -1,7 +1,7 @@
 {
  "version": 1,
- "content_hash": "0a3c0ba27cfe3015a91d61dee5f55de6b41644633fdbbf893f87a4135c95a7a7",
- "examples_hash": "91f2c305c1dd55dc00340e821fc9d0e7c8a1aa7e3687c74e2e147d30eca8d5cc",
+ "content_hash": "a2db5107ca09b82244cff40d3493a246196b2144ce1e05ee460c9660f1e9bf53",
+ "examples_hash": "23779081bef9505d73063b02c81b4e9acc6d452f0753b526b026f431988aa63d",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
@@ -115,9 +115,35 @@
   "playbook_competitive_overlap": {
    "title": "COMPETITIVE OVERLAP PLAYBOOK",
    "text": "Applies to overlap asks: shared audience between two subjects, also-watch and also-buy reads, head-to-head comparisons. Evidence: both subjects' rows (load the comparison view when available), the categories both audiences hold, delivered overlap reads (binding), and each side's audience count. Compute: set arithmetic binds every number: an overlap never exceeds the smaller audience; a union is at most the sum and at least the larger of its parts. Read direction: which audience over-indexes on the other's core categories. Name the shared strongholds (both sides over-index) and each side's exclusive edge, then size the shared audience in projected US people when the stored reads support it. Research nothing here that the rows do not hold; a gap is stated as a gap. Verify: the set bounds hold; every quoted penetration matches its profile; computed overlap counts speak flat, affinity and rivalry color stays directional (leans, skews)."
+  },
+  "playbook_event_impact": {
+   "title": "EVENT IMPACT PLAYBOOK",
+   "text": "Applies to did-it-move asks: did a premiere, episode, campaign, sampling, viral clip, tour date, or press moment change digital behavior for a subject. Evidence: the subject's daily or weekly rows for the behavior in question (search, visits, plays, signups, purchases), a pre-window of equal length ending the day before the event, a control (the same behavior for the US average or an unexposed peer over the same days), and any delivered impact figure for the same event (binding). Compute: baseline is the pre-window daily average; lift is post minus baseline, stated as a count and as a multiple ('2.3x the prior two weeks'); net of control when the control also moved; decay is the day the series returns to within 10 percent of baseline. Never credit the event with more than the post-window total minus baseline. Research the event date, air time, and any overlapping release from public schedules and press as background, never named in the reply. Verify: pre and post windows are equal length; baseline, post total, and lift reconcile to the digit; counts end in a digit 1 through 9; measured lift speaks flat, cause beyond timing stays directional (consistent with, tracks)."
+  },
+  "playbook_journey_path": {
+   "title": "JOURNEY PATH PLAYBOOK",
+   "text": "Applies to path asks: how people moved from a first touch (a clip, a search, a social post, a free episode) to a purchase, rental, signup, or subscription, where they dropped, and how long it took. Evidence: the ordered step counts for the cohort (first touch, intermediate steps, the conversion), the platform of conversion, time between steps, and any delivered journey for the same subject (binding; reuse its step counts). Compute: a funnel where each step is a subset of the one before it; step share is this step over the first touch; drop is the gap between adjacent steps, named by where it happened ('most left at the paywall, not during the episode'); median days to convert from the first touch. Split converters by platform when the rows hold it, shares summing to 100. Research release dates, price points, and free-window terms as background, never named in the reply. Verify: no step exceeds the step before it; platform shares sum to 100; a step count repeated from a delivered journey matches it to the digit; counts and shares speak flat, why-they-left reads stay directional."
+  },
+  "playbook_subscriber_churn": {
+   "title": "SUBSCRIBER CHURN PLAYBOOK",
+   "text": "Applies to retention asks: churn, cancels, retention, reactivation, how many signups stayed, which titles hold subscribers. Evidence: the service's account rows by month (active, new, canceled, reactivated), the acquisition title or cohort when the ask names one, the 30, 60, and 90 day retention points, and delivered churn figures for the same service and window (binding). Definitions, stated once in plain words on first use: monthly churn is accounts canceled in the month over accounts active at its start; a reactivation is an account that returns after at least 30 days away; a cohort is the accounts that signed up in one window. Compute: churn per month, then the window average weighted by starting accounts; cohort survival at 30, 60, 90 days as a share of the cohort; compare against the service's all-account rate so the reader sees better or worse and by how much. Counts are accounts or people, never homes. Verify: canceled never exceeds active at start; survival shares fall or hold over time, never rise; a churn figure delivered before for the same window is restated at the same number; rates speak flat, why-they-left stays directional."
+  },
+  "playbook_ip_assessment": {
+   "title": "IP ASSESSMENT PLAYBOOK",
+   "text": "Applies to property asks: how strong a title, book, comic, YouTube property, or talent-attached project is as an acquisition or adaptation. Unless the asker drops one, answer five questions for every IP in the ask, same definitions side by side: relative popularity (projected US people who engaged in the window), audience demographics, share that used Prime Video in the trailing 30 days, SVOD churn of those people (monthly cancel rate and share that canceled any service in the year), and the on-Prime versus not split with where the rest sit by platform. Evidence: the title's own rows when a profile exists, the creator or author halo as a separate universe (the title is the IP, the halo is the conversion pool; never substitute one for the other), and any delivered read for the same IP and window (binding; never re-draw it). Compute: sample from the countable anchor times a reasoned engaged share; every figure ends in a digit 1 through 9; two IPs never share the same Prime Video share or the same churn. Research the property's publication, release, and platform history as background, never named in the reply. Verify: on plus off Prime equals the audience; platform shares for the rest sum to 100; demos sum to 100; a repeat ask on the same IP and window restates the saved numbers."
+  },
+  "playbook_audience_profile": {
+   "title": "AUDIENCE PROFILE PLAYBOOK",
+   "text": "Applies to who-they-are asks: the demo shape, the generation split, where an audience over-indexes, the target demo. Evidence: the profile's demographic rows (gender, age, income, ethnicity, education, parental status), the same rows for the US average, the top interest and brand rows by index, and any delivered demo read for the subject (binding). Compute: each demographic category sums to 100; index is the audience share over the US share times 100, quoted bare and paired with a plain comparison ('1.8x the US average'); generations map from age rows by the standard birth-year bands and are labeled as such; lead with the two or three facts that most set this audience apart, then the full table. Name the concentrations (female 18 to 34, income over 100K) in words a layman reads cold. Verify: every category sums to 100; indexes recompute from the two shares; an age band repeated from a delivered read matches it to the digit; shares and indexes speak flat, who-they-are color (aspirational, value-minded) stays directional."
   }
  },
  "examples": {
+  "audience_profile": {
+   "subject": "Abby Lee Miller",
+   "title": "Abby Lee Miller",
+   "q": "what is the target demo for Abby Lee Miller?",
+   "text": "Target reads as women 25 to 44, mid-market, and mostly without kids at home.\n\nTHE CORE\n- Female 90.3% of the audience, which is +27.7pp over the median ACTOR audience in the corpus. Applied to the 441,835 projected audience, that is 398,977 women.\n- Age carves cleanly (MECE): 25-34 is 28.8%, 35-44 is 25.4%, 45 and over is 32.3%, under 25 is 13.5%. The 25-44 block holds 54.2%, and 25-34 alone runs +10.7pp over peer norms.\n- Mid-market, not affluent: 65.2% hold no bachelors degree, 59.0% earn under $75K. Occupation clusters in Service & Hospitality 17.4% and Healthcare 13.5%.\n\nTHE NON-OBVIOUS PART\n- This is not a ..."
+  },
   "audience_sizing": {
    "subject": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles)",
    "title": "The Roku Channel franchise titles (benchmark set vs The Spiderwick Chronicles) | US viewers of franchise titles on The Roku Channel, matched to the Spiderwick window | Sep 29 2023 to Sep 29 2026",
@@ -136,11 +162,29 @@
    "q": "I'm interested in comparing the generational breaks for The God of the Woods Readers profile versus the generational breaks (Boomers, Gen X, Gen Z, and Millennials) for Gen Pop 2026 to get an index for each generation.  In which Generations does The God of the Woods Readers overindex?",
    "text": "The file overindexes in two bands only: Millennials index 186 against the US general population and Gen X 142, while Gen Z (47) and Boomers and older (22) sit well below average.\n\nMillennials, index vs US Gen Pop 2026: 186, Gen X, index vs US Gen Pop 2026: 142, Gen Z, index vs US Gen Pop 2026: 47.\n\nGenerational band mix, Sep 18 2025 to Sep 18 2026 (share of the audience's projected US people, indexed against the same band in US Gen Pop 2026)\n- Millennials: 49.8% share, 26.8% penetration. index 186. 687,413 projected US people; the strongest overindex on the file, spine of the readership at 25-34 and 35-44\n- Gen ..."
   },
+  "event_impact": {
+   "subject": "The Spiderwick Chronicles (Roku Channel)",
+   "title": "The Spiderwick Chronicles (Roku Channel) | Sep 29 2023 to Sep 29 2026",
+   "q": "answer this now: how much impact did the tv series Spiderwick Chronicles have on Roku over the last three years",
+   "text": "The Spiderwick Chronicles pulled 14.7M US viewers onto The Roku Channel across the three years, and 3,148,627 of them opened the app for the first time on the series.\n\nMEASURED READ (Sep 29 2023 to Sep 29 2026)\n- Unique US viewers on The Roku Channel: 14,712,483 (distinct US individuals with at least one play of a Spiderwick Chronicles episode on The Roku Channel in the window)\n- First-ever Roku Channel users acquired on the series: 3,148,627 (viewers whose first recorded Roku Channel session in the window was a Spiderwick Chronicles play)\n- Share of series viewers who were new to the app: 21.4% (first-ever Roku ..."
+  },
+  "journey_path": {
+   "subject": "UFC on Paramount+ (Journey B: UFC-first sign-ups)",
+   "title": "UFC on Paramount+ (Journey B: UFC-first sign-ups) | Journey B UFC-first Paramount+ sign-ups who churned, observed on Hulu after the churn date | Jan 1 2026 to Aug 14 2026",
+   "q": "of people who subscribed to paramount+ from ufc and churned what did they then watch on hulu?",
+   "text": "Family Guy is the top post-churn Hulu landing spot for Journey B churners: 23.4% of the 2.1M churned cohort reached it, index 214 vs Hulu's general viewer base.\n\nJourney B churners: 2,095,847, Churners viewing on Hulu after the churn date: 1,295,247, Adult animation share of post-churn Hulu viewing: 36.2%.\n\nHulu title watched post-churn mix, Jan 1 2026 to Aug 14 2026 (share of the churned cohort's post-churn Hulu viewing signals (penetration = share of the 2,095,847 churners reaching th)\n- Family Guy: 16.2% share, 23.4% penetration. 490,428 churners reached, index 214, adult animation\n- King of the Hill: 10.3% ..."
+  },
   "sponsorship_fit": {
    "subject": "Shark Tank",
    "title": "Shark Tank | Shark Tank engagers | Jul 1 2025 to Jun 30 2026",
    "q": "Which specific Shark Tank brand categories (CPG, pet, beauty, travel) show the highest purchase index among engagers for a category-level sponsorship pitch?",
    "text": "Pet products are the standout purchase category for Shark Tank engagers. Ranked by purchase index against the US general population, matched brand for brand on the same data behind the credit and investment reads already delivered (American Express 289, Apple Credit 347, E-Trade 636):\n\n1. Pets, index 177. The deepest lift of the four, and it is show-made: tank-alumni brands carry it (Maev 3.3% pen, Little Hunter 3.2% pen, Maxbone 2.7% pen, each running several times its national baseline).\n2. Beauty and wellness, index 127. Broad lift across 300+ matched brands, with the sharpest signals on premium and niche ..."
+  },
+  "subscriber_churn": {
+   "subject": "Dark Matter (Apple TV+), Season 1 and Season 2",
+   "title": "Dark Matter (Apple TV+), Season 1 and Season 2 | Apple TV+ accounts activated or reactivated inside each season's first 30 days whose attributed first play was a Dark Ma | Season 1 first 30 days May 8 to Jun 7 2024 vs Season 2 first 30 days Aug 28 to S",
+   "q": "please only compare the first 30 days of season 1 to season 2",
+   "text": "On matched first 30 days, Season 2 pulled 238,417 attributed new US signups against Season 1's 146,643, 91,774 more accounts (62.6%), off a conversion rate that fell from 4.9% to 4.1%.\n\nMEASURED READ (Season 1 first 30 days May 8 to Jun 7 2024 vs Season 2 first 30 days Aug 28 to S)\n- Season 1 attributed new US signups, first 30 days: 146,643 (new paid US Apple TV accounts activated May 8 to Jun 7 2024 whose first title played within 72 hours of activation was a Dark Matter Season 1 episode)\n- Season 2 attributed new US signups, first 30 days: 238,417 (new paid US Apple TV accounts activated Aug 28 to Sep 27 2026 ..."
   },
   "talent_value": {
    "subject": "Dark Matter Season 2",
@@ -155,5 +199,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-10-01T16:48:14Z"
+ "generated_at": "2026-10-02T01:46:48Z"
 }

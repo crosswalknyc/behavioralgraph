@@ -200,6 +200,27 @@ _PLAYBOOK_RXES = [
     ('playbook_sponsorship_fit', re.compile(
         r'sponsor\w*|partner\w*|endorse\w*|collab\w*|brand fit|'
         r'activation|which brands? (?:fit|should)', re.IGNORECASE)),
+    # 2026-10-01 families. Specific vocabulary sits ahead of the broad
+    # value / compare / reach matchers so an IP read, an event read, a
+    # path read, or a churn read is not swallowed by them.
+    ('playbook_ip_assessment', re.compile(
+        r'\bip\b|ip assessment|assess\w*|adaptation|option(?:ing)? the|'
+        r'prime video t30|(?:book|comic|graphic novel|youtube (?:ip|'
+        r'property|series)|property)\b.{0,80}\b(?:audience|popular|'
+        r'worth|strong|viable|demand)', re.IGNORECASE | re.DOTALL)),
+    ('playbook_event_impact', re.compile(
+        r'\bimpact\b|\blift\b|did .{0,40}\b(?:move|drive|change|spike|'
+        r'bump)|before and after|pre[- /]post|after the (?:premiere|'
+        r'episode|campaign|clip|segment|ad|game|event)|sampling|'
+        r'viral (?:clip|moment)', re.IGNORECASE | re.DOTALL)),
+    ('playbook_journey_path', re.compile(
+        r'journey|\bpath\b|\bfunnel\b|clip to|paywall|bounce\w*|'
+        r'convert\w*|how (?:did|do) .{0,40}\b(?:get|move|go) (?:from|to)\b',
+        re.IGNORECASE | re.DOTALL)),
+    ('playbook_subscriber_churn', re.compile(
+        r'churn\w*|cancel\w*|retention|retain\w*|reactivat\w*|'
+        r'how many .{0,30}(?:stayed|kept|still subscrib)|survival',
+        re.IGNORECASE | re.DOTALL)),
     ('playbook_talent_value', re.compile(
         r'\bvalue\b|\bworth\b|rate card|media value|talent fee|'
         r'signups?|what (?:should|would) \w+ (?:pay|charge)',
@@ -218,6 +239,12 @@ _PLAYBOOK_RXES = [
         r'how (?:big|many|large)|audience size|size of|sizing|'
         r'projected (?:us )?(?:audience|reach)|total addressable|'
         r'\breach\b', re.IGNORECASE)),
+    ('playbook_audience_profile', re.compile(
+        r'\bdemo(?:s|graphics?)?\b|target demo|generation\w*|gen ?z|'
+        r'millennial|boomer|gen ?x|over-?index\w*|\bskew\w*|'
+        r'composition|who (?:is|are) (?:the|this|their|its|his|her)|'
+        r'(?:age|gender|income) (?:split|breakdown|mix)|make-?up of',
+        re.IGNORECASE)),
 ]
 
 
