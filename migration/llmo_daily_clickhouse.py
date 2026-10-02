@@ -55,6 +55,12 @@ from typing import Any, Iterable, Optional
 import boto3
 import clickhouse_connect
 
+# Same import pattern the other migration/ scripts use so `python3
+# migration/llmo_daily_clickhouse.py` (repo-root cwd) can still resolve
+# the sibling helper.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from url_pii_redaction import wrap_url_column  # noqa: E402  (defense-in-depth PII scrub)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
@@ -66,8 +72,8 @@ logger = logging.getLogger('llmo_daily')
 
 CH_HOST       = os.environ.get('CH_HOST',     '168.119.215.48')
 CH_PORT       = int(os.environ.get('CH_PORT', '8123'))
-CH_USER       = os.environ.get('CH_USER',     'jessie')
-CH_PASSWORD   = os.environ.get('CH_PASSWORD', '5Icl8SvwmzWMiZUNMZfv')
+CH_USER       = os.environ.get('CH_USER',     'bgapp')
+CH_PASSWORD   = os.environ.get('CH_PASSWORD', '')
 CH_DATABASE   = os.environ.get('CH_DATABASE', 'clickstream')
 
 OPENAI_KEY    = os.environ.get('OPENAI_API_KEY', '')
@@ -179,6 +185,12 @@ _AI_MATCH_EXPR = """(
           'claude\\\\.ai|anthropic\\\\.com|deepseek\\\\.com')
 )"""
 
+# Defense-in-depth: even though clickstream_final is redacted at every
+# write path (2026-08-31 lockdown), wrap f.URL in the same email-substring
+# scrub before it lands in llmo_events. If a future writer regresses, the
+# leak stops at this ETL boundary.
+_URL_REDACTED = wrap_url_column("f.URL")
+
 INSERT_LLMO_EVENTS_SQL = f"""
 INSERT INTO clickstream.llmo_events
     (UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED,
@@ -191,7 +203,7 @@ WITH ai_user_days AS (
 ),
 base AS (
     SELECT
-        f.UID, f.BROWSER, f.PLATFORM, f.URL, f.VISIT_TS, f.DELIVERED,
+        f.UID, f.BROWSER, f.PLATFORM, {_URL_REDACTED} AS URL, f.VISIT_TS, f.DELIVERED,
         trim(splitByChar('|', f.COMMON_NAME)[1]) AS cn_first,
         f.TICKER, f.DOMAIN,
         if(
@@ -218,7 +230,7 @@ sequenced AS (
                  ORDER BY VISIT_TS, URL, cn_first, PLATFORM, BROWSER
                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 )
-SELECT
+        SELECT
     UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED,
     nullIf(trim(cn_first), '') AS COMMON_NAME, TICKER, DOMAIN,
     multiIf(

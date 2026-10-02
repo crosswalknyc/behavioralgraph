@@ -20,6 +20,32 @@
 
 set -eu
 
+# Case C (2026-10-02 RCA W3): twin modules are GENERATED from the parent
+# repo (scripts/module_twins.json + scripts/sync_module_twins.py). A
+# staged twin that does not match its source is a hand edit, and hand
+# edits are how twins drift. When this clone sits inside the parent
+# checkout (../scripts/sync_module_twins.py exists), block the commit
+# for any staged twin that differs from its source. Pure byte compares,
+# never writes. Skipped when the parent is not present (bare clone, CI).
+TWIN_GEN="../scripts/sync_module_twins.py"
+if [ -f "$TWIN_GEN" ]; then
+    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.py$' || true)
+    if [ -n "$STAGED_PY" ]; then
+        ONLY=""
+        for f in $STAGED_PY; do ONLY="$ONLY bg-webapp/$f"; done
+        # shellcheck disable=SC2086
+        if ! (cd .. && python3 scripts/sync_module_twins.py --quiet --only $ONLY); then
+            echo ""
+            echo "[pre-commit] COMMIT BLOCKED: a staged twin module differs from its source."
+            echo "[pre-commit] Twins are generated, never edited here. Fix the parent copy, then:"
+            echo "[pre-commit]     (cd .. && python3 scripts/sync_module_twins.py --write)"
+            echo "[pre-commit] re-stage, and commit again. Bypass only with --no-verify;"
+            echo "[pre-commit] the nightly test_module_twin_sync will still flag the drift."
+            exit 1
+        fi
+    fi
+fi
+
 STAGED=""
 if git diff --cached --name-only | grep -qE '^templates/index\.html$'; then
     STAGED=1
