@@ -18842,7 +18842,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            fits edge-to-edge on a phone (header + rows share this grid, so
            they stay aligned). */
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row {
-            grid-template-columns: 46px minmax(0, 1fr) 44px 48px 38px !important;
+            grid-template-columns: 48px minmax(84px, 1fr) 46px 48px 38px !important;
             gap: 4px !important;
         }
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row.head {
@@ -18859,25 +18859,32 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .idx {
             font-size: 10px !important;
         }
-        /* Break long segment / category words so they wrap inside their own
-           column instead of spilling over the next one (fixes e.g.
-           "BACHELOR'S" overlapping the Profile value). */
+        /* Wrap Segment / Category at word boundaries only (never mid-word);
+           the floored tracks above keep them from collapsing to one letter
+           per line. */
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .key,
         #dashboardView.piq-v4 .dashboard-tab-content .piq-data-row .name {
             min-width: 0 !important;
-            overflow: hidden !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word !important;
+            overflow: visible !important;
+            white-space: normal !important;
+            overflow-wrap: normal !important;
+            word-break: normal !important;
         }
-        /* Key Differentiators table: keep the columns comfortable and let the
-           whole table scroll sideways when it can't fully fit. Header + data
-           rows both live in #demoDifferentiators, so they scroll together. */
-        #dashboardView.piq-v4 #demoDifferentiators {
+        /* Key Differentiators (#demoDifferentiators): v4 ships desktop-width
+           columns (130/88/88/72) that collapse the Segment track to ~0 on a
+           phone, which is why "BACHELOR'S" broke one letter per line. Use
+           phone widths (3 ids beat v4's #tab-demographics rule) with a
+           floored Segment track, and let the table scroll sideways; header +
+           rows share the container, so they scroll together. */
+        #dashboardView.piq-v4 #tab-demographics #demoDifferentiators {
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
         }
-        #dashboardView.piq-v4 #demoDifferentiators .piq-data-row {
-            min-width: 340px !important;
+        #dashboardView.piq-v4 #tab-demographics #demoDifferentiators .piq-data-row {
+            grid-template-columns: 60px minmax(96px, 1fr) 52px 56px 44px !important;
+            gap: 8px !important;
+            width: auto !important;
+            min-width: 100% !important;
         }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
