@@ -3495,6 +3495,107 @@ def attach_paid_only_company(users_data: dict, company_name: str, *,
     return rec, applied, skipped
 
 
+def apply_full_dashboard_seat(user: dict) -> dict:
+    """Undo apply_prometheus_only_seat. Full catalog. Product tabs on.
+
+    Does not touch wallet, card, password, or billing_source. WBD and
+    public-signup seats are not converted here.
+    """
+    if not isinstance(user, dict):
+        return user
+    if is_public_signup_seat(user):
+        return user
+    if is_wbd_company(str(user.get("company") or "")):
+        return user
+    if str(user.get("plan") or "").strip() == PROMETHEUS_SELF_SERVE_PLAN:
+        user["plan"] = None
+    user["has_chatbot_profile_iq_access"] = True
+    user["prometheus_access"] = "full"
+    if str(user.get("prometheus_mode") or "").strip() not in (
+            "analysis", "pull", "both"):
+        user["prometheus_mode"] = "both"
+    for flag in _PROMETHEUS_ONLY_FALSE_FLAGS:
+        user[flag] = True
+    user["allowed_runs"] = ["*"]
+    user["allowed_categories"] = ["*"]
+    user["allowed_behavioral_categories"] = ["*"]
+    for key in _PROMETHEUS_ONLY_EMPTY_LISTS:
+        if key in ("allowed_categories", "allowed_behavioral_categories"):
+            continue
+        if key.endswith("_runs") or key.endswith("_tabs") or key in (
+                "impact_iq_journeys", "rankers_iq_options",
+                "hedge_fund_iq_tickers"):
+            user[key] = ["*"]
+    for field in _CATALOG_LIST_FIELDS:
+        user[field] = ["*"]
+    user["allowed_lenses"] = ["*"]
+    aan = user.get("auto_access_new")
+    if not isinstance(aan, dict):
+        aan = {}
+    aan["profile_iq"] = True
+    user["auto_access_new"] = aan
+    return user
+
+
+def mark_company_full_access(users_data: dict, company_name: str) -> dict:
+    """Clear the paid-reports-only stamp so new seats stay full access."""
+    name = str(company_name or "").strip()
+    if not name or not isinstance(users_data, dict):
+        return {}
+    if is_wbd_company(name):
+        return ((users_data.get("companies") or {}).get(name) or {})
+    rec = ((users_data.get("companies") or {}).get(name) or {})
+    if not isinstance(rec, dict):
+        return {}
+    rec["member_prometheus_only"] = False
+    return rec
+
+
+def detach_paid_only_seat(user: dict, users_data: dict, *,
+                          username: str = "",
+                          unstamp_company: bool = False):
+    """Turn paid-reports-only off for one seat.
+
+    WBD and public-signup seats stay locked. Staff are a no-op.
+    """
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return None
+    if is_internal_staff_seat(user, username):
+        return None
+    if is_public_signup_seat(user):
+        return None
+    company = str(user.get("company") or "").strip()
+    if is_wbd_company(company):
+        return None
+    apply_full_dashboard_seat(user)
+    billed = str(user.get("billing_source") or "").strip().lower() == "company"
+    if unstamp_company and company and billed:
+        mark_company_full_access(users_data, company)
+    return user
+
+
+def detach_paid_only_company(users_data: dict, company_name: str):
+    """Turn paid-reports-only off for a company wallet and members."""
+    name = str(company_name or "").strip()
+    if not name or not isinstance(users_data, dict):
+        return None, [], []
+    if is_wbd_company(name):
+        return None, [], []
+    rec = mark_company_full_access(users_data, name)
+    applied = []
+    skipped = []
+    for uname, member in company_members(name, users_data):
+        if is_internal_staff_seat(member, uname):
+            skipped.append(uname)
+            continue
+        if is_public_signup_seat(member):
+            skipped.append(uname)
+            continue
+        apply_full_dashboard_seat(member)
+        applied.append(uname)
+    return rec, applied, skipped
+
+
 def company_teammate_usernames(user: dict, users_data: dict,
                                username: str = "") -> list:
     """Usernames that share this user's company wallet, buyer first.
@@ -4450,6 +4551,8 @@ __all__ = [
     "already_owns_paid_run",
     "company_wants_paid_only", "mark_company_paid_only",
     "attach_paid_only_seat", "attach_paid_only_company",
+    "apply_full_dashboard_seat", "mark_company_full_access",
+    "detach_paid_only_seat", "detach_paid_only_company",
     "company_paid_runs", "grant_company_paid_runs",
     "inherit_company_paid_runs",
     "company_teammate_usernames",

@@ -6144,6 +6144,9 @@ def update_user(username):
         elif _want_paid:
             _wallet_co.attach_paid_only_seat(
                 user, data, wipe_catalog=True, username=username)
+        elif _already_paid:
+            _wallet_co.detach_paid_only_seat(
+                user, data, username=username, unstamp_company=True)
         elif (
             _wallet_co.company_wants_paid_only(data, user.get('company'))
             and str(user.get('billing_source') or '').lower() == 'company'

@@ -4564,7 +4564,7 @@
                             <span style="font-size: 1.35rem; line-height: 1;">🔓</span>
                             <div style="flex: 1; min-width: 220px;">
                                 <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Paid reports only</div>
-                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">They only see Prometheus and the reports they pay to pull. Anyone on the same company wallet sees those same paid reports. New people you add to that company get the same access.</div>
+                                <div style="color: var(--text-secondary); font-size: 0.72rem; margin-top: 0.2rem;">They only see Prometheus and the reports they pay to pull. Anyone on the same company wallet sees those same paid reports. New people you add to that company get the same access. Click the button again to turn this off.</div>
                             </div>
                         </div>
                         <label class="checkbox-group" style="margin-bottom: 0.55rem;">
@@ -10368,6 +10368,8 @@
             if (_paidBoxAdd) _paidBoxAdd.checked = false;
             const _paidBadgeAdd = document.getElementById('paidOnlyOnBadge');
             if (_paidBadgeAdd) _paidBadgeAdd.style.display = 'none';
+            const _paidBtnAdd = document.getElementById('paidOnlyApplyBtn');
+            if (_paidBtnAdd) _paidBtnAdd.textContent = 'Paid reports only';
             if (typeof _paidOnlyStatus === 'function') _paidOnlyStatus('');
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
@@ -10640,6 +10642,12 @@
             if (_paidBox) _paidBox.checked = _paidOn;
             const _paidBadge = document.getElementById('paidOnlyOnBadge');
             if (_paidBadge) _paidBadge.style.display = _paidOn ? 'inline' : 'none';
+            const _paidBtn = document.getElementById('paidOnlyApplyBtn');
+            if (_paidBtn) {
+                _paidBtn.textContent = _paidOn
+                    ? 'Turn off paid reports only'
+                    : 'Paid reports only';
+            }
             if (typeof _paidOnlyStatus === 'function') _paidOnlyStatus('');
             if (_bs) _bs.value = (user.billing_source === 'company')
                 ? 'company' : 'user';
@@ -14392,27 +14400,38 @@
         function applyPaidOnlyAccess() {
             var uname = _currentEditUsernameForApi();
             var box = document.getElementById('newPaidOnlyAccess');
+            var badge = document.getElementById('paidOnlyOnBadge');
+            var paidOn = !!(box && box.checked)
+                || (badge && badge.style.display !== 'none');
             if (!uname) {
-                if (box) box.checked = true;
+                if (box) box.checked = !paidOn;
                 _paidOnlyStatus(
-                    'Checked. This will apply when you save the user.',
+                    (box && box.checked)
+                        ? 'Checked. This will apply when you save the user.'
+                        : 'Unchecked. Save to keep the dashboard tabs on.',
                     'ok');
                 return;
             }
-            if (!confirm(
-                    'This turns off every dashboard tab except Prometheus. '
-                    + 'They will only see reports they pay to pull. '
-                    + 'Continue?')) {
+            var turningOn = !paidOn;
+            if (!confirm(turningOn
+                    ? ('This turns off every dashboard tab except Prometheus. '
+                        + 'They will only see reports they pay to pull. '
+                        + 'Continue?')
+                    : ('Turn paid reports only off for this user? '
+                        + 'Dashboard tabs come back.'))) {
                 return;
             }
             var btn = document.getElementById('paidOnlyApplyBtn');
-            if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = turningOn ? 'Applying...' : 'Turning off...';
+            }
             _paidOnlyStatus('');
             fetch('/api/admin/user/' + encodeURIComponent(uname)
                   + '/paid-only-access', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: '{}'
+                body: JSON.stringify({ enabled: turningOn })
             })
                 .then(function (r) {
                     return r.json().then(function (d) {
@@ -14421,14 +14440,18 @@
                 })
                 .then(function (res) {
                     if (res.ok && res.d && res.d.success) {
-                        if (box) box.checked = true;
-                        var badge = document.getElementById('paidOnlyOnBadge');
-                        if (badge) badge.style.display = 'inline';
+                        if (box) box.checked = turningOn;
+                        if (badge) {
+                            badge.style.display = turningOn ? 'inline' : 'none';
+                        }
                         if (allUsers[uname]) {
-                            allUsers[uname].plan = 'prometheus_self_serve';
+                            allUsers[uname].plan = turningOn
+                                ? 'prometheus_self_serve' : null;
                         }
                         _paidOnlyStatus(
-                            'On. They only see Prometheus and paid reports.',
+                            turningOn
+                                ? 'On. They only see Prometheus and paid reports.'
+                                : 'Off. Dashboard tabs are back.',
                             'ok');
                         if (typeof loadUsers === 'function') {
                             loadUsers().then(function () {
@@ -14436,7 +14459,9 @@
                                     editUser(uname);
                                 }
                                 _paidOnlyStatus(
-                                    'On. They only see Prometheus and paid reports.',
+                                    turningOn
+                                        ? 'On. They only see Prometheus and paid reports.'
+                                        : 'Off. Dashboard tabs are back.',
                                     'ok');
                             }).catch(function () {});
                         }
@@ -14444,9 +14469,11 @@
                         var code = (res.d && res.d.error) || '';
                         var msg = code === 'staff_blocked'
                             ? 'Internal accounts keep full access.'
-                            : (code === 'user_not_found'
-                                ? 'Save this user first, then click again.'
-                                : 'Could not apply. Try again.');
+                            : (code === 'wbd_locked'
+                                ? 'This company stays on paid reports only.'
+                                : (code === 'user_not_found'
+                                    ? 'Save this user first, then click again.'
+                                    : 'Could not apply. Try again.'));
                         _paidOnlyStatus(msg, 'error');
                     }
                 })
@@ -14457,7 +14484,14 @@
                 .finally(function () {
                     if (btn) {
                         btn.disabled = false;
-                        btn.textContent = 'Paid reports only';
+                        btn.textContent = turningOn
+                            ? 'Paid reports only'
+                            : 'Turn off paid reports only';
+                        if (box) {
+                            btn.textContent = box.checked
+                                ? 'Turn off paid reports only'
+                                : 'Paid reports only';
+                        }
                     }
                 });
         }

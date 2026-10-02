@@ -678,7 +678,8 @@
           Prometheus stays on. Every other tab turns off. They only
           see reports they pay to pull. On a company wallet, teammates
           see those same paid reports, and new people added to the
-          company get the same access.
+          company get the same access. Click the button again to
+          turn this off and give the dashboard tabs back.
         </div>
         <div id="m-paid-only-status"
           style="color: #5E7E12; font-size: 13px; font-weight: 600;
@@ -1105,6 +1106,12 @@
       const paidOn = !!u.paid_only_access;
       const paidEl = $('m-paid-only-status');
       if (paidEl) paidEl.style.display = paidOn ? 'block' : 'none';
+      const paidBtn = $('m-paid-only-btn');
+      if (paidBtn) {
+        paidBtn.textContent = paidOn
+          ? 'Turn off paid reports only'
+          : 'Paid reports only';
+      }
       $('user-modal').classList.add('open');
     }
 
@@ -1112,40 +1119,59 @@
       const kind = currentSubjectKind;
       const key = currentSubjectKey;
       if (!key) return;
-      const companyAsk = kind === 'company'
-        ? 'Everyone at this company will only see Prometheus and reports they pay to pull. Continue?'
-        : 'This turns off every dashboard tab except Prometheus. They will only see reports they pay to pull. Continue?';
+      const subject = (typeof findCurrentSubject === 'function'
+        ? findCurrentSubject() : null) || {};
+      const paidOn = !!subject.paid_only_access;
+      const turningOn = !paidOn;
+      const companyAsk = turningOn
+        ? (kind === 'company'
+          ? 'Everyone at this company will only see Prometheus and reports they pay to pull. Continue?'
+          : 'This turns off every dashboard tab except Prometheus. They will only see reports they pay to pull. Continue?')
+        : (kind === 'company'
+          ? 'Turn paid reports only off for this company? Everyone gets the dashboard tabs back.'
+          : 'Turn paid reports only off for this user? Dashboard tabs come back.');
       if (!confirm(companyAsk)) return;
       const path = kind === 'company'
         ? '/api/admin/company/' + encodeURIComponent(key) + '/paid-only-access'
         : '/api/admin/user/' + encodeURIComponent(key) + '/paid-only-access';
       const btn = $('m-paid-only-btn');
-      if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = turningOn ? 'Applying...' : 'Turning off...';
+      }
       try {
         const r = await fetch(path, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}',
+          body: JSON.stringify({ enabled: turningOn }),
         });
         const d = await r.json();
         if (r.ok && d && d.success) {
           const paidEl = $('m-paid-only-status');
-          if (paidEl) paidEl.style.display = 'block';
+          if (paidEl) paidEl.style.display = turningOn ? 'block' : 'none';
           if (typeof reloadAfterMutation === 'function') {
             await reloadAfterMutation();
           }
+          const after = (typeof findCurrentSubject === 'function'
+            ? findCurrentSubject() : null) || {};
+          const nowOn = !!after.paid_only_access;
+          if (paidEl) paidEl.style.display = nowOn ? 'block' : 'none';
+          if (btn) {
+            btn.textContent = nowOn
+              ? 'Turn off paid reports only'
+              : 'Paid reports only';
+          }
         } else if (d && d.error === 'staff_blocked') {
           alert('Internal accounts keep full access.');
+        } else if (d && d.error === 'wbd_locked') {
+          alert('This company stays on paid reports only.');
         } else {
           alert('Could not apply. Try again.');
         }
       } catch (e) {
         alert('Could not reach the server. Try again.');
       }
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Paid reports only';
-      }
+      if (btn) btn.disabled = false;
     }
 
     function closeModal() {

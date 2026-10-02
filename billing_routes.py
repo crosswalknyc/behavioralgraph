@@ -1976,13 +1976,15 @@ def admin_company_billing_config(company_name):
     "/api/admin/user/<target_username>/paid-only-access",
     methods=["POST"])
 def admin_user_paid_only_access(target_username):
-    """Lock one seat to Prometheus + reports they pay to pull."""
+    """Lock or unlock one seat. Body: {"enabled": true|false}."""
     _, _, err = _require_super_admin()
     if err:
         return err
     import wallet  # type: ignore
     from app import _users_cas_mutate  # type: ignore
 
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get("enabled", True))
     state = {"error": "", "username": "", "company": "", "runs": 0}
 
     def _apply(data):
@@ -1993,8 +1995,14 @@ def admin_user_paid_only_access(target_username):
         if wallet.is_internal_staff_seat(u, key):
             state["error"] = "staff_blocked"
             return None
-        wallet.attach_paid_only_seat(
-            u, data, wipe_catalog=True, username=key)
+        if enabled:
+            wallet.attach_paid_only_seat(
+                u, data, wipe_catalog=True, username=key)
+        else:
+            if wallet.detach_paid_only_seat(
+                    u, data, username=key, unstamp_company=True) is None:
+                state["error"] = "cannot_unlock"
+                return None
         state["username"] = key
         state["company"] = str(u.get("company") or "")
         runs = u.get("allowed_runs")
@@ -2006,13 +2014,15 @@ def admin_user_paid_only_access(target_username):
         return jsonify({"error": "user_not_found"}), 404
     if state["error"] == "staff_blocked":
         return jsonify({"error": "staff_blocked"}), 400
+    if state["error"] == "cannot_unlock":
+        return jsonify({"error": "cannot_unlock"}), 400
     if final is None:
         return jsonify({"error": "could_not_apply"}), 500
     return jsonify({
         "success": True,
         "username": state["username"],
         "company": state["company"],
-        "paid_only_access": True,
+        "paid_only_access": enabled,
         "allowed_runs_count": state["runs"],
     })
 
@@ -2021,7 +2031,8 @@ def admin_user_paid_only_access(target_username):
     "/api/admin/company/<company_name>/paid-only-access",
     methods=["POST"])
 def admin_company_paid_only_access(company_name):
-    """Lock a company wallet and every current member on it."""
+    """Lock or unlock a company wallet and every current member.
+    Body: {"enabled": true|false}."""
     _, _, err = _require_super_admin()
     if err:
         return err
@@ -2031,13 +2042,21 @@ def admin_company_paid_only_access(company_name):
     name = str(company_name or "").strip()
     if not name:
         return jsonify({"error": "company_required"}), 400
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get("enabled", True))
     state = {"error": "", "applied": [], "skipped": []}
 
     def _apply(data):
-        rec, applied, skipped = wallet.attach_paid_only_company(
-            data, name, wipe_members=True)
+        if enabled:
+            rec, applied, skipped = wallet.attach_paid_only_company(
+                data, name, wipe_members=True)
+        else:
+            rec, applied, skipped = wallet.detach_paid_only_company(
+                data, name)
         if rec is None:
-            state["error"] = "company_required"
+            state["error"] = (
+                "wbd_locked" if wallet.is_wbd_company(name)
+                else "company_required")
             return None
         state["applied"] = applied
         state["skipped"] = skipped
@@ -2051,7 +2070,7 @@ def admin_company_paid_only_access(company_name):
     return jsonify({
         "success": True,
         "company": name,
-        "paid_only_access": True,
+        "paid_only_access": enabled,
         "applied": state["applied"],
         "skipped": state["skipped"],
     })
