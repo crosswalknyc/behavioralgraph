@@ -106668,7 +106668,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '</div>';
             }).join('') + '</div>';
         }
-        function _jiqArrowFunnel(funnel, labels) {
+        function _jiqArrowFunnel(funnel, labels, dest) {
             return (funnel || []).map(function(step, i, arr) {
                 var spec = labels[i] || {};
                 var prev = i > 0 ? arr[i - 1] : null;
@@ -106679,11 +106679,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     show: _jiqArrowFig(step.people),
                     hot: !!spec.hot
                 };
-                if (i === 0) row.fullBar = !!spec.fullBar;
-                if (prev) {
-                    row.kept = prev.kept;
-                    row.keepVerb = prevSpec.keepVerb || 'of them continued';
+                if (dest) {
+                    if (i === 0) row.fullBar = !!spec.fullBar;
+                    if (prev) {
+                        row.kept = prev.kept;
+                        row.keepVerb = prevSpec.keepVerb || 'of them continued';
+                    }
+                } else if (step.kept != null) {
+                    row.kept = step.kept;
+                    row.keepVerb = spec.keepVerb || 'of them continued';
                 }
+                if (spec.fullBar) row.fullBar = true;
                 return row;
             });
         }
@@ -106781,13 +106787,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 { label: 'Used Pluto in this period.', doing: 'May 1 to Sep 28, 2026.' },
                 { label: 'Opened Arrow on Pluto.', doing: 'On demand title or the live channel.' },
                 { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true }
-            ]);
+            ], true);
             var depth = _jiqArrowFunnel(spine.slice(4, 8), [
                 { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true, fullBar: true, keepVerb: 'of them returned' },
                 { label: 'Returned within 30 days.', doing: 'A second Arrow session.' },
                 { label: 'Viewed five or more episodes.', doing: 'On demand or live, same person.' },
                 { label: 'Finished Season 1.', doing: 'Twenty-three episodes.' }
-            ]);
+            ], true);
             var peerRows = peers.map(function(p) {
                 return {
                     label: p.title,
