@@ -106607,40 +106607,58 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return '<button type="button" class="jiq-arrow-link" onclick="_jiqArrowActivateTab(\'' + tabId + '\')">'
                 + _jiqFragEsc(label) + '</button>';
         }
+        function _jiqArrowKeepBar(s) {
+            if (s.kept == null && !s.fullBar) return '';
+            var keepW = s.fullBar ? 100 : Math.max(0.6, Math.min(100, Number(s.kept)));
+            var verb = s.keepVerb || 'of them continued';
+            var line = s.fullBar ? '' : (_jiqArrowPct(s.kept) + ' ' + verb);
+            return '<div class="jiq-frag-track" aria-label="' + _jiqFragEsc(line || s.show || '') + '">'
+                + '<div class="jiq-frag-keep" style="width:' + keepW + '%;"></div></div>'
+                + (line ? '<div class="jiq-frag-foot"><span class="jiq-frag-kept">'
+                    + _jiqFragEsc(line) + '</span></div>' : '');
+        }
         function _jiqArrowSpine(rows) {
             return (rows || []).map(function(s, i, arr) {
                 var last = i === arr.length - 1;
-                var html = '<div class="jiq-frag-step' + (last ? ' is-terminal' : '') + (s.hot ? ' is-hot' : '') + '">'
+                return '<div class="jiq-frag-step' + (last ? ' is-terminal' : '') + (s.hot ? ' is-hot' : '') + '">'
                     + '<div class="jiq-frag-rail"><i></i></div><div class="jiq-frag-body">'
                     + '<div class="jiq-frag-line"><span class="jiq-frag-label">' + _jiqFragEsc(s.label) + '</span>'
                     + '<span class="jiq-frag-count">' + _jiqFragEsc(s.show) + '</span></div>'
                     + (s.doing ? '<div class="jiq-frag-doing">' + _jiqFragEsc(s.doing) + '</div>' : '')
+                    + _jiqArrowKeepBar(s)
                     + '</div></div>';
-                if (!last && s.kept != null) {
-                    var keepW = Math.max(0.6, Math.min(100, Number(s.kept)));
-                    var verb = s.keepVerb || 'of them continued';
-                    html += '<div class="jiq-frag-bridge"><div class="jiq-frag-rail"></div><div class="jiq-frag-body">'
-                        + '<div class="jiq-frag-track"><div class="jiq-frag-keep" style="width:' + keepW + '%;"></div></div>'
-                        + '<div class="jiq-frag-foot"><span class="jiq-frag-kept">'
-                        + _jiqFragEsc(_jiqArrowPct(s.kept) + ' ' + verb)
-                        + '</span></div></div></div>';
-                }
-                return html;
             }).join('');
+        }
+        function _jiqArrowHFunnel(rows) {
+            return '<div class="jiq-arrow-hfunnel">' + (rows || []).map(function(s) {
+                var keepW = s.fullBar ? 100 : (s.kept == null ? 0 : Math.max(0.6, Math.min(100, Number(s.kept))));
+                var verb = s.keepVerb || 'of them continued';
+                var line = (s.kept == null || s.fullBar) ? '' : (_jiqArrowPct(s.kept) + ' ' + verb);
+                var showBar = s.fullBar || s.kept != null;
+                return '<div class="jiq-arrow-hcol' + (s.hot ? ' is-hot' : '') + '">'
+                    + '<div class="jiq-arrow-hnum">' + _jiqFragEsc(s.show) + '</div>'
+                    + '<div class="jiq-arrow-hlabel">' + _jiqFragEsc(s.label) + '</div>'
+                    + (s.doing ? '<div class="jiq-arrow-hdoing">' + _jiqFragEsc(s.doing) + '</div>' : '')
+                    + (showBar ? '<div class="jiq-arrow-hbar" aria-label="' + _jiqFragEsc(line || s.show) + '"><i style="width:' + keepW + '%;"></i></div>' : '')
+                    + (line ? '<div class="jiq-arrow-hpct">' + _jiqFragEsc(line) + '</div>' : '')
+                    + '</div>';
+            }).join('') + '</div>';
         }
         function _jiqArrowFunnel(funnel, labels) {
             return (funnel || []).map(function(step, i, arr) {
                 var spec = labels[i] || {};
-                var next = arr[i + 1];
+                var prev = i > 0 ? arr[i - 1] : null;
+                var prevSpec = i > 0 ? (labels[i - 1] || {}) : {};
                 var row = {
                     label: spec.label || step.label,
                     doing: spec.doing != null ? spec.doing : (step.doing || ''),
                     show: _jiqArrowFig(step.people),
                     hot: !!spec.hot
                 };
-                if (next) {
-                    row.kept = step.kept;
-                    row.keepVerb = spec.keepVerb || 'of them continued';
+                if (i === 0) row.fullBar = !!spec.fullBar;
+                if (prev) {
+                    row.kept = prev.kept;
+                    row.keepVerb = prevSpec.keepVerb || 'of them continued';
                 }
                 return row;
             });
@@ -106741,7 +106759,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true }
             ]);
             var depth = _jiqArrowFunnel(spine.slice(4, 8), [
-                { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true, keepVerb: 'of them returned' },
+                { label: 'Viewed Arrow for five minutes.', doing: 'The three groups add to this.', hot: true, fullBar: true, keepVerb: 'of them returned' },
                 { label: 'Returned within 30 days.', doing: 'A second Arrow session.' },
                 { label: 'Viewed five or more episodes.', doing: 'On demand or live, same person.' },
                 { label: 'Finished Season 1.', doing: 'Twenty-three episodes.' }
@@ -106760,10 +106778,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '</div>'
                 + _jiqArrowRead('1.39M opened Arrow and left within five minutes. They are not in the 6.01M.')
                 + _jiqArrowSec('FROM PLUTO USERS TO ARROW VIEWERS', 'Starts at Pluto users, not US people.', 'Each bar is the share of that step who continued to the next.')
-                + '<div class="jiq-ufc-spine">' + _jiqArrowSpine(reach) + '</div>'
+                + _jiqArrowHFunnel(reach)
                 + _jiqArrowSec('WHAT ARROW VIEWERS DID NEXT', 'What Arrow viewers did next.', 'The same funnel, continued. Each bar is the share of that step who continued to the next.')
                 + _jiqArrowRead('Of 6.0M viewers, 3.5M returned within 30 days and 1.1M finished Season 1.')
-                + '<div class="jiq-ufc-spine">' + _jiqArrowSpine(depth) + '</div>'
+                + _jiqArrowHFunnel(depth)
                 + _jiqArrowSec('THE OTHER MAY 1 TITLES', 'Arrow is the largest of the four exclusives. Same window. Unique people who viewed that title on Pluto.', '')
                 + '<div class="jiq-frag-detours cols-1">'
                 + _jiqUfcNestDetours([{ title: 'PLUTO VIEWERS, MAY 1 TO SEP 28', rows: peerRows }], true)
@@ -106796,27 +106814,30 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 };
             });
             return _jiqArrowSec('02 DISCOVERY', 'Search brought in new viewers. Pluto\'s own app brought Arrow to existing ones.', 'First touch: where each person first encountered Arrow on Pluto. One channel per person. Adds to the 6.01M viewers.')
-                + '<div class="jiq-ufc-mix">'
-                + '<div class="jiq-ufc-mix-col">'
-                + '<div class="jiq-ufc-mix-k">NEW TO PLUTO VIA ARROW  ·  1.25M</div>'
-                + '<div class="jiq-ufc-mix-bar">'
-                + '<div class="is-hot" style="flex:' + bSearch + '">' + _jiqArrowPct(bSearch) + '</div>'
+                + '<div class="jiq-arrow-mix">'
+                + '<div class="jiq-arrow-mix-col">'
+                + '<div class="jiq-arrow-mix-k">NEW TO PLUTO VIA ARROW  ·  1.25M</div>'
+                + '<div class="jiq-arrow-mix-bar">'
+                + '<div class="is-hot" style="flex:' + bSearch + '"></div>'
                 + '<div class="is-rest" style="flex:' + (100 - bSearch) + '"></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-mix-cap"><b>SEARCH (GOOGLE OR BING)</b><span>First touch for ' + _jiqArrowPct(bSearch) + ' of people whose first Pluto view was Arrow.</span></div>'
+                + '<div class="jiq-arrow-mix-under">'
+                + '<div style="flex:' + bSearch + '"><b>' + _jiqArrowPct(bSearch) + '</b><span>SEARCH (GOOGLE OR BING)</span></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-mix-col">'
-                + '<div class="jiq-ufc-mix-k">EXISTING PLUTO VIEWERS  ·  3.57M</div>'
-                + '<div class="jiq-ufc-mix-bar">'
-                + '<div class="is-app" style="flex:' + aIn + '">' + _jiqArrowPct(aIn) + '</div>'
-                + '<div class="is-soc" style="flex:' + aLin + '">' + _jiqArrowPct(aLin) + '</div>'
+                + '<div class="jiq-arrow-mix-cap">First touch for ' + _jiqArrowPct(bSearch) + ' of people whose first Pluto view was Arrow.</div>'
+                + '</div>'
+                + '<div class="jiq-arrow-mix-col">'
+                + '<div class="jiq-arrow-mix-k">EXISTING PLUTO VIEWERS  ·  3.57M</div>'
+                + '<div class="jiq-arrow-mix-bar">'
+                + '<div class="is-hot" style="flex:' + aIn + '"></div>'
+                + '<div class="is-soc" style="flex:' + aLin + '"></div>'
                 + '<div class="is-rest" style="flex:' + (100 - aIn - aLin) + '"></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-mix-cap is-2">'
-                + '<div><b>IN THE APP</b><span>' + _jiqArrowPct(aIn) + '</span></div>'
-                + '<div><b>LIVE CHANNEL</b><span>' + _jiqArrowPct(aLin) + '</span></div>'
+                + '<div class="jiq-arrow-mix-under">'
+                + '<div style="flex:' + aIn + '"><b>' + _jiqArrowPct(aIn) + '</b><span>IN THE APP</span></div>'
+                + '<div style="flex:' + aLin + '"><b>' + _jiqArrowPct(aLin) + '</b><span>LIVE CHANNEL</span></div>'
                 + '</div>'
-                + '<div class="jiq-ufc-mix-cap"><span>First touch for ' + _jiqArrowPct(aIn) + ' and ' + _jiqArrowPct(aLin) + ' of existing Pluto viewers.</span></div>'
+                + '<div class="jiq-arrow-mix-cap">First touch for ' + _jiqArrowPct(aIn) + ' and ' + _jiqArrowPct(aLin) + ' of existing Pluto viewers.</div>'
                 + '</div>'
                 + '</div>'
                 + _jiqArrowSec('ALL FIRST TOUCHES', 'Search is first and the app is a close second.', '6.01M people. Six channels, one per person.')
@@ -187913,6 +187934,64 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         background: none; border: 0; padding: 0; font: inherit;
     }
     body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-link { color: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-hfunnel {
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px 22px; margin: 8px 34px 28px;
+    }
+    @media (max-width: 980px) {
+        #jiqArrowNestCard .jiq-arrow-hfunnel { grid-template-columns: 1fr 1fr; }
+    }
+    #jiqArrowNestCard .jiq-arrow-hnum {
+        font-size: 28px; font-weight: 800; letter-spacing: -.03em;
+    }
+    #jiqArrowNestCard .jiq-arrow-hcol.is-hot .jiq-arrow-hnum { color: #C7F23E; }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-hcol.is-hot .jiq-arrow-hnum { color: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-hlabel {
+        margin-top: 8px; font-size: 14px; font-weight: 700; letter-spacing: -.01em;
+    }
+    #jiqArrowNestCard .jiq-arrow-hdoing {
+        margin-top: 3px; font-size: 11px; line-height: 1.45; color: #7C878A;
+    }
+    #jiqArrowNestCard .jiq-arrow-hbar {
+        height: 9px; border-radius: 999px; background: #3B3D38; margin-top: 12px; overflow: hidden;
+    }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-hbar { background: #DDDACE; }
+    #jiqArrowNestCard .jiq-arrow-hbar i {
+        display: block; height: 100%; border-radius: 999px; background: #C7F23E;
+    }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-hbar i { background: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-hpct {
+        margin-top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: #C7F23E;
+    }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-hpct { color: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-mix {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 28px 80px;
+        margin: 0 34px 20px;
+    }
+    @media (max-width: 1080px) { #jiqArrowNestCard .jiq-arrow-mix { grid-template-columns: 1fr; } }
+    #jiqArrowNestCard .jiq-arrow-mix-k {
+        font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: #7C878A; margin-bottom: 10px;
+        word-spacing: 0.35em;
+    }
+    #jiqArrowNestCard .jiq-arrow-mix-bar { display: flex; height: 44px; border-radius: 8px; overflow: hidden; }
+    #jiqArrowNestCard .jiq-arrow-mix-bar .is-hot { background: #C7F23E; }
+    #jiqArrowNestCard .jiq-arrow-mix-bar .is-soc { background: #B7B3D8; }
+    #jiqArrowNestCard .jiq-arrow-mix-bar .is-rest { background: #3B3D38; }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-mix-bar .is-hot { background: #5E7E12; }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-mix-bar .is-soc { background: #8E3FA8; }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-mix-bar .is-rest { background: #C9C6BA; }
+    #jiqArrowNestCard .jiq-arrow-mix-under { display: flex; gap: 12px; margin-top: 10px; }
+    #jiqArrowNestCard .jiq-arrow-mix-under b {
+        display: block; font-size: 18px; font-weight: 800; letter-spacing: -.02em;
+    }
+    #jiqArrowNestCard .jiq-arrow-mix-under span {
+        display: block; margin-top: 3px; font-size: 12px; line-height: 1.35; color: #9AA09B;
+    }
+    #jiqArrowNestCard .jiq-arrow-mix-cap {
+        margin-top: 12px; font-size: 12px; line-height: 1.45; color: #9AA09B;
+    }
 
     #jiqAnimCrNestCard {
         margin: 0 0 8px;
