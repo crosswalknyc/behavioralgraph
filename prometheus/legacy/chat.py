@@ -3382,6 +3382,64 @@ _PM_PRICING_COPY = (
     "$10.50 / $52.50 per million in/out, plus $0.021 per search.")
 
 
+_PM_SUBJECT_FIELDS = ('subject', 'name', 'display_name', 'subject_label',
+                      'title')
+
+
+def _pm_sanitize_draft_subjects(spec_draft):
+    """2026-10-02 audit. Cleans every name field on the draft through
+    prometheus.guards.sanitize_subject_label. Returns a plain question
+    for the user when nothing usable is left (the ask was a question
+    fragment, not an audience), else None."""
+    if not isinstance(spec_draft, dict):
+        return None
+    from prometheus import guards as _pg
+    for k in _PM_SUBJECT_FIELDS:
+        v = spec_draft.get(k)
+        if not isinstance(v, str) or not v.strip():
+            continue
+        clean = _pg.sanitize_subject_label(v)
+        if clean and clean != v:
+            spec_draft[k] = clean
+        elif not clean:
+            spec_draft[k] = ''
+    subj = spec_draft.get('subject') or spec_draft.get('name')
+    if subj:
+        return None
+    return ("I did not catch which audience to build. Name the person, "
+            "brand, title, or group (for example \"Spiderwick Chronicles "
+            "viewers\" or \"Starz subscribers\") and I will set up the "
+            "brief.")
+
+
+def _pm_subiq_platform_only_question(spec_draft, text):
+    """2026-10-02 audit. A Subscriber IQ draft whose title slot holds a
+    streaming service, not a show, asks for the title instead of
+    researching an air window for a network. Returns a guidance
+    payload or None."""
+    if not isinstance(spec_draft, dict):
+        return None
+    from prometheus import guards as _pg
+    title = ''
+    for k in ('title', 'show', 'subject', 'name'):
+        v = spec_draft.get(k)
+        if isinstance(v, str) and v.strip():
+            title = v.strip()
+            break
+    if not title or not _pg.is_streaming_platform(title):
+        return None
+    plat = _pg.humanize_name(title)
+    return {
+        'success': False, 'guidance': True,
+        'error': (f"Subscriber IQ reads one title on a service, so I need "
+                  f"the show. Which {plat} title and season? For example "
+                  f"\"Outlander season 7 on {plat}\". If you want the whole "
+                  f"{plat} subscriber base as an audience, say \"{plat} "
+                  "subscribers\" and I will set up that profile instead."),
+        'followups': [f"{plat} subscribers as a Profile IQ"],
+    }
+
+
 def _pm_pricing_question(text):
     """True when the ask is about what things COST. Balance and usage
     asks ('how many credits do I have left'), category mentions
@@ -3546,11 +3604,11 @@ def api_synth_chat_clarify():
                    "numbers ladder up"
                    + (" - every quarter ships as its own dated file"
                       if qcuts else "")
-                   + "). Review the brief below and approve to queue.")
+                   + "). Review the brief below and approve to start the build.")
         else:
             msg = (f"No add-on cuts - just the national "
                    f"{_pm_universe_phrase(draft)} + avid. Review the "
-                   "brief below and approve to queue.")
+                   "brief below and approve to start the build.")
         if notes:
             real = [n for n in notes if n not in
                     ('parse_partial', 'parse_failed')][:4]
@@ -3721,7 +3779,7 @@ def api_synth_chat_clarify():
             })
         return jsonify({'success': True, 'draft': draft,
                         'message': head + " Review the brief below "
-                        "and approve to queue.",
+                        "and approve to start the build.",
                         'next_step': 'approve'})
 
     if step == 'qualifier_match':
@@ -3907,7 +3965,7 @@ def api_synth_chat_clarify():
                 })
             return jsonify({'success': True, 'draft': draft,
                             'message': head + " Review the brief "
-                            "below and approve to queue.",
+                            "below and approve to start the build.",
                             'next_step': 'approve'})
         built = str(data.get('built_label') or '').strip()
         return jsonify({
@@ -4231,7 +4289,7 @@ def api_synth_chat_clarify():
                             f"agree. Total: {total} credits "
                             f"({subiq_credits} Subscriber IQ + "
                             f"{prof_credits} Profile IQ). Review the "
-                            f"brief below and approve to queue."),
+                            f"brief below and approve to start the build."),
                 'next_step': 'approve'})
         if said_no:
             subiq['addon_profile'] = False
@@ -4242,7 +4300,7 @@ def api_synth_chat_clarify():
                 'success': True, 'draft': draft,
                 'message': (f"Just the Subscriber IQ - "
                             f"{subiq_credits} credits. Review the "
-                            f"brief below and approve to queue."),
+                            f"brief below and approve to start the build."),
                 'next_step': 'approve'})
         return jsonify({
             'success': True, 'draft': draft,
@@ -4396,7 +4454,7 @@ def api_synth_chat_clarify():
             })
         return jsonify({'success': True, 'draft': draft,
                         'message': head + " Review the brief below "
-                        "and approve to queue.",
+                        "and approve to start the build.",
                         'next_step': 'approve'})
 
     if step == 'viewer_audience':
@@ -4485,7 +4543,7 @@ def api_synth_chat_clarify():
             })
         return jsonify({'success': True, 'draft': draft,
                         'message': head + " Review the brief below "
-                        "and approve to queue.",
+                        "and approve to start the build.",
                         'next_step': 'approve'})
 
     if step == 'viewer_scope':
@@ -4544,7 +4602,7 @@ def api_synth_chat_clarify():
                 })
             return jsonify({'success': True, 'draft': draft,
                             'message': head + " Review the brief "
-                            "below and approve to queue.",
+                            "below and approve to start the build.",
                             'next_step': 'approve'})
 
         def _vs_pick_question():
@@ -4745,7 +4803,7 @@ def api_synth_chat_clarify():
             })
         return jsonify({'success': True, 'draft': draft,
                         'message': head + " Review the brief below "
-                        "and approve to queue.",
+                        "and approve to start the build.",
                         'next_step': 'approve'})
 
     if step == 'parent_link':
@@ -4892,7 +4950,7 @@ def api_synth_chat_clarify():
                         f"cut of {parent_display} "
                         f"({cut_credits} credits) - the numbers ladder "
                         "up to that parent. Review the brief below "
-                        "and approve to queue."),
+                        "and approve to start the build."),
             'next_step': 'approve',
         })
 
@@ -4976,6 +5034,43 @@ def api_synth_chat_clarify():
 
     # step == 'cuts' (legacy). Merges with any market cuts the region
     # step already added instead of overwriting them.
+    # 2026-10-02 audit: "I want cuts by Quarter based on dates" used to
+    # get "that piece needs a closer look and I'll come back to you"
+    # and then queued with no cuts. Time-window replies either add the
+    # named quarters as dated reads or ask which quarters, plainly.
+    try:
+        from prometheus import guards as _pg
+        _win = _pg.time_window_cut_ask(answer)
+    except Exception:
+        _win = None
+    if _win:
+        _named = _win.get('quarters') or []
+        if _win['kind'] == 'quarter' and _named:
+            _have = {str(q.get('label')) for q in
+                     (draft.get('quarter_cuts') or []) if isinstance(q, dict)}
+            draft['quarter_cuts'] = list(draft.get('quarter_cuts') or []) + [
+                q for q in _named if q['label'] not in _have]
+            # Demo / market cuts named in the same reply still count.
+            _more, _ = _H._parse_addon_cuts_answer(
+                _pg._QUARTER_RX.sub(' ', _pg._QUARTER_WORD_RX.sub(' ', answer)),
+                subject)
+            if _more:
+                draft['addon_cuts'] = _H._merge_cuts(draft.get('addon_cuts'),
+                                                     _more)
+            return _finalize_cuts_response(None)
+        _unit = {'quarter': 'quarters', 'month': 'months', 'year': 'years',
+                 'week': 'weeks'}.get(_win['kind'], 'date ranges')
+        _eg = ('"2Q 2026 and 3Q 2026"' if _win['kind'] == 'quarter'
+               else '"Jan 2026 and Feb 2026"' if _win['kind'] == 'month'
+               else '"2025 and 2026"')
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"I can do that. Each {_unit[:-1]} ships as its "
+                        f"own dated read on the same audience. Which "
+                        f"{_unit} do you want? For example {_eg}. Or say "
+                        "none to skip the cuts."),
+            'next_step': 'cuts',
+        })
     cuts, notes = _H._parse_addon_cuts_answer(answer, subject)
     if cuts is None:
         return jsonify({
@@ -5475,6 +5570,21 @@ def _pm_interpret_core(user, body, text, history):
     # already reads stacked criteria as one persona. See
     # _is_single_compound_audience + profile-iq-pipeline-rules.mdc s2.
     _single_compound = _H._is_single_compound_audience(text)
+    # 2026-10-02 audit: a question is never a batch. "Can I cut the
+    # existing Apple TV+ profile by Quarter (i.e., 2Q 2026)?" was split
+    # into two builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut
+    # ...". Capability questions and question-shaped asks with no build
+    # verb skip both splitters and read as one request.
+    try:
+        from prometheus import guards as _pg
+        _is_q = _pg.is_capability_question(text) or (
+            _pg.is_question_shaped(text)
+            and not re.search(r'\b(?:run|build|pull|create|queue|'
+                              r'generate|make|give me|i need|i want)\b',
+                              text, re.I))
+    except Exception:
+        _is_q = False
+    _single_compound = _single_compound or _is_q
     _batch_subjects = [] if _single_compound else _H._detect_batch_subjects(text)
     _cart = None if _single_compound else _H._detect_cartesian_batch(text)
     _cart_wins = bool(_cart) and (
@@ -6028,6 +6138,13 @@ def _pm_interpret_core(user, body, text, history):
         # future-window guard so an in-progress season's through-today
         # binding is what that guard sees.
         if _dec_norm == 'subscriber_iq':
+            # 2026-10-02 audit: a platform in the title slot ("Pull
+            # Subscriber IQ for Starz") researched an air window for a
+            # network for 190 to 590 seconds and then failed. Ask for
+            # the title at once instead.
+            _plat_q = _pm_subiq_platform_only_question(spec_draft, text)
+            if _plat_q:
+                return jsonify(_plat_q)
             _H._apply_subiq_guards(spec_draft, text)
             needs_date_clarification = False
         # Future-window guard (2026-08-25): runs AFTER every window
@@ -6044,6 +6161,19 @@ def _pm_interpret_core(user, body, text, history):
             })
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 or estimated_credits)
+        # 2026-10-02 audit: model reasoning leaked into the subject
+        # ("Starz+ ... The prior turn asked for Starz; this turn asks
+        # for Starz+") and a question fragment became a build ("Appeal
+        # of the Spiderwick Franchise"). Clean every name field; a
+        # subject with nothing usable left asks instead of building.
+        try:
+            _bad_subj = _pm_sanitize_draft_subjects(spec_draft)
+        except Exception:
+            traceback.print_exc()
+            _bad_subj = None
+        if _bad_subj:
+            return jsonify({'success': False, 'guidance': True,
+                            'error': _bad_subj})
         subject_label = (spec_draft.get('subject')
                          or spec_draft.get('name') or subject_label)
         # Guided clarify steps (2026-08-19 Cut Strategist): every fresh
@@ -7409,6 +7539,13 @@ def _pm_rescue_unverified_draft(draft, usage_extras=None):
         summary = ' '.join(str(data['summary']).split())
         print(f"[approve-rescue] {subject!r} identified: "
               f"{summary[:140]}")
+        # 2026-10-02 audit: this name was never imported here, so the
+        # rescue raised NameError into its own except and silently
+        # returned None on every approve it should have saved.
+        try:
+            from iq_rankers import MASTER_CATEGORIES
+        except Exception:
+            MASTER_CATEGORIES = {}
         sys_p, usr_p = _synth_chat_interpret_prompts(
             (f"run a profile on {subject}\n\n"
              f"VERIFIED CONTEXT (already researched, treat as fact): "
@@ -9440,6 +9577,7 @@ def _pm_bank_regression_case(username, question, complaint, history,
                          if vc.get('data') else None)
             subj = ''
             try:
+                import prometheus_analysis as pma
                 subj = str(pma.guess_subject_from_text(question)
                            or '').strip()
             except Exception:
@@ -11344,6 +11482,15 @@ def _pm_panel_fact_response(pm_user, ppu, text, base):
     try:
         df, _etag = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET, key)
         meta = pma._profile_meta(df, (base or {}).get('subject') or '')
+        # 2026-10-02 audit: the subject's own platform is not a brand
+        # fact ("what % of Roku subscribers ..." on The Roku Channel
+        # file read back "Roku reaches 18.4% of the audience"). That
+        # ask is about the audience itself; ride the full read.
+        if fact.get('kind') == 'brand':
+            _b = re.sub(r'[^a-z0-9]+', '', str(fact.get('brand') or '').lower())
+            _s = re.sub(r'[^a-z0-9]+', '', str(meta.get('name') or '').lower())
+            if _b and _s and (_b in _s or _s in _b):
+                return None
         gmap = (pma.load_genpop_map(_H.s3_client, _H.S3_BUCKET)
                 if fact.get('kind') == 'brand' else {})
         ans = pma.answer_panel_fact(fact, df, meta, gmap)
@@ -13894,6 +14041,7 @@ def _pm_analyze_core(user, body, text, history):
             'fw_confirm', 'fw_inputs', 'aiq_confirm', 'aiq_inputs',
             'panel_confirm')):
         try:
+            import prometheus_analysis as pma
             _my_years = _pm_detect_multi_year_ask(text)
             if _my_years:
                 _my_ctx = body.get('page_context') or {}

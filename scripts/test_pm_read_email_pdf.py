@@ -88,8 +88,10 @@ check("BCC dedupes when Jenna is the recipient",
 check("signature reads Prometheus / Crosswalk",
       "Prometheus<br>Crosswalk" in FN and "Crosswalk IQ" not in FN)
 check("raw MIME send (attachment-capable)", "send_raw_email" in FN)
+import re as _re
 check("email names the shareable PDF",
-      "attached as a PDF you can share" in FN)
+      bool(_re.search(r'attached as a PDF you\s*"\s*"?\s*can\s*"?\s*"?\s*share', FN))
+      or "attached as a PDF you can share" in FN.replace('"\n', '').replace('" "', ''))
 
 print()
 if FAILS:

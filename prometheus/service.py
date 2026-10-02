@@ -22,6 +22,7 @@ so they run for an already-gated user from any surface. They still
 return Flask responses; ``_unpack`` reads them back to a dict.
 """
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -252,9 +253,9 @@ def ask(user, body, *, via='session'):
                                  'client_hint': None}
         else:
             _extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
-            _armed = any(_extra.get(k) or body.get(k)
-                         for k in _ANALYZE_PASSTHROUGH)
-            if not _armed:
+            _armed_now = any(_extra.get(k) or body.get(k)
+                             for k in _ANALYZE_PASSTHROUGH)
+            if not _armed_now:
                 _ref = _refs.detect_unresolved(text, history, ctx)
                 if _ref:
                     raw = _refs.clarify_payload(_ref, text)
@@ -276,6 +277,73 @@ def ask(user, body, *, via='session'):
                     return env, 200
     except Exception as e:
         print(f"[prometheus] referent gate skipped: {e}")
+
+    # Bare replies (2026-10-02 audit). "approved", "ok", "no", "1",
+    # "none" with nothing armed on the server side are not asks. They
+    # used to reach a reasoning pass that guessed a subject out of them
+    # ("approved" became a fresh build of the last profile mentioned;
+    # "no" re-asked the open-screen question it was declining). With no
+    # armed step they get a short, deterministic reply; a number or a
+    # yes that answers the options on the previous agent turn is
+    # rewritten to that option and runs as that option.
+    if referent_decision is None:
+        try:
+            _rewrite, _bare = _bare_reply(body, text, history, has_ctx)
+            if _rewrite:
+                text = _rewrite
+                body = dict(body)
+                body['text'] = text
+            elif _bare is not None:
+                decision = {'surface': 'analyze' if has_ctx else 'interpret',
+                            'mode': None, 'reason': 'short_reply',
+                            'client_hint': None}
+                raw = _bare
+                if _client_surface == 'interpret':
+                    raw = _interpret_shape(raw)
+                try:
+                    host.ask_hint(route='short_reply', outcome='answered')
+                except Exception:
+                    pass
+                env = envelope.wrap(raw, surface=decision['surface'],
+                                    decision=decision, thread_id=tid,
+                                    via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw,
+                              decision['surface'])
+                return env, 200
+        except Exception as e:
+            print(f"[prometheus] bare-reply gate skipped: {e}")
+
+    # Capability questions (2026-10-02 audit). "Can I cut the existing
+    # Apple TV+ profile by quarter (i.e., 2Q 2026)?" was split into two
+    # builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut ...". A
+    # question about what the product does gets the answer, not a
+    # draft and never a batch.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import guards as _g
+            _cap = _g.capability_answer(text)
+        except Exception as e:
+            print(f"[prometheus] capability gate skipped: {e}")
+            _cap = None
+        if _cap:
+            raw = {'success': True, 'action': 'answer',
+                   'reply': _cap['reply'],
+                   'followups': list(_cap.get('followups') or []),
+                   'offer_deck': False, 'deck_angle': None}
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'capability_question', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_cap.get('followups') or [])
+            try:
+                host.ask_hint(route='capability_question', outcome='answered')
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw,
+                          'analyze')
+            return env, 200
 
     # A client in the middle of its own armed step (a confirm chip, a
     # deck angle picker, a clarify answer) already knows the surface.
@@ -335,6 +403,131 @@ def ask(user, body, *, via='session'):
                         thread_id=tid, via=via)
     _persist_turn(persist, uname, tid, history, text, env, raw, surface)
     return env, status
+
+
+_ARMED_BODY_KEYS = ('locked_sample_tu', 'locked_sample_avid', 'angle',
+                    'confirm_open_screen', 'draft', 'step')
+_THANKS_RX = re.compile(r'^(?:thanks?|thank\s+you|ty|cool|got\s+it|'
+                        r'understood|noted|perfect|great)[.! ]*$', re.I)
+_ORD_WORDS = {'one': 1, 'first': 1, 'the first': 1, 'the first one': 1,
+              'two': 2, 'second': 2, 'the second': 2, 'the second one': 2,
+              'three': 3, 'third': 3, 'the third': 3, 'the third one': 3,
+              'four': 4, 'five': 5}
+
+
+def _armed(body):
+    extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+    if any(extra.get(k) or body.get(k) for k in _ANALYZE_PASSTHROUGH):
+        return True
+    return any(body.get(k) for k in _ARMED_BODY_KEYS)
+
+
+def _last_agent_turn(history):
+    for t in reversed(history or []):
+        if isinstance(t, dict) and str(t.get('role') or '') == 'agent':
+            return t
+    return None
+
+
+_UTILITY_CHIP_RX = re.compile(
+    r'^(?:email\s+me|send\s+me|save|download|something\s+else|'
+    r'cancel|no\b|none\b|skip|new\s+thread|start\s+over)', re.I)
+
+
+def _option_labels(turn):
+    """Choices the previous agent turn offered, only when that turn
+    asked a question: a numbered list in its text first, else its
+    envelope options minus utility chips (email me, something else)."""
+    out = []
+    if not isinstance(turn, dict):
+        return out
+    txt = str(turn.get('text') or '')
+    if '?' not in txt:
+        return out
+    for m in re.finditer(r'(?m)^\s*(\d{1,2})[.)]\s+(.+?)\s*$', txt):
+        out.append(m.group(2).strip())
+    if out:
+        return out
+    meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+    for o in (meta.get('options') or []):
+        if isinstance(o, dict):
+            lbl = str(o.get('send') or o.get('label') or '').strip()
+        else:
+            lbl = str(o or '').strip()
+        if lbl and not _UTILITY_CHIP_RX.match(lbl):
+            out.append(lbl)
+    return out
+
+
+def _bare_reply(body, text, history, has_ctx):
+    """(rewrite_text, payload). rewrite_text is set when the bare reply
+    resolves to an option the previous turn offered (the ask continues
+    as that option). payload is the deterministic answer for a bare
+    reply nothing was waiting on. (None, None) means not a bare reply
+    or an armed step owns it."""
+    from . import guards
+    kind = guards.bare_reply_kind(text)
+    if not kind or _armed(body):
+        return None, None
+    prev = _last_agent_turn(history)
+    options = _option_labels(prev)
+    low = ' '.join(str(text or '').lower().split()).strip(' .!')
+    if kind == 'number' and options:
+        picks = []
+        for tok in re.split(r'\s*(?:,|and|&)\s*', low):
+            tok = tok.replace('option', '').strip()
+            n = None
+            if tok.isdigit():
+                n = int(tok)
+            elif tok in _ORD_WORDS:
+                n = _ORD_WORDS[tok]
+            elif tok in ('the last', 'the last one', 'last'):
+                n = len(options)
+            if n and 1 <= n <= len(options):
+                picks.append(options[n - 1])
+        if picks:
+            return ', '.join(dict.fromkeys(picks)), None
+
+    def _p(reply, chips=None):
+        out = {'success': True, 'action': 'answer', 'reply': reply,
+               'followups': list(chips or []), 'offer_deck': False,
+               'deck_angle': None}
+        return out
+
+    if kind == 'affirm':
+        if _THANKS_RX.match(low):
+            return None, _p('Anytime. Ask me the next one when you are ready.')
+        if options:
+            return None, _p('Which one? ' + ' / '.join(options[:4]) + '. '
+                            'Send the one you mean and I will run it.',
+                            options[:4])
+        if re.search(r'approv|go|run|ship|do it|proceed', low):
+            return None, _p(
+                'Nothing is waiting on an approval right now. If you were '
+                'approving a brief, use the Approve button on its card. '
+                'Otherwise tell me the audience or the question and I '
+                'will take it from there.')
+        return None, _p(
+            'Nothing is waiting on a yes right now. Ask me the question '
+            'or name the audience and I will run it.')
+    if kind == 'negative':
+        if re.search(r'cancel|stop|never ?mind|forget|scratch|skip', low):
+            return None, _p('Closed. Ask me anything else when ready.')
+        if options:
+            return None, _p(
+                'No problem. Which audience should I use instead? Name '
+                'it here and I will run the same question on it.')
+        return None, _p(
+            'No problem. Tell me the audience or the question you want '
+            'instead and I will run it.')
+    if kind == 'none':
+        return None, _p(
+            'Noted. If that answers a brief, finish it on the card above. '
+            'Otherwise, what would you like to run next?')
+    # number with no options to map to
+    return None, _p(
+        'Which list is that answering? Tell me the choice in words and '
+        'I will run it.')
 
 
 def _interpret_shape(raw):

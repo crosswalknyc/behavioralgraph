@@ -186,9 +186,45 @@ def _profile_meta(df, fallback_name):
             dates.append(m.group(1))
     if len(dates) >= 2:
         window = f"{dates[0]} to {dates[1]}"
-    return {'name': name or fallback_name or 'Audience',
+    return {'name': _humanize_subject(name or fallback_name) or 'Audience',
             'sample': sample, 'proj': proj, 'window': window,
             'bp_col': bp, 'brand_category': brand_category}
+
+
+_KEEP_CAPS = {'TV', 'NFL', 'NBA', 'MLB', 'NHL', 'MLS', 'WNBA', 'UFC', 'HBO',
+              'ESPN', 'CBS', 'NBC', 'ABC', 'AMC', 'BET', 'MTV', 'CNN', 'BBC',
+              'USA', 'UK', 'US', 'LA', 'NYC', 'DC', 'AI', 'IQ', 'TU', 'EST',
+              'TVOD', 'SVOD', 'AVOD', 'FAST', 'PVOD', 'QSR', 'CPG', 'DIY',
+              'GOAT', 'ESPN+', 'HBO', 'FX', 'TLC', 'HGTV', 'PBS', 'NPR',
+              'YTD', 'II', 'III', 'IV', 'VR', 'AR', 'OG'}
+
+
+def _humanize_subject(s):
+    """'THE_ROKU_CHANNEL' -> 'The Roku Channel'. Mixed-case names and
+    names with lowercase letters pass through untouched (2026-10-02:
+    a file key leaked into a reply as the audience name)."""
+    s = str(s or '').strip()
+    if not s:
+        return s
+    if '_' not in s and not (s.isupper() and len(s) > 3):
+        return s
+    words = re.split(r'[_\s]+', s)
+    out = []
+    for w in words:
+        if not w:
+            continue
+        if w.upper() in _KEEP_CAPS:
+            out.append(w.upper())
+        elif re.fullmatch(r'\d+[A-Za-z]*', w):
+            out.append(w.upper())
+        elif "'" in w:
+            out.append("'".join(part.capitalize() for part in w.split("'")))
+        elif out and w.lower() in ('on', 'of', 'the', 'and', 'in', 'at',
+                                   'to', 'for', 'a', 'an', 'vs', 'x'):
+            out.append(w.lower())
+        else:
+            out.append(w.capitalize())
+    return ' '.join(out)
 
 
 def load_genpop_map(s3_client, bucket):
@@ -3543,7 +3579,17 @@ _PANEL_FACT_BLOCKERS = re.compile(
     r"white\s*space|opportunit|journey|campaign|creative|pitch|deck|"
     r"churn|over.?index|overlap|trend|trajector|drove|convert|"
     r"partnership|value|worth|report|insight|analy[sz]|deep dive|"
-    r"story|angle|persona|summar|against)\b", re.I)
+    r"story|angle|persona|summar|against|"
+    # 2026-10-02 audit: evaluative and retention asks are judgments,
+    # not lookups ("is this a strong number?", "what % stayed?").
+    r"strong|weak|good|bad|healthy|typical|normal|benchmark|average|"
+    r"mean|stayed|stay|carried|retain|retention|kept|lapsed|"
+    r"cancel|dropped|drop.?off|lift|growth|grew|decline|fell|"
+    r"higher|lower|better|worse|improv)\b", re.I)
+
+# A panel fact is one short question. Two sentences or two question
+# marks is a conversation, which rides the full read (2026-10-02).
+_PANEL_FACT_MULTI_RX = re.compile(r"[.?!]\s+\S")
 
 _PANEL_FACT_FRAME = re.compile(
     r"(?:%|percent(?:age)?|\bshare\b|\bsplit\b|\bbreakdown\b|"
@@ -3638,6 +3684,8 @@ def detect_panel_fact(text):
     if not t or len(t) > 220:
         return None
     if _PANEL_FACT_BLOCKERS.search(t):
+        return None
+    if _PANEL_FACT_MULTI_RX.search(t) or t.count('?') > 1:
         return None
     if _PANEL_FACT_SIZE_RE.search(t):
         return {'kind': 'size'}

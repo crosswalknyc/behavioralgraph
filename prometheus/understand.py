@@ -26,6 +26,7 @@ client without that UI ignores the hint and runs the surface as is.
 """
 import re
 
+from . import guards
 from .host import host
 
 ANALYZE_MODES = ('exec_summary', 'whitespace', 'new_consumers', 'personas',
@@ -179,6 +180,12 @@ def should_analyze(text, has_ctx):
         return True
     if _QUESTION_OPEN_RX.search(t):
         return True
+    # A question mark or an interrogative on ANY sentence, not only
+    # the first or the last (2026-10-02 audit: "58.3% stayed for
+    # more. is this a strong number? for the other franchises ..."
+    # read as a build).
+    if guards.is_question_shaped(t):
+        return True
     return False
 
 
@@ -215,8 +222,43 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         d.update(surface='deck', reason='deck_ask')
         return d
 
+    # 2b. A bare acknowledgement, pick, or refusal with nothing armed
+    #     is not an ask. The surface stays whatever the data state
+    #     says; the ask service answers it without a reasoning pass
+    #     (2026-10-02 audit: "approved" became a fresh build, "no"
+    #     re-asked the open-screen question).
+    kind = guards.bare_reply_kind(t)
+    if kind:
+        d.update(surface='analyze' if has_ctx else 'interpret',
+                 reason='short_reply:' + kind)
+        return d
+
+    # 2c. A capability question with a deterministic answer ("Can I
+    #     cut the existing Apple TV+ profile by quarter?") is answered,
+    #     never drafted. Only fires when guards can answer it, so a
+    #     polite build order ("can you build me a Nike profile") still
+    #     builds.
+    try:
+        if guards.capability_answer(t):
+            d.update(surface='analyze', reason='capability_question')
+            return d
+    except Exception:
+        pass
+
     # 3. Subscriber IQ asks are build requests, even with a profile open.
+    #    A question ABOUT the open Subscriber IQ page, or about what
+    #    the product can do, is a question (2026-10-02 audit: "Is that
+    #    55% of total viewers or of new and reactivated watchers?"
+    #    became a Subscriber IQ draft).
     subiq = looks_subscriber_iq(t) or looks_ambiguous_churn(t)
+    if subiq and guards.subiq_question_not_build(t, has_ctx=has_ctx):
+        subiq = False
+        if has_ctx:
+            d.update(surface='analyze', reason='question_about_subiq')
+            return d
+        if guards.is_capability_question(t):
+            d.update(surface='analyze', reason='capability_question')
+            return d
 
     # 4. Dashboard pickers (menus the dashboard can open). The surface
     #    is still analyze for a client without that UI.

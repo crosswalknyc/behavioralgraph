@@ -78594,6 +78594,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 chipAction: 'buy_credits',
                                 url: String(url) }]
                 });
+                return;
+            }
+            // 2026-10-02: a guidance reply that carries follow-up
+            // choices shows them as chips (capability answers such as
+            // "Run Apple TV+ for 2Q 2026"). Each chip sends its label.
+            var _fu = (data && Array.isArray(data.followups)) ? data.followups : [];
+            var _fuOpts = [];
+            for (var _fi = 0; _fi < _fu.length && _fuOpts.length < 4; _fi++) {
+                var _f = _fu[_fi];
+                var _fl = (typeof _f === 'string') ? _f
+                    : (_f && (_f.label || _f.send)) || '';
+                if (_fl) _fuOpts.push({ label: String(_fl) });
+            }
+            if (_fuOpts.length) {
+                _synthChatPushTurnWithMeta('agent', text, { options: _fuOpts });
             } else {
                 synthChatPushTurn('agent', text);
             }
@@ -78972,8 +78987,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 'trailing 12 months': 1,
                 'last 12 months': 1,
                 'the last 12 months': 1,
+                'default': 1, 'the default': 1, 'default window': 1,
+                'the default window': 1, 'use the default window': 1,
+                'use default': 1, 'default dates': 1,
+                'the default dates': 1, 'standard': 1,
+                'the standard window': 1, 'keep the default': 1,
+                'go with the default': 1, 'stick with the default': 1,
+                'yes default': 1, 'yes, default': 1,
+                'yes the default': 1, 'yes, the default': 1,
+                'yes use the default window': 1,
+                'yes, use the default window': 1,
             };
-            return yes[t] === 1;
+            if (yes[t] === 1) return true;
+            return /^(?:yes[,.]?\s*|ok(?:ay)?[,.]?\s*|sure[,.]?\s*)?(?:(?:use|go with|keep|stick with|take)\s+)?(?:the\s+)?(?:default|standard|usual|normal|regular)(?:\s+(?:window|dates?|date\s+range|range|period|12\s+months?))?$/.test(t);
+        }
+
+        // Split "use the default window. And this profile will include
+        // X" into the confirmation and the extra detail (2026-10-02).
+        function _synthChatDateConfirmSplit(text) {
+            var raw = String(text || '').trim();
+            if (!raw) return { confirm: false, rest: '' };
+            if (_synthChatIsDateConfirmation(raw)) return { confirm: true, rest: '' };
+            var m = raw.match(/^(?:yes[,.!]?\s*|ok(?:ay)?[,.!]?\s*|sure[,.!]?\s*)?(?:(?:use|go with|keep|stick with|take)\s+)?(?:the\s+)?(?:default|standard|usual|normal|regular|trailing\s+12\s+months?|(?:the\s+)?last\s+12\s+months?)(?:\s+(?:window|dates?|date\s+range|range|period|12\s+months?))?(?:\s+(?:is|are|works?|(?:is|are)\s+fine|(?:is|are)\s+good))?[.!,;:]*\s*/i);
+            if (!m || !m[0] || m[0].length < 7) return { confirm: false, rest: '' };
+            var rest = raw.slice(m[0].length).trim();
+            if (/^(?:to|for|of|from|through|until)\b/i.test(rest)) return { confirm: false, rest: '' };
+            rest = rest.replace(/^(?:(?:is|are|that's|thats)\s+)?(?:fine|good|great|ok(?:ay)?|works(?:\s+for\s+me)?|please|thanks|thank\s+you)[,.!;]*\s*/i, '')
+                .replace(/^(?:and|also|plus|but|then|also,)\s+/i, '').trim();
+            return { confirm: true, rest: rest };
         }
 
         // Clear the date-clarification state. Called after either
@@ -79484,7 +79525,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var lines = [head];
                 if (typeof st.pending_position === 'number' && cur === 'queued') {
-                    lines.push('Position ' + st.pending_position + ' in queue.');
+                    lines.push('Number ' + st.pending_position + ' in line.');
                 }
                 if (cur === 'tu_done' && st.tu_key) {
                     lines.push('File: ' + st.tu_key);
@@ -80820,6 +80861,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 synthChatDiscoveryOffer ||
                 synthChatIncidenceOffer ||
                 _pmMemoryConfirm ||
+                _pmAwaitingAudienceName ||
+                _pmAwaitingCombineChoice ||
+                _pmAwaitingCombineName ||
                 _pmCompareArmed);
         }
 
@@ -80835,6 +80879,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _pmCompareArmed = false;
             _pmCompareCandidates = null;
             _pmMemoryConfirm = null;
+            _pmAwaitingAudienceName = null;
+            try { _pmClearCombineState(); } catch (_) {}
             _pmPanelOffer = null;
             _pmBpiqCollect = false;
             _pmBpiqConfirm = null;
@@ -80863,6 +80909,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // The pending confirm is an armed step - released on topic
         // switch like every other pending question.
         var _pmMemoryConfirm = null;
+        // 2026-10-02: armed after "No" / "Something else" to a
+        // "Do you mean for X?" question. Holds the original ask so the
+        // next short message (an audience name) binds to it.
+        var _pmAwaitingAudienceName = null;
         // Priced research-report quote (2026-09-14): a no-base subject
         // gets a quote; the armed offer routes the next reply to the
         // charged confirm, the build flow, or a quiet release.
@@ -81779,6 +81829,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // pivot behavior: bypass WITHOUT releasing so the picker
             // stays answerable afterward.
             var _pmKpiPivot = _pmLooksMetricKpi(text);
+            // Typed approval (2026-10-02): "approved" / "approve" /
+            // "run it" while a brief is on screen is the Approve button.
+            // It used to route as a fresh ask and rebuild the brief.
+            if ((synthChatCurrentDraft || (synthChatBatchDrafts && synthChatBatchDrafts.length)) &&
+                !_pmArmedStepActive() &&
+                /^(?:yes[,.!]?\s*)?(?:approved?|approve (?:it|this|the brief)|run it|go ahead|proceed|ship it|start (?:it|the build)|looks good[,.]? (?:approve|run it|go))[.! ]*$/i.test(text.trim())) {
+                try { await synthChatApproveBrief(); } catch (_) {}
+                return;
+            }
             // Deck-ask pivot (2026-08-31, Jenna / Unlikely
             // Collaborators defect): an explicit deck ask always wins
             // over any half-armed build state. Release every armed
@@ -81848,8 +81907,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                           bind_cohort: _mcPick.cohort || '' });
                     return;
                 }
-                if (/^something else[.! ]*$/i.test(_mcLow)) {
+                if (/^(something else|no|nope|nah|not that( one)?|neither|none( of (those|them))?|wrong( one)?|different( one)?|other)[.! ]*$/i.test(_mcLow)) {
                     _pmMemoryConfirm = null;
+                    _pmAwaitingAudienceName = { question: _mc.question || '' };
                     synthChatPushTurn('agent',
                         'No problem. Which audience should I use? ' +
                         'Name it here, or open a profile from ' +
@@ -81857,6 +81917,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 _pmMemoryConfirm = null;
+            }
+
+            // Name-the-audience follow-through (2026-10-02): the user
+            // said no to the guess and was asked to name the audience.
+            // A short name binds the original question to it. A fresh
+            // ask releases and routes on its own.
+            if (_pmAwaitingAudienceName && !_pmKpiPivot && !_pmDeckPivot) {
+                var _anStash = _pmAwaitingAudienceName;
+                _pmAwaitingAudienceName = null;
+                var _anName = text.trim().replace(/^(?:use|try|do|how about|what about|make it|it'?s|its)\s+/i, '')
+                    .replace(/[.!?]+$/, '').trim();
+                var _anWords = _anName.split(/\s+/).length;
+                if (_anStash.question && _anName && _anWords <= 7 &&
+                    text.indexOf('?') === -1 &&
+                    !_pmLooksTopicSwitch(text) &&
+                    !/^(?:run|build|pull|create|make|show|compare|what|which|who|how|why|when|where)\b/i.test(_anName)) {
+                    await _pmAnalyze(_anStash.question, _pmCollectPageContext(), '',
+                        { bind_subject: _anName });
+                    return;
+                }
             }
 
             // Attribution tracking follow-through (2026-09-22):
@@ -82147,6 +82227,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // Falls through to the interpret call below.
             } else if (_pmAwaitingCombineChoice) {
                 var _cbWant = _pmWantsCombined(text);
+                if (_cbWant === null &&
+                    (text.indexOf('?') !== -1 || text.split(/\s+/).length >= 8 ||
+                     _pmLooksTopicSwitch(text))) {
+                    // 2026-10-02: a new question is not an answer to
+                    // the combine picker. Release and route it fresh.
+                    _pmClearCombineState();
+                    _cbWant = undefined;
+                }
                 if (_cbWant === null) {
                     synthChatPushTurn('agent',
                         'I did not catch that. One combined profile '
@@ -82154,6 +82242,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         + 'profile for each?');
                     return;
                 }
+                if (_cbWant === undefined) {
+                    // fall through to routing below
+                } else {
                 if (_cbWant) {
                     _pmAwaitingCombineChoice = false;
                     _pmAwaitingCombineName = true;
@@ -82163,6 +82254,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 _pmReleaseStashedBatch();
                 return;
+                }
             }
 
             if (synthChatAwaitingDateConfirm && !_pmKpiPivot && !_pmDeckPivot) {
@@ -82173,8 +82265,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // window. Bind it onto the drafts we already have and
                 // release them the same way. If that cannot be done
                 // cleanly the old re-read still runs below.
-                var _pmDateOk = _synthChatIsDateConfirmation(text);
-                if (!_pmDateOk) {
+                // 2026-10-02: "use the default window. And this profile
+                // will include X" is a yes plus more detail. The detail
+                // rides with the original ask and the default window is
+                // stated, so the window is never asked twice.
+                var _pmDateFold = false;
+                var _pmDateSplit = _synthChatDateConfirmSplit(text);
+                if (_pmDateSplit.confirm && _pmDateSplit.rest &&
+                    synthChatStashedOriginalText) {
+                    text = synthChatStashedOriginalText + '. ' + _pmDateSplit.rest
+                        + '. Date range: trailing 12 months (the default).';
+                    _synthChatClearDateState();
+                    _pmDateFold = true;
+                }
+                var _pmDateOk = !_pmDateFold && (_pmDateSplit.confirm || _synthChatIsDateConfirmation(text));
+                if (!_pmDateOk && !_pmDateFold) {
                     _pmDateOk = await _pmRebindStashedWindow(text);
                 }
                 if (_pmDateOk) {
@@ -82223,13 +82328,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return;
                 }
                 // User replied with a different date instruction.
-                // Combine with the original ask so Claude has the
-                // full context in a single interpret call.
-                if (synthChatStashedOriginalText) {
-                    text = synthChatStashedOriginalText
-                        + '. Date range: ' + text;
+                // Combine with the original ask so the full context
+                // rides in a single interpret call.
+                if (!_pmDateFold) {
+                    if (synthChatStashedOriginalText) {
+                        text = synthChatStashedOriginalText
+                            + '. Date range: ' + text;
+                    }
+                    _synthChatClearDateState();
                 }
-                _synthChatClearDateState();
             }
 
             // ===== PROMETHEUS ROUTING (2026-10-01: the server decides) =====
@@ -82658,7 +82765,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 lines.push('_Shared context applied to each: "' + sharedCtx + '"_');
             }
             lines.push('');
-            lines.push('Approve to queue all ' + drafts.length + ', or send another message to adjust.');
+            lines.push('Approve to start all ' + drafts.length + ', or send another message to adjust.');
             return lines.join('\n');
         }
 
@@ -83612,7 +83719,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (skipRe.test(t)) {
                     synthChatBatchClarify = null;
                     synthChatPushTurn('agent',
-                        'No problem - approve to queue them, or send another message to adjust.');
+                        'No problem - approve to start them, or send another message to adjust.');
                     return;
                 }
                 var _end = _synthChatBeginThinking('clarify');
@@ -83651,7 +83758,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (skipRe.test(t)) {
                 synthChatBatchClarify = null;
                 synthChatPushTurn('agent',
-                    'No cuts added. Approve to queue all ' +
+                    'No cuts added. Approve to start all ' +
                     (synthChatBatchDrafts || []).length +
                     ', or send another message to adjust.');
                 return;
@@ -83679,7 +83786,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     synthChatBatchClarify = null;
                     synthChatPushTurn('agent',
                         (d2.message || 'No cuts recognized.') +
-                        ' Approve to queue the batch as-is.');
+                        ' Approve to start the batch as-is.');
                     return;
                 }
                 var drafts = synthChatBatchDrafts || [];
@@ -84017,8 +84124,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
                 _synthChatPushTurnWithMeta('agent',
-                    'Queued ' + data.subject + '' +
-                    (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
+                    'Started ' + data.subject + '' +
+                    (data.pending_position ? ' (number ' + data.pending_position + ' in line)' : '') +
                     '.',
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
                 _synthChatStartPolling(data.run_id, data.subject);
@@ -84092,8 +84199,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (r && r.success && r.run_id) {
                         queuedNames.push(subj);
                         _synthChatPushTurnWithMeta('agent',
-                            'Queued ' + (r.subject || subj) + '' +
-                                (r.pending_position ? ' (position ' + r.pending_position + ' in queue)' : '') +
+                            'Started ' + (r.subject || subj) + '' +
+                                (r.pending_position ? ' (number ' + r.pending_position + ' in line)' : '') +
                                 '.',
                             { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
                         _synthChatStartPolling(r.run_id, r.subject || subj);
@@ -84185,6 +84292,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 case 'running':   return 'running';
                 case 'tu_done':   return 'primary profile ready';
                 case 'avid_done': return 'avid cut ready';
+                case 'addon_cuts': return 'building the add-on cuts';
+                case 'cut_done':  return 'cut ready';
+                case 'subiq_done': return 'subscriber read ready';
+                case 'cancelled': return 'cancelled';
+                case 'pending':   return 'queued';
                 case 'complete':  return 'complete';
                 case 'error':     return 'error';
                 case 'failed':    return 'failed';

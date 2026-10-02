@@ -1271,8 +1271,12 @@ def _topical_overlap_ok(entry, qn, floor=0.34):
         subj_toks = set(normalize_subject(
             str(entry.get('subject') or '')).split())
         toks = [w for w in toks if w not in subj_toks]
-        if len(toks) < 3:
-            return True  # too little signal to judge; older behavior
+        if not toks:
+            return True  # nothing distinctive to judge on
+        # 2026-10-02 audit: one or two topic tokens used to pass
+        # unjudged, which is how a short ask replayed an unrelated
+        # read. With little signal, every token must land.
+        _need_all = len(toks) < 3
         etext = ' '.join((
             str(entry.get('qn') or entry.get('q') or ''),
             normalize_subject(
@@ -1289,7 +1293,10 @@ def _topical_overlap_ok(entry, qn, floor=0.34):
                          and (q.startswith(e) or e.startswith(q))
                          for e in estems))
         share = hit / max(1, len(qstems))
-        if share >= floor:
+        if _need_all:
+            if hit >= len(qstems):
+                return True
+        elif share >= floor:
             return True
         print(f"[insights-ledger] semantic candidate rejected on "
               f"topic overlap ({share:.0%}): {entry.get('k')}")
