@@ -185678,6 +185678,45 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     window.addEventListener('resize', window._closeMobileToolsMenu);
                 }, 0);
             };
+            // The native <select> picker refuses to open on the sub-tabs (its
+            // toolbar lives inside a body-pinned position:fixed chrome, where
+            // iOS focuses the control but never shows the wheel). preventDefault
+            // on mousedown did not reliably suppress it either. So on phones we
+            // swap in a real <button> - a button's click ALWAYS fires - and open
+            // the custom menu from it. The native <select> stays in the DOM but
+            // hidden, so desktop (which never hits this width) is untouched.
+            window._ensureMobileToolsBtn = function () {
+                var mob = !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
+                var sel = document.getElementById('mobileToolsNav');
+                var btn = document.getElementById('mobileToolsNavBtn');
+                if (!sel || !sel.parentNode) return;
+                if (!mob) {
+                    if (btn) btn.style.display = 'none';
+                    sel.style.display = 'none'; // original desktop state
+                    return;
+                }
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.id = 'mobileToolsNavBtn';
+                    btn.className = 'mobile-tools-nav';
+                    btn.textContent = 'Data & Analysis Tools';
+                    btn.style.flex = '1 0 100%';
+                    btn.style.margin = '0 0 12px 0';
+                    btn.style.textAlign = 'left';
+                    btn.style.fontFamily = 'inherit';
+                    sel.parentNode.insertBefore(btn, sel);
+                    btn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (window._openMobileToolsMenu) window._openMobileToolsMenu(btn);
+                    });
+                }
+                btn.style.display = 'block';
+                // Hide the native select hard: inline !important beats the
+                // mobile ".mobile-tools-nav { display:block !important }" reveal.
+                sel.style.setProperty('display', 'none', 'important');
+            };
             // Make every "Select Profile" sidebar a collapsible accordion on
             // phones. Gated to mobile so the desktop DOM is never touched.
             window._initMobileSidebarCollapse = function () {
@@ -185704,19 +185743,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             document.addEventListener('DOMContentLoaded', function () {
                 try { window._buildMobileToolsNav(); } catch (e) {}
                 try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
-                try {
-                    var _mtn = document.getElementById('mobileToolsNav');
-                    if (_mtn && !_mtn._mtmBound) {
-                        _mtn._mtmBound = true;
-                        // preventDefault on mousedown blocks BOTH the native
-                        // picker and focus, so on phones we fully own the tap.
-                        _mtn.addEventListener('mousedown', function (e) {
-                            if (!_isMobileViewport()) return;
-                            e.preventDefault();
-                            if (window._openMobileToolsMenu) window._openMobileToolsMenu(_mtn);
-                        });
-                    }
-                } catch (e) {}
+                try { window._ensureMobileToolsBtn(); } catch (e) {}
+            });
+            // Run now too: this inline script executes during parsing, before
+            // DOMContentLoaded - but if that event already fired, the listener
+            // above would never run, leaving the dropdown dead. Belt + braces.
+            try { window._ensureMobileToolsBtn(); } catch (e) {}
+            window.addEventListener('resize', function () {
+                try { window._ensureMobileToolsBtn(); } catch (e) {}
             });
         })();
     </script>
