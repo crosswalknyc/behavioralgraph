@@ -361,7 +361,7 @@
     window.nlUploadHtml = async function () {
         if (!state.editingId) return;
         const file = $('nl-html-file').files[0];
-        if (!file) { toast('Choose an HTML file first', true); return; }
+        if (!file) { toast('Choose an HTML file or a ZIP first', true); return; }
         const fd = new FormData();
         fd.append('file', file);
         try {
@@ -373,7 +373,11 @@
             const data = await resp.json();
             if (!resp.ok || data.success === false) throw new Error(data.error || 'Upload failed');
             $('nl-preview').src = '/n/preview/' + encodeURIComponent(state.editingId) + '?t=' + Date.now();
-            toast('HTML loaded' + (data.assets ? ` · ${data.assets} images hosted` : ''));
+            toast(
+                'Letter loaded'
+                + (data.assets ? ` · ${data.assets} images hosted` : '')
+                + (data.web_slug ? ` · web at /the-read/${data.web_slug}/` : '')
+            );
         } catch (e) { toast(e.message, true); }
     };
 

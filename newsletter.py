@@ -18,6 +18,7 @@ import threading
 import time
 import traceback
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -46,6 +47,7 @@ SEND_KEY = "system/newsletter/sends/{cid}.json"
 EVENTS_KEY = "system/newsletter/events/{cid}.jsonl"
 DOWNLOAD_KEY = "system/newsletter/downloads/{cid}.json"
 ATTACH_KEY = "system/newsletter/attachments/{cid}/{name}"
+WEB_HTML_KEY = "system/newsletter/web/{cid}/index.html"
 
 SEED_DIR = Path(__file__).resolve().parent / "newsletter_seed"
 SEED_HTML = SEED_DIR / "the_read_creatorverse.html"
@@ -233,11 +235,13 @@ def collect_trackable_links(html: str):
     return links
 
 
-def build_send_template(html: str, asset_base: str, download_url: str = ""):
+def build_send_template(html: str, asset_base: str, download_url: str = "", web_base: str = ""):
     """Turn stored HTML into a per-recipient template with placeholders."""
     html = html or ""
     if asset_base:
         html = html.replace("{{ASSET_BASE}}", asset_base.rstrip("/"))
+    if web_base:
+        html = html.replace("{{WEB_BASE}}", web_base.rstrip("/") + "/")
     if download_url:
         html = html.replace("{{DOWNLOAD}}", download_url)
         html = re.sub(
@@ -668,6 +672,36 @@ def get_campaign_html(cid: str) -> str:
 
 def put_campaign_html(cid: str, html: str):
     _put_text(CAMPAIGN_HTML_KEY.format(cid=cid), html, "text/html; charset=utf-8")
+
+
+def get_web_html(cid: str) -> str:
+    return _get_text(WEB_HTML_KEY.format(cid=cid)) or ""
+
+
+def put_web_html(cid: str, html: str):
+    _put_text(WEB_HTML_KEY.format(cid=cid), html or "", "text/html; charset=utf-8")
+
+
+def _web_slug_of(camp) -> str:
+    slug = ((camp or {}).get("web_slug") or "").strip()
+    return re.sub(r"[^A-Za-z0-9._-]", "", slug)
+
+
+def _web_public_url(camp, settings=None) -> str:
+    slug = _web_slug_of(camp)
+    if not slug:
+        return ""
+    return f"{_public_base(settings)}/the-read/{slug}/"
+
+
+def _campaign_by_web_slug(state, slug):
+    slug = re.sub(r"[^A-Za-z0-9._-]", "", slug or "")
+    if not slug:
+        return None
+    for camp in state.get("campaigns") or []:
+        if _web_slug_of(camp) == slug:
+            return camp
+    return None
 
 
 def get_send_snapshot(cid: str):
@@ -1754,7 +1788,9 @@ def _run_send(campaign_id):
         base = _public_base(settings)
         asset_base = f"{base}/n/asset/{campaign_id}"
         download_url = f"{base}/n/d/{campaign_id}" if (camp.get("download") or {}).get("enabled") else ""
-        template, links = build_send_template(html, asset_base, download_url)
+        template, links = build_send_template(
+            html, asset_base, download_url, web_base=_web_public_url(camp, settings),
+        )
         text_fallback = strip_tags(html)[:4000]
         from_header, from_addr = _from_header(camp, settings)
         reply_to = (camp.get("reply_to") or settings.get("reply_to") or DEFAULT_REPLY_TO).strip()
@@ -1880,7 +1916,9 @@ def send_test(campaign_id, to_email):
     base = _public_base(settings)
     asset_base = f"{base}/n/asset/{campaign_id}"
     download_url = f"{base}/n/d/{campaign_id}" if (camp.get("download") or {}).get("enabled") else ""
-    template, links = build_send_template(html, asset_base, download_url)
+    template, links = build_send_template(
+        html, asset_base, download_url, web_base=_web_public_url(camp, settings),
+    )
     personalized, unsub = personalize_html(template, campaign_id, email, links, base)
     from_header, from_addr = _from_header(camp, settings)
     reply_to = (camp.get("reply_to") or settings.get("reply_to") or DEFAULT_REPLY_TO).strip()
@@ -2099,6 +2137,8 @@ def _public_campaign(c, subscriber_counts=None, settings=None, include_downloads
         "download_url": _public_download_url(cid, settings) if dl.get("enabled") else "",
         "download_stats": dl_stats,
         "share_url": nli.share_url(cid, settings) if cid else "",
+        "web_slug": (c.get("web_slug") or "").strip(),
+        "web_url": _web_public_url(c, settings),
         "linkedin": nli.public_campaign_linkedin(c, settings),
     }
 
@@ -2182,6 +2222,7 @@ def _preview_html(campaign_id):
     asset_base = f"{base}/n/asset/{campaign_id}"
     html = (html or "").replace("{{ASSET_BASE}}", asset_base)
     camp = _campaign(state, campaign_id) or {}
+    html = html.replace("{{WEB_BASE}}", _web_public_url(camp, settings))
     if (camp.get("download") or {}).get("enabled"):
         html = html.replace("{{DOWNLOAD}}", f"{base}/n/d/{campaign_id}")
     html = UNSUB_PLACEHOLDER_RE.sub("#", html)
@@ -2450,23 +2491,42 @@ def api_upload_html(cid):
     if not _campaign(state, cid):
         return jsonify({"success": False, "error": "campaign not found"}), 404
     html = ""
-    if request.files.get("file"):
-        html = request.files["file"].read().decode("utf-8", errors="replace")
+    slug = ""
+    n_assets = 0
+    up = request.files.get("file")
+    if up and up.filename:
+        raw = up.read()
+        name = (up.filename or "").lower()
+        if name.endswith(".zip") or (raw[:2] == b"PK"):
+            try:
+                html, n_assets, slug = ingest_campaign_package(cid, raw)
+            except ValueError as e:
+                return jsonify({"success": False, "error": str(e)}), 400
+        else:
+            html = raw.decode("utf-8", errors="replace")
+            html, n_assets = _store_html_assets(cid, html)
     else:
         body = request.get_json(silent=True) or {}
         html = body.get("html") or ""
-    html, n_assets = _store_html_assets(cid, html)
+        html, n_assets = _store_html_assets(cid, html)
     put_campaign_html(cid, html)
 
     def mutate(st):
         c = _campaign(st, cid)
         if not c:
             return None
+        if slug:
+            c["web_slug"] = slug
         c["updated_at"] = _utcnow()
         return st
 
     _cas_update_state(mutate)
-    return jsonify({"success": True, "bytes": len(html.encode("utf-8")), "assets": n_assets})
+    return jsonify({
+        "success": True,
+        "bytes": len(html.encode("utf-8")),
+        "assets": n_assets,
+        "web_slug": slug,
+    })
 
 
 @newsletter_bp.route("/api/admin/newsletter/campaigns/<cid>/duplicate", methods=["POST"])
@@ -3310,6 +3370,148 @@ def public_download_file(cid, token):
 # Internals used by routes
 # ---------------------------------------------------------------------------
 
+PACKAGE_IMAGE_EXT = {"jpg", "jpeg", "png", "gif", "webp"}
+MAX_PACKAGE_BYTES = 40 * 1024 * 1024
+_SRC_URL_RE = re.compile(
+    r"""(?P<pre>(?:src|href|background)\s*=\s*["'])(?P<url>[^"']+)(?P<post>["'])""",
+    re.I,
+)
+_CSS_URL_RE = re.compile(
+    r"""(?P<pre>url\(\s*['"]?)(?P<url>[^'")]+)(?P<post>['"]?\s*\))""",
+    re.I,
+)
+
+
+def _zip_member_name(info):
+    name = (info.filename or "").replace("\\", "/").lstrip("/")
+    if not name or name.endswith("/") or name.startswith("__MACOSX/") or "/." in name:
+        return ""
+    return name
+
+
+def _pick_email_html(htmls):
+    """Emma's send file: email/*.html, not PREVIEW, not the fat web index."""
+    if not htmls:
+        return "", ""
+    scored = []
+    for path, text in htmls:
+        low = path.lower()
+        score = 0
+        if "/email/" in f"/{low}" or low.startswith("email/"):
+            score += 50
+        if "preview" in Path(low).name:
+            score -= 40
+        if Path(low).name == "index.html":
+            score -= 20
+        size = len(text.encode("utf-8", errors="replace"))
+        if size <= 120_000:
+            score += 25
+        elif size > 400_000:
+            score -= 25
+        scored.append((score, -size, path, text))
+    scored.sort(reverse=True)
+    path, text = scored[0][2], scored[0][3]
+    return text, path
+
+
+def _pick_web_html(htmls, email_path):
+    for path, text in htmls:
+        if path == email_path:
+            continue
+        low = path.lower()
+        if Path(low).name == "index.html" and "email/" not in low:
+            return text, path
+    biggest = ("", "")
+    biggest_n = -1
+    for path, text in htmls:
+        if path == email_path:
+            continue
+        n = len(text)
+        if n > biggest_n:
+            biggest_n = n
+            biggest = (text, path)
+    return biggest
+
+
+def _slug_from_package_paths(paths):
+    for path in paths:
+        parts = [p for p in path.replace("\\", "/").split("/") if p]
+        if len(parts) >= 2 and parts[0].lower() not in {"email", "__macosx"}:
+            if parts[-1].lower() == "index.html" or parts[-2].lower() == "images":
+                return re.sub(r"[^A-Za-z0-9._-]", "", parts[0].lower().replace("_", "-"))
+    return ""
+
+
+def rewrite_package_urls(html, image_names, slug=""):
+    """Point every package image at the hosted asset. Keep the web version link."""
+    html = html or ""
+    name_map = {name.lower(): name for name in image_names}
+
+    def swap(m):
+        url = (m.group("url") or "").strip()
+        base = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        key = base.lower()
+        if key in name_map:
+            return f"{m.group('pre')}{{{{ASSET_BASE}}}}/{name_map[key]}{m.group('post')}"
+        return m.group(0)
+
+    html = _SRC_URL_RE.sub(swap, html)
+    html = _CSS_URL_RE.sub(swap, html)
+    if slug:
+        html = re.sub(
+            rf"https?://[^/\"']+/the-read/{re.escape(slug)}/?",
+            "{{WEB_BASE}}",
+            html,
+            flags=re.I,
+        )
+    return html
+
+
+def ingest_campaign_package(cid, raw_zip):
+    """ZIP in, hosted images out. Email HTML is stored. Web HTML is optional."""
+    if not raw_zip:
+        raise ValueError("that ZIP is empty")
+    if len(raw_zip) > MAX_PACKAGE_BYTES:
+        raise ValueError("ZIP is over 40 MB")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw_zip))
+    except zipfile.BadZipFile:
+        raise ValueError("that file is not a ZIP")
+    images = {}
+    htmls = []
+    paths = []
+    with zf:
+        for info in zf.infolist():
+            name = _zip_member_name(info)
+            if not name:
+                continue
+            paths.append(name)
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            data = zf.read(info)
+            if ext in PACKAGE_IMAGE_EXT:
+                images[_safe_filename(Path(name).name)] = data
+            elif ext in {"html", "htm"}:
+                htmls.append((name, data.decode("utf-8", errors="replace")))
+    if not htmls:
+        raise ValueError("the ZIP needs an HTML file")
+    email_html, email_path = _pick_email_html(htmls)
+    web_html, web_path = _pick_web_html(htmls, email_path)
+    slug = _slug_from_package_paths(paths) or _slug_from_package_paths([email_path, web_path])
+    hosted = 0
+    for name, data in images.items():
+        _put_bytes(ASSET_KEY.format(cid=cid, name=name), data, _content_type_for(name))
+        hosted += 1
+    email_html = rewrite_package_urls(email_html, images.keys(), slug)
+    email_html, extra = _store_html_assets(cid, email_html)
+    hosted += extra
+    if web_html:
+        web_html = rewrite_package_urls(web_html, images.keys(), slug)
+        web_html, extra_web = _store_html_assets(cid, web_html)
+        hosted += extra_web
+        put_web_html(cid, web_html)
+    return email_html, hosted, slug
+
+
 def _store_html_assets(cid, html):
     n = 0
 
@@ -3561,10 +3763,62 @@ def public_the_read():
     )
 
 
+def _serve_web_issue(camp, settings):
+    cid = camp.get("id")
+    html = get_web_html(cid)
+    if not (html or "").strip():
+        return None
+    base = _public_base(settings)
+    html = html.replace("{{ASSET_BASE}}", f"{base}/n/asset/{cid}")
+    html = html.replace("{{WEB_BASE}}", _web_public_url(camp, settings))
+    return Response(html, mimetype="text/html; charset=utf-8")
+
+
+@newsletter_bp.route("/the-read/<slug>/images/<name>")
+def public_web_image(slug, name):
+    slug = re.sub(r"[^A-Za-z0-9._-]", "", slug or "")
+    name = _safe_filename(name)
+    state = load_state_raw()
+    camp = _campaign_by_web_slug(state, slug)
+    if not camp or not name:
+        return Response("not found", status=404)
+    raw = _get_bytes(ASSET_KEY.format(cid=camp.get("id"), name=name))
+    if raw is None:
+        return Response("not found", status=404)
+    return Response(
+        raw,
+        mimetype=_content_type_for(name),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@newsletter_bp.route("/the-read/<slug>/")
+@newsletter_bp.route("/the-read/<slug>/index.html")
+def public_web_issue(slug):
+    slug = re.sub(r"[^A-Za-z0-9._-]", "", slug or "")
+    state = load_state_raw()
+    camp = _campaign_by_web_slug(state, slug)
+    if not camp:
+        return render_template(
+            "the_read.html",
+            issues=public_archive_issues(state),
+            notice=False,
+            error="That issue is not available.",
+            address=_company_address(),
+        ), 404
+    page = _serve_web_issue(camp, state.get("settings") or {})
+    if page is None:
+        return redirect(f"/the-read/{camp.get('id')}")
+    return page
+
+
 @newsletter_bp.route("/the-read/<cid>")
 def public_the_read_issue(cid):
     cid = re.sub(r"[^A-Za-z0-9._-]", "", cid or "")
     state = load_state_raw()
+    web_camp = _campaign_by_web_slug(state, cid)
+    if web_camp and get_web_html(web_camp.get("id")):
+        return redirect(f"/the-read/{_web_slug_of(web_camp)}/", code=302)
     camp = _campaign(state, cid)
     if not camp or _effective_status(camp) != "sent":
         return render_template(

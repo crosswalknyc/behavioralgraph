@@ -3545,10 +3545,11 @@
                         </div>
                         <label>Audience</label>
                         <select id="nl-ed-list"></select>
-                        <label>HTML file</label>
-                        <input type="file" id="nl-html-file" accept=".html,text/html">
+                        <label>HTML or ZIP</label>
+                        <input type="file" id="nl-html-file" accept=".html,.zip,text/html,application/zip">
+                        <div class="nl-sub" style="margin-top:0.25rem;">A ZIP can be the letter HTML plus an images folder. We host the images and point the HTML at them.</div>
                         <div class="nl-row" style="margin-top:0.6rem;">
-                            <button class="btn btn-small btn-secondary" onclick="nlUploadHtml()">Load HTML</button>
+                            <button class="btn btn-small btn-secondary" onclick="nlUploadHtml()">Load HTML or ZIP</button>
                             <button class="btn btn-small btn-secondary" onclick="nlSaveCampaign()">Save</button>
                         </div>
                         <div class="nl-divider">Gated download</div>
@@ -18680,7 +18681,7 @@
             }
         }
     </script>
-    <script src="/static/newsletter_admin.js?v=20260923-export"></script>
+    <script src="/static/newsletter_admin.js?v=20261002-zip"></script>
 
     <!-- Journey IQ Annotations Modal -->
     <div id="jiqAnnotModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
