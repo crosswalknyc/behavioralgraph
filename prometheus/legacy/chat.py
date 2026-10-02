@@ -5215,6 +5215,93 @@ def _pm_watch_notify(username, question, payload, subject=None):
         pass
 
 
+_PM_TAXONOMY_OVERRIDES = frozenset({
+    'empty', 'faulted', 'clarified', 'clarified_repeat', 'proposed',
+    'confirmed'})
+
+
+def _pm_swallow(where, exc=None, note=None):
+    """The one way to swallow an exception on a request path
+    (2026-10-02 RCA: `except Exception: pass` hid every model, shape,
+    and transport fault behind a polite sentence). Prints the
+    traceback and records a fault note on flask.g so the ask log
+    carries it in `extra.faults`. Never raises."""
+    try:
+        traceback.print_exc()
+    except Exception:
+        pass
+    try:
+        from flask import g as _g
+        faults = getattr(_g, '_pm_faults', None)
+        if faults is None:
+            faults = []
+            _g._pm_faults = faults
+        if len(faults) < 6:
+            msg = str(where)[:40]
+            if exc is not None:
+                msg += f': {type(exc).__name__}'
+            if note:
+                msg += f' {str(note)[:60]}'
+            faults.append(msg)
+    except Exception:
+        pass
+
+
+def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
+                           base_outcome, question, username):
+    """Refine the legacy outcome with prometheus.ask_outcome and fire
+    the ops alert for the states a user should never sit in. Returns
+    (outcome, extra). Never raises."""
+    extra = {}
+    try:
+        from flask import g as _g
+        faults = getattr(_g, '_pm_faults', None)
+        if faults:
+            extra['faults'] = '; '.join(faults)[:200]
+    except Exception:
+        pass
+    try:
+        from prometheus import ask_outcome as _ao
+        outcome, detail = _ao.classify(surface, payload, status_code,
+                                       history, base_outcome)
+        if outcome in _PM_TAXONOMY_OVERRIDES:
+            final = outcome
+        else:
+            final = base_outcome or outcome
+        extra['result'] = outcome
+        for k, v in (detail or {}).items():
+            extra[k] = v
+        if outcome in _ao.ALERT_OUTCOMES:
+            already = False
+            try:
+                from flask import g as _g2
+                already = bool(getattr(_g2, '_pm_fault_alerted', False))
+                _g2._pm_fault_alerted = True
+            except Exception:
+                pass
+            if not already:
+                try:
+                    _H._chatbot_error_email(
+                        f'prometheus/{surface}',
+                        RuntimeError(f'ask outcome {outcome}'),
+                        username or 'unknown',
+                        {'question': str(question or '')[:600],
+                         'outcome': outcome,
+                         'reply_sample': (detail or {}).get('sample') or
+                         _ao.reply_text(payload)[:300],
+                         'surface': surface,
+                         'faults': extra.get('faults')},
+                        'Reply classified ' + outcome
+                        + ' by prometheus.ask_outcome (no traceback; '
+                          'the route returned normally).')
+                except Exception:
+                    traceback.print_exc()
+        return final, (extra or None)
+    except Exception:
+        traceback.print_exc()
+        return base_outcome, (extra or None)
+
+
 def _ask_logged(surface):
     """Wrap a chatbot route so every question is recorded to the ask
     log with route, outcome, and response time. Fire-and-forget."""
@@ -5225,9 +5312,11 @@ def _ask_logged(surface):
             t0 = time.time()
             question, view, mode = '', '', None
             log_surface = surface
+            ask_history = []
             try:
                 body = request.get_json(force=True, silent=True) or {}
                 question = str(body.get('text') or '').strip()
+                ask_history = body.get('history') or []
                 mode = (str(body.get('mode') or '').strip().lower()
                         or None)
                 pc = body.get('page_context') or {}
@@ -5311,13 +5400,22 @@ def _ask_logged(surface):
                 if subject and view and view not in _ASK_SUBJECT_VIEWS \
                         and not _ask_mentions_subject(question, subject):
                     subject = None
+                # Failure taxonomy (2026-10-02 RCA): classify what the
+                # user actually received. Legacy outcome names are kept
+                # for answers and build decisions; the states that used
+                # to hide under 'answered' (empty, faulted, clarified,
+                # clarified_repeat, proposed, confirmed) replace it.
+                outcome, extra = _pm_ask_apply_taxonomy(
+                    log_surface, payload, status_code, ask_history,
+                    outcome, question,
+                    session.get('username') or getattr(_g, '_pm_ask_user', None) or '')
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
                     view=view, question=question, surface=log_surface,
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
-                    mode=mode, subject=subject,
+                    mode=mode, subject=subject, extra=extra,
                     stages=getattr(_g, '_pm_ask_stages', None))
                 _pm_watch_notify(
                     session.get('username') or getattr(_g, '_pm_ask_user', None) or '', question, payload,
@@ -8888,6 +8986,8 @@ def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
     if fault and alert:
         try:
             _pm_ask_hint(outcome='intake_fault', subject=flow)
+            from flask import g as _gf
+            _gf._pm_fault_alerted = True
         except Exception:
             pass
         try:
