@@ -19083,6 +19083,21 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             font-size: 16px !important;
             letter-spacing: -0.02em !important;
         }
+        /* Mobile hero keeps only the two headline KPIs (US Audience, Crosswalk
+           sample); drop the Female / Under-35 tiles that wrapped to a 2nd line
+           and ate into the fixed-height copy frame. Applies to every tab. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroKpis .piq-kpi:nth-child(n+3) {
+            display: none !important;
+        }
+        /* Hide the date / category / universe pills on mobile. v4 shows them on
+           the sub-tabs (Demographics/Behavioral/etc) but NOT on Insights; with
+           the copy framed to a fixed 132px, those pills pushed the name and
+           one-liner up out of the clip window, so the sub-tabs looked nothing
+           like Insights. Hiding them everywhere makes every tab match Insights:
+           name + one-liner + the two KPIs. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #piqHeroPills {
+            display: none !important;
+        }
 
         /* ---- 11g. IMDB badge: tiny, tucked into the portrait's bottom-left ----
            v4 floats it top-left at 11px; shrink it hard and pin it to the lower
