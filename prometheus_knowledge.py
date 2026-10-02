@@ -345,6 +345,23 @@ def module_text(pack, names):
 # scrubbed decisions corpus cannot itself carry (the compiler's leak
 # gate keeps those words out of the JSON). Detection lives here, in
 # code, per the standing security boundary.
+_trigger_rx_cache = {}
+
+
+def _trigger_rx(pattern):
+    """Compiled per-decision trigger regex, cached; None when the
+    pattern does not compile."""
+    if pattern in _trigger_rx_cache:
+        return _trigger_rx_cache[pattern]
+    try:
+        rx = re.compile(pattern, re.I)
+    except re.error:
+        rx = None
+    if len(_trigger_rx_cache) < 256:
+        _trigger_rx_cache[pattern] = rx
+    return rx
+
+
 _EXTRA_TRIGGERS = {
     'individual_level': re.compile(r'\bhouse\s?holds?\b|\bHHs?\b'),
     'clickstream_boundary': re.compile(
@@ -395,6 +412,13 @@ def match_decisions(text, subject='', decisions=None, limit=4):
         rx = _EXTRA_TRIGGERS.get(d.get('id'))
         if rx is not None and rx.search(f"{text or ''} {subject or ''}"):
             score += 3
+        # Distilled operator corrections (2026-10-02) may carry their
+        # own ask-shape regex; a bad pattern is ignored, never raised.
+        trig = d.get('trigger')
+        if trig:
+            crx = _trigger_rx(str(trig))
+            if crx is not None and crx.search(str(text or '')):
+                score += 3
         if score > 0:
             scored.append((score, d))
     scored.sort(key=lambda sd: (-sd[0], str(sd[1].get('id'))))

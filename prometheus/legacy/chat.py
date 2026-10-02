@@ -2282,16 +2282,6 @@ def _save_synth_chat_history(username, history):
                     th['title'] = _pm_thread_title_from(trimmed)
                 break
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
-        # Prometheus watch (2026-09-24, Jenna): every question a
-        # watched company (Paramount+, Sony) asks, with the answer it
-        # got, lands in Jenna's inbox. Both surfaces and the finished
-        # background reads all pass through this save. Daemon thread,
-        # never raises, never delays the save.
-        try:
-            import prometheus_watch as _pmw
-            _pmw.on_history_saved(username, trimmed, _H.load_users)
-        except Exception:
-            traceback.print_exc()
         return True
     except Exception as e:
         print(f"[synth-chat] history save failed for {username}: {e}")
@@ -10354,6 +10344,17 @@ _PM_REPORT_ASK_RE = re.compile(
     r'|full (analysis|read)|research (report|read))\b', re.I)
 
 
+def _pm_plausible_subject(subj):
+    """A subject string that is only ordinary words, or starts or ends
+    on a connective, is not a subject (2026-10-02, 'Three Actually
+    Influence Product Purchases and')."""
+    try:
+        from prometheus import referents as _refs
+        return bool(_refs.plausible_subject(subj))
+    except Exception:
+        return bool(str(subj or '').strip())
+
+
 def _pm_looks_report_ask(text):
     """True when the ask wants a put-together deliverable (keeps the
     2026-09-14 priced research-report flow); False for plain questions,
@@ -11448,6 +11449,27 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     bind_cohort = str(bind_cohort or '').strip()
     if bind_subject and not subj_hint:
         subj_hint = bind_subject
+    # WHICH ONES? (2026-10-02 Jenna: "it should have asked him which 3
+    # influencers he was talking about then actually given him the
+    # answer"). An ask that points at "these three creators" and names
+    # none of them stops here with the question, before any base
+    # lookup, any model call, any offer. A subject handed in by a
+    # model or an extractor that is only ordinary words ("Three
+    # Actually Influence Product Purchases and") is not a subject.
+    try:
+        from prometheus import referents as _refs
+        if subj_hint and not _refs.plausible_subject(subj_hint):
+            print(f"[pm-referent] dropped implausible subject hint "
+                  f"{subj_hint!r}")
+            subj_hint = ''
+        if not bind_subject and not isinstance(panel_confirm, dict):
+            _unres = _refs.detect_unresolved(text, history, ctx)
+            if _unres:
+                _pm_ask_hint(route='referent_clarify',
+                             outcome='asked_which')
+                return jsonify(_refs.clarify_payload(_unres, text))
+    except Exception:
+        traceback.print_exc()
     # HARD GATE (2026-08-27, Jenna): resolve the base that authorizes
     # this generated read BEFORE anything is generated. No base
     # anywhere = no numbers; the subject needs its 5-credit Total
@@ -11603,6 +11625,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # priced research-report flow below.
         _bf_subj = (subj_hint or pma.guess_subject_from_text(text)
                     or '').strip()
+        if _bf_subj and not _pm_plausible_subject(_bf_subj):
+            _bf_subj = ''
         if (_bf_subj and not isinstance(panel_confirm, dict)
                 and not _pm_looks_report_ask(text)):
             try:
@@ -11637,6 +11661,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         # bills as metered usage (2026-09-14: nothing is ever free).
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or '').strip()
+        if subj_name and not _pm_plausible_subject(subj_name):
+            subj_name = ''
         if isinstance(panel_confirm, dict) and not subj_name:
             subj_name = str(panel_confirm.get('subject') or '').strip()
         if subj_name:
@@ -12537,11 +12563,6 @@ def _pm_save_thread_or_active(username, tid, history):
                     th['title'] = _pm_thread_title_from(trimmed)
                 break
         _pm_s3_put_json(_pm_threads_index_key(username), idx)
-    except Exception:
-        traceback.print_exc()
-    try:
-        import prometheus_watch as _pmw
-        _pmw.on_history_saved(username, trimmed, _H.load_users)
     except Exception:
         traceback.print_exc()
     return True

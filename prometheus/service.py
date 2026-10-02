@@ -225,11 +225,65 @@ def ask(user, body, *, via='session'):
     except Exception:
         pass
 
+    # Unresolved referents (2026-10-02 Jenna: "it should have asked him
+    # which 3 influencers he was talking about then actually given him
+    # the answer"). Two halves, both before any surface runs:
+    #  1. This turn is the names answering our which-ones question:
+    #     fold them into the question that asked, and run that on the
+    #     analyze surface bound to those names.
+    #  2. This turn points at "these three creators" / "both shows" /
+    #     "all 4 titles" and names none of them anywhere we can see:
+    #     ask which ones. No model call, no charge, no offer.
+    referent_decision = None
+    _client_surface = str(body.get('surface') or '').strip().lower()
+    try:
+        from . import referents as _refs
+        _merged, _label = _refs.answer_merge(history, text)
+        if _merged:
+            text = _merged
+            body = dict(body)
+            body['text'] = text
+            if not body.get('bind_subject') and not (
+                    isinstance(body.get('extra'), dict)
+                    and body['extra'].get('bind_subject')):
+                body['bind_subject'] = _label
+            referent_decision = {'surface': 'analyze', 'mode': None,
+                                 'reason': 'referent_answer',
+                                 'client_hint': None}
+        else:
+            _extra = body.get('extra') if isinstance(body.get('extra'), dict) else {}
+            _armed = any(_extra.get(k) or body.get(k)
+                         for k in _ANALYZE_PASSTHROUGH)
+            if not _armed:
+                _ref = _refs.detect_unresolved(text, history, ctx)
+                if _ref:
+                    raw = _refs.clarify_payload(_ref, text)
+                    if _client_surface == 'interpret':
+                        raw = _interpret_shape(raw)
+                    decision = {'surface': 'analyze', 'mode': None,
+                                'reason': 'referent_clarify',
+                                'client_hint': None}
+                    try:
+                        host.ask_hint(route='referent_clarify',
+                                      outcome='asked_which')
+                    except Exception:
+                        pass
+                    env = envelope.wrap(raw, surface='analyze',
+                                        decision=decision,
+                                        thread_id=tid, via=via)
+                    _persist_turn(persist, uname, tid, history, text,
+                                  env, raw, 'analyze')
+                    return env, 200
+    except Exception as e:
+        print(f"[prometheus] referent gate skipped: {e}")
+
     # A client in the middle of its own armed step (a confirm chip, a
     # deck angle picker, a clarify answer) already knows the surface.
     # It names it; the server still gates and runs it.
     forced = str(body.get('surface') or '').strip().lower()
-    if forced in _SURFACES:
+    if referent_decision is not None:
+        decision = referent_decision
+    elif forced in _SURFACES:
         decision = {'surface': forced,
                     'mode': (str(body.get('mode') or '').strip().lower()
                              or None),
@@ -269,26 +323,61 @@ def ask(user, body, *, via='session'):
         raw, status = host.calm_payload(), 200
     else:
         raw, status = _unpack(resp)
+        if (referent_decision is not None and _client_surface == 'interpret'
+                and isinstance(raw, dict)):
+            # The widget is sitting in its build flow (that is where it
+            # sent the names). That flow renders analyze results only
+            # in the guidance shape, the same way the legacy interpret
+            # deflection hands them back.
+            raw = _interpret_shape(raw)
 
     env = envelope.wrap(raw, surface=surface, decision=decision,
                         thread_id=tid, via=via)
-
-    if persist and tid and env.get('text'):
-        try:
-            turns = list(history)
-            turns.append({'role': 'user', 'text': text, 'ts': _now()})
-            meta = {'kind': env['kind'], 'surface': surface}
-            if env.get('options'):
-                meta['options'] = env['options']
-            if env.get('job'):
-                meta[env['job']['type'] + '_job_id'] = env['job']['id']
-            turns.append({'role': 'agent', 'text': env['text'],
-                          'ts': _now(), 'meta': meta})
-            save_thread(uname, tid, turns)
-        except Exception as e:
-            print(f"[prometheus] persist failed for {uname}: {e}")
-
+    _persist_turn(persist, uname, tid, history, text, env, raw, surface)
     return env, status
+
+
+def _interpret_shape(raw):
+    """Analyze result -> the one payload the widget's build flow renders
+    as a plain chat turn (no approval card): success False + guidance,
+    reply on `error`, with the armed extras the flow knows how to arm
+    (read job, memory confirm, priced read offer)."""
+    if not isinstance(raw, dict) or not raw.get('success') \
+            or not raw.get('reply'):
+        return raw
+    out = {'success': False, 'guidance': True, 'analysis_read': True,
+           'error': str(raw['reply'])}
+    for k in ('read_job_id', 'memory_confirm', 'panel_offer',
+              'referent_clarify', 'file_link'):
+        if raw.get(k):
+            out[k] = raw[k]
+    if raw.get('memory_confirm') or raw.get('panel_offer'):
+        out['followups'] = [str(f) for f in (raw.get('followups') or []) if f]
+    return out
+
+
+def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
+    """Append the user turn and the agent turn to the thread. The
+    which-ones question keeps its referent on the agent turn's meta so
+    the names that come back merge into the question that asked."""
+    if not (persist and tid and env.get('text')):
+        return
+    try:
+        turns = list(history)
+        turns.append({'role': 'user', 'text': text, 'ts': _now()})
+        meta = {'kind': env['kind'], 'surface': surface}
+        if env.get('options'):
+            meta['options'] = env['options']
+        if env.get('job'):
+            meta[env['job']['type'] + '_job_id'] = env['job']['id']
+        if isinstance(raw, dict) and isinstance(
+                raw.get('referent_clarify'), dict):
+            meta['referent_clarify'] = raw['referent_clarify']
+        turns.append({'role': 'agent', 'text': env['text'],
+                      'ts': _now(), 'meta': meta})
+        save_thread(uname, tid, turns)
+    except Exception as e:
+        print(f"[prometheus] persist failed for {uname}: {e}")
 
 
 # ------------------------------------------------------------------- jobs

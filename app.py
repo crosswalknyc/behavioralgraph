@@ -275,8 +275,9 @@ def prometheus_correct():
                 "<div>The delivered answer is retired"
                 + (f" ({n} stored read{'s' if n != 1 else ''} "
                    f"pulled from replay)" if n else '')
-                + " and the correction now holds for every future "
-                "ask like it.</div>")
+                + ". Prometheus turned your note into a standing "
+                "rule and follows it on every ask shaped like this "
+                "one.</div>")
         box = (
             "<div style='font-size:11px;letter-spacing:.08em;"
             "text-transform:uppercase;color:#5E7E12;font-weight:600;"
@@ -291,7 +292,12 @@ def prometheus_correct():
             + box.format(t='Answer as delivered', b=a_esc[:3000])
             + "<div style='font-size:11px;letter-spacing:.08em;"
             "text-transform:uppercase;color:#5E7E12;font-weight:600;"
-            "margin:18px 0 6px'>What it should have said</div>"
+            "margin:18px 0 6px'>What should it have done?</div>"
+            "<div style='color:#5C6560;font-size:13px;line-height:1.5;"
+            "margin:0 0 8px'>Describe the behavior, not the answer. "
+            "Prometheus turns this into a rule it follows on every "
+            "ask shaped like this one; your words are never served "
+            "back as the reply.</div>"
             "<textarea name='correction' rows='6' required "
             "style='width:100%;box-sizing:border-box;border:none;"
             "border-radius:12px;padding:14px 16px;font-size:14px;"
