@@ -29736,7 +29736,7 @@ https://www.instagram.com/p/..."></textarea>
                         </div>
 
                         <!-- Valuation cards row: BEV, BLV, Conversion -->
-                        <div id="bpiqValuationRow" style="display: flex; gap: 5rem; margin-bottom: 1.5rem; align-items: stretch;">
+                        <div id="bpiqValuationRow" style="display: flex; gap: 3.5rem; margin-bottom: 1.5rem; align-items: stretch;">
                             <!-- 🤝 Brand Engagement Value -->
                             <div id="bpiqBevCard" class="tab-section" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: none; flex-direction: column;">
                                 <h3 style="margin: 0 0 0.35rem; font-size: 1.4rem; white-space: nowrap;">🤝 Brand Engagement Value</h3>
@@ -75698,8 +75698,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 rows.forEach(function(r, i) {
                     var rowH = (i === 0) ? '4rem' : '3.2rem';
                     html += '<tr style="height:' + rowH + ';' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
-                         +    '<td style="padding:8px 12px;color:var(--text-secondary);vertical-align:bottom;">' + r.label + '</td>'
-                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;white-space:nowrap;vertical-align:bottom;">' + r.value + '</td>'
+                         +    '<td colspan="2" style="padding:8px 12px;vertical-align:bottom;">'
+                         +      '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;">'
+                         +        '<div style="color:var(--text-secondary);min-width:0;">' + r.label + '</div>'
+                         +        '<div style="text-align:right;font-weight:600;white-space:nowrap;">' + r.value + '</div>'
+                         +      '</div>'
+                         +    '</td>'
                          +  '</tr>';
                 });
                 html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
