@@ -18934,6 +18934,28 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all {
             color: #5C6560 !important;
         }
+        /* Keep AARON PAUL + HELP + CLOSE ALL TABS on a single row. v4 lets the
+           bar wrap and pushes HELP / CLOSE ALL right via margin-left:auto, so
+           CLOSE ALL dropped to a second line on phones. Pack them left on one
+           nowrap row and let the row scroll sideways if they overflow a narrow
+           phone. Mobile-only. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar {
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar::-webkit-scrollbar {
+            display: none;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all.profile-help-pill {
+            flex: 0 0 auto !important;
+            margin-left: 0 !important;
+        }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
         #chatWidget { display: none !important; }
