@@ -18994,7 +18994,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            #profileHeaderRow / #dashProfileInfo ids lift these above the 980px
            rules (which tied on specificity before). Applies to EVERY tab so the
            header is identical on Demographics / Behavioral / etc. Mobile-only. */
-        #dashboardView.piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo {
             display: grid !important;
             grid-template-columns: 118px minmax(0, 1fr) !important;
             grid-template-areas: "photo copy" !important;
@@ -19004,7 +19004,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             padding: 12px 12px 16px !important;
             min-height: 0 !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo .dash-profile-image-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo .dash-profile-image-wrap {
             grid-area: photo !important;
             width: 118px !important;
             height: 132px !important;
@@ -19014,14 +19014,14 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             max-height: 132px !important;
             align-self: start !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo .profile-title-and-toolbar-wrap {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo .profile-title-and-toolbar-wrap {
             grid-area: copy !important;
             min-width: 0 !important;
             min-height: 0 !important;
             max-height: 132px !important;
             overflow: hidden !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo #piqHeroCopy {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #piqHeroCopy {
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
@@ -19030,7 +19030,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             overflow: hidden !important;
             gap: 2px !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo #dashHeroEyebrow {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroEyebrow {
             font-size: 9px !important;
             letter-spacing: 0.1em !important;
             margin: 0 0 2px !important;
@@ -19039,12 +19039,12 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             text-overflow: ellipsis !important;
             max-width: 100% !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo #dashHeroName {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroName {
             font-size: 22px !important;
             line-height: 1.02 !important;
             margin: 0 0 3px !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo #dashHeroOneliner {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroOneliner {
             font-size: 12px !important;
             line-height: 1.25 !important;
             max-width: none !important;
@@ -19054,7 +19054,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             -webkit-box-orient: vertical !important;
             overflow: hidden !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo #dashHeroKpis {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroKpis {
             display: flex !important;
             flex-flow: row wrap !important;
             width: auto !important;
@@ -19064,12 +19064,12 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             min-width: 0 !important;
             overflow: hidden !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo .piq-kpi .lbl {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo .piq-kpi .lbl {
             font-size: 8px !important;
             letter-spacing: 0.1em !important;
             margin-bottom: 1px !important;
         }
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo .piq-kpi .val {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo .piq-kpi .val {
             font-size: 16px !important;
             letter-spacing: -0.02em !important;
         }
@@ -19078,7 +19078,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            v4 floats it top-left at 11px; shrink it hard and pin it to the lower
            -left corner inside the (now smaller) portrait, on every tab.
            Mobile-only. */
-        #dashboardView.piq-v4.piq-has-profile #dashProfileInfo .dash-imdb-box {
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo .dash-imdb-box {
             top: auto !important;
             bottom: 4px !important;
             left: 4px !important;
