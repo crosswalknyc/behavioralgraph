@@ -18767,7 +18767,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown,
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #hoverToggle,
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
-            flex: 1 0 auto !important;
+            flex: 1 1 0 !important;   /* equal quarters: DATA CUTS, EXPORT, HOVER, US% share one full-width row */
             min-width: 0 !important;
             margin: 0 !important;
             justify-content: center !important;
@@ -18784,10 +18784,10 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashDisplayToggle {
             color: #9AA09B !important;
             font-weight: 500 !important;
-            letter-spacing: 0.1em !important;
+            letter-spacing: 0.02em !important;
             text-transform: uppercase !important;
-            font-size: 11px !important;
-            padding: 0.5rem 0.4rem !important;
+            font-size: 10px !important;
+            padding: 0.5rem 0.12rem !important;
         }
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > #dashViewDeltasBtn,
         body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn,
@@ -18806,9 +18806,9 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome).piq-v4 #toolbarContent > .dash-dropdown > .dash-action-btn::after {
             content: "EXPORT";
             display: inline-block !important;   /* beat .has-tooltip::after{display:none} */
-            font-size: 11px !important;
+            font-size: 10px !important;
             font-weight: 500;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.02em;
             text-transform: uppercase;
             color: #9AA09B !important;
         }
@@ -18973,6 +18973,62 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all.profile-help-pill {
             flex: 0 0 auto !important;
             margin-left: 0 !important;
+        }
+
+        /* ---- 11e. Align the three header bands to one full-width gutter -------
+           profileTabsBar already sits at a 12px gutter; v4 keeps #toolbarRow at
+           32px, so the dropdown + control rows looked inset vs the tab bar. Pull
+           the toolbar to the same 12px so all three bands span the screen edge
+           to edge and line up. Mobile-only. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #toolbarRow {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+        }
+
+        /* ---- 11f. Profile hero: portrait left, copy to the right (compact) ----
+           v4 stacks the portrait ABOVE the copy on phones (the 980px query sets
+           #dashProfileInfo to a single column), eating a lot of vertical space.
+           Put Aaron Paul / one-liner / time span / Total Universe to the RIGHT
+           of a shrunk portrait and tighten the type. Scoped to the Insights
+           hero (the tall one); other tabs already use a compact hero. The extra
+           #dashProfileInfo id keeps us above the 980px rules. Mobile-only. */
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashProfileInfo {
+            display: grid !important;
+            grid-template-columns: auto minmax(0, 1fr) !important;
+            grid-template-areas: "photo copy" !important;
+            align-items: center !important;
+            column-gap: 14px !important;
+            row-gap: 0 !important;
+            padding: 12px 12px 16px !important;
+            min-height: 0 !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] .dash-profile-image-wrap {
+            grid-area: photo !important;
+            width: 92px !important;
+            height: 100px !important;
+            min-width: 92px !important;
+            max-width: 92px !important;
+            min-height: 100px !important;
+            max-height: 100px !important;
+            align-self: start !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] .profile-title-and-toolbar-wrap {
+            grid-area: copy !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashHeroName {
+            font-size: 24px !important;
+            line-height: 1.0 !important;
+            margin: 0 0 4px !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashHeroEyebrow {
+            margin-bottom: 4px !important;
+        }
+        #dashboardView.piq-v4.piq-has-profile[data-piq-tab="insights"] #dashHeroOneliner {
+            font-size: 13px !important;
+            line-height: 1.3 !important;
+            max-width: none !important;
         }
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
