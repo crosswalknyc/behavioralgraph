@@ -107148,7 +107148,50 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     return '<div class="jiq-ufc-fig"><b>' + _jiqFragEsc(m.title) + '</b><span>' + _jiqFragEsc(m.why) + '</span></div>';
                 }).join('')
                 + '</div>'
+                + _jiqArrowSec('WHAT ELSE TO SHARE', 'Four moves, ranked by confidence.', '')
+                + _jiqArrowMovesTable()
                 + _jiqArrowFoot();
+        }
+        function _jiqArrowMovesTable() {
+            var rows = [
+                {
+                    rec: 'Pair Arrow with The 100 on the home row and the live schedule.',
+                    ev: '28.6% of Arrow viewers viewed The 100 (index about 334 vs all Pluto users). 31.7% of The 100 viewers viewed Arrow.',
+                    conf: 'High',
+                    owner: 'Programming',
+                    hot: true
+                },
+                {
+                    rec: 'Get new-to-Pluto viewers from episode 1 to episode 2.',
+                    ev: '29.2% reach five episodes vs 42.8% of existing viewers. 48.2% vs 64.3% return within 30 days.',
+                    conf: 'Medium, lever untested',
+                    owner: 'Product'
+                },
+                {
+                    rec: 'When playback stops early, surface the next title, not the exit. Ask WB to route YouTube clip end cards to Pluto.',
+                    ev: '1.39M opened and left within five minutes. 44.3% (618K) watched an Arrow clip on YouTube the same day. Short-form clips were the first touch for 20.5% of all viewers.',
+                    conf: 'Medium, clip routing depends on WB',
+                    owner: 'Product and Marketing'
+                },
+                {
+                    rec: 'Make the case to license the rest of the Arrowverse.',
+                    ev: '1.45M Arrow viewers (24.2%) searched for The Flash. 54.3% still use Netflix.',
+                    conf: 'Medium, pending rights and search provenance',
+                    owner: 'Content acquisition'
+                }
+            ];
+            return '<table class="jiq-ufc-tbl jiq-arrow-moves"><thead><tr>'
+                + '<th>Recommendation</th><th>Evidence</th><th>Confidence</th><th>Owner</th>'
+                + '</tr></thead><tbody>'
+                + rows.map(function(r) {
+                    return '<tr>'
+                        + '<td class="rec">' + _jiqFragEsc(r.rec) + '</td>'
+                        + '<td class="m">' + _jiqFragEsc(r.ev) + '</td>'
+                        + '<td' + (r.hot ? ' class="hi"' : '') + '>' + _jiqFragEsc(r.conf) + '</td>'
+                        + '<td>' + _jiqFragEsc(r.owner) + '</td>'
+                        + '</tr>';
+                }).join('')
+                + '</tbody></table>';
         }
         function _jiqArrowNestMethod() {
             var d = _jiqArrowD();
@@ -188254,6 +188297,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqArrowNestCard .jiq-arrow-dleg-row b { font-weight: 800; }
     #jiqArrowNestCard .jiq-arrow-dleg-row em,
     #jiqArrowNestCard .jiq-arrow-dleg-row .gp { color: #9AA09B; font-weight: 600; }
+    #jiqArrowNestCard .jiq-arrow-moves { table-layout: fixed; }
+    #jiqArrowNestCard .jiq-arrow-moves th:nth-child(1),
+    #jiqArrowNestCard .jiq-arrow-moves td.rec { width: 24%; font-weight: 700; }
+    #jiqArrowNestCard .jiq-arrow-moves th:nth-child(2),
+    #jiqArrowNestCard .jiq-arrow-moves td.m { width: 42%; }
+    #jiqArrowNestCard .jiq-arrow-moves th:nth-child(3),
+    #jiqArrowNestCard .jiq-arrow-moves td.hi { width: 18%; }
+    #jiqArrowNestCard .jiq-arrow-moves td.hi { color: #C7F23E; font-weight: 800; }
+    body[data-theme="light"] #jiqArrowNestCard .jiq-arrow-moves td.hi { color: #5E7E12; }
+    #jiqArrowNestCard .jiq-arrow-moves th:nth-child(4) { width: 16%; }
 
     #jiqAnimCrNestCard {
         margin: 0 0 8px;
