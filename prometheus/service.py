@@ -10,6 +10,7 @@ with the same request shape::
      'history': [...] | None,        # a client may send its own; else loaded
      'context': {...} | None,        # page facts: open profile, cuts, tabs
      'mode': str | None,             # explicit analyze mode (chip)
+     'surface': str | None,          # a client mid armed-step names it
      'extra': {...} | None,          # explicit confirm / input step
      'persist': bool,                # save turns server-side (default: yes,
                                      #   except client == 'dashboard')
@@ -28,6 +29,7 @@ from .host import host
 from . import understand
 from . import envelope
 
+_SURFACES = ('interpret', 'analyze', 'deck')
 _ANALYZE_PASSTHROUGH = ('bind_subject', 'bind_cohort', 'overall_ranks',
                         'panel_confirm', 'bpiq_inputs', 'bpiq_confirm',
                         'jiq_inputs', 'jiq_confirm', 'fw_inputs',
@@ -151,11 +153,12 @@ def _gate_for(surface, user):
     return None
 
 
-def _analyze_body(body, text, history, decision):
+def _analyze_body(body, text, history, decision, tid=None):
     ctx = body.get('context')
     if ctx is None:
         ctx = body.get('page_context')
-    out = {'text': text, 'history': history, 'page_context': ctx or None}
+    out = {'text': text, 'history': history, 'page_context': ctx or None,
+           'thread_id': tid}
     mode = decision.get('mode') or body.get('mode')
     if mode:
         out['mode'] = mode
@@ -167,8 +170,17 @@ def _analyze_body(body, text, history, decision):
     return out
 
 
-def _interpret_body(body, text, history):
-    out = {'text': text, 'history': history}
+def _deck_body(body, text, history, ctx, tid=None):
+    out = {'text': text, 'history': history, 'page_context': ctx or None,
+           'thread_id': tid}
+    for k in ('angle', 'confirm_open_screen'):
+        if body.get(k) is not None:
+            out[k] = body[k]
+    return out
+
+
+def _interpret_body(body, text, history, tid=None):
+    out = {'text': text, 'history': history, 'thread_id': tid}
     for k in ('locked_sample_tu', 'locked_sample_avid'):
         if body.get(k) is not None:
             out[k] = body[k]
@@ -213,10 +225,20 @@ def ask(user, body, *, via='session'):
     except Exception:
         pass
 
-    decision = understand.decide(
-        text, has_ctx=has_ctx, mode=body.get('mode'),
-        extra=body.get('extra'), open_tabs=open_tabs,
-        deck_in_flight=bool(body.get('deck_in_flight')))
+    # A client in the middle of its own armed step (a confirm chip, a
+    # deck angle picker, a clarify answer) already knows the surface.
+    # It names it; the server still gates and runs it.
+    forced = str(body.get('surface') or '').strip().lower()
+    if forced in _SURFACES:
+        decision = {'surface': forced,
+                    'mode': (str(body.get('mode') or '').strip().lower()
+                             or None),
+                    'reason': 'client_surface', 'client_hint': None}
+    else:
+        decision = understand.decide(
+            text, has_ctx=has_ctx, mode=body.get('mode'),
+            extra=body.get('extra'), open_tabs=open_tabs,
+            deck_in_flight=bool(body.get('deck_in_flight')))
     surface = decision['surface']
     try:
         host.ask_hint(route='prometheus/ask:' + surface)
@@ -232,14 +254,13 @@ def ask(user, body, *, via='session'):
     try:
         if surface == 'analyze':
             resp = host.analyze_core(
-                user, _analyze_body(body, text, history, decision),
+                user, _analyze_body(body, text, history, decision, tid),
                 text, history)
         elif surface == 'deck':
-            resp = host.deck_core(user, {'text': text, 'history': history,
-                                         'page_context': ctx or None})
+            resp = host.deck_core(user, _deck_body(body, text, history, ctx, tid))
         else:
             resp = host.interpret_core(
-                user, _interpret_body(body, text, history), text, history)
+                user, _interpret_body(body, text, history, tid), text, history)
     except Exception as e:
         try:
             host.error_email('prometheus/ask:' + surface, e)

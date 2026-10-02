@@ -55151,6 +55151,7 @@ def _ask_logged(surface):
             from flask import g as _g
             t0 = time.time()
             question, view, mode = '', '', None
+            log_surface = surface
             try:
                 body = request.get_json(force=True, silent=True) or {}
                 question = str(body.get('text') or '').strip()
@@ -55178,9 +55179,9 @@ def _ask_logged(surface):
                     try:
                         import render_usage_log as _rul
                         _rul.record_ask(
-                            user=(session.get('username') or 'unknown'),
+                            user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
                             view=view, question=question,
-                            surface=surface, route='unknown',
+                            surface=log_surface, route='unknown',
                             outcome='error',
                             ms=int((time.time() - t0) * 1000),
                             mode=mode, subject=None,
@@ -55189,7 +55190,7 @@ def _ask_logged(surface):
                         pass
                     try:
                         _pm_watch_notify(
-                            session.get('username') or '', question,
+                            session.get('username') or getattr(_g, '_pm_ask_user', None) or '', question,
                             {'reply': _CHATBOT_CALM_MESSAGE}, None)
                     except Exception:
                         pass
@@ -55207,8 +55208,19 @@ def _ask_logged(surface):
                     payload = actual.get_json(silent=True)
                 except Exception:
                     payload = None
+                # Prometheus v1 envelope (2026-10-01): the one-door
+                # route answers {kind, surface, raw}. The log keeps
+                # the legacy surface names and reads the legacy body,
+                # so the weekly reviews and the per-ask notify see
+                # exactly what they saw before.
+                if isinstance(payload, dict) \
+                        and isinstance(payload.get('raw'), dict) \
+                        and payload.get('surface') in ('interpret',
+                                                       'analyze', 'deck'):
+                    log_surface = payload['surface']
+                    payload = payload['raw']
                 route, outcome, subject = _ask_infer_route_outcome(
-                    surface, payload, status_code)
+                    log_surface, payload, status_code)
                 route = getattr(_g, '_pm_ask_route', None) or route
                 outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
                 subject = getattr(_g, '_pm_ask_subject', None) or subject
@@ -55228,14 +55240,14 @@ def _ask_logged(surface):
                     subject = None
                 import render_usage_log as _rul
                 _rul.record_ask(
-                    user=(session.get('username') or 'unknown'),
-                    view=view, question=question, surface=surface,
+                    user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
+                    view=view, question=question, surface=log_surface,
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject,
                     stages=getattr(_g, '_pm_ask_stages', None))
                 _pm_watch_notify(
-                    session.get('username') or '', question, payload,
+                    session.get('username') or getattr(_g, '_pm_ask_user', None) or '', question, payload,
                     subject)
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
@@ -55248,7 +55260,7 @@ def _ask_logged(surface):
                                                 'memory_confirm'):
                         import prometheus_memory as _pmm
                         _pmm.remember(
-                            (session.get('username') or '').strip(),
+                            (session.get('username') or getattr(_g, '_pm_ask_user', None) or '').strip(),
                             question, subject=subject, view=view,
                             route=route)
                 except Exception:
@@ -62420,6 +62432,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'stage': 'reading the data',
             'question': text[:300], 'started_at': time.time()})
         _pm_read_inflight_mark(_pm_user, text, job_id)
+        _pm_job_bind_thread(job_id)
         threading.Thread(
             target=_pm_run_read_job,
             args=(job_id, _pm_user, _pm_read_extras, text,
@@ -63041,6 +63054,67 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
 
 _PM_READ_PREFIX = 'system/prometheus_reads/'
 
+# Thread targeting for background jobs (2026-10-01, Prometheus v1).
+# A caller that names a thread (the app, the API) sets a marker for
+# the life of the request thread; the job launch binds it to the job
+# id; the finish lands the result in THAT thread. Dashboard requests
+# name no thread and keep the legacy active-thread landing.
+_PM_REQ_THREAD = threading.local()
+_PM_JOB_THREAD = {}
+
+
+def _pm_req_thread_set(body):
+    try:
+        _PM_REQ_THREAD.tid = str((body or {}).get('thread_id') or '').strip()
+    except Exception:
+        _PM_REQ_THREAD.tid = ''
+
+
+def _pm_job_bind_thread(job_id):
+    tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
+    if tid and job_id:
+        _PM_JOB_THREAD[job_id] = tid
+    return tid or None
+
+
+def _pm_thread_for_job(username, job_id):
+    """The thread a finished job should land in, or None for the
+    caller's active thread. Verifies the id still belongs to the user."""
+    tid = _PM_JOB_THREAD.pop(job_id, None)
+    if not tid or not username:
+        return None
+    try:
+        idx = _load_threads_index(username)
+        if any(t.get('id') == tid for t in idx.get('threads', [])):
+            return tid
+    except Exception:
+        pass
+    return None
+
+
+def _pm_load_thread_or_active(username, tid):
+    if not tid:
+        return _load_synth_chat_history(username) or []
+    return _pm_s3_json(_pm_thread_key(username, tid), []) or []
+
+
+def _pm_save_thread_or_active(username, tid, history):
+    if not tid:
+        return _save_synth_chat_history(username, history)
+    trimmed = list(history or [])[-200:]
+    _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
+    try:
+        idx = _load_threads_index(username)
+        for th in idx.get('threads', []):
+            if th.get('id') == tid:
+                th['updated'] = _pm_iso_now()
+                th['turns'] = len(trimmed)
+                break
+        _pm_s3_put_json(_pm_threads_index_key(username), idx)
+    except Exception:
+        traceback.print_exc()
+    return True
+
 
 def _pm_read_status_write(job_id, payload):
     s3_client.put_object(
@@ -63403,7 +63477,8 @@ def _pm_append_read_to_history(username, job_id, payload):
         reply = str((payload or {}).get('reply') or '').strip()
         if not reply:
             return
-        history = _load_synth_chat_history(username) or []
+        _tid = _pm_thread_for_job(username, job_id)
+        history = _pm_load_thread_or_active(username, _tid)
         if _pm_history_has_job_turn(history, 'read_job_id', job_id):
             return
         followups = [f for f in ((payload or {}).get('followups') or [])
@@ -63413,7 +63488,7 @@ def _pm_append_read_to_history(username, job_id, payload):
             'meta': {'read_job_id': job_id, 'kind': 'read',
                      'options': [{'label': f, 'send': f}
                                  for f in followups]}})
-        _save_synth_chat_history(username, history)
+        _pm_save_thread_or_active(username, _tid, history)
     except Exception:
         traceback.print_exc()
 
@@ -63427,7 +63502,8 @@ def _pm_append_deck_to_history(username, job_id, status):
         url = str((status or {}).get('url') or '')
         if not url.lower().startswith('https://'):
             return
-        history = _load_synth_chat_history(username) or []
+        _tid = _pm_thread_for_job(username, job_id)
+        history = _pm_load_thread_or_active(username, _tid)
         if _pm_history_has_job_turn(history, 'deck_job_id', job_id):
             return
         title = str((status or {}).get('title')
@@ -63444,7 +63520,7 @@ def _pm_append_deck_to_history(username, job_id, status):
             'meta': {'deck_job_id': job_id, 'kind': 'deck',
                      'link': {'url': url,
                               'label': 'Download the deck'}}})
-        _save_synth_chat_history(username, history)
+        _pm_save_thread_or_active(username, _tid, history)
     except Exception:
         traceback.print_exc()
 
@@ -64299,6 +64375,7 @@ def _pm_analyze_core(user, body, text, history):
     usage gates below are part of the surface and run for everyone.
     Returns a Flask response exactly as before.
     """
+    _pm_req_thread_set(body)
     # Pricing questions (2026-09-23 Jenna): the flat rate card, served
     # before the tier and funds gates - a drained account asking what
     # things cost gets the answer, free, no model call.
@@ -66613,6 +66690,7 @@ def _pm_deck_core(user, body):
     """The deck surface for an already-gated user. Split out of
     ``api_synth_chat_deck`` (2026-10-01, Prometheus Phase 1); the
     tier, funds, and usage gates below run for every caller."""
+    _pm_req_thread_set(body)
     # Prometheus tier gate (2026-08-26): decks are an analysis-tier
     # feature. pulls_only users without pay-as-you-go get the offer.
     _gate_resp = _pm_access_gate(user)
@@ -66683,6 +66761,7 @@ def _pm_deck_core(user, body):
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
+    _pm_job_bind_thread(job_id)
     t = threading.Thread(target=_pm_run_deck_job,
                          args=(job_id, username, ctx, history[-14:], angle,
                                _charge_user, deck_subject, deck_partner),

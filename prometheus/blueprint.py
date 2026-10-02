@@ -21,9 +21,10 @@ Every handler is wrapped by the host's route guard (calm reply on an
 unhandled error, ops email) and the ask logger, the same two wrappers
 the legacy chat routes use, so observability is unchanged.
 """
+import os
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, make_response, request
 
 from . import __version__
 from .host import host
@@ -31,6 +32,53 @@ from . import service
 from . import understand
 
 bp = Blueprint('prometheus_api', __name__, url_prefix='/api/prometheus/v1')
+
+
+# ------------------------------------------------------------------ CORS
+# A standalone app on its own host needs to call this surface from the
+# browser. Origins are allow-listed by env (comma-separated); nothing
+# configured means same-origin only, exactly as before. Preflight
+# (OPTIONS) is answered here without touching auth; real requests
+# carry a session cookie or X-Crosswalk-API-Key.
+def _allowed_origins():
+    raw = os.environ.get('PROMETHEUS_ALLOWED_ORIGINS', '') or ''
+    return {o.strip().rstrip('/') for o in raw.split(',') if o.strip()}
+
+
+def _cors_origin():
+    origin = (request.headers.get('Origin') or '').strip().rstrip('/')
+    if not origin:
+        return None
+    allowed = _allowed_origins()
+    if origin in allowed:
+        return origin
+    # A wildcard entry means any origin, but still with credentials
+    # echoed per origin (never a literal '*' with credentials).
+    if '*' in allowed:
+        return origin
+    return None
+
+
+@bp.before_request
+def _preflight():
+    if request.method == 'OPTIONS':
+        resp = make_response('', 204)
+        return resp
+    return None
+
+
+@bp.after_request
+def _cors_headers(resp):
+    origin = _cors_origin()
+    if origin:
+        resp.headers['Access-Control-Allow-Origin'] = origin
+        resp.headers['Access-Control-Allow-Credentials'] = 'true'
+        resp.headers['Access-Control-Allow-Headers'] = (
+            'Content-Type, X-Crosswalk-API-Key, X-Requested-With')
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        resp.headers['Access-Control-Max-Age'] = '600'
+        resp.headers['Vary'] = 'Origin'
+    return resp
 
 
 def _guarded(label, log_ask=False):
@@ -55,6 +103,12 @@ def _auth():
     if err:
         return None, None, err
     via = 'api_key' if (user or {}).get('_auth_via') == 'api_key' else 'session'
+    try:
+        # The ask log and the per-ask notify read the session user;
+        # an API-key caller has none, so hand them the gated identity.
+        g._pm_ask_user = service.username_of(user)
+    except Exception:
+        pass
     return user, via, None
 
 
@@ -95,9 +149,15 @@ def understand_only():
                         'error': 'not available on this key'}), 403
     body = _body() if request.method == 'POST' else {}
     text = (body.get('text') or request.args.get('text') or '').strip()
-    has_ctx = bool(body.get('context') or request.args.get('has_ctx'))
+    has_ctx = bool(body.get('context') or body.get('has_ctx')
+                   or request.args.get('has_ctx'))
+    try:
+        open_tabs = int(body.get('open_tabs') or request.args.get('open_tabs') or 0)
+    except (TypeError, ValueError):
+        open_tabs = 0
     d = understand.decide(text, has_ctx=has_ctx, mode=body.get('mode'),
-                          extra=body.get('extra'))
+                          extra=body.get('extra'), open_tabs=open_tabs,
+                          deck_in_flight=bool(body.get('deck_in_flight')))
     return jsonify({'success': True, 'decision': d})
 
 

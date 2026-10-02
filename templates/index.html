@@ -81256,6 +81256,49 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return false;
         }
 
+        // Server-side decision (2026-10-01, Prometheus v1). One small
+        // call, no model, ~50ms. Null on any failure so the caller can
+        // fall back to the browser detectors.
+        async function _pmUnderstand(text, ctx) {
+            try {
+                var r = await fetch('/api/prometheus/v1/understand', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        text: String(text || ''),
+                        has_ctx: !!ctx,
+                        open_tabs: _pmOtherOpenTabs(ctx).length,
+                        deck_in_flight: !!_pmDeckInFlight
+                    })
+                });
+                if (!r.ok) return null;
+                var d = await r.json();
+                return (d && d.success && d.decision && d.decision.surface)
+                    ? d.decision : null;
+            } catch (_) { return null; }
+        }
+        // Act on a decision. Returns 'done' when the ask was handled
+        // here, 'interpret' when it should continue to the build flow.
+        async function _pmActOnDecision(d, text, ctx) {
+            if (d.client_hint === 'analyze_menu') {
+                _pmShowAnalyzeMenu(ctx);
+                return 'done';
+            }
+            if (d.reason === 'compare_open_tabs' ||
+                d.client_hint === 'compare_open_tabs') {
+                await _pmCompareOpenTabs(text, ctx);
+                return 'done';
+            }
+            if (d.client_hint === 'compare_picker') {
+                _pmShowComparePicker(ctx);
+                return 'done';
+            }
+            if (d.surface === 'analyze') {
+                var out = await _pmAnalyze(text, ctx, d.mode || '');
+                return out === 'reroute' ? 'interpret' : 'done';
+            }
+            return 'interpret';
+        }
         async function _pmAnalyze(text, ctx, mode, extra) {
             if (!ctx && mode !== 'search_demand' &&
                 !(extra && (extra.bind_subject || extra.overall_ranks ||
@@ -82322,15 +82365,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 _synthChatClearDateState();
             }
 
-            // ===== PROMETHEUS PAGE-AWARE ROUTING (2026-08-20) =====
-            // Deck follow-through first, then analysis questions about
-            // the data open on the dashboard. Build / cut / refresh asks
-            // fall through to the interpret pipeline below.
+            // ===== PROMETHEUS ROUTING (2026-10-01: the server decides) =====
+            // understand() on the server owns the question / build /
+            // deck call for every client. The widget keeps only its own
+            // UI state (an armed compare picker) and opens dashboard
+            // pickers when the decision says so. If the decision call
+            // itself fails, the legacy browser detectors below still
+            // route, so a blip never strands an ask.
+            var _pmCtx = _pmCollectPageContext();
+            var _pmDecision = await _pmUnderstand(text, _pmCtx);
+            if (_pmDecision) {
+                if (_pmDecision.surface === 'deck') {
+                    await _pmStartDeck(text);
+                    return;
+                }
+                if (_pmCompareArmed || /^compare with[:\s]/i.test(text)) {
+                    if (await _pmHandleCompareReply(text, _pmCtx)) return;
+                }
+                var _pmActed = await _pmActOnDecision(_pmDecision, text, _pmCtx);
+                if (_pmActed !== 'interpret') return;
+                // interpret: a build / cut / refresh ask, or the analyst
+                // handed a no-context question back. Fall through.
+            } else {
+            // ----- fallback: legacy page-aware routing (2026-08-20) -----
             if (_pmLooksLikeDeckAsk(text)) {
                 await _pmStartDeck(text);
                 return;
             }
-            var _pmCtx = _pmCollectPageContext();
             // Subscriber IQ asks bypass the page-aware analysis
             // routing entirely (2026-08-26): they are build requests
             // for the interpret flow, even when a profile is open.
@@ -82370,6 +82431,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (_pmOutcome !== 'reroute') return;
                 // reroute: the analyst says this is a build ask; fall
                 // through to interpret with the same text.
+            }
             }
 
             btn.disabled = true;
@@ -83161,16 +83223,43 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } catch (_) {}
         }
 
+        // One door (2026-10-01, Prometheus v1): the three chat
+        // surfaces post to /api/prometheus/v1/ask. The widget names
+        // the surface it is already in (its armed steps are browser
+        // state); the server gates and runs the same core it always
+        // did and answers with an envelope whose `raw` is the legacy
+        // body the renderers below already understand.
+        var _PM_V1_SURFACES = {
+            '/api/brief-chat/interpret': 'interpret',
+            '/api/brief-chat/analyze': 'analyze',
+            '/api/brief-chat/deck': 'deck'
+        };
+        function _pmV1Request(url, body) {
+            var surface = _PM_V1_SURFACES[url];
+            if (!surface) return { url: url, body: body };
+            var b = Object.assign({}, body || {});
+            b.surface = surface;
+            b.client = 'dashboard';
+            return { url: '/api/prometheus/v1/ask', body: b };
+        }
+        function _pmV1Unwrap(data) {
+            if (data && typeof data === 'object' && data.kind &&
+                Object.prototype.hasOwnProperty.call(data, 'raw')) {
+                return data.raw;
+            }
+            return data;
+        }
         async function _synthChatFetchJson(url, body, signal) {
+            var _req = _pmV1Request(url, body);
             async function _once() {
-                var r = await fetch(url, {
+                var r = await fetch(_req.url, {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(body),
+                    body: JSON.stringify(_req.body),
                     signal: signal
                 });
                 var data = null, parseFailed = false;
-                try { data = await r.json(); }
+                try { data = _pmV1Unwrap(await r.json()); }
                 catch (_) { parseFailed = true; }
                 return { r: r, data: data,
                          retriable: parseFailed || r.status === 502 ||
