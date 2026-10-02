@@ -29366,7 +29366,8 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #ecommerceIQView .bp-cover h2 { color: #0C1618; }
 
         /* ---- Broadsheet head ---- */
-        #ecommerceIQView .bp-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 2.25rem 3rem;
+        /* Left padding clears the fixed Library rail. */
+        #ecommerceIQView .bp-wrap { width: 100%; max-width: none; margin: 0; padding: 0 3rem 3rem 4.5rem;
             flex: 0 0 auto; }
         #ecommerceIQView .bp-top { display: grid; grid-template-columns: 1fr 320px; gap: 2.8rem;
             padding: 1.7rem 0 1.9rem; border-bottom: 1px solid var(--bp-rule); }
