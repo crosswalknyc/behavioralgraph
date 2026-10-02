@@ -3474,6 +3474,14 @@ def pin_subject_to_100_in_appearing_categories(df, subject, verbose=True):
         if not (95.0 <= best_bp < 99.9999):
             return df, 0
 
+    # pandas >= 3 'str' / StringDtype columns reject the int writes
+    # below (Hetzner, 2026-10-02). Same object coercion as _set_bp: it
+    # keeps every existing cell verbatim and accepts the mixed writes.
+    for _dtcol in (bp_col, raw_col, proj_col, cs_col):
+        if (_dtcol and _dtcol in df.columns
+                and df[_dtcol].dtype.name not in ('object', 'O',
+                                                  'float64', 'int64')):
+            df[_dtcol] = df[_dtcol].astype(object)
     df.at[best_idx, bp_col] = '100.0000%'
     df.at[best_idx, raw_col] = sample_size
     df.at[best_idx, proj_col] = profile_universe
