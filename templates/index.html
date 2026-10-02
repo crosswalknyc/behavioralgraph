@@ -86527,6 +86527,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // Same palette convention Profile IQ uses on its folder dots.
         function _jiqLibraryDot(label) {
             var k = String(label || '').toUpperCase().trim();
+            if (k.indexOf('MUSIC') === 0) return 'orchid';
             if (k.indexOf('PLATFORM') === 0) return 'cobalt';
             if (k.indexOf('TV') === 0) return 'signal';
             if (k.indexOf('BRAND') === 0) return 'dusk';
@@ -87313,11 +87314,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // known category falls into the trailing "Other"
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
+                        { id: 'music',       label: '🎵 Music to Long Form', keywords: ['music to long form'] },
                         { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix', 'amc+', 'amc plus', 'amc_plus', 'amc migration'] },
-                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['heated rivalry', 'heated_rivalry', 'young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab'] },
+                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: [] },
                         { id: 'movie',       label: '🎬 Movie',             keywords: ['barbie'] },
-                        { id: 'music',       label: '🎵 Music to Long Form', keywords: ['music to long form', 'song journey', 'music analysis'] },
                         { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: [] }
                     ];
                     function _runMatchesCategory(r, cat) {
@@ -87330,6 +87331,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var placedKeys = {};
                     var byCategory = {};
                     CATEGORIES.forEach(function(cat) { byCategory[cat.id] = []; });
+                    function _isFoldedIntoMusicToLongForm(r) {
+                        var name = ((r.project_name || r.target || r.key || '') + '')
+                            .toLowerCase().replace(/[_\-]+/g, ' ');
+                        if (name.indexOf('song journey') !== -1) return true;
+                        if (name.indexOf('music analysis') !== -1) return true;
+                        if (name.indexOf('music to long form') !== -1) return true;
+                        var key = ((r.key || r.demo_id || '') + '').toLowerCase();
+                        if (key.indexOf('heated_rivalry_song') !== -1) return true;
+                        if (key.indexOf('barbie_song') !== -1) return true;
+                        if (key.indexOf('__demo_music_') === 0
+                                && key.indexOf('music_to_long_form') === -1
+                                && key.indexOf('music_influence') === -1) return true;
+                        return false;
+                    }
+                    visibleRuns = visibleRuns.filter(function(r) {
+                        return !_isFoldedIntoMusicToLongForm(r);
+                    });
                     visibleRuns.forEach(function(r) {
                         for (var i = 0; i < CATEGORIES.length; i++) {
                             if (_runMatchesCategory(r, CATEGORIES[i])) {
@@ -87360,7 +87378,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             { value: '__demo_arrow_pluto__',     label: 'Arrow · Pluto TV' },
                             { value: '__demo_adult_animation__',  label: 'Adult Animation · SVOD discovery' },
                             { value: '__demo_animation_creators__', label: 'Digital Animation Creators' },
-                            { value: '__demo_heated_rivalry_song__', label: 'Heated Rivalry · song journey' },
                             { value: '__demo_young_sheldon_pvod__', label: 'Young Sheldon · Amazon PVOD episode' },
                             { value: '__demo_dexters_lab_pvod__', label: "Dexter's Laboratory · Amazon PVOD episode" }
                         ],
@@ -87368,7 +87385,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             { value: '__demo_fragrance_tiktok__', label: 'Luxury Fragrance \u00b7 TikTok Shop purchase journey' }
                         ],
                         movie: [
-                            { value: '__demo_barbie_song__', label: 'Barbie \u00b7 song journey' }
                         ],
                         music: [
                             { value: '__demo_music_to_long_form__', label: "Music to Long Form" }
@@ -87403,6 +87419,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // an explicit allow-list (e.g. Landman + Fandango) must
                         // not still list Netflix, UFC, neurotrophic demos, etc.
                         var demos = (DEMO_CARDS[cat.id] || []).filter(function(d) {
+                            if (d.value === '__demo_music_to_long_form__') return true;
                             if (window.__jiqAllowAll) return true;
                             return (window.__jiqAllowedDemos || []).indexOf(d.value) !== -1;
                         });
