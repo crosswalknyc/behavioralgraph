@@ -24,6 +24,7 @@ Decision shape::
 'compare_picker') name interactive pickers the dashboard can show. A
 client without that UI ignores the hint and runs the surface as is.
 """
+import os
 import re
 
 from . import guards
@@ -191,7 +192,34 @@ def should_analyze(text, has_ctx):
 
 def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
            deck_in_flight=False):
-    """Route one fresh ask. See the module docstring for the shape."""
+    """Route one fresh ask. See the module docstring for the shape.
+
+    Every reason the steps below emit is a row in
+    ``prometheus.routing_table.ROWS`` (2026-10-02 RCA): the decision
+    carries the row id as ``row`` so the widget and the ask log speak
+    the same vocabulary. An unknown reason is a contract break: it
+    raises under REGRESSION_TEST_MODE and is logged otherwise."""
+    d = _decide(text, has_ctx=has_ctx, mode=mode, extra=extra,
+                open_tabs=open_tabs, deck_in_flight=deck_in_flight)
+    try:
+        from . import routing_table as _rt
+        row = _rt.row_for(d.get('reason'))
+        d['row'] = row['id'] if row else None
+        if row is None:
+            msg = ('understand.decide emitted a reason with no routing '
+                   'table row: %r' % (d.get('reason'),))
+            if os.environ.get('REGRESSION_TEST_MODE'):
+                raise RuntimeError(msg)
+            print('[understand] ' + msg)
+    except RuntimeError:
+        raise
+    except Exception:
+        d.setdefault('row', None)
+    return d
+
+
+def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
+            deck_in_flight=False):
     t = str(text or '').strip()
     extra = extra if isinstance(extra, dict) else {}
     d = {'surface': 'interpret', 'mode': None, 'reason': 'default',

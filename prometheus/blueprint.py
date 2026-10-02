@@ -161,6 +161,22 @@ def understand_only():
     return jsonify({'success': True, 'decision': d})
 
 
+@bp.route('/routing-table', methods=['GET'])
+@_guarded('prometheus/routing-table')
+def routing_table():
+    """The declarative routing decision table the server routes by and
+    the widget acts on (2026-10-02 RCA). Session callers only."""
+    user, via, err = _auth()
+    if err:
+        return err
+    if via == 'api_key':
+        return jsonify({'success': False,
+                        'error': 'not available on this key'}), 403
+    from . import routing_table as _rt
+    return jsonify({'success': True, 'rows': _rt.as_public(),
+                    'client_actions': sorted(_rt.CLIENT_ACTIONS)})
+
+
 @bp.route('/threads', methods=['GET'])
 @_guarded('prometheus/threads')
 def threads_list():

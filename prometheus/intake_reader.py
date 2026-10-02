@@ -497,7 +497,8 @@ _MON_RX = (r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
 _DATE_RX = (r'(?:(?P<iso>\d{4}-\d{2}-\d{2})|'
             r'(?P<mon>' + _MON_RX + r')\.?\s*(?:(?P<day>\d{1,2})(?:st|nd|rd|th)?,?\s*)?'
             r'(?P<year>(?:19|20)\d{2}))')
-_RANGE_SEP = r'\s*(?:-|–|—|to|through|thru|until|till)\s*'
+# hyphen, en dash (U+2013), em dash (U+2014) as typed by users
+_RANGE_SEP = r'\s*(?:-|\u2013|\u2014|to|through|thru|until|till)\s*'
 _DATE_RANGE = re.compile(_DATE_RX + _RANGE_SEP
                          + _DATE_RX.replace('(?P<', '(?P<b_'), re.I)
 _SHORT_RANGE = re.compile(  # "Apr-Dec 2024", "Apr to Dec 2024"
