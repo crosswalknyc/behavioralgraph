@@ -56351,6 +56351,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (k.indexOf('ATTRIBUTION') === 0 || k.indexOf('SF ') === 0) return 'orchid';
                     return 'muted';
                 }
+                function _navBindTap(el, handler) {
+                    var _mobile = !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
+                    if (_mobile) {
+                        // iOS Safari: `click` is unreliable on these dynamically
+                        // built buttons inside the pinned header chrome, so also
+                        // fire the handler on touchend. Mobile-only; the click
+                        // listener below de-dupes (per element) so a tap that
+                        // emits both touchend + click runs the handler once.
+                        el.addEventListener('touchend', function (ev) {
+                            el._navTapAt = Date.now();
+                            if (ev) ev.preventDefault();
+                            handler.call(el, ev);
+                        }, { passive: false });
+                    }
+                    el.addEventListener('click', function (ev) {
+                        if (el._navTapAt && (Date.now() - el._navTapAt) < 700) return;
+                        handler.call(el, ev);
+                    });
+                }
                 function _buildLeafOption(opt) {
                     var val = opt.value;
                     var label = _navCleanLabel(opt.textContent);
@@ -56372,7 +56391,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (disabled) {
                         item.disabled = true;
                     } else {
-                        item.addEventListener('click', function() {
+                        _navBindTap(item, function() {
                             var v = this.getAttribute('data-value');
                             viewDropdown.value = v;
                             viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
@@ -56442,7 +56461,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             _countBadge.setAttribute('aria-label', _groupItemCount + ' items - click to expand');
                             parentBtn.appendChild(_countBadge);
                         }
-                        parentBtn.addEventListener('click', (function(name, wrap, btn) {
+                        _navBindTap(parentBtn, (function(name, wrap, btn) {
                             return function(e) {
                                 e.stopPropagation();
                                 var nowOpen = wrap.classList.toggle('open');
@@ -56486,8 +56505,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     clearTimeout(_productAccessSyncTimer);
                     _productAccessSyncTimer = setTimeout(syncProductAccessFromServer, 300);
                 });
-                triggerEl.addEventListener('click', function(e) {
-                    e.stopPropagation();
+                _navBindTap(triggerEl, function(e) {
+                    if (e) e.stopPropagation();
                     var open = panelEl.classList.toggle('open');
                     triggerEl.setAttribute('aria-expanded', open ? 'true' : 'false');
                 });
