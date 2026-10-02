@@ -18722,6 +18722,53 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             transform: none !important;
             box-shadow: none !important;
         }
+        /* Custom "Data & Analysis Tools" menu (see #mobile-nav-enhancements).
+           The native <select> picker is unreliable on the sub-tabs, where the
+           toolbar lives inside a body-pinned position:fixed chrome - iOS
+           focuses the select ("lights up") but never shows the wheel. We draw
+           this menu instead, pinned to <body> above the chrome (JS sets the
+           inline top/left/width). Mobile-only. */
+        .mobile-tools-menu {
+            background-color: var(--bg-input, #0d1a2a);
+            border: 1px solid #66d9ef;
+            border-radius: 8px;
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+            padding: 4px 0;
+            max-height: 60vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .mobile-tools-menu .mtm-group {
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #7C878A;
+            font-weight: 600;
+            padding: 9px 14px 4px;
+        }
+        .mobile-tools-menu .mtm-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: 0;
+            color: #E9E8E1;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 12px 14px;
+            cursor: pointer;
+        }
+        .mobile-tools-menu .mtm-item:active {
+            background: rgba(102, 217, 239, 0.16);
+        }
+        body[data-theme="light"] .mobile-tools-menu {
+            background-color: #FFFFFF;
+            border-color: #66d9ef;
+        }
+        body[data-theme="light"] .mobile-tools-menu .mtm-item { color: #0C1618; }
         #toolbarContent .toolbar-section { display: none !important; }
         /* Jenna's v4 re-shows the DATA + ANALYSIS TOOLS pill rows
            (`#dashboardView.piq-v4 .toolbar-section` / `.dashboard-tabs` use
@@ -185529,6 +185576,87 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
                 sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
             };
+            // ---- Custom tap-to-open menu (replaces the native <select>
+            // picker on phones). On the sub-tabs the whole toolbar lives inside
+            // a body-pinned position:fixed chrome, where iOS gives the select
+            // focus but never presents the wheel. We suppress the native picker
+            // (preventDefault on mousedown) and draw our own menu, anchored to
+            // the bar and pinned to <body> above the chrome. It reuses the same
+            // tab buttons, so navigation + access gating are identical. ----
+            function _mobileToolsItems() {
+                var groups = document.querySelectorAll('#toolbarContent .dashboard-tabs');
+                var groupLabels = ['Data', 'Analysis Tools'];
+                var out = [];
+                for (var g = 0; g < groups.length; g++) {
+                    var gb = groups[g].querySelectorAll('.tab-btn');
+                    for (var i = 0; i < gb.length; i++) {
+                        var b = gb[i];
+                        if (b.style.display === 'none' || window.getComputedStyle(b).display === 'none') continue;
+                        var le = b.querySelector('.tab-label');
+                        var txt = ((le ? le.textContent : b.textContent) || '').trim();
+                        if (!txt) continue;
+                        out.push({ label: txt, group: (groupLabels[g] || 'Tools'), btn: b });
+                    }
+                }
+                return out;
+            }
+            function _mtmOutside(e) {
+                var m = document.getElementById('mobileToolsMenu');
+                if (!m) return;
+                if (m.contains(e.target)) return;
+                if (e.target && e.target.id === 'mobileToolsNav') return;
+                window._closeMobileToolsMenu();
+            }
+            window._closeMobileToolsMenu = function () {
+                var m = document.getElementById('mobileToolsMenu');
+                if (m) m.remove();
+                document.removeEventListener('pointerdown', _mtmOutside, true);
+                window.removeEventListener('resize', window._closeMobileToolsMenu);
+                window._mtmOpen = false;
+            };
+            window._openMobileToolsMenu = function (sel) {
+                if (window._mtmOpen) { window._closeMobileToolsMenu(); return; }
+                var items = _mobileToolsItems();
+                if (!items.length) return;
+                var old = document.getElementById('mobileToolsMenu');
+                if (old) old.remove();
+                var menu = document.createElement('div');
+                menu.id = 'mobileToolsMenu';
+                menu.className = 'mobile-tools-menu';
+                var curGroup = '';
+                items.forEach(function (it) {
+                    if (it.group !== curGroup) {
+                        curGroup = it.group;
+                        var h = document.createElement('div');
+                        h.className = 'mtm-group';
+                        h.textContent = it.group;
+                        menu.appendChild(h);
+                    }
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'mtm-item';
+                    btn.textContent = it.label;
+                    btn.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        window._closeMobileToolsMenu();
+                        try { it.btn.click(); } catch (_e) {}
+                    });
+                    menu.appendChild(btn);
+                });
+                var rect = sel.getBoundingClientRect();
+                menu.style.position = 'fixed';
+                menu.style.top = (rect.bottom + 4) + 'px';
+                menu.style.left = rect.left + 'px';
+                menu.style.width = rect.width + 'px';
+                menu.style.zIndex = '2147483600';
+                document.body.appendChild(menu);
+                window._mtmOpen = true;
+                setTimeout(function () {
+                    document.addEventListener('pointerdown', _mtmOutside, true);
+                    window.addEventListener('resize', window._closeMobileToolsMenu);
+                }, 0);
+            };
             // Make every "Select Profile" sidebar a collapsible accordion on
             // phones. Gated to mobile so the desktop DOM is never touched.
             window._initMobileSidebarCollapse = function () {
@@ -185555,6 +185683,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             document.addEventListener('DOMContentLoaded', function () {
                 try { window._buildMobileToolsNav(); } catch (e) {}
                 try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
+                try {
+                    var _mtn = document.getElementById('mobileToolsNav');
+                    if (_mtn && !_mtn._mtmBound) {
+                        _mtn._mtmBound = true;
+                        // preventDefault on mousedown blocks BOTH the native
+                        // picker and focus, so on phones we fully own the tap.
+                        _mtn.addEventListener('mousedown', function (e) {
+                            if (!_isMobileViewport()) return;
+                            e.preventDefault();
+                            if (window._openMobileToolsMenu) window._openMobileToolsMenu(_mtn);
+                        });
+                    }
+                } catch (e) {}
             });
         })();
     </script>
