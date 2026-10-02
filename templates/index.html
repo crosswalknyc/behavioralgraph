@@ -73503,6 +73503,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Filter input applies to whichever tree is shown
         };
 
+        function _bpiqLastKeyName() {
+            try {
+                return 'bpiqLastKey' + ((typeof currentUsername !== 'undefined' && currentUsername) ? '_' + currentUsername : '');
+            } catch (_e) { return 'bpiqLastKey'; }
+        }
+
         function loadBpiqProfiles() {
             var tree = document.getElementById('bpiqProfileTree');
             if (!tree) return;
@@ -73569,6 +73575,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         html += '</div>';
                     });
                     tree.innerHTML = html;
+                    var panels = document.getElementById('bpiqDashboardPanels');
+                    var last = null;
+                    try { last = localStorage.getItem(_bpiqLastKeyName()); } catch (_e) {}
+                    if (last && (!panels || panels.style.display === 'none')
+                        && files.some(function(f) { return f.key === last; })) {
+                        selectBpiqResult(last);
+                    } else if (_bpiqState.s3_key) {
+                        tree.querySelectorAll('.profile-tree-item').forEach(function(el) {
+                            el.classList.toggle('active', el.getAttribute('data-bpiq-key') === _bpiqState.s3_key);
+                        });
+                    }
                 }).catch(function() {
                     tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">Failed to load results.</div>';
                 });
@@ -73629,6 +73646,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // _bpiqState alongside the s3_key for round-trip
                     // back to the export endpoint.
                     _bpiqState.s3_key    = key;
+                    try { localStorage.setItem(_bpiqLastKeyName(), key); } catch (_e) {}
                     _bpiqState.image_url = resp.image_url || '';
                     _bpiqState.category  = resp.category  || '';
                     // Thread admin-managed category onto the data object
@@ -132179,6 +132197,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             // Picking a partnership is the end of the errand, so it closes.
             if (ev.target.closest('#bpiqProfileTree .profile-select-item') ||
+                ev.target.closest('#bpiqProfileTree .profile-tree-item') ||
                 ev.target.closest('#bpiqProfileTree .subscriber-show-item')) {
                 setTimeout(function () { _bpLibraryOpen(false); }, 40);
             }
