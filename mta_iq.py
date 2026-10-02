@@ -540,6 +540,10 @@ def _freq_ceiling_for(t: dict) -> int:
         return 3
     if ch in ("x", "twitter", "facebook", "snapchat", "reddit"):
         return 8
+    if "press" in ch or "editorial" in ch or "news" in ch:
+        # An article (review, interview, trailer write-up) is read once,
+        # occasionally twice. No ambient repeat play like a feed clip.
+        return 2
     return 6
 
 
@@ -656,6 +660,10 @@ def _per_exposure_prior(slug: str, t: dict) -> float:
     if "search" in at:             c -= 0.010
     if ch in ("youtube",):         c += 0.007
     if ch in ("reddit", "snapchat"): c -= 0.010
+    if "press" in ch and "review" in at:
+        # A release-week review is read by people already deciding
+        # whether to go; it sits one step from the showtimes page.
+        c += 0.012
     return float(c)
 
 
