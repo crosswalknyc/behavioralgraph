@@ -185621,8 +185621,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var bd = document.createElement('div');
                 bd.id = 'mobileToolsBackdrop';
                 bd.style.cssText = 'position:fixed;inset:0;z-index:2147483500;background:rgba(0,0,0,0.4);';
-                bd.addEventListener('click', function () { window._closeMobileToolsMenu(); });
-                document.body.appendChild(bd);
+                bd.addEventListener('click', function (e) { if (e.target === bd) window._closeMobileToolsMenu(); });
                 var menu = document.createElement('div');
                 menu.id = 'mobileToolsMenu';
                 menu.className = 'mobile-tools-menu';
@@ -185639,12 +185638,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     mi.type = 'button';
                     mi.className = 'mtm-item';
                     mi.textContent = it.label;
-                    mi.addEventListener('click', function (ev) {
-                        ev.preventDefault();
-                        ev.stopPropagation();
+                    var _ilast = 0;
+                    var _choose = function (ev) {
+                        var now = Date.now();
+                        if (now - _ilast < 450) { if (ev) ev.preventDefault(); return; }
+                        _ilast = now;
+                        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
                         window._closeMobileToolsMenu();
                         try { it.btn.click(); } catch (_e) {}
-                    });
+                    };
+                    // Same iOS-reliable tap as the opener: touchend first,
+                    // click as fallback, de-duped so one tap = one selection.
+                    mi.addEventListener('touchend', _choose, { passive: false });
+                    mi.addEventListener('click', _choose);
                     menu.appendChild(mi);
                 });
                 var rect = anchor.getBoundingClientRect();
@@ -185653,7 +185659,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 menu.style.left = Math.round(rect.left) + 'px';
                 menu.style.width = Math.round(rect.width) + 'px';
                 menu.style.zIndex = '2147483600';
-                document.body.appendChild(menu);
+                bd.appendChild(menu);
+                document.body.appendChild(bd);
                 window._mtmOpen = true;
                 window.addEventListener('resize', window._closeMobileToolsMenu);
             };
