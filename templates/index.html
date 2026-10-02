@@ -75321,7 +75321,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _bpiqDemoData = d || {};
             var pre  = (_bpiqDemoData.pre)  || {};
             var post = (_bpiqDemoData.post) || {};
-            var html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;">';
+            var html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem 4rem;">';
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
                 var preMap  = _bpiqMergeDemo(field, pre[field]);
                 var postMap = _bpiqMergeDemo(field, post[field]);
@@ -75380,7 +75380,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
                 html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;"><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;" data-bpiq-demo-field="' + field + '">'
-                     +  '<colgroup><col style="width:auto;"><col style="width:18%;"><col style="width:18%;"><col style="width:16%;"><col style="width:18%;"></colgroup>'
+                     +  '<colgroup><col style="width:auto;"><col style="width:19%;"><col style="width:19%;"><col style="width:19%;"><col style="width:19%;"></colgroup>'
                      +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
                      +  '<th data-bpiq-demo-sort="label"    style="' + thBase + 'text-align:left;">'  + arrow('label')    + '</th>'
                      +  '<th data-bpiq-demo-sort="pre"      style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')      + '</th>'
@@ -132462,6 +132462,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             for (var i = 0; i < els.length; i++) {
                 var el = els[i];
                 if (el.dataset.bpPanel === '1') continue;
+                // The Lift tab's KPI cards keep their boxes at any width.
+                var lift = el.closest('#bpiqKpiAndLiftWrap');
+                if (lift && el.parentElement !== lift) continue;
                 var r = el.getBoundingClientRect();
                 if (r.width < 240 || r.height < 56) continue;
                 var s = getComputedStyle(el);
