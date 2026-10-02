@@ -8734,6 +8734,135 @@ def _pm_claude_data(system_prompt, user_prompt, **kw):
     return {}
 
 
+_PM_INTAKE_STALL_PREFIX = 'Almost there - I still need'
+
+_PM_INTAKE_FAULT_REPLY = ('Got it. I have what you sent and I am lining '
+                          'it up now. I will email you when it is '
+                          'complete.')
+
+
+def _pm_intake_prior_user_turns(history, ask_copy, limit=4):
+    """User turns that belong to the open guided intake.
+
+    Walks the widget history backwards. Stops at the first agent turn
+    that is neither the intake ask copy nor a stall reply, so only the
+    messages the user sent while answering THIS intake come back,
+    oldest first. The current message is not in ``history`` yet.
+    """
+    out = []
+    ask = ' '.join(str(ask_copy or '').split()).lower()
+    for turn in reversed(list(history or [])):
+        if not isinstance(turn, dict):
+            continue
+        role = str(turn.get('role') or '').lower()
+        txt = str(turn.get('text') or '').strip()
+        if role == 'user':
+            if txt:
+                out.append(txt)
+            if len(out) >= limit:
+                break
+            continue
+        norm = ' '.join(txt.split()).lower()
+        if norm.startswith(_PM_INTAKE_STALL_PREFIX.lower()):
+            continue
+        if ask and norm[:80] == ask[:80]:
+            break
+        break
+    return list(reversed(out))
+
+
+def _pm_intake_last_agent_stalled(history):
+    for turn in reversed(list(history or [])):
+        if isinstance(turn, dict) and str(turn.get('role') or '').lower() != 'user':
+            txt = ' '.join(str(turn.get('text') or '').split()).lower()
+            return txt.startswith(_PM_INTAKE_STALL_PREFIX.lower())
+    return False
+
+
+def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
+                       required, ask_copy, user=None, usage_extras=None):
+    """Parse a guided-intake message the way a person would read it.
+
+    Returns ``(parsed, fault)``. Three layers, cheapest first:
+
+    1. Parse the message on its own.
+    2. If that is incomplete and the user already sent earlier turns
+       in this intake, parse all of them together. Users split the
+       brief across messages; a parser that only sees the latest one
+       asks for things it was already told.
+    3. If a substantive message (10+ words) still yields none of the
+       required fields, or the previous reply was already a stall and
+       the user answered with substance again, that is a fault in our
+       reading, not a gap in their message. ``fault`` is True: the
+       caller must NOT send the stall copy a second time. It sends the
+       'lining it up, will email you' reply and this helper emails ops
+       (jenna@ + jessie@) the raw messages so a person runs it.
+
+    Born from the 2026-10-01 Babylon 5 intake: a complete brief got
+    'Almost there - I still need the category, the platform, the
+    conversion event' twice in a row because the parser read an empty
+    object and nothing noticed the reply was repeating.
+    """
+    text = str(text or '').strip()
+    try:
+        parsed = parse_fn(text, usage_extras=usage_extras) or {}
+    except Exception:
+        traceback.print_exc()
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    if complete_fn(parsed):
+        return parsed, False
+    prior = _pm_intake_prior_user_turns(history, ask_copy)
+    if prior:
+        combined = '\n\n'.join(prior + [text])
+        try:
+            again = parse_fn(combined, usage_extras=usage_extras) or {}
+        except Exception:
+            traceback.print_exc()
+            again = {}
+        if isinstance(again, dict):
+            if complete_fn(again):
+                return again, False
+            if (sum(1 for k in required if again.get(k))
+                    > sum(1 for k in required if parsed.get(k))):
+                parsed = again
+    substantive = len(text.split()) >= 10
+    found = sum(1 for k in required if parsed.get(k))
+    fault = bool(substantive
+                 and (found == 0 or _pm_intake_last_agent_stalled(history)))
+    if fault:
+        try:
+            _pm_ask_hint(outcome='intake_fault', subject=flow)
+        except Exception:
+            pass
+        try:
+            _who = ''
+            if isinstance(user, dict):
+                _who = (user.get('email') or user.get('username') or '')
+            _H._chatbot_error_email(
+                route=f'prometheus/intake/{flow}',
+                err=RuntimeError(
+                    f'{flow} intake could not read a complete brief; '
+                    f'user told it will be emailed'),
+                user_email=_who or None,
+                payload={'flow': flow, 'message': text,
+                         'earlier_messages': prior,
+                         'parsed': parsed,
+                         'required': list(required)},
+                tb='(guided intake fault - run this by hand and email '
+                   'the user from Prometheus)')
+        except Exception:
+            traceback.print_exc()
+    return parsed, fault
+
+
+def _pm_intake_fault_payload():
+    return {'success': True, 'action': 'answer',
+            'reply': _PM_INTAKE_FAULT_REPLY,
+            'followups': [], 'offer_deck': False, 'deck_angle': None}
+
+
 _PM_INTENT_HYDRATE_CACHE = {}
 
 
@@ -14299,7 +14428,13 @@ def _pm_analyze_core(user, body, text, history):
             'bpiq_job_id': _bpiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('bpiq_inputs'):
-        _parsed = _pm_bpiq_parse(text, usage_extras=_pm_ppu)
+        _parsed, _bfault = _pm_intake_resolve(
+            'brand_partnership', text, history, _pm_bpiq_parse,
+            _pm_bpiq_inputs_complete,
+            ('brand_partner', 'qualifier', 'event_start', 'event_end'),
+            _PM_BPIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+        if _bfault and not _pm_bpiq_inputs_complete(_parsed):
+            return jsonify(_pm_intake_fault_payload())
         if _pm_bpiq_inputs_complete(_parsed):
             _parsed.pop('missing', None)
             return jsonify({
@@ -14373,7 +14508,13 @@ def _pm_analyze_core(user, body, text, history):
             'aiq_job_id': _aiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('aiq_inputs'):
-        _aparsed = _pm_aiq_parse(text, usage_extras=_pm_ppu)
+        _aparsed, _afault = _pm_intake_resolve(
+            'attribution', text, history, _pm_aiq_parse,
+            _pm_aiq_inputs_complete,
+            ('campaign_name', 'urls', 'conversion_event'),
+            _PM_AIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+        if _afault and not _pm_aiq_inputs_complete(_aparsed):
+            return jsonify(_pm_intake_fault_payload())
         if _pm_aiq_inputs_complete(_aparsed):
             _aparsed.pop('missing', None)
             return jsonify({
@@ -14484,7 +14625,14 @@ def _pm_analyze_core(user, body, text, history):
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('fw_inputs'):
-        _fparsed = _pm_fw_parse(text, usage_extras=_pm_ppu)
+        _fparsed, _ffault = _pm_intake_resolve(
+            'flywheel', text, history, _pm_fw_parse,
+            _pm_fw_inputs_complete,
+            ('subject', 'captured_action', 'ecosystem',
+             'conversion_event'),
+            _PM_FW_ASK_COPY, user=user, usage_extras=_pm_ppu)
+        if _ffault and not _pm_fw_inputs_complete(_fparsed):
+            return jsonify(_pm_intake_fault_payload())
         if _pm_fw_inputs_complete(_fparsed):
             _fparsed.pop('missing', None)
             return jsonify({
@@ -14549,7 +14697,13 @@ def _pm_analyze_core(user, body, text, history):
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     if body.get('jiq_inputs'):
-        _jparsed = _pm_jiq_parse(text, usage_extras=_pm_ppu)
+        _jparsed, _jfault = _pm_intake_resolve(
+            'digital_journey', text, history, _pm_jiq_parse,
+            _pm_jiq_inputs_complete,
+            ('subject', 'platform', 'conversion_event'),
+            _PM_JIQ_ASK_COPY, user=user, usage_extras=_pm_ppu)
+        if _jfault and not _pm_jiq_inputs_complete(_jparsed):
+            return jsonify(_pm_intake_fault_payload())
         if _pm_jiq_inputs_complete(_jparsed):
             _jparsed.pop('missing', None)
             return jsonify({
