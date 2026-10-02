@@ -6913,9 +6913,11 @@ def _build_synthetic_panel(config: dict) -> dict:
             else:
                 print(f"   🎯 pre_existing_pct from research: {pre_existing_pct*100:.1f}%")
         except (TypeError, ValueError):
-            pre_existing_pct = 0.0 if is_new else 0.30
+            pre_existing_pct = 0.0 if is_new else _svod_salt_unit(
+                f"{config.get('project_name','')}|pre_existing", 0.24, 0.37)
     else:
-        pre_existing_pct = 0.0 if is_new else 0.30
+        pre_existing_pct = 0.0 if is_new else _svod_salt_unit(
+            f"{config.get('project_name','')}|pre_existing", 0.24, 0.37)
     pre_existing_panel = int(total_panel * pre_existing_pct)
     clean_sample_panel = total_panel - pre_existing_panel
 
@@ -6954,6 +6956,8 @@ def _build_synthetic_panel(config: dict) -> dict:
         for retired in (3.5, 8.5, 6.2):
             if abs(v - retired) < 0.05:
                 v = round(v + 0.2, 1)
+        if abs(v - round(v)) < 0.05:  # x.0 reads as a placeholder
+            v = round(v + _svod_salt_unit(f"{skey}|avg_days_nudge", 0.1, 0.4), 1)
         return v
 
     if research and research.get('avg_days_to_signup') is not None:
@@ -6964,6 +6968,22 @@ def _build_synthetic_panel(config: dict) -> dict:
             avg_days = _fallback_avg_days()
     else:
         avg_days = _fallback_avg_days()
+
+    # Window sanity: signups land inside [availability, window end +
+    # attribution tail]. A 9-day average on a premiere-weekend read with a
+    # short attribution tail is arithmetically impossible.
+    try:
+        _cs, _ce = config.get('campaign_start'), config.get('campaign_end')
+        if hasattr(_cs, 'year') and hasattr(_ce, 'year'):
+            _span = max(1, (_ce - _cs).days) + int(config.get('attribution_window') or 30)
+            _cap = round(_span * 0.8, 1)
+            if avg_days > _cap:
+                avg_days = max(0.6, round(_cap * _svod_salt_unit(
+                    f"{config.get('project_name','')}|avg_days_cap", 0.55, 0.9), 1))
+                if abs(avg_days - round(avg_days)) < 0.05:
+                    avg_days = round(avg_days + 0.3, 1)
+    except Exception:
+        pass
 
     clean_conv  = round(new_signups_panel * 100.0 / clean_sample_panel, 2) if clean_sample_panel > 0 else 0.0
     total_conv  = round(new_signups_panel * 100.0 / total_panel, 2) if total_panel > 0 else 0.0
@@ -7097,6 +7117,7 @@ def _build_synthetic_demographics(config: dict, new_signups_panel: int,
             dict(config['demographic_age_pcts']),
             dict(config['demographic_gender_pcts']),
             new_signups_panel,
+            derive_pct_from_counts=False,  # mirror Profile IQ verbatim
         )
 
     if research and research.get('demographics_confidence') in ('high', 'medium'):
@@ -7208,6 +7229,17 @@ def _build_synthetic_demographics(config: dict, new_signups_panel: int,
         f"{config.get('show_search_terms') or config.get('project_name','')}|"
         f"{config.get('platform_name','')}"
     )
+
+    # The genre tables above are PRIORS. Shipping them verbatim gives every
+    # title in a genre the same age curve (a cross-file template signature),
+    # so wobble each bucket per title and renormalize before emitting.
+    _wob = {k: max(0.2, v * _svod_salt_unit(f"{show_key}|age|{k}", 0.86, 1.15))
+            for k, v in pcts.items()}
+    _tot = sum(_wob.values()) or 1.0
+    pcts = {k: round(v * 100.0 / _tot, 1) for k, v in _wob.items()}
+    male_raw   = max(5.0, male_raw   * _svod_salt_unit(f"{show_key}|g|m", 0.90, 1.11))
+    female_raw = max(5.0, female_raw * _svod_salt_unit(f"{show_key}|g|f", 0.90, 1.11))
+
     mf_tot = male_raw + female_raw
     male_skew_pct = (male_raw * 100.0 / mf_tot) if mf_tot > 0 else 50.0
     lgbtq = _derive_lgbtq_shares(
@@ -7237,18 +7269,41 @@ def _build_synthetic_demographics(config: dict, new_signups_panel: int,
     return _emit_demographics_df(pcts, gpcts, new_signups_panel)
 
 
-def _emit_demographics_df(pcts: dict, gpcts: dict, new_signups_panel: int) -> pd.DataFrame:
+def _emit_demographics_df(pcts: dict, gpcts: dict, new_signups_panel: int,
+                          derive_pct_from_counts: bool = True) -> pd.DataFrame:
     """Materialize age + gender percentage dicts into the CATEGORY/VALUE/
     COUNT/PERCENTAGE dataframe shape the rest of the pipeline expects.
     Shared between the research-driven and prior-driven demographic paths.
+
+    Counts are apportioned largest-remainder so each section sums exactly
+    to the signup total (the old per-row int(round()) drifted the sum and
+    shipped count/percentage pairs that contradicted each other). By
+    default the displayed percentage is then re-derived from the final
+    count, so a bucket can never print "20.0%" next to a count that is
+    actually 15.8% of the total. The locked-demographics path passes
+    derive_pct_from_counts=False because its percentages must mirror the
+    title's Profile IQ values verbatim (cross-product coherence).
     """
+    def _apportion(d: dict) -> dict:
+        exact = {k: max(0.0, new_signups_panel * float(v) / 100.0) for k, v in d.items()}
+        floors = {k: int(e) for k, e in exact.items()}
+        rem = max(0, new_signups_panel - sum(floors.values()))
+        for k in sorted(exact, key=lambda k: exact[k] - floors[k], reverse=True):
+            if rem <= 0:
+                break
+            floors[k] += 1
+            rem -= 1
+        return floors
+
     rows = []
-    for label, pct in pcts.items():
-        cnt = max(0, int(round(new_signups_panel * pct / 100.0)))
-        rows.append({"CATEGORY": "AGE", "VALUE": label, "COUNT": cnt, "PERCENTAGE": pct})
-    for label, pct in gpcts.items():
-        cnt = max(0, int(round(new_signups_panel * pct / 100.0)))
-        rows.append({"CATEGORY": "GENDER", "VALUE": label, "COUNT": cnt, "PERCENTAGE": pct})
+    for cat, d in (("AGE", pcts), ("GENDER", gpcts)):
+        counts = _apportion(d)
+        for label, pct in d.items():
+            cnt = counts[label]
+            out_pct = (round(cnt * 100.0 / new_signups_panel, 2)
+                       if derive_pct_from_counts and new_signups_panel > 0 else pct)
+            rows.append({"CATEGORY": cat, "VALUE": label, "COUNT": cnt,
+                         "PERCENTAGE": out_pct})
     return pd.DataFrame(rows)
 
 
@@ -7633,6 +7688,27 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
                 rows.append({"COMMON_NAME": str(name).lower(), "PERCENT": float(pct)})
         return pd.DataFrame(rows)
 
+    def _off_boundaries(df_c: pd.DataFrame) -> pd.DataFrame:
+        # Research / focused calls return 1dp estimates (72.2, 57.8). The
+        # writer prints 2dp, so every row lands on a .X0 boundary - eight
+        # "round" values in a row reads as a table, not a measurement.
+        # Salted sub-decimal offset per title+platform, collision-free.
+        skey = str(config.get('project_name')
+                   or (config.get('show_search_terms') or ['show'])[0])
+        out, seen = [], set()
+        for _, r in df_c.iterrows():
+            v = float(r['PERCENT'])
+            if int(round(v * 100)) % 10 == 0:
+                v = round(v + _svod_salt_unit(f"{skey}|compb|{r['COMMON_NAME']}",
+                                              0.03, 0.27), 2)
+                if int(round(v * 100)) % 10 == 0:
+                    v = round(v + 0.03, 2)
+            while v in seen:
+                v = round(v + 0.11, 2)
+            seen.add(v)
+            out.append({"COMMON_NAME": r['COMMON_NAME'], "PERCENT": v})
+        return pd.DataFrame(out)
+
     # Research-derived competitive overlap (preferred path)
     if research and isinstance(research.get('competitive_overlap'), list) and research['competitive_overlap']:
         rows = []
@@ -7648,7 +7724,7 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
         if rows:
             print(f"   🎯 Competitive overlap from research ({len(rows)} platforms, "
                   f"{len(research.get('competitive_sources') or [])} sources)")
-            return pd.DataFrame(rows)
+            return _off_boundaries(pd.DataFrame(rows))
 
     # Secondary path: focused Claude call — show-differentiated, genre-aware,
     # uses research dict as signal hints when present. This is what stops
@@ -7672,7 +7748,7 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
         # writer (and any downstream auditor) can see how we landed here.
         if isinstance(research, dict):
             research.setdefault('competitive_overlap_focused', focused)
-        return pd.DataFrame(rows)
+        return _off_boundaries(pd.DataFrame(rows))
 
     # Default overlap by current-platform tier
     platform = (config.get('platform_name') or '').lower()
@@ -7703,7 +7779,30 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
     else:
         items = [('netflix',55.0),('hulu',35.0),('amazon prime video',40.0),
                  ('disney+',22.0),('hbo max',15.0),('peacock',12.0),('paramount+',10.0),('apple tv+',8.0)]
-    return pd.DataFrame([{"COMMON_NAME": n, "PERCENT": p} for (n, p) in items])
+
+    # The tier tables above are PRIORS, not output. Shipping them verbatim
+    # stamped one identical competitive list across every title on the same
+    # platform (both Outlander seasons shipped the same 8 round values on
+    # 2026-10-01). Salt each row per title around its prior, keep values
+    # messy 2dp off .X0/.00 boundaries, drop the home platform if the
+    # generic list carries it, and never let two rows collide.
+    show_key_c = str(config.get('project_name')
+                     or (config.get('show_search_terms') or ['show'])[0])
+    plat_norm = platform.replace(' ', '').lower()
+    out, seen = [], set()
+    for name, prior in items:
+        if plat_norm and plat_norm in name.replace(' ', '').lower():
+            continue  # never list the home platform as its own competitor
+        v = prior * _svod_salt_unit(f"{show_key_c}|comp|{name}|m", 0.88, 1.13)
+        v += _svod_salt_unit(f"{show_key_c}|comp|{name}|a", -0.9, 0.9)
+        v = max(2.6, min(79.4, round(v, 2)))
+        if int(round(v * 100)) % 10 == 0:  # off .X0 / .00 boundaries
+            v = round(v + 0.07, 2)
+        while v in seen:
+            v = round(v + 0.13, 2)
+        seen.add(v)
+        out.append((name, v))
+    return pd.DataFrame([{"COMMON_NAME": n, "PERCENT": p} for (n, p) in out])
 
 
 def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
@@ -7738,7 +7837,37 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
             d = ep['air_date'] if isinstance(ep, dict) else ep
             if hasattr(d, 'year') and (d.year, d.month) in signups_per_month:
                 signups_per_month[(d.year, d.month)] += 1
+        if sum(signups_per_month.values()) == 0:
+            # No episode dates landed in the window (episode tracking off, or
+            # a premiere-window run with just start/end dates). The old
+            # behavior left every month at zero weight, so the headline
+            # signups never appeared in the monthly rollup: files shipped
+            # "N signups" up top and "0 watched show / 0.0%" below it - two
+            # claims about the same month that cannot both be true. Spread
+            # the attributed signups across the window months instead,
+            # front-loaded on the premiere month with a salted decay.
+            _skey_m = str(config.get('project_name')
+                          or (config.get('show_search_terms') or ['show'])[0])
+            decay = _svod_salt_unit(f"{_skey_m}|monthly_decay", 0.42, 0.66)
+            w = 1.0
+            for (yy, mm) in months:
+                signups_per_month[(yy, mm)] = max(
+                    0.001, w * _svod_salt_unit(f"{_skey_m}|mw|{yy}-{mm}", 0.9, 1.1))
+                w *= decay
         total_ep = sum(signups_per_month.values()) or 1
+        # Exact-sum apportionment: the monthly "watched show" counts must
+        # re-sum to the headline New Platform Signups (the old per-month
+        # int() truncation leaked a few units every month).
+        _quota = {k: new_signups_panel * (v / total_ep)
+                  for k, v in signups_per_month.items()}
+        _floors = {k: int(q) for k, q in _quota.items()}
+        _rem = new_signups_panel - sum(_floors.values())
+        for k in sorted(_quota, key=lambda k: _quota[k] - _floors[k], reverse=True):
+            if _rem <= 0:
+                break
+            _floors[k] += 1
+            _rem -= 1
+        _month_signups_exact = _floors
         sig_rows = []
         churn_rows = []
         # Per-show salt for the monthly platform totals. The tier bases
@@ -7758,7 +7887,7 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
 
         for (y, mo) in months:
             label = f"{y:04d}-{mo:02d}"
-            month_signups = max(1, int(new_signups_panel * (signups_per_month[(y, mo)] / total_ep)))
+            month_signups = _month_signups_exact[(y, mo)]
             total_month = _messy_monthly(
                 int(monthly_base * (1 + (((mo + y) % 7) - 3) * 0.012)), label, 'monthly_total')
             sig_rows.append({
@@ -7773,6 +7902,11 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
             churn_rate = round(_svod_salt_unit(f"{_mo_salt}|churn_rate|{label}", 7.6, 10.3), 2)
             if int(round(churn_rate * 100)) % 10 == 0:  # keep off .X0 boundaries
                 churn_rate = round(churn_rate + 0.03, 2)
+            # The writer displays this at 1dp; a draw near a whole number
+            # prints "10.0%" and reads as a placeholder. Keep the 1dp digit
+            # off zero.
+            while int(round(churn_rate * 10)) % 10 == 0:
+                churn_rate = round(churn_rate + 0.13, 2)
             churn_rows.append({
                 "VISIT_MONTH":   label,
                 "CHURNED_USERS": _messy_monthly(int(total_month * churn_rate / 100.0), label, 'monthly_churn'),

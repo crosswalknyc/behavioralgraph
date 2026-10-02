@@ -24,6 +24,12 @@ services:
         value: midgenow!2
       - key: FLASK_DEBUG
         value: "false"
+      # Research gate for Subscriber IQ runs. Without this every
+      # dashboard-initiated run falls back to tier priors and genre
+      # tables (the template-output defect shipped 2026-10-01).
+      # ANTHROPIC_API_KEY must also be set (dashboard-managed secret).
+      - key: USE_CLAUDE_REASONING
+        value: "1"
       # Snowflake credentials - set these in Render dashboard
       - key: SNOWFLAKE_USER
         sync: false

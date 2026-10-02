@@ -159,6 +159,15 @@ class _Doc:
         self._parse()
         self.salt = salt if salt is not None else (
             f"{self.show_tracked}|{self.platform_tracked}")
+        # Load-time count -> projection ratio per row, used by the GP
+        # recouple pass so a count that gets nudged later carries its
+        # projection with it (a 741 count must never keep the projection
+        # that was printed for 750).
+        self.gp_ratio = {}
+        for i in range(len(self.rows)):
+            c, g = self.geti(i, C_COUNT), self.geti(i, C_GP)
+            if c and g and c > 0 and g > 0:
+                self.gp_ratio[i] = g / c
 
     # -- helpers ------------------------------------------------------------
     def cell(self, i, col):
@@ -358,12 +367,20 @@ def _fix_demo_groups(doc: _Doc):
     return locked
 
 
+def _mag_ok(v: int):
+    """Magnitude guard: a nudge must stay small RELATIVE to the value. A
+    10-count demographic bucket moved by 8 units is an 80% distortion of a
+    researched distribution; cap small values at ~25% movement."""
+    cap = max(1, v // 4)
+    return lambda d: abs(d) <= cap
+
+
 def _dezero_free(doc: _Doc, i, col, label, klass):
     v = doc.geti(i, col)
     if v is None or v <= 0 or v % 10 != 0:
         return
     h = _hash(doc.salt, label, col, v)
-    d = _pick_delta(h, [lambda d: _ok(v + d)])
+    d = _pick_delta(h, [lambda d: _ok(v + d), _mag_ok(v)])
     if d is not None:
         doc.set(i, col, v + d, label, klass)
 
@@ -381,7 +398,8 @@ def _dezero_pair(doc: _Doc, i, col, partners, label, klass):
     for j, pv in cands:
         if pv is None or pv <= 1:
             continue
-        d = _pick_delta(h, [lambda d: _ok(v + d), lambda d: _ok(pv - d)])
+        d = _pick_delta(h, [lambda d: _ok(v + d), lambda d: _ok(pv - d),
+                            _mag_ok(v)])
         if d is not None:
             doc.set(i, col, v + d, label, klass)
             doc.set(j, col, pv - d, f"{label} (compensating)", klass)
@@ -517,6 +535,89 @@ def _dezero_counts(doc: _Doc, watchers_locked, signups_locked, touch_locked,
         for i in idxs:
             lbl = f"{group} {str(doc.cell(i, C_CAT)).strip()}"
             _dezero_pair(doc, i, C_COUNT, idxs, lbl, "trailing_zero")
+
+
+def _recouple_gp_to_counts(doc: _Doc):
+    """Carry projections with their counts. The count passes above nudge
+    and reconcile Count cells; before this pass existed the row kept the
+    projection printed for the OLD count (a 741 count sitting next to the
+    projection of 750). Re-derive each changed row's projection from its
+    load-time count->projection ratio. Runs before the chain passes so
+    the chain pin and touchpoint re-sum operate on recoupled values."""
+    changed = {ch["row"] for ch in doc.changes if ch["col"] == C_COUNT}
+    if not changed:
+        return
+    ni = doc.headline.get("New Platform Signups")
+    t1i = next((i for i, rank in doc.touch if rank == 1), None)
+    # Alias detection must use pre-recouple values (no GP pass has run yet).
+    t1_loaded_aliased = (t1i is not None and ni is not None
+                         and doc.gp(t1i) is not None
+                         and doc.gp(t1i) == doc.gp(ni))
+    skip = {doc.touch_total}
+    if t1_loaded_aliased:
+        skip.add(t1i)  # re-aliased below, never ratio-recoupled
+
+    touch_rows = {i for i, _ in doc.touch}
+    touched_component = False
+    for i in sorted(changed):
+        if i in skip or i not in doc.gp_ratio:
+            continue
+        c = doc.geti(i, C_COUNT)
+        if c is None or c <= 0:
+            continue
+        want = int(round(doc.gp_ratio[i] * c))
+        if want > 0 and doc.gp(i) != want:
+            doc.set(i, C_GP, want,
+                    str(doc.cell(i, C_CAT)).strip() + " projection",
+                    "gp_recouple")
+            if i in touch_rows:
+                touched_component = True
+
+    if t1_loaded_aliased and doc.gp(t1i) != doc.gp(ni):
+        doc.set(t1i, C_GP, doc.gp(ni), "1st Touchpoint projection",
+                "gp_recouple")
+        touched_component = True
+    if touched_component and doc.touch_total is not None:
+        comp_sum = sum(doc.gp(i) or 0 for i, _ in doc.touch)
+        if comp_sum > 0 and doc.gp(doc.touch_total) != comp_sum:
+            doc.set(doc.touch_total, C_GP, comp_sum,
+                    "Total Platform Signups projection", "gp_recouple")
+
+
+def _recouple_demo_pcts(doc: _Doc):
+    """A demographic percentage is count / New Platform Signups. The count
+    passes above can move both sides; before this pass existed the pct cell
+    kept its pre-nudge value (a bucket printing "1.49%" next to a count that
+    is 0.30% of the base). Recompute the pct for any demo row whose count
+    moved, and for every demo row when the base itself moved."""
+    ni = doc.headline.get("New Platform Signups")
+    if ni is None:
+        return
+    n = doc.geti(ni, C_COUNT)
+    if not n or n <= 0:
+        return
+    changed = {ch["row"] for ch in doc.changes if ch["col"] == C_COUNT}
+    base_moved = ni in changed
+    for group, idxs in doc.demo.items():
+        for i in idxs:
+            if not base_moved and i not in changed:
+                continue
+            c = doc.geti(i, C_COUNT)
+            if c is None:
+                continue
+            old = str(doc.cell(i, C_PCT)).strip()
+            if not old.endswith("%"):
+                continue
+            new = f"{c * 100.0 / n:.2f}%"
+            if new == old:
+                continue
+            r = doc.rows[i]
+            r[C_PCT] = new
+            doc.changes.append({
+                "row": i, "col": C_PCT,
+                "label": f"{group} {str(doc.cell(i, C_CAT)).strip()} pct",
+                "before": old, "after": new, "klass": "pct_recouple",
+            })
 
 
 def _fix_gp_chain(doc: _Doc):
@@ -712,6 +813,8 @@ def process_rows(rows, salt=None):
     touch_locked = _fix_touch_counts(doc)
     demo_locked = _fix_demo_groups(doc)
     _dezero_counts(doc, watchers_locked, signups_locked, touch_locked, demo_locked)
+    _recouple_gp_to_counts(doc)
+    _recouple_demo_pcts(doc)
     chain_locked, t1_aliased = _fix_gp_chain(doc)
     if not chain_locked:
         # No usable chain: the signups projection is a free cell.
