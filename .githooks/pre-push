@@ -29,6 +29,21 @@ url="$2"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Publish lock (2026-10-02 RCA W3): when this clone sits inside the
+# parent checkout, refuse to push main while another session holds a
+# fresh publish lock (scripts/publish_lock.py). No lock at all prints a
+# one-line reminder and goes through; an unreachable S3 goes through.
+if [ -f "../scripts/publish_lock.py" ] && [ "$remote" != "" ]; then
+    if ! (cd .. && python3 scripts/publish_lock.py check --quiet); then
+        echo ""
+        echo "[pre-push] PUSH BLOCKED: another session is publishing right now."
+        echo "[pre-push] Wait for it, or when you are sure it is done:"
+        echo "[pre-push]     (cd .. && python3 scripts/publish_lock.py status)"
+        echo "[pre-push]     (cd .. && python3 scripts/publish_lock.py release --force)"
+        exit 1
+    fi
+fi
+
 # Read pushed refs from stdin. Format (one per line):
 #   <local ref> <local sha> <remote ref> <remote sha>
 while read -r local_ref local_sha remote_ref remote_sha; do

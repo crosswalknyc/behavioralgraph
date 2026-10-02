@@ -2084,6 +2084,7 @@
                 <button class="admin-tab" onclick="showSettingsTab('creditUsageExport')">📊 Credit Usage by Period</button>
                 <button class="admin-tab" id="settingsTabDailySpend" onclick="showSettingsTab('dailySpend')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">💵 Daily Spend</button>
                 <button class="admin-tab" id="settingsTabDefaultPhoto" onclick="showSettingsTab('defaultProfilePhoto')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">👤 Default Profile Photo</button>
+                <button class="admin-tab" id="settingsTabOpsStatus" onclick="showSettingsTab('opsStatus')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">🩺 System Status</button>
                 <a class="admin-tab" id="settingsTabBilling" href="/admin/billing" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }}; text-decoration: none;">💳 Billing</a>
             </div>
             
@@ -2686,6 +2687,29 @@
                             <button class="btn btn-small btn-secondary" onclick="loadDailySpend()">↻ Refresh</button>
                         </div>
                         <div id="dailySpendContent">
+                            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- System Status Tab (Super Admin only, 2026-10-02) -->
+            <div id="settings-tab-opsStatus" class="settings-tab-content" style="display: none;">
+                {% if current_user_role == 'super_admin' %}
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🩺 System Status</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            One light for the whole system. Green means the deployed build matches main, the deploy smoke passed, last night's checks passed, the intake canary ran clean, and every scheduled job ran on time. Each card below says which one is not true.
+                        </p>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <span id="opsStatusUpdatedAt" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            <button class="btn btn-small btn-secondary" onclick="loadOpsStatus()">↻ Refresh</button>
+                        </div>
+                        <div id="opsStatusContent">
                             <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                         </div>
                     </div>
@@ -6912,12 +6936,100 @@
             if (tabName === 'defaultProfilePhoto') {
                 loadDefaultProfilePhotoUI();
             }
+            if (tabName === 'opsStatus') {
+                loadOpsStatus();
+            }
             if (tabName === 'dailySpend') {
                 loadDailySpend();
             }
         }
 
         // Daily Spend (Settings, super_admin only)
+        // System Status tile (2026-10-02 RCA W3). Reads /api/admin/ops-status,
+        // which folds the build server heartbeat, the post-deploy smoke, the
+        // nightly corrections triage and the publish lock into one payload.
+        async function loadOpsStatus() {
+            const content = document.getElementById('opsStatusContent');
+            const updatedAt = document.getElementById('opsStatusUpdatedAt');
+            if (!content) return;
+            content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>';
+            const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const when = (iso) => iso ? String(iso).slice(0, 16).replace('T', ' ') + ' UTC' : 'never';
+            const ago = (min) => (min == null) ? '' : (min < 60 ? `${min} min ago` : (min < 2880 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} d ago`));
+            const LIGHT = {green: '#22c55e', amber: '#f59e0b', red: '#ef4444'};
+            const dot = (color) => `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle;"></span>`;
+            const lightOf = (ok, pending) => pending ? LIGHT.amber : (ok === true ? LIGHT.green : (ok === false ? LIGHT.red : LIGHT.amber));
+            const card = (title, color, lines) => `
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem;">
+                    <div style="font-weight: 600; margin-bottom: 0.4rem;">${dot(color)}${esc(title)}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">${lines.join('<br>')}</div>
+                </div>`;
+            try {
+                const res = await fetch('/api/admin/ops-status', { credentials: 'same-origin' });
+                const d = await res.json();
+                if (!res.ok || !d || d.success === false) {
+                    content.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">${esc((d && d.error) || 'Status is not available right now.')}</div>`;
+                    return;
+                }
+                if (updatedAt) updatedAt.textContent = 'Read ' + when(d.generated_at);
+                const hb = d.heartbeat || {}, prod = d.prod || {}, smoke = d.smoke || {}, canary = d.canary || {};
+                const corr = d.corrections || {}, lock = d.publish_lock || {};
+                const overall = `
+                    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.9rem 1rem;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);margin-bottom:0.75rem;">
+                        <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${LIGHT[d.light] || LIGHT.amber};"></span>
+                        <div>
+                            <div style="font-weight:700;font-size:1.05rem;">${d.light === 'green' ? 'All clear' : (d.light === 'red' ? 'Needs attention' : 'Check')}</div>
+                            <div style="font-size:0.85rem;color:var(--text-secondary);">${(d.reasons && d.reasons.length) ? d.reasons.map(esc).join('<br>') : 'Deployed build matches main, smoke passed, checks passed, canary clean, jobs on time.'}</div>
+                        </div>
+                    </div>`;
+                const deployOk = prod.deploy_state === 'deployed';
+                const prodLines = [
+                    `Serving <code>${esc(prod.version || '?')}</code>${prod.main_sha ? ` · main <code>${esc(prod.main_sha)}</code>` : ''}`,
+                    prod.deploy_state === 'pending' ? `Deploy pending for ${esc(prod.lag_min)} min` : (deployOk ? `Deployed ${when(prod.deployed_at)}` : (prod.deploy_state ? `Deploy state: ${esc(prod.deploy_state)}` : 'No deploy record yet')),
+                    prod.this_process_version && prod.this_process_version !== prod.version ? `This page is served by <code>${esc(prod.this_process_version)}</code>` : '',
+                ].filter(Boolean);
+                const smokeLines = smoke.present ? [
+                    `${smoke.result === 'green' ? 'Passed' : 'Failed'} on <code>${esc(smoke.sha)}</code> · ${esc((smoke.total || 0) - (smoke.failed || 0))}/${esc(smoke.total)} checks · ${when(smoke.ran_at)}`,
+                    ...(smoke.failing || []).map(f => `✗ ${esc(f)}`),
+                ] : ['No smoke run recorded yet'];
+                const canaryLines = canary.present ? [
+                    `${esc(canary.date)}: ${canary.result === 'green' ? 'all' : esc((canary.total || 0) - (canary.stalled || 0)) + ' of'} ${esc(canary.total)} briefs completed${canary.stalled ? `, ${esc(canary.stalled)} stalled` : ''}`,
+                ] : ['No canary summary for today yet'];
+                const regLines = (d.regression || []).length ? d.regression.map(r =>
+                    `${r.result === 'green' ? '✓' : '✗'} ${esc(r.name)}: ${r.result === 'crashed' ? 'runner crashed' : `${esc(r.passed)}/${esc(r.total)} passed`}${(r.failing || []).length ? ` · failing: ${r.failing.map(esc).join(', ')}` : ''}`
+                ) : ['No regression results yet'];
+                const regOk = (d.regression || []).length ? d.regression.every(r => r.result === 'green') : null;
+                const timers = d.timers || [];
+                const overdue = timers.filter(t => t.overdue);
+                const timerLines = timers.length ? [
+                    `${timers.length} scheduled jobs${overdue.length ? `, ${overdue.length} overdue` : ', all on time'}`,
+                    ...overdue.map(t => `✗ ${esc(t.unit)} last ran ${ago(t.last_age_min) || 'never'}`),
+                    ...(hb.failed_units || []).map(u => `✗ ${esc(u)} is in the failed state`),
+                ] : ['No timer data in the heartbeat'];
+                const corrLines = corr.present ? [
+                    `${esc(corr.open)} open · ${esc(corr.applied)} applied (${esc(corr.applied_last_7d)} this week) · ${esc(corr.banked)} banked as checks`,
+                    `Replay of applied corrections: ${esc(corr.replay || 'unknown')}${corr.replay_failed ? ` (${esc(corr.replay_failed)} failing)` : ''} · ${when(corr.generated_at)}`,
+                ] : ['No triage run yet'];
+                const lockLines = lock.held ? [
+                    `Held by ${esc(lock.owner)} since ${when(lock.acquired_at)}${lock.note ? ` · ${esc(lock.note)}` : ''}`,
+                    `Expires ${when(lock.expires_at)}`,
+                ] : ['Free'];
+                content.innerHTML = overall + `
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:0.75rem;">
+                        ${card('Production', lightOf(prod.reachable && (deployOk || prod.deploy_state == null), prod.deploy_state === 'pending'), prodLines)}
+                        ${card('Deploy smoke', lightOf(smoke.present ? smoke.result === 'green' : null), smokeLines)}
+                        ${card('Nightly checks', lightOf(regOk), regLines)}
+                        ${card('Intake canary', lightOf(canary.present ? canary.result === 'green' : null), canaryLines)}
+                        ${card('Scheduled jobs', lightOf(timers.length ? (!overdue.length && !(hb.failed_units || []).length) : null), timerLines)}
+                        ${card('Corrections', lightOf(corr.present ? (corr.replay !== 'red' && !(corr.open > 0 && corr.applied === 0)) : null), corrLines)}
+                        ${card('Publish lock', lock.held ? LIGHT.amber : LIGHT.green, lockLines)}
+                        ${card('Heartbeat', lightOf(hb.present ? (hb.age_min != null && hb.age_min <= 120) : null), hb.present ? [`From ${esc(hb.host || 'build server')} ${ago(hb.age_min)} (${when(hb.generated_at)})`] : ['No heartbeat yet'])}
+                    </div>`;
+            } catch (e) {
+                content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Status is not available right now.</div>';
+            }
+        }
+
         async function loadDailySpend() {
             const content = document.getElementById('dailySpendContent');
             const updatedAt = document.getElementById('dailySpendUpdatedAt');

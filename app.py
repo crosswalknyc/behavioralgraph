@@ -23303,6 +23303,27 @@ def _migrate_legacy_hidden_product_keys(hidden_products: dict) -> dict:
     return out
 
 
+@app.route('/api/admin/ops-status', methods=['GET'])
+@requires_super_admin
+def api_admin_ops_status():
+    """System Status tile (2026-10-02 RCA W3): the build server's hourly
+    heartbeat, the post-deploy smoke, the nightly corrections triage and
+    the publish lock, folded into one payload by migration.ops_status.
+    Read-only; every section degrades to present: False on its own."""
+    try:
+        from migration.ops_status import build_payload
+        payload = build_payload(s3_client, S3_BUCKET, this_version=APP_BUILD_VERSION)
+    except Exception as e:
+        print(f"[ops-status] payload failed: {e}")
+        payload = {'success': False, 'light': 'amber',
+                   'reasons': ['status documents could not be read right now'],
+                   'error': 'status unavailable'}
+    resp = jsonify(payload)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
 @app.route('/api/admin/live-features', methods=['GET'])
 @requires_auth
 def get_live_features():
