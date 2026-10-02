@@ -113980,7 +113980,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (meta) meta.textContent = copy.eyebrow || ((d.meta && d.meta.window) || '');
             var art = document.getElementById('jiqFragArt');
             if (art) {
-                var hero = art.getAttribute('data-ys-hero') || '';
+                // A stored run names its own still. The Young Sheldon
+                // photo is only the fallback for the Young Sheldon read;
+                // any other journey without a still draws its initials.
+                var hero = (p && p.hero_image)
+                        || (d.meta && d.meta.hero_image)
+                        || (fullMeta && fullMeta.hero_image) || '';
+                var _ysMode = (fullMeta && fullMeta.story_mode) || (d.meta && d.meta.story_mode) || '';
+                if (!hero && _ysMode === 'young_sheldon_pvod') {
+                    hero = art.getAttribute('data-ys-hero') || '';
+                }
+                if (hero === '__JIQ_DEFAULT_HERO__') {
+                    hero = art.getAttribute('data-default-hero') || '';
+                }
                 var subject = (fullMeta && (fullMeta.customer_brand || fullMeta.target_name))
                     || 'Young Sheldon';
                 if (hero) {
