@@ -187048,6 +187048,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
     #jiqMusicArt::after {
         background: linear-gradient(90deg, var(--cw-page, #111F22) 0%, rgba(17,31,34,0) 18%);
     }
+    #jiqMusicCatalogCard .jiq-frag-cover {
+        align-items: start;
+        grid-template-columns: minmax(0, 1fr) 260px;
+    }
+    #jiqMusicArt.jiq-frag-art {
+        align-self: start;
+        width: 260px;
+        min-height: 0;
+        height: auto;
+        aspect-ratio: 2 / 3;
+    }
+    #jiqMusicArt img {
+        object-fit: cover;
+        object-position: center center;
+    }
     #jiqMusicArt.is-mosaic {
         display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
     }
