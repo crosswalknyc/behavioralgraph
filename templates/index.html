@@ -80848,28 +80848,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _synthChatClearDateState();
         }
 
-        function _pmShouldAnalyze(text, ctx) {
-            var t = String(text || '').trim();
-            if (!t) return false;
-            // Explicit build / pipeline asks always go to the
-            // interpret flow. Everything past these trivial vetoes is
-            // the server router's decision (2026-08-28): it answers,
-            // generates the measured read, or hands back a
-            // route_hint that re-routes to the interpret flow.
-            if (/\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}\bprofiles?\b/i.test(t)) return false;
-            if (/\b(cut|slice)\b[^.]{0,40}\bby\b/i.test(t)) return false;
-            if (/\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b/i.test(t)) return false;
-            // With data open, analyze is the default surface.
-            if (ctx) return true;
-            // Nothing open: question-shaped and KPI asks still
-            // resolve there (measured read, grounded confirm, or the
-            // open-something nudge). Anything else stays with the
-            // interpret flow.
-            if (_pmLooksMetricKpi(t)) return true;
-            if (/\?\s*$/.test(t)) return true;
-            if (/^(what|which|who|whose|how|why|where|when|do|does|did|are|is|was|were|can|could|would|should|show me|tell me|give me|compare|analy[sz]e|top \d|break ?down)\b/i.test(t)) return true;
-            return false;
-        }
 
         // ===================== ANALYSIS MODE MENU (2026-08-21) =====================
         // Jenna: "if you click analyze it should give you chips under
@@ -80934,21 +80912,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ] });
         }
 
-        function _pmIsAnalyzeMenuAsk(text) {
-            return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
-                .test(String(text || '').trim());
-        }
-
-        function _pmIsOpenTabsCompareAsk(text) {
-            var t = String(text || '').trim();
-            return /^compare\b/i.test(t) && /\b(open|tabs)\b/i.test(t) &&
-                !/\bselected cuts\b/i.test(t);
-        }
-
-        function _pmIsCompareOthersAsk(text) {
-            return /^compare (this |it )?(against|vs\.?|with|to) other (profiles?|data|audiences?)[.!?]?$/i
-                .test(String(text || '').trim());
-        }
 
         // Map a message to an analysis mode the backend has tailored
         // instructions for. Explicit mode args win over this.
@@ -80964,179 +80927,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             return null;
         }
 
-        // ============= SEARCH-JOURNEY DEMAND ROUTING (2026-08-26) =============
-        // Questions about how people FIND a title or brand (search
-        // demand, first touch, rival-platform hunt, destination search)
-        // route to the analyze endpoint with mode='search_demand'. They
-        // carry their own subject, so no open profile is required.
-        // Mirrors detect_search_demand_intent in prometheus_analysis.py.
-        function _pmLooksSearchDemand(text) {
-            var t = String(text || '');
-            if (!t.trim()) return false;
-            if (/\bsearch demand\b/i.test(t)) return true;
-            if (/\bsearch[- ]journey\b/i.test(t)) return true;
-            if (/\bsearch[- ]to[- ]play\b/i.test(t)) return true;
-            if (/\bfirst[- ]touch(ed|ing)?\b/i.test(t)) return true;
-            if (/\bdestination (search|share)\b/i.test(t)) return true;
-            if (/\b(netflix|hulu|hbo max|max|prime video|prime|disney\+?|peacock|paramount\+?|apple tv\+?|tubi|starz|youtube) hunt\b/i.test(t)) return true;
-            if (/\bhow (are|were|do|did|is|was) (people|viewers|users|searchers|audiences?|everyone|subscribers) (find|finding|discover|discovering|first[- ]touch)/i.test(t)) return true;
-            if (/\bwhat('?s| is| was) the search (demand|interest|volume)\b/i.test(t)) return true;
-            if (/\bwhere[- ]to[- ]watch search/i.test(t)) return true;
-            return false;
-        }
 
-        // ============= SUBSCRIBER IQ ROUTING (2026-08-26) =============
-        // Subscriber IQ pulls (product-name asks, signup/acquisition
-        // attribution, first watch, title-tied churn or win-back,
-        // subscriber impact) always fall through to the interpret
-        // flow, even when a profile is open on screen - the page-aware
-        // analysis routing must never hijack them. Typo tolerant: each
-        // token's letters are counted against the key vocabulary so
-        // 'subscriber aqcuisiont' and 'subsciber' still match.
-        // Mirrors subiq_intent.py (detect_subscriber_iq_intent);
-        // scripts/test_subiq_intent_coverage.py enforces the sync.
-        var _PM_SUBIQ_CANON = ['subscriber', 'subscribers', 'subscribed',
-            'subscribes', 'subscribe', 'subscription', 'subscriptions',
-            'acquisition', 'acquisitions', 'attribution', 'reactivation',
-            'reactivations', 'reactivated', 'cancellation',
-            'cancellations', 'signup', 'signups'];
-        function _pmSubIqLetterDiff(a, b) {
-            var ca = {}, cb = {}, k, d = 0, i;
-            for (i = 0; i < a.length; i++) ca[a[i]] = (ca[a[i]] || 0) + 1;
-            for (i = 0; i < b.length; i++) cb[b[i]] = (cb[b[i]] || 0) + 1;
-            for (k in ca) d += Math.max(0, ca[k] - (cb[k] || 0));
-            for (k in cb) d += Math.max(0, cb[k] - (ca[k] || 0));
-            return d;
-        }
-        function _pmSubIqCanonToken(tok) {
-            if (tok.length < 5 || _PM_SUBIQ_CANON.indexOf(tok) !== -1) return tok;
-            var best = null, bestDiff = 3;
-            for (var i = 0; i < _PM_SUBIQ_CANON.length; i++) {
-                var c = _PM_SUBIQ_CANON[i];
-                if (c[0] !== tok[0]) continue;
-                if (Math.abs(c.length - tok.length) > 2) continue;
-                if (c.indexOf('q') !== -1 && tok.indexOf('q') === -1) continue;
-                var diff = _pmSubIqLetterDiff(tok, c);
-                if (diff < bestDiff) { bestDiff = diff; best = c; }
-            }
-            return (best && bestDiff <= 2) ? best : tok;
-        }
-        function _pmSubIqNormalize(text) {
-            var t = String(text || '').toLowerCase()
-                .replace(/[\u2018\u2019\u02bc'`]/g, '')
-                .replace(/[^a-z0-9+]+/g, ' ')
-                .replace(/\s+/g, ' ').trim();
-            if (!t) return '';
-            t = ' ' + t.split(' ').map(_pmSubIqCanonToken).join(' ') + ' ';
-            t = t.replace(/ sign ups /g, ' signups ')
-                 .replace(/ sign up /g, ' signup ')
-                 .replace(/ win back /g, ' winback ')
-                 .replace(/ win backs /g, ' winbacks ');
-            return t.replace(/^\s+|\s+$/g, '');
-        }
-        var _PM_SUBIQ_PRODUCT = [
-            /\bsub(?:scri\w*)?s? ?iq\b/,
-            /\b(?:signups?|subscri\w*|acquisitions?|subs?) trackers?\b/
-        ];
-        var _PM_SUBIQ_VETO = [
-            /\b(?:build|make|create|pull|run|generate|queue|derive|spin up)\b[^.?!]{0,50}\b(?:profile|audience|universe|persona|cut)s?\b/,
-            /\b(?:profile|audience|universe|cohort|persona)s? (?:of|for|on)\b/,
-            /\bpeople who\b/,
-            /\b(?:viewers|users|subscri\w*|fans|members|customers|households|adults|shoppers|buyers) who\b/,
-            /\b(?:subscri\w*|audience|viewers?) demographics?\b/,
-            /\bdemographics? (?:of|for|breakdown)\b/,
-            /\bdemo breakdown\b/,
-            /\bsearch demand\b/,
-            /\bsearch journey\b/,
-            /\bfirst touch\w*\b/,
-            /\bsearch to play\b/,
-            /\bwhere to watch\b/,
-            /\bhow (?:are|were|do|did|is|was) (?:people|viewers|users|searchers|audiences?|everyone|subscribers) (?:find|finding|discover|discovering)\b/,
-            /\bswitchers?\b/,
-            /\bchurned (?:from|off|out of|away from)\b/,
-            /\bhow many (?:panelists?|panel|sample)\b/,
-            /\bhow many (?:subscri\w*|subs|members) (?:does|do|did)\b/,
-            /\bsubscri\w* counts?\b/,
-            /\b(?:avid|casual) fans?\b/
-        ];
-        var _PM_SUBIQ_FAMILIES = [
-            /\b(?:subscri\w*|signups?|subs?) acquisitions?\b/,
-            /\bacquisitions? (?:drivers?|analysis|report|read|numbers|story|breakdown|attribution|funnel|split|deck)\b/,
-            /\bacquisitions? (?:for|on)\b/,
-            /\b(?:signups?|subscri\w*|subs) attribution\b/,
-            /\battribution (?:of|for|on) (?:signups?|subscri\w*|subs)\b/,
-            /\b(?:drove|drive|drives|driving|driven|brought|bring|brings|bringing)\b[^.?!]{0,40}\b(?:signups?|subscri\w*|subs)\b/,
-            /\b(?:signups?|subscri\w*|subs)\b[^.?!]{0,30}\b(?:driven by|attributed to|because of|thanks to|due to)\b/,
-            /\b(?:subscri\w*|subs|signups?) (?:gained|added|acquired|won)\b/,
-            /\bnew (?:subscri\w*|subs|signups?) (?:from|off|because|after|thanks|due)\b/,
-            /\b(?:who|how many(?: people| viewers| users| folks)?) (?:signed up|subscribed|joined)\b/,
-            /\bsign(?:ed|s)? up (?:because|after|for|off|from|thanks|due)\b/,
-            /\bsubscribed (?:because|after|for|off|from|thanks|due)\b/,
-            /\bjoin(?:ed|s|ing)?\b[^.?!]{0,25}\b(?:because of|to watch|for)\b/,
-            /\b\w+ driven signups?\b/,
-            /\bsignups? (?:for|from|off)\b/,
-            /\bconversion to (?:subscri\w*|subs|signups?)\b/,
-            /\bfirst watch\w*\b/,
-            /\bfirst (?:title|show|series|movie|thing|content) (?:watched|streamed|played|viewed)\b/,
-            /\bwatch(?:ed)? first\b/,
-            /\bfirst stream\w*\b/,
-            /\bentry title\b/,
-            /\bfront door title\b/,
-            /\bgateway (?:title|show|series)\b/,
-            /\bcancell?ations? (?:after|when|following|during|spike)\b/,
-            /\bchurn\w* (?:after|when|following|during)\b/,
-            /\b(?:did|do|will|are) (?:people|subscri\w*|subs|viewers|users|anyone|they) (?:leave|leaving|cancel|churn|drop|unsubscribe)\b/,
-            /\b(?:leave|left|cancell?ed|churned) (?:when|after|once)\b/,
-            /\bwin ?backs?\b/,
-            /\breactivat\w*\b/,
-            /\bdormant (?:subscri\w*|subs|accounts?|users)\b/,
-            /\b(?:subscri\w*|subs|accounts?) (?:coming|came|come) back\b/,
-            /\bretention (?:after|through|during|impact)\b/,
-            /\b(?:subscri\w*|subs) (?:lost|churned)\b/,
-            /\b(?:subscri\w*|signups?) impact\b/,
-            /\bsubscri\w* (?:lift|bump|effect)\b/,
-            /\bsignups? (?:during|over|around) (?:the )?\w+/,
-            /\b(?:finale|premiere|launch) (?:week )?signups?\b/,
-            /\bimpact on (?:signups?|subscri\w*|subs)\b/
-        ];
-        function _pmLooksSubscriberIq(text) {
-            var t = _pmSubIqNormalize(text);
-            if (!t) return false;
-            var i;
-            for (i = 0; i < _PM_SUBIQ_PRODUCT.length; i++) {
-                if (_PM_SUBIQ_PRODUCT[i].test(t)) return true;
-            }
-            for (i = 0; i < _PM_SUBIQ_VETO.length; i++) {
-                if (_PM_SUBIQ_VETO[i].test(t)) return false;
-            }
-            for (i = 0; i < _PM_SUBIQ_FAMILIES.length; i++) {
-                if (_PM_SUBIQ_FAMILIES[i].test(t)) return true;
-            }
-            return false;
-        }
-        // Ambiguous churn / retention asks (2026-08-26): churn
-        // vocabulary with no title event ('Peacock churn', bare
-        // 'retention') falls through to the interpret flow, which
-        // asks whether the user wants the churn and cancellation
-        // read or an audience profile of the churned subscribers.
-        // Mirrors subiq_intent.ambiguous_churn_subject.
-        var _PM_SUBIQ_CHURN_HINT = /\b(?:churn\w*|retention|cancell?ations?)\b/;
-        var _PM_SUBIQ_CHURN_COHORT = [
-            /\b(?:build|make|create|pull|run|generate|queue|derive|spin up)\b[^.?!]{0,50}\b(?:profile|audience|universe|persona|cut)s?\b/,
-            /\b(?:profile|audience|universe|cohort|persona)s? (?:of|for|on)\b/,
-            /\bpeople who\b/,
-            /\b(?:viewers|users|subscri\w*|fans|members|customers|households|adults|shoppers|buyers) who\b/
-        ];
-        function _pmLooksAmbiguousChurn(text) {
-            var t = _pmSubIqNormalize(text);
-            if (!t) return false;
-            if (_pmLooksSubscriberIq(text)) return false;
-            if (!_PM_SUBIQ_CHURN_HINT.test(t)) return false;
-            for (var i = 0; i < _PM_SUBIQ_CHURN_COHORT.length; i++) {
-                if (_PM_SUBIQ_CHURN_COHORT[i].test(t)) return false;
-            }
-            return true;
-        }
 
         // Other profiles open as dashboard tabs (beyond the active one).
         function _pmOtherOpenTabs(ctx) {
@@ -81333,8 +81124,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         // Server-side decision (2026-10-01, Prometheus v1). One small
-        // call, no model, ~50ms. Null on any failure so the caller can
-        // fall back to the browser detectors.
+        // call, no model, ~50ms. Null on any failure; the caller retries
+        // once and then holds the ask (there is no browser-side router).
         async function _pmUnderstand(text, ctx) {
             try {
                 var r = await fetch('/api/prometheus/v1/understand', {
@@ -82442,73 +82233,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
 
             // ===== PROMETHEUS ROUTING (2026-10-01: the server decides) =====
-            // understand() on the server owns the question / build /
-            // deck call for every client. The widget keeps only its own
-            // UI state (an armed compare picker) and opens dashboard
-            // pickers when the decision says so. If the decision call
-            // itself fails, the legacy browser detectors below still
-            // route, so a blip never strands an ask.
+            // understand() on the server owns the question / build / deck
+            // call for every client. The widget keeps only its own UI
+            // state (an armed compare picker) and opens dashboard pickers
+            // when the decision says so. The decision call retries once;
+            // if it still cannot be reached the ask stays in the composer
+            // with a short note instead of being guessed at in the browser.
             var _pmCtx = _pmCollectPageContext();
             var _pmDecision = await _pmUnderstand(text, _pmCtx);
-            if (_pmDecision) {
-                if (_pmDecision.surface === 'deck') {
-                    await _pmStartDeck(text);
-                    return;
-                }
-                if (_pmCompareArmed || /^compare with[:\s]/i.test(text)) {
-                    if (await _pmHandleCompareReply(text, _pmCtx)) return;
-                }
-                var _pmActed = await _pmActOnDecision(_pmDecision, text, _pmCtx);
-                if (_pmActed !== 'interpret') return;
-                // interpret: a build / cut / refresh ask, or the analyst
-                // handed a no-context question back. Fall through.
-            } else {
-            // ----- fallback: legacy page-aware routing (2026-08-20) -----
-            if (_pmLooksLikeDeckAsk(text)) {
-                await _pmStartDeck(text);
+            if (!_pmDecision) _pmDecision = await _pmUnderstand(text, _pmCtx);
+            if (!_pmDecision) {
+                synthChatPushTurn('agent',
+                    'I could not reach the server for a moment. ' +
+                    'Your message is back in the box. Send it again.');
+                var _pmInp = document.getElementById('synthChatInput');
+                if (_pmInp && !_pmInp.value) _pmInp.value = text;
                 return;
             }
-            // Subscriber IQ asks bypass the page-aware analysis
-            // routing entirely (2026-08-26): they are build requests
-            // for the interpret flow, even when a profile is open.
-            var _pmSubIqAsk = _pmLooksSubscriberIq(text) ||
-                _pmLooksAmbiguousChurn(text);
-            // Analysis mode menu (2026-08-21 Jenna): the bare "Analyze
-            // this data" chip opens a menu of analysis modes instead of
-            // firing one generic read. Specific asks still flow straight
-            // through.
-            if (_pmIsAnalyzeMenuAsk(text)) {
-                _pmShowAnalyzeMenu(_pmCtx);
+            if (_pmDecision.surface === 'deck') {
+                await _pmStartDeck(text);
                 return;
             }
             if (_pmCompareArmed || /^compare with[:\s]/i.test(text)) {
                 if (await _pmHandleCompareReply(text, _pmCtx)) return;
             }
-            if (_pmIsOpenTabsCompareAsk(text)) {
-                await _pmCompareOpenTabs(text, _pmCtx);
-                return;
-            }
-            if (_pmIsCompareOthersAsk(text)) {
-                _pmShowComparePicker(_pmCtx);
-                return;
-            }
-            if (!_pmSubIqAsk && _pmLooksSearchDemand(text)) {
-                var _pmOutcomeSd = await _pmAnalyze(text, _pmCtx,
-                                                    'search_demand');
-                if (_pmOutcomeSd !== 'reroute') return;
-            }
-            var _pmMode = _pmSubIqAsk ? null : _pmModeForText(text);
-            if (_pmMode && _pmCtx) {
-                var _pmOutcomeM = await _pmAnalyze(text, _pmCtx, _pmMode);
-                if (_pmOutcomeM !== 'reroute') return;
-            }
-            if (!_pmSubIqAsk && _pmShouldAnalyze(text, _pmCtx)) {
-                var _pmOutcome = await _pmAnalyze(text, _pmCtx);
-                if (_pmOutcome !== 'reroute') return;
-                // reroute: the analyst says this is a build ask; fall
-                // through to interpret with the same text.
-            }
-            }
+            var _pmActed = await _pmActOnDecision(_pmDecision, text, _pmCtx);
+            if (_pmActed !== 'interpret') return;
+            // interpret: a build / cut / refresh ask, or the analyst
+            // handed a no-context question back. Fall through.
 
             btn.disabled = true;
             var prev = btn.textContent;
