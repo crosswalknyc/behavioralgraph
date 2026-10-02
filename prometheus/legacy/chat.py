@@ -5510,6 +5510,18 @@ def _ask_logged(surface):
                     view = 'profileIQ'
             except Exception:
                 pass
+            # What the user did next (2026-10-02): a repeat of the
+            # prior ask or a push-back phrase grades the PRIOR reply
+            # failed. Computed before the handler runs so a route can
+            # read g._pm_user_signal and stop replaying the same
+            # answer (S5); recorded on this ask under extra.
+            user_sig = None
+            try:
+                from prometheus import user_signal as _us
+                user_sig = _us.detect(question, ask_history)
+                _g._pm_user_signal = user_sig
+            except Exception:
+                user_sig = None
             try:
                 resp = fn(*args, **kwargs)
             except Exception:
@@ -5603,6 +5615,13 @@ def _ask_logged(surface):
                         ask_history,
                         session.get('username') or getattr(_g, '_pm_ask_user', None) or '',
                         t0)
+                if user_sig:
+                    merged = {'user_signal': user_sig.get('signal'),
+                              'rejects': str(user_sig.get('prior_question')
+                                             or '')[:120]}
+                    for k, v in (extra or {}).items():
+                        merged.setdefault(k, v)
+                    extra = merged
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
