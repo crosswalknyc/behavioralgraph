@@ -5302,6 +5302,160 @@ def _pm_ask_apply_taxonomy(surface, payload, status_code, history,
         return base_outcome, (extra or None)
 
 
+_PM_GATE_HELD_MESSAGE = (
+    "I did not land a clean answer on that one. I am looking at it now "
+    "and will email you the read.")
+_PM_GATE_TASK_MESSAGE = (
+    "I read that as a task, not a profile to build. Which audience "
+    "should this be on? Name the show, brand, or person (one line is "
+    "enough) and I will take it from there.")
+_PM_GATE_RETRY_BUDGET_S = 45
+_PM_GATE_HELD = frozenset({'empty', 'faulted'})
+
+
+def _pm_unpack_resp(resp):
+    """(actual_response, status_code, payload, envelope) for a Flask
+    view return. `envelope` is the v1 {kind, surface, raw} wrapper when
+    the body carried one (payload is then the legacy raw body), else
+    None."""
+    status_code, payload, envelope = 200, None, None
+    actual = resp
+    if isinstance(resp, tuple) and resp:
+        actual = resp[0]
+        if len(resp) > 1 and isinstance(resp[1], int):
+            status_code = resp[1]
+    try:
+        payload = actual.get_json(silent=True)
+    except Exception:
+        payload = None
+    if isinstance(payload, dict) and isinstance(payload.get('raw'), dict) \
+            and payload.get('surface') in ('interpret', 'analyze', 'deck'):
+        envelope = payload
+        payload = payload['raw']
+    return actual, status_code, payload, envelope
+
+
+def _pm_draft_decision(payload):
+    """The build decision a reply carries, if any."""
+    if not isinstance(payload, dict):
+        return ''
+    for src in (payload, payload.get('draft'), payload.get('spec'),
+                payload.get('data')):
+        if isinstance(src, dict) and src.get('decision'):
+            return str(src.get('decision') or '')
+    return ''
+
+
+def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
+                    surface, outcome, extra, question, history,
+                    username, t0):
+    """The only exit for a reply (2026-10-02 RCA). A reply the user
+    should never receive (empty, transport text, scaffold labels, a
+    build card for a task) does not leave this function as-is:
+
+      1. empty / faulted on the answer surface: one retry inside the
+         request budget, keeping the retried answer when it is clean;
+      2. still held: the honest reply ("I will email you the read") plus
+         the manual-look email so a human closes the loop;
+      3. a new-build draft for an ask that reads as a task: the
+         which-audience question instead of the card.
+
+    Returns (resp, payload, status_code, outcome, extra). Never raises;
+    on any internal failure the original reply passes through."""
+    extra = dict(extra or {})
+    try:
+        from flask import g as _g
+        from prometheus import ask_outcome as _ao
+        if not isinstance(payload, dict):
+            return resp, payload, status_code, outcome, (extra or None)
+        _, _, _, envelope = _pm_unpack_resp(resp)
+        result = str(extra.get('result') or outcome or '')
+        # Async acknowledgements (a queued job) are answers.
+        if (payload.get('job_id') or payload.get('read_job_id')
+                or payload.get('pending')):
+            return resp, payload, status_code, outcome, (extra or None)
+
+        held = result in _PM_GATE_HELD
+        mismatched = False
+        try:
+            from prometheus import guards as _pg
+            if surface == 'interpret' and _pm_draft_decision(payload) \
+                    in ('new_build',) and status_code < 400 \
+                    and _pg.reads_as_task(question):
+                mismatched = True
+        except Exception:
+            pass
+        if not held and not mismatched:
+            return resp, payload, status_code, outcome, (extra or None)
+
+        # 1. one retry on the answer surface
+        if held and surface == 'analyze' \
+                and (time.time() - t0) < _PM_GATE_RETRY_BUDGET_S \
+                and not getattr(_g, '_pm_gate_retried', False):
+            _g._pm_gate_retried = True
+            try:
+                resp2 = fn(*args, **kwargs)
+                _, sc2, pl2, _ = _pm_unpack_resp(resp2)
+                oc2, det2 = _ao.classify(surface, pl2, sc2, history,
+                                         outcome)
+                if isinstance(pl2, dict) and oc2 not in _PM_GATE_HELD:
+                    extra['gate'] = 'retry_ok'
+                    extra['result'] = oc2
+                    for k, v in (det2 or {}).items():
+                        extra[k] = v
+                    final = oc2 if oc2 in _PM_TAXONOMY_OVERRIDES \
+                        else outcome
+                    if final in _PM_GATE_HELD:
+                        final = 'answered'
+                    return resp2, pl2, sc2, final, extra
+                extra['gate'] = 'retry_held'
+            except Exception:
+                _pm_swallow('answer-gate retry')
+
+        # 2 / 3. honest reply, never the broken one
+        if mismatched:
+            new_payload = {'success': False, 'guidance': True,
+                           'error': _PM_GATE_TASK_MESSAGE}
+            new_status = 400
+            outcome = 'mismatched'
+            extra['gate'] = 'task_not_build'
+            extra['result'] = 'mismatched'
+            told = _PM_GATE_TASK_MESSAGE
+            reason = ('The ask reads as an analysis task but the '
+                      'interpret step drafted a new profile build; the '
+                      'user was asked which audience instead of being '
+                      'shown the build card.')
+        else:
+            new_payload = dict(payload)
+            for k in ('answer', 'message', 'text', 'markdown', 'html'):
+                new_payload.pop(k, None)
+            new_payload['reply'] = _PM_GATE_HELD_MESSAGE
+            new_payload['success'] = True
+            new_payload['gate'] = 'held'
+            new_status = 200
+            extra['gate'] = extra.get('gate') or 'held'
+            told = _PM_GATE_HELD_MESSAGE
+            reason = ('The reply came back ' + result + ' (blank, '
+                      'transport text, or scaffold labels), so the user '
+                      'was told the read will come by email. Please '
+                      'send it.')
+        try:
+            _H._prometheus_manual_look_email(question, told, reason,
+                                             user_email=username or None)
+        except Exception:
+            traceback.print_exc()
+        body = new_payload
+        if envelope is not None:
+            body = dict(envelope)
+            body['raw'] = new_payload
+        new_resp = jsonify(body)
+        return (new_resp, new_status), new_payload, new_status, \
+            outcome, extra
+    except Exception:
+        traceback.print_exc()
+        return resp, payload, status_code, outcome, (extra or None)
+
+
 def _ask_logged(surface):
     """Wrap a chatbot route so every question is recorded to the ask
     log with route, outcome, and response time. Fire-and-forget."""
@@ -5409,6 +5563,17 @@ def _ask_logged(surface):
                     log_surface, payload, status_code, ask_history,
                     outcome, question,
                     session.get('username') or getattr(_g, '_pm_ask_user', None) or '')
+                # Answer gate (2026-10-02 RCA): the only exit. A held
+                # reply is retried once, then replaced with the honest
+                # email promise; a build card for a task becomes the
+                # which-audience question.
+                resp, payload, status_code, outcome, extra = \
+                    _pm_answer_gate(
+                        fn, args, kwargs, resp, payload, status_code,
+                        log_surface, outcome, extra, question,
+                        ask_history,
+                        session.get('username') or getattr(_g, '_pm_ask_user', None) or '',
+                        t0)
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
