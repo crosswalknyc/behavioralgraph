@@ -19030,6 +19030,16 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             overflow: hidden !important;
             gap: 2px !important;
         }
+        /* The copy column is a fixed 132px tall so it frames to the portrait.
+           Flex children default to flex-shrink:1, so on tabs with the extra
+           pills row (Demographics/Behavioral) the stack exceeds 132px and the
+           children get squeezed BELOW their own text height - the one-liner
+           then rides up over the name. Pin every child to its content height
+           so they stack cleanly and any overflow is clipped instead. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #piqHeroCopy > * {
+            flex: 0 0 auto !important;
+            min-height: 0 !important;
+        }
         :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileHeaderRow #dashProfileInfo #dashHeroEyebrow {
             font-size: 9px !important;
             letter-spacing: 0.1em !important;
