@@ -16467,6 +16467,39 @@ def _all_numerics_in_row(row, start_idx=1, max_count=4):
             result.append((parse_number(row[j]), j))
     return result
 
+def _subiq_month_row_fields(row):
+    """Read a MONTHLY PLATFORM SIGNUPS / CHURN row regardless of layout.
+
+    Current library layout (10 cols):
+        month, '', count, label, secondary, label, '', '', pct, gen_pop
+    Legacy layout (9 cols):
+        month, count, label, secondary, label, '', '', pct, gen_pop
+    Returns stripped strings; missing cells come back ''.
+    """
+    cells = [str(c).strip() for c in (row or [])]
+
+    def _at(i):
+        return cells[i] if 0 <= i < len(cells) else ''
+
+    shift = 1 if (_at(1) == '' and _at(2) != '') else 0
+    pct = ''
+    gen_pop = ''
+    # Percentage is the first cell ending in '%' after the labels; the
+    # projection is the cell after it. Scan so a missing secondary
+    # pair never shifts the read.
+    for i in range(3 + shift, len(cells)):
+        if cells[i].endswith('%'):
+            pct = cells[i]
+            gen_pop = _at(i + 1)
+            break
+    return {
+        'count': _at(1 + shift),
+        'secondary': _at(3 + shift),
+        'percentage': pct,
+        'gen_pop': gen_pop,
+    }
+
+
 def parse_subscriber_iq_csv(csv_content):
     """Parse subscriber IQ CSV (show-to-platform attribution format)."""
     lines = csv_content.strip().split('\n')
@@ -16858,23 +16891,32 @@ def parse_subscriber_iq_csv(csv_content):
                 continue
             if first_col and first_col not in ['', 'MONTHLY PLATFORM SIGNUPS -']:
                 if re.match(r'^\d{4}-\d{2}$', first_col):
+                    # 2026-10-02: every file in the library carries the
+                    # 10-column layout (month, '', count, label, secondary,
+                    # label, '', '', pct, gen_pop). The old fixed offsets
+                    # read the empty cell as the count, so monthly signups
+                    # and churn parsed blank for the whole library and
+                    # Prometheus never saw the file's churn. Detect the
+                    # shift instead of assuming one layout.
+                    _mo = _subiq_month_row_fields(row)
                     parsed['monthly_signups'].append({
                         'month': first_col,
-                        'signups': row[1].strip() if len(row) > 1 else '',
-                        'watched_show': row[3].strip() if len(row) > 3 else '',
-                        'percentage': row[7].strip() if len(row) > 7 else '',
-                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                        'signups': _mo['count'],
+                        'watched_show': _mo['secondary'],
+                        'percentage': _mo['percentage'],
+                        'gen_pop': _mo['gen_pop']
                     })
         
         # Monthly churn
         elif current_section == 'monthly_churn':
             if first_col and first_col not in ['', 'MONTHLY PLATFORM CHURN -']:
                 if re.match(r'^\d{4}-\d{2}$', first_col):
+                    _mo = _subiq_month_row_fields(row)
                     parsed['monthly_churn'].append({
                         'month': first_col,
-                        'churned': row[1].strip() if len(row) > 1 else '',
-                        'percentage': row[7].strip() if len(row) > 7 else '',
-                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                        'churned': _mo['count'],
+                        'percentage': _mo['percentage'],
+                        'gen_pop': _mo['gen_pop']
                     })
             elif 'DEMOGRAPHICS' in first_col or 'DEMOGRAPHICS' in second_col:
                 current_section = 'demographics'
@@ -19036,6 +19078,43 @@ def list_subscriber_iq_files():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/subscriber-iq/download/<path:s3_key>')
+@requires_auth
+def download_subscriber_iq_csv(s3_key):
+    """Download the Subscriber IQ file behind the open read (2026-10-02).
+
+    Same access checks as the data route. The Profile IQ page has had an
+    export control from day one; this gives the Subscriber IQ page its
+    own download so users do not have to go to the storage bucket for
+    the file.
+    """
+    ok, err = _require_module_access(
+        'has_subscriber_iq_access',
+        'analysis_iq_modules::svod',
+        module_label='Subscriber IQ')
+    if not ok:
+        return err
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'Storage not configured'}), 500
+    user = get_current_user()
+    if not _user_can_open_subscriber(user, s3_key):
+        return jsonify({'success': False,
+                        'error': 'Subscriber IQ access not granted for this file'}), 403
+    try:
+        resp = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
+        body = resp['Body'].read()
+    except Exception as e:
+        print(f"download_subscriber_iq_csv failed for {s3_key}: {e}")
+        return jsonify({'success': False, 'error': 'File not found'}), 404
+    fname = os.path.basename(s3_key) or 'subscriber_iq.csv'
+    if not fname.lower().endswith('.csv'):
+        fname += '.csv'
+    out = Response(body, mimetype='text/csv')
+    out.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    out.headers['Cache-Control'] = 'no-store'
+    return out
 
 
 @app.route('/api/subscriber-iq/data/<path:s3_key>')

@@ -28816,6 +28816,9 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                     <span id="subscriberHoverToggleLabel">HOVER ON</span>
                                 </div>
+                                <div class="display-mode-toggle" id="subscriberDownloadBtn" onclick="downloadSubscriberIQCSV()" title="Download the full Subscriber IQ file (CSV) for the open read">
+                                    <span>📥 DOWNLOAD CSV</span>
+                                </div>
                                 <div class="display-mode-toggle close-all-red" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
                                     <span>CLOSE ALL TABS</span>
                                 </div>
@@ -80160,13 +80163,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                     if (!show && tabs.length) show = tabs[0].name || '';
                 } catch (_) {}
+                var demo = d.demographics || {};
                 return {
                     show: show,
                     metadata: d.metadata || null,
                     key_metrics: d.key_metrics || null,
                     attribution_summary: d.attribution_summary || null,
                     top_episodes: (d.episode_attribution || []).slice(0, 6),
-                    signup_timing: (d.signup_timing || []).slice(0, 6)
+                    signup_timing: (d.signup_timing || []).slice(0, 6),
+                    // 2026-10-02: the page now hands Prometheus every
+                    // section the file carries, so a churn or overlap
+                    // question is answered from the open read.
+                    post_signup_touchpoints: (d.post_signup_touchpoints || []).slice(0, 6),
+                    competitive_platforms: (d.competitive_platforms || []).slice(0, 8),
+                    monthly_signups: (d.monthly_signups || []).slice(-12),
+                    monthly_churn: (d.monthly_churn || []).slice(-12),
+                    demographics: {
+                        age: (demo.age || []).slice(0, 8),
+                        gender: (demo.gender || []).slice(0, 6)
+                    }
                 };
             },
             trendsIQ: function() {
@@ -134485,6 +134500,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
         
         // Switch to a subscriber tab
+        // 2026-10-02: Subscriber IQ gets its own export (Bria). Streams the
+        // full file behind the open read through the same access checks as
+        // the data route, so nobody has to go to storage for it.
+        function downloadSubscriberIQCSV() {
+            var key = activeSubscriberTabId;
+            if (!key && openSubscriberTabs && openSubscriberTabs.length) key = openSubscriberTabs[0].id;
+            if (!key) {
+                if (typeof showToast === 'function') showToast('Open a Subscriber IQ read first.', 'warning');
+                return;
+            }
+            var a = document.createElement('a');
+            a.href = '/api/subscriber-iq/download/' + encodeURIComponent(key);
+            a.download = '';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() { try { document.body.removeChild(a); } catch (_) {} }, 0);
+        }
+
         function switchToSubscriberTab(s3Key) {
             const tab = openSubscriberTabs.find(t => t.id === s3Key);
             if (!tab) return;

@@ -15260,20 +15260,25 @@ def _pm_analyze_core(user, body, text, history):
     # rides too, for any indexed title the question names first and
     # the open profile second. Skipped when that title's Subscriber IQ
     # view is already on screen, since its payload is the page context.
+    _subiq_grounded = False
     try:
         _vc = ctx.get('view_context') or {}
-        _open_show = ''
-        if str(_vc.get('view_id') or '') == 'subscriberIQ':
-            _open_show = str(((_vc.get('data') or {}).get('show')) or '')
+        _subiq_view_open = str(_vc.get('view_id') or '') == 'subscriberIQ'
+        # 2026-10-02 (Bria): the open title's full file evidence rides
+        # even when its Subscriber IQ view is on screen. The page
+        # context is a compact summary; the evidence block is the
+        # authoritative file read with the churn definition, and it is
+        # cached, so there is no cost to carrying both.
         _sq_block, _sq_show = pma.build_subiq_evidence_block(
             _H.s3_client, _H.SUBSCRIBER_S3_BUCKET,
             _H.parse_subscriber_iq_csv, text,
             subject_hint=str((p_meta.get('name')
                               if ctx.get('primary') else '') or ''),
-            prefer_text=True, skip_show=_open_show)
+            prefer_text=True)
         if _sq_block:
             xmod_block = (f"{xmod_block}\n\n{_sq_block}"
                           if xmod_block else _sq_block)
+        _subiq_grounded = bool(_sq_block) or _subiq_view_open
     except Exception:
         traceback.print_exc()
     _pm_ask_stage('anchors', t0=_t_anchors)
@@ -15335,6 +15340,31 @@ def _pm_analyze_core(user, body, text, history):
     # (2026-08-28) sends analysis-shaped data asks straight to the
     # measured read, this handoff is the safety net only - the stage
     # counter tracks how often it still fires.
+    # Subscriber IQ answer-in-place (2026-10-02, Bria): "Analyze SWAT
+    # Exiles, top 3 insights" with the read on screen came back as
+    # generate_metrics and the reasoned pass answered about Starz with
+    # numbers that were not the file's. When the title's read is on
+    # screen or in evidence, the answer comes from the read. One re-ask
+    # with the force note; if that still yields no reply, fall through
+    # to the handoff so the user is never left without an answer.
+    if action == 'generate_metrics' and _subiq_grounded \
+            and pma.subiq_answer_in_place(text):
+        _pm_ask_stage('subiq_answer_in_place', count=1)
+        try:
+            _r2 = _pm_claude_json(
+                pma.ANALYSIS_SYSTEM_PROMPT,
+                f"{user_prompt}\n\n{pma.SUBIQ_FORCE_ANSWER_NOTE}",
+                max_tokens=_max_tok, temperature=0.4,
+                usage_extras=_pm_ppu)
+            _d2 = (_r2.get('data') or {}) if _r2.get('success') else {}
+            if isinstance(_d2, list):
+                _d2 = next((d for d in _d2 if isinstance(d, dict)), {})
+            if str(_d2.get('reply') or '').strip():
+                data = dict(_d2)
+                data['action'] = 'answer'
+                action = 'answer'
+        except Exception:
+            traceback.print_exc()
     if action == 'generate_metrics':
         _pm_ask_stage('handoff_generate', count=1)
         return _pm_generate_metrics_response(

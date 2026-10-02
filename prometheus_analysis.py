@@ -1590,24 +1590,101 @@ def match_subiq_shows(s3_client, subiq_bucket, phrase, limit=3):
     return out
 
 
+_SUBIQ_BASE_TAIL_RE = re.compile(
+    r'\b(?:season \d{1,2}|limited series|miniseries|part \d{1,2}|'
+    r'vol(?:ume)? \d{1,2}|the movie|movie|film)\b')
+_SUBIQ_ALIAS_STOP = frozenset(('of', 'the', 'a', 'an', 'and', 'my', 'in',
+                               'on', 'to', 'for'))
+
+
+def _subiq_title_aliases(show):
+    """Normalized strings that name one library file in a message.
+
+    full      'swat exiles season 1'
+    base      'swat exiles'            (season / qualifier tail dropped)
+    initials  'outlander bomb'         (a run of 3+ words collapsed to
+                                        its initials, so the house
+                                        shorthand for Outlander Blood
+                                        of My Blood resolves)
+    Returns [(alias, kind)] with kind in {'full', 'base', 'initials'}.
+    2026-10-02 (Bria): "Analyze SWAT Exiles" found nothing because the
+    file is "SWAT Exiles Season 1", so the answer came from a reasoned
+    read instead of the file.
+    """
+    full = _subiq_norm(show)
+    out = []
+    if len(full) >= 4:
+        out.append((full, 'full'))
+    base = re.sub(r'\s+', ' ', _SUBIQ_BASE_TAIL_RE.sub(' ', full)).strip()
+    base = re.sub(r'\s+\d{1,2}$', '', base).strip()
+    if len(base) >= 4 and base != full:
+        out.append((base, 'base'))
+    words = base.split()
+    seen = {a for a, _k in out}
+    for i in range(len(words)):
+        for j in range(i + 3, len(words) + 1):
+            run = words[i:j]
+            if sum(1 for w in run if w not in _SUBIQ_ALIAS_STOP) < 2:
+                continue
+            acro = ''.join(w[0] for w in run)
+            if len(acro) < 3:
+                continue
+            alias = ' '.join(words[:i] + [acro] + words[j:]).strip()
+            # An initialism on its own ('bomb') is too loose; it needs
+            # at least one real word of the title beside it, or to be
+            # the whole title at 4+ letters.
+            if alias == acro and len(acro) < 4:
+                continue
+            if alias not in seen:
+                seen.add(alias)
+                out.append((alias, 'initials'))
+    return out
+
+
 def find_subiq_titles_in_text(s3_client, subiq_bucket, text, limit=3):
     """Every library title the message names (season-aware, whitespace
     and punctuation tolerant), longest name first, one entry per show.
     Used to answer compare / which-title questions from the library
-    instead of drafting a new build."""
+    instead of drafting a new build.
+
+    A message that names the base title without a season ("SWAT
+    Exiles") resolves to that title's files; when the message names a
+    season, only the matching season counts. House initialisms
+    ("Outlander BOMB") resolve through _subiq_title_aliases."""
     t = ' ' + _subiq_norm(text) + ' '
     if len(t) < 6:
         return []
     hits = []
     for show, key, lm in list_subiq_shows(s3_client, subiq_bucket):
-        n = _subiq_norm(show)
-        if len(n) < 4:
-            continue
-        if (' ' + n + ' ') in t:
-            hits.append((len(n), show, key, lm))
-    hits.sort(key=lambda h: -h[0])
+        full = _subiq_norm(show)
+        file_seasons = set(re.findall(r'\bseason (\d{1,2})\b', full))
+        best = None
+        for alias, kind in _subiq_title_aliases(show):
+            if (' ' + alias + ' ') not in t:
+                continue
+            if kind != 'full' and file_seasons:
+                # Seasons named right after THIS title in the message
+                # ("Outlander BOMB Season 2"): when present, only the
+                # matching season's file counts. Seasons named next to
+                # another title in the same sentence do not bleed over.
+                asked = set()
+                for m in re.finditer(
+                        r'\b' + re.escape(alias) + r' season (\d{1,2})\b'
+                        r'(?:(?:\s+\w+){0,3}?\s+(?:vs|versus|and|to|against|with|'
+                        r'compared (?:to|with))\s+season (\d{1,2})\b)?', t):
+                    asked.update(g for g in m.groups() if g)
+                if asked and not (asked & file_seasons):
+                    continue
+            score = (len(alias), 2 if kind == 'full' else 1)
+            if best is None or score > best:
+                best = score
+        if best is not None:
+            hits.append((best, show, key, lm))
+    # Longest alias first, full-name hits ahead of base hits, newest
+    # file first on ties.
+    hits.sort(key=lambda h: (h[0][0], h[0][1], h[3] or ''), reverse=True)
     out, seen = [], set()
-    for _ln, show, key, lm in hits:
+    for _sc, show, key, lm in hits:
         if show in seen:
             continue
         seen.add(show)
@@ -2126,6 +2203,66 @@ _SUBIQ_PAYLOAD_TTL_S = 600
 _subiq_payload_cache = {}   # {s3_key: {'etag', 'ts', 'parsed'}}
 
 
+_SUBIQ_OUT_OF_READ_RE = re.compile(
+    r"\b(revenue|arpu|ltv|lifetime value|forecast|predict\w*|"
+    r"next (?:month|quarter|season|year)|how many will|"
+    r"profile iq|brand penetration|index vs)\b", re.I)
+
+SUBIQ_FORCE_ANSWER_NOTE = (
+    "SUBSCRIBER IQ ANSWER IN PLACE: the Subscriber IQ read for the "
+    "title(s) in this question is on screen and/or in the SUBSCRIBER "
+    "ACQUISITION EVIDENCE block above. Answer with action=answer from "
+    "those numbers only: accounts viewed, new signups, conversion, "
+    "attributed vs reactivated, episode drivers, signup timing by day, "
+    "first visits after signup, monthly platform signups, monthly "
+    "platform churn (platform-level, as labeled), signup demographics, "
+    "and platform overlap. Do not return generate_metrics. If the ask "
+    "names a figure this read does not carry, give the nearest figure "
+    "the read does carry, say in plain words which measure it is, and "
+    "stop. Never invent the missing figure and never present a number "
+    "that is not in the read as if it were.")
+
+
+def subiq_answer_in_place(text):
+    """True when a Subscriber IQ ask should be answered from the read
+    rather than handed to the reasoned-read pass.
+
+    Everything an insight / summary / comparison / churn / timing /
+    demographic question needs is in the file. Only asks that name a
+    measure the read never carries (revenue, forecasts, Profile IQ
+    style indexes) may still hand off.
+    """
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return not _SUBIQ_OUT_OF_READ_RE.search(t)
+
+
+def _apply_dashboard_subiq_adjustments(key, parsed):
+    """Make the off-screen parse match what the dashboard shows.
+
+    The Subscriber IQ data route applies two serve-time adjustments the
+    raw parser does not: admin episode overrides and the demographic
+    projection rescale (age / gender projections sum to the projected
+    new signups). Prometheus quoted the raw parse, so an off-screen
+    answer could carry different projections than the open page
+    (2026-10-02, Bria). Resolve the host lazily; never raise.
+    """
+    try:
+        import sys as _sys
+        host = _sys.modules.get('app')
+        if host is None:
+            return
+        fn = getattr(host, 'apply_subscriber_episode_overrides', None)
+        if callable(fn):
+            fn(key, parsed)
+        fn = getattr(host, 'normalize_demographics_gen_pop_to_nps', None)
+        if callable(fn):
+            fn(parsed)
+    except Exception:
+        pass
+
+
 def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
     """Full parsed Subscriber IQ payload for one file. Within the TTL
     the cached parse is reused as-is; past it a HEAD revalidates the
@@ -2146,6 +2283,7 @@ def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
         resp = s3_client.get_object(Bucket=subiq_bucket, Key=key)
         etag = (resp.get('ETag') or '').strip('"')
         parsed = parser(resp['Body'].read().decode('utf-8'))
+        _apply_dashboard_subiq_adjustments(key, parsed)
     except Exception:
         return c['parsed'] if c else None
     with _xmod_lock:
@@ -2177,6 +2315,16 @@ def find_subiq_title(s3_client, subiq_bucket, text, subject_hint='',
         return index.get(tk) if tk else None
 
     def _from_text():
+        # Base-name / initialism aware first (2026-10-02): "Analyze
+        # SWAT Exiles" resolves to the SWAT Exiles Season 1 file.
+        try:
+            hits = find_subiq_titles_in_text(s3_client, subiq_bucket,
+                                             text, limit=1)
+        except Exception:
+            hits = []
+        if hits:
+            show, key, _lm = hits[0]
+            return (show, key)
         shows = {show for show, _k in index.values()}
         tk = _xmod_title_key(_xmod_subject_from_text(text, shows))
         return index.get(tk) if tk else None
@@ -2284,15 +2432,39 @@ def render_subiq_evidence(parsed, show):
         tagged.append((3, 'SIGNUP TIMING (after availability): '
                        + '; '.join(tim_bits) + '.'))
 
+    plat = str(md.get('platform') or '').strip() or 'the platform'
     mo_bits = []
     for m in (parsed.get('monthly_signups') or [])[-12:]:
         if not isinstance(m, dict):
             continue
         s = _xmod_fmt_count(m.get('signups'))
         if m.get('month') and s:
-            mo_bits.append(f"{m['month']} {s}")
+            w = _xmod_fmt_count(m.get('watched_show'))
+            pct = str(m.get('percentage') or '').strip()
+            tail = ''
+            if w and pct:
+                tail = f" ({w} watched the show, {pct})"
+            elif w:
+                tail = f" ({w} watched the show)"
+            mo_bits.append(f"{m['month']} {s}{tail}")
     if mo_bits:
-        tagged.append((4, 'MONTHLY SIGNUPS: ' + '; '.join(mo_bits) + '.'))
+        tagged.append((4, f'MONTHLY {plat.upper()} SIGNUPS (all new '
+                       f'{plat} signups that month, show watchers in '
+                       'parentheses): ' + '; '.join(mo_bits) + '.'))
+
+    tp_bits = []
+    for t in (parsed.get('post_signup_touchpoints') or [])[:5]:
+        if not isinstance(t, dict):
+            continue
+        lab = str(t.get('touchpoint') or '').strip()
+        u = _xmod_fmt_count(t.get('users'))
+        pct = str(t.get('percentage') or '').strip()
+        if lab and lab.lower() != 'total' and u:
+            tp_bits.append(f"{lab} visit {u}" + (f" ({pct})" if pct else ''))
+    if tp_bits:
+        tagged.append((4, 'SHOW AS FIRST VISITS AFTER SIGNUP (how soon '
+                       'the new signup went to the show): '
+                       + '; '.join(tp_bits) + '.'))
 
     demo = parsed.get('demographics') or {}
     demo_bits = []
@@ -2321,9 +2493,25 @@ def render_subiq_evidence(parsed, show):
     for m in (parsed.get('monthly_churn') or [])[-6:]:
         if isinstance(m, dict) and m.get('month') \
                 and _xmod_fmt_count(m.get('churned')):
-            ch_bits.append(f"{m['month']} {_xmod_fmt_count(m['churned'])}")
+            pct = str(m.get('percentage') or '').strip()
+            ch_bits.append(f"{m['month']} {_xmod_fmt_count(m['churned'])}"
+                           + (f" ({pct})" if pct else ''))
     if ch_bits:
-        tagged.append((6, 'MONTHLY CHURN: ' + '; '.join(ch_bits) + '.'))
+        # 2026-10-02 (Bria): churn moves up the keep order and carries
+        # its definition. This read measures PLATFORM churn (all
+        # accounts on the platform that stopped visiting that month),
+        # not the churn of this show's own signup cohort. Prometheus
+        # must say which one it is quoting and never present a reasoned
+        # cohort number as if it came from this read.
+        tagged.append((3, f'MONTHLY {plat.upper()} CHURN (all {plat} '
+                       'accounts that stopped visiting that month, as '
+                       'a share of the platform base; this is NOT the '
+                       "churn of this show's signup cohort, which this "
+                       'read does not measure): ' + '; '.join(ch_bits)
+                       + '. If asked about churn of the signups this '
+                       'show brought in, quote the platform churn above '
+                       'as the measured figure and say the cohort-level '
+                       'churn is not part of this read.'))
 
     if len(tagged) <= 2:
         return ''
