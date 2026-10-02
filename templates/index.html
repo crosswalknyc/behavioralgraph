@@ -18887,6 +18887,54 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             min-width: 100% !important;
         }
 
+        /* ---- 11d. DATA CUTS "Add to dashboard" popover: reliable taps ---------
+           On phones the checkbox rows were hard/impossible to tap. Kill the
+           ~300ms tap delay (touch-action) and give every row a comfortable
+           tap height so a finger reliably toggles the cut. Mobile-only. */
+        #compareDateRangesPopover {
+            touch-action: manipulation;
+        }
+        #compareDateRangesPopover label {
+            min-height: 42px;
+            touch-action: manipulation;
+        }
+
+        /* ---- 16c. Profile-tab-bar buttons: match the DATA CUTS / EXPORT pill ---
+           The active profile tab (AARON PAUL) already uses the gray pill but
+           turns green when active; CLOSE ALL TABS is red and HELP uses card
+           colors. On phones, flatten all three to the muted gray pill the
+           toolbar controls use. Mobile-only; desktop keeps its colors. */
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab.active,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all.profile-help-pill {
+            background: #15252A !important;
+            border: 1px solid #3B3D38 !important;
+            color: #9AA09B !important;
+            border-radius: 6px !important;
+            font-weight: 500 !important;
+        }
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab .profile-tab-name,
+        :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all {
+            font-size: 10.5px !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            color: #9AA09B !important;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab.active,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all.profile-help-pill {
+            background: #FFFFFF !important;
+            border-color: #C9C6BA !important;
+            color: #5C6560 !important;
+        }
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab .profile-tab-name,
+        body[data-theme="light"] :is(#dashboardView, #piqStickyChrome).piq-v4.piq-has-profile #profileTabsBar .profile-tab-close-all {
+            color: #5C6560 !important;
+        }
+
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
         #chatWidget { display: none !important; }
 
