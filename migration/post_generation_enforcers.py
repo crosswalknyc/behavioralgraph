@@ -3420,6 +3420,19 @@ def pin_subject_to_100_in_appearing_categories(df, subject, verbose=True):
                     used_metadata = True
                     break
 
+    # 2026-10-02 (Substack, Jessie): BRAND CATEGORY said APP/PLATFORM
+    # but the subject's only row sat in MEDIA (its hostmap home), so the
+    # metadata path found nothing and the max-BP fallback's [95, 100)
+    # gate left it at 89.26. A subject that appears in exactly ONE
+    # non-skip grid has no sister grid for that row to be a peer rate
+    # in: that single grid IS the native grid. Pin regardless of size.
+    if best_idx is None and len(candidate_idxs) == 1:
+        bp = _to_float(df.at[candidate_idxs[0], bp_col])
+        if bp is not None:
+            best_idx = candidate_idxs[0]
+            best_bp = bp
+            used_metadata = True
+
     # Fallback: BRAND CATEGORY missing or no matching candidate row ->
     # use max-BP heuristic (Defect 24 behavior).
     if best_idx is None:
