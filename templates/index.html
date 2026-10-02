@@ -52507,14 +52507,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 <div class="jiq-frag" id="jiqMusicCatalogCard" style="display: none;">
                     <div class="jiq-frag-cover">
                         <div class="jiq-frag-copy">
-                            <div class="jiq-frag-eyebrow" id="jiqMusicMeta">Song journey</div>
-                            <h2 id="jiqMusicTitle">Song journey.</h2>
-                            <div class="jiq-frag-read-lead" id="jiqMusicLead">Soundtrack first touch.</div>
+                            <div class="jiq-frag-eyebrow" id="jiqMusicMeta">Music to Long Form</div>
+                            <h2 id="jiqMusicTitle">Music to Long Form.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqMusicLead">Soundtrack first, then the title.</div>
                             <p id="jiqMusicDeck"></p>
                             <div class="jiq-frag-kpis" id="jiqMusicKpis"></div>
                         </div>
                         <div class="jiq-frag-art is-ini" id="jiqMusicArt"><span class="jiq-frag-art-ini" id="jiqMusicArtIni">SJ</span></div>
                     </div>
+                    <div id="jiqMusicTabBar" class="jiq-music-tabbar" style="display: none;"></div>
                     <div id="jiqMusicHost"></div>
                 </div>
 
@@ -87316,7 +87317,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         { id: 'tv',          label: '📺 TV Shows',          keywords: ['heated rivalry', 'heated_rivalry', 'young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: [] },
                         { id: 'movie',       label: '🎬 Movie',             keywords: ['barbie'] },
-                        { id: 'music',       label: '🎵 Song journeys',     keywords: ['song journey', 'music analysis'] },
+                        { id: 'music',       label: '🎵 Music to Long Form', keywords: ['music to long form', 'song journey', 'music analysis'] },
                         { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: [] }
                     ];
                     function _runMatchesCategory(r, cat) {
@@ -87370,67 +87371,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             { value: '__demo_barbie_song__', label: 'Barbie \u00b7 song journey' }
                         ],
                         music: [
-                            { value: '__demo_heated_rivalry_song__', label: "Heated Rivalry \u00b7 song journey" },
-                            { value: '__demo_barbie_song__', label: "Barbie \u00b7 song journey" },
-                            { value: '__demo_music_minecraft_movie__', label: "A Minecraft Movie \u00b7 song journey" },
-                            { value: '__demo_music_anyone_but_you__', label: "Anyone But You \u00b7 song journey" },
-                            { value: '__demo_music_wakanda_forever__', label: "Black Panther: Wakanda Forever \u00b7 song journey" },
-                            { value: '__demo_music_deadpool_wolverine__', label: "Deadpool & Wolverine \u00b7 song journey" },
-                            { value: '__demo_music_gotg3__', label: "Guardians of the Galaxy Vol. 3 \u00b7 song journey" },
-                            { value: '__demo_music_inside_out_2__', label: "Inside Out 2 \u00b7 song journey" },
-                            { value: '__demo_music_it_ends_with_us__', label: "It Ends with Us \u00b7 song journey" },
-                            { value: '__demo_music_moana_2__', label: "Moana 2 \u00b7 song journey" },
-                            { value: '__demo_music_oppenheimer__', label: "Oppenheimer \u00b7 song journey" },
-                            { value: '__demo_music_sinners__', label: "Sinners \u00b7 song journey" },
-                            { value: '__demo_music_the_holdovers__', label: "The Holdovers \u00b7 song journey" },
-                            { value: '__demo_music_turning_red__', label: "Turning Red \u00b7 song journey" },
-                            { value: '__demo_music_twisters__', label: "Twisters \u00b7 song journey" },
-                            { value: '__demo_music_baby_reindeer__', label: "Baby Reindeer \u00b7 song journey" },
-                            { value: '__demo_music_beef__', label: "Beef \u00b7 song journey" },
-                            { value: '__demo_music_bridgerton__', label: "Bridgerton \u00b7 song journey" },
-                            { value: '__demo_music_emily_in_paris__', label: "Emily in Paris \u00b7 song journey" },
-                            { value: '__demo_music_euphoria__', label: "Euphoria \u00b7 song journey" },
-                            { value: '__demo_music_fallout__', label: "Fallout \u00b7 song journey" },
-                            { value: '__demo_music_fire_country__', label: "Fire Country \u00b7 song journey" },
-                            { value: '__demo_music_ginny_georgia__', label: "Ginny & Georgia \u00b7 song journey" },
-                            { value: '__demo_music_landman__', label: "Landman \u00b7 song journey" },
-                            { value: '__demo_music_love_is_blind__', label: "Love is Blind \u00b7 song journey" },
-                            { value: '__demo_music_walter_boys__', label: "My Life with the Walter Boys \u00b7 song journey" },
-                            { value: '__demo_music_nobody_wants_this__', label: "Nobody Wants This \u00b7 song journey" },
-                            { value: '__demo_music_off_campus__', label: "Off Campus \u00b7 song journey" },
-                            { value: '__demo_music_outer_banks__', label: "Outer Banks \u00b7 song journey" },
-                            { value: '__demo_music_poker_face__', label: "Poker Face \u00b7 song journey" },
-                            { value: '__demo_music_ransom_canyon__', label: "Ransom Canyon \u00b7 song journey" },
-                            { value: '__demo_music_stranger_things__', label: "Stranger Things \u00b7 song journey" },
-                            { value: '__demo_music_ted_lasso__', label: "Ted Lasso \u00b7 song journey" },
-                            { value: '__demo_music_the_boys__', label: "The Boys \u00b7 song journey" },
-                            { value: '__demo_music_the_crown__', label: "The Crown \u00b7 song journey" },
-                            { value: '__demo_music_the_rookie__', label: "The Rookie \u00b7 song journey" },
-                            { value: '__demo_music_tsitp__', label: "The Summer I Turned Pretty \u00b7 song journey" },
-                            { value: '__demo_music_virgin_river__', label: "Virgin River \u00b7 song journey" },
-                            { value: '__demo_music_wednesday__', label: "Wednesday \u00b7 song journey" },
-                            { value: '__demo_music_yellowstone__', label: "Yellowstone \u00b7 song journey" },
-                            { value: '__demo_music_you__', label: "You \u00b7 song journey" },
-                            { value: '__demo_music_paradise__', label: "Paradise \u00b7 song journey" },
-                            { value: '__demo_music_bachelor__', label: "Bachelor \u00b7 song journey" },
-                            { value: '__demo_music_axel_f__', label: "Beverly Hills Cop: Axel F \u00b7 song journey" },
-                            { value: '__demo_music_greys_anatomy__', label: "Grey's Anatomy \u00b7 song journey" },
-                            { value: '__demo_music_happy_gilmore_2__', label: "Happy Gilmore 2 \u00b7 song journey" },
-                            { value: '__demo_music_love_island__', label: "Love Island \u00b7 song journey" },
-                            { value: '__demo_music_migration__', label: "Migration \u00b7 song journey" },
-                            { value: '__demo_music_one_of_them_days__', label: "One of them Days \u00b7 song journey" },
-                            { value: '__demo_music_road_house__', label: "Road House \u00b7 song journey" },
-                            { value: '__demo_music_school_spirits__', label: "School Spirits \u00b7 song journey" },
-                            { value: '__demo_music_sweet_magnolias__', label: "Sweet Magnolias \u00b7 song journey" },
-                            { value: '__demo_music_the_bear__', label: "The Bear \u00b7 song journey" },
-                            { value: '__demo_music_the_gentlemen__', label: "The Gentlemen \u00b7 song journey" },
-                            { value: '__demo_music_lincoln_lawyer__', label: "The Lincoln Lawyer \u00b7 song journey" },
-                            { value: '__demo_music_rings_of_power__', label: "The Lord of the Rings: The Rings of Power \u00b7 song journey" },
-                            { value: '__demo_music_the_waterfront__', label: "The Waterfront \u00b7 song journey" },
-                            { value: '__demo_music_white_lotus__', label: "The White Lotus \u00b7 song journey" },
-                            { value: '__demo_music_wild_robot__', label: "The Wild Robot \u00b7 song journey" },
-                            { value: '__demo_music_top_gun_maverick__', label: "Top Gun: Maverick \u00b7 song journey" },
-                            { value: '__demo_music_untamed__', label: "Untamed \u00b7 song journey" }
+                            { value: '__demo_music_to_long_form__', label: "Music to Long Form" }
                         ],
                         neurotropic: []
                     };
@@ -111730,45 +111671,164 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (abs >= 1000) return (n / 1000).toFixed(1) + 'K';
             return String(Math.round(n));
         }
+        var _jiqMusicActiveSlug = '';
+        var _jiqMusicKindFilter = 'all';
+        var _jiqMusicQuery = '';
+
+        function _jiqMusicCatalogObj() {
+            return (typeof _JIQ_MUSIC_CATALOG !== 'undefined' && _JIQ_MUSIC_CATALOG)
+                ? _JIQ_MUSIC_CATALOG : null;
+        }
+
+        function _jiqMusicPersonLine(demo) {
+            if (!demo) return '';
+            var loc = String(demo.location || '').split(',')[0] || '';
+            return [demo.gender, demo.age, loc].filter(Boolean).join(', ');
+        }
+
+        function _jiqMusicFromSong(slug) {
+            if (typeof _JIQ_SONG_DATA === 'undefined' || !_JIQ_SONG_DATA) return null;
+            var raw = _JIQ_SONG_DATA[slug];
+            if (!raw || !raw.meta) return null;
+            var meta = raw.meta;
+            var demo = (raw.individual_journey || {}).demographics || {};
+            var songs = (raw.songs || []).map(function(s) {
+                return {
+                    song: s.song,
+                    artist: s.artist,
+                    in_title: s.in_show ? 'yes' : 'edit-only',
+                    url: ((s.clips || []).filter(function(c) { return c && c.url; })[0] || {}).url || ''
+                };
+            });
+            var person = ((raw.individual_journey || {}).steps || []).map(function(s) {
+                var clips = s.clips || [];
+                return {
+                    step: s.n,
+                    date: s.date,
+                    surface: s.surface,
+                    action: s.action,
+                    song: (clips[0] && clips[0].song) || '',
+                    url: (clips[0] && clips[0].url) || '',
+                    url_2: (clips[1] && clips[1].url) || '',
+                    ugc_tiktok: ''
+                };
+            });
+            var steps = (raw.discovery || []).map(function(d, i) {
+                return {
+                    step: i + 1,
+                    date: '',
+                    surface: d.channel || '',
+                    action: d.note || d.detail || '',
+                    people: d.listeners || d.cf || 0,
+                    urls: []
+                };
+            });
+            return {
+                slug: slug,
+                meta: {
+                    title: meta.title,
+                    kind: meta.kind,
+                    platform: meta.platform,
+                    customer: slug === 'barbie' ? 'Warner Bros' : 'Max',
+                    category: slug === 'barbie' ? 'movie' : 'tv',
+                    person: _jiqMusicPersonLine(demo),
+                    window_start: meta.window_start,
+                    window_end: meta.window_end,
+                    window: (meta.window_start || '') + ' to ' + (meta.window_end || ''),
+                    window_label: meta.window_label,
+                    release: meta.release_date,
+                    lead_song: (songs[0] && songs[0].song) || '',
+                    lead_artist: (songs[0] && songs[0].artist) || ''
+                },
+                songs: songs,
+                featured_clips: raw.featured_clips || [],
+                person_steps: person,
+                steps: steps
+            };
+        }
+
+        function _jiqMusicEntries() {
+            var out = [];
+            var extras = ['barbie', 'heated_rivalry'];
+            extras.forEach(function(slug) {
+                var t = _jiqMusicFromSong(slug);
+                if (t) out.push(t);
+            });
+            var data = _jiqMusicCatalogObj() || {};
+            Object.keys(data).forEach(function(slug) {
+                var t = data[slug];
+                if (t && t.meta) {
+                    t.slug = slug;
+                    out.push(t);
+                }
+            });
+            out.sort(function(a, b) {
+                return String((a.meta || {}).title || '').localeCompare(
+                    String((b.meta || {}).title || ''));
+            });
+            return out;
+        }
+
+        function _jiqMusicGet(slug) {
+            if (!slug) return null;
+            if (slug === 'barbie' || slug === 'heated_rivalry') {
+                return _jiqMusicFromSong(slug);
+            }
+            var data = _jiqMusicCatalogObj();
+            return (data && data[slug]) ? data[slug] : null;
+        }
+
         function _jiqMusicHydrateRun(key) {
-            var m = /^__demo_music_([a-z0-9_]+)__$/.exec(String(key || ''));
-            if (!m) return null;
-            var data = (typeof _JIQ_MUSIC_CATALOG !== 'undefined') ? _JIQ_MUSIC_CATALOG : null;
-            if (!data) return null;
-            var t = data[m[1]];
-            if (!t || !t.meta) return null;
-            var meta = t.meta;
-            var first = ((t.steps || [])[0] || {}).people || 0;
+            key = String(key || '');
+            var umbrella = (key === '__demo_music_to_long_form__'
+                || key === '__demo_music_catalog__');
+            var m = /^__demo_music_([a-z0-9_]+)__$/.exec(key);
+            if (!umbrella && !m) return null;
+            if (m && m[1] === 'to_long_form') umbrella = true;
+            if (m && m[1] === 'catalog') umbrella = true;
+            if (m && m[1] === 'influence') return null;
+            var entries = _jiqMusicEntries();
+            if (!entries.length) return null;
+            var slug = '';
+            if (!umbrella && m) slug = m[1];
+            if (slug && !_jiqMusicGet(slug)) slug = '';
+            if (!slug) slug = _jiqMusicActiveSlug || (entries[0] && entries[0].slug) || '';
+            _jiqMusicActiveSlug = slug;
+            var t = _jiqMusicGet(slug) || entries[0];
+            var meta = (t && t.meta) || {};
+            var first = ((t && t.steps) || [])[0] || {};
             return {
                 success: true,
                 data: {
                     meta: {
                         story_mode: 'music_catalog',
-                        target_name: meta.title,
-                        target_display: meta.title + ' - song journey',
-                        project_name: meta.title + ' song journey',
+                        target_name: 'Music to Long Form',
+                        target_display: 'Music to Long Form',
+                        project_name: 'Music to Long Form',
                         customer_brand: meta.customer || '',
                         start_date: meta.window_start || '',
                         end_date: meta.window_end || '',
                         target_type: 'music_to_content_journey',
-                        category: meta.category || 'tv'
+                        category: 'tv'
                     },
-                    music_catalog: t,
+                    music_catalog: { umbrella: true, slug: slug },
                     facts: [
-                        { label: 'Window', value: meta.window_label || meta.window || '' },
+                        { label: 'Titles', value: String(entries.length) + ' titles. One tab each.' },
+                        { label: 'Open', value: meta.title || '' },
                         { label: 'Lead song', value: (meta.lead_song || '') + (meta.lead_artist ? ' / ' + meta.lead_artist : '') },
-                        { label: 'First touch', value: _jiqMusicM(first) + ' people on the lead-song first touch.' },
-                        { label: 'Person', value: meta.person || '' }
+                        { label: 'First touch', value: first.people ? (_jiqMusicM(first.people) + ' people on the first step.') : (meta.window_label || '') }
                     ]
                 }
             };
         }
+
         function _jiqMusicHide() {
             var bar = document.getElementById('jiqMusicTabBar');
             var card = document.getElementById('jiqMusicCatalogCard');
-            if (bar) bar.style.display = 'none';
+            if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
             if (card) card.style.display = 'none';
         }
+
         function _jiqMusicClip(c) {
             if (!c || !c.url) return '';
             return '<a class="jiq-clip is-' + _jiqMusicEsc(String(c.kind || 'link').toLowerCase())
@@ -111778,8 +111838,90 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + (c.song ? '<span class="jiq-clip-h">' + _jiqMusicEsc(c.song) + '</span>' : '')
                 + '</a>';
         }
+
+        function _jiqMusicPaintTabs() {
+            var bar = document.getElementById('jiqMusicTabBar');
+            if (!bar) return;
+            var entries = _jiqMusicEntries();
+            var q = String(_jiqMusicQuery || '').toLowerCase();
+            var vis = entries.filter(function(t) {
+                var kind = (t.meta && t.meta.kind) || '';
+                if (_jiqMusicKindFilter === 'Film' && kind !== 'Film') return false;
+                if (_jiqMusicKindFilter === 'Series' && kind !== 'Series') return false;
+                if (q && String((t.meta && t.meta.title) || '').toLowerCase().indexOf(q) < 0) return false;
+                return true;
+            });
+            if (!_jiqMusicActiveSlug && vis[0]) _jiqMusicActiveSlug = vis[0].slug;
+            var kinds = [
+                { id: 'all', label: 'All' },
+                { id: 'Film', label: 'Film' },
+                { id: 'Series', label: 'Series' }
+            ];
+            bar.style.display = '';
+            bar.innerHTML =
+                '<div class="jiq-music-kind">' + kinds.map(function(k) {
+                    return '<button type="button" data-kind="' + k.id + '"'
+                        + (_jiqMusicKindFilter === k.id ? ' class="is-on"' : '') + '>'
+                        + k.label + '</button>';
+                }).join('')
+                + '<input type="search" id="jiqMusicFind" class="jiq-music-find" placeholder="Find a title" value="'
+                + _jiqMusicEsc(_jiqMusicQuery) + '"></div>'
+                + '<div class="jiq-music-titles">' + vis.map(function(t) {
+                    var slug = t.slug;
+                    var title = (t.meta && t.meta.title) || slug;
+                    return '<button type="button" data-slug="' + _jiqMusicEsc(slug) + '"'
+                        + (slug === _jiqMusicActiveSlug ? ' class="is-on"' : '') + '>'
+                        + _jiqMusicEsc(title) + '</button>';
+                }).join('') + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('[data-kind]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqMusicKindFilter = btn.getAttribute('data-kind') || 'all';
+                    var still = _jiqMusicEntries().some(function(t) {
+                        if (t.slug !== _jiqMusicActiveSlug) return false;
+                        var kind = (t.meta && t.meta.kind) || '';
+                        if (_jiqMusicKindFilter === 'Film') return kind === 'Film';
+                        if (_jiqMusicKindFilter === 'Series') return kind === 'Series';
+                        return true;
+                    });
+                    if (!still) {
+                        var next = _jiqMusicEntries().filter(function(t) {
+                            var kind = (t.meta && t.meta.kind) || '';
+                            if (_jiqMusicKindFilter === 'Film') return kind === 'Film';
+                            if (_jiqMusicKindFilter === 'Series') return kind === 'Series';
+                            return true;
+                        })[0];
+                        if (next) _jiqMusicActiveSlug = next.slug;
+                    }
+                    renderJourneyIqMusicCatalog({ umbrella: true, slug: _jiqMusicActiveSlug });
+                });
+            });
+            Array.prototype.forEach.call(bar.querySelectorAll('[data-slug]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqMusicActiveSlug = btn.getAttribute('data-slug') || '';
+                    renderJourneyIqMusicCatalog({ umbrella: true, slug: _jiqMusicActiveSlug });
+                });
+            });
+            var find = document.getElementById('jiqMusicFind');
+            if (find) {
+                find.addEventListener('input', function() {
+                    _jiqMusicQuery = find.value || '';
+                    _jiqMusicPaintTabs();
+                });
+            }
+        }
+
         function renderJourneyIqMusicCatalog(block) {
-            var t = block;
+            var slug = (block && block.slug) || (block && block.music_catalog && block.music_catalog.slug) || '';
+            if (slug) _jiqMusicActiveSlug = slug;
+            var entries = _jiqMusicEntries();
+            if (!entries.length) {
+                _jiqMusicHide();
+                return;
+            }
+            if (!_jiqMusicActiveSlug || !_jiqMusicGet(_jiqMusicActiveSlug)) {
+                _jiqMusicActiveSlug = entries[0].slug;
+            }
+            var t = _jiqMusicGet(_jiqMusicActiveSlug);
             if (t && t.music_catalog) t = t.music_catalog;
             if (!t || !t.meta) {
                 _jiqMusicHide();
@@ -111788,6 +111930,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var meta = t.meta;
             var card = document.getElementById('jiqMusicCatalogCard');
             if (card) card.style.display = '';
+            _jiqMusicPaintTabs();
             var titleEl = document.getElementById('jiqMusicTitle');
             var leadEl = document.getElementById('jiqMusicLead');
             var deckEl = document.getElementById('jiqMusicDeck');
@@ -111796,25 +111939,24 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var iniEl = document.getElementById('jiqMusicArtIni');
             var host = document.getElementById('jiqMusicHost');
             var first = ((t.steps || [])[0] || {}).people || 0;
-            if (titleEl) titleEl.textContent = (meta.title || '') + '.';
-            if (leadEl) leadEl.textContent = (meta.lead_song || 'Soundtrack') + ' is the first music touch.';
+            if (titleEl) titleEl.textContent = 'Music to Long Form.';
+            if (leadEl) leadEl.textContent = (meta.title || 'This title') + '. ' + (meta.lead_song || 'Soundtrack') + ' is the first music touch.';
             if (deckEl) {
                 deckEl.textContent = (meta.platform || '') + '. ' + (meta.window_label || meta.window || '')
                     + '. One person, then the URLs that sit on each step.';
             }
-            if (metaEl) metaEl.textContent = (meta.kind || 'Title') + ' · song journey';
-            if (iniEl) {
-                var words = String(meta.title || '').split(/\s+/);
-                iniEl.textContent = (words[0] || 'M').slice(0, 2).toUpperCase();
-            }
+            if (metaEl) metaEl.textContent = 'Music to Long Form · ' + (meta.kind || 'Title');
+            if (iniEl) iniEl.textContent = 'ML';
             if (kpisEl) {
                 kpisEl.innerHTML =
-                    '<div class="jiq-frag-kpi"><b>' + _jiqMusicEsc(_jiqMusicM(first)) + '</b><span>First-touch people</span></div>'
+                    '<div class="jiq-frag-kpi"><b>' + _jiqMusicEsc(meta.title || '') + '</b><span>Open title</span></div>'
                     + '<div class="jiq-frag-kpi"><b>' + _jiqMusicEsc(meta.lead_song || '') + '</b><span>Lead song</span></div>'
-                    + '<div class="jiq-frag-kpi"><b>' + _jiqMusicEsc(meta.platform || '') + '</b><span>Where they watch</span></div>';
+                    + '<div class="jiq-frag-kpi"><b>' + _jiqMusicEsc(first ? _jiqMusicM(first) : (meta.platform || '')) + '</b><span>'
+                    + (first ? 'First-touch people' : 'Where they watch') + '</span></div>';
             }
             var songs = (t.songs || []).map(function(s) {
-                return '<a class="jiq-clip is-official" href="' + _jiqMusicEsc(s.url || '#')
+                var href = s.url || '#';
+                return '<a class="jiq-clip is-official" href="' + _jiqMusicEsc(href)
                     + '" target="_blank" rel="noopener noreferrer">'
                     + '<span class="jiq-clip-k">' + _jiqMusicEsc(s.in_title === 'yes' ? 'In title' : (s.in_title || 'Song')) + '</span>'
                     + '<span class="jiq-clip-t">' + _jiqMusicEsc(s.song || '') + '</span>'
@@ -111847,21 +111989,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 host.innerHTML =
                     '<div class="jiq-song-pad">'
                     + '<div class="jiq-frag-sec"><div class="jiq-frag-num">01 Songs</div>'
-                    + '<h3>Soundtrack and needle-drop songs on this file.</h3>'
+                    + '<h3>Soundtrack and needle-drop songs on this title.</h3>'
                     + '<em>In title stays on the album or in the episode. Edit-only is labeled.</em></div>'
                     + '<div class="jiq-clip-row">' + songs + clips + '</div>'
                     + '<div class="jiq-frag-sec"><div class="jiq-frag-num">02 One viewer</div>'
                     + '<h3>' + _jiqMusicEsc(meta.person || 'One person') + '</h3>'
-                    + '<em>Thirteen steps. Same shape as Heated Rivalry and Barbie.</em></div>'
+                    + '<em>Thirteen steps. Same shape as the rest of the file.</em></div>'
                     + '<div style="overflow-x:auto;"><table class="jiq-music-table"><thead><tr>'
                     + '<th>#</th><th>Date</th><th>Surface</th><th>Action</th><th>URL</th>'
                     + '</tr></thead><tbody>' + person + '</tbody></table></div>'
                     + '<div class="jiq-frag-sec"><div class="jiq-frag-num">03 Clickstream</div>'
-                    + '<h3>Ten URLs on each step. Unique US people.</h3>'
-                    + '<em>Top three shown. Full ten live in the CSV.</em></div>'
-                    + '<div style="overflow-x:auto;"><table class="jiq-music-table"><thead><tr>'
+                    + '<h3>' + (rows ? 'People on each step.' : 'This title sits on the same file.') + '</h3>'
+                    + '<em>' + (rows ? 'Top URLs shown when the title has them.' : 'Open the tab. The songs and the person path are here.') + '</em></div>'
+                    + (rows ? ('<div style="overflow-x:auto;"><table class="jiq-music-table"><thead><tr>'
                     + '<th>#</th><th>Date</th><th>Surface</th><th>Action</th><th>People</th><th>URLs</th>'
-                    + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+                    + '</tr></thead><tbody>' + rows + '</tbody></table></div>') : '')
                     + '</div>';
             }
         }
@@ -186365,6 +186507,36 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         background: linear-gradient(90deg, #E9E8E1 0%, rgba(233,232,225,0) 18%);
     }
     .jiq-song-pad { margin: 0 34px 28px; }
+
+    .jiq-music-tabbar { margin: 12px 34px 4px; }
+    .jiq-music-kind { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .jiq-music-kind button, .jiq-music-titles button {
+        border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03);
+        color: #9AA09B; border-radius: 6px; padding: 7px 12px;
+        font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .jiq-music-kind button.is-on, .jiq-music-titles button.is-on {
+        border-color: #C7F23E; color: #C7F23E; background: rgba(199,242,62,.12);
+    }
+    .jiq-music-titles { display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto; padding-bottom: 6px; }
+    .jiq-music-titles button { font-weight: 600; padding: 6px 10px; }
+    .jiq-music-find {
+        flex: 1 1 180px; min-width: 140px; max-width: 280px;
+        border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03);
+        color: #E9E8E1; border-radius: 6px; padding: 7px 12px; font-size: 12px;
+    }
+    body[data-theme="light"] .jiq-music-kind button,
+    body[data-theme="light"] .jiq-music-titles button {
+        border-color: #C9C6BA; background: #FFFFFF; color: #5C6560;
+    }
+    body[data-theme="light"] .jiq-music-kind button.is-on,
+    body[data-theme="light"] .jiq-music-titles button.is-on {
+        border-color: #5E7E12; color: #5E7E12; background: rgba(94,126,18,.08);
+    }
+    body[data-theme="light"] .jiq-music-find {
+        border-color: #C9C6BA; background: #FFFFFF; color: #0C1618;
+    }
+
     .jiq-music-table { width: 100%; border-collapse: collapse; }
     .jiq-music-table th { text-align: left; font-size: 10px; letter-spacing: 0.08em;
         text-transform: uppercase; color: #7C878A; padding: 8px 10px; }
