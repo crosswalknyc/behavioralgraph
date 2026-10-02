@@ -4323,7 +4323,21 @@ def build_profile_required_reply(subject):
     existing bases only, never substitute for a base pull. No numbers,
     no internal vocabulary; the build chip rides as a followup so the
     standard build flow takes over. Returns (reply, followups)."""
-    subj = str(subject or '').strip() or 'that subject'
+    subj = str(subject or '').strip()
+    if not subj or subj.lower() in ('that subject', 'this subject',
+                                    'the subject', 'none', 'null'):
+        # No subject resolved (2026-10-02 replay found "the that
+        # subject profile" shipping): ask for the audience instead of
+        # printing the placeholder.
+        reply = (
+            "That read needs a profile built first, and I did not catch "
+            "which audience it is about. Name the person, brand, title, "
+            "or group and I will build the Total Universe profile, then "
+            "read it any way you need: age bands, parent cohorts, buyer "
+            "overlaps, category mixes. The build takes 5 credits and "
+            "lands in your Select Profile dropdown when it finishes."
+        )
+        return scrub_user_text(reply), ["Build a profile for ..."]
     reply = (
         f"That read needs the {subj} profile built first. Once the "
         f"{subj} Total Universe profile is in your library, I can read "
