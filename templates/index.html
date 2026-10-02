@@ -139971,6 +139971,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             if (window._piqV4WatchChrome) window._piqV4WatchChrome();
             if (window._piqV4PinChrome) window._piqV4PinChrome();
+            // Guarantee the mobile Data & Analysis Tools button exists after any
+            // toolbar (re)build - this runs on every profile load + tab switch
+            // on the device, so it does not depend on DOMContentLoaded firing.
+            if (window._ensureMobileToolsBtn) window._ensureMobileToolsBtn();
             return wrap;
         };
 
@@ -185597,26 +185601,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 return out;
             }
-            function _mtmOutside(e) {
-                var m = document.getElementById('mobileToolsMenu');
-                if (!m) return;
-                if (m.contains(e.target)) return;
-                if (e.target && e.target.id === 'mobileToolsNav') return;
-                window._closeMobileToolsMenu();
-            }
             window._closeMobileToolsMenu = function () {
                 var m = document.getElementById('mobileToolsMenu');
                 if (m) m.remove();
-                document.removeEventListener('pointerdown', _mtmOutside, true);
+                var bd = document.getElementById('mobileToolsBackdrop');
+                if (bd) bd.remove();
                 window.removeEventListener('resize', window._closeMobileToolsMenu);
                 window._mtmOpen = false;
             };
-            window._openMobileToolsMenu = function (sel) {
+            window._openMobileToolsMenu = function (anchor) {
                 if (window._mtmOpen) { window._closeMobileToolsMenu(); return; }
                 var items = _mobileToolsItems();
                 if (!items.length) return;
-                var old = document.getElementById('mobileToolsMenu');
-                if (old) old.remove();
+                window._closeMobileToolsMenu();
+                // Full-screen backdrop: closes on an outside tap and makes it
+                // obvious the menu opened (it dims the page). Sits just under
+                // the menu's z-index. No document-level pointerdown listener,
+                // so there is no open/close race on the same tap.
+                var bd = document.createElement('div');
+                bd.id = 'mobileToolsBackdrop';
+                bd.style.cssText = 'position:fixed;inset:0;z-index:2147483500;background:rgba(0,0,0,0.4);';
+                bd.addEventListener('click', function () { window._closeMobileToolsMenu(); });
+                document.body.appendChild(bd);
                 var menu = document.createElement('div');
                 menu.id = 'mobileToolsMenu';
                 menu.className = 'mobile-tools-menu';
@@ -185629,30 +185635,27 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         h.textContent = it.group;
                         menu.appendChild(h);
                     }
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'mtm-item';
-                    btn.textContent = it.label;
-                    btn.addEventListener('click', function (ev) {
+                    var mi = document.createElement('button');
+                    mi.type = 'button';
+                    mi.className = 'mtm-item';
+                    mi.textContent = it.label;
+                    mi.addEventListener('click', function (ev) {
                         ev.preventDefault();
                         ev.stopPropagation();
                         window._closeMobileToolsMenu();
                         try { it.btn.click(); } catch (_e) {}
                     });
-                    menu.appendChild(btn);
+                    menu.appendChild(mi);
                 });
-                var rect = sel.getBoundingClientRect();
+                var rect = anchor.getBoundingClientRect();
                 menu.style.position = 'fixed';
-                menu.style.top = (rect.bottom + 4) + 'px';
-                menu.style.left = rect.left + 'px';
-                menu.style.width = rect.width + 'px';
+                menu.style.top = Math.round(rect.bottom + 4) + 'px';
+                menu.style.left = Math.round(rect.left) + 'px';
+                menu.style.width = Math.round(rect.width) + 'px';
                 menu.style.zIndex = '2147483600';
                 document.body.appendChild(menu);
                 window._mtmOpen = true;
-                setTimeout(function () {
-                    document.addEventListener('pointerdown', _mtmOutside, true);
-                    window.addEventListener('resize', window._closeMobileToolsMenu);
-                }, 0);
+                window.addEventListener('resize', window._closeMobileToolsMenu);
             };
             // The native <select> picker refuses to open on the sub-tabs (its
             // toolbar lives inside a body-pinned position:fixed chrome, where
@@ -185681,12 +185684,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     btn.style.margin = '0 0 12px 0';
                     btn.style.textAlign = 'left';
                     btn.style.fontFamily = 'inherit';
+                    btn.style.cursor = 'pointer';
+                    btn.style.webkitTapHighlightColor = 'transparent';
                     sel.parentNode.insertBefore(btn, sel);
-                    btn.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        e.stopPropagation();
+                    var _mtmLast = 0;
+                    var _mtmFromBtn = function (e) {
+                        var now = Date.now();
+                        if (now - _mtmLast < 450) { if (e) e.preventDefault(); return; }
+                        _mtmLast = now;
+                        if (e) { e.preventDefault(); e.stopPropagation(); }
                         if (window._openMobileToolsMenu) window._openMobileToolsMenu(btn);
-                    });
+                    };
+                    // touchend is the most reliable tap signal on iOS; click is
+                    // the fallback. De-duped so one tap = one toggle.
+                    btn.addEventListener('touchend', _mtmFromBtn, { passive: false });
+                    btn.addEventListener('click', _mtmFromBtn);
                 }
                 btn.style.display = 'block';
                 // Hide the native select hard: inline !important beats the
