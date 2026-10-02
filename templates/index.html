@@ -106730,9 +106730,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var legend = slices.map(function(s, i) {
                 return '<div class="jiq-arrow-dleg-row">'
                     + '<i style="background:' + colors[i % colors.length] + '"></i>'
-                    + '<span>' + _jiqFragEsc(s.label) + '</span>'
-                    + '<b>' + _jiqArrowPct(s.pct) + '</b>'
+                    + '<span class="lab">' + _jiqFragEsc(s.label) + '</span>'
                     + '<em>' + _jiqFragEsc(_jiqArrowNum(s.people)) + '</em>'
+                    + '<b>' + _jiqArrowPct(s.pct) + '</b>'
                     + '<span class="gp">' + _jiqArrowPct(s.gp) + '</span></div>';
             }).join('');
             return '<div class="jiq-arrow-donut">'
@@ -106742,8 +106742,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '<text x="140" y="134" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">Arrow</text>'
                 + '<text x="140" y="154" text-anchor="middle" font-size="11" fill="#7C878A">vs Gen Pop</text>'
                 + '</svg>'
-                + '<div class="jiq-arrow-dleg-k"><span></span><span></span><span>Arrow</span><span>People</span><span>Gen Pop</span></div>'
-                + '<div class="jiq-arrow-dleg">' + legend + '</div>'
+                + '<div class="jiq-arrow-dleg">'
+                + '<div class="jiq-arrow-dleg-k is-group"><span></span><span></span><span class="arrow">ARROW</span><span class="gphead">Gen Pop</span></div>'
+                + '<div class="jiq-arrow-dleg-k is-sub"><span></span><span></span><span>Total</span><span>%</span><span>%</span></div>'
+                + legend
+                + '</div>'
                 + '</div>';
         }
         function _jiqArrowBars(tables) {
@@ -188270,25 +188273,33 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         word-spacing: 0.35em;
     }
     #jiqArrowNestCard .jiq-arrow-donut svg { display: block; margin: 0 auto; }
+    #jiqArrowNestCard .jiq-arrow-dleg { max-width: 280px; margin: 0 auto; text-align: left; }
     #jiqArrowNestCard .jiq-arrow-dleg-k,
     #jiqArrowNestCard .jiq-arrow-dleg-row {
         display: grid;
-        grid-template-columns: 10px minmax(0, 1fr) 3.6rem 5.6rem 3.8rem;
-        gap: 8px; align-items: center; text-align: left;
+        grid-template-columns: 10px max-content 5.4rem 3.1rem 3.4rem;
+        gap: 3px 6px; align-items: end; justify-content: start; text-align: left;
     }
     #jiqArrowNestCard .jiq-arrow-dleg-k {
-        margin: 10px 0 4px; font-size: 10px; font-weight: 700;
+        margin: 8px 0 0; font-size: 10px; font-weight: 700;
         letter-spacing: .06em; text-transform: uppercase; color: #7C878A;
     }
-    #jiqArrowNestCard .jiq-arrow-dleg-k span:nth-child(n+3) { text-align: right; }
+    #jiqArrowNestCard .jiq-arrow-dleg-k.is-group { margin-top: 10px; }
+    #jiqArrowNestCard .jiq-arrow-dleg-k.is-group .arrow {
+        grid-column: 3 / 5; text-align: center;
+    }
+    #jiqArrowNestCard .jiq-arrow-dleg-k.is-group .gphead { text-align: center; }
+    #jiqArrowNestCard .jiq-arrow-dleg-k.is-sub { margin: 1px 0 3px; }
+    #jiqArrowNestCard .jiq-arrow-dleg-k.is-sub span:nth-child(n+3) { text-align: right; }
     #jiqArrowNestCard .jiq-arrow-dleg-row {
-        padding: 5px 0; font-size: 12px;
+        padding: 4px 0; font-size: 12px;
         border-bottom: 1px solid rgba(233,232,225,.08);
     }
     #jiqArrowNestCard .jiq-arrow-dleg-row:last-child { border-bottom: 0; }
     #jiqArrowNestCard .jiq-arrow-dleg-row i {
         width: 10px; height: 10px; border-radius: 2px; display: block;
     }
+    #jiqArrowNestCard .jiq-arrow-dleg-row .lab { padding-right: 2px; }
     #jiqArrowNestCard .jiq-arrow-dleg-row b,
     #jiqArrowNestCard .jiq-arrow-dleg-row em,
     #jiqArrowNestCard .jiq-arrow-dleg-row .gp {
