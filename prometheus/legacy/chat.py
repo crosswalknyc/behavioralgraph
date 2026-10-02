@@ -5992,6 +5992,58 @@ def _pm_interpret_core(user, body, text, history):
                     'error': guidance_msg,
                 }), 400
 
+        # Fragment-subject guard (2026-10-02 RCA, Scott: "review these
+        # three creators and prepare a report on which of the three
+        # actually influence product purchases" drafted a new build
+        # named "Three Actually Influence Product Purchases"). A
+        # subject that reads as a slice of the sentence is not an
+        # entity. Research can still rescue a real title the guard
+        # misjudges; otherwise the user names the audience and no
+        # build is drafted.
+        try:
+            from prometheus import guards as _pg
+            _frag_subj = str(spec_draft.get('subject') or '').strip()
+            _frag_dec = str(spec_draft.get('decision') or '')
+        except Exception:
+            _frag_subj, _frag_dec = '', ''
+        if _frag_subj and _frag_dec in ('new_build', 'subscriber_iq', '') \
+                and _pg.subject_reads_as_fragment(_frag_subj):
+            _fr_rescued = False
+            try:
+                _uv = _pm_rescue_unverified_draft(
+                    {'name': _frag_subj, 'decision': 'new_build',
+                     'tu_demos': {}})
+                if isinstance(_uv, dict) and isinstance(
+                        _uv.get('draft'), dict) \
+                        and not _pg.subject_reads_as_fragment(
+                            _uv['draft'].get('subject')):
+                    spec_draft = _uv['draft']
+                    _fr_rescued = True
+                    print(f"[synth-chat interpret] fragment subject "
+                          f"rescued by research: {_frag_subj!r}")
+            except Exception:
+                _pm_swallow('fragment-rescue')
+            if not _fr_rescued:
+                _pm_ask_hint(outcome='asked_subject', subject=_frag_subj)
+                guidance_msg = (
+                    "I read that as a task, not a profile to build. "
+                    "Which audience should this be on? Name the show, "
+                    "brand, or person (one line is enough) and I will "
+                    "take it from there.")
+                try:
+                    _H._prometheus_manual_look_email(
+                        text, guidance_msg,
+                        'The audience in this ask did not resolve to a '
+                        'named subject, so the user was asked to '
+                        'rephrase.')
+                except Exception:
+                    traceback.print_exc()
+                return jsonify({
+                    'success': False,
+                    'guidance': True,
+                    'error': guidance_msg,
+                }), 400
+
         # Subscriber IQ intent net (2026-08-26): typo-tolerant
         # deterministic routing for Subscriber IQ asks the interpret
         # step misread ('subscriber aqcuisiont', 'first watch', 'what

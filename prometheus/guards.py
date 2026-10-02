@@ -122,6 +122,109 @@ def is_capability_question(text):
     return bool(_CAPABILITY_RX.search(t))
 
 
+# ── Build is never the default (2026-10-02 RCA) ─────────────────────
+# A build costs the user credits. It happens on a build order (a build
+# verb with 'profile', a Subscriber IQ pull, a guided tool intake) or
+# on a short bare subject ("Reba McEntire avid fans"). An imperative
+# TASK ("review these three creators and prepare a report on which of
+# the three actually influence product purchases") is work for the
+# analysis pass, which asks "which ones?" when the referents are
+# unnamed. Scott's 2026-10-02 ask became a Profile IQ build named
+# "Three Actually Influence Product Purchases".
+_BUILD_ORDER_RX = re.compile(
+    r'\b(run|build|pull|create|queue|start|launch|generate|make)\b'
+    r'[^.;\n]{0,60}\b(profiles?|profile iq|subscriber iq|digital journey|'
+    r'flywheel|brand partnership|attribution|avid|cut|universe)\b', re.I)
+_TOOL_NOUN_RX = re.compile(
+    r'\b(brand partnership|attribution iq|attribution|flywheel|digital '
+    r'journey|journey iq|subscriber iq|profile iq|impact iq|trends iq|'
+    r'audience cut|avid (?:fan|cut))\b', re.I)
+_TASK_VERB_RX = re.compile(
+    r'^(?:please\s+|can you\s+|could you\s+|would you\s+|i need you to\s+|'
+    r'i want you to\s+)?'
+    r'(review|compare|summari[sz]e|list|prepare|analy[sz]e|look at|look '
+    r'into|tell me|explain|find|rank|evaluate|assess|recommend|identify|'
+    r'break ?down|describe|audit|check|read|walk me through|help me|'
+    r'write|draft|put together|figure out|work out|determine|estimate|'
+    r'value|size|quantify|score|grade|vet|validate|verify|contrast|'
+    r'map|outline|digest|interpret|translate|report on|dig into|'
+    r'tell us|show us)\b', re.I)
+_TASK_SHAPE_RX = re.compile(
+    r'\b(which of (?:the|these|those)|report on|and list|a report|'
+    r'prepare a|actually|whether|recommend|rank them|compare them|'
+    r'top \d+ insights?|key takeaways?|what (?:do|does|did|should))\b',
+    re.I)
+_FRAGMENT_TOKENS = {
+    'actually', 'which', 'that', 'who', 'whom', 'whose', 'influence',
+    'influences', 'influenced', 'purchase', 'purchases', 'purchasing',
+    'buy', 'buys', 'buying', 'bought', 'watch', 'watched', 'watching',
+    'prepare', 'report', 'list', 'review', 'compare', 'these', 'those',
+    'them', 'their', 'into', 'whether', 'because', 'about', 'versus',
+    'should', 'would', 'could', 'does', 'did', 'are', 'is', 'was',
+    'were', 'has', 'have', 'had', 'will', 'can', 'please', 'tell',
+    'show', 'give', 'make', 'build', 'run', 'pull', 'create',
+}
+_NUMBER_WORDS = {'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+                 'eight', 'nine', 'ten', 'several', 'few', 'some', 'all',
+                 'both', 'each', 'every', 'these', 'those', 'the'}
+
+
+def is_build_order(text):
+    """An explicit build order: a build verb bound to a product noun."""
+    return bool(_BUILD_ORDER_RX.search(str(text or '')))
+
+
+def reads_as_task(text):
+    """An imperative or analytical task that is not a build order.
+
+    True when the ask opens with a task verb (review, compare, prepare,
+    list, analyze, ...) or carries a task shape ("which of the three",
+    "report on", "and list some"), and does not order a build. Short
+    bare subjects ("Nike", "Reba McEntire avid fans") are NOT tasks."""
+    t = str(text or '').strip()
+    if not t or is_build_order(t):
+        return False
+    # A named tool product is a guided intake, not a free task.
+    if _TOOL_NOUN_RX.search(t):
+        return False
+    words = t.split()
+    if len(words) < 4:
+        return False
+    if _TASK_VERB_RX.match(t):
+        return True
+    if len(words) >= 8 and _TASK_SHAPE_RX.search(t):
+        return True
+    return False
+
+
+def subject_reads_as_fragment(subject):
+    """A build subject that is a slice of the user's sentence, not an
+    entity. "Three Actually Influence Product Purchases" (Scott,
+    2026-10-02). Deterministic: a verb or function word inside the
+    label, a number-word opener, or more than six words."""
+    s = str(subject or '').strip()
+    if not s:
+        return False
+    toks = re.sub(r'[^a-z0-9 ]+', ' ', s.lower()).split()
+    if not toks:
+        return False
+    if len(toks) > 6:
+        return True
+    if toks[0] in _NUMBER_WORDS and len(toks) >= 3:
+        return True
+    hits = [w for w in toks if w in _FRAGMENT_TOKENS]
+    # One function word inside a real title is common ("Days of Our
+    # Lives" has none, "Who Wants to Be a Millionaire" has 'who'); two
+    # or more, or a bare verb of commerce / influence, is a fragment.
+    if len(hits) >= 2:
+        return True
+    if any(w in ('influence', 'influences', 'influenced', 'actually',
+                 'purchases', 'purchasing', 'prepare', 'report',
+                 'whether', 'because') for w in toks):
+        return True
+    return False
+
+
 def subiq_is_explicit_pull(text):
     """True when the ask plainly orders a Subscriber IQ build. A
     question that only mentions churn / reactivated / new viewers

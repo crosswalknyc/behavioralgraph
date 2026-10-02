@@ -270,6 +270,16 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         if guards.is_capability_question(t):
             d.update(surface='analyze', reason='capability_question')
             return d
+    # A churn / retention TASK without a build order ("analyze the
+    # churn on these two titles and recommend which one gets the
+    # dollars") is analysis, not a 10-credit pull (2026-10-02 RCA).
+    try:
+        if subiq and not guards.subiq_is_explicit_pull(t) \
+                and guards.reads_as_task(t):
+            d.update(surface='analyze', reason='task_not_build')
+            return d
+    except Exception:
+        pass
 
     # 4. Dashboard pickers (menus the dashboard can open). The surface
     #    is still analyze for a client without that UI.
@@ -305,6 +315,19 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         d.update(surface='analyze', reason='question' if not has_ctx
                  else 'data_open')
         return d
+
+    # 7b. Build is never the default (2026-10-02 RCA). An imperative
+    #     task that does not order a build ("review these three
+    #     creators and prepare a report on which ... influence
+    #     product purchases") is work for the analysis pass, which
+    #     asks "which ones?" when the referents are unnamed. A short
+    #     bare subject still falls through to interpret.
+    try:
+        if not subiq and guards.reads_as_task(t):
+            d.update(surface='analyze', reason='task_not_build')
+            return d
+    except Exception:
+        pass
 
     d['reason'] = 'subiq' if subiq else 'build_or_other'
     return d
