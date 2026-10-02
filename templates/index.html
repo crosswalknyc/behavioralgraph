@@ -29391,6 +29391,7 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #ecommerceIQView .bp-tab { background: #FFFFFF; border-color: #C9C6BA; color: #5C6560; }
         body[data-theme="light"] #ecommerceIQView .bp-tab.is-active { background: rgba(94, 126, 18, 0.08);
             border-color: rgba(94, 126, 18, 0.4); color: #5E7E12; }
+        #ecommerceIQView #bpiqValuationRow > .tab-section { flex: 1 1 0 !important; min-width: 0 !important; }
         #ecommerceIQView #bpiqValuationRow :is(#bpiqBevBody, #bpiqBlvBody, #bpiqConversions, #bpiqConvValBody) {
             max-width: 600px; width: 100%; }
         /* Left padding clears the fixed Library rail. */
@@ -75750,7 +75751,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var bevRateValue = (v.rates && v.rates.bev_per_user) || 0;
                 bevBody.innerHTML = _bpiqMathRow(
                     [
-                        { label: '<span style="font-weight:700;color:var(--text-primary);">Post-Campaign Engaged Consumers</span>',
+                        { label: '<span style="font-weight:700;color:var(--text-primary);white-space:nowrap;">Post-Campaign Engaged Consumers</span>',
                           value: _bpiqFmtNum(bevCount) },
                         { label: '× $/consumer rate<br>'
                                  + _bpiqBenchHint(_bm.bev_per_user)
@@ -75774,7 +75775,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var blvRateValue = (v.rates && v.rates.blv_per_incr_user) || 0;
                 blvBody.innerHTML = _bpiqMathRow(
                     [
-                        { label: '<span style="white-space:nowrap;"><span style="font-weight:700;color:var(--text-primary);">Incremental Consumers</span> <span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span></span>',
+                        { label: '<span style="white-space:nowrap;"><span style="font-weight:700;color:var(--text-primary);">Incremental Consumers</span> <span style="font-size:10.5px;">(post − pre · DiD vs Gen Pop)</span></span>',
                           value: _bpiqFmtNum(blvCount) },
                         { label: '× $/incremental-consumer rate<br>'
                                  + _bpiqBenchHint(_bm.blv_per_incr_user)
