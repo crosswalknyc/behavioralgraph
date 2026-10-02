@@ -18887,6 +18887,24 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             min-width: 100% !important;
         }
 
+        /* ---- 16d. DATA CUTS columns: scroll the data tables sideways ----------
+           When a cut (e.g. AVID) is added, v4 swaps each demographic card's
+           bar list for a .behavioral-table grid and injects a cohort column
+           per cut; the behavioral / interests / locations tables grow the same
+           way. On a phone those extra columns run off the right edge. Make the
+           grid tables scroll horizontally so every cohort column is reachable
+           while the fixed column widths (proportions) stay put. Harmless with
+           no cut active - nothing overflows, so no scrollbar appears.
+           Mobile-only; desktop keeps its native layout. */
+        #dashboardView.piq-v4 .behavioral-table,
+        #dashboardView.piq-v4 #tab-demographics .demo-table-container .behavioral-table,
+        #dashboardView.piq-v4 .interests-list-section .interests-grid,
+        #dashboardView.piq-v4 #interestsGrid,
+        #dashboardView.piq-v4 [id^="locationList"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
         /* ---- 11d. DATA CUTS "Add to dashboard" popover: reliable taps ---------
            On phones the checkbox rows were hard/impossible to tap. Kill the
            ~300ms tap delay (touch-action) and give every row a comfortable
