@@ -139654,6 +139654,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var wrap = document.getElementById('piqStickyChrome');
             var promo = document.getElementById('prometheusWidget');
             var spacer = document.getElementById('piqChromeSpacer');
+            // While the mobile "Data & Analysis Tools" picker is open the
+            // <select> holds focus. Opening it on iOS shrinks the visual
+            // viewport, which fires resize -> this function; re-styling the
+            // position:fixed chrome (top/left/width) out from under the select
+            // dismisses the native picker. Leave the chrome untouched until it
+            // blurs. (Only a concern on the sub-tabs, where the chrome is tall
+            // enough that a reflow visibly jumps.)
+            var _piqAE = document.activeElement;
+            if (_piqAE && _piqAE.id === 'mobileToolsNav' && wrap && wrap.classList.contains('piq-chrome-fixed')) {
+                return wrap;
+            }
             if (!view || !wrap || !view.classList.contains('piq-v4') || !view.classList.contains('piq-has-profile')
                     || !(window._piqV4ViewVisible ? window._piqV4ViewVisible() : true)) {
                 if (wrap) {
@@ -185379,8 +185390,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     }
                 }
                 window._mobileToolsBtns = btns;
-                sel.innerHTML = html;
-                sel.selectedIndex = 0;
+                // Reassigning innerHTML tears down and rebuilds the <option>s.
+                // This runs on focus, i.e. exactly as the native picker is
+                // opening on iOS - rebuilding then can dismiss it. Only rewrite
+                // when the option set actually changed.
+                if (sel.innerHTML !== html) sel.innerHTML = html;
+                try { sel.selectedIndex = 0; } catch (_e) {}
             };
             window._onMobileToolsNav = function (sel) {
                 var idx = parseInt(sel.value, 10);
