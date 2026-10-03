@@ -5575,6 +5575,22 @@ def _pm_interpret_core(user, body, text, history):
             pass
         return jsonify({'success': False, 'guidance': True,
                         'error': _lk_reply, 'followups': _lk_chips})
+    # Deterministic lanes run before any library or model path
+    # (2026-10-02 S7): "is eastside golf running?" is a status
+    # question even when it is question-shaped and names a library
+    # title; it used to fall into the library-answer read below and
+    # spend a model call on a lookup.
+    # Subject-named status question (2026-10-02 S3 lanes): "is
+    # eastside golf running?" answers from the caller's runs and the
+    # library on this surface too. It drafted a fresh 5-credit build
+    # here while the analysis surface answered the same words.
+    _st_lane = _pm_status_lane(user, text)
+    if _st_lane:
+        _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
+        _pm_ask_hint(route='status_check', outcome=_st_outcome,
+                     subject=_st_subject)
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _st_reply, 'followups': _st_chips})
     # A question about reads the library already holds (compare two
     # titles' first three days, which had more new accounts) answers
     # from those reads instead of drafting a new order (2026-10-02
@@ -5624,17 +5640,6 @@ def _pm_interpret_core(user, body, text, history):
                 pass
             return jsonify({'success': False, 'guidance': True,
                             'error': _wo_reply})
-    # Subject-named status question (2026-10-02 S3 lanes): "is
-    # eastside golf running?" answers from the caller's runs and the
-    # library on this surface too. It drafted a fresh 5-credit build
-    # here while the analysis surface answered the same words.
-    _st_lane = _pm_status_lane(user, text)
-    if _st_lane:
-        _st_reply, _st_chips, _st_outcome, _st_subject = _st_lane
-        _pm_ask_hint(route='status_check', outcome=_st_outcome,
-                     subject=_st_subject)
-        return jsonify({'success': False, 'guidance': True,
-                        'error': _st_reply, 'followups': _st_chips})
     # Typed approval with no brief on screen (2026-10-02 S3 lanes):
     # "approved" reaching this surface bare means the card is gone
     # (reload, new tab). It used to become a build for a subject
@@ -5955,6 +5960,7 @@ def _pm_interpret_core(user, body, text, history):
         # 32k ceiling + array salvage (2026-08-20): rule 7 lets this
         # call return a multi-spec ARRAY, which needs far more than
         # 8192 output tokens and must survive truncation.
+        _t_model = time.monotonic()
         result = _H._run_nflx_claude_agent(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -5962,6 +5968,7 @@ def _pm_interpret_core(user, body, text, history):
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             salvage_arrays=True,
         )
+        _pm_ask_stage('model', t0=_t_model)
         if not result.get('success'):
             _H._chatbot_error_email(
                 'brief-chat/interpret',
@@ -6161,10 +6168,12 @@ def _pm_interpret_core(user, body, text, history):
         # binding medium/platform words in the ask win over a famous
         # lookalike name. Verifies suspect content titles via web
         # search; still-ambiguous drafts stash a confirm question.
+        _t_identity = time.monotonic()
         try:
             _H._resolve_subject_identity(spec_draft, text, allow_ask=True)
         except Exception as _id_err:
             print(f"[synth-chat interpret] identity error: {_id_err}")
+        _pm_ask_stage('identity', t0=_t_identity)
 
         # Normalized existing-profile match (2026-08-24 SHARKNINJA
         # directive): same entity under case/spacing/punctuation
@@ -6203,7 +6212,9 @@ def _pm_interpret_core(user, body, text, history):
         # the likely intended name as a chip; no brief is drafted.
         # Fail-open on errors and timeouts; off under
         # PM_CHAT_SUBJECT_VERIFY=0 for hermetic runs.
+        _t_verify = time.monotonic()
         _sv_block = _pm_chat_subject_verify(spec_draft, candidates, text)
+        _pm_ask_stage('verify', t0=_t_verify)
         if _sv_block is not None:
             return _sv_block
 
@@ -6264,11 +6275,13 @@ def _pm_interpret_core(user, body, text, history):
         # now; while the broad-vs-viewers question is still pending,
         # the scope question chains after that answer instead (see the
         # ip_scope clarify handler).
+        _t_scope = time.monotonic()
         try:
             if not spec_draft.get('ask_ip_scope'):
                 _H._apply_viewer_scope_guard(spec_draft, text, allow_ask=True)
         except Exception as _vsc_err:
             print(f"[synth-chat interpret] viewer-scope error: {_vsc_err}")
+        _pm_ask_stage('viewer_scope', t0=_t_scope)
 
         # Kids-product definition (2026-08-27 Jenna, Toca Boca
         # directive): a product whose end users are predominantly
@@ -6347,9 +6360,11 @@ def _pm_interpret_core(user, body, text, history):
         # scopes - binds onto the draft with an echo, or asks before
         # anything builds. Runs BEFORE the date gate so a bound
         # quarter/fiscal window marks the range explicit.
+        _t_guards = time.monotonic()
         _sg_ask = _H._apply_semantic_guards(
             spec_draft, text, history=history, allow_ask=True,
             decision=decision_str)
+        _pm_ask_stage('semantic_guards', t0=_t_guards)
         if _sg_ask:
             return jsonify({
                 'success': False,
@@ -6618,6 +6633,7 @@ def _pm_interpret_core(user, body, text, history):
         # Jenna): same helper the Partner API quotes from, derived from
         # the exact sample pinned on this draft, so the brief, the
         # partner surfaces, and the delivered file all agree.
+        _t_estimate = time.monotonic()
         try:
             _est_rng = _H._estimated_audience_range(
                 spec_draft.get('subject_raw_tu'))
@@ -6650,6 +6666,7 @@ def _pm_interpret_core(user, body, text, history):
         except Exception as _est_err:
             print(f"[synth-chat interpret] estimate range skipped: "
                   f"{_est_err}")
+        _pm_ask_stage('estimate', t0=_t_estimate)
         # Age from the immutable filename stamp + em/en dash scrub on
         # every model-authored prose field the widget renders
         # (2026-08-25: interpret assumptions shipped em dashes onto
@@ -18011,3 +18028,7 @@ from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_fw_status,
     api_synth_chat_aiq_status,
 )
+# Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
+# the digest caches when a profile loads so the first ask skips the
+# five-second digest stage.
+import prometheus.warm  # noqa: E402,F401

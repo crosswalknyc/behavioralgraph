@@ -81249,6 +81249,43 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } catch (_) {}
         })();
 
+        // Screen warm-up (2026-10-02 S7): tell the server what is on
+        // screen as soon as a profile loads or the composer takes
+        // focus, so the first question finds the digest already built.
+        // Fire-and-forget; deduped per screen; never surfaces anything.
+        var _pmWarmLast = { key: '', at: 0 };
+        var _pmWarmTimer = null;
+        function _pmWarmScreen() {
+            try {
+                if (_pmWarmTimer) clearTimeout(_pmWarmTimer);
+                _pmWarmTimer = setTimeout(function() {
+                    _pmWarmTimer = null;
+                    try {
+                        var ctx = _pmCollectPageContext();
+                        if (!ctx || !ctx.primary || !ctx.primary.s3_key) return;
+                        var key = String(ctx.primary.s3_key) + '|' +
+                            (ctx.cuts || []).map(function(c) { return c && c.s3_key; }).join(',');
+                        var now = Date.now();
+                        if (key === _pmWarmLast.key && (now - _pmWarmLast.at) < 45000) return;
+                        _pmWarmLast = { key: key, at: now };
+                        fetch('/api/brief-chat/warm', {
+                            method: 'POST', credentials: 'same-origin', keepalive: true,
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ page_context: ctx })
+                        }).catch(function() {});
+                    } catch (_) {}
+                }, 500);
+            } catch (_) {}
+        }
+        try {
+            document.addEventListener('focusin', function(ev) {
+                try {
+                    var t = ev && ev.target;
+                    if (t && t.id === 'synthChatInput') _pmWarmScreen();
+                } catch (_) {}
+            });
+        } catch (_) {}
+
         function _pmCollectPageContext() {
             try {
                 var primaryKey = (typeof currentS3Key !== 'undefined' && currentS3Key) || null;
@@ -141304,6 +141341,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     renderDashboard(data.data, data.brand, data.date_range, data.display_override);
                     _piqTakeViewIfStillActive(_productAtStart);
                     applyGenPopMode();
+                    try { _pmWarmScreen(); } catch (_) {}
                 } else {
                     const msg = response.status === 404
                         ? 'Profile not found. Click ↻ to refresh the profile list.'
@@ -147862,6 +147900,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             currentS3Key = profileId;
             currentDashboardData = parsed;
             setCurrentProfileDisplayOverride(displayOverride);
+            try { _pmWarmScreen(); } catch (_) {}
             
             const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, profileId, displayOverride);
             const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, displayOverride);
