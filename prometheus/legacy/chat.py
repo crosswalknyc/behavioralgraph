@@ -5649,6 +5649,18 @@ def _pm_interpret_core(user, body, text, history):
         return jsonify({'success': False, 'guidance': True,
                         'error': _PM_APPROVE_NO_DRAFT_COPY})
 
+    # CAN'T-DO LANE (2026-10-02 S8): the same honest boundary on the
+    # build surface, so "refund those credits" or "add my colleague"
+    # never becomes a draft named after the request.
+    _cd_lane = _pm_cant_do_lane(
+        (session.get('username') or user.get('username') or '').strip(),
+        text)
+    if _cd_lane:
+        _cd_reply, _cd_chips, _cd_kind = _cd_lane
+        _pm_ask_hint(route='cant_do', outcome=_cd_kind)
+        return jsonify({'success': False, 'guidance': True,
+                        'error': _cd_reply, 'followups': _cd_chips})
+
     # ------------------------------------------------------------------
     # INCIDENCE / SAMPLE-SIZE PRE-CHECK (2026-08-19): questions like
     # "how many panelists would we have for X over Y?" get a sample-
@@ -10479,6 +10491,29 @@ def _pm_forward_user_feedback(username, text, kind):
         threading.Thread(target=_send, daemon=True).start()
     except Exception:
         traceback.print_exc()
+
+
+def _pm_cant_do_lane(username, text):
+    """(reply, chips, kind) when the message asks for an action this
+    chat cannot take (add a user, refund credits, rename or re-image a
+    profile, edit a number by hand, contact a third party, set up a
+    recurring run, push a file into another tool), else None. The
+    note goes to the team on the same hourly-deduped path as product
+    feedback; the reply says what Prometheus can do instead. No model
+    call (2026-10-02 S8)."""
+    try:
+        from prometheus import capabilities as _pc
+        if not _pc.enabled():
+            return None
+        kind = _pc.action_request(text)
+        if not kind:
+            return None
+        reply, chips = _pc.cant_do_reply(kind)
+        _pm_forward_user_feedback(username, text, 'action_request_' + kind)
+        return reply, chips, kind
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 _PM_BUILD_NOTIFY_PREFIX = 'system/pm_build_notify/'
@@ -15598,6 +15633,20 @@ def _pm_analyze_core(user, body, text, history):
                           'I will set up the email.'),
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
+    # CAN'T-DO LANE (2026-10-02 S8): an action this chat cannot take
+    # (add a user, refund credits, rename or re-image a profile, edit
+    # a number, contact a third party, schedule a run, push a file
+    # into another tool) gets an honest answer naming what Prometheus
+    # can do instead and who handles the rest. Runs after the
+    # feedback and delivery lanes, before any model path.
+    _cd_lane = _pm_cant_do_lane(_fb_user, text)
+    if _cd_lane:
+        _cd_reply, _cd_chips, _cd_kind = _cd_lane
+        _pm_ask_hint(route='cant_do', outcome=_cd_kind)
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': _cd_reply,
+            'followups': _cd_chips, 'offer_deck': False,
+            'deck_angle': None})
     # SUBSCRIBER IQ LOOKUP (2026-10-02 Bria): "Do you see the SWAT
     # Exiles Season 1 Subscriber IQ?" is answered from the library and
     # the caller's runs. It never reaches the Subscriber IQ build
@@ -17807,6 +17856,7 @@ _EXPORTS = (
     '_pm_bpiq_parse',
     '_pm_bpiq_status_write',
     '_pm_cancel_target',
+    '_pm_cant_do_lane',
     '_pm_challenge_headsup',
     '_pm_clarify_answer_merge',
     '_pm_classify_chain',
