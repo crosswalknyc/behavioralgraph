@@ -6371,6 +6371,14 @@ def _load_rhythm_profiles() -> dict[str, dict]:
     return _rhythm_profiles_cache
 
 
+# An item's aggregate normally sits near its largest platform block
+# (14.5K of 34.7K items read a little under it on 2026-10-05, a
+# cross-platform read rather than a strict sum). Under half of the
+# largest block it is not a read at all but a collapsed value (3, 5)
+# that must never be used as a scale.
+_AGG_COLLAPSE_FRACTION = 0.5
+
+
 def _rescale_estimate_blocks(it: dict, old_mid: int, new_mid: int,
                               key: str, salt: str) -> None:
     """Move an item's aggregate to `new_mid` and rescale bands +
@@ -6386,7 +6394,7 @@ def _rescale_estimate_blocks(it: dict, old_mid: int, new_mid: int,
     by_plat0 = it.get('by_platform') or {}
     mids0 = [int(b.get('us_estimate') or 0) for b in by_plat0.values()
              if isinstance(b, dict)] if isinstance(by_plat0, dict) else []
-    if mids0 and old_mid < max(mids0):
+    if mids0 and old_mid < max(mids0) * _AGG_COLLAPSE_FRACTION:
         rebuilt = max(sum(m for m in mids0 if m > 0), max(mids0))
         it['us_estimate'] = _natural_last_digits(rebuilt, key, f'{salt}|rebuilt')
         if isinstance(it.get('us_estimate_low'), int) and it['us_estimate_low'] > it['us_estimate']:
@@ -6870,7 +6878,7 @@ def _set_platform_reading(it: dict, slug: str, new_value: int,
         mids = [int(b.get('us_estimate') or 0)
                 for b in (it.get('by_platform') or {}).values()
                 if isinstance(b, dict)]
-        if mids and new_agg < max(mids):
+        if mids and new_agg < max(mids) * _AGG_COLLAPSE_FRACTION:
             new_agg = max(sum(m for m in mids if m > 0), max(mids))
         a_scale = new_agg / agg
         it['us_estimate'] = _natural_last_digits(new_agg, item_key, salt)
