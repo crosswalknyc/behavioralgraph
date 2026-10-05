@@ -5055,7 +5055,7 @@ def _pm_watch_notify(username, question, payload, subject=None):
 
 _PM_TAXONOMY_OVERRIDES = frozenset({
     'empty', 'faulted', 'clarified', 'clarified_repeat', 'proposed',
-    'confirmed'})
+    'confirmed', 'rerouted'})
 
 
 def _pm_swallow(where, exc=None, note=None):
@@ -5215,6 +5215,12 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
         # Async acknowledgements (a queued job) are answers.
         if (payload.get('job_id') or payload.get('read_job_id')
                 or payload.get('pending')):
+            return resp, payload, status_code, outcome, (extra or None)
+        # Handoffs (action build_profile / route_hint) carry a blank
+        # reply by contract: the widget runs the build interpret next.
+        # Holding one replaces the handoff with the email promise and
+        # the user never sees the build card (2026-10-05, Soulidified).
+        if _ao.is_handoff(payload) and status_code < 400:
             return resp, payload, status_code, outcome, (extra or None)
 
         held = result in _PM_GATE_HELD
@@ -16379,10 +16385,14 @@ def _pm_analyze_core(user, body, text, history):
     _pm_subject = (p_meta.get('name')
                    or (ctx.get('view_context') or {}).get('view_title')
                    or 'open view')
-    _pm_ask_hint(route=('profile_build' if action == 'build_profile'
+    # A build_profile action is a handoff to the interpret flow, not
+    # an answer: log it as the reroute it is (the explicit reroute
+    # exits above use the same route / outcome pair).
+    _pm_ask_hint(route=('build_reroute' if action == 'build_profile'
                         else 'page_analysis'),
-                 outcome='answered', subject=_pm_subject,
-                 mode=mode or None)
+                 outcome=('rerouted' if action == 'build_profile'
+                          else 'answered'),
+                 subject=_pm_subject, mode=mode or None)
     # Fresh generations meter through their own model-call usage rows
     # (usage_extras on _pm_claude_json); no separate debit here.
     return jsonify({

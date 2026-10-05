@@ -15,6 +15,8 @@ of these outcomes (the ask log and the alert rule both read it):
     proposed    a confirm card where one field was proposed, not typed
     clarified   a clarifying question back to the user
     clarified_repeat  the same clarify the user already received
+    rerouted    a handoff to another flow (the widget runs the build
+                interpret next); the blank reply is the contract
     empty       nothing the user could read
     faulted     transport / auth / scaffold text shown as content
     declined    an honest decline (credits, not quantifiable, no context)
@@ -27,6 +29,25 @@ from __future__ import annotations
 import re
 
 ALERT_OUTCOMES = frozenset({'empty', 'faulted', 'clarified_repeat'})
+
+# Analyze replies that hand the turn to another flow. The widget reads
+# `action` / `route_hint` and calls the build interpret next, so the
+# blank `reply` is the contract, not a failure (2026-10-05: Sydney's
+# Soulidified build ask was classified empty, held by the answer gate,
+# alerted, and the user was told to wait for an email instead of
+# seeing the build card).
+HANDOFF_ACTIONS = frozenset({'build_profile'})
+
+
+def is_handoff(payload):
+    """True when the payload routes the widget to another flow."""
+    if not isinstance(payload, dict):
+        return False
+    if payload.get('success') is False:
+        return False
+    if str(payload.get('action') or '') in HANDOFF_ACTIONS:
+        return True
+    return bool(str(payload.get('route_hint') or '').strip())
 
 # Strings a user must never see as the body of an answer. Transport,
 # auth, Python, and HTML leakage. Matched against the whole reply when
@@ -148,6 +169,10 @@ def classify(surface, payload, status_code=200, history=None,
                                                      'draft'):
                 detail['decision'] = base_outcome
             return 'built', detail
+        if is_handoff(payload) and not is_faulted_text(text):
+            detail['handoff'] = (str(payload.get('route_hint') or '').strip()
+                                 or 'interpret')
+            return 'rerouted', detail
         if not text.strip():
             if has_card or has_structured:
                 return (base_outcome or 'answered'), detail
