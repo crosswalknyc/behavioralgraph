@@ -2875,6 +2875,13 @@ def refresh_paid_only_product_flags(user: dict) -> dict:
         user[flag] = bool(
             keys or gifted or complimentary_needles(user, product))
     user["has_chatbot_profile_iq_access"] = True
+    bpiq = _clean_paid_runs(user.get("brand_partnership_iq_journeys"))
+    if bpiq:
+        user["has_brand_partnership_iq_access"] = True
+        mods = _clean_paid_runs(user.get("analysis_iq_modules"))
+        if "brand_partnership_iq" not in mods:
+            mods.append("brand_partnership_iq")
+        user["analysis_iq_modules"] = mods
     return user
 
 
@@ -3081,6 +3088,16 @@ def inherit_company_paid_runs(user: dict, users_data: dict, *,
             user["complimentary_keys"] = _merge_key_map(
                 user.get("complimentary_keys"),
                 rec.get("complimentary_keys"))
+        company_bpiq = _clean_paid_runs(
+            rec.get("brand_partnership_iq_journeys"))
+        if company_bpiq:
+            cur = user.get("brand_partnership_iq_journeys")
+            if replace or not isinstance(cur, list):
+                user["brand_partnership_iq_journeys"] = list(company_bpiq)
+            else:
+                have = _clean_paid_runs(cur)
+                user["brand_partnership_iq_journeys"] = have + [
+                    k for k in company_bpiq if k not in have]
     elif is_public_signup_seat(user):
         user["complimentary_titles"] = {}
         user["complimentary_keys"] = {}

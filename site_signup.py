@@ -243,6 +243,19 @@ def clamp_self_serve_access(user: Optional[dict], access: dict) -> dict:
         out["has_subscriber_iq_access"] = True
     if jiq or _has_complimentary(user, "journey_iq"):
         out["has_journey_iq_access"] = True
+    # A paid-only seat may hold one Brand Partnership IQ report
+    # without opening the rest of the fleet. Restore the stored
+    # allow-list after the wipe above. Do not route this through
+    # complimentary_keys: that unlocks the dashboard before the
+    # opening top-up.
+    bpiq = _granted_list(user, "brand_partnership_iq_journeys")
+    if bpiq:
+        out["brand_partnership_iq_journeys"] = bpiq
+        out["has_brand_partnership_iq_access"] = True
+        mods = [m for m in (out.get("analysis_iq_modules") or []) if m]
+        if "brand_partnership_iq" not in mods:
+            mods.append("brand_partnership_iq")
+        out["analysis_iq_modules"] = mods
     return apply_complimentary_product_flags(user, out)
 
 
