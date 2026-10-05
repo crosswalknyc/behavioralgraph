@@ -74603,14 +74603,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + '</div>';
             }
 
+            // Each section renders on its own. If one throws on an
+            // unexpected field shape, the others still repaint for
+            // THIS read instead of leaving the previously viewed
+            // read's panels on screen (Willow Smith x Free People
+            // read looked like a copy of Zoe Kravitz x YSL, 2026-10-05).
+            function _bpiqSection(label, fn) {
+                try { fn(); }
+                catch (e) { console.warn('[bpiq] ' + label + ' section failed:', e); }
+            }
             // Incremental reach (control vs treatment, DiD)
-            _bpiqRenderControl(data.control_group || {}, data.projected_audience_size || 0);
+            _bpiqSection('control', function() {
+                _bpiqRenderControl(data.control_group || {}, data.projected_audience_size || 0);
+            });
 
             // Demographics (pre vs post brand engagers)
-            _bpiqRenderDemographics(data.demographics || {});
+            _bpiqSection('demographics', function() {
+                _bpiqRenderDemographics(data.demographics || {});
+            });
 
             // 💰 Total Brand Value (hero) + Valuation Breakdown
-            _bpiqRenderValuation(data.valuation || {});
+            _bpiqSection('valuation', function() {
+                _bpiqRenderValuation(data.valuation || {});
+            });
 
             // Top brand properties - display gen-pop projected hits.
             // Fallback to raw hits × ROAS multiplier (~494.85) for old
@@ -75515,7 +75530,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         // that collapse to the same canonical bucket.
         function _bpiqMergeDemo(field, arr) {
             var out = {};
-            (arr || []).forEach(function(x) {
+            // Canonical shape is a list of {value, percentage}. A
+            // bucket -> pct map (older generator output) is accepted
+            // too so one odd file can never abort the render.
+            if (arr && !Array.isArray(arr) && typeof arr === 'object') {
+                arr = Object.keys(arr).map(function(k) {
+                    return { value: k, percentage: arr[k] };
+                });
+            }
+            (Array.isArray(arr) ? arr : []).forEach(function(x) {
                 if (!x || x.value == null) return;
                 var label = _bpiqNormalizeDemoLabel(field, x.value);
                 out[label] = (out[label] || 0) + (Number(x.percentage) || 0);

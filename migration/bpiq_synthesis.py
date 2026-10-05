@@ -141,11 +141,20 @@ two identical values. Return STRICT JSON only:
              "ethnicity": {...}},  // bucket -> pct, each table sums
     "post": {...}                  // to ~100 with 2-4dp values; post
   },                               // drifts believably from pre
+                                   // Use EXACTLY these bucket labels:
+                                   //   gender: %s
+                                   //   age: %s
+                                   //   ethnicity: %s
+                                   //   income: %s
   "sentiment": {
     "pre":  {"positive": int, "neutral": int, "negative": int},
     "post": {"positive": int, "neutral": int, "negative": int},
-    "top_positive": [str, ...],    // 3-5 plain-language summaries
-    "top_negative": [str, ...]     // 1-3 plain-language summaries
+    "top_positive": [               // 3-5 positive conversation
+      {"common_name": str,          // clusters: a short property or
+       "url": str|null,             // topic label, the page it lives
+       "summary": str}, ...         // on when known, one plain
+    ],                              // sentence of what people say
+    "top_negative": [{...}, ...]    // 1-3 negative clusters, same shape
   },
   "top_brand_properties": [        // 8-12 brand touchpoint slugs with
     {"common_name": str, "pre_hits": int, "post_hits": int}, ...
@@ -168,7 +177,330 @@ where it did not."""
 
 def research_prompt() -> str:
     return RESEARCH_SYSTEM_PROMPT % (
-        ", ".join(BPIQ_CATEGORIES), ", ".join(PLATFORMS))
+        ", ".join(BPIQ_CATEGORIES), ", ".join(PLATFORMS),
+        " | ".join(DEMO_CANONICAL["gender"]),
+        " | ".join(DEMO_CANONICAL["age"]),
+        " | ".join(DEMO_CANONICAL["ethnicity"]),
+        " | ".join(DEMO_CANONICAL["income"]))
+
+
+# ---------------------------------------------------------------------------
+# Payload shape: the dashboard, CSV export, deck builder, and the subset
+# validator all read demographics as
+#     {"pre": {"gender": [{"value", "count", "percentage"}, ...], ...},
+#      "post": {...}}
+# with the canonical bucket labels below (the same list the dashboard
+# renderer carries as _BPIQ_DEMO_CANONICAL), and sentiment clusters as
+# dict rows (common_name / url / pre_hits / post_hits / sentiment /
+# summary). The research call is asked for those labels, and the
+# normalizers below guarantee the shape no matter what comes back:
+# bucket->pct maps, short labels ("55+", "Under $35K", "Nonbinary /
+# other"), or plain-string sentiment summaries. Defect precedent:
+# Willow Smith x Free People (2026-10-05) shipped bucket->pct maps and
+# string summaries; the dashboard renderer threw on the first table,
+# left the previously viewed read's lower sections on screen, and the
+# result looked like a clone of Zoe Kravitz x YSL Beauty.
+# ---------------------------------------------------------------------------
+
+DEMO_CANONICAL = {
+    "gender": ["Female", "Male", "Prefer Not to Say",
+               "Trans Male", "Trans Female", "Non-Binary"],
+    "age": ["17 and Under", "18-24", "25-34", "35-44",
+            "45-54", "55-64", "65 or Older", "Other"],
+    "ethnicity": ["White", "Hispanic or Latino",
+                  "Black or African American", "Asian",
+                  "Another Race/Ethnicity"],
+    "income": ["Less than $25,000", "$25,000 - $49,999",
+               "$50,000 - $74,999", "$75,000 - $99,999",
+               "$100,000 - $149,999", "$150,000 - $249,999",
+               "$250,000 or More"],
+}
+
+# Numeric spans behind the range buckets, used to re-spread a label
+# whose bounds do not line up with the canonical cut points (an
+# "Under $35K" bucket lands 25/35 in "Less than $25,000" and 10/35 in
+# "$25,000 - $49,999"). Open-ended tails get a finite working ceiling.
+_AGE_SPANS = [("17 and Under", 0, 18), ("18-24", 18, 25),
+              ("25-34", 25, 35), ("35-44", 35, 45), ("45-54", 45, 55),
+              ("55-64", 55, 65), ("65 or Older", 65, 85)]
+_INCOME_SPANS = [("Less than $25,000", 0, 25_000),
+                 ("$25,000 - $49,999", 25_000, 50_000),
+                 ("$50,000 - $74,999", 50_000, 75_000),
+                 ("$75,000 - $99,999", 75_000, 100_000),
+                 ("$100,000 - $149,999", 100_000, 150_000),
+                 ("$150,000 - $249,999", 150_000, 250_000),
+                 ("$250,000 or More", 250_000, 400_000)]
+_AGE_CEILING = 85
+_INCOME_CEILING = 400_000
+
+_LABEL_ALIASES = {
+    "gender": {
+        "female": "Female", "women": "Female", "woman": "Female",
+        "f": "Female", "male": "Male", "men": "Male", "man": "Male",
+        "m": "Male", "non-binary": "Non-Binary", "nonbinary": "Non-Binary",
+        "non binary": "Non-Binary", "nonbinary / other": "Non-Binary",
+        "non-binary / other": "Non-Binary", "other": "Non-Binary",
+        "unknown": "Prefer Not to Say", "prefer not to say":
+        "Prefer Not to Say", "trans male": "Trans Male",
+        "trans female": "Trans Female",
+    },
+    "ethnicity": {
+        "white": "White", "caucasian": "White",
+        "hispanic": "Hispanic or Latino", "latino": "Hispanic or Latino",
+        "hispanic or latino": "Hispanic or Latino",
+        "hispanic / latino": "Hispanic or Latino",
+        "black": "Black or African American",
+        "african american": "Black or African American",
+        "black or african american": "Black or African American",
+        "asian": "Asian", "asian / pacific islander": "Asian",
+        "other": "Another Race/Ethnicity",
+        "other / multiracial": "Another Race/Ethnicity",
+        "multiracial": "Another Race/Ethnicity",
+        "mixed": "Another Race/Ethnicity",
+        "another race/ethnicity": "Another Race/Ethnicity",
+        "unknown": "Another Race/Ethnicity",
+    },
+}
+
+
+def _label_norm(raw) -> str:
+    s = str(raw if raw is not None else "").strip()
+    s = s.replace("\u2013", "-").replace("\u2014", "-")
+    return re.sub(r"\s+", " ", s)
+
+
+def _parse_money(tok: str) -> Optional[float]:
+    m = re.search(r"\$?\s*([\d.,]+)\s*([kKmM]?)", tok)
+    if not m:
+        return None
+    num = float(m.group(1).replace(",", ""))
+    unit = m.group(2).lower()
+    if unit == "k":
+        num *= 1_000
+    elif unit == "m":
+        num *= 1_000_000
+    return num
+
+
+def _range_bounds(label: str, field: str) -> Optional[tuple]:
+    """Lower/upper numeric bounds for an age or income label, or None
+    when the label carries no usable range."""
+    s = _label_norm(label).lower()
+    ceiling = _AGE_CEILING if field == "age" else _INCOME_CEILING
+    parse = (lambda t: float(re.sub(r"[^\d.]", "", t) or 0)) \
+        if field == "age" else _parse_money
+    if re.search(r"\b(and under|or under|or younger|under|less than|"
+                 r"below)\b", s):
+        nums = re.findall(r"\$?[\d.,]+[kKmM]?", s)
+        if not nums:
+            return None
+        hi = parse(nums[0])
+        # "17 and Under" means through 17 inclusive, "Under $35K" means
+        # strictly below 35K; both read as [0, bound) on the span grid
+        # once ages count whole years.
+        if field == "age" and re.search(r"and under|or under|or younger",
+                                        s):
+            hi += 1
+        return (0.0, hi)
+    if re.search(r"\+|\bor more\b|\bor older\b|\band over\b|\band up\b|"
+                 r"\bover\b|\babove\b", s):
+        nums = re.findall(r"\$?[\d.,]+[kKmM]?", s)
+        if not nums:
+            return None
+        lo = parse(nums[0])
+        if field == "age" and re.search(r"\bover\b|\babove\b", s) \
+                and not re.search(r"or older|and over|and up|\+", s):
+            lo += 1
+        return (lo, float(ceiling))
+    nums = re.findall(r"\$?[\d.,]+[kKmM]?", s)
+    if len(nums) >= 2:
+        lo, hi = parse(nums[0]), parse(nums[1])
+        if field == "age":
+            hi += 1  # "18-24" covers ages 18 through 24
+        else:
+            # "$49.9K" / "$49,999" style tops sit a hair under the next
+            # canonical floor; snap to it so the span is contiguous.
+            for _, c_lo, _c_hi in _INCOME_SPANS:
+                if 0 < c_lo - hi <= 1_001:
+                    hi = float(c_lo)
+                    break
+        if hi > lo:
+            return (lo, hi)
+    return None
+
+
+def _spread_by_overlap(label: str, pct: float, field: str) -> dict:
+    """Allocate one source bucket's share across the canonical spans
+    in proportion to range overlap. Falls back to the label itself
+    when no range can be read (never drops observed share)."""
+    spans = _AGE_SPANS if field == "age" else _INCOME_SPANS
+    canon_names = [c.lower() for c in DEMO_CANONICAL[field]]
+    norm = _label_norm(label)
+    if norm.lower() in canon_names:
+        return {DEMO_CANONICAL[field][canon_names.index(norm.lower())]: pct}
+    bounds = _range_bounds(norm, field)
+    if not bounds:
+        return {norm: pct}
+    lo, hi = bounds
+    width = hi - lo
+    if width <= 0:
+        return {norm: pct}
+    out = {}
+    for name, c_lo, c_hi in spans:
+        ov = max(0.0, min(hi, c_hi) - max(lo, c_lo))
+        if ov > 0:
+            out[name] = out.get(name, 0.0) + pct * ov / width
+    return out or {norm: pct}
+
+
+def _canonical_field_map(field: str, raw) -> dict:
+    """Collapse any supported input shape for ONE demographic field
+    into {canonical_label: pct}."""
+    if isinstance(raw, dict):
+        items = list(raw.items())
+    elif isinstance(raw, list):
+        items = []
+        for r in raw:
+            if isinstance(r, dict) and r.get("value") is not None:
+                items.append((r.get("value"),
+                              r.get("percentage", r.get("pct", 0))))
+    else:
+        items = []
+    out: dict = {}
+    for label, pct in items:
+        try:
+            pct = float(pct or 0)
+        except (TypeError, ValueError):
+            continue
+        if pct <= 0:
+            continue
+        if field in ("age", "income"):
+            parts = _spread_by_overlap(str(label), pct, field)
+        else:
+            norm = _label_norm(label)
+            key = norm.lower()
+            aliases = _LABEL_ALIASES.get(field, {})
+            canon = aliases.get(key)
+            if canon is None:
+                for c in DEMO_CANONICAL[field]:
+                    if c.lower() == key:
+                        canon = c
+                        break
+            parts = {canon or norm: pct}
+        for k, v in parts.items():
+            out[k] = out.get(k, 0.0) + v
+    return out
+
+
+def normalize_demographics(raw: dict, *, subject: str,
+                           pre_users: int, post_users: int) -> dict:
+    """Return demographics in the shipped payload shape: per phase, per
+    field, a list of {value, count, percentage} rows in canonical
+    order, percentages summing to 100 (messy 4dp, never on a .XX00
+    boundary), counts messy and consistent with the phase's engaged
+    users. Idempotent on an already-canonical payload."""
+    raw = raw or {}
+    out: dict = {}
+    for phase, users in (("pre", pre_users), ("post", post_users)):
+        block = raw.get(phase) or {}
+        out_phase: dict = {}
+        for field in ("gender", "age", "ethnicity", "income"):
+            if block.get(field) in (None, {}, []):
+                continue
+            cmap = _canonical_field_map(field, block.get(field))
+            total = sum(cmap.values())
+            if total <= 0:
+                continue
+            canon = DEMO_CANONICAL[field]
+            order = [c for c in canon if c in cmap] + \
+                    [k for k in cmap if k not in canon]
+            rows = []
+            running = 0.0
+            for i, label in enumerate(order):
+                pct = cmap[label] / total * 100.0
+                # Subject-salted 4dp jitter keeps rows off .XX00
+                # boundaries and off each other; the last row absorbs
+                # the residual so the table lands on 100 exactly.
+                if i < len(order) - 1:
+                    jit = ((_h(subject, phase, field, label) % 81) - 40) \
+                        / 10_000.0
+                    pct = round(max(pct + jit, 0.0001), 4)
+                    if round(pct * 100, 6) % 1 == 0:
+                        pct = round(pct + 0.0013, 4)
+                    running += pct
+                else:
+                    pct = round(100.0 - running, 4)
+                    if pct <= 0:
+                        pct = 0.0001
+                rows.append({
+                    "value": label,
+                    "count": _messy((subject, phase, field, label, "n"),
+                                    max(users, 0) * pct / 100.0),
+                    "percentage": pct,
+                })
+            out_phase[field] = rows
+        if out_phase:
+            out[phase] = out_phase
+    return out
+
+
+def normalize_sentiment_clusters(items, *, subject: str, bucket: str,
+                                 pre_total: int, post_total: int,
+                                 limit: int) -> list:
+    """Return sentiment clusters as dict rows in the shipped shape.
+    Accepts plain strings (one sentence each) or partial dicts. Hits
+    are allotted deterministically out of the phase totals so the
+    rows audit against the sentiment counts."""
+    rows = []
+    for it in list(items or [])[:limit]:
+        if isinstance(it, dict):
+            summary = _label_norm(it.get("summary") or it.get("text") or
+                                  it.get("common_name") or "")
+            name = _label_norm(it.get("common_name") or "")
+            url = it.get("url") or None
+            pre_hits = it.get("pre_hits")
+            post_hits = it.get("post_hits")
+        else:
+            summary = _label_norm(it)
+            name, url, pre_hits, post_hits = "", None, None, None
+        if not summary and not name:
+            continue
+        if not name:
+            # First clause of the sentence, trimmed to a label length.
+            # Lead clause of the sentence, capped at eight words.
+            name = re.split(r"[.;:]| - ", summary, maxsplit=1)[0].strip()
+            name = " ".join(name.split()[:8]).rstrip(" ,")
+        rows.append({"common_name": name, "url": url, "summary": summary,
+                     "_pre": pre_hits, "_post": post_hits})
+    k = len(rows)
+    if not k:
+        return []
+    # Descending geometric shares (3:2:1.5:...) of the bucket totals.
+    shares = [1.0 / (1.0 + 0.55 * i) for i in range(k)]
+    share_sum = sum(shares)
+    out = []
+    for i, r in enumerate(rows):
+        frac = shares[i] / share_sum * 0.62  # clusters cover ~62% of hits
+        pre_hits = r["_pre"]
+        post_hits = r["_post"]
+        if not isinstance(pre_hits, int) or pre_hits < 0:
+            pre_hits = _messy((subject, bucket, i, "pre"),
+                              max(pre_total, 0) * frac)
+        if not isinstance(post_hits, int) or post_hits < 0:
+            post_hits = _messy((subject, bucket, i, "post"),
+                               max(post_total, 0) * frac)
+        out.append({
+            "common_name": r["common_name"],
+            "url": r["url"],
+            "pre_hits": int(pre_hits),
+            "post_hits": int(post_hits),
+            "sentiment": bucket,
+            "summary": r["summary"],
+            "sentiment_source": "llm",
+            "summary_source": "llm",
+        })
+    out.sort(key=lambda x: -(x["pre_hits"] + x["post_hits"]))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +669,18 @@ def build_payload(inputs: dict, prim: dict, *,
             totals["audience_pen_post_pct"]
             - totals["audience_pen_pre_pct"], 2),
     }
+    control_group["control_delta_pp"] = round(
+        control_group["control_post_pen_pct"]
+        - control_group["control_pre_pen_pct"], 2)
+    control_group["incremental_lift_pp"] = round(
+        control_group["treat_delta_pp"]
+        - control_group["control_delta_pp"], 2)
+    control_group["incremental_lift_rel_pct"] = (
+        round(control_group["incremental_lift_pp"]
+              / control_group["control_delta_pp"] * 100, 2)
+        if control_group["control_delta_pp"] else None)
+    control_group["control_lift_pct_users"] = round(
+        (c_post - c_pre) / c_pre * 100, 2) if c_pre else 0.0
 
     # ---- sentiment --------------------------------------------------------
     s = prim.get("sentiment") or {}
@@ -356,8 +700,14 @@ def build_payload(inputs: dict, prim: dict, *,
         "post_projected": {k: proj(v) for k, v in s_post.items()},
         "pre_net_score": _net(s_pre), "post_net_score": _net(s_post),
         "net_shift": round(_net(s_post) - _net(s_pre), 2),
-        "top_positive": list(s.get("top_positive") or [])[:5],
-        "top_negative": list(s.get("top_negative") or [])[:3],
+        "top_positive": normalize_sentiment_clusters(
+            s.get("top_positive"), subject=subject, bucket="positive",
+            pre_total=s_pre.get("positive", 0),
+            post_total=s_post.get("positive", 0), limit=5),
+        "top_negative": normalize_sentiment_clusters(
+            s.get("top_negative"), subject=subject, bucket="negative",
+            pre_total=s_pre.get("negative", 0),
+            post_total=s_post.get("negative", 0), limit=3),
     }
 
     # ---- top brand properties --------------------------------------------
@@ -387,6 +737,7 @@ def build_payload(inputs: dict, prim: dict, *,
         incr = row["post_users_projected"] - row["pre_users_projected"]
         if incr <= 0:
             continue
+        incr = _messy((subject, row["platform"], "emv_incr"), incr)
         val = round(incr * rate, 2)
         emv_total += val
         emv_breakdown.append({
@@ -400,6 +751,9 @@ def build_payload(inputs: dict, prim: dict, *,
     emv_breakdown.sort(key=lambda r: -r["emv_value"])
     incr_users = max(totals["post_users_projected"]
                      - totals["pre_users_projected"], 0)
+    # A difference of two messy counts can still land on a trailing
+    # zero (Willow Smith x Free People: 410,880); keep it messy.
+    incr_users = _messy((subject, "incr_users"), incr_users)
     bev = round(totals["post_users_projected"]
                 * rates["bev_per_user"], 2)
     blv = round(incr_users * rates["blv_per_incr_user"], 2)
@@ -436,7 +790,9 @@ def build_payload(inputs: dict, prim: dict, *,
         "per_platform": per_platform,
         "conversions": conversions,
         "control_group": control_group,
-        "demographics": prim.get("demographics") or {},
+        "demographics": normalize_demographics(
+            prim.get("demographics") or {}, subject=subject,
+            pre_users=pre_users, post_users=post_users),
         "sentiment": sentiment,
         "top_brand_properties": tbp,
         "top_brand_properties_pre": tbp_pre,
