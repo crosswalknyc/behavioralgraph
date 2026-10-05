@@ -189177,6 +189177,28 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
+
+    /* ---- The full board folds as the window narrows -----------------
+       The columns are set inline, so the overrides need !important. The
+       movers rail drops under the boards first; then Film and TV stack. */
+    @media (max-width: 1500px) {
+        #trendsIQView .tiq-board { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        #trendsIQView .tiq-board:not(:has(> .tiq-card + .tiq-card)) {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        #trendsIQView .tiq-board > .tiq-movers {
+            grid-column: 1 / -1;
+            border-left: 0; padding-left: 0;
+            border-top: 1px solid var(--mag-rule); padding-top: 20px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            column-gap: 28px;
+        }
+        #trendsIQView .tiq-board > .tiq-movers > h4,
+        #trendsIQView .tiq-board > .tiq-movers > .tiq-movers-note { grid-column: 1 / -1; }
+    }
+    @media (max-width: 1200px) {
+        #trendsIQView .tiq-board { grid-template-columns: minmax(0, 1fr) !important; }
+    }
 </style>
 <script>
     // Which products run the brand palette. Keep in sync as views migrate.
