@@ -10938,7 +10938,7 @@
             
             // Access expiration
             if (user.access_expires) {
-                document.getElementById('accessExpires').value = user.access_expires;
+                document.getElementById('accessExpires').value = String(user.access_expires).slice(0, 10);
                 document.getElementById('unlimitedAccess').checked = false;
                 document.getElementById('accessExpires').disabled = false;
             } else {

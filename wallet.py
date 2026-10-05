@@ -1665,27 +1665,51 @@ def opening_funding_unmet(user: dict, users_data: dict = None,
     return _lifetime_topups_usd(subject) + 1e-9 < float(need)
 
 
-def access_window_expired(user: dict, today=None) -> bool:
-    """True when access_expires is a date and today is after it.
+def _parse_access_expires(raw):
+    """Return (date_only, value) or (None, None).
 
-    The stored date is the last calendar day they can sign in
-    (UTC). Missing / unreadable dates never expire.
+    Date-only values stay the last UTC calendar day the seat can
+    sign in. A datetime (ISO, with or without a timezone) is the
+    exact cutoff. Naive datetimes are UTC.
     """
-    raw = (user or {}).get("access_expires")
-    if not raw:
-        return False
+    s = str(raw or "").strip()
+    if not s:
+        return None, None
+    if "T" in s or (len(s) > 10 and s[10] in " T"):
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return False, dt
+        except (TypeError, ValueError):
+            pass
     try:
-        exp = datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
+        return True, datetime.strptime(s[:10], "%Y-%m-%d").date()
     except (TypeError, ValueError):
+        return None, None
+
+
+def access_window_expired(user: dict, today=None) -> bool:
+    """True when the seat is past access_expires.
+
+    Date-only values expire after that UTC calendar day. Datetime
+    values expire at that instant. Missing / unreadable dates never
+    expire.
+    """
+    date_only, exp = _parse_access_expires((user or {}).get("access_expires"))
+    if exp is None:
         return False
     if today is None:
-        day = datetime.now(timezone.utc).date()
+        now = datetime.now(timezone.utc)
+    elif isinstance(today, datetime):
+        now = today if today.tzinfo else today.replace(tzinfo=timezone.utc)
     else:
-        try:
-            day = today.date()
-        except Exception:
-            day = today
-    return day > exp
+        if date_only:
+            return today > exp
+        now = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    if date_only:
+        return now.date() > exp
+    return now > exp
 
 
 def opening_checkout_allowed(amt, *, amount_locked: bool = False,
