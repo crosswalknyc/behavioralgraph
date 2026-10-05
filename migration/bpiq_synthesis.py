@@ -172,7 +172,18 @@ Ground every level in the researched reality of THIS partnership:
 when the campaign ran, where the creative lived, how famous the
 talent is, the brand's baseline reach. The event-window penetration
 must exceed pre for platforms that carried creative and move little
-where it did not."""
+where it did not.
+
+Demographics describe the BRAND ENGAGERS inside the qualifier
+audience (the people with a brand touchpoint), not the talent's whole
+following. Research who the brand actually sells to and let that
+bound every table: a brand that serves one gender (women's apparel
+like Free People, men's grooming), one life stage (kids' toys, baby
+care), or one income tier must show it. Men inside a women's-apparel
+brand's engagers are a small gift-and-browse share (single digits to
+low teens), whatever the talent's own gender mix is. Post drifts
+toward the talent's audience where the campaign pulled new people
+in, but never past what the brand's customer base supports."""
 
 
 def research_prompt() -> str:

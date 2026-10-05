@@ -16518,14 +16518,27 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             ContentType='application/json')
         bare_key = out_key.replace('brand-partnership-iq/', '')
         # Metadata sidecar: title + category so the tab and the admin
-        # CMS render it immediately.
+        # CMS render it immediately, plus the thumbnail every hand-built
+        # read carries (2026-10-05, Willow Smith x Free People shipped
+        # without a photo).
+        _img_url = None
+        try:
+            from prometheus.bpiq_image import resolve_bpiq_image
+            _img_url, _img_src = resolve_bpiq_image(_H, inputs)
+            print(f"[bpiq-job {job_id}] image {_img_src}: {_img_url}")
+        except Exception as img_err:
+            print(f"[bpiq-job {job_id}] image lookup failed "
+                  f"(non-fatal): {img_err}")
         try:
             meta = _H.load_bpiq_metadata()
+            _prev = meta.get(bare_key) or {}
             meta[bare_key] = {
-                **(meta.get(bare_key) or {}),
+                **_prev,
                 'display_name': payload.get('project_name') or bare_key,
                 'category': (category or 'ENTERTAINMENT'),
             }
+            if _img_url and not _prev.get('image_url'):
+                meta[bare_key]['image_url'] = _img_url
             _H.s3_client.put_object(
                 Bucket=_H.S3_BUCKET, Key=_H.BPIQ_METADATA_KEY,
                 Body=json.dumps(meta, indent=2).encode('utf-8'),
