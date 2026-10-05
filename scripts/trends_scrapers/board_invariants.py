@@ -55,6 +55,7 @@ import json
 import logging
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -267,7 +268,9 @@ def format_report(res: dict) -> str:
         items = res.get(key) or []
         lines.append(f"  {label}: {len(items)}")
         for v in items[:6]:
-            lines.append('     ' + json.dumps(v, ensure_ascii=False)[:180])
+            # Wide enough that a value is never cut mid-number: the
+            # 2026-10-03 alert read 'below_v: 57281' for a 572,81x row.
+            lines.append('     ' + json.dumps(v, ensure_ascii=False)[:320])
         if len(items) > 6:
             lines.append(f"     ... and {len(items) - 6} more")
     lines.append('  rails:')
@@ -280,6 +283,272 @@ def format_report(res: dict) -> str:
                      f"chart {ch:14s} catalog>floor {s['catalog_above']:>3} "
                      f"tail inversions {s['rail_inversions']:>3}{flag}")
     return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Terminal fixer: arithmetic on the rendered board, written to the store
+# ---------------------------------------------------------------------------
+# Spacing between neighbouring positions when a value has to be moved
+# under the one above it. Same band the chart coherence pass uses, so a
+# row this pass places is indistinguishable from one that pass placed.
+_STEP_MIN = 0.015
+_STEP_MAX = 0.060
+
+
+def _step(salt: str) -> float:
+    from scripts.trends_scrapers import stream_estimates as se
+    return _STEP_MIN + se._h01(salt) * (_STEP_MAX - _STEP_MIN)
+
+
+def _under(value: float, limit: Optional[int], title: str, salt: str) -> int:
+    """Natural last digits on `value`, never above `limit`, never below 1."""
+    from scripts.trends_scrapers import published_chart_coherence as pcc
+    lim = int(limit) if limit else None
+    return max(1, pcc._natural_under(max(1, int(round(value))), lim,
+                                     title or '', salt))
+
+
+def _resolve(se, ces, store: dict, slug: str, prefix: str, it: dict,
+             is_channel: bool) -> tuple[list[str], Optional[int]]:
+    """The store keys the rendered row reads, and the store's reading.
+
+    A row the store does not know (no entry under any sibling key) comes
+    back with no candidates; a row whose store reading differs from what
+    rendered comes back with the reading so the caller can refuse to
+    write blind.
+    """
+    name = (it.get('name') if is_channel else it.get('title')) or ''
+    norm = se._cp_normalize(name)
+    if not norm:
+        return [], None
+    if is_channel:
+        cands = [f'fast_channel:{slug}:{norm}']
+    else:
+        cands = ces.entry_key_candidates(prefix, _kind(it), norm)
+    if not ces.present(store, cands):
+        return [], None
+    return cands, ces.reading_for(store, cands, slug)
+
+
+def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
+    """Correct, in place, whatever the set-level pass left on the board.
+
+    The set-level fixer reasons every chart and catalog again and is
+    the right first answer; on 2026-10-03 it ran three times and left
+    one Netflix series pair reading the wrong way round (The Great
+    British Baking Show above LEGO ONE PIECE on the chart, 174,193
+    against 572,81x on the page), and the gate's only remaining move
+    was an email. This is the move it has now. Pure arithmetic on the
+    values the page is showing, in the order the page is showing them:
+
+      I1  a chart position reading at or above the one above it is
+          placed a drawn step (1.5% to 6%) under it, cascading down;
+      I6  a blank chart or tail row takes a step under its upper
+          neighbour (or a step over its lower one at the top);
+      I3  a catalog row reading above the chart's last position is
+          placed under that floor, breaches keeping their own order;
+      I5  the tail after the chart descends in render order;
+      I4  two rows seated within 0.5% of each other at the platform
+          cap are spaced apart.
+
+    Every value is written across every sibling key the render could
+    resolve (`chart_entry_sync.write_across`), capped at the service's
+    daily ceiling, with natural last digits. A row whose store reading
+    does not match what rendered is used as an anchor but never
+    written, because the page is reading something this pass cannot
+    see. I2 (no chart published) is not a value and is left alone.
+    """
+    from scripts.trends_scrapers import stream_estimates as se
+    from scripts.trends_scrapers import chart_entry_sync as ces
+    from scripts.trends_scrapers import _base
+
+    board = se._read_snapshot('stream_estimates') or {}
+    store = board.get('items') or {}
+    stats: dict[str, Any] = {'moved': 0, 'unresolved': 0, 'mismatch': 0,
+                             'rails': 0, 'written': False, 'detail': []}
+    if not store:
+        stats['error'] = 'no store'
+        return stats
+    caps = _daily_caps()
+    cards = (payload or {}).get('cards') or {}
+    day = board.get('target_date') or ''
+
+    for section, _label in _SECTIONS:
+        for slug, panel in (cards.get(section) or {}).items():
+            if not isinstance(panel, dict):
+                continue
+            is_channel = False
+            rows = panel.get('items') if isinstance(panel.get('items'), list) else []
+            if not rows and isinstance(panel.get('channels'), list):
+                rows, is_channel = panel['channels'], True
+            if not rows:
+                continue
+            rail = f'{section}.{slug}'
+            prefix = se.published_chart_key_prefix(slug)
+            cap = caps.get(slug)
+            salt0 = f'{day}|terminal|{slug}'
+
+            # One record per rendered row: value as rendered, store
+            # keys, and whether the store agrees with the page.
+            recs = []
+            for i, it in enumerate(rows):
+                v = _row_value(it)
+                cands, reading = _resolve(se, ces, store, slug, prefix,
+                                          it, is_channel)
+                writable = bool(cands) and (reading or 0) == v
+                if cands and not writable and v:
+                    stats['mismatch'] += 1
+                g, pos = _chart_group(it)
+                recs.append({'i': i, 'it': it, 'v': v, 'cands': cands,
+                             'writable': writable, 'g': g, 'pos': pos,
+                             'title': (it.get('name') if is_channel
+                                       else it.get('title')) or '',
+                             'shelf': bool(it.get('collection')
+                                           and it.get('bucket_rank'))})
+
+            moves: list[tuple[dict, int, str]] = []
+
+            def _place(r, new_v, why):
+                new_v = max(1, int(new_v))
+                if new_v == r['v']:
+                    return
+                if r['cands'] and r['writable']:
+                    moves.append((r, new_v, why))
+                else:
+                    stats['unresolved'] += 1
+                r['v'] = new_v   # anchors below use the placed value
+
+            # I1 + chart blanks: each chart in its published order.
+            charts: dict[str, list] = defaultdict(list)
+            for r in recs:
+                if r['g']:
+                    charts[r['g']].append(r)
+            floors: dict[str, int] = {}
+            for g, seq in charts.items():
+                seq.sort(key=lambda r: r['pos'])
+                prev: Optional[int] = None
+                for j, r in enumerate(seq):
+                    salt = f'{salt0}|{g}|{r["pos"]}'
+                    limit = cap
+                    if prev is not None:
+                        limit = prev - 1 if limit is None else min(limit, prev - 1)
+                    if not r['v']:
+                        if prev is not None:
+                            _place(r, _under(prev * (1 - _step(salt)), limit,
+                                             r['title'], salt), 'I6 chart blank')
+                        else:
+                            nxt = next((x['v'] for x in seq[j + 1:] if x['v']), 0)
+                            if nxt:
+                                _place(r, _under(nxt * (1 + _step(salt)), cap,
+                                                 r['title'], salt), 'I6 chart blank')
+                    elif prev is not None and r['v'] >= prev:
+                        _place(r, _under(prev * (1 - _step(salt)), limit,
+                                         r['title'], salt), 'I1 chart order')
+                    elif cap and r['v'] > cap:
+                        _place(r, _under(cap, limit, r['title'], salt), 'cap')
+                    if r['v']:
+                        prev = r['v']
+                kind = g.rsplit('|', 1)[-1].strip().lower()
+                kind = 'film' if kind == 'film' else ('tv' if kind else '')
+                sub = g.split('|')[1].lower() if '|' in g else ''
+                if not kind and sub:
+                    kind = 'film' if ('film' in sub or 'movie' in sub) else 'tv'
+                last = min((r['v'] for r in seq if r['v']), default=0)
+                if last:
+                    floors[kind] = (max(floors[kind], last) if kind in floors
+                                    else last)
+
+            # I3: catalog rows above their kind's floor go under it,
+            # keeping their order among themselves.
+            if floors:
+                for kind in set(_kind(r['it']) for r in recs):
+                    floor = floors.get(kind)
+                    if floor is None:
+                        floor = min(floors.values())
+                    breach = [r for r in recs
+                              if not r['g'] and not r['shelf'] and r['v'] > floor
+                              and _kind(r['it']) == kind]
+                    breach.sort(key=lambda r: -r['v'])
+                    cur = floor
+                    for r in breach:
+                        salt = f'{salt0}|catalog|{r["title"]}'
+                        new_v = _under(cur * (1 - _step(salt)), cur - 1,
+                                       r['title'], salt)
+                        _place(r, new_v, 'I3 catalog under chart')
+                        cur = r['v']
+
+            # I5 + tail blanks: the rendered tail descends.
+            tail = [r for r in recs if not r['g']]
+            prev = None
+            for j, r in enumerate(tail):
+                salt = f'{salt0}|tail|{r["i"]}'
+                if not r['v']:
+                    if prev is not None:
+                        _place(r, _under(prev * (1 - _step(salt)), prev - 1,
+                                         r['title'], salt), 'I6 blank')
+                    else:
+                        nxt = next((x['v'] for x in tail[j + 1:] if x['v']), 0)
+                        if nxt:
+                            _place(r, _under(nxt * (1 + _step(salt)), cap,
+                                             r['title'], salt), 'I6 blank')
+                elif prev is not None and r['v'] > prev:
+                    _place(r, _under(prev * (1 - _step(salt)), prev - 1,
+                                     r['title'], salt), 'I5 rail order')
+                if r['v']:
+                    prev = r['v']
+
+            # I4: seats at the cap spaced apart.
+            if cap:
+                near = sorted((r for r in recs if r['v'] >= cap * (1 - CAP_SEAT_BAND)),
+                              key=lambda r: -r['v'])
+                for j in range(1, len(near)):
+                    a, b = near[j - 1], near[j]
+                    if a['v'] - b['v'] <= a['v'] * CAP_SEAT_TIGHT:
+                        salt = f'{salt0}|seat|{b["title"]}'
+                        _place(b, _under(a['v'] * (1 - _step(salt)), a['v'] - 1,
+                                         b['title'], salt), 'I4 cap seat')
+
+            if moves:
+                stats['rails'] += 1
+            for r, new_v, why in moves:
+                res = ces.write_across(se, store, r['cands'], slug, new_v,
+                                       f'{salt0}|{why}')
+                if not (res.get('set') or res.get('created')):
+                    # A blank row's block exists with no reading, and
+                    # the shared setter moves readings rather than
+                    # creating them. Seat it directly.
+                    for k in ces.present(store, r['cands']):
+                        it = store[k]
+                        blk = (it.get('by_platform') or {}).get(slug)
+                        if isinstance(blk, dict) and not blk.get('us_estimate'):
+                            blk['us_estimate'] = new_v
+                            blk['us_estimate_low'] = max(1, int(new_v * 0.74))
+                            blk['us_estimate_high'] = max(new_v, int(new_v * 1.36))
+                            if not isinstance(it.get('us_estimate'), int) \
+                                    or it['us_estimate'] <= 0:
+                                it['us_estimate'] = new_v
+                            res['set'] = res.get('set', 0) + 1
+                if res.get('set') or res.get('created'):
+                    stats['moved'] += 1
+                    stats['detail'].append(
+                        {'rail': rail, 'title': r['title'], 'to': new_v, 'why': why})
+                else:
+                    stats['unresolved'] += 1
+
+    for d in stats['detail'][:40]:
+        logger.info('board terminal fix: %s %r -> %s (%s)',
+                    d['rail'], d['title'], f"{d['to']:,}", d['why'])
+    if stats['moved'] and write:
+        board['items'] = store
+        board['count'] = len(store)
+        board['board_terminal_fix_at'] = datetime.now(timezone.utc).isoformat()
+        _base.write_snapshot('stream_estimates', board)
+        stats['written'] = True
+    logger.info('board terminal fix: %d value(s) placed on %d rail(s), '
+                '%d unresolved, %d store/page mismatch(es), written=%s',
+                stats['moved'], stats['rails'], stats['unresolved'],
+                stats['mismatch'], stats['written'])
+    return stats
 
 
 def _fresh_view() -> Optional[dict]:
@@ -362,6 +631,7 @@ def gate(payload: Optional[dict] = None, *, fix: bool = True,
         # defect in the fixer and gets reported, not retried forever;
         # a pass that is still converging gets to finish the job.
         attempt = 0
+        again: Optional[dict] = None
         while fixable and attempt < MAX_FIX_ATTEMPTS:
             attempt += 1
             rc = _run_fixer()
@@ -393,15 +663,54 @@ def gate(payload: Optional[dict] = None, *, fix: bool = True,
                        + len(result['I6_blanks']))
             if result['violations'] >= before_n:
                 break   # no progress: another identical pass will not help
+
+        # Whatever the set-level pass left is placed arithmetically,
+        # on the page's own values in the page's own order, and the
+        # board is re-read. The gate's last move used to be an email;
+        # a survivor is a defect in a pass and gets corrected here,
+        # not reported and left (Jenna 2026-10-05: "they should self
+        # fix").
+        if fixable and again is not None:
+            try:
+                tf = terminal_fix(again)
+                result['terminal_fix'] = {k: tf.get(k) for k in
+                                          ('moved', 'rails', 'unresolved',
+                                           'mismatch', 'written')}
+                print(f"board invariants: terminal fix placed {tf.get('moved', 0)} "
+                      f"value(s) on {tf.get('rails', 0)} rail(s), "
+                      f"{tf.get('unresolved', 0)} unresolved", flush=True)
+                if tf.get('written'):
+                    final = _fresh_view()
+                    if final is not None:
+                        result_after = audit(final)
+                        result_after['fixed'] = (first['violations']
+                                                 - result_after['violations'])
+                        result_after['fix_attempts'] = result.get('fix_attempts', 0)
+                        result_after['terminal_fix'] = result['terminal_fix']
+                        result = result_after
+                        logger.info('board invariants (after terminal fix): '
+                                    '%d violation(s)', result['violations'])
+                        print(f"board invariants (after terminal fix): "
+                              f"{result['violations']} violation(s)", flush=True)
+            except Exception:
+                logger.exception('board invariants: terminal fix failed '
+                                 '(non-fatal)')
     if result['violations'] and alert:
         try:
             from scripts.trends_scrapers.run_guard import send_alert
+            tf = result.get('terminal_fix') or {}
             body = ('The rendered Trends IQ board failed its invariants after '
-                    'the pricing pass and one in-place fix attempt. These are '
+                    'the pricing pass, the in-place set-level fix attempts, '
+                    'and the terminal arithmetic placement. These are '
                     'the rules a platform\'s own people would check: chart '
                     'order, chart present, catalog under the chart, no cap '
-                    'seats, rail order, no blanks. A survivor here is a defect '
-                    'in a pass, not a wait for the next run.\n\n'
+                    'seats, rail order, no blanks. A survivor here is a row '
+                    'the store cannot reach from the page (no entry under any '
+                    'key the render reads, or a service that published no '
+                    'chart), not a wait for the next run.\n\n'
+                    f"terminal placement: {tf.get('moved', 0)} value(s) placed, "
+                    f"{tf.get('unresolved', 0)} unresolved, "
+                    f"{tf.get('mismatch', 0)} store/page mismatch(es)\n\n"
                     + format_report(result) + '\n')
             send_alert('board_invariants',
                        'Trends IQ: board invariants failed after the pricing pass',
@@ -417,11 +726,33 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument('--json', action='store_true')
     ap.add_argument('--gate', action='store_true',
                     help='audit, fix in place once, re-audit, alert on survivors')
+    ap.add_argument('--terminal-fix', action='store_true',
+                    help='audit, then place every survivor arithmetically '
+                         'and write the store (no set-level pass, no alert)')
+    ap.add_argument('--dry-run', action='store_true',
+                    help='with --terminal-fix: compute and log, write nothing')
     args = ap.parse_args(argv)
     if args.gate:
         res = gate()
         print(format_report(res) if 'rails' in res else res)
         return 0 if res.get('violations') == 0 else 1
+    if args.terminal_fix:
+        payload = _fresh_view()
+        if payload is None:
+            return 2
+        before = audit(payload)
+        print(format_report(before))
+        if not before['violations']:
+            return 0
+        tf = terminal_fix(payload, write=not args.dry_run)
+        print(json.dumps({k: v for k, v in tf.items() if k != 'detail'}))
+        for d in tf.get('detail') or []:
+            print(f"   {d['rail']:40s} {d['title']!r} -> {d['to']:,} ({d['why']})")
+        if args.dry_run or not tf.get('written'):
+            return 0
+        after = audit(_fresh_view() or {})
+        print(format_report(after))
+        return 0 if after.get('violations') == 0 else 1
     if args.view:
         payload = json.load(open(args.view))
     else:
