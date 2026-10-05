@@ -312,10 +312,13 @@ def _resolve(se, ces, store: dict, slug: str, prefix: str, it: dict,
              is_channel: bool) -> tuple[list[str], Optional[int]]:
     """The store keys the rendered row reads, and the store's reading.
 
-    A row the store does not know (no entry under any sibling key) comes
-    back with no candidates; a row whose store reading differs from what
-    rendered comes back with the reading so the caller can refuse to
-    write blind.
+    The candidates come back whether or not the store has an entry under
+    any of them (a chart entrant the store has never seen gets created
+    under the first); the reading is None when the store has no value
+    for this service, which is also the carried-forward case, where the
+    page is showing yesterday's number because today's store has no
+    block for the service. Only a store reading that EXISTS and differs
+    from what rendered is a real mismatch.
     """
     name = (it.get('name') if is_channel else it.get('title')) or ''
     norm = se._cp_normalize(name)
@@ -325,9 +328,91 @@ def _resolve(se, ces, store: dict, slug: str, prefix: str, it: dict,
         cands = [f'fast_channel:{slug}:{norm}']
     else:
         cands = ces.entry_key_candidates(prefix, _kind(it), norm)
-    if not ces.present(store, cands):
-        return [], None
     return cands, ces.reading_for(store, cands, slug)
+
+
+def _seed_entry(store: dict, key: str, it: dict, slug: str, day: str,
+                is_channel: bool, unit_label: Optional[str]) -> None:
+    """Create the store entry a rendered row has none of.
+
+    2026-10-05: titles that entered a chart in the morning scrape (Ice
+    Age, Men In Black 3, Grumpier Old Men, Grizzly Night) had no entry
+    under any key, so every writer silently skipped them and the rows
+    stayed where the page had them. The entry is modelled on the
+    rendered row; the service block is added by `write_across`.
+    """
+    kind = key.split(':', 1)[0]
+    if kind.startswith('fast_'):
+        kind = kind[len('fast_'):]
+    ent: dict[str, Any] = {
+        'kind': 'channel' if is_channel else kind,
+        'display_title': (it.get('name') if is_channel else it.get('title')) or '',
+        'artist': '',
+        'image': it.get('image'),
+        'url': it.get('url'),
+        'us_estimate': 0,
+        'confidence': 'low',
+        'as_of_date': day,
+    }
+    if unit_label:
+        ent['unit_label'] = unit_label
+    for f in ('published_rank', 'published_chart', 'published_group'):
+        if it.get(f) is not None:
+            ent[f] = it[f]
+    if it.get('published_rank'):
+        ent['best_rank'] = it['published_rank']
+        if it.get('published_chart'):
+            ent['chart_labels'] = [f"{it['published_chart']} #{it['published_rank']}"]
+    store[key] = ent
+
+
+def _rail_unit(rows: list) -> Optional[str]:
+    """The unit label the rail's own rows carry (for entries this pass
+    has to create)."""
+    for it in rows:
+        blk = it.get('us_streams') if isinstance(it.get('us_streams'), dict) else None
+        if blk and blk.get('unit_label'):
+            return blk['unit_label']
+    return None
+
+
+def _write_row(se, ces, store: dict, stats: dict, rail: str, slug: str,
+               day: str, r: dict, new_v: int, why: str, is_channel: bool,
+               unit_label: Optional[str], salt0: str) -> bool:
+    """Put `new_v` on the store for one rendered row, creating the entry
+    or the service block when the store lacks them."""
+    if not ces.present(store, r['cands']):
+        # The chart's own kind leads the candidates; a row whose kind
+        # the page does not state is seeded under the generic title
+        # key rather than guessed as a film.
+        key = r['cands'][0]
+        if not _kind(r['it']) and not is_channel:
+            generic = [k for k in r['cands'] if k.split(':', 1)[0].endswith('title')]
+            if generic:
+                key = generic[0]
+        _seed_entry(store, key, r['it'], slug, day, is_channel, unit_label)
+        stats['created_entries'] = stats.get('created_entries', 0) + 1
+    res = ces.write_across(se, store, r['cands'], slug, new_v, f'{salt0}|{why}')
+    if not (res.get('set') or res.get('created')):
+        # A blank row's block exists with no reading, and the shared
+        # setter moves readings rather than creating them. Seat it
+        # directly.
+        for k in ces.present(store, r['cands']):
+            it = store[k]
+            blk = (it.get('by_platform') or {}).get(slug)
+            if isinstance(blk, dict) and not blk.get('us_estimate'):
+                blk['us_estimate'] = new_v
+                blk['us_estimate_low'] = max(1, int(new_v * 0.74))
+                blk['us_estimate_high'] = max(new_v, int(new_v * 1.36))
+                if not isinstance(it.get('us_estimate'), int) or it['us_estimate'] <= 0:
+                    it['us_estimate'] = new_v
+                res['set'] = res.get('set', 0) + 1
+    if res.get('set') or res.get('created'):
+        stats['moved'] += 1
+        stats['detail'].append({'rail': rail, 'title': r['title'], 'to': new_v, 'why': why})
+        return True
+    stats['unresolved'] += 1
+    return False
 
 
 def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
@@ -372,6 +457,7 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
     caps = _daily_caps()
     cards = (payload or {}).get('cards') or {}
     day = board.get('target_date') or ''
+    top_rows: dict[str, tuple] = {}
 
     for section, _label in _SECTIONS:
         for slug, panel in (cards.get(section) or {}).items():
@@ -395,7 +481,12 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
                 v = _row_value(it)
                 cands, reading = _resolve(se, ces, store, slug, prefix,
                                           it, is_channel)
-                writable = bool(cands) and (reading or 0) == v
+                # Writable unless the store holds a reading for this
+                # service that is not what the page shows. No reading
+                # at all (carried forward, or an entry the store has
+                # never seen) is writable: the write creates the block
+                # or the entry and the page reads it from then on.
+                writable = bool(cands) and (reading is None or reading == v)
                 if cands and not writable and v:
                     stats['mismatch'] += 1
                 g, pos = _chart_group(it)
@@ -511,27 +602,36 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
             if moves:
                 stats['rails'] += 1
             for r, new_v, why in moves:
-                res = ces.write_across(se, store, r['cands'], slug, new_v,
-                                       f'{salt0}|{why}')
-                if not (res.get('set') or res.get('created')):
-                    # A blank row's block exists with no reading, and
-                    # the shared setter moves readings rather than
-                    # creating them. Seat it directly.
-                    for k in ces.present(store, r['cands']):
-                        it = store[k]
-                        blk = (it.get('by_platform') or {}).get(slug)
-                        if isinstance(blk, dict) and not blk.get('us_estimate'):
-                            blk['us_estimate'] = new_v
-                            blk['us_estimate_low'] = max(1, int(new_v * 0.74))
-                            blk['us_estimate_high'] = max(new_v, int(new_v * 1.36))
-                            if not isinstance(it.get('us_estimate'), int) \
-                                    or it['us_estimate'] <= 0:
-                                it['us_estimate'] = new_v
-                            res['set'] = res.get('set', 0) + 1
-                if res.get('set') or res.get('created'):
-                    stats['moved'] += 1
-                    stats['detail'].append(
-                        {'rail': rail, 'title': r['title'], 'to': new_v, 'why': why})
+                _write_row(se, ces, store, stats, rail, slug, day, r, new_v,
+                           why, is_channel, _rail_unit(rows), salt0)
+            top_rows[rail] = (slug, recs, rows, is_channel)
+
+    # I4 across services: two rails under one cap whose top rows sit
+    # within 0.5% of each other near it. The lower of the pair takes
+    # a drawn step under the higher.
+    by_cap: dict[int, list] = defaultdict(list)
+    for rail, (slug, recs, rows, is_channel) in top_rows.items():
+        cap = caps.get(slug)
+        if not cap or not recs:
+            continue
+        best = max((r for r in recs if r['v']), key=lambda r: r['v'], default=None)
+        if best and best['v'] >= cap * (1 - CAP_SEAT_BAND):
+            by_cap[cap].append((best['v'], rail, slug, best, rows, is_channel))
+    for cap, tops in by_cap.items():
+        tops.sort(key=lambda x: x[0])
+        for i in range(len(tops) - 1):
+            lo, hi = tops[i], tops[i + 1]
+            if hi[0] - lo[0] <= hi[0] * CAP_SEAT_TIGHT:
+                _, rail, slug, r, rows, is_channel = lo
+                salt = f'{day}|terminal|{slug}|xseat|{r["title"]}'
+                new_v = _under(hi[0] * (1 - _step(salt)), hi[0] - 1, r['title'], salt)
+                if r['cands'] and r['writable'] and new_v != r['v']:
+                    stats['rails'] += 1
+                    _write_row(se, ces, store, stats, rail, slug, day, r, new_v,
+                               'I4 cap seat across services', is_channel,
+                               _rail_unit(rows), f'{day}|terminal|{slug}')
+                    r['v'] = new_v
+                    lo = (new_v,) + lo[1:]
                 else:
                     stats['unresolved'] += 1
 
