@@ -388,7 +388,16 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
             artist = (it.get('artist') or it.get('author') or '').strip()
             if kind == 'fast_channel':
                 artist = cg._platform_slug_from_path(path)
-            cands = cg._entry_key_candidates(se, kind, title, artist)
+            # The row's OWN kind, not the list's first row's. A mixed
+            # `.items` list opens on a TV row, and keying a film row
+            # (Grizzly Night, Paramount+ Most Watched #11, 2026-10-05)
+            # off it put the entry under `tv:`; the film chart reads
+            # `film:` first, the research merge carries only the keys
+            # the catalog references, and the value was gone by the
+            # next pass. Written under its own kind the entry is the one
+            # the chart row renders and every later pass targets.
+            row_kind = cg._estimator_kind_for(path, it) or kind
+            cands = cg._entry_key_candidates(se, row_kind, title, artist)
             key = next((c for c in cands if c in items), None) or cands[0]
             if not key:
                 stats['skipped'].append((path, f'{title}: no key'))
@@ -414,7 +423,8 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
             entry = items.get(key)
             created = False
             if not isinstance(entry, dict):
-                entry = {'kind': kind, 'display_title': title,
+                entry = {'kind': key.split(':', 1)[0] if ':' in key else kind,
+                         'display_title': title,
                          'artist': artist, 'chart_labels': [],
                          'best_rank': rows[i][0],
                          'as_of_date': target_date_iso}
@@ -422,6 +432,16 @@ def fill(payload: dict, still_missing: list[tuple[str, str]],
                     entry['image'] = it.get('image')
                 if it.get('url'):
                     entry['url'] = it.get('url')
+                # A chart row's position travels with the entry so the
+                # chart passes level it as part of its chart and the
+                # render reads it as the chart's row, not a catalog one.
+                pr = it.get('published_rank')
+                if isinstance(pr, (int, float)) and pr > 0:
+                    entry['published_rank'] = int(pr)
+                    for f in ('published_chart', 'published_group',
+                              'category_display'):
+                        if it.get(f):
+                            entry[f] = it.get(f)
                 created = True
             label = (f'{cg._platform_chart_label(se, kind, service)} '
                      f'#{rows[i][0]}' if service else f'{path} #{rows[i][0]}')
