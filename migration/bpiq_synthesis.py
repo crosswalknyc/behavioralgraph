@@ -660,7 +660,13 @@ def build_payload(inputs: dict, prim: dict, *,
 
     # ---- control group (gen pop drift) -----------------------------------
     drift_pp = float(prim.get("gen_pop_drift_pp", 0.4))
-    ctrl_n = _messy((subject, "ctrl"), n * (3.1 + (_h(subject) % 90) / 100))
+    # The Gen Pop cohort is SIZE-MATCHED to the partner audience: same
+    # panel count, same projection, so the two deltas read on the same
+    # base (dashboard contract; every hand-built read carries
+    # control_size == audience_size). 2026-10-05, Jenna on Willow Smith
+    # x Free People: "why is the willow control bigger than the
+    # target? shouldnt they be the same number".
+    ctrl_n = n
     c_pre_pct = max(pre_pct * 0.22 + (_h(subject, "cp") % 70) / 100.0, 0.3)
     c_post_pct = c_pre_pct + drift_pp
     c_pre = _messy((subject, "c_pre"), ctrl_n * c_pre_pct / 100.0)
@@ -668,7 +674,7 @@ def build_payload(inputs: dict, prim: dict, *,
     control_group = {
         "enabled": True,
         "control_size": ctrl_n,
-        "projected_control_size": proj(ctrl_n),
+        "projected_control_size": projected,
         "control_pre_users": c_pre, "control_post_users": c_post,
         "control_pre_hits": _messy((subject, "ch_pre"), c_pre * 2.1),
         "control_post_hits": _messy((subject, "ch_post"), c_post * 2.2),
