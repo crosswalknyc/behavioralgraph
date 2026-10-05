@@ -13253,6 +13253,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                 subiq_block, neighbor_block,
                                 examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
+    if pma.is_cohort_churn_ask(text):
+        extra_blocks.append(pma.COHORT_CHURN_GUIDANCE)
     # Paid research report on a no-base subject (2026-09-14): the
     # subject has no profile rows anywhere, so the read is researched
     # end to end instead of derived from a base file. The guidance
@@ -15809,15 +15811,28 @@ def _pm_analyze_core(user, body, text, history):
     # least one named library title stays here; everything else still
     # re-routes to the Subscriber IQ build flow.
     _subiq_answerable = False
-    if _route == 'subiq':
+    _subiq_fork = (_route == 'clarify'
+                   and _route_d.get('why') == 'subiq_fork')
+    if _route == 'subiq' or _subiq_fork:
         try:
             from prometheus import guards as _pg_sq
             import prometheus_analysis as _pma_sq
             if (not _pg_sq.subiq_is_explicit_pull(text)
-                    and _pg_sq.is_question_shaped(text)
-                    and _pma_sq.find_subiq_titles_in_text(
-                        _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, text)):
-                _subiq_answerable = True
+                    and _pg_sq.is_question_shaped(text)):
+                _sq_view_open = str(((ctx or {}).get('view_context')
+                                     or {}).get('view_id') or '') \
+                    == 'subscriberIQ'
+                # 2026-10-05 (Emma, Peacock July-cohort churn): a
+                # QUESTION about churn / signups is answered, never
+                # handed to the build flow. The ambiguous-churn fork
+                # and the Subscriber IQ view being open both count:
+                # the open read (or the library) is the base and the
+                # deeper pass derives what the read does not carry.
+                if (_subiq_fork or _sq_view_open
+                        or _pma_sq.is_cohort_churn_ask(text)
+                        or _pma_sq.find_subiq_titles_in_text(
+                            _H.s3_client, _H.SUBSCRIBER_S3_BUCKET, text)):
+                    _subiq_answerable = True
         except Exception:
             traceback.print_exc()
     if _subiq_answerable:
@@ -16209,6 +16224,30 @@ def _pm_analyze_core(user, body, text, history):
     except Exception:
         traceback.print_exc()
     _pm_ask_stage('anchors', t0=_t_anchors)
+    # Cohort-churn lane (2026-10-05, Emma / Jenna: "the agent should
+    # look at what monthly average churn is for peacock from external
+    # sources (sec reports, etc) then figure it out"). With the title's
+    # Subscriber IQ read grounded, a churn question about a signup
+    # cohort skips the screen model (which can only quote platform
+    # churn) and goes straight to the derived read, which researches
+    # the platform's published churn and shapes the cohort curve.
+    if _subiq_grounded and pma.is_cohort_churn_ask(text):
+        _pm_ask_stage('cohort_churn_lane', count=1)
+        _cc_vc = (ctx.get('view_context') or {}).get('data') or {}
+        _cc_subject = (str(_cc_vc.get('show') or '').strip()
+                       or (p_meta.get('name') if ctx.get('primary') else '')
+                       or '')
+        return _pm_generate_metrics_response(
+            user, text, history,
+            metric_request={
+                'subject': _cc_subject,
+                'metric_family': 'cohort churn',
+                'cohort': text[:200],
+                'needed': 'month-by-month churn of the signup cohort '
+                          'named in the question, US-projected counts '
+                          'and rates'},
+            anchors_block=xmod_block, charge_done=True,
+            ctx=ctx, digest_block=digest or '')
     # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
     # already delivered for this subject ride the prompt as binding
     # constraints, so the NORMAL answer path sits on the same
@@ -16368,6 +16407,41 @@ def _pm_analyze_core(user, body, text, history):
                     'needed': text[:200]},
                 anchors_block=xmod_block, charge_done=True,
                 ctx=ctx, digest_block=digest or '')
+    # US projection audit (2026-10-05, Jenna: "make sure all numbers
+    # prometheus sends out are always projected to the US gen pop ...
+    # never dont project"). Every panel -> US pair the prompt carried
+    # (screen data, Subscriber IQ evidence, profile digest) is checked
+    # against the finished reply. A panel count standing without its
+    # US figure re-asks the model once with the explicit map; a redo
+    # that still leaks has the panel numbers replaced in place.
+    if action == 'answer' and reply:
+        try:
+            from prometheus import projection as _proj
+            _, _pj_pairs = _proj.project_view_context(
+                ctx.get('view_context'))
+            _pj_pairs = list(_pj_pairs or []) \
+                + _proj.pairs_from_text(xmod_block) \
+                + _proj.pairs_from_text(digest or '')
+            if _pj_pairs:
+                def _pj_reask(note, _up=user_prompt, _mt=_max_tok):
+                    _t = time.monotonic()
+                    _r = _pm_claude_json(
+                        pma.ANALYSIS_SYSTEM_PROMPT, f"{_up}\n\n{note}",
+                        max_tokens=_mt, temperature=0.3,
+                        usage_extras=_pm_ppu)
+                    _pm_ask_stage('projection_reask', t0=_t)
+                    _d = (_r.get('data') or {}) if _r.get('success') else {}
+                    if isinstance(_d, list):
+                        _d = next((x for x in _d if isinstance(x, dict)), {})
+                    return pma.scrub_user_text(
+                        str(_d.get('reply') or '').strip())
+                reply, _pj_detail = _proj.enforce(
+                    reply, _pj_pairs, reask=_pj_reask, log=print)
+                if _pj_detail:
+                    _pm_ask_stage('projection_fix', count=1)
+                    print(f"[projection] analyze reply fixed: {_pj_detail}")
+        except Exception:
+            _pm_swallow('projection audit')
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]

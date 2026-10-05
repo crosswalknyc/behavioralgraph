@@ -342,7 +342,8 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
     lines = [f"PROFILE: {name}"]
     bits = []
     if meta.get('sample'):
-        bits.append(f"sample {meta['sample']:,} panelists")
+        bits.append(f"panel sample {meta['sample']:,} (internal, never "
+                    "stated to the reader)")
     if meta.get('proj'):
         bits.append(f"projected US audience {meta['proj']:,}")
     bits.append(f"window {meta.get('window') or 'trailing 12 months'}")
@@ -590,7 +591,8 @@ def build_cut_divergence(parent_df, parent_meta, cut_df, cut_meta,
     lines = [f"CUT: {cut_meta['name']} (vs parent {parent_meta['name']})"]
     bits = []
     if cut_meta.get('sample'):
-        bits.append(f"sample {cut_meta['sample']:,} panelists")
+        bits.append(f"panel sample {cut_meta['sample']:,} (internal, never "
+                    "stated to the reader)")
     if cut_meta.get('proj'):
         bits.append(f"projected US audience {cut_meta['proj']:,}")
     if bits:
@@ -1009,6 +1011,12 @@ CHALLENGED NUMBERS (the reader questions a figure)
 - Then reconcile like for like: if the user cites a different or earlier figure, name what differs (window, cohort, definition, cut vs whole audience) before anything else. Two figures that measure different things are both right; say which is which.
 - Never revise, walk back, or re-derive a previously delivered figure inline. If the two reads genuinely measure the same thing in the same window and still disagree, say the team is reviewing it and the confirmed number will follow by email. Never speculate about internal causes.
 
+US PROJECTION (binding, every count, every surface)
+- Every count the reader sees is projected to the US population: accounts, viewers, signups, reactivations, sessions, hours, hits, daily and monthly series, cohort sizes, table cells, CSV cells. The headline and the breakdown sit on the same US scale; a US headline over a panel-count daily series is a defect.
+- Screen data and evidence carry counts in pairs: panel_<key> / <key>_us, or "panel (US)". The _us or US figure is the only one you state. A panel count never appears in an answer, a table, or a CSV, not even alongside its US figure.
+- When a count exists only at panel level, multiply it by the us_projection_factor (or the file's own ratio of US to panel on its headline count) and state the result as the US figure. Sums, shares, and comparisons are computed on US figures. Label count columns "US" where a header exists (new_signups_us, accounts_us).
+- Percentages, rates, indexes, days, and dollar figures are not counts and are stated as given.
+
 ON-SCREEN VIEW DATA (other dashboard views)
 - The dashboard has more views than Profile IQ: Subscriber IQ (per-title signup and reactivation attribution for streaming platforms), Trends (daily national and geo trend reads across search, headlines, streaming, gaming, retail), Microdramas IQ (vertical-drama title leaderboards across Peacock, ReelShort, DramaBox), and others. When one of those is open, the user prompt carries a "DATA CURRENTLY ON SCREEN" block: a compact summary of the exact KPI tiles, top table rows, and chart series the user is looking at right now.
 - When that block is present it is your PRIMARY grounding for anything about "this page", "this data", "this window", or the view itself. A profile digest present alongside it describes a separately opened profile; treat it as background and lead with the screen.
@@ -1333,6 +1341,15 @@ def render_view_context_block(view_context):
     title = (view_context.get('view_title')
              or view_context.get('view_id') or 'the open view')
     data = view_context.get('data') or {}
+    # US projection (2026-10-05, Jenna): every count row is rewritten
+    # as panel_<key> + <key>_us before the model sees it, so the
+    # number it can quote is the US figure.
+    try:
+        from prometheus import projection as _proj
+        data, _ = _proj.project_view_data(
+            data, salt=str(view_context.get('view_id') or ''))
+    except Exception:
+        pass
     try:
         body = json.dumps(data, ensure_ascii=False, indent=1)
     except Exception:
@@ -1344,7 +1361,9 @@ def render_view_context_block(view_context):
         "a compact summary of exactly what is visible on their screen "
         "(KPI tiles, top table rows, chart series). It is first-party "
         "Crosswalk measurement, same standing as the digest. Ground "
-        "the answer in it.\n"
+        "the answer in it. Counts come in pairs: panel_<key> is the "
+        "internal panel count and <key>_us is the US figure. State "
+        "only the _us figure, in prose, tables, and CSVs alike.\n"
         f"{body}\n\n"
     )
 
@@ -2223,17 +2242,79 @@ SUBIQ_FORCE_ANSWER_NOTE = (
     "that is not in the read as if it were.")
 
 
+# Cohort churn (2026-10-05, Emma / Jenna): "What was monthly churn for
+# Peacock accounts that signed up in July 2026, July through
+# September?" went to the build flow and came back with no written
+# answer. A Subscriber IQ read measures PLATFORM churn, not the churn
+# of one signup cohort, so a cohort-churn ask is a derived read: the
+# deeper pass takes the platform's published monthly churn from
+# approved sources, the read's own platform churn and signup counts,
+# and shapes the cohort's month-by-month curve. Never a build, never
+# a fork, never "the read does not carry that".
+_COHORT_CHURN_RE = re.compile(
+    r"\b(?:churn\w*|retention|retain\w*|cancell?\w*|lapse\w*|"
+    r"still (?:subscribed|active|paying))\b", re.I)
+_COHORT_FRAME_RE = re.compile(
+    r"\b(?:signed up|sign[- ]?ups?|subscribed|joined|acquired|activated|"
+    r"cohorts?|new (?:accounts|subs|subscribers|signups)|"
+    r"(?:accounts|subscribers|subs|users|viewers) (?:that|who)|"
+    r"month (?:one|1|two|2|three|3)|first (?:\d+|thirty|sixty|ninety) "
+    r"days|(?:30|60|90)[- ]day)\b", re.I)
+
+
+def is_cohort_churn_ask(text):
+    """True for a churn / retention question about a SIGNUP COHORT
+    (accounts that signed up in a month, a title's new subscribers,
+    month-1 / month-2 retention), as opposed to platform-level churn."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return bool(_COHORT_CHURN_RE.search(t) and _COHORT_FRAME_RE.search(t))
+
+
+COHORT_CHURN_GUIDANCE = (
+    'COHORT CHURN (this ask is the churn of a signup cohort, derived):\n'
+    '1. The Subscriber IQ evidence carries the cohort size (new and '
+    'reactivated signups, US figures) and the PLATFORM churn for the '
+    'month. Platform churn is the base rate for the whole subscriber '
+    'base, not the cohort; it anchors the floor.\n'
+    '2. Research the platform\'s monthly churn with web_search from '
+    'approved ground only: the parent company\'s earnings commentary '
+    'and SEC filings, subscription-measurement firms (Antenna-class '
+    'monthly churn and survival reads), eMarketer, Statista. Take the '
+    'most recent trailing figure and its recent trend.\n'
+    '3. Shape the cohort curve: a cohort acquired by one title churns '
+    'well above the platform base in its first full month (binge '
+    'titles highest, weekly cadence lower), steps down in month two, '
+    'and approaches the platform base by month three. Reactivated '
+    'accounts churn faster than net-new in month one. Ad-supported '
+    'tiers churn faster than premium.\n'
+    '4. Deliver a month-by-month table: starting cohort, churned, '
+    'churn rate, remaining, every count projected to the US (never a '
+    'panel count), messy last digits, each month\'s remaining equal '
+    'to the next month\'s start. Then the share of the cohort still '
+    'active at the end of the window and what it means for the next '
+    'drop. Hard counts speak flat; the curve shape reads as '
+    'directional language (leans, tends to).\n'
+    '5. Never name a source, a firm, or a research step; never say the '
+    'read does not carry cohort churn; never offer a build instead of '
+    'the number.\n')
+
+
 def subiq_answer_in_place(text):
     """True when a Subscriber IQ ask should be answered from the read
     rather than handed to the reasoned-read pass.
 
-    Everything an insight / summary / comparison / churn / timing /
-    demographic question needs is in the file. Only asks that name a
-    measure the read never carries (revenue, forecasts, Profile IQ
-    style indexes) may still hand off.
+    Everything an insight / summary / comparison / platform-churn /
+    timing / demographic question needs is in the file. Asks that name
+    a measure the read never carries (revenue, forecasts, Profile IQ
+    style indexes) and cohort-churn asks (derived from platform churn
+    plus researched benchmarks) hand off to the deeper pass.
     """
     t = str(text or '')
     if not t.strip():
+        return False
+    if is_cohort_churn_ask(t):
         return False
     return not _SUBIQ_OUT_OF_READ_RE.search(t)
 
@@ -2351,12 +2432,48 @@ def render_subiq_evidence(parsed, show):
     def _cnt(d, key='count'):
         return _xmod_fmt_count((d or {}).get(key))
 
+    # US projection (2026-10-05, Jenna: "never dont project"). The
+    # file's own Gen Pop column rides every count; a row without one
+    # is projected at the file's factor so no panel count ever stands
+    # alone in the prompt.
+    try:
+        from prometheus import projection as _proj
+    except Exception:
+        _proj = None
+    _seed = []
+    for _d in (km.get('total_watchers'), km.get('new_signups'),
+               asum.get('total')):
+        if isinstance(_d, dict) and _proj is not None:
+            _pc, _pu = _proj._to_num(_d.get('count')), \
+                _proj._to_num(_d.get('gen_pop'))
+            if _pc and _pu and _pu > _pc:
+                _seed.append((_pc, _pu))
+    _factor = _proj.factor_from_pairs(_seed) if _proj is not None \
+        else 32.99
+
+    def _us(d, key):
+        """'<panel> (<us> US)' for one count cell, projecting when the
+        row carries no Gen Pop twin."""
+        d = d or {}
+        c = _xmod_fmt_count(d.get(key))
+        if not c:
+            return None
+        us = _xmod_fmt_count(d.get('gen_pop'))
+        if not us and _proj is not None:
+            pv = _proj._to_num(d.get(key))
+            if pv:
+                us = _xmod_fmt_count(_proj.messy_projection(
+                    pv, _factor, f"{show}|{key}"))
+        return f"{c} ({us} US)" if us else c
+
     def _pair(d, label):
         d = d or {}
         c = _cnt(d)
         us = _xmod_fmt_count(d.get('gen_pop'))
         if c and us:
             return f"{label} {c} ({us} US)"
+        if c and _proj is not None:
+            return f"{label} {_us(d, 'count')}"
         if c or us:
             return f"{label} {c or us}"
         return None
@@ -2374,7 +2491,10 @@ def render_subiq_evidence(parsed, show):
             + (': ' + '; '.join(head_bits) if head_bits else '')),
         (0, "Measured show-to-platform acquisition for this title. "
             "These are the authoritative subscriber numbers: cite them "
-            "flat and never contradict them."),
+            "flat and never contradict them. Every count below is "
+            "written as 'panel (US)': the US figure is the one the "
+            "reader gets, in prose, tables, and CSVs alike; the panel "
+            "count never appears in an answer."),
     ]
 
     key_bits = [b for b in (
@@ -2414,7 +2534,7 @@ def render_subiq_evidence(parsed, show):
             continue
         lab = lab if '/' in lab else f"Ep {lab}"
         d = str(e.get('episode_date') or '').strip()
-        s = _xmod_fmt_count(e.get('signups'))
+        s = _us(e, 'signups')
         ep_bits.append(f"{lab}{f' ({d})' if d else ''} {s} signups")
     if ep_bits:
         tagged.append((2, 'TOP EPISODES (key drivers, by signups): '
@@ -2425,7 +2545,7 @@ def render_subiq_evidence(parsed, show):
         if not isinstance(t, dict):
             continue
         lab = str(t.get('timing') or '').strip()
-        s = _xmod_fmt_count(t.get('signups'))
+        s = _us(t, 'signups')
         if lab and s:
             tim_bits.append(f"{lab} {s}")
     if tim_bits:
@@ -2437,9 +2557,9 @@ def render_subiq_evidence(parsed, show):
     for m in (parsed.get('monthly_signups') or [])[-12:]:
         if not isinstance(m, dict):
             continue
-        s = _xmod_fmt_count(m.get('signups'))
+        s = _us(m, 'signups')
         if m.get('month') and s:
-            w = _xmod_fmt_count(m.get('watched_show'))
+            w = _us({'watched_show': m.get('watched_show')}, 'watched_show')
             pct = str(m.get('percentage') or '').strip()
             tail = ''
             if w and pct:
@@ -2457,7 +2577,7 @@ def render_subiq_evidence(parsed, show):
         if not isinstance(t, dict):
             continue
         lab = str(t.get('touchpoint') or '').strip()
-        u = _xmod_fmt_count(t.get('users'))
+        u = _us(t, 'users')
         pct = str(t.get('percentage') or '').strip()
         if lab and lab.lower() != 'total' and u:
             tp_bits.append(f"{lab} visit {u}" + (f" ({pct})" if pct else ''))
@@ -2494,7 +2614,7 @@ def render_subiq_evidence(parsed, show):
         if isinstance(m, dict) and m.get('month') \
                 and _xmod_fmt_count(m.get('churned')):
             pct = str(m.get('percentage') or '').strip()
-            ch_bits.append(f"{m['month']} {_xmod_fmt_count(m['churned'])}"
+            ch_bits.append(f"{m['month']} {_us(m, 'churned')}"
                            + (f" ({pct})" if pct else ''))
     if ch_bits:
         # 2026-10-02 (Bria): churn moves up the keep order and carries
@@ -2509,9 +2629,12 @@ def render_subiq_evidence(parsed, show):
                        "churn of this show's signup cohort, which this "
                        'read does not measure): ' + '; '.join(ch_bits)
                        + '. If asked about churn of the signups this '
-                       'show brought in, quote the platform churn above '
-                       'as the measured figure and say the cohort-level '
-                       'churn is not part of this read.'))
+                       'show brought in (cohort churn), return '
+                       'action=generate_metrics with the cohort and '
+                       'window; the deeper pass derives the cohort '
+                       'curve from this platform churn plus the '
+                       "platform's published monthly churn. Never say "
+                       'the read does not carry it.'))
 
     if len(tagged) <= 2:
         return ''
