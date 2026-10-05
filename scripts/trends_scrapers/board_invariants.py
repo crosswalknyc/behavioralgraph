@@ -251,16 +251,22 @@ def audit(payload: dict) -> dict[str, Any]:
                     {'rail': f'{tops[i][0]} + {tops[i + 1][0]}', 'a': tops[i][1],
                      'b': tops[i + 1][1], 'cap': cap, 'cross_service': True})
 
+    # I2 is a scraper outcome, not a board defect: a declared chart
+    # the morning scrape did not bring back (Peacock, 2026-10-05, no
+    # chart today and none archived in five days). Nothing on the
+    # board can be moved to make a chart appear, so it is reported
+    # for coverage and never counted toward the alert.
     out['violations'] = sum(len(out[k]) for k in
-                            ('I1_chart_order', 'I2_chart_present', 'I3_catalog_under',
+                            ('I1_chart_order', 'I3_catalog_under',
                              'I4_cap_seats', 'I5_rail_order', 'I6_blanks'))
+    out['charts_missing'] = len(out['I2_chart_present'])
     return out
 
 
 def format_report(res: dict) -> str:
     lines = [f"board invariants: {res['violations']} violation(s)"]
     for key, label in (('I1_chart_order', 'I1 chart order'),
-                       ('I2_chart_present', 'I2 chart present'),
+                       ('I2_chart_present', 'I2 chart missing (scraper, not counted)'),
                        ('I3_catalog_under', 'I3 catalog under chart'),
                        ('I4_cap_seats', 'I4 cap seats'),
                        ('I5_rail_order', 'I5 rail order'),
@@ -412,6 +418,10 @@ def _write_row(se, ces, store: dict, stats: dict, rail: str, slug: str,
         stats['detail'].append({'rail': rail, 'title': r['title'], 'to': new_v, 'why': why})
         return True
     stats['unresolved'] += 1
+    stats['unresolved_detail'].append(
+        {'rail': rail, 'title': r['title'], 'to': new_v, 'why': why, 'cands': r['cands'],
+         'present': ces.present(store, r['cands']), 'reading': r.get('reading'),
+         'page': r['v'], 'write': res})
     return False
 
 
@@ -450,7 +460,8 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
     board = se._read_snapshot('stream_estimates') or {}
     store = board.get('items') or {}
     stats: dict[str, Any] = {'moved': 0, 'unresolved': 0, 'mismatch': 0,
-                             'rails': 0, 'written': False, 'detail': []}
+                             'rails': 0, 'written': False, 'detail': [],
+                             'unresolved_detail': []}
     if not store:
         stats['error'] = 'no store'
         return stats
@@ -491,11 +502,39 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
                     stats['mismatch'] += 1
                 g, pos = _chart_group(it)
                 recs.append({'i': i, 'it': it, 'v': v, 'cands': cands,
+                             'reading': reading,
                              'writable': writable, 'g': g, 'pos': pos,
                              'title': (it.get('name') if is_channel
                                        else it.get('title')) or '',
                              'shelf': bool(it.get('collection')
                                            and it.get('bucket_rank'))})
+
+            # A title rendered twice on one rail under two kinds (Jack
+            # Reacher the film at #10 of Prime Video's film chart and
+            # the row its TV chart carries) must not share a write: the
+            # family write would let the second row's value overwrite
+            # the first's on both keys. Each such row writes only its
+            # own kind's key, seeded if the store lacks it.
+            by_norm: dict[str, list] = defaultdict(list)
+            for r in recs:
+                if r['cands'] and not is_channel:
+                    by_norm[ces.sibling_norm(r['cands'][0])].append(r)
+            for group in by_norm.values():
+                if len(group) < 2:
+                    continue
+                for r in group:
+                    k = None
+                    kind = _kind(r['it'])
+                    if kind:
+                        k = next((c for c in r['cands']
+                                  if c.split(':', 1)[0].endswith(kind)), None)
+                    if k is None:
+                        k = ces.preferred(store, r['cands'], slug) or r['cands'][0]
+                    r['cands'] = [k]
+                    blk = ((store.get(k) or {}).get('by_platform') or {}).get(slug) or {}
+                    rv = blk.get('us_estimate')
+                    r['reading'] = rv if isinstance(rv, int) and rv > 0 else None
+                    r['writable'] = r['reading'] is None or r['reading'] == r['v']
 
             moves: list[tuple[dict, int, str]] = []
 
@@ -507,6 +546,10 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
                     moves.append((r, new_v, why))
                 else:
                     stats['unresolved'] += 1
+                    stats['unresolved_detail'].append(
+                        {'rail': rail, 'title': r['title'], 'to': new_v, 'why': why,
+                         'cands': r['cands'], 'present': ces.present(store, r['cands']),
+                         'reading': r['reading'], 'page': r['v']})
                 r['v'] = new_v   # anchors below use the placed value
 
             # I1 + chart blanks: each chart in its published order.
@@ -846,6 +889,10 @@ def main(argv: Optional[list] = None) -> int:
             return 0
         tf = terminal_fix(payload, write=not args.dry_run)
         print(json.dumps({k: v for k, v in tf.items() if k != 'detail'}))
+        for d in tf.get('unresolved_detail') or []:
+            print(f"   UNRESOLVED {d['rail']:<40} {d['title']!r} page {d['page']:,} "
+                  f"-> {d['to']:,} ({d['why']}) reading {d['reading']} "
+                  f"present {d['present']}" + (f" write {d['write']}" if d.get('write') else ''))
         for d in tf.get('detail') or []:
             print(f"   {d['rail']:40s} {d['title']!r} -> {d['to']:,} ({d['why']})")
         if args.dry_run or not tf.get('written'):

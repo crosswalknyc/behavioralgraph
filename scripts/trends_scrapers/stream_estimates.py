@@ -6375,7 +6375,25 @@ def _rescale_estimate_blocks(it: dict, old_mid: int, new_mid: int,
                               key: str, salt: str) -> None:
     """Move an item's aggregate to `new_mid` and rescale bands +
     per-platform blocks in lockstep (band order preserved, every
-    integer ends 1-9). Same scaling rules as the continuity guard."""
+    integer ends 1-9). Same scaling rules as the continuity guard.
+
+    An aggregate that sits under its own largest platform block is not
+    the sum of its parts and cannot be used as a scale: moving 1 to 3
+    would triple every block (2026-10-05, `tv:jack reacher`). Such an
+    item has its aggregate rebuilt from the blocks and the blocks are
+    left where they are.
+    """
+    by_plat0 = it.get('by_platform') or {}
+    mids0 = [int(b.get('us_estimate') or 0) for b in by_plat0.values()
+             if isinstance(b, dict)] if isinstance(by_plat0, dict) else []
+    if mids0 and old_mid < max(mids0):
+        rebuilt = max(sum(m for m in mids0 if m > 0), max(mids0))
+        it['us_estimate'] = _natural_last_digits(rebuilt, key, f'{salt}|rebuilt')
+        if isinstance(it.get('us_estimate_low'), int) and it['us_estimate_low'] > it['us_estimate']:
+            it['us_estimate_low'] = it['us_estimate']
+        if isinstance(it.get('us_estimate_high'), int) and it['us_estimate_high'] < it['us_estimate']:
+            it['us_estimate_high'] = it['us_estimate']
+        return
     scale = new_mid / old_mid if old_mid else 1.0
     it['us_estimate'] = new_mid
     lo = _continuity_scaled(it.get('us_estimate_low'), scale, key,
@@ -6838,6 +6856,22 @@ def _set_platform_reading(it: dict, slug: str, new_value: int,
     agg = int(it.get('us_estimate') or 0)
     if agg > 0:
         new_agg = max(1, agg + delta)
+        # The aggregate is the sum of the platform mids, so it can
+        # never sit under the largest of them. When it does (an
+        # entry whose aggregate had already collapsed to a few units
+        # while its blocks read in the hundreds of thousands) it is
+        # rebuilt from its parts instead of following the delta.
+        # 2026-10-05: `tv:jack reacher` carried an aggregate of 3
+        # against a 430,693 Prime Video block; the delta walk took the
+        # aggregate to 1, the distinctness backstop at the write
+        # boundary moved 1 to 3 to keep the day distinct, and
+        # `_rescale_estimate_blocks` tripled every block with it,
+        # which is how 430,693 rendered as 1,292,118 one write later.
+        mids = [int(b.get('us_estimate') or 0)
+                for b in (it.get('by_platform') or {}).values()
+                if isinstance(b, dict)]
+        if mids and new_agg < max(mids):
+            new_agg = max(sum(m for m in mids if m > 0), max(mids))
         a_scale = new_agg / agg
         it['us_estimate'] = _natural_last_digits(new_agg, item_key, salt)
         for f in ('us_estimate_low', 'us_estimate_high'):
