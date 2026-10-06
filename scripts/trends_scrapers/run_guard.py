@@ -303,6 +303,122 @@ class RunLock:
 
 
 # ---------------------------------------------------------------------------
+# Guard 1b: one board writer at a time
+# ---------------------------------------------------------------------------
+def _default_board_lock_path() -> str:
+    env = os.environ.get("TRENDS_BOARD_LOCK")
+    if env:
+        return env
+    if os.path.isdir("/var/lock") and os.access("/var/lock", os.W_OK):
+        return "/var/lock/trends_board_write.lock"
+    return os.path.expanduser("~/.trends_board_write.lock")
+
+
+BOARD_LOCK_PATH = _default_board_lock_path()
+_BOARD_LOCK_HELD_ENV = "TRENDS_BOARD_LOCK_HELD"
+BOARD_LOCK_WAIT_S = 3 * 3600.0
+
+
+class BoardLock:
+    """Blocking exclusive lock around any stage that rewrites the board
+    store (`stream_estimates`): the coverage gate, the chart sizer, the
+    board gate and its terminal fix.
+
+    The store is read whole and written whole, so two of these stages
+    running at once each publish the other's work away, and a terminal
+    pass can seat a chart off a half-written board. 2026-10-06: two
+    cookie donations on the Mac each started a refresh with its own
+    coverage gate while the daily lane was pricing; three writers raced
+    and one of them collapsed the Netflix rail into the five figures.
+
+    Unlike `RunLock` this one waits (up to `wait_s`, then runs anyway
+    with a warning so a stuck holder can never stop the board). It is
+    re-entrant across a process tree: a stage that holds it exports
+    `TRENDS_BOARD_LOCK_HELD`, and the subprocesses it spawns (the gate's
+    fixer, the lane's gate) inherit the environment and pass straight
+    through instead of waiting on their parent.
+    """
+
+    def __init__(self, label: str, *, path: str = BOARD_LOCK_PATH,
+                 wait_s: float = BOARD_LOCK_WAIT_S):
+        self.label = label
+        self.path = path
+        self.wait_s = max(0.0, float(wait_s or 0.0))
+        self.acquired = False
+        self.inherited = False
+        self.waited_s = 0.0
+        self._fh = None
+        self._set_env = False
+
+    def __enter__(self) -> "BoardLock":
+        if os.environ.get(_BOARD_LOCK_HELD_ENV):
+            self.inherited = True
+            self.acquired = True
+            return self
+        try:
+            import fcntl
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            self._fh = open(self.path, "a+")
+            deadline = time.monotonic() + self.wait_s
+            while True:
+                try:
+                    fcntl.flock(self._fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except (OSError, IOError):
+                    if time.monotonic() >= deadline:
+                        logger.warning("run_guard: %s waited %.0f min for the "
+                                       "board lock at %s and is going ahead "
+                                       "without it", self.label,
+                                       self.waited_s / 60.0, self.path)
+                        break
+                    if self.waited_s % 300.0 == 0.0:
+                        hp = self._holder()
+                        logger.info("run_guard: %s is waiting for the board "
+                                    "lock held by %s", self.label, hp or "?")
+                    time.sleep(5.0)
+                    self.waited_s += 5.0
+            if self.waited_s:
+                logger.info("run_guard: %s took the board lock after %.0fs",
+                            self.label, self.waited_s)
+            try:
+                self._fh.seek(0)
+                self._fh.truncate()
+                self._fh.write(f"{os.getpid()} {self.label}\n{_now_iso()}\n")
+                self._fh.flush()
+            except Exception:
+                pass
+            os.environ[_BOARD_LOCK_HELD_ENV] = str(os.getpid())
+            self._set_env = True
+            self.acquired = True
+        except Exception as e:
+            logger.warning("run_guard: could not take the board lock (%s); "
+                           "continuing without it", e)
+            self.acquired = True
+        return self
+
+    def _holder(self) -> Optional[str]:
+        try:
+            with open(self.path) as fh:
+                lines = [ln.strip() for ln in fh.read().splitlines() if ln.strip()]
+            return " / ".join(lines[:2]) if lines else None
+        except Exception:
+            return None
+
+    def __exit__(self, *exc) -> None:
+        if self._set_env:
+            os.environ.pop(_BOARD_LOCK_HELD_ENV, None)
+        try:
+            if self._fh:
+                import fcntl
+                fcntl.flock(self._fh, fcntl.LOCK_UN)
+                self._fh.close()
+        except Exception:
+            pass
+        self._fh = None
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Guard 2: runtime watchdog
 # ---------------------------------------------------------------------------
 def start_watchdog(expected_minutes: int = EXPECTED_RUNTIME_MIN,

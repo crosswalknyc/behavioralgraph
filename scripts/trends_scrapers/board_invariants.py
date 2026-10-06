@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -63,6 +64,18 @@ logger = logging.getLogger(__name__)
 CAP_SEAT_BAND = 0.05        # within 5% of the service's daily cap
 CAP_SEAT_TIGHT = 0.005      # and within 0.5% of each other
 MAX_FIX_ATTEMPTS = 3        # fixer passes per gate while still converging
+# A charted row under this share of its chart's median is the wrong
+# side of an inversion: it gets lifted back between its neighbours
+# instead of pulling every row below it down. 2026-10-06: a Netflix
+# film row left at a few thousand by a thin research pass made the
+# order cascade seat the rest of the chart, and then the catalog under
+# it, in the 5K-14K range on a rail that reads in the hundreds of
+# thousands.
+DIP_FRACTION = 0.2
+# The terminal pass never cuts a rendered value to under this share
+# of itself in one pass. A move that large is a wrong anchor, not an
+# order fix; the row stays unresolved and the set-level sizer takes it.
+MAX_CUT_FRACTION = 0.1
 
 _SECTIONS = (('streaming_trending', 'streaming'), ('fast_trending', 'fast'))
 
@@ -542,6 +555,18 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
                 new_v = max(1, int(new_v))
                 if new_v == r['v']:
                     return
+                if (r['v'] and new_v < r['v'] * MAX_CUT_FRACTION
+                        and why.startswith(('I1', 'I3', 'I5'))):
+                    # A cut this deep means the anchor above is wrong,
+                    # not this row. Leave it and let the sizer level
+                    # the set; never collapse a rail from here.
+                    stats['unresolved'] += 1
+                    stats['unresolved_detail'].append(
+                        {'rail': rail, 'title': r['title'], 'to': new_v,
+                         'why': f'{why} (cut too deep, held)',
+                         'cands': r['cands'], 'present': ces.present(store, r['cands']),
+                         'reading': r['reading'], 'page': r['v']})
+                    return
                 if r['cands'] and r['writable']:
                     moves.append((r, new_v, why))
                 else:
@@ -560,6 +585,35 @@ def terminal_fix(payload: dict, *, write: bool = True) -> dict[str, Any]:
             floors: dict[str, int] = {}
             for g, seq in charts.items():
                 seq.sort(key=lambda r: r['pos'])
+                # Dips first. A row far under the chart's own level is
+                # the wrong side of its inversion: lift it back between
+                # its neighbours rather than seating every row below it
+                # under a bad anchor.
+                vals = sorted(r['v'] for r in seq if r['v'])
+                if len(vals) >= 3:
+                    med = vals[len(vals) // 2]
+                    bar = med * DIP_FRACTION
+                    for j, r in enumerate(seq):
+                        if not r['v'] or r['v'] >= bar:
+                            continue
+                        salt = f'{salt0}|{g}|dip|{r["pos"]}'
+                        above = next((x['v'] for x in reversed(seq[:j])
+                                      if x['v'] and x['v'] >= bar), None)
+                        below = next((x['v'] for x in seq[j + 1:]
+                                      if x['v'] and x['v'] >= bar), None)
+                        if above and below and above > below:
+                            target = int(math.sqrt(above * below))
+                            lim = above - 1
+                        elif below:
+                            target = below * (1 + _step(salt))
+                            lim = (above - 1) if above else cap
+                        elif above:
+                            target = above * (1 - _step(salt))
+                            lim = above - 1
+                        else:
+                            continue
+                        _place(r, _under(target, lim, r['title'], salt),
+                               'I1 chart dip')
                 prev: Optional[int] = None
                 for j, r in enumerate(seq):
                     salt = f'{salt0}|{g}|{r["pos"]}'
@@ -875,19 +929,26 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument('--dry-run', action='store_true',
                     help='with --terminal-fix: compute and log, write nothing')
     args = ap.parse_args(argv)
+    from scripts.trends_scrapers.run_guard import BoardLock
     if args.gate:
-        res = gate()
+        with BoardLock('The board gate'):
+            res = gate()
         print(format_report(res) if 'rails' in res else res)
         return 0 if res.get('violations') == 0 else 1
     if args.terminal_fix:
+        lock = BoardLock('The terminal fix')
+        lock.__enter__()
         payload = _fresh_view()
         if payload is None:
+            lock.__exit__(None, None, None)
             return 2
         before = audit(payload)
         print(format_report(before))
         if not before['violations']:
+            lock.__exit__(None, None, None)
             return 0
         tf = terminal_fix(payload, write=not args.dry_run)
+        lock.__exit__(None, None, None)
         print(json.dumps({k: v for k, v in tf.items() if k != 'detail'}))
         for d in tf.get('unresolved_detail') or []:
             print(f"   UNRESOLVED {d['rail']:<40} {d['title']!r} page {d['page']:,} "

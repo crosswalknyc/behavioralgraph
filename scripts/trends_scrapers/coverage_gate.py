@@ -1498,7 +1498,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(name)s %(message)s')
-    summary = run_gate(dry_run=args.dry_run)
+    from scripts.trends_scrapers.run_guard import BoardLock
+    with BoardLock('The coverage gate'):
+        summary = run_gate(dry_run=args.dry_run)
     print(f"coverage_gate summary: {summary}")
     return 0
 

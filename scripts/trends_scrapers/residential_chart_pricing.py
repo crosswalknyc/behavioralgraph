@@ -290,7 +290,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
     from scripts.trends_scrapers import stream_estimates as se
+    from scripts.trends_scrapers.run_guard import BoardLock
 
+    with BoardLock('The chart sizer'):
+        return _main_locked(args, se)
+
+
+def _main_locked(args, se) -> int:
     board = se._read_snapshot('stream_estimates') or {}
     if args.slug:
         declared = {s for s, _l in se._charted_slugs()}
