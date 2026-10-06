@@ -18847,11 +18847,15 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            Base/v4 grid is `40px minmax(150px,1fr) 105px 105px 90px` with a 12px
            gap (~538px min) so Profile / Gen Pop / Index run off the right edge.
            Tighten the rank + numeric columns, let Item shrink, and shrink the
-           gap so #, Item, Profile, Gen Pop and Index all fit. Mobile only. */
-        #dashboardView.piq-v4 #tab-interests .interest-item,
-        #dashboardView.piq-v4 #tab-interests .interest-header-row {
-            grid-template-columns: 20px minmax(0, 1fr) 54px 54px 46px !important;
-            gap: 0 3px !important;
+           gap so #, Item, Profile, Gen Pop and Index all fit. Mobile only.
+           NB: the `body` prefix is required so these beat the later v4 rule
+           (#dashboardView.piq-v4 #tab-interests .interest-item { gap:12px }),
+           which otherwise ties on specificity and wins on source order - that
+           tie is why the earlier gap reduction had no visible effect. */
+        body #dashboardView.piq-v4 #tab-interests .interest-item,
+        body #dashboardView.piq-v4 #tab-interests .interest-header-row {
+            grid-template-columns: 15px minmax(0, 1fr) 54px 54px 46px !important;
+            gap: 0 6px !important;
         }
 
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
