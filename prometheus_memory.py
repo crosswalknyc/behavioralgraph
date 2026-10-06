@@ -265,6 +265,28 @@ def recall(user, k=MAX_ASKS):
     return list((doc.get('asks') or [])[:k])
 
 
+_ENTITY_PLATFORM_RX = re.compile(
+    r'\s+(?:on|via|at)\s+(?:netflix|hulu|max|hbo max|hbo|disney\+?|'
+    r'disney plus|peacock|paramount\+?|paramount plus|apple tv\+?|'
+    r'apple tv plus|prime video|amazon prime video|amazon|prime|starz|'
+    r'showtime|amc\+?|discovery\+?|espn\+?|tubi|pluto tv|roku|freevee|'
+    r'crunchyroll|britbox|youtube|youtube tv|fubo|sling|philo|cbs|nbc|'
+    r'abc|fox|the cw|spotify|tiktok|instagram)\s*$', re.I)
+
+
+def entity_fold(name):
+    """One key per real-world entity across the spellings a thread
+    produces: case, '&' vs 'and', punctuation, a trailing platform
+    ('on Hulu'), a trailing Series / TU / Total Universe label."""
+    t = str(name or '').strip().lower()
+    t = t.replace('&', ' and ').replace('+', ' plus ')
+    t = _ENTITY_PLATFORM_RX.sub('', t)
+    t = re.sub(r'\s+(series|tu|total universe|viewers|fans|audience)$', '', t)
+    t = re.sub(r'[^a-z0-9]+', ' ', t)
+    t = re.sub(r'\bthe\b', ' ', t)
+    return ' '.join(t.split())
+
+
 def recent_referents(user, k=2):
     """The user's most recent distinct (subject, cohort) referents,
     newest first - the candidates a grounded confirm offers when an
@@ -275,7 +297,10 @@ def recent_referents(user, k=2):
         if not subj:
             continue
         cohort = str(a.get('cohort') or '').strip() or None
-        sig = (subj.lower(), (cohort or '').lower())
+        # 2026-10-05 (Scott): 'Will And Grace' and 'Will & Grace on
+        # Hulu' are one show. A confirm never offers the same entity
+        # twice under two spellings.
+        sig = (entity_fold(subj), (cohort or '').lower())
         if sig in seen:
             continue
         seen.add(sig)

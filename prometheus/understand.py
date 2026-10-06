@@ -55,8 +55,23 @@ _QUESTION_OPEN_RX = re.compile(
     r'analy[sz]e|top \d|break ?down)\b', re.I)
 
 _DECK_BUILD_RX = re.compile(
-    r'\b(build|make|create|generate|put together|spin up|prepare|draft)\b'
+    r'\b(build|make|create|generate|put together|spin up|prepare|draft|'
+    r'put|turn|drop|export|convert|render|lay out|package|wrap|compile|'
+    r'assemble)\b'
     r'[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx)\b', re.I)
+# 2026-10-05 (Scott): 'put that data into a simple deck' is a deck
+# ask whatever the verb. So is 'render it' when the reply before it
+# was a deck outline (SLIDE 1 ... ). The outline is a draft; the
+# user asking to render it wants the file.
+_DECK_INTO_RX = re.compile(
+    r'\binto (?:a |an )?(?:simple |quick |short |small |tight |clean |'
+    r'one[- ]page )?(?:deck|slides?|presentation|one[- ]?pager|pptx)\b', re.I)
+_RENDER_IT_RX = re.compile(
+    r'^(?:please\s+)?(?:render|build|make|export|generate|create|produce|'
+    r'do|ship|send|give me|finish)\s+(?:it|that|this|them|these|the deck|'
+    r'the slides|the file|the pptx|as a deck|the actual deck)'
+    r'(?:\s+(?:now|please|as a deck|as slides|as a pptx|for real))?[.! ]*$'
+    r'|^render[.! ]*$', re.I)
 _DECK_NOUN_RX = re.compile(
     r'\binsights? deck\b|\b(pitch|talent[- ]value|audience[- ]value|'
     r'partnership) deck\b|\bdeck (on|about|for)\b|'
@@ -99,11 +114,15 @@ def mode_for_text(text):
     return None
 
 
-def looks_like_deck_ask(text, deck_in_flight=False):
+def looks_like_deck_ask(text, deck_in_flight=False,
+                        prior_deck_outline=False):
     t = str(text or '').strip()
     if not t or deck_in_flight:
         return False
-    if _DECK_BUILD_RX.search(t) or _DECK_NOUN_RX.search(t):
+    if _DECK_BUILD_RX.search(t) or _DECK_NOUN_RX.search(t) \
+            or _DECK_INTO_RX.search(t):
+        return True
+    if prior_deck_outline and _RENDER_IT_RX.match(t):
         return True
     if _DECK_ARTIFACT_RX.search(t):
         return True
@@ -190,8 +209,32 @@ def should_analyze(text, has_ctx):
     return False
 
 
+_DECK_OUTLINE_RX = re.compile(
+    r'(?m)^\s*SLIDE\s+1\b|^Here is the deck\b|^Here is a [\w -]*deck\b|'
+    r'^Deck outline\b', re.I)
+
+
+def prior_deck_outline(history):
+    """True when the last substantive agent turn (skipping a clarify
+    question) was a deck outline typed into chat instead of a file."""
+    skipped = 0
+    for t in reversed(history or []):
+        if not isinstance(t, dict) or str(t.get('role') or '') != 'agent':
+            continue
+        txt = str(t.get('text') or '')
+        if _DECK_OUTLINE_RX.search(txt):
+            return True
+        # A one-line question ('Do you mean for X, or Y?') sits
+        # between the outline and the render ask; look past it once.
+        if txt.strip().endswith('?') and len(txt) < 200 and skipped < 2:
+            skipped += 1
+            continue
+        return False
+    return False
+
+
 def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
-           deck_in_flight=False):
+           deck_in_flight=False, prior_outline=False):
     """Route one fresh ask. See the module docstring for the shape.
 
     Every reason the steps below emit is a row in
@@ -200,7 +243,8 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
     the same vocabulary. An unknown reason is a contract break: it
     raises under REGRESSION_TEST_MODE and is logged otherwise."""
     d = _decide(text, has_ctx=has_ctx, mode=mode, extra=extra,
-                open_tabs=open_tabs, deck_in_flight=deck_in_flight)
+                open_tabs=open_tabs, deck_in_flight=deck_in_flight,
+                prior_outline=prior_outline)
     try:
         from . import routing_table as _rt
         row = _rt.row_for(d.get('reason'))
@@ -219,7 +263,7 @@ def decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
 
 
 def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
-            deck_in_flight=False):
+            deck_in_flight=False, prior_outline=False):
     t = str(text or '').strip()
     extra = extra if isinstance(extra, dict) else {}
     d = {'surface': 'interpret', 'mode': None, 'reason': 'default',
@@ -246,7 +290,8 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
         return d
 
     # 2. Deck asks.
-    if looks_like_deck_ask(t, deck_in_flight):
+    if looks_like_deck_ask(t, deck_in_flight,
+                           prior_deck_outline=bool(prior_outline)):
         d.update(surface='deck', reason='deck_ask')
         return d
 

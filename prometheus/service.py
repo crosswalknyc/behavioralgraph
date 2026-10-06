@@ -279,6 +279,35 @@ def ask(user, body, *, via='session'):
     except Exception as e:
         print(f"[prometheus] referent gate skipped: {e}")
 
+    # Answers to a which-one confirm (2026-10-05, Scott). The turn
+    # before asked "Do you mean for Will And Grace, or Will & Grace on
+    # Hulu?" and the user typed "both". The widget only resolves exact
+    # chip text, so the raw word reached the router, which asked the
+    # same question again and then gave up. The server resolves it:
+    # both / either / whichever / a label / "the Hulu one" picks the
+    # option (the same entity under two spellings is one option), and
+    # the ORIGINAL ask re-runs bound to it. Never ask twice.
+    if referent_decision is None and not _armed(body):
+        try:
+            _ca = _confirm_answer(text, history)
+        except Exception as e:
+            print(f"[prometheus] confirm-answer gate skipped: {e}")
+            _ca = None
+        if _ca:
+            text = _ca['question']
+            body = dict(body)
+            body['text'] = text
+            if _ca.get('subject') and not body.get('bind_subject'):
+                body['bind_subject'] = _ca['subject']
+                if _ca.get('cohort'):
+                    body['bind_cohort'] = _ca['cohort']
+            try:
+                host.ask_hint(route='confirm_answer',
+                              outcome='resolved',
+                              subject=_ca.get('subject'))
+            except Exception:
+                pass
+
     # Bare replies (2026-10-02 audit). "approved", "ok", "no", "1",
     # "none" with nothing armed on the server side are not asks. They
     # used to reach a reasoning pass that guessed a subject out of them
@@ -358,10 +387,15 @@ def ask(user, body, *, via='session'):
                              or None),
                     'reason': 'client_surface', 'client_hint': None}
     else:
+        try:
+            _outline = understand.prior_deck_outline(history)
+        except Exception:
+            _outline = False
         decision = understand.decide(
             text, has_ctx=has_ctx, mode=body.get('mode'),
             extra=body.get('extra'), open_tabs=open_tabs,
-            deck_in_flight=bool(body.get('deck_in_flight')))
+            deck_in_flight=bool(body.get('deck_in_flight')),
+            prior_outline=_outline)
     surface = decision['surface']
     try:
         host.ask_hint(route='prometheus/ask:' + surface)
@@ -458,6 +492,102 @@ def _option_labels(turn):
         if lbl and not _UTILITY_CHIP_RX.match(lbl):
             out.append(lbl)
     return out
+
+
+_CONFIRM_Q_RX = re.compile(
+    r'^\s*Do you mean (?:for )?(.+?)(?:,? or (.+?))?\s*\?\s*$', re.I | re.S)
+_CONFIRM_ANY_RX = re.compile(
+    r'^(?:both|either|either one|either is fine|whichever|any|any of them|'
+    r'all|all of them|does ?n[o\']t matter|doesnt matter|same thing|'
+    r'they are the same|same|yes|yep|yeah|that one|the first( one)?|'
+    r'first|the second( one)?|second)[.! ]*$', re.I)
+_CONFIRM_THE_ONE_RX = re.compile(r'^the\s+(.+?)\s+one[.! ]*$', re.I)
+
+
+def _confirm_options(turn):
+    """[{label, subject, cohort}] for a which-one confirm turn, from
+    its envelope options first (they carry the bound subject), else
+    parsed out of the question text."""
+    out = []
+    meta = turn.get('meta') if isinstance(turn.get('meta'), dict) else {}
+    mc = meta.get('memory_confirm') if isinstance(meta.get('memory_confirm'), dict) else {}
+    for o in (mc.get('options') or []):
+        if isinstance(o, dict) and o.get('label'):
+            out.append({'label': str(o['label']), 'subject': str(o.get('subject') or o['label']),
+                        'cohort': str(o.get('cohort') or '') or None})
+    if not out:
+        for o in (meta.get('options') or []):
+            lbl = str((o.get('label') if isinstance(o, dict) else o) or '').strip()
+            if lbl and not _UTILITY_CHIP_RX.match(lbl):
+                out.append({'label': lbl, 'subject': lbl, 'cohort': None})
+    if not out:
+        m = _CONFIRM_Q_RX.match(str(turn.get('text') or ''))
+        if m:
+            for g in (m.group(1), m.group(2)):
+                if g and g.strip():
+                    out.append({'label': g.strip(), 'subject': g.strip(), 'cohort': None})
+    return out
+
+
+def _confirm_answer(text, history):
+    """When the previous agent turn was a which-one confirm and this
+    turn answers it, return {'question', 'subject', 'cohort', 'label'}:
+    the ask that triggered the confirm plus the option picked. None
+    when this turn is not such an answer."""
+    hist = [t for t in (history or []) if isinstance(t, dict)]
+    prev = _last_agent_turn(hist)
+    if not prev or not _CONFIRM_Q_RX.match(str(prev.get('text') or '')):
+        return None
+    options = _confirm_options(prev)
+    if not options:
+        return None
+    low = ' '.join(str(text or '').lower().split()).strip()
+    if not low or len(low) > 60:
+        return None
+    try:
+        from prometheus_memory import entity_fold
+    except Exception:
+        def entity_fold(x):
+            return re.sub(r'[^a-z0-9]+', ' ', str(x or '').lower()).strip()
+    pick = None
+    for o in options:
+        if low.strip(' .!') == o['label'].lower() \
+                or entity_fold(low) == entity_fold(o['label']):
+            pick = o
+            break
+    if pick is None:
+        m = _CONFIRM_THE_ONE_RX.match(low)
+        if m:
+            key = entity_fold(m.group(1))
+            for o in options:
+                if key and (key in entity_fold(o['label'])
+                            or key in o['label'].lower()):
+                    pick = o
+                    break
+    if pick is None and _CONFIRM_ANY_RX.match(low):
+        if re.match(r'^(?:the )?second', low) and len(options) > 1:
+            pick = options[1]
+        else:
+            # both / either / yes / first: one entity under two
+            # spellings is one option; otherwise the first offered.
+            pick = options[0]
+    if pick is None:
+        return None
+    # The ask that triggered the confirm: the memory_confirm question
+    # on the turn, else the user turn right before it.
+    meta = prev.get('meta') if isinstance(prev.get('meta'), dict) else {}
+    mc = meta.get('memory_confirm') if isinstance(meta.get('memory_confirm'), dict) else {}
+    question = str(mc.get('question') or '').strip()
+    if not question:
+        idx = hist.index(prev)
+        for t in reversed(hist[:idx]):
+            if str(t.get('role') or '') == 'user' and str(t.get('text') or '').strip():
+                question = str(t['text']).strip()
+                break
+    if not question:
+        return None
+    return {'question': question, 'subject': pick.get('subject') or pick['label'],
+            'cohort': pick.get('cohort'), 'label': pick['label']}
 
 
 def _bare_reply(body, text, history, has_ctx):

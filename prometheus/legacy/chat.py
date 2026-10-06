@@ -5189,9 +5189,8 @@ _PM_GATE_TASK_MESSAGE = (
     "should this be on? Name the show, brand, or person (one line is "
     "enough) and I will take it from there.")
 _PM_GATE_REPEAT_MESSAGE = (
-    "I asked for that already and did not read your answer well, so I "
-    "will not ask again. I am passing this to the team and will email "
-    "you the read.")
+    "I could not place that answer, so I will not ask again. I am "
+    "taking this to the team and will email you the read.")
 _PM_GATE_RETRY_BUDGET_S = 45
 _PM_GATE_HELD = frozenset({'empty', 'faulted'})
 
