@@ -46,7 +46,16 @@ def init_app(app, host_module):
         app.register_blueprint(bp)
         print(f"[prometheus] v{__version__} surface registered at "
               f"{bp.url_prefix}")
-        return True
     except Exception as e:  # pragma: no cover - defensive at boot
         print(f"[prometheus] blueprint registration failed: {e}")
         return False
+    # Build-first follow-through (2026-10-06, Jenna): a stashed
+    # question answers itself on the user's thread once its profile
+    # lands, tab open or not. Daemon thread; kill switch
+    # PM_PENDING_ANSWERS=0; never under REGRESSION_TEST_MODE.
+    try:
+        from . import pending_answers as _pa
+        _pa.start(app, host_module)
+    except Exception as e:  # pragma: no cover - defensive at boot
+        print(f"[prometheus] pending-answers sweeper not started: {e}")
+    return True

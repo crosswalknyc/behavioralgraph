@@ -24,7 +24,8 @@ import re
 
 _SCAFFOLD_RX = re.compile(
     r'^\s*(?:\*\*|#+\s*)?(?:measured read|answer(?: first)?|summary|evidence|'
-    r'so what|tl;?dr|the read|read|reasoning|key takeaways?|bottom line)'
+    r'so what|tl;?dr|the reads?|reads?|reasoning|key takeaways?|bottom line|'
+    r'headline|interpretive reads?|what this means|the numbers?|metrics)'
     r'\s*(?:\(([^)]{0,160})\))?\s*[:\-]?\s*(?:\*\*)?\s*$', re.I)
 _CAPS_HEADER_RX = re.compile(r'^\s*(?:\*\*)?([A-Z0-9][A-Z0-9 ,.\'’&/+%:$\-]{11,})(?:\*\*)?\s*$')
 _LONG_PAREN_RX = re.compile(r'\s*\(([^()]{90,}?)\)')
@@ -83,6 +84,11 @@ def shape(reply):
                     q = q[:1].upper() + q[1:]
                     if q and q[-1] not in '.:!?':
                         q += '.'
+                    # a window qualifier reads as a window line
+                    if re.match(r'^(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{1,2}'
+                                r'|\d{4}|\d{1,2}/\d{1,2})', q) \
+                            and re.search(r'\bto\b', q) and re.search(r'\b(?:19|20)\d{2}\b', q):
+                        q = 'Window: ' + q
                     out_lines.append(q)
                 continue
             if _is_caps_header(ln):
@@ -129,3 +135,15 @@ def shape_payload(raw):
             raw['reply'] = shaped
             raw.setdefault('_shaped', True)
     return raw
+
+
+def shape_finished_read(payload, held=False):
+    """A finished background read lands via the status doc the widget
+    polls and the thread copy, bypassing the envelope; shape it here.
+    A held read carries no answer to shape. Never raises."""
+    if held or not isinstance(payload, dict):
+        return payload
+    try:
+        return shape_payload(payload)
+    except Exception:
+        return payload

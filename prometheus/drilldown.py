@@ -72,6 +72,266 @@ def looks_like_drilldown(text):
     return bool(_CUE_RE.search(t)) or looks_like_check(t)
 
 
+# ------------------------------------------------------- definitions
+
+# A question that asks what a LABEL on the journey means ("Define 'Saw a
+# retarget'", "what counts as a retarget", "what data is used for that
+# signal") is a lookup into that journey's own row, not a glossary
+# entry (2026-10-06, Alexia: the generic "Journey steps" definition
+# came back for a question about one named fork row; Jenna: it should
+# have said what a retarget is here, paid or a second piece of content).
+_DEF_CUE_RX = re.compile(
+    r"\b(define|definition of|defined as|what (?:does|do|did) .{0,60}? (?:mean|refer to|cover|include)|"
+    r"what (?:counts|qualifies) as|what is meant by|what(?:'s| is| are) (?:a |an |the )?.{0,40}? "
+    r"(?:signal|stage|step|row|label|category|bucket)\b|what data|which data|what signal|what source|"
+    r"how (?:is|are|was|were) .{0,60}? (?:measured|counted|computed|defined|determined|captured|tracked|identified)|"
+    r"what goes into|what feeds|explain (?:what|the|this|that)|meaning of)\b", re.I)
+_QUOTED_RX = re.compile(r"[\"\u201c\u201d']([^\"\u201c\u201d']{3,80})[\"\u201c\u201d']")
+_DEF_TAIL_RX = re.compile(
+    r"\b(?:define|definition of|what is meant by|what (?:counts|qualifies) as|meaning of|explain)\s+"
+    r"(?:a |an |the )?([A-Za-z][A-Za-z0-9 ,&'/+\-]{2,60}?)(?=\s*(?:[?.:;]|\bwhat\b|\bin\b|\bon\b|\bfor\b|$))", re.I)
+
+
+def _lnorm(s):
+    return re.sub(r'[^a-z0-9]+', ' ', str(s or '').lower()).strip()
+
+
+def looks_like_definition(text):
+    t = str(text or '').strip()
+    if not t or len(t) > 400:
+        return False
+    return bool(_DEF_CUE_RX.search(t))
+
+
+def label_candidates(text):
+    """Phrases the ask may be naming, most specific first: quoted text,
+    then the words after the cue ("define X", "what counts as X")."""
+    t = str(text or '')
+    out = []
+    for m in _QUOTED_RX.finditer(t):
+        c = m.group(1).strip()
+        if c and c not in out:
+            out.append(c)
+    for m in _DEF_TAIL_RX.finditer(t):
+        c = m.group(1).strip(' ,')
+        if c and c not in out:
+            out.append(c)
+    m = re.search(r"\bwhat\s+(?:does|do|did|is|are)\s+(?:a |an |the )?(.{3,60}?)\s+"
+                  r"(?:mean|refer|cover|include|measure|count|signal|stage|step|row|label)\b", t, re.I)
+    if m:
+        c = m.group(1).strip(' ,\'"')
+        if c and c not in out:
+            out.append(c)
+    return out
+
+
+_LABEL_STOP = {'a', 'an', 'the', 'this', 'that', 'here', 'there', 'signal', 'row', 'stage',
+               'step', 'label', 'bucket', 'category', 'in', 'on', 'for', 'of', 'to', 'is',
+               'are', 'was', 'were', 'and', 'or', 'analysis', 'journey', 'page', 'table'}
+
+
+def _label_match(cands, label):
+    ln = _lnorm(label)
+    if not ln:
+        return 0
+    ltoks = set(ln.split())
+    for c in cands:
+        cn = _lnorm(c)
+        if not cn:
+            continue
+        if cn == ln:
+            return 3
+        if len(cn) >= 5 and (cn in ln or ln in cn):
+            return 2
+        ctoks = {w for w in cn.split() if w not in _LABEL_STOP}
+        if ctoks and len(ctoks) <= 4 and ctoks <= ltoks:
+            return 1
+    return 0
+
+
+def find_by_label(text, payload, key=''):
+    """The journey element whose label the ask names: a fork row, a
+    spine stage, a detour row, a breakdown item, or a detour table.
+    Exact label match beats containment; None when nothing matches."""
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    if not j:
+        return None
+    cands = label_candidates(text)
+    if not cands:
+        # no quoted or cued phrase: try every row label against the ask
+        cands = [text]
+    best = None
+
+    def _consider(score, prio, hit):
+        # match strength first, then where the label lives: a stage
+        # label beats a fork label beats a fork's description
+        nonlocal best
+        if score and (best is None or (score, prio) > (best[0], best[1])):
+            best = (score, prio, hit)
+
+    for r in j.get('fork') or []:
+        hit = {'kind': 'fork_row', 'key': key, 'payload': payload, 'row': r, 'number': _acc(r)}
+        _consider(_label_match(cands, r.get('label')), 4, hit)
+        _consider(_label_match(cands, r.get('doing')), 1, hit)
+    for si, st in enumerate(j.get('spine') or []):
+        _consider(_label_match(cands, st.get('label')), 5,
+                  {'kind': 'stage', 'key': key, 'payload': payload, 'stage': st,
+                   'stage_index': si, 'number': _acc(st)})
+    for di, d in enumerate(j.get('detours') or []):
+        for ri, r in enumerate(d.get('rows') or []):
+            _consider(_label_match(cands, r.get('label')), 3,
+                      {'kind': 'detour_row', 'key': key, 'payload': payload, 'detour': d,
+                       'detour_index': di, 'row': r, 'row_index': ri, 'number': _acc(r)})
+            for b in bd_rows(r):
+                _consider(_label_match(cands, b.get('label')), 2,
+                          {'kind': 'breakdown_item', 'key': key, 'payload': payload, 'detour': d,
+                           'detour_index': di, 'row': r, 'row_index': ri, 'item': b, 'number': _acc(b)})
+        _consider(_label_match(cands, d.get('title')), 2,
+                  {'kind': 'detour_table', 'key': key, 'payload': payload, 'detour': d,
+                   'detour_index': di, 'number': sum(_acc(r) for r in (d.get('rows') or []))})
+    return best[2] if best else None
+
+
+def locate_label(text, uname, ctx=None, s3=None, bucket=None):
+    """Search the journeys for the label the ask names."""
+    if s3 is None:
+        s3, bucket = _s3()
+    for key in _journey_keys(s3, bucket, uname, ctx):
+        try:
+            payload = _load_payload(s3, bucket, key)
+        except Exception:
+            continue
+        hit = find_by_label(text, payload, key)
+        if hit:
+            return hit
+    return None
+
+
+def _prev_fork_row(j, row):
+    """The fork row this one splits from: the nearest earlier row whose
+    count equals this row's kept-plus-dropped base."""
+    try:
+        base = _acc(row) + int(row.get('dropped') or 0)
+    except Exception:
+        base = 0
+    rows = j.get('fork') or []
+    for r in rows:
+        if r is row:
+            break
+        if base and _acc(r) == base:
+            return r
+    for st in reversed(j.get('spine') or []):
+        if base and _acc(st) == base:
+            return st
+    return None
+
+
+def _paid_companions(j, label):
+    """Detour rows that carry a paid / sponsored word and share a token
+    with the label (the paid slice of a retarget, for example)."""
+    toks = {w for w in _lnorm(label).split() if len(w) > 3}
+    out = []
+    for d in j.get('detours') or []:
+        for r in d.get('rows') or []:
+            rl = _lnorm(r.get('label'))
+            if re.search(r'\b(paid|sponsored|ad|ads|display|promoted)\b', rl) \
+                    and toks & set(rl.split()):
+                out.append((d, r))
+    return out
+
+
+_COUNTED_LINE = ('Counted from each person\'s own sessions in the window, in time order: '
+                 'a person counts here the first time one of those touches shows up after '
+                 'the step before it, and only once.')
+
+
+def reply_for_definition(hit):
+    """What a named element of the journey means, and what data makes
+    the signal, from the journey's own fields."""
+    payload = hit['payload']
+    j = payload.get('fragrance_shop_journey') or {}
+    subj = _subject_of(payload)
+    kind = hit['kind']
+    if kind == 'fork_row':
+        r = hit['row']
+        label = str(r.get('label') or '').strip()
+        n = _acc(r)
+        parts = []
+        head = f"\"{label}\" on the journey for {subj}"
+        doing = _doing_for_chat(r.get('doing'))
+        surface = str(r.get('surface') or '').strip().rstrip('.')
+        if doing and _lnorm(doing) != _lnorm(label):
+            head += f" means: {doing}"
+        elif 'retarget' in _lnorm(label) and surface:
+            head += (f" means a follow-up for {subj} reached the person after they left, "
+                     f"a second piece of content rather than the first one they saw: "
+                     f"{surface[:1].lower() + surface[1:]}")
+            surface = ''
+        elif surface:
+            head += f" means: {surface[:1].lower() + surface[1:]}"
+            surface = ''
+        head += f". It is {n:,} people"
+        prev = _prev_fork_row(j, r)
+        if prev is not None and r.get('kept') is not None:
+            pl = _doing_for_chat(prev.get('doing')) or str(prev.get('label') or '')
+            head += f", {float(r['kept']):.1f}% of the {_acc(prev):,} who {pl[:1].lower() + pl[1:]}"
+        head += '.'
+        parts.append(head)
+        if surface:
+            parts.append(f"What the signal is made of: {surface}.")
+        paid = _paid_companions(j, label)
+        if paid:
+            d, pr = paid[0]
+            parts.append(
+                f"Paid and unpaid follow-ups both count toward it. The paid piece on its own is in "
+                f"\"{d.get('title')}\": {pr.get('label')}, {float(pr.get('pct') or 0):.1f}% "
+                f"({_acc(pr):,} people).")
+        parts.append(_COUNTED_LINE)
+        if r.get('timing'):
+            parts.append(f"Timing: {str(r['timing']).rstrip('.')}.")
+        return '\n\n'.join(parts)
+    if kind == 'stage':
+        st = hit['stage']
+        label = str(st.get('label') or '').strip()
+        n = _acc(st)
+        parts = [f"\"{label}\" is a stage of the journey for {subj}"]
+        doing = _doing_for_chat(st.get('doing'))
+        if doing and _lnorm(doing) != _lnorm(label):
+            parts[0] += f": {doing}"
+        parts[0] += f". {n:,} people reached it"
+        if st.get('kept') is not None:
+            parts[0] += f", {float(st['kept']):.1f}% of the step before"
+        parts[0] += '.'
+        if st.get('where'):
+            parts.append(f"What the signal is made of: {str(st['where']).rstrip('.')}.")
+        parts.append(_COUNTED_LINE)
+        return '\n\n'.join(parts)
+    if kind in ('detour_row', 'breakdown_item'):
+        d, r = hit['detour'], hit['row']
+        b = hit.get('item') if kind == 'breakdown_item' else None
+        el = b or r
+        label = str(el.get('label') or '').strip()
+        n = _acc(el)
+        parts = [f"\"{label}\" is a row in \"{d.get('title')}\" on the journey for {subj}: "
+                 f"{n:,} people" + (f", {float(el.get('pct')):.1f}% of that table's base" if el.get('pct') is not None else '') + '.']
+        doing = _doing_for_chat(el.get('doing'))
+        if doing:
+            parts.append(doing + '.')
+        if d.get('note'):
+            parts.append(f"How that table is counted: {str(d['note']).rstrip('.')}.")
+        parts.append(_COUNTED_LINE)
+        return '\n\n'.join(parts)
+    if kind == 'detour_table':
+        d = hit['detour']
+        parts = [f"\"{d.get('title')}\" is a table on the journey for {subj} with "
+                 f"{len(d.get('rows') or [])} rows."]
+        if d.get('note'):
+            parts.append(f"How it is counted: {str(d['note']).rstrip('.')}.")
+        parts.append(_COUNTED_LINE)
+        return '\n\n'.join(parts)
+    return ''
+
+
 # ------------------------------------------------------------------ store
 
 def _s3():
@@ -674,12 +934,22 @@ def answer(text, uname, ctx=None, tid=None, *, s3=None, bucket=None,
            claude_data=None, build_async=True):
     """The lane. None when the ask is not a drill-down or no journey
     holds the number. Otherwise the raw analyze payload."""
-    if not looks_like_drilldown(text):
+    is_def = looks_like_definition(text)
+    if not looks_like_drilldown(text) and not is_def:
         return None
     if s3 is None:
         try:
             s3, bucket = _s3()
         except Exception:
+            return None
+    if is_def:
+        # what a named element means, from the journey's own fields
+        dh = locate_label(text, uname, ctx, s3=s3, bucket=bucket)
+        if dh:
+            rep = reply_for_definition(dh)
+            if rep:
+                return _raw(rep, _subject_of(dh['payload']), _followups(dh), drilldown='definition')
+        if not looks_like_drilldown(text):
             return None
     hit = locate(text, uname, ctx, s3=s3, bucket=bucket)
     if not hit:

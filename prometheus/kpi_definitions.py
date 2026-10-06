@@ -436,6 +436,11 @@ def find_definition(text, view_id='', on_screen_labels=None):
                     best = (score, d)
     if best:
         return best[1]
+    # A quoted phrase the glossary does not know is a label on the page
+    # (a journey row, a tile): the generic entry never answers for it
+    # (2026-10-06, Alexia's "Saw a retarget").
+    if re.search(r"[\"\u201c\u201d']([^\"\u201c\u201d']{3,80})[\"\u201c\u201d']", str(text or '')):
+        return None
     if re.search(r'\b(?:this|that|it|these|those)\b', nt) and on_screen_labels:
         hits = []
         for lab in on_screen_labels:

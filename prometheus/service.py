@@ -546,7 +546,7 @@ def ask(user, body, *, via='session'):
     if referent_decision is None and not _armed(body):
         try:
             from . import drilldown as _dd
-            _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if _dd.looks_like_drilldown(text) else None
+            _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if (_dd.looks_like_drilldown(text) or _dd.looks_like_definition(text)) else None
         except Exception as e:
             print(f"[prometheus] drill-down lane skipped: {e}")
             _dd_raw = None

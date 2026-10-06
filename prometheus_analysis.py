@@ -647,66 +647,399 @@ _ENTITY_COMMON_WORDS = {
     'uber', 'chime', 'mars', 'vans', 'guess', 'gain', 'all'}
 
 
+# Categories that carry the same brand at ONE identical value by
+# construction (profile-iq-pipeline-rules 3b: MOST PURCHASED BRANDS is
+# the anchor for the purchase family; AUTOMOBILE anchors AUTOMOTIVE
+# PARTS; TALENT anchors its role categories; SPORTS TEAM its league
+# companions). A brand showing in two of these at the same value is the
+# same people counted once, listed under two headings - never two
+# behaviors (2026-10-06: a read on Under Armour called MOST PURCHASED
+# BRANDS 'purchase behavior' and APPAREL/FOOTWEAR 'shopping behavior'
+# and concluded 'anyone touching the brand is converting').
+_MIRROR_ANCHOR_ORDER = (
+    'MOST PURCHASED BRANDS', 'AUTOMOBILE', 'TALENT', 'SPORTS TEAM',
+    'QSR', 'PODCAST')
+
+
+def _mirror_rank(cat):
+    cu = _norm_cat(cat)
+    for i, a in enumerate(_MIRROR_ANCHOR_ORDER):
+        if cu == a:
+            return i
+    return len(_MIRROR_ANCHOR_ORDER)
+
+
+def _fmt_people(n):
+    try:
+        n = int(round(float(str(n).replace(',', ''))))
+    except (TypeError, ValueError):
+        return None
+    return f"{n:,}" if n > 0 else None
+
+
+_ENTITY_ROWS_HEADER = (
+    'EXACT ROWS FOR ENTITIES THIS QUESTION NAMES (verbatim cells from '
+    'the base file; these are measured values - quote them as stated, '
+    'never re-derive or round them away). A "projected US people" '
+    'count is the file\'s own figure: quote it exactly, never '
+    'recompute it from the percentage. A row marked "also listed '
+    'under ..." is ONE measurement shown under more than one heading '
+    '(the same people counted once), never two behaviors: a "shop at '
+    'or buy" question has one answer, the brand\'s row.')
+
+
+def _entity_row_groups(df, genpop_map, text):
+    """{entity: [(cat, bp, gp, proj)]} for every non-demo row whose
+    Value the question names. Shared by the entity rows block and the
+    purchase context."""
+    bp_col = _bp_col(df)
+    if bp_col is None:
+        return {}
+    proj_c = _fuzzy_col(df, 'proj')
+    qn = (' ' + re.sub(r'[^a-z0-9]+', ' ', str(text).lower()).strip() + ' ')
+    raw = str(text)
+    by_ent = {}
+    for _, row in df.iterrows():
+        cat = _norm_cat(row.get('Column'))
+        if cat in METADATA_COLS or cat in DEMO_COLS:
+            continue
+        val = str(row.get('Value') or '').strip()
+        if len(val) < 3:
+            continue
+        ent_sp = re.sub(r'[^a-z0-9]+', ' ', val.lower()).strip()
+        if len(ent_sp) < 3 or f' {ent_sp} ' not in qn:
+            continue
+        if (' ' not in ent_sp
+                and ent_sp in _ENTITY_COMMON_WORDS
+                and val not in raw
+                and val.capitalize() not in raw
+                and val.title() not in raw):
+            continue
+        bp = _parse_bp(row.get(bp_col))
+        if bp is None or bp >= 99.99:
+            # the subject's own self-pin row is not an entity row
+            continue
+        gp = genpop_map.get((cat, _norm_brand(val))) if genpop_map else None
+        proj = _fmt_people(row.get(proj_c)) if proj_c is not None else None
+        by_ent.setdefault(val, []).append((cat, bp, gp, proj))
+    return by_ent
+
+
+def _entity_lines(val, rows, max_rows_per_entity=4, who='this audience'):
+    """One line per DISTINCT value for an entity; categories carrying
+    the same value collapse into one line naming every heading."""
+    groups = {}
+    for cat, bp, gp, proj in rows:
+        groups.setdefault(round(bp, 4), []).append((cat, bp, gp, proj))
+    lines = []
+    for key in sorted(groups, reverse=True)[:max_rows_per_entity]:
+        g = sorted(groups[key], key=lambda r: (_mirror_rank(r[0]), r[0]))
+        cat, bp, gp, proj = g[0]
+        heading = cat
+        if len(g) > 1:
+            heading += (' (also listed under '
+                        + ', '.join(r[0] for r in g[1:])
+                        + ' at the same value: one measurement, not two behaviors)')
+        gp = next((r[2] for r in g if r[2] is not None), gp)
+        proj = next((r[3] for r in g if r[3]), proj)
+        bits = f"- {val} | {heading}: {bp:.4f}% of {who}"
+        if proj:
+            bits += f" | projected US people {proj} (quote verbatim)"
+        if gp is not None and gp >= 0.01:
+            bits += f" | gen pop {gp:.4f}% | {bp / gp:.1f}x (index {round(bp / gp * 100)})"
+        lines.append(bits)
+    return lines
+
+
 def build_named_entity_rows(df, genpop_map, text, limit=8,
                             max_rows_per_entity=4):
-    """Verbatim base-file rows for entities the question names.
-    Returns '' when the question names nothing the file carries.
-    Never raises."""
+    """Verbatim base-file rows for entities the question names, with
+    the file's own projected count and mirrored categories collapsed
+    to one line. Returns '' when the question names nothing the file
+    carries. Never raises."""
     try:
         if df is None or not str(text or '').strip():
             return ''
-        bp_col = _bp_col(df)
-        if bp_col is None:
-            return ''
-        qn = (' ' + re.sub(r'[^a-z0-9]+', ' ',
-                           str(text).lower()).strip() + ' ')
-        raw = str(text)
-        by_ent = {}
-        for _, row in df.iterrows():
-            cat = _norm_cat(row.get('Column'))
-            if cat in METADATA_COLS or cat in DEMO_COLS:
-                continue
-            val = str(row.get('Value') or '').strip()
-            if len(val) < 3:
-                continue
-            ent_sp = re.sub(r'[^a-z0-9]+', ' ', val.lower()).strip()
-            if len(ent_sp) < 3 or f' {ent_sp} ' not in qn:
-                continue
-            if (' ' not in ent_sp
-                    and ent_sp in _ENTITY_COMMON_WORDS
-                    and val not in raw
-                    and val.capitalize() not in raw
-                    and val.title() not in raw):
-                continue
-            bp = _parse_bp(row.get(bp_col))
-            if bp is None:
-                continue
-            gp = genpop_map.get((cat, _norm_brand(val))) \
-                if genpop_map else None
-            by_ent.setdefault(val, []).append((cat, bp, gp))
+        by_ent = _entity_row_groups(df, genpop_map, text)
         if not by_ent:
             return ''
         ranked = sorted(by_ent.items(),
                         key=lambda kv: -max(r[1] for r in kv[1]))
         lines = []
         for val, rows in ranked[:limit]:
-            rows = sorted(rows, key=lambda r: -r[1])
-            for cat, bp, gp in rows[:max_rows_per_entity]:
-                bits = f"- {val} | {cat}: {bp:.4f}% of this audience"
-                if gp is not None and gp >= 0.01:
-                    bits += (f" | gen pop {gp:.4f}%"
-                             f" | {bp / gp:.1f}x")
-                lines.append(bits)
+            lines.extend(_entity_lines(val, rows, max_rows_per_entity))
         if not lines:
             return ''
-        return ('EXACT ROWS FOR ENTITIES THIS QUESTION NAMES '
-                '(verbatim cells from the base file; these are '
-                'measured values - quote them as stated, never '
-                're-derive or round them away):\n'
-                + '\n'.join(lines[:limit * max_rows_per_entity]))
+        return _ENTITY_ROWS_HEADER + '\n' + '\n'.join(
+            lines[:limit * max_rows_per_entity])
     except Exception as e:
         print(f"[prometheus] named-entity rows failed: {e}")
         return ''
+
+
+# ---------------------------------------------------------------------------
+# Brand purchase questions (2026-10-06, Jenna: "the Avid tier and the
+# retail channel pulled into any brand-purchase question by default").
+# ---------------------------------------------------------------------------
+
+_PURCHASE_ASK_RX = re.compile(
+    r"\b(buy|buys|buying|bought|purchas\w*|shop(?:s|ped|ping)?\b|shopper\w*|"
+    r"customer\w*|spend\w*\s+(?:at|on|with)|own(?:s|ed)?\s+(?:a|an|the)?\s*\w*"
+    r"|wear\w*|subscribe\w*\s+to|order\w*\s+from|eat\w*\s+at|dine\w*)\b", re.I)
+
+_PURCHASE_FAMILY = {
+    'MOST PURCHASED BRANDS', 'CPG', 'APPAREL/FOOTWEAR', 'APPAREL',
+    'FOOTWEAR', 'BEAUTY/WELLNESS', 'BEAUTY', 'HOME/OUTDOOR', 'ACCESSORIES',
+    'PETS', 'TOYS', 'TOY', 'TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE',
+    'TECHNOLOGY BRAND/DEVICE', 'HEAVY MACHINERY', 'WHERE THEY SHOP',
+    'RETAILERS', 'QSR', 'WHERE THEY DINE', 'CASUAL DINING', 'AUTOMOBILE',
+    'AUTOMOTIVE PARTS', 'GROCERY', 'ACTIVEWEAR', 'JEWELRY', 'INTIMATES',
+    'BEVERAGE', 'TRAVEL', 'TELECOM', 'BANKING', 'BANKS', 'DIGITAL BANKING',
+    'CREDIT PROVIDER', 'INSURANCE', 'PHARMACY', 'BETTING', 'TICKETING',
+    'WORKOUT FACILITY', 'STREAMING/PLATFORM', 'STREAMING MUSIC'}
+
+_RETAIL_CHANNEL_CATS = ('WHERE THEY SHOP', 'RETAILERS', 'RETAILER')
+
+
+def is_brand_purchase_ask(text):
+    """True for a question about buying, shopping, owning, wearing,
+    subscribing to, or being a customer of something."""
+    return bool(_PURCHASE_ASK_RX.search(str(text or '')))
+
+
+def find_avid_key(s3_client, bucket, subject, exclude_key=None):
+    """S3 key of the subject's Avid Fan cut in the library
+    ('<Subject> - Avid Fan'), or None. Never raises."""
+    try:
+        subj = _norm_brand(str(subject or ''))
+        if not subj:
+            return None
+        for nm, sk in _load_catalog_names(s3_client, bucket):
+            parts = str(nm).split(' - ', 1)
+            if len(parts) != 2 or 'avid' not in parts[1].lower():
+                continue
+            if _norm_brand(parts[0]) == subj and sk != exclude_key:
+                return sk
+    except Exception:
+        pass
+    return None
+
+
+def build_purchase_context(df, genpop_map, text, avid_df=None,
+                           subject=None, max_retail=10, max_peers=5):
+    """The block a brand-purchase question answers from, so the Avid
+    tier and the retail channel are IN the answer rather than offered
+    as follow-ups:
+
+      - the named brand's row(s) in the Avid Fan cut (same brand, same
+        heading, the cut's own projected count verbatim);
+      - where this audience buys: the retail-channel rows (WHERE THEY
+        SHOP / RETAILERS) ranked by index, penetration at least 1%;
+      - the brand's peers: the leading rows of its own sub-category.
+
+    Returns '' when the question names no purchase-family row. Never
+    raises."""
+    try:
+        if df is None or not str(text or '').strip():
+            return ''
+        by_ent = _entity_row_groups(df, genpop_map, text)
+        named = {val: rows for val, rows in by_ent.items()
+                 if any(_norm_cat(r[0]) in _PURCHASE_FAMILY for r in rows)}
+        if not named and not is_brand_purchase_ask(text):
+            return ''
+        if not named:
+            return ''
+        out = ['PURCHASE CONTEXT FOR THIS QUESTION (part of the answer, '
+               'never a follow-up offer): lead with the audience-wide row, '
+               'then the Avid tier for the same brand, then where this '
+               'audience buys, then the peer brands.']
+        # Avid tier rows for the named brands.
+        if avid_df is not None:
+            try:
+                a_meta = _profile_meta(avid_df, 'avid')
+            except Exception:
+                a_meta = {}
+            a_rows = _entity_row_groups(avid_df, genpop_map, text)
+            a_lines = []
+            for val in named:
+                if val in a_rows:
+                    a_lines.extend(_entity_lines(
+                        val, a_rows[val], 2, who='the Avid tier'))
+            if a_lines:
+                head = ('AVID TIER (the subject\'s avid fans, the library\'s '
+                        'Avid Fan cut; never describe it by a play count or '
+                        'any other definition')
+                if a_meta.get('proj'):
+                    head += f"; projected US people {a_meta['proj']:,}, quote verbatim"
+                head += '):'
+                out.append(head)
+                out.extend(a_lines)
+        # Retail channel: where this audience buys.
+        bp_col = _bp_col(df)
+        proj_c = _fuzzy_col(df, 'proj')
+        retail = []
+        for _, row in df.iterrows():
+            cat = _norm_cat(row.get('Column'))
+            if not any(cat == c or cat.startswith(c) for c in _RETAIL_CHANNEL_CATS):
+                continue
+            val = str(row.get('Value') or '').strip()
+            bp = _parse_bp(row.get(bp_col))
+            if not val or bp is None or bp < 1.0 or bp >= 99.99:
+                continue
+            gp = genpop_map.get((cat, _norm_brand(val))) if genpop_map else None
+            idx = (bp / gp * 100) if gp and gp >= 0.01 else None
+            proj = _fmt_people(row.get(proj_c)) if proj_c is not None else None
+            retail.append((idx if idx is not None else -1, val, cat, bp, gp, proj))
+        if retail:
+            def _rline(r):
+                idx, val, cat, bp, gp, proj = r
+                line = f"- {val} | {cat}: {bp:.4f}%"
+                if proj:
+                    line += f" | projected US people {proj} (quote verbatim)"
+                if idx is not None and idx >= 0:
+                    line += f" | gen pop {gp:.4f}% | index {round(idx)}"
+                return line
+            n_reach = max(3, max_retail // 3)
+            # the biggest doors by reach, then the strongest leans
+            # weighted by reach (penetration x index, retailers at 5%
+            # or more): a 0.3% boutique at index 1,300 is not where
+            # this audience buys, and a 24% retailer at index 357 is
+            by_reach = sorted(retail, key=lambda r: -r[3])[:n_reach]
+            seen = {r[1] for r in by_reach}
+            by_lean = [r for r in sorted(retail, key=lambda r: -(max(r[0], 0) * r[3]))
+                       if r[3] >= 5.0 and r[0] > 100 and r[1] not in seen][:max_retail - n_reach]
+            out.append('WHERE THIS AUDIENCE BUYS, largest retail doors by reach:')
+            out.extend(_rline(r) for r in by_reach)
+            if by_lean:
+                out.append('WHERE THIS AUDIENCE BUYS, strongest leans with real reach (index, retailers at 5% or more):')
+                out.extend(_rline(r) for r in by_lean)
+        # Peers: the leading rows of the named brand's own sub-category
+        # (the sub-category, not MOST PURCHASED BRANDS, so the peers are
+        # the brand's real competitive set).
+        peer_cats = []
+        for val, rows in named.items():
+            for cat, bp, gp, proj in rows:
+                cu = _norm_cat(cat)
+                if cu in _PURCHASE_FAMILY and cu != 'MOST PURCHASED BRANDS' \
+                        and cu not in peer_cats:
+                    peer_cats.append(cu)
+        named_norm = {_norm_brand(v) for v in named}
+        for cu in peer_cats[:2]:
+            grp = df[df['Column'].map(_norm_cat) == cu]
+            peers = []
+            for _, row in grp.iterrows():
+                val = str(row.get('Value') or '').strip()
+                bp = _parse_bp(row.get(bp_col))
+                if not val or bp is None or bp >= 99.99 or _norm_brand(val) in named_norm:
+                    continue
+                gp = genpop_map.get((cu, _norm_brand(val))) if genpop_map else None
+                peers.append((bp, val, gp))
+            peers.sort(key=lambda r: -r[0])
+            if peers:
+                out.append(f"PEERS IN {cu} (leading rows):")
+                for bp, val, gp in peers[:max_peers]:
+                    line = f"- {val}: {bp:.4f}%"
+                    if gp is not None and gp >= 0.01:
+                        line += f" | gen pop {gp:.4f}% | index {round(bp / gp * 100)}"
+                    out.append(line)
+        return '\n'.join(out) if len(out) > 1 else ''
+    except Exception as e:
+        print(f"[prometheus] purchase context failed: {e}")
+        return ''
+
+
+def purchase_facts(df, genpop_map, text, avid_df=None):
+    """The binding figures behind a brand-purchase read, for the verify
+    pass and the in-place enforcement (2026-10-06: a read invented an
+    Avid tier of 3,155,223 with Under Armour at 31.4% / 990,743 while
+    the Avid file measures 3,157,308 and 23.1188% / 729,937).
+
+    {'tu_universe', 'avid_universe', 'brands': [{'label', 'tu_pct',
+    'tu_proj', 'tu_index', 'avid_pct', 'avid_proj', 'avid_index'}]}
+    or {} when the question names no purchase-family row."""
+    try:
+        if df is None:
+            return {}
+        by_ent = _entity_row_groups(df, genpop_map, text)
+        named = {val: rows for val, rows in by_ent.items()
+                 if any(_norm_cat(r[0]) in _PURCHASE_FAMILY for r in rows)}
+        if not named:
+            return {}
+        out = {'brands': []}
+        try:
+            out['tu_universe'] = int(_profile_meta(df, 'tu').get('proj') or 0) or None
+        except Exception:
+            out['tu_universe'] = None
+        a_rows = {}
+        if avid_df is not None:
+            try:
+                out['avid_universe'] = int(_profile_meta(avid_df, 'avid').get('proj') or 0) or None
+            except Exception:
+                out['avid_universe'] = None
+            a_rows = _entity_row_groups(avid_df, genpop_map, text)
+
+        def _best(rows):
+            rows = sorted(rows, key=lambda r: (_mirror_rank(r[0]), -r[1]))
+            cat, bp, gp, proj = rows[0]
+            gp = next((r[2] for r in rows if r[2] is not None), gp)
+            proj = next((r[3] for r in rows if r[3]), proj)
+            try:
+                projn = int(str(proj).replace(',', '')) if proj else None
+            except (TypeError, ValueError):
+                projn = None
+            idx = round(bp / gp * 100) if gp and gp >= 0.01 else None
+            return bp, projn, idx
+
+        for val, rows in named.items():
+            bp, projn, idx = _best(rows)
+            b = {'label': val, 'tu_pct': bp, 'tu_proj': projn, 'tu_index': idx,
+                 'avid_pct': None, 'avid_proj': None, 'avid_index': None}
+            if val in a_rows:
+                abp, aproj, aidx = _best(a_rows[val])
+                b.update(avid_pct=abp, avid_proj=aproj, avid_index=aidx)
+            out['brands'].append(b)
+        return out
+    except Exception as e:
+        print(f"[prometheus] purchase facts failed: {e}")
+        return {}
+
+
+def build_entity_and_purchase_blocks(s3_client, bucket, base, text):
+    """(entity_rows_block, purchase_block, purchase_facts) for a read on `base`
+    (2026-10-01 deep corpus reach; 2026-10-06 purchase questions). The
+    digest keeps top rows per category; a named mid-tail brand's
+    verbatim cells ride the prompt from the full base file with Gen
+    Pop baselines so the model quotes measured values instead of
+    re-deriving them. A brand purchase question also carries the Avid
+    tier (the library's '<Subject> - Avid Fan' cut when one exists),
+    where the audience buys, and the brand's peers; the facts dict
+    (purchase_facts) binds the verify pass. ('', '', {}) on any
+    failure; never raises."""
+    try:
+        key = str((base or {}).get('s3_key') or '')
+        if not key.lower().endswith('.csv'):
+            return '', '', {}
+        df, _ = load_profile_df(s3_client, bucket, key)
+        gp_map = load_genpop_map(s3_client, bucket)
+        entity_rows = build_named_entity_rows(df, gp_map, text)
+        if not entity_rows or not is_brand_purchase_ask(text):
+            return entity_rows, '', {}
+        avid_df = None
+        try:
+            ak = find_avid_key(s3_client, bucket, (base or {}).get('subject'),
+                               exclude_key=key)
+            if ak:
+                avid_df, _ = load_profile_df(s3_client, bucket, ak)
+        except Exception as e:
+            print(f"[prometheus] avid cut load failed: {e}")
+        block = build_purchase_context(
+            df, gp_map, text, avid_df=avid_df,
+            subject=(base or {}).get('subject'))
+        facts = purchase_facts(df, gp_map, text, avid_df=avid_df) if block else {}
+        return entity_rows, block, facts
+    except Exception as e:
+        print(f"[prometheus] entity/purchase blocks failed: {e}")
+        return '', '', {}
 
 
 # get_digest_bundle serves the stored digest only when every stamp
@@ -4778,6 +5111,9 @@ HOW TO REASON THE NUMBERS
 - ANCHORS in the user prompt are Crosswalk's own prior measurements and on-file reads for this subject. Calibrate to them; never contradict them.
 - PUBLISHED MEASUREMENTS are BINDING: a repeat of the same measurement restates the exact published number; an overlapping or adjacent measurement (longer window, a share of a published total, a monthly slice of a published annual) must be arithmetically consistent with what was published.
 - Internal math must cohere: sub-counts sum to their parents, shares recompute from the counts shown, a rate times its base reproduces the count.
+- MIRRORED ROWS ARE ONE MEASUREMENT. A brand that appears under more than one heading at the same value (MOST PURCHASED BRANDS with APPAREL/FOOTWEAR, CPG, BEAUTY/WELLNESS, HOME/OUTDOOR, ACCESSORIES, PETS, TOYS, TECHNOLOGY BRAND, WHERE THEY SHOP; AUTOMOBILE with AUTOMOTIVE PARTS; TALENT with its role categories; SPORTS TEAM with its league) is the same people counted once and listed twice. Never read two mirrored rows as two behaviors: not shopping versus buying, browsing versus purchasing, looking versus converting, exposure versus action. A "shop at or buy" question has ONE answer, the brand's row, and the reply says so in one sentence.
+- VERBATIM COUNTS. When a prompt block carries a projected US people count for a row, quote it exactly as given. Never recompute a count from a percentage when the file's own count is in front of you.
+- BRAND PURCHASE QUESTIONS. When the prompt carries a PURCHASE CONTEXT block, the answer itself carries, in this order: the brand's audience-wide row (penetration, projected US people, index), the Avid tier row for the same brand, where this audience buys it (the retail rows given, by index), and the brand's peers in its own sub-category. These are paragraphs of the answer, never follow-up offers or chips.
 - Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. Percentages carry one decimal.
 - MULTIPLE QUESTIONS IN ONE ASK: answer every one, each under its own short plain heading, in the order asked. Never answer only the first and stop.
 - NEVER DECLINE: you never ask the reader to rephrase, narrow, re-aim, or pick a different question, and you never say a number cannot be locked down. When the screen tables do not carry the exact split asked for, derive it from the audience measures you do have and state the read plainly.

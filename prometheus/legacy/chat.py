@@ -11796,14 +11796,20 @@ def _pm_pending_q_tokens(s):
             if w and w not in _PM_BASE_GENERIC_TOKENS}
 
 
-def _pm_stash_pending_question(username, subject, question):
+def _pm_stash_pending_question(username, subject, question,
+                               thread_id=None):
     """Remember the question that triggered a build-first offer so the
     completed run can answer it automatically (2026-09-24 Jenna). Kept
-    per user, newest first, capped at 5, 48h expiry."""
+    per user, newest first, capped at 5, 7-day expiry. The thread the
+    question came from rides along (2026-10-06) so the server-side
+    follow-through (prometheus.pending_answers) answers on that thread
+    even when the tab is closed."""
     uname = str(username or '').strip().lower()
     if not uname or not subject or not question:
         return
     import time as _t
+    if thread_id is None:
+        thread_id = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
 
     def _mut(doc):
         doc = doc if isinstance(doc, dict) else {}
@@ -11814,7 +11820,8 @@ def _pm_stash_pending_question(username, subject, question):
         lst = [e for e in lst
                if str(e.get('question') or '') != str(question)]
         lst.insert(0, {'subject': str(subject)[:160],
-                       'question': str(question)[:500], 'ts': now})
+                       'question': str(question)[:500], 'ts': now,
+                       'thread_id': str(thread_id or '')[:64]})
         doc[uname] = lst[:5]
         return doc
     try:
@@ -13521,23 +13528,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     stages['subiq'] = int((time.monotonic() - _t_stage) * 1000)
-    # Exact rows for question-named entities (2026-10-01, Jenna: deep
-    # corpus reach). The digest keeps top rows per category; a named
-    # mid-tail brand's verbatim cells ride the prompt from the full
-    # base file with Gen Pop baselines so the model quotes measured
-    # values instead of re-deriving them.
-    entity_rows_block = ''
+    # Exact rows for question-named entities plus, for a brand
+    # purchase question, the Avid tier and the retail channel
+    # (2026-10-06, Jenna); one call, fail-safe to ('', '').
     _t_stage = time.monotonic()
-    try:
-        _er_key = str(base.get('s3_key') or '')
-        if _er_key.lower().endswith('.csv'):
-            _er_df, _ = pma.load_profile_df(_H.s3_client, _H.S3_BUCKET,
-                                            _er_key)
-            entity_rows_block = pma.build_named_entity_rows(
-                _er_df, pma.load_genpop_map(_H.s3_client, _H.S3_BUCKET),
-                text)
-    except Exception:
-        traceback.print_exc()
+    entity_rows_block, purchase_block, _purchase_facts = \
+        pma.build_entity_and_purchase_blocks(_H.s3_client, _H.S3_BUCKET, base, text)
     stages['entity_rows'] = int((time.monotonic() - _t_stage) * 1000)
     # Measured daily signals (2026-10-01, Jenna: flavor 1). Aggregate
     # tracker counts for subjects the ask names - templated, read-
@@ -13562,9 +13558,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=_rm_led_block,
         profile_rows_block=digest_block)
-    extra_blocks = [b for b in (entity_rows_block, measured_block,
-                                subiq_block, neighbor_block,
-                                examples_block) if b]
+    extra_blocks = [b for b in (entity_rows_block, purchase_block,
+                                measured_block, subiq_block,
+                                neighbor_block, examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
     if pma.is_cohort_churn_ask(text):
         extra_blocks.append(pma.COHORT_CHURN_GUIDANCE)
@@ -13659,6 +13655,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     verdict, verify_revised = None, False
+    _last_draft, _last_verdict = (None, None, None, None), None
     # 2026-09-03 (Jenna, no-rebuild-level-correction.mdc): silent
     # verify auto-correct. Set True below when a second corrective
     # pass turns a would-be HELD read into a shippable one; drives
@@ -13670,7 +13667,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             _v_lookup = pmv.load_base_lookup(
                 _H.s3_client, _H.S3_BUCKET, base.get('s3_key'),
                 base.get('subject') or '')
-            verdict = pmv.verify_read(
+            verdict = pmv.verify_read(bound_facts=_purchase_facts, 
                 reply=reply, res=res, family=fam0,
                 base_lookup=_v_lookup, question=text,
                 prior_entries=_pm_verify_prior_entries(res, fam0, led))
@@ -13680,6 +13677,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         print(f"[pm-verify] first pass failed: "
               f"{verdict.get('findings')}")
         revised_ok = False
+        _last_draft, _last_verdict = (data, res, reply, fam0), verdict
         try:
             rev_prompt = (user_prompt + '\n\n'
                           + pmv.render_findings_block(
@@ -13699,7 +13697,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
-                    verdict2 = pmv.verify_read(
+                    verdict2 = pmv.verify_read(bound_facts=_purchase_facts, 
                         reply=reply2, res=res2, family=fam2,
                         base_lookup=_v_lookup, question=text,
                         prior_entries=_pm_verify_prior_entries(
@@ -13710,6 +13708,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                         verify_revised = revised_ok = True
                     else:
                         verdict = verdict2
+                        _last_draft = (data2, res2, reply2, fam2)
         except Exception:
             traceback.print_exc()
         if not revised_ok:
@@ -13768,7 +13767,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                             res3)
                         fam3 = ('strategy' if is_strategy
                                 else res3.get('metric_family'))
-                        verdict3 = pmv.verify_read(
+                        verdict3 = pmv.verify_read(bound_facts=_purchase_facts, 
                             reply=reply3, res=res3, family=fam3,
                             base_lookup=_v_lookup, question=text,
                             prior_entries=_pm_verify_prior_entries(
@@ -13781,8 +13780,19 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                         else:
                             _retry_findings = (
                                 verdict3.get('findings') or [])
+                            _last_draft, _last_verdict = (data3, res3, reply3, fam3), verdict3
             except Exception:
                 traceback.print_exc()
+        if not revised_ok and _purchase_facts and pmv is not None:
+            # In-place rescue (no-rebuild-level-correction): when only
+            # bound purchase facts are still wrong, the measured figures
+            # go in place and the read ships.
+            _resc = pmv.rescue_with_facts(_last_draft, _last_verdict or verdict,
+                                          _purchase_facts)
+            if _resc:
+                data, res, reply, fam0, verdict, _nfix = _resc
+                verify_revised = revised_ok = _pm_auto_corrected = True
+                stages['facts_fixed'] = int(_nfix)
         if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)
@@ -13818,6 +13828,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 'deck_angle': None, '_held': True, '_family': fam0,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
+    # Bound purchase facts (2026-10-06): after the passes, the measured
+    # Avid tier and projected counts replace any remaining near-miss in
+    # place. Figures only; never raises.
+    if _purchase_facts and pmv is not None:
+        try:
+            reply, res, _nfix = pmv.facts_enforce(reply, res, _purchase_facts)
+            if _nfix:
+                stages['facts_fixed'] = int(_nfix)
+                print(f"[pm-verify] bound facts enforced in place: {_nfix} figure(s)")
+        except Exception:
+            traceback.print_exc()
     # 0 = clean pass, 1 = passed after one revision, 2 = held (above),
     # 3 = pass unavailable (verification infrastructure trouble),
     # 4 = auto-corrected then shipped (2026-09-03, silent in-place
@@ -14480,6 +14501,10 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
         payload.pop('_family', None)
         held = bool(payload.pop('_held', False))
         _verify = payload.pop('_verify', None)
+        # The finished read bypasses the envelope, so the plain-English
+        # shaper runs here (2026-10-06).
+        from prometheus import reply_shape as _rs
+        _rs.shape_finished_read(payload, held)
         _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
             _done = {**head,

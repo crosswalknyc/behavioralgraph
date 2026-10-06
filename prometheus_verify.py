@@ -99,6 +99,14 @@ _GENERIC_LABEL_NORMS = frozenset({
     'generalpopulation', 'index', 'tilt', 'share', 'reach', 'profile',
     'file', 'subject', 'read', 'people', 'adults', 'household',
     'households', 'income', 'group', 'segment', 'us',
+    # verbs that sit next to a figure are never a row label
+    # (2026-10-06: 'carries' bound by containment to the Carrie
+    # Underwood row and failed a clean read)
+    'carries', 'carry', 'carrying', 'runs', 'running', 'reads',
+    'reading', 'sits', 'sitting', 'lands', 'landing', 'measures',
+    'reaches', 'reaching', 'indexes', 'holds', 'stands', 'clocks',
+    'posts', 'hits', 'comes', 'shows', 'prints', 'registers',
+    'tracks', 'trails', 'leads', 'lifts', 'climbs', 'drops',
 })
 
 _NORM_RX = re.compile(r'[^a-z0-9]+')
@@ -909,23 +917,280 @@ def scrub_check(reply):
 
 
 # ---------------------------------------------------------------------------
+# Check 4: bound purchase facts (2026-10-06)
+# ---------------------------------------------------------------------------
+# A brand-purchase read carries the Avid tier and the file's projected
+# counts in its prompt. Those figures are binding: the first read on
+# Gunna / Under Armour invented an Avid tier of 3,155,223 people with
+# Under Armour at 31.4% (990,743) while the Avid file measures
+# 3,157,308 and 23.1188% (729,937), and recomputed the audience-wide
+# count to 3,006,387 where the file says 3,006,379. The check names the
+# measured figure for the revision pass; the enforcement puts it in
+# place when the model still misses.
+
+_PCT_RX = re.compile(r'(?<![\d.])(\d{1,2}(?:\.\d{1,2})?)\s?%')
+_COUNT_RX = re.compile(r'(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]*\s?%)')
+_AVID_CUE_RX = re.compile(r'\bavid\b', re.I)
+_AVID_DEF_RX = re.compile(
+    r'\b(?:\d+|one|two|three|four|five|six)\s+or\s+more\s+'
+    r'(?:plays|streams|sessions|visits|listens|views)\b', re.I)
+
+
+def _sentences(text):
+    out = []
+    for ln in str(text or '').split('\n'):
+        for s_ in re.split(r'(?<=[.!?])\s+(?=[A-Z])', ln):
+            if s_.strip():
+                out.append(s_)
+    return out
+
+
+def _mentions(sentence, label):
+    ln = _norm(label)
+    return bool(ln) and ln in _norm(sentence)
+
+
+def _near(v, target, rel):
+    return target and abs(float(v) - float(target)) <= rel * float(target)
+
+
+def _pct_fmt(v, like):
+    """Format `v` with the same decimals as the cited figure `like`."""
+    dp = len(like.split('.')[1]) if '.' in like else 0
+    dp = max(1, min(dp, 2))
+    return f"{float(v):.{dp}f}"
+
+
+def _brand_facts(facts):
+    for b in (facts or {}).get('brands') or []:
+        if isinstance(b, dict) and b.get('label'):
+            yield b
+
+
+def facts_check(reply, res, facts):
+    """Bound facts a brand-purchase read must honor. Returns
+    {'status': 'pass'|'fail'|'skip', 'detail', 'findings'}."""
+    if not facts or not list(_brand_facts(facts)):
+        return {'status': 'skip', 'detail': 'no bound facts', 'findings': []}
+    findings = []
+    text = str(reply or '')
+    avid_u = (facts or {}).get('avid_universe')
+    for sent in _sentences(text):
+        has_avid = bool(_AVID_CUE_RX.search(sent))
+        counts = [c for c in _COUNT_RX.findall(sent)]
+        if has_avid and _AVID_DEF_RX.search(sent):
+            findings.append('The Avid tier is the library\'s Avid Fan cut; it is '
+                            'not defined by a play or stream count. Drop that '
+                            'definition and quote the tier\'s measured figures.')
+        if has_avid and avid_u:
+            for c in counts:
+                n = int(c.replace(',', ''))
+                if n != avid_u and _near(n, avid_u, 0.06):
+                    findings.append(f"The reply sizes the Avid tier at {n:,} but the "
+                                    f"Avid file measures {avid_u:,} people. Quote it exactly.")
+        for b in _brand_facts(facts):
+            if not _mentions(sent, b['label']):
+                continue
+            if has_avid and b.get('avid_pct') is not None:
+                for pm in _PCT_RX.findall(sent):
+                    v = float(pm)
+                    if abs(v - b['avid_pct']) > 0.35 and abs(v - b['tu_pct']) > 0.35 \
+                            and abs(v - (b.get('tu_index') or -999)) > 0.5:
+                        findings.append(
+                            f"The reply cites {b['label']} inside the Avid tier at {pm}% "
+                            f"but the Avid file measures {b['avid_pct']:.4f}% "
+                            f"({(b.get('avid_proj') or 0):,} people). Use the measured figures.")
+                if b.get('avid_proj'):
+                    for c in counts:
+                        n = int(c.replace(',', ''))
+                        if n == b['avid_proj'] or (b.get('tu_proj') and n == b['tu_proj']) \
+                                or (avid_u and n == avid_u):
+                            continue
+                        if _near(n, b['avid_proj'], 0.45):
+                            findings.append(
+                                f"The reply counts {b['label']} buyers inside the Avid tier at "
+                                f"{n:,} but the Avid file measures {b['avid_proj']:,}. Quote it exactly.")
+            if b.get('tu_proj'):
+                for c in counts:
+                    n = int(c.replace(',', ''))
+                    if n != b['tu_proj'] and _near(n, b['tu_proj'], 0.03) \
+                            and not (avid_u and n == avid_u):
+                        findings.append(
+                            f"The reply counts {b['label']} at {n:,} but the file's projected "
+                            f"count is {b['tu_proj']:,}. Quote it exactly, never recompute it.")
+    # de-dupe, keep order
+    seen, uniq = set(), []
+    for f in findings:
+        if f not in seen:
+            seen.add(f)
+            uniq.append(f)
+    if uniq:
+        return {'status': 'fail', 'detail': f"{len(uniq)} bound fact(s) missed",
+                'findings': uniq[:MAX_FINDINGS]}
+    return {'status': 'pass', 'detail': 'bound facts honored', 'findings': []}
+
+
+def facts_enforce(reply, res, facts):
+    """Put the measured figures in place where the final reply still
+    misses them (the deterministic backstop after the revision passes).
+    Returns (reply, res, n_fixed). Figures only; prose untouched."""
+    if not facts or not list(_brand_facts(facts)):
+        return reply, res, 0
+    text = str(reply or '')
+    avid_u = (facts or {}).get('avid_universe')
+    n_fixed = 0
+
+    def _fix_sentence(sent):
+        nonlocal n_fixed
+        has_avid = bool(_AVID_CUE_RX.search(sent))
+        out = sent
+        if has_avid and _AVID_DEF_RX.search(out):
+            # an invented tier definition ("at 4 or more plays in the
+            # window") comes out; the figures stay
+            out2 = re.sub(r'(?:\s+(?:at|with|of))?\s*' + _AVID_DEF_RX.pattern
+                          + r'(?:\s+(?:in|over|during)\s+the\s+window)?',
+                          '', out, flags=re.I)
+            out2 = re.sub(r'\(\s*,\s*', '(', re.sub(r'\s{2,}', ' ', out2))
+            if out2 != out:
+                n_fixed += 1
+                out = out2
+        if has_avid and avid_u:
+            def _ru(m):
+                nonlocal n_fixed
+                n = int(m.group(1).replace(',', ''))
+                if n != avid_u and _near(n, avid_u, 0.06):
+                    n_fixed += 1
+                    return f"{avid_u:,}"
+                return m.group(0)
+            out = _COUNT_RX.sub(_ru, out)
+        for b in _brand_facts(facts):
+            if not _mentions(out, b['label']):
+                continue
+            if has_avid and b.get('avid_pct') is not None:
+                def _rp(m):
+                    nonlocal n_fixed
+                    v = float(m.group(1))
+                    if abs(v - b['avid_pct']) > 0.35 and abs(v - b['tu_pct']) > 0.35 \
+                            and abs(v - (b.get('tu_index') or -999)) > 0.5:
+                        n_fixed += 1
+                        return m.group(0).replace(m.group(1), _pct_fmt(b['avid_pct'], m.group(1)))
+                    return m.group(0)
+                out = _PCT_RX.sub(_rp, out)
+                if b.get('avid_proj'):
+                    def _rc(m):
+                        nonlocal n_fixed
+                        n = int(m.group(1).replace(',', ''))
+                        if n == b['avid_proj'] or (b.get('tu_proj') and n == b['tu_proj']) \
+                                or (avid_u and n == avid_u):
+                            return m.group(0)
+                        if _near(n, b['avid_proj'], 0.45):
+                            n_fixed += 1
+                            return f"{b['avid_proj']:,}"
+                        return m.group(0)
+                    out = _COUNT_RX.sub(_rc, out)
+            if b.get('tu_proj'):
+                def _rt(m):
+                    nonlocal n_fixed
+                    n = int(m.group(1).replace(',', ''))
+                    if n != b['tu_proj'] and _near(n, b['tu_proj'], 0.03) \
+                            and not (avid_u and n == avid_u):
+                        n_fixed += 1
+                        return f"{b['tu_proj']:,}"
+                    return m.group(0)
+                out = _COUNT_RX.sub(_rt, out)
+        return out
+
+    lines = []
+    for ln in text.split('\n'):
+        parts = re.split(r'((?<=[.!?])\s+(?=[A-Z]))', ln)
+        lines.append(''.join(p if i % 2 else _fix_sentence(p)
+                             for i, p in enumerate(parts)))
+    new_reply = '\n'.join(lines)
+    # metrics list: the same figures by label
+    try:
+        for m in (res or {}).get('metrics') or []:
+            if not isinstance(m, dict):
+                continue
+            lab = ' '.join(str(m.get(k) or '') for k in ('label', 'name', 'note'))
+            v = m.get('value')
+            if not isinstance(v, (int, float)):
+                continue
+            has_avid = bool(_AVID_CUE_RX.search(lab))
+            for b in _brand_facts(facts):
+                if not _mentions(lab, b['label']):
+                    continue
+                if has_avid and b.get('avid_pct') is not None and v <= 100 \
+                        and abs(v - b['avid_pct']) > 0.35 and abs(v - b['tu_pct']) > 0.35 \
+                        and abs(v - (b.get('tu_index') or -999)) > 0.5 and 'index' not in lab.lower():
+                    m['value'] = round(b['avid_pct'], 1)
+                    n_fixed += 1
+                elif has_avid and b.get('avid_proj') and v > 1000 and v != b['avid_proj'] \
+                        and _near(v, b['avid_proj'], 0.45):
+                    m['value'] = b['avid_proj']
+                    n_fixed += 1
+                elif b.get('tu_proj') and v > 1000 and v != b['tu_proj'] and _near(v, b['tu_proj'], 0.03):
+                    m['value'] = b['tu_proj']
+                    n_fixed += 1
+            if has_avid and avid_u and isinstance(m.get('value'), (int, float)) \
+                    and m['value'] != avid_u and _near(m['value'], avid_u, 0.06) and m['value'] > 1000:
+                m['value'] = avid_u
+                n_fixed += 1
+    except Exception:
+        pass
+    return new_reply, res, n_fixed
+
+
+def rescue_with_facts(last_draft, last_verdict, facts):
+    """The in-place rescue after the revision passes (no-rebuild-level
+    correction): when every check other than the bound facts passed on
+    the last draft, put the measured figures in place and, if the
+    facts then hold, ship that draft. Returns (data, res, reply,
+    family, verdict, n_fixed) or None."""
+    try:
+        data, res, reply, fam = last_draft or (None, None, None, None)
+        if reply is None or not facts:
+            return None
+        checks = (last_verdict or {}).get('checks') or {}
+        others = [c for k, c in checks.items() if k != 'facts']
+        if not others or any((c or {}).get('status') == 'fail' for c in others):
+            return None
+        reply2, res2, n_fixed = facts_enforce(reply, res, facts)
+        if facts_check(reply2, res2, facts).get('status') == 'fail':
+            return None
+        verdict = dict(last_verdict or {}, ok=True)
+        verdict['checks'] = dict(checks, facts={'status': 'pass', 'detail': 'enforced in place',
+                                                'findings': []})
+        print(f"[pm-verify] bound facts enforced in place ({n_fixed} figure(s)); read ships")
+        return data, res2, reply2, fam, verdict, n_fixed
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
 def verify_read(*, reply, res, family=None, base_lookup=None,
-                prior_entries=None, question=None):
-    """Run all three checks. Returns
-    {'ok', 'checks': {'anchor', 'ledger', 'scrub'}, 'findings'}."""
+                prior_entries=None, question=None, bound_facts=None):
+    """Run the checks (anchor, ledger, scrub, and bound facts when a
+    brand-purchase read carries them). Returns
+    {'ok', 'checks': {...}, 'findings'}."""
     anchor = anchor_check(reply, res, base_lookup, question=question)
     ledger = ledger_check(res, family, prior_entries or [])
     scrub = scrub_check(reply)
-    findings = (anchor['findings'] + ledger['findings']
-                + scrub['findings'])[:MAX_FINDINGS + 4]
-    ok = all(c['status'] != 'fail' for c in (anchor, ledger, scrub))
-    return {'ok': ok,
-            'checks': {'anchor': anchor, 'ledger': ledger,
-                       'scrub': scrub},
-            'findings': findings}
+    checks = {'anchor': anchor, 'ledger': ledger, 'scrub': scrub}
+    if bound_facts:
+        try:
+            checks['facts'] = facts_check(reply, res, bound_facts)
+        except Exception:
+            checks['facts'] = {'status': 'skip', 'detail': 'facts check failed',
+                               'findings': []}
+    findings = []
+    for c in checks.values():
+        findings += c.get('findings') or []
+    findings = findings[:MAX_FINDINGS + 4]
+    ok = all(c['status'] != 'fail' for c in checks.values())
+    return {'ok': ok, 'checks': checks, 'findings': findings}
 
 
 def render_findings_block(findings):
@@ -956,6 +1221,7 @@ def stamp(verdict, revised=False, held=False):
     return {
         'outcome': outcome,
         'anchor': _st('anchor'),
+        'facts': _st('facts'),
         'ledger': _st('ledger'),
         'scrub': _st('scrub'),
         'anchored': int((checks.get('anchor') or {}).get('anchored') or 0),
