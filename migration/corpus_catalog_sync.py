@@ -37,7 +37,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-for p in (ROOT, os.path.join(ROOT, 'bg-webapp')):
+# PM_TEST_WEBAPP points the test harness at the webapp checkout under
+# test; on the engine host it is unset and the sibling checkout is used.
+for p in (ROOT, os.environ.get('PM_TEST_WEBAPP') or os.path.join(ROOT, 'bg-webapp')):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -379,9 +381,16 @@ def audit(limit_subjects=5000):
     return findings, len(multi)
 
 
+# Order matters: a label is classed by the first family that names it.
+# A showtimes page and a ticketing-site visit are two different steps
+# (film ladder per no-box-office-prediction.mdc, settled 2026-10-06):
+# 'Looked up showtimes' compares with 'reached a showtimes page', never
+# with 'went to a ticketing site or app for a ticket'.
 _STAGE_CLASSES = (
-    ('checkout', ('checkout', 'cart', 'paid', 'bought', 'purchase', 'end point')),
-    ('ticketing', ('ticketing site', 'ticketing-site', 'showtime')),
+    ('checkout', ('checkout', 'cart', 'paid', 'bought', 'purchase', 'end point',
+                  'final ticket step')),
+    ('showtimes', ('showtime',)),
+    ('ticketing', ('ticketing site', 'ticketing-site', 'ticketing page', 'for a ticket')),
     ('infoseek', ('looked', 'search', 'info', 'research', 'trailer', 'review')),
     ('exposed', ('saw', 'exposed', 'reached by', 'tracked campaign')),
     ('acted', ('acted', 'engaged', 'clicked')),
