@@ -1253,8 +1253,20 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
         i + ' ' + next(s['label'] for s in spine if s['id'] == i))), None)
     if c_mid and mid_id:
         targets[mid_id] = c_mid * shares['infoseek']
-    c_bot = _nest_count(camp, '3_' if ticketing else
-                        str(camp['nest'][-1]['stage'])[:2])
+    # Film ladder (no-box-office-prediction.mdc, labels settled
+    # 2026-10-06): campaign stage 3 is the showtimes page, stage 4 is
+    # the ticketing-site visit for a ticket. The journey's terminal
+    # "went to a ticketing site or app for a ticket" holds to stage 4;
+    # a showtimes stage in the journey holds to stage 3.
+    if ticketing:
+        c_show = _nest_count(camp, '3_')
+        show_id = next((i for i in ids[1:-1] if i != mid_id and re.search(
+            r'showtime', i + ' ' + next(s['label'] for s in spine if s['id'] == i), re.I)), None)
+        if c_show and show_id:
+            targets[show_id] = c_show * shares['bottom']
+        c_bot = _nest_count(camp, '4_') or c_show
+    else:
+        c_bot = _nest_count(camp, str(camp['nest'][-1]['stage'])[:2])
     if c_bot:
         targets[ids[-1]] = c_bot * shares['bottom']
     if not targets:

@@ -79,14 +79,15 @@ TITLE_TYPE_DEFAULTS = {
             "top_funnel_label":           "Engagement",
             "mid_funnel_label":           "Info-seek",
             "mid_funnel_full":            "Searched title / IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days",
-            # Jenna 2026-09-23: never say ticketing / bought a ticket. We
-            # observe traffic that reached a checkout page on a showtimes
-            # site, never a purchase.
-            "bottom_funnel_label":        "Checkout page",
-            "bottom_funnel_full":         "Reached a checkout page on a showtimes site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days",
-            "conversion_noun":            "checkout page visit",
-            "conversion_verb":            "reach the checkout page",
-            "conversion_endpoint_label":  "checkout pages",
+            # Jenna 2026-10-05 (no-box-office-prediction.mdc): the furthest
+            # point a film read sees is the ticketing site. The count is
+            # people who went to a ticketing site or app for a ticket;
+            # never a purchase, checkout or buyer claim.
+            "bottom_funnel_label":        "Ticketing site visit",
+            "bottom_funnel_full":         "Went to a ticketing site or app (Fandango / AMC / Regal / Cinemark / Atom) for a ticket within 7 days",
+            "conversion_noun":            "ticketing-site visit",
+            "conversion_verb":            "go to a ticketing site for a ticket",
+            "conversion_endpoint_label":  "ticketing sites",
             "attribution_window_days":    7,
         },
         "enabled_tabs": {

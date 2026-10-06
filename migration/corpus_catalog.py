@@ -381,9 +381,12 @@ def facts_from_attribution(slug, assets, fit, user=''):
     note = f"Attribution IQ: {title}"
     key = f"intent/{slug}/"
     facts = []
+    # Film ladder nouns per no-box-office-prediction.mdc (2026-10-06):
+    # stage 3 is a showtimes page, stage 4 is the ticketing-site visit
+    # for a ticket. Never a purchase, checkout or buyer claim.
     labels = {'0_tam': 'US addressable', '1_exposed': 'saw tracked campaign content',
-              '2_infoseek': 'looked the title up', '3_ticketer': 'went to a ticketing site or app',
-              '4_paid': 'reached the checkout page'}
+              '2_infoseek': 'looked the title up', '3_ticketer': 'reached a showtimes page',
+              '4_paid': 'went to a ticketing site or app for a ticket'}
     items = []
     if isinstance(nest, dict):
         items = [(k, v) for k, v in nest.items()]

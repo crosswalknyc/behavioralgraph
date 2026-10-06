@@ -47061,6 +47061,38 @@ def _sg_parse_quarter_cut_list(text, today):
     return None
 
 
+def _sg_quarters_parent_window(quarters):
+    """Mirror of the worker's quarters_parent_window: quarters in one
+    calendar year -> Jan 1 of that year to the last quarter's end
+    ('calendar 2026 through Q3', 'calendar 2026' for all four); quarters
+    spanning years -> first start to last end. (start, end, label) or
+    None."""
+    qs = []
+    for q in quarters or []:
+        if not isinstance(q, dict):
+            continue
+        st, en = str(q.get('start') or '').strip(), str(q.get('end') or '').strip()
+        if re.fullmatch(r'\d{4}-\d{2}-\d{2}', st) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', en):
+            qs.append((st, en, str(q.get('label') or '').strip()))
+    if not qs:
+        return None
+    starts = sorted(x[0] for x in qs)
+    ends = sorted(x[1] for x in qs)
+    years = {x[0][:4] for x in qs} | {x[1][:4] for x in qs}
+    if len(years) == 1:
+        year = years.pop()
+        end = ends[-1]
+        last_q = (int(end[5:7]) - 1) // 3 + 1
+        n_q = len({(int(x[0][5:7]) - 1) // 3 + 1 for x in qs})
+        label = (f"calendar {year}" if (n_q >= 4 and last_q == 4)
+                 else f"calendar {year} through Q{last_q}")
+        return f"{year}-01-01", end, f"{label}: {year}-01-01 to {end}"
+    first = min(qs, key=lambda x: x[0])
+    last = max(qs, key=lambda x: x[1])
+    lbl = f"{first[2] or first[0]} to {last[2] or last[1]}"
+    return starts[0], ends[-1], f"{lbl}: {starts[0]} to {ends[-1]}"
+
+
 def _sg_bind_quarter_cuts(draft, quarters, text, decision):
     """Bind a multi-quarter ask. Every quarter ships as its own dated
     deliverable '{Subject} - Q{n} {year}' derived off the finished
@@ -47099,6 +47131,24 @@ def _sg_bind_quarter_cuts(draft, quarters, text, decision):
     draft['quarter_cuts'] = [
         {'label': str(q['label']).upper(), 'start': q['start'],
          'end': q['end']} for q in rest]
+    # A fresh parent reads the quarters' year, not whichever quarter
+    # the draft happened to land on (2026-10-06, the Starz 2026 parent
+    # shipped as Apr 1 to Jun 30 while it parented Q1 to Q3). The
+    # worker enforces the same rule at build entry.
+    if dec not in ('derive_cut', 'cut_needs_parent', 'existing_match',
+                   'time_shifted_refresh'):
+        try:
+            _pw = _sg_quarters_parent_window(quarters)
+            if _pw:
+                _ps, _pe, _plbl = _pw
+                draft['date_range'] = {'start': _ps, 'end': _pe}
+                draft['date_range_explicit'] = True
+                draft['date_window_label'] = _plbl
+                _route_window_fields(draft, dec or decision, _ps, _pe,
+                                     _plbl, _ew_format_label(_ps, _pe))
+                _append_identity_echo(draft, f"window read as {_plbl}")
+        except Exception as _pw_err:
+            print(f"[quarter-cuts] parent window widen skipped: {_pw_err}")
     try:
         draft['estimated_credits'] = int(
             draft.get('estimated_credits')

@@ -34094,12 +34094,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 //
                 // Order matters: longer / more-specific first so the exact
                 // "Ticketing %" swap fires before the bare "Ticketing".
-                if (bfl && bfl !== 'Checkout page') {
+                if (bfl && bfl !== 'Ticketing site visit') {
                     var bflLower = bfl.toLowerCase();
                     map.push(['Ticketing visits', bfl + 's']);
                     map.push(['ticketing visits', bflLower + 's']);
                     map.push(['Ticketing sites',  bfl + 's']);
                     map.push(['ticketing sites',  bflLower + 's']);
+                    map.push(['Ticketing site visits', bfl + 's']);
+                    map.push(['ticketing site visits', bflLower + 's']);
+                    map.push(['Ticketing site visit', bfl]);
+                    map.push(['ticketing site visit', bflLower]);
                     map.push(['Ticketing site',   bfl]);
                     map.push(['ticketing site',   bflLower]);
                     // Short-form "Ticket visits" (Q4 Talent Attribution
@@ -34110,7 +34114,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     map.push(['Ticket %',         bfl + ' %']);
                     map.push(['Ticketing %',      bfl + ' %']);
                     map.push(['ticketing %',      bflLower + ' %']);
-                    map.push(['Checkout page',        bfl]);
                     map.push(['ticketing',        bflLower]);
                 }
                 return map.length ? map : null;
@@ -34317,7 +34320,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                     var term = ov.terminology || {};
                     var isBrand = ov.title_type === 'brand';
-                    var bfl = term.bottom_funnel_label || 'Checkout page';
+                    var bfl = term.bottom_funnel_label || 'Ticketing site visit';
                     var subjectNoun = isBrand ? 'the brand' : 'the title';
                     var infoExamples = window._iiqAssetsCaptionSample(
                         term.journey_info_destinations,
@@ -34330,7 +34333,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         4
                     );
                     var convLead = isBrand ? 'share who then visited '
-                                            : 'share who then reached a checkout page on (';
+                                            : 'share who then went to a ticketing site or app for a ticket on (';
                     var convTail = isBrand ? '' : ')';
                     var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){return String(s==null?'':s);};
                     var winDays = parseInt(term.attribution_window_days, 10) || 7;
@@ -34383,7 +34386,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             window._iiqBFL = function() {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
-                return term.bottom_funnel_label || 'Checkout page';
+                return term.bottom_funnel_label || 'Ticketing site visit';
             };
             // Daily-timeseries chart labels (Q2 Paid vs Organic, Q2 modal).
             // Brand campaigns often need custom wording that pluralizes
@@ -34405,7 +34408,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // default: conversion / bottom funnel
                 if (term.daily_conversion_series_label) return term.daily_conversion_series_label;
                 if (term.bottom_funnel_label)           return term.bottom_funnel_label + 's (daily)';
-                return 'Checkout page visits (daily)';
+                return 'Ticketing site visits (daily)';
             };
             window._iiqInfoSeekTooltip = function(count) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
@@ -34455,7 +34458,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                          + ' destination within 7 days (e.g. ' + convExamples + '). ~'
                          + fmtCompact(count) + ' people.';
                 }
-                return '% of viewers who reached a checkout page within 7 days ('
+                return '% of viewers who went to a ticketing site or app for a ticket within 7 days ('
                      + window._iiqAssetsCaptionSample(
                          term.journey_conversion_destinations,
                          'Fandango / AMC / Regal / Cinemark / Atom',
@@ -34510,7 +34513,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                          + ' destination (e.g. ' + convExamples + ') within 7 days of exposure. ~'
                          + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
                 }
-                return '% of REACHED cohort members who reached a checkout page ('
+                return '% of REACHED cohort members who went to a ticketing site or app for a ticket ('
                      + window._iiqAssetsCaptionSample(
                          term.journey_conversion_destinations,
                          'Fandango / AMC / Regal / Cinemark / Atom',
@@ -34549,7 +34552,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var term = ov.terminology || {};
                 return {
                     isBrand: ov.title_type === 'brand',
-                    bottomFunnelLabel: term.bottom_funnel_label || 'Checkout page',
+                    bottomFunnelLabel: term.bottom_funnel_label || 'Ticketing site visit',
                     infoExamples: window._iiqAssetsCaptionSample(
                         term.journey_info_destinations,
                         'IMDB / Rotten Tomatoes / Letterboxd / official site', 4),
@@ -36689,7 +36692,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             function _iiqMTARenderCoefficientCard(d) {
                 var tps = (d.touchpoints || []).slice();
                 if (!tps.length) return '';
-                var bfl = d.bottom_funnel_label || 'Checkout page';
+                var bfl = d.bottom_funnel_label || 'Ticketing site visit';
                 var convNoun = d.conversion_noun || 'conversion';
                 var audLabelCoef = (d.cohort_meta && d.cohort_meta.audience_label) ? String(d.cohort_meta.audience_label) : '';
                 var introLeadCoef = audLabelCoef
@@ -36868,7 +36871,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     catch (_ge) { console.warn('[MTA] as-of read failed', _ge); }
                 }
                 var tps = (activePayload.touchpoints || []).slice();
-                var bfl = activePayload.bottom_funnel_label || d.bottom_funnel_label || 'Checkout page';
+                var bfl = activePayload.bottom_funnel_label || d.bottom_funnel_label || 'Ticketing site visit';
                 var convNoun = activePayload.conversion_noun || d.conversion_noun || 'conversion';
 
                 // Dropdown row + cohort meta strip render UNCONDITIONALLY
@@ -37263,7 +37266,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (_iiqGoatFiltersActive() ? '<button type="button" onclick="iiqGoatFilterClear()" style="background:transparent; color:#B7B3D8; border:1px solid rgba(183,179,216,0.35); border-radius:999px; font-size:0.7rem; padding:0.2rem 0.65rem; cursor:pointer;">Clear filters</button>' : '')
                     + '</div>';
                 var bm = rowsAll.benchmark || {};
-                var noun = useInfo ? 'info-seek' : 'checkout page';
+                var noun = useInfo ? 'info-seek' : 'ticketing site visit';
                 var bench = '';
                 if (bm.median > 0) {
                     bench = '<div class="iiq-support-intro" style="margin-top:0.3rem;">Benchmark: the campaign median ' + noun + ' rate of ' + bm.median.toFixed(2) + '% across ' + bm.n + ' rated creative assets in view at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '. Lift is each asset\u2019s own rate against that median. Ticketing, showtime, search and Wikipedia destinations are read on Attribution, not ranked here.</div>';
@@ -37322,15 +37325,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var rows = _iiqComputeAudienceRows(asOf, opening);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var noun = useInfo ? 'Info-seek' : 'Checkout page';
-                var nounLower = useInfo ? 'info-seek' : 'checkout page';
+                var noun = useInfo ? 'Info-seek' : 'Ticketing site visit';
+                var nounLower = useInfo ? 'info-seek' : 'ticketing site visit';
                 var DEF = 8;
                 var showAll = !!window._iiqAudienceTable_showAll;
                 var shown = showAll ? rows : rows.slice(0, DEF);
                 var headerHtml = '<thead><tr>'
                     + _iiqAudTh('Audience', 'audience', 'left')
                     + _iiqAudTh('Share of exposure', 'overlap', 'right', 'This cohort\u2019s share of every viewer the campaign creative in view has reached at the as-of date. The ~N line is the viewer count.')
-                    + _iiqAudTh(noun + ' %', 'response', 'right', 'Of the viewers reached in this cohort, the share who took the downstream action inside the 7-day window. The label switches at T-14: info-seek before, checkout page after.')
+                    + _iiqAudTh(noun + ' %', 'response', 'right', 'Of the viewers reached in this cohort, the share who took the downstream action inside the 7-day window. The label switches at T-14: info-seek before, ticketing site after.')
                     + _iiqAudTh('Share of response', 'share', 'right', 'This cohort\u2019s share of every ' + nounLower + ' response the campaign has earned at the as-of date.')
                     + _iiqAudTh('Served', 'served', 'right', 'Share of exposure divided by share of response. Under 0.77x reads under-served, over 1.30x over-served, between reads balanced.')
                     + '</tr></thead>';
@@ -37390,8 +37393,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     + (rows.length ? (under + ' cohort' + (under === 1 ? '' : 's') + ' read under-served, ' + over + ' over-served. ') : '')
                     + 'Click any header to re-sort. Click a row for the assets behind the cohort.';
 
-                // Opening weekend purchasers: who reached the checkout
-                // page, by demographic and psychographic cohort, once the
+                // Opening weekend ticketing site visitors: who went to a ticketing
+                // site or app for a ticket, by demographic and psychographic cohort, once the
                 // as-of date has reached opening day.
                 var purchasersHtml = '';
                 var dOpen = opening ? _iiqGoatDays(opening) : null, dAsOf = _iiqGoatDays(asOf);
@@ -37416,19 +37419,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var demo = byResp.filter(function(r) { return DEMO_CATS[String(r.category || '').toUpperCase()]; }).slice(0, 6);
                     var psych = byResp.filter(function(r) { return !DEMO_CATS[String(r.category || '').toUpperCase()]; }).slice(0, 6);
                     var lead = byResp[0];
-                    var lists = list(demo, 'Demographic cohorts, share of checkout page reach') + list(psych, 'Psychographic and fandom cohorts, share of checkout page reach');
+                    var lists = list(demo, 'Demographic cohorts, share of ticketing site reach') + list(psych, 'Psychographic and fandom cohorts, share of ticketing site reach');
                     purchasersHtml = '<div style="margin-top:1.1rem; padding:0.85rem 1rem; border:1px solid rgba(199,242,62,0.28); border-radius:10px; background: rgba(199,242,62,0.05);">'
-                        + '<div style="color:#C7F23E; font-size:0.62rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Opening weekend purchasers</div>'
-                        + '<div style="color:#E9E8E1; font-size:0.95rem; font-weight:600; margin-top:0.2rem; line-height:1.35;">Who reached the checkout page, read back from the campaign\u2019s own creative.</div>'
+                        + '<div style="color:#C7F23E; font-size:0.62rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Opening weekend ticketing site visitors</div>'
+                        + '<div style="color:#E9E8E1; font-size:0.95rem; font-weight:600; margin-top:0.2rem; line-height:1.35;">Who went to a ticketing site or app for a ticket, read back from the campaign\u2019s own creative.</div>'
                         + '<div style="color:#9AA09B; font-size:0.78rem; margin-top:0.3rem; line-height:1.5;">'
-                        + (lead ? (escapeHtml(_iiqGoatAudLabel(lead)) + ' carries the largest share of checkout page reach at ' + lead.share_response_pct.toFixed(1) + '% against ' + lead.share_exposure_pct.toFixed(1) + '% of exposure. ') : '')
-                        + 'Each line is the cohort\u2019s share of every viewer who reached the checkout page by ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + ', with the served read beside it. Cohorts overlap, so shares are read side by side rather than summed.'
+                        + (lead ? (escapeHtml(_iiqGoatAudLabel(lead)) + ' carries the largest share of ticketing site reach at ' + lead.share_response_pct.toFixed(1) + '% against ' + lead.share_exposure_pct.toFixed(1) + '% of exposure. ') : '')
+                        + 'Each line is the cohort\u2019s share of every viewer who went to a ticketing site or app for a ticket by ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + ', with the served read beside it. Cohorts overlap, so shares are read side by side rather than summed.'
                         + '</div>'
                         + '<div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-top:0.7rem;">' + lists + '</div>'
                         + '</div>';
                 } else if (opening) {
                     purchasersHtml = '<div style="margin-top:1.1rem; padding:0.7rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background: rgba(255,255,255,0.02); color:#9AA09B; font-size:0.78rem; line-height:1.5;">'
-                        + '<span style="color:#E9E8E1; font-weight:600;">Opening weekend purchasers.</span> Opens with the T-0 preset. From opening day this page adds who reached the checkout page by demographic and psychographic cohort, read back from the same creative. Until then the ' + nounLower + ' read above is the leading indicator.'
+                        + '<span style="color:#E9E8E1; font-weight:600;">Opening weekend ticketing site visitors.</span> Opens with the T-0 preset. From opening day this page adds who went to a ticketing site or app for a ticket by demographic and psychographic cohort, read back from the same creative. Until then the ' + nounLower + ' read above is the leading indicator.'
                         + '</div>';
                 }
 
@@ -37443,7 +37446,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<summary><span>How to read this.</span></summary>'
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Share of exposure.</b> The cohort\u2019s share of every viewer the creative in view has reached at the as-of date. Reach here is the campaign\u2019s own exposure, so it can never exceed what the assets delivered.</p>'
-                    +       '<p><b>' + noun + ' %.</b> Of the viewers reached in the cohort, the share who took the downstream action inside the 7-day window. Info-seek before T-14, checkout page after.</p>'
+                    +       '<p><b>' + noun + ' %.</b> Of the viewers reached in the cohort, the share who took the downstream action inside the 7-day window. Info-seek before T-14, ticketing site after.</p>'
                     +       '<p><b>Share of response.</b> The cohort\u2019s share of every response the campaign has earned at this date.</p>'
                     +       '<p><b>Served.</b> Share of exposure divided by share of response. Under 0.77x is under-served: the cohort responds harder than it is being reached, so it is where extra reach pays. Over 1.30x is over-served: the cohort takes more of the exposure than of the response. Between the two is balanced.</p>'
                     +       '<p><b>Over time.</b> Move the as-of date or use the T-90 to T+30 presets. The served read at T-30 against T-7 is the under-served list closing or widening.</p>'
@@ -37487,7 +37490,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     wow.tone = p > 0 ? 'up' : (p < 0 ? 'down' : 'flat');
                 }
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var noun = useInfo ? 'info-seek' : 'checkout page';
+                var noun = useInfo ? 'info-seek' : 'ticketing site visit';
                 var bul = [];
                 var movers = _iiqComputeAssetMoversRows(asOf, opening) || [];
                 var mv = movers[0] || null;
@@ -37530,15 +37533,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (useInfo) {
                     if (mvL && auL) impl = 'One angle: ' + mvL + ' is carrying the exposure and info-seek is climbing on it. Pair the next drop with the ' + auL + ' cohort to lift on the axis with the most headroom.';
                     else if (mvL)   impl = 'One angle: keep ' + mvL + ' in rotation while the info-seek signal is still building. Reassess after the next drop.';
-                    else            impl = 'One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout page reach.';
+                    else            impl = 'One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to ticketing site reach.';
                 } else if (postOpen) {
-                    if (sgL && auL) impl = 'One angle: ' + sgL + ' read as the checkout page driver of the campaign' + (mvL && mvL !== sgL ? (', ' + mvL + ' carried the exposure') : '') + ', and the ' + auL + ' cohort responded hardest when reached. Lead the next title\u2019s plan with that pairing.';
-                    else if (sgL)   impl = 'One angle: ' + sgL + ' read as the checkout page driver of the campaign' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carried the exposure') : '') + '. Anchor the next launch plan around it.';
-                    else            impl = 'One angle: the campaign has run its course. Pull the picker back to opening week to see the assets that carried the checkout page signal.';
+                    if (sgL && auL) impl = 'One angle: ' + sgL + ' read as the ticketing site driver of the campaign' + (mvL && mvL !== sgL ? (', ' + mvL + ' carried the exposure') : '') + ', and the ' + auL + ' cohort responded hardest when reached. Lead the next title\u2019s plan with that pairing.';
+                    else if (sgL)   impl = 'One angle: ' + sgL + ' read as the ticketing site driver of the campaign' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carried the exposure') : '') + '. Anchor the next launch plan around it.';
+                    else            impl = 'One angle: the campaign has run its course. Pull the picker back to opening week to see the assets that carried the ticketing site signal.';
                 } else {
-                    if (sgL && auL) impl = 'One angle: ' + sgL + ' reads as the checkout page driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + ', and the ' + auL + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
-                    else if (sgL)   impl = 'One angle: ' + sgL + ' reads as the checkout page driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + '. Concentrate spend behind it through the final week.';
-                    else            impl = 'One angle: pull the read forward with the picker to see the assets carrying the checkout page signal, then concentrate spend there in the final week.';
+                    if (sgL && auL) impl = 'One angle: ' + sgL + ' reads as the ticketing site driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + ', and the ' + auL + ' cohort responds hard when reached. Prioritize retargeting there in the final week.';
+                    else if (sgL)   impl = 'One angle: ' + sgL + ' reads as the ticketing site driver right now' + (mvL && mvL !== sgL ? (' while ' + mvL + ' carries the exposure') : '') + '. Concentrate spend behind it through the final week.';
+                    else            impl = 'One angle: pull the read forward with the picker to see the assets carrying the ticketing site signal, then concentrate spend there in the final week.';
                 }
                 bul.push({ label: implHead, text: impl });
                 return { wow: wow, bullets: bul, benchmark: bm, use_info: useInfo, rated: rated, week: wk, audiences: aud };
@@ -37626,7 +37629,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     paths.attribution = {};
                     paths.time_to_conversion = [];
                     paths.path_archetypes = [];
-                    paths.asof_note = 'Tickets were not on sale at this date, so the checkout stages read zero. The attribution cuts, time to convert and path archetypes open with ticketing' + (tOpen ? (' on ' + _iiqFmtAsOfDate(tOpen)) : '') + '.';
+                    paths.asof_note = 'Tickets were not on sale at this date, so the ticketing site stages read zero. The attribution cuts, time to convert and path archetypes open with ticketing' + (tOpen ? (' on ' + _iiqFmtAsOfDate(tOpen)) : '') + '.';
                 } else if (fExp < 0.999) {
                     paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ': ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure had accrued by this date.';
                 }
@@ -38350,7 +38353,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 }
                 var top3 = rows.slice(0, 3);
                 var useInfo = rows[0].use_info;
-                var metricNoun = useInfo ? 'info-seek' : 'checkout page reach';
+                var metricNoun = useInfo ? 'info-seek' : 'ticketing site reach';
                 var label = asset.action_label || asset.asset_type || 'this asset';
                 var trimmed = (label.length > 60) ? (label.slice(0, 57) + '\u2026') : label;
 
@@ -38442,7 +38445,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<table style="width:100%; border-collapse: collapse;">'
                     +       '<thead><tr>'
                     +         '<th style="text-align:left; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Cohort</th>'
-                    +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">' + (useInfo ? 'Info-seek %' : 'Checkout page %') + '</th>'
+                    +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">' + (useInfo ? 'Info-seek %' : 'Ticketing site visit %') + '</th>'
                     +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Index</th>'
                     +         '<th style="text-align:right; padding: 0.4rem 0.85rem; font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#797F81; border-bottom:1px solid #27393D;">Fit</th>'
                     +       '</tr></thead>'
@@ -38538,7 +38541,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var showAllAsset = !!window._iiqAssetTable_showAll;
                 var displayAssetRows = showAllAsset ? rows : rows.slice(0, IIQ_ASSET_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var primaryHeader = useInfo ? 'Info-seek %' : 'Checkout page %';
+                var primaryHeader = useInfo ? 'Info-seek %' : 'Ticketing site visit %';
                 // Column tooltips mirror the plain-English paragraphs in
                 // the 'How to read this.' collapsible directly below the
                 // intro line, so a hover surfaces the same explanation
@@ -38546,7 +38549,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // copy, no em dashes.
                 var assetTip = 'The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.';
                 var exposureTip = 'How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.';
-                var primaryTip = 'Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, checkout page after.';
+                var primaryTip = 'Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.';
                 var liftTip = 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.';
                 var sampleTip = 'Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.';
                 var confTip = 'Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.';
@@ -38663,7 +38666,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var sortState = window._iiqAssetTable || { key: 'lift', dir: 'desc' };
                 var sortLabelMap = {
-                    lift: 'lift vs benchmark', exposure: 'exposure', primary: (useInfo ? 'info-seek %' : 'checkout page %'),
+                    lift: 'lift vs benchmark', exposure: 'exposure', primary: (useInfo ? 'info-seek %' : 'ticketing site visit %'),
                     sample: 'sample size', conf: 'confidence', asset: 'asset title'
                 };
                 var sortLabel = sortLabelMap[sortState.key] || sortState.key;
@@ -38713,7 +38716,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Asset.</b> The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.</p>'
                     +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.</p>'
-                    +       '<p><b>Response %</b> (Info-seek before T-14, Checkout page after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, checkout page after.</p>'
+                    +       '<p><b>Response %</b> (Info-seek before T-14, Ticketing site after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.</p>'
                     +       '<p><b>Lift vs benchmark.</b> How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.</p>'
                     +       '<p><b>Sample size.</b> Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.</p>'
                     +       '<p><b>Confidence.</b> Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.</p>'
@@ -39301,14 +39304,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var showAllAud = !!window._iiqAudienceTable_showAll;
                 var displayAudRows = showAllAud ? rows : rows.slice(0, IIQ_AUD_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var responseHeader = useInfo ? 'Info-seek %' : 'Checkout page %';
+                var responseHeader = useInfo ? 'Info-seek %' : 'Ticketing site visit %';
                 // Column tooltips mirror the plain-English paragraphs in the
                 // 'How to read this.' collapsible directly below the intro line,
                 // so a hover surfaces the same explanation without opening the
                 // reference panel.
                 var overlapTip = 'Share of this cohort exposed to the campaign so far. The ~N reached line under the percent shows the raw person count.';
-                var responseTip = 'Of the exposed viewers in this cohort, share who took the downstream action. Label switches at T-14, 14 days pre-launch: info-seek before, checkout page after.';
-                var indexTip = 'How much stronger this cohort\'s ' + (useInfo ? 'info-seek' : 'checkout page') + ' rate is than a random slice of Gen Pop. Strong sits at 1.3x or higher, On pace 0.7 to 1.3x, Soft below 0.7x.';
+                var responseTip = 'Of the exposed viewers in this cohort, share who took the downstream action. Label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.';
+                var indexTip = 'How much stronger this cohort\'s ' + (useInfo ? 'info-seek' : 'ticketing site visit') + ' rate is than a random slice of Gen Pop. Strong sits at 1.3x or higher, On pace 0.7 to 1.3x, Soft below 0.7x.';
                 var fitTip = 'Sweet spot: high reach and high affinity, already hitting and converting. Under-served: high affinity but low reach, respond well when reached, shift spend here. Broad: high reach and on-pace affinity, converting at baseline. Off-target: low reach and low affinity, skip.';
 
                 var headerHtml = '<thead><tr>'
@@ -39391,7 +39394,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var sortState = window._iiqAudienceTable || { key: 'fit', dir: 'desc' };
                 var sortLabelMap = {
-                    fit: 'fit', overlap: 'overlap', response: (useInfo ? 'info-seek %' : 'checkout page %'),
+                    fit: 'fit', overlap: 'overlap', response: (useInfo ? 'info-seek %' : 'ticketing site visit %'),
                     index: 'vs Gen Pop index', audience: 'audience name'
                 };
                 var sortLabel = sortLabelMap[sortState.key] || sortState.key;
@@ -39441,7 +39444,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<summary><span>How to read this.</span></summary>'
                     +     '<div class="iiq-help-body">'
                     +       '<p><b>Overlap %.</b> What share of this cohort has been exposed to the campaign so far. The ~N reached line under the percent shows the raw person count.</p>'
-                    +       '<p><b>Response %.</b> Of the exposed viewers in the cohort, what share took the downstream action. The label switches at T-14, 14 days pre-launch: info-seek before, checkout page after.</p>'
+                    +       '<p><b>Response %.</b> Of the exposed viewers in the cohort, what share took the downstream action. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing site after.</p>'
                     +       '<p><b>Vs Gen Pop index.</b> How much stronger this cohort\'s response is than a random slice of Gen Pop. Strong sits at 1.3x or higher, on pace lands near baseline (0.7 to 1.3x), soft under-indexes below 0.7x.</p>'
                     +       '<p><b>Fit.</b> The strategic label. Combines reach and affinity into one of four buckets:</p>'
                     +       '<ul>'
@@ -39954,7 +39957,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var primaryMetricLabel = useInfo ? 'info-seek' : 'checkout page';
+                var primaryMetricLabel = useInfo ? 'info-seek' : 'ticketing site visit';
 
                 // ---- Sub-panel A: asset movers ----------------------
                 var assetPanelHtml;
@@ -40346,7 +40349,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var medRate = useInfo ? median.info_pct : median.ticket_pct;
                         var ratio = medRate > 0 ? (topRate / medRate) : 0;
                         var sLabel = top.asset.action_label || top.asset.asset_type || 'Untitled asset';
-                        var metricNoun = useInfo ? 'info-seek driver' : 'checkout-page driver';
+                        var metricNoun = useInfo ? 'info-seek driver' : 'ticketing site driver';
                         var ratioTxt = ratio >= 1.6 ? (', roughly ' + ratio.toFixed(1) + 'x campaign median') : '';
                         bulletSignal = '<strong style="color:#E9E8E1;">Strongest signal at this point:</strong> <span style="color:#9AA09B;">' + escapeHtml(sLabel) + ' reads as the strongest ' + metricNoun + ' in-window at ' + topRate.toFixed(1) + '%' + ratioTxt + '.</span>';
                     }
@@ -40388,7 +40391,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (bottom) {
                         var bLabel = bottom.asset.action_label || bottom.asset.asset_type || 'Untitled asset';
                         var bRate = useInfo ? bottom.info_pct : bottom.ticket_pct;
-                        var metricNounB = useInfo ? 'info-seek' : 'checkout-page reach';
+                        var metricNounB = useInfo ? 'info-seek' : 'ticketing site reach';
                         bulletSoft = '<strong class="iiq-soft-label">Where signals are soft:</strong> <span style="color:#9AA09B;">' + escapeHtml(bLabel) + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%, one angle: platform-audience-content mismatch, worth watching.</span>';
                     }
                 }
@@ -40416,23 +40419,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     } else if (_implMover) {
                         bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: keep ' + escapeHtml(_implMover) + ' in rotation while the info-seek signal is still building. Reassess after the next drop.</span>';
                     } else {
-                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout-page reach.</span>';
+                        bulletImplications = '<strong style="color:#E9E8E1;">Implications for next week:</strong> <span style="color:#9AA09B;">One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to ticketing site reach.</span>';
                     }
                 } else {
                     var _implPostOpen = !!(opening && asOf && String(asOf) > String(opening));
                     var _implHead = _implPostOpen ? 'What this run says:' : 'Implications for next week:';
                     if (_implMover && _implAud) {
                         bulletImplications = '<strong style="color:#E9E8E1;">' + _implHead + '</strong> <span style="color:#9AA09B;">One angle: ' + escapeHtml(_implMover) + (_implPostOpen
-                            ? ' read as the checkout-page driver of the campaign, and the ' + escapeHtml(_implAud) + ' cohort responded hardest when reached. Lead the next title\'s plan with that pairing.</span>'
-                            : ' reads as the checkout-page driver right now, and the ' + escapeHtml(_implAud) + ' cohort responds hard when reached. Prioritize retargeting there in the final week.</span>');
+                            ? ' read as the ticketing site driver of the campaign, and the ' + escapeHtml(_implAud) + ' cohort responded hardest when reached. Lead the next title\'s plan with that pairing.</span>'
+                            : ' reads as the ticketing site driver right now, and the ' + escapeHtml(_implAud) + ' cohort responds hard when reached. Prioritize retargeting there in the final week.</span>');
                     } else if (_implMover) {
                         bulletImplications = '<strong style="color:#E9E8E1;">' + _implHead + '</strong> <span style="color:#9AA09B;">One angle: ' + escapeHtml(_implMover) + (_implPostOpen
-                            ? ' read as the checkout-page driver of the campaign. Anchor the next launch plan around it.</span>'
-                            : ' reads as the checkout-page driver right now. Concentrate spend behind it through the final week.</span>');
+                            ? ' read as the ticketing site driver of the campaign. Anchor the next launch plan around it.</span>'
+                            : ' reads as the ticketing site driver right now. Concentrate spend behind it through the final week.</span>');
                     } else {
                         bulletImplications = '<strong style="color:#E9E8E1;">' + _implHead + '</strong> <span style="color:#9AA09B;">One angle: ' + (_implPostOpen
-                            ? 'the campaign has run its course. Pull the picker back to opening week to see the assets that carried the checkout-page signal.</span>'
-                            : 'pull the read forward with the picker to see the assets carrying the checkout-page signal, then concentrate spend there in the final week.</span>');
+                            ? 'the campaign has run its course. Pull the picker back to opening week to see the assets that carried the ticketing site signal.</span>'
+                            : 'pull the read forward with the picker to see the assets carrying the ticketing site signal, then concentrate spend there in the final week.</span>');
                     }
                 }
 
@@ -40452,7 +40455,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             return '<strong ' + (b.soft ? 'class="iiq-soft-label"' : 'style="color:#E9E8E1;"') + '>' + escapeHtml(b.label) + '</strong> <span style="color:#9AA09B;">' + escapeHtml(b.text) + '</span>';
                         });
                         var gbm = gf.benchmark || {};
-                        goatBenchHelp = '<p><b>Benchmark.</b> The campaign median ' + (gf.use_info ? 'info-seek' : 'checkout page') + ' rate across every rated creative asset in view at this date'
+                        goatBenchHelp = '<p><b>Benchmark.</b> The campaign median ' + (gf.use_info ? 'info-seek' : 'ticketing site visit') + ' rate across every rated creative asset in view at this date'
                             + (gbm.median > 0 ? (': ' + gbm.median.toFixed(2) + '% across ' + gbm.n + ' assets') : '') + '. Lift on the Performance page is each asset\u2019s own rate against it.</p>'
                             + '<p><b>One week, one number.</b> New viewers reached in the last 7 days, against the 7 days before. The WoW chip, the biggest mover, the movers list, the exposure tile and the trajectory all read from it.</p>';
                     } catch (_gse) { }
@@ -40496,7 +40499,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +     '<p><b>The as-of date and T-minus label.</b> Every number on this card and the three cards below is filtered to what would have been known on this date. Change it with the picker above or the T-90 through T+30 preset row.</p>'
                     +     '<p><b>WoW exposure chip (top-right).</b> Total campaign exposure this week compared to the previous 7 days. A launch-week pill appears when the prior week falls before the campaign started.</p>'
                     +     '<p><b>Biggest mover this week.</b> The asset with the largest week-over-week change in exposure, in either direction.</p>'
-                    +     '<p><b>Strongest signal at this point.</b> The asset with the highest response rate for the current phase (info-seek before T-14, checkout page after).</p>'
+                    +     '<p><b>Strongest signal at this point.</b> The asset with the highest response rate for the current phase (info-seek before T-14, ticketing site after).</p>'
                     +     '<p><b>Most meaningful audience finding.</b> The cohort with the highest overlap-weighted response for the current phase. When an under-served cohort ranks high, it surfaces here.</p>'
                     +     '<p><b>Where signals are soft.</b> The lowest-performing bullet for the current phase. Shown in Dusk so a soft signal never masquerades as an accent moment.</p>'
                     +     goatBenchHelp
@@ -40507,12 +40510,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // ==== Watch this week (David ask C3) ====
                 // Phase-aware KPI band above the intro line. Pre-T-14
                 // spotlights info-seek on assets with meaningful
-                // exposure; post-T-14 spotlights checkout-page reach.
+                // exposure; post-T-14 spotlights ticketing site reach.
                 // The supporting line names the current leader over the
                 // 100K viewer threshold so the operator can move on the
                 // signal without opening another tab.
                 var watchThreshold = 100000; // viewer floor for a meaningful read
-                var watchKpi = useInfo ? 'Info-seek % on assets above 100K viewers' : 'Checkout-page reach % on assets above 100K viewers';
+                var watchKpi = useInfo ? 'Info-seek % on assets above 100K viewers' : 'Ticketing site visit % on assets above 100K viewers';
                 var watchTopAsset = null, watchTopRate = 0;
                 for (var _wi = 0; _wi < ratedAssets.length; _wi++) {
                     var _ra = ratedAssets[_wi];
@@ -40647,7 +40650,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
                 // --- Phase-appropriate response metric ---
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
-                var responseLabel = useInfo ? 'Info-seek rate' : 'Checkout page rate';
+                var responseLabel = useInfo ? 'Info-seek rate' : 'Ticketing site visit rate';
 
                 // View-weighted mean response rate across assets in view.
                 var respNum = 0, respDen = 0;
@@ -40777,7 +40780,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var medRate = useInfo ? median.info_pct : median.ticket_pct;
                         var ratio = medRate > 0 ? (topRate / medRate) : 0;
                         var sLabel = top.asset.action_label || top.asset.asset_type || 'Untitled asset';
-                        var metricNoun = useInfo ? 'info-seek driver' : 'checkout-page driver';
+                        var metricNoun = useInfo ? 'info-seek driver' : 'ticketing site driver';
                         var ratioTxt = ratio >= 1.6 ? (', roughly ' + ratio.toFixed(1) + 'x campaign median') : '';
                         bullets.push('Strongest signal at this point: ' + sLabel + ' reads as the strongest ' + metricNoun + ' in-window at ' + topRate.toFixed(1) + '%' + ratioTxt + '.');
                     }
@@ -40811,7 +40814,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (bottom) {
                         var bLabel = bottom.asset.action_label || bottom.asset.asset_type || 'Untitled asset';
                         var bRate = useInfo ? bottom.info_pct : bottom.ticket_pct;
-                        var metricNounB = useInfo ? 'info-seek' : 'checkout-page reach';
+                        var metricNounB = useInfo ? 'info-seek' : 'ticketing site reach';
                         bullets.push('Where signals are soft: ' + bLabel + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%. One angle: platform-audience-content mismatch, worth watching.');
                     }
                 }
@@ -40834,13 +40837,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     if (useInfo) {
                         if (_pdfMoverLabel && _pdfAudLabel) _pdfImpl = 'Implications for next week: One angle: ' + _pdfMoverLabel + ' is carrying the exposure story and info-seek is climbing on it. Pair the next drop with the ' + _pdfAudLabel + ' cohort to lift on the axis with the most headroom.';
                         else if (_pdfMoverLabel)             _pdfImpl = 'Implications for next week: One angle: keep ' + _pdfMoverLabel + ' in rotation while the info-seek signal is still building. Reassess after the next drop.';
-                        else                                 _pdfImpl = 'Implications for next week: One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to checkout-page reach.';
+                        else                                 _pdfImpl = 'Implications for next week: One angle: the top of funnel is still building. Prioritize assets that lift info-seek before shifting attention to ticketing site reach.';
                     } else {
                         var _pdfPostOpen = (function() { try { var _o = (window.__intentIQ && window.__intentIQ.overview) || {}; var _a = _iiqAsOfGet(); return !!(_o.opening_date && _a && String(_a) > String(_o.opening_date)); } catch (e) { return false; } })();
                         var _pdfHead = _pdfPostOpen ? 'What this run says: ' : 'Implications for next week: ';
-                        if (_pdfMoverLabel && _pdfAudLabel) _pdfImpl = _pdfHead + 'One angle: ' + _pdfMoverLabel + (_pdfPostOpen ? ' read as the checkout-page driver of the campaign, and the ' + _pdfAudLabel + ' cohort responded hardest when reached. Lead the next title\'s plan with that pairing.' : ' reads as the checkout-page driver right now, and the ' + _pdfAudLabel + ' cohort responds hard when reached. Prioritize retargeting there in the final week.');
-                        else if (_pdfMoverLabel)             _pdfImpl = _pdfHead + 'One angle: ' + _pdfMoverLabel + (_pdfPostOpen ? ' read as the checkout-page driver of the campaign. Anchor the next launch plan around it.' : ' reads as the checkout-page driver right now. Concentrate spend behind it through the final week.');
-                        else                                 _pdfImpl = _pdfHead + 'One angle: ' + (_pdfPostOpen ? 'the campaign has run its course. Pull the picker back to opening week to see the assets that carried the checkout-page signal.' : 'pull the read forward with the picker to see the assets carrying the checkout-page signal, then concentrate spend there in the final week.');
+                        if (_pdfMoverLabel && _pdfAudLabel) _pdfImpl = _pdfHead + 'One angle: ' + _pdfMoverLabel + (_pdfPostOpen ? ' read as the ticketing site driver of the campaign, and the ' + _pdfAudLabel + ' cohort responded hardest when reached. Lead the next title\'s plan with that pairing.' : ' reads as the ticketing site driver right now, and the ' + _pdfAudLabel + ' cohort responds hard when reached. Prioritize retargeting there in the final week.');
+                        else if (_pdfMoverLabel)             _pdfImpl = _pdfHead + 'One angle: ' + _pdfMoverLabel + (_pdfPostOpen ? ' read as the ticketing site driver of the campaign. Anchor the next launch plan around it.' : ' reads as the ticketing site driver right now. Concentrate spend behind it through the final week.');
+                        else                                 _pdfImpl = _pdfHead + 'One angle: ' + (_pdfPostOpen ? 'the campaign has run its course. Pull the picker back to opening week to see the assets that carried the ticketing site signal.' : 'pull the read forward with the picker to see the assets carrying the ticketing site signal, then concentrate spend there in the final week.');
                     }
                     if (_pdfImpl) bullets.push(_pdfImpl);
                 } catch (_pdfImplErr) { /* keep 4 bullets on failure */ }
@@ -40882,7 +40885,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                 fit: _servedLabel[r.fit] || 'Balanced',
                             };
                         });
-                        _goatAudCols = { overlap: 'Share of exposure', response: (useInfo ? 'Info-seek' : 'Checkout page'), index: 'Response index', fit: 'Served' };
+                        _goatAudCols = { overlap: 'Share of exposure', response: (useInfo ? 'Info-seek' : 'Ticketing site visit'), index: 'Response index', fit: 'Served' };
                     } catch (_gpe) { _goatFacts = null; _goatAudCols = null; }
                 }
 
@@ -44818,7 +44821,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     var _q2ov  = (window.__intentIQ && window.__intentIQ.overview) || {};
                     var _q2trm = _q2ov.terminology || {};
                     var _q2isBrand = _q2ov.title_type === 'brand';
-                    var _q2bfl = (_q2trm.bottom_funnel_label || 'Checkout page');
+                    var _q2bfl = (_q2trm.bottom_funnel_label || 'Ticketing site visit');
                     var _q2bflLc = _q2bfl.toLowerCase();
                     if (_q2isBrand) {
                         chartCaption = 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ' + _q2bflLc + 's. All four lines track together across the campaign - view lines spike on major content drops, and ' + _q2bflLc + 's rise on high-intent creative (product tutorials, referral pushes, testimonial cuts). Info-seek trails view spikes by 1-2 days as audiences research the brand between exposure and action. Dots along the x-axis = each paid/organic asset drop date.';
@@ -45881,7 +45884,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                             '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.5rem; margin-bottom:0.7rem;">'
                           +   iiqSummaryTile(headerLabel + ' views',         fmtCompact(totViews), 'across ' + rows.length + ' assets')
                           +   iiqSummaryTile('Info-seekers',                 fmtCompact(totInfo),  totViews > 0 ? (totInfo / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
-                          +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page')) + 's',   fmtCompact(totTk),    totViews > 0 ? (totTk   / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
+                          +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit')) + 's',   fmtCompact(totTk),    totViews > 0 ? (totTk   / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
                           +   iiqSummaryTile('Top asset type',               escapeHtml(topType),  topTypeShare.toFixed(0) + '% of cohort views')
                           + '</div>';
 
@@ -45911,8 +45914,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                                +     _th('views',         'Cohort views',  true)
                                +     _th('info_pct',      'Info %',        true)
                                +     _th('info_seekers',  'Info #',        true)
-                               +     _th('ticket_pct',    ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page')) + ' %',      true)
-                               +     _th('ticket_visits', ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page')) + ' #',      true)
+                               +     _th('ticket_pct',    ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit')) + ' %',      true)
+                               +     _th('ticket_visits', ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit')) + ' #',      true)
                                +   '</tr></thead>'
                                +   '<tbody>' + rowsHtml + '</tbody>'
                                + '</table></div>'
@@ -45977,7 +45980,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                   +   iiqSummaryTile('Engagement', fmtCompact(eng), 'likes + comments + shares')
                   +   iiqSummaryTile('Eng. rate', engRate.toFixed(2) + '%', 'engagement / views')
                   +   iiqSummaryTile('Info-seek %', proj.info_pct.toFixed(2) + '%', '~' + fmtCompact(infoCount) + ' viewers within 7d')
-                  +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page')) + ' %', proj.ticket_pct.toFixed(2) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
+                  +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit')) + ' %', proj.ticket_pct.toFixed(2) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
                   + '</div>'
                   + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
                   +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
@@ -46026,7 +46029,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         ];
                         if (hasFunnelSynth) {
                             series.push({ name: 'Daily info-seekers',     color: '#a5b4fc', points: infoPts });
-                            series.push({ name: 'Daily ' + ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page').toLowerCase()) + 's', color: '#f472b6', points: tkPts   });
+                            series.push({ name: 'Daily ' + ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit').toLowerCase()) + 's', color: '#f472b6', points: tkPts   });
                         }
                         var captionTitle = 'Daily performance (' + escapeHtml(winLabel) + ')'
                             + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">estimated daily distribution from window total + posted_date</span>' : '');
@@ -46092,10 +46095,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var channelTxt = escapeHtml(asset.channel || '—');
 
                 var infoTileTip = 'Info-seek % is the share of viewers within a 7-day post-view window who searched the title or hit an info page (IMDb / RT / Letterboxd). Computed at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '.';
-                var tkTileTip = 'Checkout page % is the share of viewers within a 7-day post-view window who reached a checkout page on a showtimes site (Fandango / AMC / Regal / Cinemark / Atom). Computed at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '.';
+                var tkTileTip = 'Ticketing site visit % is the share of viewers within a 7-day post-view window who went to a ticketing site or app (Fandango / AMC / Regal / Cinemark / Atom) for a ticket. Computed at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '.';
                 var primaryFlag = ' <span style="font-size:0.62rem; color:#C7F23E; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">primary</span>';
                 var infoLabelHtml = 'Info-seek %' + (useInfo ? primaryFlag : '');
-                var tkLabelHtml   = 'Checkout page %' + (useInfo ? '' : primaryFlag);
+                var tkLabelHtml   = 'Ticketing site visit %' + (useInfo ? '' : primaryFlag);
 
                 function tile(labelHtml, valueTxt, subTxt, tipText) {
                     var tipAttr = tipText ? (' title="' + escapeHtml(tipText) + '"') : '';
@@ -46167,7 +46170,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         var v = useInfo ? Number(p.info_seekers) : Number(p.ticket_visits);
                         return { x: p.date, y: isFinite(v) ? v : 0 };
                     });
-                    var primaryLabel = useInfo ? 'Daily info-seekers' : 'Daily checkout page visits';
+                    var primaryLabel = useInfo ? 'Daily info-seekers' : 'Daily ticketing site visits';
                     var primaryColor = useInfo ? '#a5b4fc' : '#f472b6';
                     var chartHtml;
                     if (typeof iiqLineChartDual === 'function') {
@@ -46184,7 +46187,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         );
                     }
                     var caption = 'Daily performance up to ' + escapeHtml(_iiqFmtAsOfDate(asOf))
-                        + ' · <span style="color:#797F81;">views on the left axis, ' + (useInfo ? 'info-seekers' : 'checkout page visits') + ' on the right axis</span>'
+                        + ' · <span style="color:#797F81;">views on the left axis, ' + (useInfo ? 'info-seekers' : 'ticketing site visits') + ' on the right axis</span>'
                         + (isSynth ? ' · <span style="color:#797F81;">daily shape derived from window total + posted_date</span>' : '');
                     host.innerHTML = '<div style="font-size:0.75rem; color:#9AA09B; margin-bottom:0.4rem;">' + caption + '</div>' + chartHtml;
                 }
@@ -46321,10 +46324,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (reachedJit > peopleJit) reachedJit = peopleJit;
                 var respondedJit = _pitJit('modal_resp', row.responded);
                 var overlapTip = 'Share of the cohort that has seen at least one asset in view. Saturates toward the cohort\'s baseline overlap as more of the campaign fires.';
-                var responseLabel = useInfo ? 'Info-seek %' : 'Checkout page %';
-                var responseTip = (useInfo ? 'Info-seek' : 'Checkout page') + ' % applied to the reached slice of the cohort. Weighted mean across in-view assets, tilted by cohort affinity.';
+                var responseLabel = useInfo ? 'Info-seek %' : 'Ticketing site visit %';
+                var responseTip = (useInfo ? 'Info-seek' : 'Ticketing site visit') + ' % applied to the reached slice of the cohort. Weighted mean across in-view assets, tilted by cohort affinity.';
                 var reachedTip = 'Cohort viewers reached by at least one in-view asset at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '.';
-                var respondedTip = 'Reached cohort viewers who then took a ' + (useInfo ? 'title info-search or IMDb / RT / Letterboxd hit' : 'checkout page visit') + ' within a 7-day window.';
+                var respondedTip = 'Reached cohort viewers who then took a ' + (useInfo ? 'title info-search or IMDb / RT / Letterboxd hit' : 'ticketing site visit') + ' within a 7-day window.';
 
                 var idxChipHtml;
                 if (row.index == null) {
@@ -47111,7 +47114,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     +   _q4Hdr('info_pct',      'Info-seek %',   '#a5b4fc', 'right', 'View-weighted mean per-asset info-seek %. Same formula as Assets page.')
                     +   _q4Hdr('info_seekers',  'Info-seekers',  '#a5b4fc', 'right', 'Total info-seekers = view-weighted info-seek % \u00d7 total views. Same formula as Assets page.')
                     +   (function() {
-                            var _bfl = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page';
+                            var _bfl = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Ticketing site visit';
                             var _bflLower = _bfl.toLowerCase();
                             return _q4Hdr('ticket_pct',    _bfl + ' %',  '#fbbf24', 'right', 'View-weighted mean per-asset ' + _bflLower + ' %. Same formula as Assets page.')
                                 +  _q4Hdr('ticket_visits', _bfl + 's',   '#fbbf24', 'right', 'Total ' + _bflLower + 's = view-weighted ' + _bflLower + ' % \u00d7 total views. Same formula as Assets page.');
@@ -47148,7 +47151,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums; opacity:0.85;">' + tkCntCell + '</td>'
                         + '</tr>';
                     if (_q4Open) {
-                        var _bflRow = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page';
+                        var _bflRow = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Ticketing site visit';
                         // Sortable post rows + Posted column on every
                         // campaign except GOAT (frozen). GOAT keeps the
                         // views-desc list it shipped with.
@@ -48046,7 +48049,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var tilesHtml = '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     +   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets')
                     +   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers - ' + _iiqInfoSub)
-                    +   iiqSummaryTile(((typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Checkout page'), fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% - ' + _iiqTkSub)
+                    +   iiqSummaryTile(((typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Ticketing site visit'), fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% - ' + _iiqTkSub)
                     +   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social')
                     + '</div>';
                 // The section opens on a rule and its own label. Path
@@ -48269,7 +48272,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 // AFTER column
                 html +=     '<div>';
                 html +=       _iiqJrnSecHead('After, within 7 days: what they did next', '');
-                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Downstream behavior projected from info-seek % + ' + escapeHtml(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Checkout page')).toLowerCase()) + ' % per Assets card, view-weighted across the campaign.</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Downstream behavior projected from info-seek % + ' + escapeHtml(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing site visit')).toLowerCase()) + ' % per Assets card, view-weighted across the campaign.</div>';
                 html +=       '<div style="' + _IIQ_JRN_GRID + ' padding-bottom:0.25rem; font-size:0.56rem; text-transform:uppercase; letter-spacing:0.09em; color:#7C878A;">';
                 html +=         '<div>Destination</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
                 html +=       '</div>';

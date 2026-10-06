@@ -1332,9 +1332,9 @@ def compute_mta_coefficients(campaign_slug: str,
     ttype = (overview.get("title_type") or "film").lower()
     term = overview.get("terminology") or {}
     conversion_noun = term.get("conversion_noun") or (
-        "signup" if ttype == "brand" else "checkout page visit"
+        "signup" if ttype == "brand" else "ticketing-site visit"
     )
-    bottom_funnel_label = term.get("bottom_funnel_label") or "Cart / checkout"
+    bottom_funnel_label = term.get("bottom_funnel_label") or "Ticketing site visit"
     display_name = overview.get("display_name") or slug
 
     assets_resp = _intent_iq.get_assets(slug, window="all")
@@ -1897,9 +1897,9 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
-                                          "different film that weekend"),
+        "leak_competing_label":        "Ticketing site for a competing film",
+        "leak_competing_note":         ("Opened a showtimes page within 7d and went to a ticketing site or app "
+                                          "for a ticket to a different film that weekend"),
     },
     "dhar_mann_minions_and_monsters": {
         "kind": "film",
@@ -1908,9 +1908,9 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Reached checkout for a competing family film",
-        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
-                                          "different family film that weekend"),
+        "leak_competing_label":        "Ticketing site for a competing family film",
+        "leak_competing_note":         ("Opened a showtimes page within 7d and went to a ticketing site or app "
+                                          "for a ticket to a different family film that weekend"),
     },
     "the_influencer_project_hades": {
         "kind": "film",
@@ -1919,9 +1919,9 @@ _CARD_CONFIG: dict[str, dict] = {
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Creator reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
-                                          "different film that weekend"),
+        "leak_competing_label":        "Ticketing site for a competing film",
+        "leak_competing_note":         ("Opened a showtimes page within 7d and went to a ticketing site or app "
+                                          "for a ticket to a different film that weekend"),
     },
     "chime": {
         "kind": "brand",
@@ -2040,9 +2040,9 @@ def _card_config(slug: str, ttype: str, display_name: str,
                                           "YouTube trailer", "Official site"],
         "assist_touchpoints":          ["Trailer viewed", "Cast IG reel",
                                           "Coupon query", "Paid social retarget"],
-        "leak_competing_label":        "Reached checkout for a competing film",
-        "leak_competing_note":         ("Reached a cart/purchase page within 7d and reached the checkout page for a "
-                                          "different film that weekend"),
+        "leak_competing_label":        "Ticketing site for a competing film",
+        "leak_competing_note":         ("Opened a showtimes page within 7d and went to a ticketing site or app "
+                                          "for a ticket to a different film that weekend"),
     }
 
 
@@ -2055,8 +2055,10 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
     funnel', 'Lower funnel', 'Conversion') so the ladder reads as a
     tier on its own without cross-referencing the stage code. The
     specific action after the colon still varies per campaign kind and
-    per campaign terminology ('Ticket purchased' vs the brand's own
-    conversion noun, 'Cart/purchase page reach' vs 'Website or app visit',
+    per campaign terminology (film: a showtimes page, then a ticketing
+    site or app visit for a ticket, never a purchase claim, per
+    no-box-office-prediction.mdc; brand: 'Website or app visit' and the
+    brand's own conversion noun;
     the attribution-window days from the terminology block).
     """
     term = terminology or {}
@@ -2065,8 +2067,8 @@ def _nest_stage_labels(kind: str, display_name: str, conversion_noun: str,
         return {
             "1_exposed":  f"Top of funnel: Exposed to {display_name}",
             "2_infoseek": f"Mid funnel: Info-seek within {window_days}d",
-            "3_ticketer": f"Lower funnel: Reached the cart/purchase page within {window_days}d",
-            "4_paid":     f"Reached the checkout page within {window_days}d",
+            "3_ticketer": f"Lower funnel: Reached a showtimes page within {window_days}d",
+            "4_paid":     f"Went to a ticketing site or app for a ticket within {window_days}d",
         }
     conv_action = (conversion_noun[:1].upper() + conversion_noun[1:]
                     if conversion_noun else "Converted")
@@ -2085,7 +2087,7 @@ def _fork_question(kind: str, of_stage: str) -> str:
         return {
             "1_exposed":  "Saw the trailer specifically",
             "2_infoseek": "Hit multiple review surfaces",
-            "3_ticketer": "Hit more than one cart/purchase surface (deal-hunt)",
+            "3_ticketer": "Checked showtimes on more than one surface",
         }[of_stage]
     return {
         "1_exposed":  "Saw the flagship creative specifically",
@@ -2101,13 +2103,13 @@ def _archetype_defs(kind: str) -> list[dict]:
     if kind == "film":
         return [
             {"archetype": "Straight-through",
-             "description": "Exposed to cart page to checkout, no research or retarget"},
+             "description": "Exposed, then a showtimes page, then a ticketing site, no research or retarget"},
             {"archetype": "Researched",
-             "description": "Exposed to info-seek to cart page to checkout"},
+             "description": "Exposed, then info-seek, then a showtimes page, then a ticketing site"},
             {"archetype": "Retargeted",
-             "description": "Bagged and left, came back after a paid social retarget"},
+             "description": "Opened a showtimes page and left, came back after a paid social retarget"},
             {"archetype": "Deal-hunt",
-             "description": "Touched multiple cart/purchase surfaces before reaching checkout"},
+             "description": "Checked showtimes on more than one surface before going to a ticketing site"},
         ]
     return [
         {"archetype": "Straight-through",
@@ -2128,12 +2130,12 @@ def _leak_stage_labels(kind: str) -> dict:
     if kind == "film":
         return {
             "infoseek_no_conv": (
-                "Info-seek no ticket",
-                "Searched the title within 7d but never reached a cart/purchase page",
+                "Info-seek, no showtimes page",
+                "Searched the title within 7d but never opened a showtimes page",
             ),
             "conv_visit_no_pay": (
-                "Cart-page visit no checkout",
-                "Reached a cart/purchase page within 7d but never reached the checkout page, the bag-abandon equivalent",
+                "Showtimes page, no ticketing site",
+                "Opened a showtimes page within 7d but never went to a ticketing site or app for a ticket",
             ),
         }
     return {
@@ -2640,7 +2642,7 @@ def _compute_paths_impl(*, slug: str, ttype: str, display_name: str,
     if cfg.get("paths_conversion_noun"):
         paths_conversion_noun = cfg["paths_conversion_noun"]
     elif kind == "film":
-        paths_conversion_noun = "checkout page visit"
+        paths_conversion_noun = "ticketing-site visit"
     else:
         paths_conversion_noun = (bottom_funnel_label or conversion_noun
                                     or "conversion")
