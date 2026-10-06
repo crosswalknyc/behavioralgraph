@@ -73,6 +73,7 @@ This module imports only prometheus_analysis and subiq_intent (both
 pure text modules): no Flask, no S3, no model client, so it stays
 unit-testable and safe to import anywhere.
 """
+import re
 import time
 
 __all__ = ['route_ask', 'ROUTES']
@@ -207,6 +208,26 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
                 return d
         except Exception:
             pass
+        # 7b. A question that NAMES a subject the library already holds
+        # is decided on that subject BEFORE any remembered referent
+        # (2026-10-06, Eliot: "are fans of Gunna more likely to buy Under
+        # Armour", Gunna profile just landed, was met with "Do you mean
+        # for Politics Girl?"). The classifier arbitrates analysis vs
+        # build vs cut; when it is not available for the ask, a
+        # question naming a held subject reads on it.
+        kind = None
+        if _resolve(has_base):
+            kind = _classify(d, t, pma, has_base, classify_fn)
+            if kind == 'analysis':
+                d.update(route='generate', why='classifier')
+                return d
+            if kind in ('build', 'cut'):
+                d.update(route='build_interpret', why='classifier')
+                return d
+            if not d.get('used_classifier') and not build_shaped \
+                    and _question_shaped(t):
+                d.update(route='generate', why='named_base')
+                return d
         # 8. Grounded confirm from cross-session memory.
         if _resolve(memory_referent):
             d.update(route='memory_confirm', why='memory_referent')
@@ -215,7 +236,8 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
         # missed, with a resolvable base, never dead-ends at the
         # nudge. 'build'/'cut' verdicts hand the ask to the build
         # flow via the re-route contract.
-        kind = _classify(d, t, pma, has_base, classify_fn)
+        if kind is None:
+            kind = _classify(d, t, pma, has_base, classify_fn)
         if kind == 'analysis':
             d.update(route='generate', why='classifier')
             return d
@@ -248,6 +270,15 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
     # 10. Default: the normal build-interpret flow.
     d.update(route='build_interpret', why='build_default')
     return d
+
+
+_QUESTION_RX = re.compile(
+    r"^\s*(are|is|do|does|did|how|what|which|who|why|where|when|can|could|would|will|should)\b", re.I)
+
+
+def _question_shaped(t):
+    t = str(t or '')
+    return bool(_QUESTION_RX.match(t)) or '?' in t
 
 
 def _classify(d, t, pma, has_base, classify_fn):
