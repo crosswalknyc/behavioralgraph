@@ -2921,40 +2921,33 @@ _STREAMING_PLATFORMS_META = [
     # reach is the total-brand-reach figure the rules rule out.
     {'key': 'moviesphereplus',
      'label': 'MovieSphere+',
-     'ceiling': 135_000,
+     # 2026-10-06: weekly cap = 7 x the highest daily any film has
+     # held on the platform-reported feed (3,581/day, Dec 2025) with
+     # 1.8x headroom. Was 135,000 from reasoning alone.
+     'ceiling': 45_377,
      'anchors': (
          "MovieSphere+ is Lionsgate's ad-free on-demand subscription "
-         'drawn from the studio library, launched in the US in May '
-         '2026 at $4.99/month and sold through Prime Video Channels '
-         'and YouTube Primetime Channels. It is a NEW and SMALL '
-         'service: Antenna tracks it among its 31 Specialty SVOD '
-         'services but publishes no count for it, and reasoning from '
-         "Antenna's Amazon Channels gross-add flow and the service's "
-         'launch timing puts it near 210-290K US subscriber accounts, '
-         'roughly 470K US individuals reachable, roughly 235K of them '
-         'watching in a given week. The panel carries about 150 '
-         'titles and the weekly tiers below cover every rank with no '
-         'gap and no overlap, by the rank given in CHART CONTEXT: '
-         'rank 1 35,000-52,000 US viewers/week, and that top slot is '
-         'usually a marquee Lionsgate feature in rotation (Django '
-         'Unchained, a John Wick or Hunger Games entry, Kill Bill, '
-         'the Saw and Evil Dead horror catalog); ranks 2-10 '
-         '20,000-35,000/week; ranks 11-40 9,000-20,000/week; ranks '
-         '41-100 3,500-9,000/week; ranks 101 and below, which is '
-         'mostly deep Lionsgate TV and older acquisitions (Blue '
-         'Mountain State, Masters of Horror, Call Me Fitz), '
-         '1,200-3,500/week. Read the tier off the rank you are given '
-         'and do not promote a title into a higher tier because it is '
-         'famous: a well-known feature sitting at rank 84 on a '
-         'service this small is a rank-84 audience. WEEKLY TO DAILY '
-         'FOR THIS KIND: divide a title tier by 3.5, not by 7. A '
-         'viewer watches a given film or episode once in a week '
-         'rather than once a day, so a title\'s weekly viewers arrive '
-         'across roughly three and a half days. Rank 1 therefore '
-         'lands near 10,000-14,900 a day and the deep catalog near '
-         '340-1,000, before the day-of-week factor. Anchor: Antenna '
-         'State of Subscriptions Q3 2026 Specialty SVOD landscape + '
-         'the published US launch price and date. '
+         'drawn from the studio library, sold in the US through Prime '
+         'Video Channels (since at least October 2024) and YouTube '
+         'Primetime Channels, $4.99/month. ITS SCALE IS MEASURED, NOT '
+         'REASONED: the platform reports its title-level streams, and '
+         'in August 2026 the service did about 1.37M film streams '
+         'across 725 films, about 44,000 a day service-wide. The #1 '
+         'film did about 61,000 streams in the month (about 2,000 a '
+         'day), #10 about 24,000 (about 770 a day), #25 about 13,500 '
+         '(about 440 a day), #100 about 3,300 (about 105 a day), and '
+         'the long tail under 1,000 a month (under 30 a day). Across '
+         'eighteen months the service ran 13,000 to 61,000 film '
+         'streams a day with seasonal peaks in December, March and '
+         'July-August, and no film ever exceeded about 3,600 a day. '
+         'The top of the service is Tyler Perry\'s Madea films, '
+         'Divergent, Bad Moms, Sinister, Wrong Turn and the Saw and '
+         'Halloween horror rotation; TV series (Blue Mountain State, '
+         'Manhunt, Ash vs Evil Dead) stream by episode and may sit a '
+         'little above the film #1, never above the service. A '
+         'well-known feature at rank 84 on a service this size is a '
+         'rank-84 audience: about 120 a day. When a PLATFORM-REPORTED '
+         'line is given for the title, start from it. '
          'IMPORTANT: MovieSphere+ the paid on-demand service, NOT '
          'MovieSphere the free FAST channel and NOT MovieSphere Gold '
          'the over-the-air network in 30M+ homes. Do not reason from '
@@ -3017,30 +3010,35 @@ _STREAMING_PLATFORMS_META = [
     # below where they are.
     {'key': 'lionsgateplus',
      'label': 'Lionsgate+',
-     'ceiling': 155_000,
+     # 2026-10-06: weekly cap = 7 x the highest daily any film has
+     # held on the platform-reported feed (1,918/day, Apr 2026 launch
+     # month) with 1.8x headroom. Was 155,000 from reasoning alone.
+     'ceiling': 24_311,
      'anchors': (
          "Lionsgate+ is the Lionsgate studio's own ad-free library "
          'service, the brand Starz used internationally as STARZPLAY '
          'before the 2022 rebrand and now standing on its own after '
          'the 2025 Starz separation. It went live in the US on '
          '2026-04-09 at $6.99/month and is sold in the US ONLY as a '
-         'Prime Video add-on channel. It is a NEW and SMALL service: '
-         'nobody publishes a count for it, and reasoning from '
-         "Antenna's Amazon Channels gross-add flow, its specialty "
-         'retention curve and the launch timing puts it near 240-330K '
-         'US subscriber accounts, roughly 540K US individuals '
-         'reachable, roughly 270K of them watching in a given week. '
-         'The catalog is the Lionsgate library: the John Wick films, '
-         'the Hunger Games and Saw rotations, La La Land, Knives Out, '
-         'Hacksaw Ridge, A Simple Favor, plus Lionsgate TV (Weeds, '
-         'Nurse Jackie, Spartacus, Nashville, Hell on Wheels, Party '
-         'Down, Minx, Amandaland). Bands: the number one title '
-         '32,000-60,000 US viewers/week, and that top slot is usually '
-         'a John Wick entry or another marquee feature in rotation; '
-         'top-10 14,000-32,000/week; ranks 10-40 4,500-14,000/week; '
-         'deep catalog and older Lionsgate TV 700-4,500/week. Anchor: '
-         'Antenna State of Subscriptions Q3 2026 Specialty SVOD '
-         'landscape + the published US launch price and date. '
+         'Prime Video add-on channel. ITS SCALE IS MEASURED, NOT '
+         'REASONED: the platform reports its title-level streams, and '
+         'in August 2026 the service did about 690,000 film streams '
+         'across 725 films, about 22,000 a day service-wide. The #1 '
+         'film did about 34,000 streams in the month (about 1,100 a '
+         'day), #10 about 11,000 (about 360 a day), #25 about 5,700 '
+         '(about 185 a day), #100 about 1,500 (about 46 a day), and '
+         'the long tail under 500 a month (under 16 a day). Across its '
+         'five full months the service ran 14,500 to 23,300 film '
+         'streams a day and no film ever exceeded about 1,900 a day. '
+         'The top of the service is the John Wick films, Deepwater '
+         'Horizon, La La Land, Midway, Lawless, Operation Fortune and '
+         'the Now You See Me, Red, Rambo and Escape Plan rotations; '
+         'Lionsgate TV (Weeds, Nurse Jackie, Spartacus, Nashville, '
+         'Hell on Wheels, Party Down, Minx) streams by episode and may '
+         'sit a little above the film #1, never above the service. A '
+         'well-known feature at rank 84 on a service this size is a '
+         'rank-84 audience: about 55 a day. When a PLATFORM-REPORTED '
+         'line is given for the title, start from it. '
          'IMPORTANT: Lionsgate+ the add-on channel, NOT Starz, which '
          'is a separate company since 2025 and last disclosed 12.7M '
          'US streaming subscribers - the two share Lionsgate films in '
@@ -3827,6 +3825,16 @@ def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str
         scope = _carriage_scope_line(p['key'])
         if scope:
             lines.append(f'      {scope}')
+        # A service whose scale the platform reports to a partner
+        # (2026-10-06, Lionsgate+ and MovieSphere+) puts that scale
+        # under its entry; it outranks every reasoned anchor above.
+        try:
+            from scripts.trends_scrapers import first_party_calibration as _fpc
+            fp = _fpc.service_prompt_line(p['key'])
+        except Exception:                                 # pragma: no cover
+            fp = ''
+        if fp:
+            lines.append(f'      {fp}')
     return '\n'.join(lines)
 
 
@@ -4166,6 +4174,27 @@ def _streaming_position_block(item: dict) -> str:
         'title is absent from it, that is itself informative: the title '
         'draws LESS than the one the service ranks last, because '
         'otherwise they would have charted it.')
+
+
+def _first_party_title_lines(item: dict, display_title: str) -> str:
+    """The title's own platform-reported reading, when a partner's feed
+    carries it (2026-10-06). One line per calibrated service the item
+    is on, appended to the item block so the model starts from the
+    measured number rather than reasoning past it."""
+    out = ''
+    try:
+        from scripts.trends_scrapers import first_party_calibration as _fpc
+        on = set((item.get('by_platform') or {}).keys()) | set(
+            str(x).lower() for x in (item.get('chart_labels') or []))
+        for slug in _fpc.CALIBRATED_SLUGS:
+            if on and slug not in on:
+                continue
+            ln = _fpc.title_prompt_line(slug, display_title)
+            if ln:
+                out += '\n' + ln
+    except Exception:                                     # pragma: no cover
+        pass
+    return out
 
 
 def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
@@ -4753,6 +4782,8 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         unit  = 'daily US views'
         query = f'"{display_title}" daily viewers US streaming 2026'
         item_line = f'TITLE: {display_title}{_streaming_position_block(item)}'
+    if kind in ('film', 'tv') or item_line.startswith('TITLE: '):
+        item_line += _first_party_title_lines(item, display_title)
 
     platforms = _platforms_for_kind(kind)
     # For FAST channels, restrict the prompt to the ONE platform the
@@ -7817,6 +7848,12 @@ def _restamp_published_ranks(researched: dict[str, dict]) -> dict:
     return out
 
 
+def _apply_first_party_calibration(researched: dict[str, dict],
+                                   target_date_iso: str) -> dict:
+    from scripts.trends_scrapers import first_party_calibration as fpc
+    return fpc.apply_to_store(researched, target_date_iso)
+
+
 def _finalize_published_charts(researched: dict[str, dict],
                                target_date_iso: str) -> dict:
     """The closing sequence every writer of the store runs last.
@@ -7838,6 +7875,12 @@ def _finalize_published_charts(researched: dict[str, dict],
     out: dict = {}
     for name, fn in (
             ('stamps', lambda: _restamp_published_ranks(researched)),
+            # 2026-10-06: services whose scale the platform reports to
+            # a partner take that scale before anything else levels
+            # them (chart position -> its measured level, titled rows
+            # -> their own reading, the rest held under the service).
+            ('first_party', lambda: _apply_first_party_calibration(
+                researched, target_date_iso)),
             ('ceiling', lambda: _reclamp_carried_to_platform_ceiling(researched)),
             ('coherence', lambda: _enforce_published_chart_coherence(
                 researched, target_date_iso)),
