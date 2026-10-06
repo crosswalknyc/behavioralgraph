@@ -1036,10 +1036,19 @@ def build_entity_and_purchase_blocks(s3_client, bucket, base, text):
         entity_rows = build_named_entity_rows(df, gp_map, text)
         if not entity_rows or not is_brand_purchase_ask(text):
             return entity_rows, '', {}
-        avid_df = None
+        avid_df, ak = None, None
         try:
-            ak = find_avid_key(s3_client, bucket, (base or {}).get('subject'),
-                               exclude_key=key)
+            # the subject as the base names it, else the catalog display
+            # name of the base file itself (a base can arrive with a
+            # file-stem subject that never matches a cut name)
+            names = [str((base or {}).get('subject') or '').strip()]
+            for nm, sk in _load_catalog_names(s3_client, bucket):
+                if sk == key and nm and nm not in names:
+                    names.append(nm)
+            for nm in names:
+                ak = find_avid_key(s3_client, bucket, nm, exclude_key=key) if nm else None
+                if ak:
+                    break
             if ak:
                 avid_df, _ = load_profile_df(s3_client, bucket, ak)
         except Exception as e:
@@ -1048,6 +1057,9 @@ def build_entity_and_purchase_blocks(s3_client, bucket, base, text):
             df, gp_map, text, avid_df=avid_df,
             subject=(base or {}).get('subject'))
         facts = purchase_facts(df, gp_map, text, avid_df=avid_df) if block else {}
+        print(f"[pm-read] purchase context: brands={[b.get('label') for b in facts.get('brands') or []]} "
+              f"avid={'yes (' + str(ak) + ')' if avid_df is not None else 'no'} "
+              f"subject={(base or {}).get('subject')!r}")
         return entity_rows, block, facts
     except Exception as e:
         print(f"[prometheus] entity/purchase blocks failed: {e}")
