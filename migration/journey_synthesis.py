@@ -210,6 +210,13 @@ Rules that do not move:
   carries Fandango / AMC / Regal / Cinemark / Atom. A search step
   carries typed search. Never paste the same URL list onto every
   step. Share-of-step percents must differ across steps.
+- LOOK AT WHAT WE ALREADY HOLD BEFORE BUILDING. If corpus_anchors
+  lists tracked asset URLs (creator posts, YouTube videos, editorial
+  articles from Attribution IQ), the exposure / "saw tracked campaign
+  content" / creator / editorial steps MUST use those URLs. Do not
+  invent Instagram search, TikTok search, YouTube search, or Google
+  search for a stage we already track. Search pages are only for a
+  typed-search step.
 
 Journey families. journey_kind in the input decides which:
 - "purchase": the shop family. The last stage is the paid event; the
@@ -1070,6 +1077,28 @@ def find_attribution_campaign(subject: str, s3=None,
     return attribution_anchor_from(slug, assets, fit)
 
 
+def _campaign_asset_urls(assets: dict) -> list[dict]:
+    """The public URLs Attribution IQ already tracks on this title."""
+    out = []
+    seen = set()
+    for a in (assets or {}).get('assets') or []:
+        url = str(a.get('url') or '').strip()
+        key = url.rstrip('/').lower()
+        if not url.startswith('https://') or key in seen:
+            continue
+        if 'argentina-vs-argelia' in key:
+            continue
+        seen.add(key)
+        out.append({
+            'url': url,
+            'channel': a.get('channel') or '',
+            'asset_type': a.get('asset_type') or '',
+            'title': a.get('action_label') or a.get('asset_title') or '',
+            'views': int(a.get('ext_view_count') or 0),
+        })
+    return out
+
+
 def attribution_anchor_from(slug: str, assets: dict, fit: dict) -> Optional[dict]:
     """Shape the campaign documents into the anchor the journey uses.
     Pure; the tests feed it fixtures."""
@@ -1110,6 +1139,7 @@ def attribution_anchor_from(slug: str, assets: dict, fit: dict) -> Optional[dict
         'touchpoints': tps[:12],
         'asset_count': len((assets or {}).get('assets') or []),
         'channel_mix': channel_mix_from(assets, overall.get('touchpoints') or []),
+        'assets': _campaign_asset_urls(assets),
     }
 
 
@@ -1260,6 +1290,15 @@ def anchors_prompt_block(anchors: dict) -> Optional[dict]:
         'assists': camp['assists'],
         'top_assets_by_converters': camp['touchpoints'][:8],
         'tracked_asset_count': camp['asset_count'],
+        'tracked_asset_urls': (camp.get('assets') or [])[:12],
+        'use_these_urls': (
+            "The exposure / saw-tracked-campaign-content / creator / "
+            "editorial clickstream steps MUST use a few of these URLs "
+            "(the top video, a creator post, an editorial page, then a "
+            "couple more). They are the creator posts, YouTube videos, "
+            "and editorial articles Attribution IQ already tracks. Do "
+            "not invent search pages for a stage we already track. Do "
+            "not list every tracked asset."),
         'tracked_channels': [
             {'channel': d['channel'], 'tracked_assets': d['assets'],
              'share_of_exposure_pct': d['pct']}
@@ -1700,6 +1739,9 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                        surface='journey_synthesis', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         raise RuntimeError('journey research returned no primitives')
+    if anchors.get('attribution'):
+        prim = dict(prim)
+        prim['tracked_assets'] = anchors['attribution'].get('assets') or []
     payload = build_journey(inputs, prim, created_by=created_by)
     if anchors.get('attribution'):
         try:

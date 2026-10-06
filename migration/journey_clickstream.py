@@ -21,6 +21,8 @@ MIN_STEPS = 8
 MAX_STEPS = 13
 MIN_URLS = 6
 MAX_URLS = 10
+# A few of the campaign's own pages. Never the full asset list.
+TOP_TRACKED_URLS = 6
 
 _TIKTOK_VIDEO = re.compile(
     r'tiktok\.com/@[^/]+/video/\d+', re.I)
@@ -219,26 +221,30 @@ def researched_extras_for(subject: str, platform: str = ''
     rows: list[tuple[str, str]] = []
     if 'influencer project' in s:
         rows = [
-            ('https://www.youtube.com/results?search_query=The+Influencer+Project+official+trailer',
-             'Official trailer search'),
-            ('https://www.fandango.com/search?q=The+Influencer+Project',
-             'Fandango title search'),
-            ('https://www.amctheatres.com/search?q=The+Influencer+Project',
-             'AMC title search'),
-            ('https://www.regmovies.com/search?query=The+Influencer+Project',
-             'Regal title search'),
-            ('https://www.cinemark.com/search?q=The+Influencer+Project',
-             'Cinemark title search'),
-            ('https://www.atomtickets.com/search?q=The+Influencer+Project',
-             'Atom title search'),
+            ('https://www.youtube.com/watch?v=q5DIxirBMx4',
+             'Official trailer'),
+            ('https://www.instagram.com/p/Db_pWmQyLzR/',
+             'Official Instagram post'),
+            ('https://www.instagram.com/p/Db6fWgFDQQ5/',
+             'Official Instagram post'),
+            ('https://www.tiktok.com/@the.influencer.project/video/7672835530790358302',
+             'Official TikTok video'),
+            ('https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html',
+             'New York Times review'),
             ('https://screenrant.com/the-influencer-project-movie-review/',
-             'Review page on this title'),
-            ('https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026',
-             'Review page on this title'),
+             'ScreenRant review'),
             ('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
-             'Review page on this title'),
-            ('https://www.imdb.com/find/?q=The%20Influencer%20Project',
-             'Title page search'),
+             'Variety review'),
+            ('https://www.fandango.com/the-influencer-project-2026-246853/movie-overview',
+             'Fandango title page'),
+            ('https://www.cinemark.com/movies/the-influencer-project',
+             'Cinemark title page'),
+            ('https://www.harkins.com/movies/the-influencer-project/2026-10-04',
+             'Harkins title page'),
+            ('https://gatewayfilmcenter.org/movies/the-influencer-project-2026/',
+             'Gateway Film Center title page'),
+            ('https://www.theinfluencerprojectmovie.com/',
+             'Official title page'),
         ]
     elif 'young sheldon' in s:
         rows = [
@@ -297,9 +303,13 @@ _HINT_BANDS = (
 def step_family(surface: str, action: str, step_id: str = '') -> str:
     """Which URL set this step is allowed to carry."""
     blob = f'{surface} {action} {step_id}'.lower()
+    if any(x in blob for x in (
+            'tracked campaign', 'saw tracked', 'exposed to',
+            'campaign content')):
+        return 'tracked'
     creator = any(x in blob for x in (
         'creator', 'feed', 'tiktok', 'instagram', 'reels', 'short-form',
-        'short form', 'clip', 'ugc', 'for you', 'influencer'))
+        'short form', 'clip', 'ugc', 'for you'))
     editorial = any(x in blob for x in (
         'editorial', 'article', 'review', 'press', 'variety', 'ebert',
         'screenrant', 'critic', 'media coverage', 'outlet'))
@@ -330,6 +340,180 @@ def step_family(surface: str, action: str, step_id: str = '') -> str:
     return 'search'
 
 
+_TRACKED_FOR_TEST = None
+_SKIP_URL_BITS = ('argentina-vs-argelia',)
+
+
+def set_tracked_assets(rows):
+    """Tests inject Attribution IQ assets. None clears."""
+    global _TRACKED_FOR_TEST
+    _TRACKED_FOR_TEST = None if rows is None else list(rows or [])
+
+
+def classify_tracked_url(url: str, channel: str = '',
+                         asset_type: str = '') -> str:
+    u = str(url or '').lower()
+    ch = str(channel or '').lower()
+    typ = str(asset_type or '').lower()
+    if any(b in u for b in _SKIP_URL_BITS):
+        return 'skip'
+    if 'press' in ch or any(h in u for h in (
+            'screenrant.com', 'nytimes.com', 'variety.com', 'rogerebert.com',
+            'ign.com', 'dreadcentral.com', 'yahoo.com', 'imdb.com/news',
+            'flickeringmyth.com', 'movieguide.org', 'horrorsociety.com',
+            'horror-fix.com', 'dailydead.com', 'pophorror.com',
+            'scifinow.co.uk', 'movievine.com', 'thathollywoodshow.com')):
+        return 'editorial'
+    if 'youtube.com/watch' in u or 'youtube.com/shorts' in u:
+        return 'video'
+    if '/video/' in u or 'instagram.com/p/' in u or 'instagram.com/reel/' in u:
+        return 'creator_post'
+    if 'tiktok.com/@' in u or 'instagram.com/' in u:
+        return 'creator'
+    if any(h in u for h in (
+            'fandango.com/search', 'amctheatres.com/search',
+            'regmovies.com/search', 'cinemark.com/search',
+            'atomtickets.com/search')):
+        return 'other'
+    if any(h in u for h in (
+            'fandango.com/', 'cinemark.com/movies/',
+            'harkins.com/movies', 'gatewayfilmcenter.org/movies',
+            'brendentheatres.com', 'theinfluencerprojectmovie.com')):
+        return 'tickets'
+    if 'review' in typ or 'press' in typ:
+        return 'editorial'
+    return 'other'
+
+
+def normalize_tracked_assets(rows) -> list[dict]:
+    out = []
+    seen = set()
+    for raw in rows or []:
+        if isinstance(raw, (list, tuple)):
+            url = str(raw[0] if raw else '')
+            why = str(raw[1] if len(raw) > 1 else '')
+            kind = str(raw[2] if len(raw) > 2 else '')
+            row = {'url': url, 'title': why, 'kind': kind,
+                   'channel': '', 'asset_type': '', 'views': 0}
+        elif isinstance(raw, dict):
+            row = {
+                'url': str(raw.get('url') or ''),
+                'title': str(raw.get('title') or raw.get('action_label')
+                             or raw.get('asset_title') or ''),
+                'channel': str(raw.get('channel') or ''),
+                'asset_type': str(raw.get('asset_type') or ''),
+                'views': int(raw.get('views') or raw.get('ext_view_count')
+                             or raw.get('exposed_n') or 0),
+                'kind': str(raw.get('kind') or ''),
+            }
+        else:
+            continue
+        url = row['url'].strip()
+        key = url.rstrip('/').lower()
+        if not url.startswith('https://') or key in seen:
+            continue
+        kind = row['kind'] or classify_tracked_url(
+            url, row['channel'], row['asset_type'])
+        if kind == 'skip':
+            continue
+        row['url'] = url
+        row['kind'] = kind
+        seen.add(key)
+        out.append(row)
+    return out
+
+
+def pick_tracked_urls(tracked: list[dict], family: str, step_i: int = 1
+                      ) -> list[tuple[str, str, float]]:
+    """The campaign URLs that belong on this step, ranked by views."""
+    rows = normalize_tracked_assets(tracked)
+    if not rows:
+        return []
+    if family in ('tracked', 'creator_editorial'):
+        want = ('video', 'creator_post', 'creator', 'editorial')
+    elif family in ('creator',):
+        want = ('creator_post', 'creator')
+    elif family == 'editorial':
+        want = ('editorial',)
+    elif family == 'video':
+        want = ('video', 'creator_post')
+    elif family == 'tickets':
+        want = ('tickets',)
+    else:
+        return []
+    picked = [r for r in rows if r['kind'] in want]
+    picked.sort(key=lambda r: (-int(r.get('views') or 0), r['url']))
+    # Exposure shows a few of the campaign's own pages: the top
+    # video, a creator post, and an editorial, then a couple more.
+    # Never the full asset list.
+    if family in ('tracked', 'creator_editorial'):
+        mix = []
+        used = set()
+        for kind in ('video', 'creator_post', 'editorial'):
+            for r in picked:
+                if r['kind'] != kind or r['url'] in used:
+                    continue
+                mix.append(r)
+                used.add(r['url'])
+                break
+        for r in picked:
+            if r['url'] in used or r['kind'] == 'creator':
+                continue
+            mix.append(r)
+            used.add(r['url'])
+            if len(mix) >= TOP_TRACKED_URLS:
+                break
+        picked = mix
+    out = []
+    for r in picked[:TOP_TRACKED_URLS]:
+        why = r.get('title') or {
+            'video': 'Tracked video on this title',
+            'creator_post': 'Tracked creator post',
+            'creator': 'Tracked creator page',
+            'editorial': 'Tracked editorial page',
+            'tickets': 'Tracked ticketing page',
+        }.get(r['kind'], 'Tracked page on this step')
+        out.append((r['url'], why, 12.0))
+    return _apply_hints(out, step_i)
+
+
+def looks_search_not_asset(urls: list[tuple[str, str, float]]) -> bool:
+    """Search / tag pages with none of the tracked posts or articles."""
+    blob = ' '.join(u[0] for u in urls).lower()
+    search = sum(1 for t in (
+        'google.com/search', 'tiktok.com/search', 'tiktok.com/tag',
+        'instagram.com/explore', 'youtube.com/results') if t in blob)
+    asset = any(t in blob for t in (
+        'youtube.com/watch', 'instagram.com/p/', 'instagram.com/reel/',
+        '/video/', 'screenrant.com/', 'rogerebert.com/', 'variety.com/',
+        'nytimes.com/'))
+    return search >= 2 and not asset
+
+
+def load_tracked_assets(subject: str, prim: Optional[dict] = None,
+                        inputs: Optional[dict] = None,
+                        payload: Optional[dict] = None) -> list[dict]:
+    """Attribution IQ assets already on this subject, if we hold them."""
+    if _TRACKED_FOR_TEST is not None:
+        return normalize_tracked_assets(_TRACKED_FOR_TEST)
+    for src in (prim, inputs, payload,
+                (payload or {}).get('fragrance_shop_journey'),
+                (payload or {}).get('clickstream')):
+        if not isinstance(src, dict):
+            continue
+        rows = src.get('tracked_assets')
+        if not rows and isinstance(src.get('clickstream'), dict):
+            rows = src['clickstream'].get('tracked_assets')
+        if rows:
+            return normalize_tracked_assets(rows)
+    try:
+        from migration.journey_synthesis import corpus_anchors
+        camp = (corpus_anchors({'subject': subject}) or {}).get('attribution')
+        return normalize_tracked_assets((camp or {}).get('assets') or [])
+    except Exception:
+        return []
+
+
 def looks_generic_bag(urls: list[tuple[str, str, float]]) -> bool:
     """The old builder stamped google+youtube+tiktok+reddit on every step."""
     blob = ' '.join(u[0] for u in urls).lower()
@@ -351,19 +535,57 @@ def _apply_hints(urls: list[tuple[str, str, float]], step_i: int
 
 
 def urls_for_step(subject: str, platform: str, surface: str = '',
-                  action: str = '', step_i: int = 1
+                  action: str = '', step_i: int = 1,
+                  tracked: Optional[list] = None
                   ) -> list[tuple[str, str, float]]:
-    """6 to 10 public pages that belong to THIS step only."""
+    """6 to 10 public pages that belong to THIS step only.
+
+    When Attribution IQ already tracks this subject, those URLs win
+    on exposure / creator / editorial / video steps.
+    """
+    family = step_family(surface, action)
+    tracked_rows = pick_tracked_urls(tracked or [], family, step_i)
+    if not tracked_rows and family in (
+            'tracked', 'creator', 'editorial', 'creator_editorial',
+            'video', 'tickets'):
+        extras = researched_extras_for(subject, platform)
+        if extras and 'influencer project' in (subject or '').lower():
+            tracked_rows = pick_tracked_urls(
+                [{'url': u, 'title': w} for u, w in extras], family, step_i)
+    if tracked_rows:
+        if len(tracked_rows) < MIN_URLS:
+            have = {u[0].rstrip('/').lower() for u in tracked_rows}
+            named_ok = have | {
+                u[0].rstrip('/').lower()
+                for u in researched_extras_for(subject, platform)}
+            for url, why in researched_extras_for(subject, platform):
+                key = url.rstrip('/').lower()
+                if key in have:
+                    continue
+                if not is_safe_url(url, allow_named_clip=key in named_ok):
+                    continue
+                if looks_search_not_asset([(url, why, 12.0)]):
+                    continue
+                tracked_rows.append((url, why, 12.0))
+                have.add(key)
+                if len(tracked_rows) >= MIN_URLS:
+                    break
+        return _apply_hints(tracked_rows[:MAX_URLS], step_i)
     subj = str(subject or '').strip() or 'the title'
     q = _q(subj)
     tag = re.sub(r'[^a-z0-9]', '', subj.lower())[:40] or 'title'
-    family = step_family(surface, action)
     s = subj.lower()
     rows: list[tuple[str, str]] = []
 
+    named_ok = {u[0].rstrip('/').lower() for u in researched_extras_for(subject, platform)}
+    named_ok |= {r['url'].rstrip('/').lower()
+                 for r in normalize_tracked_assets(tracked or [])}
+
     def add(url: str, why: str) -> None:
-        if is_safe_url(url) and all(u[0].rstrip('/').lower() != url.rstrip('/').lower()
-                                    for u in rows):
+        allow = url.rstrip('/').lower() in named_ok
+        if is_safe_url(url, allow_named_clip=allow) and all(
+                u[0].rstrip('/').lower() != url.rstrip('/').lower()
+                for u in rows):
             rows.append((url, why))
 
     if family in ('creator', 'creator_editorial'):
@@ -379,9 +601,6 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
             'Creator and clip results')
         add(f'https://www.google.com/search?q={_q(subj + " instagram")}',
             'Typed the title plus Instagram')
-        if 'influencer project' in s:
-            add('https://www.youtube.com/results?search_query=The+Influencer+Project+official+trailer',
-                'Official trailer sitting next to the creator cuts')
     if family in ('editorial', 'creator_editorial'):
         add(f'https://www.google.com/search?q={_q(subj + " review")}',
             'Typed search for reviews of this title')
@@ -402,18 +621,22 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
             add(f'https://www.google.com/search?q={_q(subj + " variety review")}',
                 'Trade review search')
     if family == 'tickets':
-        add(f'https://www.fandango.com/search?q={q}',
-            'Fandango title search')
-        add(f'https://www.amctheatres.com/search?q={q}',
-            'AMC title search')
-        add(f'https://www.regmovies.com/search?query={q}',
-            'Regal title search')
-        add(f'https://www.cinemark.com/search?q={q}',
-            'Cinemark title search')
-        add(f'https://www.atomtickets.com/search?q={q}',
-            'Atom title search')
-        add(f'https://www.google.com/search?q={_q(subj + " tickets")}',
-            'Showtimes search')
+        for url, why in researched_extras_for(subject, platform):
+            if classify_tracked_url(url) == 'tickets':
+                add(url, why)
+        if len(rows) < MIN_URLS:
+            add(f'https://www.fandango.com/',
+                'Fandango home')
+            add(f'https://www.cinemark.com/',
+                'Cinemark home')
+            add(f'https://www.amctheatres.com/',
+                'AMC home')
+            add(f'https://www.regmovies.com/',
+                'Regal home')
+            add(f'https://www.atomtickets.com/',
+                'Atom home')
+            add(f'https://www.google.com/search?q={_q(subj + " tickets")}',
+                'Showtimes search')
     if family == 'video':
         add(f'https://www.youtube.com/results?search_query={q}',
             'Video results for the title')
@@ -510,10 +733,12 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
 
 def _pad_urls(urls: list[tuple[str, str, float]],
               subject: str, platform: str, surface: str,
-              action: str = '', step_i: int = 1
+              action: str = '', step_i: int = 1,
+              tracked: Optional[list] = None
               ) -> list[tuple[str, str, float]]:
-    family_rows = urls_for_step(subject, platform, surface, action, step_i)
-    if looks_generic_bag(urls) or not urls:
+    family_rows = urls_for_step(
+        subject, platform, surface, action, step_i, tracked=tracked)
+    if looks_generic_bag(urls) or looks_search_not_asset(urls) or not urls:
         return family_rows
     if len(urls) >= MIN_URLS:
         return _apply_hints(urls[:MAX_URLS], step_i)
@@ -531,7 +756,8 @@ def _pad_urls(urls: list[tuple[str, str, float]],
 
 def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
                    seed: str, subject: str, platform: str,
-                   named_clips: Optional[Iterable[str]]) -> Optional[dict]:
+                   named_clips: Optional[Iterable[str]],
+                   tracked: Optional[list] = None) -> Optional[dict]:
     people = int(raw.get('people') or raw.get('accounts') or 0)
     if people <= 0:
         return None
@@ -548,6 +774,8 @@ def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
     surface = str(raw.get('surface') or raw.get('where') or platform or 'Search')
     action = str(raw.get('action') or raw.get('label') or raw.get('doing')
                  or 'Opened the next page')
+    named_clips = list(named_clips or [])
+    named_clips.extend(r['url'] for r in normalize_tracked_assets(tracked or []))
     raw_urls = []
     for u in (raw.get('urls') or []):
         if isinstance(u, dict):
@@ -563,7 +791,7 @@ def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
         if _clip_ok(url, named_clips):
             raw_urls.append((url, why, hint))
     raw_urls = _pad_urls(
-        raw_urls, subject, platform, surface, action, i)
+        raw_urls, subject, platform, surface, action, i, tracked=tracked)
     return {
         'step': i,
         'date': date,
@@ -578,9 +806,12 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
                          seed: str, window: str = '',
                          detours: Optional[list[dict]] = None,
                          extra_urls: Optional[list[tuple[str, str]]] = None,
-                         named_clips: Optional[Iterable[str]] = None
+                         named_clips: Optional[Iterable[str]] = None,
+                         tracked: Optional[list] = None
                          ) -> dict:
     """Build a clickstream from the spine when research is thin."""
+    if tracked is None:
+        tracked = load_tracked_assets(subject)
     dates = _window_dates(window)
     start, end = dates[0], dates[-1]
     steps_src = _spine_steps(spine)
@@ -633,7 +864,8 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
             'urls': [],
         }
         raw['urls'] = []
-        step = _step_from_raw(raw, i, prev, seed, subject, platform, named_clips)
+        step = _step_from_raw(
+            raw, i, prev, seed, subject, platform, named_clips, tracked)
         if not step:
             continue
         out.append(step)
@@ -654,10 +886,13 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
 def normalize_clickstream(raw: Any, spine: list[dict], subject: str,
                           platform: str, seed: str, window: str = '',
                           detours: Optional[list[dict]] = None,
-                          named_clips: Optional[Iterable[str]] = None
+                          named_clips: Optional[Iterable[str]] = None,
+                          tracked: Optional[list] = None
                           ) -> dict:
     """Accept research JSON or a list of steps. Fail-safe to spine."""
     named = list(named_clips or [])
+    tracked = list(tracked or [])
+    named.extend(r['url'] for r in normalize_tracked_assets(tracked))
     steps_in = []
     if isinstance(raw, dict):
         steps_in = list(raw.get('steps') or [])
@@ -668,7 +903,8 @@ def normalize_clickstream(raw: Any, spine: list[dict], subject: str,
     for i, src in enumerate(steps_in[:MAX_STEPS], start=1):
         if not isinstance(src, dict):
             continue
-        step = _step_from_raw(src, i, prev, seed, subject, platform, named)
+        step = _step_from_raw(
+            src, i, prev, seed, subject, platform, named, tracked)
         if not step:
             continue
         out.append(step)
@@ -676,11 +912,26 @@ def normalize_clickstream(raw: Any, spine: list[dict], subject: str,
     if len(out) < MIN_STEPS:
         return fallback_clickstream(
             spine, subject, platform, seed, window, detours,
-            named_clips=named)
+            named_clips=named, tracked=tracked)
     result = {'steps': out}
-    if clickstream_urls_repeat(result):
-        return _rewrite_step_urls(result, subject, platform, seed, named)
+    if clickstream_urls_repeat(result) or _needs_tracked_rewrite(result, tracked):
+        return _rewrite_step_urls(
+            result, subject, platform, seed, named, tracked)
     return result
+
+
+def _needs_tracked_rewrite(cs: dict, tracked: list) -> bool:
+    if not tracked:
+        return False
+    for s in cs.get('steps') or []:
+        fam = step_family(s.get('surface') or '', s.get('action') or '')
+        if fam not in ('tracked', 'creator', 'editorial',
+                       'creator_editorial', 'video'):
+            continue
+        urls = [(u.get('url') or '', '', 1.0) for u in (s.get('urls') or [])]
+        if looks_search_not_asset(urls):
+            return True
+    return False
 
 
 def clickstream_urls_repeat(cs: dict) -> bool:
@@ -704,7 +955,7 @@ def clickstream_urls_repeat(cs: dict) -> bool:
 
 
 def _rewrite_step_urls(cs: dict, subject: str, platform: str, seed: str,
-                       named_clips=None) -> dict:
+                       named_clips=None, tracked=None) -> dict:
     prev = None
     out = []
     for i, s in enumerate(cs.get('steps') or [], start=1):
@@ -715,7 +966,8 @@ def _rewrite_step_urls(cs: dict, subject: str, platform: str, seed: str,
             'action': s.get('action'),
             'urls': [],
         }
-        step = _step_from_raw(raw, i, prev, seed, subject, platform, named_clips)
+        step = _step_from_raw(
+            raw, i, prev, seed, subject, platform, named_clips, tracked)
         if not step:
             continue
         out.append(step)
@@ -747,11 +999,16 @@ def attach_clickstream(payload: dict, prim: Optional[dict] = None,
     named = [inputs.get('clip_url'),
              (payload.get('meta') or {}).get('clip_url')]
     named = [u for u in named if u]
+    tracked = load_tracked_assets(subject, prim, inputs, payload)
+    named.extend(r['url'] for r in tracked)
     raw = (prim.get('clickstream')
            or blob.get('clickstream')
            or payload.get('clickstream'))
     cs = normalize_clickstream(
-        raw, spine, subject, platform, seed, window, detours, named)
+        raw, spine, subject, platform, seed, window, detours, named,
+        tracked=tracked)
+    if tracked:
+        cs['tracked_assets'] = tracked
     payload['clickstream'] = cs
     if 'fragrance_shop_journey' in payload:
         payload['fragrance_shop_journey']['clickstream'] = cs

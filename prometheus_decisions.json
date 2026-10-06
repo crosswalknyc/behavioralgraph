@@ -290,7 +290,7 @@
   {
    "id": "journey_clickstream_always",
    "decided": "2026-10-06",
-   "statement": "Every Digital Journey includes a Clickstream last tab: eight to thirteen steps, six to ten public URLs on each step, people and share of that step. URLs are real pages (search, official accounts, title pages, documented clips). People on a URL can sit on more than one URL and do not add to the step count. The same file covers shop, watch, ticketing-site visit (no ticket-bought claim), before and after a named clip, new vs already on a platform, and music-first into a title. The cover is the subject name and a real still.",
+   "statement": "Every Digital Journey includes a Clickstream last tab: eight to thirteen steps, six to ten public URLs on each step, people and share of that step. Look at what we already hold before building. If Attribution IQ already tracks this title, the exposure / saw-tracked-campaign-content / creator / editorial steps use a few of those tracked pages (the top video, a creator post, an editorial article, then a couple more). Never invent Instagram search, TikTok search, YouTube search, or Google search for a stage we already track. Never dump the full asset list. People on a URL can sit on more than one URL and do not add to the step count. The same file covers shop, watch, ticketing-site visit (no ticket-bought claim), before and after a named clip, new vs already on a platform, and music-first into a title. The cover is the subject name and a real still.",
    "match_terms": [
     "digital journey",
     "journey",

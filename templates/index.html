@@ -114923,17 +114923,16 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var s = String(subject || '').toLowerCase();
             var map = [
                 { t: 'influencer project', u: [
-                    ['https://www.youtube.com/results?search_query=The+Influencer+Project+official+trailer', 'Official trailer search', 'video'],
-                    ['https://www.fandango.com/search?q=The+Influencer+Project', 'Fandango title search', 'tickets'],
-                    ['https://www.amctheatres.com/search?q=The+Influencer+Project', 'AMC title search', 'tickets'],
-                    ['https://www.regmovies.com/search?query=The+Influencer+Project', 'Regal title search', 'tickets'],
-                    ['https://www.cinemark.com/search?q=The+Influencer+Project', 'Cinemark title search', 'tickets'],
-                    ['https://www.atomtickets.com/search?q=The+Influencer+Project', 'Atom title search', 'tickets'],
-                    ['https://screenrant.com/the-influencer-project-movie-review/', 'Review page on this title', 'editorial'],
-                    ['https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026', 'Review page on this title', 'editorial'],
-                    ['https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/', 'Review page on this title', 'editorial'],
-                    ['https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html', 'Review page on this title', 'editorial'],
-                    ['https://www.imdb.com/news/ni66038349/?ref_=nmnw_art_perm', 'Editorial stills page on this title', 'editorial']
+                    ['https://www.youtube.com/watch?v=q5DIxirBMx4', 'Official trailer', 'video'],
+                    ['https://www.instagram.com/p/Db_pWmQyLzR/', 'Official Instagram post', 'creator_post'],
+                    ['https://www.instagram.com/p/Db6fWgFDQQ5/', 'Official Instagram post', 'creator_post'],
+                    ['https://www.tiktok.com/@the.influencer.project/video/7672835530790358302', 'Official TikTok video', 'creator_post'],
+                    ['https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html', 'New York Times review', 'editorial'],
+                    ['https://screenrant.com/the-influencer-project-movie-review/', 'ScreenRant review', 'editorial'],
+                    ['https://www.fandango.com/the-influencer-project-2026-246853/movie-overview', 'Fandango title page', 'tickets'],
+                    ['https://www.cinemark.com/movies/the-influencer-project', 'Cinemark title page', 'tickets'],
+                    ['https://www.harkins.com/movies/the-influencer-project/2026-10-04', 'Harkins title page', 'tickets'],
+                    ['https://www.theinfluencerprojectmovie.com/', 'Official title page', 'tickets']
                 ]},
                 { t: 'young sheldon', u: [
                     ['https://www.amazon.com/s?k=Young+Sheldon', 'Amazon listing search', 'amazon'],
@@ -114968,7 +114967,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var blob = String(surface || '') + ' ' + String(action || '');
             blob = blob.toLowerCase();
             var act = String(action || '').toLowerCase();
-            var creator = /creator|feed|tiktok|instagram|reels|short-form|short form|clip|ugc|for you|influencer/.test(blob);
+            if (/tracked campaign|saw tracked|exposed to|campaign content/.test(blob)) return 'tracked';
+            var creator = /creator|feed|tiktok|instagram|reels|short-form|short form|clip|ugc|for you/.test(blob);
             var editorial = /editorial|article|review|press|variety|ebert|screenrant|critic|media coverage|outlet/.test(blob);
             if (creator && editorial) return 'creator_editorial';
             if (/fandango|amctheatres|amc theatre|regmovies|cinemark|atomtickets|atom ticket/.test(blob)) return 'tickets';
@@ -114994,6 +114994,31 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 if (!k || rows.some(function(r) { return r[0].replace(/\/$/, '').toLowerCase() === k; })) return;
                 rows.push([url, why]);
             }
+            var extras = _jiqClickstreamExtras(subj);
+            if (family === 'tracked' || family === 'creator_editorial' || family === 'creator' || family === 'editorial' || family === 'video' || family === 'tickets') {
+                extras.forEach(function(u) {
+                    var uf = u[2] || '';
+                    if (family === 'tracked' && (uf === 'video' || uf === 'creator_post' || uf === 'editorial')) add(u[0], u[1]);
+                    else if (family === 'creator_editorial' && (uf === 'video' || uf === 'creator_post' || uf === 'editorial')) add(u[0], u[1]);
+                    else if (family === 'creator' && (uf === 'creator_post' || uf === 'creator')) add(u[0], u[1]);
+                    else if (family === 'editorial' && uf === 'editorial') add(u[0], u[1]);
+                    else if (family === 'video' && (uf === 'video' || uf === 'creator_post')) add(u[0], u[1]);
+                    else if (family === 'tickets' && uf === 'tickets') add(u[0], u[1]);
+                });
+                if (rows.length >= 6) {
+                    var bandsEarly = [
+                        [52.4183, 41.2761, 28.6418, 19.3842, 14.8126, 11.2473, 9.6184, 7.3419, 6.1847, 4.2718],
+                        [61.4187, 33.1864, 22.3471, 16.2186, 12.4713, 8.3184, 6.1842, 5.0716, 4.2183, 3.1471],
+                        [48.2714, 31.1847, 22.6418, 16.3471, 12.8126, 9.2473, 7.6184, 5.3419, 4.1847, 3.2718],
+                        [57.1842, 36.4183, 24.1863, 18.3471, 13.8642, 10.2186, 8.4713, 6.3184, 5.1842, 4.0716],
+                        [44.8137, 29.6418, 21.3842, 15.8126, 11.2473, 8.6184, 6.3419, 5.1847, 4.2718, 3.1842]
+                    ];
+                    var bandE = bandsEarly[(((stepI || 1) - 1) % bandsEarly.length)];
+                    return rows.slice(0, 6).map(function(u, n) {
+                        return { url: u[0], why: u[1], hint: bandE[n] || 3.1847 };
+                    });
+                }
+            }
             if (family === 'creator' || family === 'creator_editorial') {
                 add('https://www.instagram.com/explore/search/keyword/?q=' + q, 'Creator feed search for this title');
                 add('https://www.tiktok.com/search?q=' + q, 'Short-form feed search');
@@ -115006,12 +115031,17 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 add('https://www.google.com/search?q=' + encodeURIComponent(subj + ' review'), 'Typed search for reviews of this title');
             }
             if (family === 'tickets') {
-                add('https://www.fandango.com/search?q=' + q, 'Fandango title search');
-                add('https://www.amctheatres.com/search?q=' + q, 'AMC title search');
-                add('https://www.regmovies.com/search?query=' + q, 'Regal title search');
-                add('https://www.cinemark.com/search?q=' + q, 'Cinemark title search');
-                add('https://www.atomtickets.com/search?q=' + q, 'Atom title search');
-                add('https://www.google.com/search?q=' + encodeURIComponent(subj + ' tickets'), 'Showtimes search');
+                extras.forEach(function(u) {
+                    if ((u[2] || '') === 'tickets') add(u[0], u[1]);
+                });
+                if (rows.length < 6) {
+                    add('https://www.fandango.com/', 'Fandango home');
+                    add('https://www.cinemark.com/', 'Cinemark home');
+                    add('https://www.amctheatres.com/', 'AMC home');
+                    add('https://www.regmovies.com/', 'Regal home');
+                    add('https://www.atomtickets.com/', 'Atom home');
+                    add('https://www.google.com/search?q=' + encodeURIComponent(subj + ' tickets'), 'Showtimes search');
+                }
             }
             if (family === 'video') {
                 add('https://www.youtube.com/results?search_query=' + q, 'Video results for the title');
@@ -115066,10 +115096,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 add('https://www.google.com/search?q=' + encodeURIComponent(subj + ' ' + family), 'More pages on this step');
                 nPad += 1;
             }
-            var extras = _jiqClickstreamExtras(subj);
             extras.forEach(function(u) {
                 var uf = u[2] || '';
-                if (uf === family || (family === 'creator_editorial' && (uf === 'creator' || uf === 'editorial'))) {
+                if (uf === family || (family === 'creator_editorial' && (uf === 'creator' || uf === 'editorial' || uf === 'creator_post' || uf === 'video')) || (family === 'tracked' && (uf === 'video' || uf === 'creator_post' || uf === 'editorial'))) {
                     add(u[0], u[1]);
                 }
             });
@@ -115216,6 +115245,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             return false;
         }
+        function _jiqLooksSearchNotAsset(cs) {
+            var steps = (cs && cs.steps) || [];
+            for (var i = 0; i < steps.length; i++) {
+                var fam = _jiqStepFamily(steps[i].surface, steps[i].action);
+                if (fam !== 'tracked' && fam !== 'creator' && fam !== 'editorial'
+                        && fam !== 'creator_editorial' && fam !== 'video') continue;
+                var blob = (steps[i].urls || []).map(function(u) {
+                    return String(u.url || '').toLowerCase();
+                }).join(' ');
+                var search = 0;
+                ['google.com/search', 'tiktok.com/search', 'tiktok.com/tag',
+                 'instagram.com/explore', 'youtube.com/results'].forEach(function(t) {
+                    if (blob.indexOf(t) >= 0) search += 1;
+                });
+                var asset = /youtube.com\/watch|instagram.com\/p\/|instagram.com\/reel\/|\/video\/|screenrant.com|rogerebert.com|variety.com|nytimes.com/.test(blob);
+                if (search >= 2 && !asset) return true;
+            }
+            return false;
+        }
         function _jiqFragOwnClickstream(d) {
             var subj = _jiqFragSubject(d);
             var plat = ((d && d.meta) || {}).platform
@@ -115223,7 +115271,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var cs = (d && d.clickstream) || null;
             if (cs && (cs.steps || []).length >= 8
                     && !_jiqClickstreamLooksForeign(cs, subj)) {
-                if (_jiqClickstreamLooksRepeated(cs)) {
+                if (_jiqClickstreamLooksRepeated(cs) || _jiqLooksSearchNotAsset(cs)) {
                     return _jiqRewriteClickstream(cs, subj, plat);
                 }
                 return cs;
