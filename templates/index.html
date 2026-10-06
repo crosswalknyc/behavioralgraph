@@ -18796,6 +18796,30 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             display: none !important;
         }
 
+        /* ---- 11i. Rankers / Trends: HOVER + REFRESH side-by-side under meta --
+           JS (_tiqMobileButtonLayout) relocates the absolutely-positioned
+           #trendsIQHoverToggle out of the header and into .tiq-meta-right next
+           to #trendsIQRefreshBtn. These rules make the "UPDATED ..." timestamp
+           take its own line, then lay HOVER + REFRESH out as a row beneath it.
+           Mobile only; desktop keeps the toggle pinned top-right of the header. */
+        #trendsIQView .tiq-meta-right {
+            display: flex !important;
+            flex-wrap: wrap;
+            align-items: center;
+            width: 100%;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+        #trendsIQView .tiq-meta-right #trendsIQUpdatedAt {
+            flex-basis: 100%;
+        }
+        #trendsIQView #trendsIQHoverToggle {
+            position: static !important;
+            top: auto !important;
+            right: auto !important;
+            margin: 0 !important;
+        }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
@@ -186225,17 +186249,40 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var _isMobileViewport = function () {
                 return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
             };
+            // Rankers/Trends: on phones, move the HOVER toggle out of the header
+            // (where it is absolutely pinned top-right) into .tiq-meta-right so it
+            // sits side-by-side with REFRESH, under the "UPDATED ..." line. On
+            // desktop widths the toggle is restored to the header. Mobile only.
+            window._tiqMobileButtonLayout = function () {
+                var hover = document.getElementById('trendsIQHoverToggle');
+                if (!hover) return;
+                var refresh = document.getElementById('trendsIQRefreshBtn');
+                var metaRight = document.querySelector('#trendsIQView .tiq-meta-right');
+                var header = document.querySelector('#trendsIQView .tiq-header');
+                if (_isMobileViewport()) {
+                    if (refresh && metaRight && hover.parentNode !== metaRight) {
+                        metaRight.insertBefore(hover, refresh);
+                        hover.setAttribute('data-tiq-moved', '1');
+                    }
+                } else if (hover.getAttribute('data-tiq-moved') === '1' && header) {
+                    header.appendChild(hover);
+                    hover.removeAttribute('data-tiq-moved');
+                }
+            };
             document.addEventListener('DOMContentLoaded', function () {
                 try { window._buildMobileToolsNav(); } catch (e) {}
                 try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
                 try { window._ensureMobileToolsBtn(); } catch (e) {}
+                try { window._tiqMobileButtonLayout(); } catch (e) {}
             });
             // Run now too: this inline script executes during parsing, before
             // DOMContentLoaded - but if that event already fired, the listener
             // above would never run, leaving the dropdown dead. Belt + braces.
             try { window._ensureMobileToolsBtn(); } catch (e) {}
+            try { window._tiqMobileButtonLayout(); } catch (e) {}
             window.addEventListener('resize', function () {
                 try { window._ensureMobileToolsBtn(); } catch (e) {}
+                try { window._tiqMobileButtonLayout(); } catch (e) {}
             });
         })();
     </script>
