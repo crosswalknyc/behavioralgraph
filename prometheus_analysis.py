@@ -863,8 +863,20 @@ def build_purchase_context(df, genpop_map, text, avid_df=None,
             a_lines = []
             for val in named:
                 if val in a_rows:
-                    a_lines.extend(_entity_lines(
-                        val, a_rows[val], 2, who='the Avid tier'))
+                    lines_v = _entity_lines(val, a_rows[val], 2, who='the Avid tier')
+                    # the direction against the audience-wide row, in
+                    # words, so the read never asserts a lift the file
+                    # does not measure
+                    try:
+                        tu_bp = max(r[1] for r in named[val])
+                        av_bp = max(r[1] for r in a_rows[val])
+                        gap = av_bp - tu_bp
+                        word = ('ABOVE' if gap > 0.25 else 'BELOW' if gap < -0.25 else 'LEVEL WITH')
+                        lines_v[0] += (f" | vs audience-wide {tu_bp:.4f}%: the Avid tier reads "
+                                       f"{word} the audience-wide level ({gap:+.1f} points)")
+                    except Exception:
+                        pass
+                    a_lines.extend(lines_v)
             if a_lines:
                 head = ('AVID TIER (the subject\'s avid fans, the library\'s '
                         'Avid Fan cut; never describe it by a play count or '
@@ -3544,8 +3556,20 @@ def _clip_text(text, limit):
     m = max(cut.rfind('. '), cut.rfind('! '), cut.rfind('? '))
     if m >= int(limit * 0.5):
         return cut[:m + 1]
+    # No sentence boundary: end on the last complete list item (a
+    # comma or 'and' past the midpoint) so a number-dense read never
+    # ships a dangling 'Culture.' where 'Culture Kings (5.5% ...)' was
+    # (2026-10-06), else the last word boundary.
+    li = max(cut.rfind(', '), cut.rfind(' and '))
+    if li >= int(limit * 0.6):
+        head = cut[:li]
+        if head.count('(') == head.count(')'):
+            return head.rstrip(' ,;:-') + '.'
     sp = cut.rfind(' ')
-    return (cut[:sp] if sp > 0 else cut).rstrip(' ,;:-') + '.'
+    out = (cut[:sp] if sp > 0 else cut)
+    if out.count('(') > out.count(')'):
+        out = out[:out.rfind('(')]
+    return out.rstrip(' ,;:-') + '.'
 
 
 def _clip_label(text, limit=120):
@@ -3636,7 +3660,7 @@ def enforce_demand_coherence(data):
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'cohort_label': str(data.get('cohort_label') or '').strip()[:160],
         'headline': _clip_text(data.get('headline'), 300),
-        'reads': [_clip_text(r, 320)
+        'reads': [_clip_text(r, 480)
                   for r in (data.get('reads') or []) if str(r).strip()][:5],
     }
 
@@ -5662,7 +5686,7 @@ def enforce_metrics_coherence(data):
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'headline': _clip_text(data.get('headline'), 300),
-        'reads': [_clip_text(r, 320)
+        'reads': [_clip_text(r, 480)
                   for r in (data.get('reads') or []) if str(r).strip()][:5],
     }
     metrics, seen = [], set()

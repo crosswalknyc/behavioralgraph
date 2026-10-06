@@ -931,6 +931,13 @@ def scrub_check(reply):
 _PCT_RX = re.compile(r'(?<![\d.])(\d{1,2}(?:\.\d{1,2})?)\s?%')
 _COUNT_RX = re.compile(r'(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]*\s?%)')
 _AVID_CUE_RX = re.compile(r'\bavid\b', re.I)
+_UP_WORDS_RX = re.compile(
+    r'\b(?:(?:runs|sits|reads|lands|comes in|is)\s+)?(?:(?:well|far|just)\s+)?'
+    r'(?:ahead of|above|higher than|over|outruns|outpaces|beats|exceeds|runs hotter than|'
+    r'buys .{0,20}? harder than)\b', re.I)
+_DOWN_WORDS_RX = re.compile(
+    r'\b(?:(?:runs|sits|reads|lands|comes in|is)\s+)?(?:(?:well|far|just)\s+)?'
+    r'(?:behind|below|under|lower than|trails|lags|undershoots)\b', re.I)
 _AVID_DEF_RX = re.compile(
     r'\b(?:\d+|one|two|three|four|five|six)\s+or\s+more\s+'
     r'(?:plays|streams|sessions|visits|listens|views)\b', re.I)
@@ -975,6 +982,8 @@ def facts_check(reply, res, facts):
     findings = []
     text = str(reply or '')
     avid_u = (facts or {}).get('avid_universe')
+    brands = list(_brand_facts(facts))
+    sole = brands[0] if len(brands) == 1 else None
     for sent in _sentences(text):
         has_avid = bool(_AVID_CUE_RX.search(sent))
         counts = [c for c in _COUNT_RX.findall(sent)]
@@ -988,8 +997,11 @@ def facts_check(reply, res, facts):
                 if n != avid_u and _near(n, avid_u, 0.06):
                     findings.append(f"The reply sizes the Avid tier at {n:,} but the "
                                     f"Avid file measures {avid_u:,} people. Quote it exactly.")
-        for b in _brand_facts(facts):
-            if not _mentions(sent, b['label']):
+        for b in brands:
+            # a one-brand question: an Avid sentence is about that brand
+            # even when it does not repeat the name ("The Avid tier runs
+            # ahead, 29.8% against 23.5%")
+            if not _mentions(sent, b['label']) and not (has_avid and b is sole):
                 continue
             if has_avid and b.get('avid_pct') is not None:
                 for pm in _PCT_RX.findall(sent):
@@ -1039,6 +1051,8 @@ def facts_enforce(reply, res, facts):
     text = str(reply or '')
     avid_u = (facts or {}).get('avid_universe')
     n_fixed = 0
+    brands = list(_brand_facts(facts))
+    sole = brands[0] if len(brands) == 1 else None
 
     def _fix_sentence(sent):
         nonlocal n_fixed
@@ -1063,10 +1077,12 @@ def facts_enforce(reply, res, facts):
                     return f"{avid_u:,}"
                 return m.group(0)
             out = _COUNT_RX.sub(_ru, out)
-        for b in _brand_facts(facts):
-            if not _mentions(out, b['label']):
+        for b in brands:
+            if not _mentions(out, b['label']) and not (has_avid and b is sole):
                 continue
             if has_avid and b.get('avid_pct') is not None:
+                before = out
+
                 def _rp(m):
                     nonlocal n_fixed
                     v = float(m.group(1))
@@ -1076,6 +1092,17 @@ def facts_enforce(reply, res, facts):
                         return m.group(0).replace(m.group(1), _pct_fmt(b['avid_pct'], m.group(1)))
                     return m.group(0)
                 out = _PCT_RX.sub(_rp, out)
+                if out != before:
+                    # the figure moved: a direction word that now points
+                    # the wrong way follows it
+                    gap = float(b['avid_pct']) - float(b['tu_pct'])
+                    if gap < -0.25:
+                        out = _UP_WORDS_RX.sub('sits just below', out)
+                    elif gap > 0.25:
+                        out = _DOWN_WORDS_RX.sub('sits above', out)
+                    else:
+                        out = _UP_WORDS_RX.sub('sits level with', out)
+                        out = _DOWN_WORDS_RX.sub('sits level with', out)
                 if b.get('avid_proj'):
                     def _rc(m):
                         nonlocal n_fixed
