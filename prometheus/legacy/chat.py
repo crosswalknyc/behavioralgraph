@@ -16823,6 +16823,42 @@ def _pm_jiq_inputs_complete(parsed):
                 and parsed.get('conversion_event'))
 
 
+def _pm_jiq_is_ticketing(inputs):
+    try:
+        from migration.journey_synthesis import is_ticketing_journey
+        return bool(is_ticketing_journey(inputs or {}))
+    except Exception:
+        return False
+
+
+def _pm_jiq_ready_message(payload, inputs):
+    """The ready notice is written here, not in the widget (2026-10-05
+    Jenna: Prometheus's words live with the API). Names the count by
+    what it is: ticketing-site visitors, viewers, or buyers, always
+    people in the US, and carries the no-purchase line on a film."""
+    subj = str((payload.get('meta') or {}).get('project_name')
+               or inputs.get('subject') or 'the journey')
+    n = (payload.get('kpis') or {}).get('total_users')
+    try:
+        n_txt = f"{int(n):,}"
+    except Exception:
+        n_txt = ''
+    ticketing = _pm_jiq_is_ticketing(inputs) or bool(
+        (payload.get('meta') or {}).get('no_purchase_claim'))
+    kind = str(inputs.get('journey_kind') or '').lower()
+    msg = (f"Your Digital Journey is ready: {subj} is live in the "
+           f"Digital Journey tab now.")
+    if n_txt and ticketing:
+        msg += (f" Ticketing-site visitors in window: {n_txt} people in "
+                "the US. No claim is made on whether any of them bought "
+                "a ticket; Crosswalk does not predict box office.")
+    elif n_txt and kind == 'watch':
+        msg += f" Viewers in window: {n_txt} people in the US."
+    elif n_txt:
+        msg += f" Buyers in window: {n_txt} people in the US."
+    return msg
+
+
 def _pm_jiq_confirm_reply(parsed):
     win = (f"{parsed['start_date']} to {parsed['end_date']}"
            if parsed.get('start_date') and parsed.get('end_date')
@@ -16832,7 +16868,25 @@ def _pm_jiq_confirm_reply(parsed):
                   f"(out of {tam})"
                   if parsed.get('start_behavior')
                   else f"- Starting universe: {tam}")
-    if str(parsed.get('journey_kind') or '') == 'watch':
+    end_step = parsed['conversion_event']
+    if _pm_jiq_is_ticketing(parsed):
+        # Movie tickets (2026-10-05 Jenna): the furthest point the read
+        # sees is the ticketing site. Say so at the confirm, before the
+        # run, so the end step is never a purchase in the reader's mind
+        # (Alexia's first ask was "purchased a digital movie ticket").
+        parsed['journey_kind'] = 'ticketing'
+        parsed['no_purchase_claim'] = True
+        end_step = ("Went to the ticketing site for a ticket. This is "
+                    "the furthest point we see; it makes no claim on "
+                    "whether a ticket was then bought, and Crosswalk "
+                    "does not predict box office")
+        parsed['conversion_event'] = (
+            "Went to a ticketing site or app for a ticket to "
+            f"{parsed['subject']} (no purchase claim)")
+        shape = ("It's a full discovery-to-ticketing-site path - where "
+                 "they see the campaign, act on it, look the film up, "
+                 "look up showtimes, and reach the ticketing site")
+    elif str(parsed.get('journey_kind') or '') == 'watch':
         shape = ("It's a full discovery-to-watch path - where the "
                  "title first reaches them, where they cross to the "
                  "platform, where they stall or hunt a free play, "
@@ -16844,7 +16898,7 @@ def _pm_jiq_confirm_reply(parsed):
     return (
         f"Here's the Digital Journey I'll build:\n"
         f"- {parsed['subject']} on {parsed['platform']}\n"
-        f"- End step: {parsed['conversion_event']}\n"
+        f"- End step: {end_step}\n"
         f"- Window: {win}\n"
         f"{start_line}\n\n"
         f"{shape} - and it lands in the Digital Journey tab when "
@@ -16911,6 +16965,10 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
             'subject': payload['meta']['project_name'],
             's3_key': out_key,
             'conversions': (payload.get('kpis') or {}).get('total_users'),
+            'count_noun': ('ticketing-site visitors'
+                           if (payload.get('meta') or {}).get('no_purchase_claim')
+                           else None),
+            'ready_message': _pm_jiq_ready_message(payload, inputs),
             'finished_at': time.time()})
         print(f"[jiq-job {job_id}] done -> {out_key}")
     except Exception as e:

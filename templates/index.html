@@ -79368,14 +79368,20 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 } catch (_) { st = null; }
                 if (!st) continue;
                 if (st.status === 'done') {
-                    synthChatPushTurn('agent',
-                        'Your Digital Journey is ready: ' +
+                    // The words come from the API (ready_message, 2026-10-05):
+                    // the server names the count by what it is. The
+                    // fallback below only runs for a job finished by an
+                    // older server build.
+                    synthChatPushTurn('agent', st.ready_message ||
+                        ('Your Digital Journey is ready: ' +
                         (st.subject || 'the journey') +
                         ' is live in the Digital Journey tab now.' +
                         (st.conversions ?
-                            ' Conversions in window: ' +
+                            ' ' + (st.count_noun ?
+                                (st.count_noun.charAt(0).toUpperCase() + st.count_noun.slice(1)) :
+                                'Conversions') + ' in window: ' +
                             Number(st.conversions).toLocaleString('en-US') +
-                            ' accounts.' : ''));
+                            ' people in the US.' : '')));
                     return;
                 }
                 if (st.status === 'error') {
