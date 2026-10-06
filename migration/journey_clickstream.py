@@ -173,8 +173,9 @@ def public_urls_for(subject: str, platform: str, surface: str = '',
     if 'youtube' in surf:
         rows.append((f'https://www.youtube.com/results?search_query={qp}',
                      'Same-day video hunt', 9.6184))
-    if extra:
-        for url, why in extra:
+    researched = researched_extras_for(subj, plat)
+    if extra or researched:
+        for url, why in list(extra or []) + researched:
             if is_safe_url(url):
                 rows.append((url, why, 8.4713))
     # Dedupe by URL, keep first why / hint.
@@ -211,18 +212,90 @@ def _spine_steps(spine: list[dict]) -> list[dict]:
     return rows
 
 
+def researched_extras_for(subject: str, platform: str = ''
+                           ) -> list[tuple[str, str]]:
+    """Title-specific public pages. Search homes and known coverage only."""
+    s = (subject or '').lower()
+    rows: list[tuple[str, str]] = []
+    if 'influencer project' in s:
+        rows = [
+            ('https://www.youtube.com/results?search_query=The+Influencer+Project+official+trailer',
+             'Official trailer search'),
+            ('https://www.fandango.com/search?q=The+Influencer+Project',
+             'Fandango title search'),
+            ('https://www.amctheatres.com/search?q=The+Influencer+Project',
+             'AMC title search'),
+            ('https://www.regmovies.com/search?query=The+Influencer+Project',
+             'Regal title search'),
+            ('https://www.cinemark.com/search?q=The+Influencer+Project',
+             'Cinemark title search'),
+            ('https://www.atomtickets.com/search?q=The+Influencer+Project',
+             'Atom title search'),
+            ('https://screenrant.com/the-influencer-project-movie-review/',
+             'Review page on this title'),
+            ('https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026',
+             'Review page on this title'),
+            ('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
+             'Review page on this title'),
+            ('https://www.imdb.com/find/?q=The%20Influencer%20Project',
+             'Title page search'),
+        ]
+    elif 'young sheldon' in s:
+        rows = [
+            ('https://www.amazon.com/s?k=Young+Sheldon',
+             'Amazon listing search'),
+            ('https://www.amazon.com/gp/video/search?phrase=Young+Sheldon',
+             'Prime Video title search'),
+            ('https://www.youtube.com/results?search_query=Young+Sheldon+official+trailer',
+             'Official trailer search'),
+            ('https://www.imdb.com/find/?q=Young%20Sheldon',
+             'Title page search'),
+        ]
+    elif 'dexter' in s and ('lab' in s or 'laboratory' in s):
+        rows = [
+            ("https://www.amazon.com/s?k=Dexter%27s+Laboratory",
+             'Amazon listing search'),
+            ("https://www.amazon.com/gp/video/search?phrase=Dexter%27s+Laboratory",
+             'Prime Video title search'),
+            ("https://www.youtube.com/results?search_query=Dexter%27s+Laboratory+official+trailer",
+             'Official trailer search'),
+            ('https://www.imdb.com/find/?q=Dexter%27s%20Laboratory',
+             'Title page search'),
+        ]
+    elif 'gilmore girls' in s:
+        rows = [
+            ('https://www.amazon.com/s?k=Gilmore+Girls',
+             'Amazon listing search'),
+            ('https://www.netflix.com/search?q=Gilmore+Girls',
+             'Netflix title search'),
+            ('https://www.youtube.com/results?search_query=Gilmore+Girls+official+trailer',
+             'Official trailer search'),
+            ('https://www.imdb.com/find/?q=Gilmore%20Girls',
+             'Title page search'),
+        ]
+    elif 'fragrance' in s or 'tiktok shop' in (platform or '').lower():
+        rows = [
+            ('https://www.tiktok.com/search?q=luxury%20fragrance%20tiktok%20shop',
+             'TikTok Shop search'),
+            ('https://www.sephora.com/search?keyword=fragrance',
+             'Sephora fragrance search'),
+            ('https://www.google.com/search?q=luxury+fragrance+tiktok+shop',
+             'Typed search for the shop path'),
+        ]
+    return rows
+
+
 def _pad_urls(urls: list[tuple[str, str, float]],
               subject: str, platform: str, surface: str) -> list[tuple[str, str, float]]:
-    if len(urls) >= MIN_URLS:
-        return urls[:MAX_URLS]
     have = {u[0].rstrip('/').lower() for u in urls}
-    for url, why, hint in public_urls_for(subject, platform, surface):
+    extra = researched_extras_for(subject, platform)
+    for url, why, hint in public_urls_for(subject, platform, surface, extra=extra):
         key = url.rstrip('/').lower()
         if key in have:
             continue
         urls.append((url, why, hint))
         have.add(key)
-        if len(urls) >= MIN_URLS:
+        if len(urls) >= MAX_URLS:
             break
     return urls[:MAX_URLS]
 
