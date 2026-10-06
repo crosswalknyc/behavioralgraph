@@ -18870,8 +18870,25 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
            into #jiqExportBar next to the PDF/CSV buttons. Kill its right-pushing
            auto margin so it sits snug after CSV, and let the bar wrap if tight.
            Mobile only. */
-        #jiqExportBar { flex-wrap: wrap; }
-        #jiqExportBar .jiq-tab-close-all { margin-left: 0 !important; align-self: center; }
+        #jiqExportBar {
+            flex-wrap: nowrap !important;
+            gap: 6px !important;
+            align-items: center;
+            min-width: 0;
+        }
+        #jiqExportBar .jiq-export-lab { letter-spacing: 0.1em !important; }
+        #jiqExportBar .jiq-export-btn {
+            padding: 4px 10px !important;
+            font-size: 10px !important;
+            letter-spacing: 0.06em !important;
+        }
+        #jiqExportBar .jiq-tab-close-all {
+            margin-left: 0 !important;
+            align-self: center;
+            padding: 4px 8px !important;
+            font-size: 8.5px !important;
+            letter-spacing: 0.08em !important;
+        }
 
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
