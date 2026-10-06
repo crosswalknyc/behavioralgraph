@@ -236,6 +236,10 @@ def notify(username, record, question, payload, subject=None):
     try:
         if not str(username or '').strip() and not (record or {}).get('email'):
             return
+        # A probe (canary, smoke, regression, operator probe) is logged
+        # under a 'canary:' label and never mails (2026-10-06).
+        if str(username or '').strip().lower().startswith('canary'):
+            return
         if is_placeholder(payload):
             return
         answer = answer_text(payload)

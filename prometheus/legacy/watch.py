@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -86,11 +86,45 @@ def _pm_catalog_block(subject, window=None, extra_subjects=()):
         return ''
 
 
+_PM_PROBE_UA_RX = re.compile(r'canary|smoke|regression|probe', re.I)
+
+
+def _pm_probe_caller():
+    """The caller label when the current request is a probe: a canary,
+    smoke, regression or operator probe driving the real ask path.
+    Signalled by the `X-Prometheus-Caller` header or a user agent that
+    names itself as one. '' for a real user's request, or outside a
+    request. A probe label wins over the session user (2026-10-06:
+    an operator probe run under the admin session was mailed to Jenna
+    and Liz as 'Jenna Menking asked a question')."""
+    try:
+        from flask import has_request_context as _hrc, request as _rq
+        if not _hrc():
+            return ''
+        caller = str(_rq.headers.get('X-Prometheus-Caller') or '').strip()
+        if caller:
+            return re.sub(r'[^a-z0-9_-]+', '', caller.lower())[:40] or 'probe'
+        if _PM_PROBE_UA_RX.search(str(_rq.headers.get('User-Agent') or '')):
+            return 'probe'
+    except Exception:
+        pass
+    return ''
+
+
+def _pm_is_probe_user(username):
+    """True for the synthetic labels a probe is logged under."""
+    return str(username or '').strip().lower().startswith('canary')
+
+
 def _pm_ask_log_user(default='unknown'):
-    """The user label an ask is logged under (2026-10-06). Session user,
-    then the API-key / job owner the route set on g, then a synthetic
-    caller marker so canary and smoke asks never read as a real user
-    with no name, else `default`."""
+    """The user label an ask is logged under (2026-10-06). A probe
+    caller first (so canary, smoke and operator probes never read as
+    a real user even under a session), then the session user, then
+    the API-key / job owner the route set on g, then a synthetic
+    caller marker, else `default`."""
+    _probe = _pm_probe_caller()
+    if _probe:
+        return 'canary:' + _probe
     try:
         u = session.get('username')
         if u:

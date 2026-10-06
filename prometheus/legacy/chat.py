@@ -5129,11 +5129,20 @@ def _ask_mentions_subject(question, subject):
         return True
 
 
-def _pm_watch_notify(username, question, payload, subject=None):
+def _pm_watch_notify(username, question, payload, subject=None,
+                     probe=False):
     """Email Jenna the question and the answer for every account.
     Runs off the request thread. The 'On it' placeholder is skipped;
     the finished read calls this again with the real answer.
-    Never raises."""
+    A probe (canary, smoke, regression, operator probe: `probe=True`
+    from a background job, a probe caller on the current request, or
+    a canary user label) never mails. Never raises."""
+    try:
+        if probe or _pm_is_probe_user(username) or _pm_probe_caller():
+            return
+    except Exception:
+        pass
+
     def _run():
         try:
             import prometheus_watch_notify as _pwn
@@ -13320,9 +13329,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 'followups': [], 'offer_deck': False,
                 'deck_angle': None})
         job_id = uuid.uuid4().hex[:12]
+        # A probe's finished read never mails anyone (captured here,
+        # on the request thread, and carried on the job).
+        _probe = bool(_pm_probe_caller()) or _pm_is_probe_user(_pm_ask_log_user(''))
         _pm_read_status_write(job_id, {
             'job_id': job_id, 'user': _pm_user, 'status': 'working',
-            'stage': 'reading the data',
+            'stage': 'reading the data', 'probe': _probe,
             'question': text[:300], 'started_at': time.time()})
         _pm_read_inflight_mark(_pm_user, text, job_id)
         _pm_job_bind_thread(job_id, _pm_user)
@@ -13331,7 +13343,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             args=(job_id, _pm_user, _pm_read_extras, text,
                   list(history or [])[-10:], mr, base, digest_block,
                   anchors_block, led),
-            kwargs={'panel_charge': panel_charge},
+            kwargs={'panel_charge': panel_charge, 'probe': _probe},
             daemon=True).start()
         _pm_ask_hint(outcome='answered', subject=base.get('subject'))
         return jsonify({
@@ -14435,7 +14447,7 @@ def _pm_append_deck_to_history(username, job_id, status):
 
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led,
-                     panel_charge=None):
+                     panel_charge=None, probe=False):
     """Background body of one generated read. Writes the finished
     payload to the S3-backed job status the widget polls; a locked
     phone or reloaded tab picks the read up when it returns. As the
@@ -14449,7 +14461,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
     every model call inside the read attributes to the requesting
     user, even though this function runs on a background thread with
     no Flask request context."""
-    head = {'job_id': job_id, 'user': pm_user,
+    head = {'job_id': job_id, 'user': pm_user, 'probe': bool(probe),
             'question': text[:300], 'started_at': time.time()}
 
     def _stage(label):
@@ -14485,8 +14497,8 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             # to email, so only a clean read fires the notify.
             _pm_append_read_to_history(pm_user, job_id, payload)
             _pm_watch_notify(pm_user, text, payload,
-                             payload.get('profile'))
-            if not held:
+                             payload.get('profile'), probe=probe)
+            if not held and not probe:
                 _pm_flush_notify(job_id, 'read',
                                  {**payload, 'question': text})
             else:
@@ -18649,6 +18661,8 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_user_block,
     _pm_catalog_block,
     _pm_ask_log_user,
+    _pm_probe_caller,
+    _pm_is_probe_user,
     _pm_watch_flag,
     _pm_record_held_reply,
     _pm_gate_options,
