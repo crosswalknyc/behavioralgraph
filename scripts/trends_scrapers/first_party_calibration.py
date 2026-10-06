@@ -197,6 +197,9 @@ def service_prompt_line(slug: str) -> str:
             f'{int(rng["daily_total_max"]):,} film streams a day and no '
             f'film ever exceeded about {int(rng.get("title_daily_max") or 0):,} '
             f'a day.')
+    parts.append('A stream is one account playing the title once; that is '
+                 'the unit of every number on this service, with no '
+                 'viewers-per-account conversion.')
     parts.append('These are measured counts. A number for this service '
                  'must sit inside this scale; a TV series streams by '
                  'episode and may sit a little above the film #1, never '

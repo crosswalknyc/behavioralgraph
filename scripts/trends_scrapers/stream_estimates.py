@@ -13,10 +13,15 @@ listened / read / played that item on that day:
   - Songs:    US daily streams across all DSPs (Spotify Daily Top 200
               US, Apple Music Daily Top 100, Billboard/Chartmetric
               daily plays, Luminate daily where available).
-  - Films/TV: US daily viewers or household views (Nielsen daily
-              streaming minutes, Whip Media daily, Samba TV daily,
-              box office daily grosses -> theatrical audience,
-              Netflix Tudum Top-10 daily, Prime Video Roll Call).
+  - Films/TV: US daily ACCOUNT views (Nielsen household minutes,
+              Netflix Top-10 views, platform-reported streams, Whip
+              Media, Samba TV, box office daily grosses -> theatrical
+              audience). One account playing a title on a day is one
+              view; the people on the couch are never multiplied in.
+              Jenna, 2026-10-06: a partner's title-level streams for
+              two services showed account-level plays are the unit the
+              platforms themselves report, so the 1.9 viewers-per-
+              account conversion is retired everywhere on streaming.
   - Broadway: performance-level daily attendance (Broadway League
               weekly grosses / 8 shows -> per-performance count).
 
@@ -1973,10 +1978,22 @@ def _daily_prompt_preface(target_date_iso: str) -> str:
         "\n"
         "You are estimating the UNIQUE US audience for THIS SPECIFIC "
         "CALENDAR DAY - the number of unique US individuals who "
-        "watched / listened / streamed / read / played / attended / "
-        "searched-for this item on this exact day. Every number you "
-        "return in the JSON below is a DAILY unique-audience count "
-        "for the target day. NOT weekly, NOT monthly, NOT lifetime.\n"
+        "listened / read / played / attended / searched-for this item "
+        "on this exact day, and for STREAMING VIDEO the number of US "
+        "ACCOUNTS that played it on this exact day. Every number you "
+        "return in the JSON below is a DAILY unique count for the "
+        "target day. NOT weekly, NOT monthly, NOT lifetime.\n"
+        "\n"
+        "STREAMING VIDEO IS COUNTED IN ACCOUNTS, NOT PEOPLE (HARD "
+        "RULE): a view is one account playing one title on one day. "
+        "Nielsen households, Netflix views, Prime Video Roll Call and "
+        "every platform-reported stream count are ALREADY at that "
+        "level. Never multiply an account figure by viewers per "
+        "account (1.9, 2.2, 2.5 or any other co-viewing factor) and "
+        "never convert subscribers to 'individuals reachable' on the "
+        "way to a title's number. Subscriber accounts -> share of "
+        "accounts that open the service on the day -> share of those "
+        "that play THIS title. Stop there.\n"
         "\n"
         "PREFER DAILY CITATIONS. Daily figures for popular items are "
         "widely reported: Nielsen daily streaming minutes, Spotify "
@@ -2887,6 +2904,10 @@ _STREAMING_PLATFORMS_META = [
     # steep on promo-priced channels, so the standing base reasons to
     # about 210-290K US subscriber ACCOUNTS.
     #
+    # (RETIRED 2026-10-06: the chain below carried a 1.9 viewers-per-
+    # account step and a daily-uniques step that the partner-reported
+    # feed showed to be 5-10x high; the entry's level now comes from
+    # `first_party_calibration`. Kept for the record.)
     # Accounts are not people and weekly is not daily, which is where
     # a level like this usually goes wrong. At roughly 1.9 viewers an
     # account the reachable base is about 470K US individuals; about
@@ -2999,6 +3020,9 @@ _STREAMING_PLATFORMS_META = [
     # name and a one-month-earlier start, and held back by the higher
     # price and the single storefront.
     #
+    # (RETIRED 2026-10-06: same 1.9 viewers-per-account step as the
+    # MovieSphere+ chain above; level now comes from the partner feed
+    # via `first_party_calibration`. Kept for the record.)
     # Accounts are not people and weekly is not daily, which is where
     # a level like this usually goes wrong. At roughly 1.9 viewers an
     # account the reachable base is about 540K US individuals; about
