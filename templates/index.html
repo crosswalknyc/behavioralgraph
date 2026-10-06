@@ -66144,10 +66144,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                    '</div>';
         }
 
-        // Rankers: every card shows 20 rows, then scrolls inside itself.
+        // Rankers: every card shows 10 rows, then scrolls inside itself.
         // Rows vary in height by tab, so the cap is measured, not fixed.
         (function () {
-            var CAP = 20;
+            var CAP = 10;
             function capLists() {
                 var view = document.getElementById('trendsIQView');
                 if (!view || view.getAttribute('data-tiq-product') !== 'rankers') return;
