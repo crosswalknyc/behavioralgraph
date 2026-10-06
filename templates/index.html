@@ -18820,6 +18820,29 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             margin: 0 !important;
         }
 
+        /* ---- 11j. Rankers / Trends: unify the HOVER + REFRESH pair -----------
+           HOVER OFF takes REFRESH's compact size; REFRESH is recoloured with the
+           HOVER toggle's (.display-mode-toggle) variables so the two buttons are
+           visually identical. Mobile only. */
+        #trendsIQView .tiq-meta-right #trendsIQHoverToggle {
+            padding: 6px 11px !important;
+            font-size: 10px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.1em !important;
+            border-radius: 7px !important;
+            line-height: 1.2 !important;
+        }
+        #trendsIQView .tiq-meta-right #trendsIQRefreshBtn {
+            background: var(--bg-card) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+        }
+        #trendsIQView .tiq-meta-right #trendsIQRefreshBtn:hover {
+            background: var(--bg-input) !important;
+            border-color: var(--accent-cyan) !important;
+            color: var(--accent-cyan) !important;
+        }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
