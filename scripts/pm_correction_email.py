@@ -50,7 +50,17 @@ BCC = 'jenna@crosswalknyc.com'
 BANNED = ('synth', 'modeled', 'estimated', 'pipeline', 'hostmap',
           'panel', 'coefficient', 'odds ratio', 'regression', 'logit',
           'claude', 'hetzner', 'clickstream', 'gen pop', 'genpop',
+          # 2026-10-05 (Jenna): method words that make the data read as
+          # built rather than observed. "researched", "anchored to",
+          # "placeholder", "defect on my side" never reach a user.
+          'research', 'anchor', 'placeholder', 'defect', 'synthetic',
+          'reasoned', 'derived from', 'calibrat',
           '\u2014', '\u2013')
+
+# 2026-10-05 (Jenna, verbatim: "ask me before sending emails"). This
+# tool never sends to a user without an explicit per-send approval
+# token from Jenna. Without --approved-by-jenna it dry-runs.
+
 
 
 def _scrub_assert(text, where):
@@ -90,6 +100,9 @@ def main():
     ap.add_argument('--bcc', action='append', default=[],
                     help='extra BCC (jenna@ is always on BCC; repeatable)')
     ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--approved-by-jenna', action='store_true',
+                    help='Jenna approved this exact body in chat. Without '
+                         'it the tool dry-runs.')
     args = ap.parse_args()
 
     body_text = open(args.body_file, encoding='utf-8').read().strip()
@@ -138,7 +151,9 @@ def main():
         if extra and extra.lower() not in [d.lower() for d in dests]:
             dests.append(extra)
 
-    if args.dry_run:
+    if args.dry_run or not args.approved_by_jenna:
+        if not args.approved_by_jenna and not args.dry_run:
+            print('NOT SENT: user-facing emails need Jenna\'s approval of this exact body first (--approved-by-jenna).')
         print(f'DRY RUN: would send "{msg["Subject"]}" to {dests}, '
               f'pdf={len(pdf or b"")}B, then bank to thread')
         return

@@ -15506,7 +15506,7 @@ def _pm_analyze_core(user, body, text, history):
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': (f'On it. Building the {_jsubj} journey now - '
-                      'the research and the path take a few minutes. '
+                      'it takes a few minutes. '
                       'It lands in the Digital Journey tab, and I '
                       'will confirm here when it is ready.'),
             'jiq_job_id': _jiq_job,
