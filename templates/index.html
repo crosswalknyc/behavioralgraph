@@ -52437,6 +52437,23 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div id="jiqArrowNestHost"></div>
                 </div>
 
+                <!-- POLITICS GIRL June 9 Instagram reel - before / after
+                     Painted only when meta.story_mode === 'politics_girl_reel'. -->
+                <div id="jiqPgrTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
+                <div class="jiq-frag" id="jiqPgrNestCard" style="display: none;">
+                    <div class="jiq-frag-cover">
+                        <div class="jiq-frag-copy">
+                            <div class="jiq-frag-eyebrow" id="jiqPgrNestMeta">VIEWER JOURNEY  ·  JUNE 9 TO OCTOBER 6, 2026</div>
+                            <h2 id="jiqPgrNestTitle">This reel starts<br>in the feed.</h2>
+                            <div class="jiq-frag-read-lead" id="jiqPgrNestLead">Most people who watched were already scrolling Instagram.</div>
+                            <p id="jiqPgrNestDeck">2.42 million unique people watched this Politics Girl reel from June 9 to October 6, 2026. 928,847 came from Following. 597,641 came from Reels. 41,847 researched the issue in the next 14 days. 7,841 opened an action page.</p>
+                            <div class="jiq-frag-kpis" id="jiqPgrNestKpis"></div>
+                        </div>
+                        <div class="jiq-frag-art" id="jiqPgrNestArt"></div>
+                    </div>
+                    <div id="jiqPgrNestHost"></div>
+                </div>
+
                 <div class="card" id="jiqUfcCaseCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(244,114,50,0.06) 0%, rgba(15,23,42,0.05) 100%);
@@ -87904,6 +87921,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
                         { id: 'music',       label: '🎵 Music to Long Form', keywords: ['music to long form'] },
+                        { id: 'civic',       label: 'Civic',                keywords: ['politics girl', 'good influence'] },
                         { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix', 'amc+', 'amc plus', 'amc_plus', 'amc migration'] },
                         { id: 'tv',          label: '📺 TV Shows',          keywords: ['young sheldon', 'young_sheldon', 'dexter', "dexter's laboratory", 'dexters laboratory', 'dexter lab', 'babylon 5', 'babylon5'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: [] },
@@ -87977,6 +87995,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         ],
                         music: [
                             { value: '__demo_music_to_long_form__', label: "Music to Long Form" }
+                        ],
+                        civic: [
+                            { value: '__demo_politics_girl_reel__', label: 'Politics Girl · June 9 reel' }
                         ],
                         neurotropic: []
                     };
@@ -88100,6 +88121,10 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqArrowHydrateRun === 'function') {
                 var _arrowRun = _jiqArrowHydrateRun(key);
                 if (_arrowRun) return _arrowRun;
+            }
+            if (typeof _jiqPgrHydrateRun === 'function') {
+                var _pgrRun = _jiqPgrHydrateRun(key);
+                if (_pgrRun) return _pgrRun;
             }
             if (typeof _jiqAnimCrHydrateRun === 'function') {
                 var _animCrRun = _jiqAnimCrHydrateRun(key);
@@ -89904,6 +89929,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var _isSpeStory              = (_storyMode === 'spe_cross_window');
             var _isUfcStory              = (_storyMode === 'ufc_paramount');
             var _isArrowStory            = (_storyMode === 'arrow_pluto');
+            var _isPgrStory              = (_storyMode === 'politics_girl_reel');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -90063,6 +90089,19 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } else {
                 if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
                 _jiqHideCard('jiqArrowNestCard');
+            }
+
+            if (_isPgrStory) {
+                if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+                if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
+                if (typeof _jiqPgrPaintNestCover === 'function') _jiqPgrPaintNestCover();
+                if (typeof _jiqPgrActivateTab === 'function') {
+                    var _pgrInitTab = (typeof _jiqPgrActiveTab !== 'undefined' && _jiqPgrActiveTab) || 'case';
+                    _jiqPgrActivateTab(_pgrInitTab);
+                }
+            } else {
+                if (typeof _jiqPgrHideTabBar === 'function') _jiqPgrHideTabBar();
+                _jiqHideCard('jiqPgrNestCard');
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -106310,6 +106349,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         function _jiqUfcActivateTab(tabId) {
             if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
             if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
+            if (typeof _jiqPgrHideTabBar === 'function') _jiqPgrHideTabBar();
             var match = _JIQ_UFC_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_UFC_TABS[0];
             _jiqUfcActiveTab = match.id;
@@ -107167,6 +107207,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             bar.style.display = '';
         }
         function _jiqArrowActivateTab(tabId) {
+            if (typeof _jiqPgrHideTabBar === 'function') _jiqPgrHideTabBar();
             var match = _JIQ_ARROW_TABS.filter(function(t) { return t.id === tabId; })[0];
             if (!match) match = _JIQ_ARROW_TABS[0];
             _jiqArrowActiveTab = match.id;
@@ -107651,6 +107692,424 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = 'Arrow_Pluto_Journey_2026_09_28.csv';
+            a.click();
+        }
+
+        var _JIQ_PGR_DATA = {"meta": {"story_mode": "politics_girl_reel", "subject": "Politics Girl", "handle": "iampoliticsgirl", "talent": "Leigh McGowan", "posted": "2026-06-09", "window_start": "2026-06-09", "window_end": "2026-10-06", "window_label": "June 9 to October 6, 2026", "url_p": "https://www.instagram.com/p/DZYmGm6DSf3/", "url_reel": "https://www.instagram.com/reel/DZYmGm6DSf3/", "caption": "America isn't in financial trouble because we have to help the poor. We're in financial trouble because we can't satisfy the rich.", "qualifying": "Opened the Instagram reel at this URL and played at least three seconds.", "before_window": "20 minutes before first play", "after_window": "20 minutes after, plus 14 days for research and action", "source_line": "Audience counts come from Crosswalk zero-party data, projected to the US population."}, "universe": {"watched": 2417863, "ig_views": 2833733, "views_seven_platforms": 7379515, "action_seven_platforms": 13779, "finished": 1184271, "finished_pct": 48.9801, "followers": 971847, "followers_pct": 40.1945, "not_following": 1446016, "not_following_pct": 59.8055, "new_follows": 84271, "researched": 41847, "researched_pct": 1.7307, "acted": 7841, "acted_pct": 0.3243, "acted_of_researched_pct": 18.7373}, "before": [{"label": "Following feed", "people": 928847, "pct": 38.416}, {"label": "Reels and suggested", "people": 597641, "pct": 24.7177}, {"label": "Another Politics Girl reel", "people": 342963, "pct": 14.1846}, {"label": "Stories", "people": 208371, "pct": 8.618}, {"label": "Notification or profile", "people": 151941, "pct": 6.2841}, {"label": "Search inside Instagram", "people": 92307, "pct": 3.8177}, {"label": "Arrived from another app", "people": 95793, "pct": 3.9619}], "after_20": [{"label": "Watched again", "people": 769841, "pct": 31.8397}, {"label": "Opened the Politics Girl profile", "people": 445317, "pct": 18.4178}, {"label": "Liked, commented, or shared", "people": 345371, "pct": 14.2841}, {"label": "Opened another Politics Girl reel", "people": 283341, "pct": 11.7187}, {"label": "Left Instagram", "people": 407341, "pct": 16.8471}, {"label": "Opened search or the browser", "people": 166652, "pct": 6.8925}], "after_14": [{"label": "Opened the Politics Girl profile", "people": 641847, "pct": 26.546}, {"label": "Watched another Politics Girl video", "people": 387241, "pct": 16.0158}, {"label": "Followed Politics Girl after the reel", "people": 84271, "pct": 3.4854}, {"label": "Researched the issue", "people": 41847, "pct": 1.7307}, {"label": "Opened an action page", "people": 7841, "pct": 0.3243}], "research_surfaces": [{"label": "Issue search", "people": 26196, "pct": 62.5995}, {"label": "News or explainer", "people": 23476, "pct": 56.0996}, {"label": "Representative page", "people": 14395, "pct": 34.3991}, {"label": "Politics Girl profile during research", "people": 7029, "pct": 16.7969}, {"label": "Wikipedia or Ballotpedia", "people": 6822, "pct": 16.3022}], "action_pages": [{"label": "Advocacy organization", "people": 3317, "pct": 42.3033}, {"label": "house.gov or congress.gov", "people": 1701, "pct": 21.6937}, {"label": "Petition", "people": 972, "pct": 12.3964}, {"label": "Small-dollar donate", "people": 957, "pct": 12.2051}, {"label": "Voter registration", "people": 894, "pct": 11.4016}], "time_to_action": [{"label": "Same session", "people": 1896, "pct": 24.1806}, {"label": "Later the same day", "people": 929, "pct": 11.848}, {"label": "2 to 7 days", "people": 3351, "pct": 42.7369}, {"label": "8 to 14 days", "people": 1084, "pct": 13.8248}, {"label": "15 or more days", "people": 581, "pct": 7.4098}], "demos": {"gender": [{"label": "Female", "people": 1551847, "pct": 64.1826}, {"label": "Male", "people": 839271, "pct": 34.7113}, {"label": "Another gender", "people": 26745, "pct": 1.1061}], "age": [{"label": "18-24", "people": 286417, "pct": 11.8459}, {"label": "25-34", "people": 541847, "pct": 22.4102}, {"label": "35-44", "people": 584271, "pct": 24.1648}, {"label": "45-54", "people": 474641, "pct": 19.6306}, {"label": "55+", "people": 530687, "pct": 21.9486}], "ethnicity": [{"label": "White", "people": 1654271, "pct": 68.4187}, {"label": "Hispanic / Latino", "people": 294641, "pct": 12.186}, {"label": "Black", "people": 283417, "pct": 11.7218}, {"label": "Asian", "people": 103641, "pct": 4.2865}, {"label": "Another race", "people": 81893, "pct": 3.387}], "income": [{"label": "Under $50,000", "people": 528417, "pct": 21.8547}, {"label": "$50,000 to $99,999", "people": 826847, "pct": 34.1974}, {"label": "$100,000 to $149,999", "people": 542271, "pct": 22.4277}, {"label": "$150,000+", "people": 520328, "pct": 21.5202}]}, "genpop": {"gender": {"Female": 49.5723, "Male": 47.8859, "Another gender": 2.5418}, "age": {"18-24": 12.037, "25-34": 16.3845, "35-44": 16.7176, "45-54": 15.8313, "55+": 39.0296}, "ethnicity": {"White": 57.7959, "Hispanic / Latino": 17.9796, "Black": 11.9178, "Asian": 6.2158, "Another race": 6.0908}, "income": {"Under $50,000": 32.4357, "$50,000 to $99,999": 29.637, "$100,000 to $149,999": 16.8173, "$150,000+": 21.11}}, "cover": {"eyebrow": "VIEWER JOURNEY  ·  JUNE 9 TO OCTOBER 6, 2026", "title": "This reel starts in the feed.", "lead": "Most people who watched were already scrolling Instagram.", "deck": "2.42 million unique people watched this Politics Girl reel from June 9 to October 6, 2026. 928,847 came from Following. 597,641 came from Reels. 41,847 researched the issue in the next 14 days. 7,841 opened an action page."}, "copy": {"overview_h": "Most viewers were already on Instagram.", "before_h": "The last stop is usually the feed.", "after_h": "Search is the real next step.", "who_h": "The reel skews female and midlife.", "read_h": "Treat this as a research post.", "method_h": "Who is in this journey.", "overview_so": "2.42 million unique people watched this reel. 38.4% came from Following. 24.7% came from Reels.", "before_so": "928,847 people were in Following when they opened it. 597,641 were in Reels. 342,963 were already on another Politics Girl reel.", "after_so": "41,847 researched the issue in 14 days. 7,841 opened an action page. That is 1 in 308 viewers.", "who_so": "64.2% female, versus 49.6% of US adults. 35 to 44 is the largest age group.", "read_so": "Judge the reel by who researched, not by who donated. Then keep the next clip inside the same session.", "kpis": [{"label": "Watched this reel", "show": "2.42M", "n": 2417863}, {"label": "Came from Following", "show": "38.4%", "n": 928847}, {"label": "Researched in 14 days", "show": "41,847", "n": 41847}, {"label": "Opened an action page", "show": "7,841", "n": 7841}], "reads": [{"title": "The feed still starts the journey.", "body": "928,847 people came from Following. 597,641 came from Reels. Keep a feed cut and a Reels cut of the same post."}, {"title": "The next clip is already in the session.", "body": "342,963 people were on another Politics Girl reel in the 20 minutes before this one. Put the sequel in that window."}, {"title": "Search is the win, not the donate click.", "body": "41,847 people researched the issue. 7,841 opened an action page. Do not score the post on donations alone."}, {"title": "Most viewers did not follow her yet.", "body": "1,446,016 people were not followers when they watched. 84,271 followed after. The reel is a finder, not only a reminder."}]}};
+
+        var _JIQ_PGR_TABS = [
+            { id: 'case',      label: 'Overview' },
+            { id: 'before',    label: 'Before' },
+            { id: 'after',     label: 'After' },
+            { id: 'segments',  label: 'Who they are' },
+            { id: 'read',      label: 'The Read' },
+            { id: 'methodology', label: 'Methodology' }
+        ];
+        var _jiqPgrActiveTab = 'case';
+
+        function _jiqPgrD() {
+            return (typeof _JIQ_PGR_DATA !== 'undefined' && _JIQ_PGR_DATA) || {};
+        }
+        function _jiqPgrNum(n) {
+            if (typeof _jiqFragNum === 'function') return _jiqFragNum(n);
+            try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+        }
+        function _jiqPgrFig(n) {
+            n = Number(n) || 0;
+            if (n >= 10000000) return (n / 1e6).toFixed(1) + 'M';
+            if (n >= 1000000) return (n / 1e6).toFixed(2) + 'M';
+            if (n >= 1000) return _jiqPgrNum(n);
+            return _jiqPgrNum(n);
+        }
+        function _jiqPgrPct(n) {
+            var v = Math.round(Number(n) * 10) / 10;
+            return v.toFixed(1) + '%';
+        }
+        function _jiqPgrEsc(s) {
+            if (typeof _jiqFragEsc === 'function') return _jiqFragEsc(s);
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function _jiqPgrSec(a, b, c) {
+            return '<div class="jiq-frag-sec"><h3>' + _jiqPgrEsc(a) + '</h3>'
+                + (b ? '<em>' + _jiqPgrEsc(b) + '</em>' : '')
+                + (c ? '<p class="jiq-frag-read-lead">' + _jiqPgrEsc(c) + '</p>' : '')
+                + '</div>';
+        }
+        function _jiqPgrFoot() {
+            var d = _jiqPgrD();
+            var m = d.meta || {};
+            var line = m.source_line || 'Audience counts come from Crosswalk zero-party data, projected to the US population.';
+            return '<p class="jiq-pgr-foot">' + _jiqPgrEsc(line) + '</p>';
+        }
+        function _jiqPgrBars(title, rows, opts) {
+            opts = opts || {};
+            var top = opts.scale != null ? opts.scale : (rows || []).reduce(function(m, r) {
+                return Math.max(m, Number(r.people) || 0);
+            }, 1);
+            return '<div class="jiq-pgr-bars"><h5>' + _jiqPgrEsc(title) + '</h5>'
+                + (rows || []).map(function(r) {
+                    var val = Number(r.people) || 0;
+                    var w = Math.max(1.4, Math.round(1000 * val / top) / 10);
+                    var shown = r.show != null ? r.show : (_jiqPgrNum(r.people) + '  ·  ' + _jiqPgrPct(r.pct));
+                    return '<div class="jiq-pgr-barrow' + (r.hot ? ' is-hot' : '') + '">'
+                        + '<span class="jiq-pgr-barlab">' + _jiqPgrEsc(r.label) + '</span>'
+                        + '<span class="jiq-pgr-bartrack"><i style="width:' + w + '%;"></i></span>'
+                        + '<span class="jiq-pgr-barval">' + _jiqPgrEsc(String(shown)) + '</span></div>';
+                }).join('')
+                + '</div>';
+        }
+        function _jiqPgrHFunnel(rows) {
+            return '<div class="jiq-pgr-hfunnel">' + (rows || []).map(function(s) {
+                var keepW = s.fullBar ? 100 : (s.kept == null ? 0 : Math.max(0.6, Math.min(100, Number(s.kept))));
+                var line = (s.kept == null || s.fullBar) ? '' : (_jiqPgrPct(s.kept) + ' ' + (s.keepVerb || 'of them continued'));
+                var showBar = s.fullBar || s.kept != null;
+                return '<div class="jiq-pgr-hcol' + (s.hot ? ' is-hot' : '') + '">'
+                    + '<div class="jiq-pgr-hnum">' + _jiqPgrEsc(s.show) + '</div>'
+                    + '<div class="jiq-pgr-hlabel">' + _jiqPgrEsc(s.label) + '</div>'
+                    + (s.doing ? '<div class="jiq-pgr-hdoing">' + _jiqPgrEsc(s.doing) + '</div>' : '')
+                    + (showBar ? '<div class="jiq-pgr-hbar"><i style="width:' + keepW + '%;"></i></div>' : '')
+                    + (line ? '<div class="jiq-pgr-hpct">' + _jiqPgrEsc(line) + '</div>' : '')
+                    + '</div>';
+            }).join('') + '</div>';
+        }
+        function _jiqPgrColors() {
+            var light = document.body && document.body.getAttribute('data-theme') === 'light';
+            return light
+                ? ['#5E7E12', '#8E3FA8', '#3358FF', '#3B3D38', '#888C89']
+                : ['#C7F23E', '#E682FF', '#3358FF', '#B7B3D8', '#9AA09B'];
+        }
+        function _jiqPgrPolar(cx, cy, r, deg) {
+            var a = (deg - 90) * Math.PI / 180;
+            return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+        }
+        function _jiqPgrAnnulus(cx, cy, r0, r1, a0, a1) {
+            var sweep = Math.max(0, Math.min(359.999, a1 - a0));
+            if (sweep < 0.2) return '';
+            var large = sweep > 180 ? 1 : 0;
+            var p0o = _jiqPgrPolar(cx, cy, r1, a0);
+            var p1o = _jiqPgrPolar(cx, cy, r1, a0 + sweep);
+            var p1i = _jiqPgrPolar(cx, cy, r0, a0 + sweep);
+            var p0i = _jiqPgrPolar(cx, cy, r0, a0);
+            return 'M' + p0o.x.toFixed(2) + ',' + p0o.y.toFixed(2)
+                + ' A' + r1 + ',' + r1 + ' 0 ' + large + ',1 ' + p1o.x.toFixed(2) + ',' + p1o.y.toFixed(2)
+                + ' L' + p1i.x.toFixed(2) + ',' + p1i.y.toFixed(2)
+                + ' A' + r0 + ',' + r0 + ' 0 ' + large + ',0 ' + p0i.x.toFixed(2) + ',' + p0i.y.toFixed(2)
+                + ' Z';
+        }
+        function _jiqPgrDemoLabel(raw) {
+            var map = {
+                '18-24': '18 to 24',
+                '25-34': '25 to 34',
+                '35-44': '35 to 44',
+                '45-54': '45 to 54',
+                'Hispanic / Latino': 'Hispanic or Latino'
+            };
+            return map[raw] || raw;
+        }
+        function _jiqPgrRing(slices, cx, cy, r0, r1, opacity) {
+            var colors = _jiqPgrColors();
+            var a = 0;
+            return slices.map(function(s, i) {
+                var sweep = Math.max(0, Number(s.pct) || 0) * 3.6;
+                var d = _jiqPgrAnnulus(cx, cy, r0, r1, a, a + sweep);
+                var mid = a + sweep / 2;
+                a += sweep;
+                if (!d) return '';
+                var lab = '';
+                if ((Number(s.pct) || 0) >= 10) {
+                    var pt = _jiqPgrPolar(cx, cy, (r0 + r1) / 2, mid);
+                    var ink = (colors[i % colors.length] === '#C7F23E' || colors[i % colors.length] === '#5E7E12') ? '#0C1618' : '#E9E8E1';
+                    lab = '<text x="' + pt.x.toFixed(1) + '" y="' + pt.y.toFixed(1)
+                        + '" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="'
+                        + ink + '">' + _jiqPgrEsc(_jiqPgrPct(s.pct)) + '</text>';
+                }
+                return '<path d="' + d + '" fill="' + colors[i % colors.length] + '" fill-opacity="'
+                    + opacity + '"></path>' + lab;
+            }).join('');
+        }
+        function _jiqPgrDemoDonut(title, key, block) {
+            var d = _jiqPgrD();
+            var gp = (d.genpop || {})[key] || {};
+            var slices = (block || []).map(function(r) {
+                var lab = r.label;
+                return {
+                    label: _jiqPgrDemoLabel(lab),
+                    pct: Number(r.pct) || 0,
+                    people: r.people,
+                    gp: Number(gp[lab] != null ? gp[lab] : gp[_jiqPgrDemoLabel(lab)]) || 0
+                };
+            });
+            var colors = _jiqPgrColors();
+            var inner = _jiqPgrRing(slices.map(function(s) { return { pct: s.pct }; }), 140, 140, 56, 80, 1);
+            var outer = _jiqPgrRing(slices.map(function(s) { return { pct: s.gp }; }), 140, 140, 90, 114, 0.42);
+            var legend = slices.map(function(s, i) {
+                return '<div class="jiq-pgr-dleg-row">'
+                    + '<i style="background:' + colors[i % colors.length] + '"></i>'
+                    + '<span class="lab">' + _jiqPgrEsc(s.label) + '</span>'
+                    + '<em>' + _jiqPgrEsc(_jiqPgrNum(s.people)) + '</em>'
+                    + '<b>' + _jiqPgrPct(s.pct) + '</b>'
+                    + '<span class="gp">' + _jiqPgrPct(s.gp) + '</span></div>';
+            }).join('');
+            return '<div class="jiq-pgr-donut">'
+                + '<h5>' + _jiqPgrEsc(title) + '</h5>'
+                + '<svg viewBox="0 0 280 280" width="280" height="280" aria-label="' + _jiqPgrEsc(title) + '">'
+                + outer + inner
+                + '<text x="140" y="134" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">Reel</text>'
+                + '<text x="140" y="154" text-anchor="middle" font-size="11" fill="#7C878A">vs Gen Pop</text>'
+                + '</svg>'
+                + '<div class="jiq-pgr-dleg">'
+                + '<div class="jiq-pgr-dleg-k is-group"><span></span><span></span><span class="reel">REEL</span><span class="gphead">Gen Pop</span></div>'
+                + '<div class="jiq-pgr-dleg-k is-sub"><span></span><span></span><span>Total</span><span>%</span><span>%</span></div>'
+                + legend
+                + '</div></div>';
+        }
+        function _jiqPgrPanelChip() {
+            return 'US ONLY  ·  JUNE 9 TO OCTOBER 6, 2026  ·  UNIQUE PEOPLE';
+        }
+        function _jiqPgrRenderTabBar() {
+            var bar = document.getElementById('jiqPgrTabBar');
+            if (!bar) return;
+            var active = _jiqPgrActiveTab || _JIQ_PGR_TABS[0].id;
+            bar.className = 'jiq-ufc-tabbar';
+            bar.innerHTML = '<div class="jiq-ufc-pills">'
+                + _JIQ_PGR_TABS.map(function(t) {
+                    var on = (t.id === active) ? ' is-on' : '';
+                    return '<button type="button" class="' + on + '" data-pgr-tab="' + t.id + '" '
+                        + 'onclick="_jiqPgrActivateTab(\'' + t.id + '\')">'
+                        + _jiqPgrEsc(t.label) + '</button>';
+                }).join('')
+                + '</div><div class="jiq-ufc-tabmeta">' + _jiqPgrPanelChip() + '</div>';
+            bar.style.display = '';
+        }
+        function _jiqPgrActivateTab(tabId) {
+            var match = _JIQ_PGR_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_PGR_TABS[0];
+            _jiqPgrActiveTab = match.id;
+            if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
+            if (typeof _jiqArrowHideTabBar === 'function') _jiqArrowHideTabBar();
+            _jiqPgrPaintNestCover();
+            var host = document.getElementById('jiqPgrNestHost');
+            var paint = _JIQ_PGR_NEST_RENDER && _JIQ_PGR_NEST_RENDER[match.id];
+            if (host && paint) host.innerHTML = paint();
+            _jiqPgrRenderTabBar();
+        }
+        function _jiqPgrHideTabBar() {
+            var bar = document.getElementById('jiqPgrTabBar');
+            if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+            _jiqHideCard('jiqPgrNestCard');
+        }
+        function _jiqPgrPaintNestCover() {
+            var d = _jiqPgrD();
+            var c = d.cover || {};
+            var tab = _jiqPgrActiveTab || 'case';
+            var isOverview = tab === 'case';
+            var kpis = document.getElementById('jiqPgrNestKpis');
+            if (kpis) kpis.innerHTML = '';
+            var meta = document.getElementById('jiqPgrNestMeta');
+            if (meta) {
+                meta.textContent = isOverview ? (c.eyebrow || '') : '';
+                meta.style.display = isOverview ? '' : 'none';
+            }
+            var title = document.getElementById('jiqPgrNestTitle');
+            if (title) title.style.display = isOverview ? '' : 'none';
+            var lead = document.getElementById('jiqPgrNestLead');
+            if (lead) {
+                lead.textContent = c.lead || '';
+                lead.style.display = isOverview ? '' : 'none';
+            }
+            var deck = document.getElementById('jiqPgrNestDeck');
+            if (deck) {
+                deck.textContent = isOverview ? (c.deck || '') : '';
+                deck.style.display = isOverview ? '' : 'none';
+            }
+            var art = document.getElementById('jiqPgrNestArt');
+            if (art) {
+                art.innerHTML = '<span class="jiq-frag-art-ini">PG</span>';
+                art.classList.add('is-ini');
+                art.style.display = isOverview ? '' : 'none';
+            }
+            var stripTitle = document.getElementById('jiqDashTitle');
+            if (stripTitle) stripTitle.style.display = 'none';
+            var nest = document.getElementById('jiqPgrNestCard');
+            if (nest) nest.style.display = '';
+        }
+        function _jiqPgrNestCase() {
+            var d = _jiqPgrD();
+            var u = d.universe || {};
+            var copy = d.copy || {};
+            var before = d.before || [];
+            var feed = before[0] || {};
+            var reels = before[1] || {};
+            return _jiqPgrSec(copy.overview_h, copy.overview_so, '')
+                + _jiqPgrHFunnel([
+                    { show: _jiqPgrFig(u.watched), label: 'Watched this reel.', doing: 'Opened the Instagram URL and played three seconds.', hot: true, fullBar: true },
+                    { show: _jiqPgrFig(u.finished), label: 'Finished most of it.', doing: 'Stayed through the argument.', kept: u.finished_pct, keepVerb: 'finished' },
+                    { show: _jiqPgrNum(u.researched), label: 'Researched the issue.', doing: 'Search, news, or a representative page in 14 days.', kept: u.researched_pct, keepVerb: 'of viewers' },
+                    { show: _jiqPgrNum(u.acted), label: 'Opened an action page.', doing: 'Advocacy, Congress, petition, donate, or voter registration.', kept: u.acted_pct, keepVerb: 'of viewers', hot: true }
+                ])
+                + '<div class="jiq-pgr-sum">'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqPgrFig(u.watched) + '</b><span>WATCHED THIS REEL</span></div>'
+                + '<div class="jiq-pgr-glyph">=</div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqPgrNum(feed.people) + '</b><span>FOLLOWING FEED</span></div>'
+                + '<div class="jiq-pgr-glyph">+</div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqPgrNum(reels.people) + '</b><span>REELS AND SUGGESTED</span></div>'
+                + '<div class="jiq-pgr-glyph">+</div>'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqPgrNum(u.watched - (feed.people || 0) - (reels.people || 0)) + '</b><span>EVERY OTHER SURFACE</span></div>'
+                + '</div>'
+                + _jiqPgrBars('Where they were in the 20 minutes before.', (d.before || []).map(function(r, i) {
+                    return Object.assign({}, r, { hot: i === 0 });
+                }))
+                + '<p class="jiq-pgr-means">What this means: most people were already inside Instagram. The reel did not have to find them on another app first.</p>'
+                + _jiqPgrFoot();
+        }
+        function _jiqPgrNestBefore() {
+            var d = _jiqPgrD();
+            var copy = d.copy || {};
+            var u = d.universe || {};
+            return _jiqPgrSec(copy.before_h, copy.before_so, '')
+                + _jiqPgrBars('Last surface before first play.', (d.before || []).map(function(r, i) {
+                    return Object.assign({}, r, { hot: i < 2 });
+                }))
+                + '<div class="jiq-pgr-sum">'
+                + '<div class="jiq-ufc-fig"><b>' + _jiqPgrNum(u.followers) + '</b><span>ALREADY FOLLOWED POLITICS GIRL</span></div>'
+                + '<div class="jiq-pgr-glyph">+</div>'
+                + '<div class="jiq-ufc-fig is-hot"><b>' + _jiqPgrNum(u.not_following) + '</b><span>NOT FOLLOWING YET</span></div>'
+                + '<div class="jiq-pgr-glyph">=</div>'
+                + '<div class="jiq-ufc-fig is-hot is-result"><b>' + _jiqPgrFig(u.watched) + '</b><span>WATCHED THIS REEL</span></div>'
+                + '</div>'
+                + '<p class="jiq-pgr-means">What this means: 1.45 million people found this reel without already following her. Reels and suggested are doing the finding.</p>'
+                + _jiqPgrFoot();
+        }
+        function _jiqPgrNestAfter() {
+            var d = _jiqPgrD();
+            var copy = d.copy || {};
+            var u = d.universe || {};
+            return _jiqPgrSec(copy.after_h, copy.after_so, '')
+                + _jiqPgrHFunnel([
+                    { show: _jiqPgrFig(u.watched), label: 'Watched this reel.', doing: 'The starting group.', hot: true, fullBar: true },
+                    { show: _jiqPgrFig(u.finished), label: 'Finished most of it.', kept: u.finished_pct, keepVerb: 'finished' },
+                    { show: _jiqPgrNum(u.researched), label: 'Researched the issue.', kept: u.researched_pct, keepVerb: 'of viewers' },
+                    { show: _jiqPgrNum(u.acted), label: 'Opened an action page.', kept: u.acted_pct, keepVerb: 'of viewers', hot: true }
+                ])
+                + _jiqPgrBars('First next step in the next 20 minutes.', (d.after_20 || []).map(function(r) {
+                    return Object.assign({}, r, { hot: /search|profile|watched again/i.test(r.label || '') });
+                }))
+                + _jiqPgrBars('In the next 14 days.', d.after_14 || [])
+                + _jiqPgrBars('What researchers opened.', d.research_surfaces || [], { scale: u.researched })
+                + _jiqPgrBars('Last action page they opened.', d.action_pages || [], { scale: u.acted })
+                + _jiqPgrBars('How long until the action page.', d.time_to_action || [], { scale: u.acted })
+                + '<p class="jiq-pgr-means">What this means: the reel moves people into search. The donate click is a thin slice of that.</p>'
+                + _jiqPgrFoot();
+        }
+        function _jiqPgrNestSegments() {
+            var d = _jiqPgrD();
+            var copy = d.copy || {};
+            var dem = d.demos || {};
+            return _jiqPgrSec(copy.who_h, copy.who_so, '')
+                + '<div class="jiq-pgr-donuts">'
+                + _jiqPgrDemoDonut('Gender', 'gender', dem.gender)
+                + _jiqPgrDemoDonut('Age', 'age', dem.age)
+                + _jiqPgrDemoDonut('Ethnicity', 'ethnicity', dem.ethnicity)
+                + _jiqPgrDemoDonut('Income', 'income', dem.income)
+                + '</div>'
+                + '<p class="jiq-pgr-means">What this means: this is a female, midlife reel. Plan the next cut for that group, not for a teen Reels default.</p>'
+                + _jiqPgrFoot();
+        }
+        function _jiqPgrNestReadTab() {
+            var d = _jiqPgrD();
+            var copy = d.copy || {};
+            var cards = (copy.reads || []).map(function(r) {
+                return '<div class="jiq-pgr-read">'
+                    + '<h4>' + _jiqPgrEsc(r.title) + '</h4>'
+                    + '<p>' + _jiqPgrEsc(r.body) + '</p></div>';
+            }).join('');
+            return _jiqPgrSec(copy.read_h, copy.read_so, '')
+                + '<div class="jiq-pgr-reads">' + cards + '</div>'
+                + _jiqPgrFoot();
+        }
+        function _jiqPgrNestMethod() {
+            var d = _jiqPgrD();
+            var m = d.meta || {};
+            var u = d.universe || {};
+            var copy = d.copy || {};
+            return _jiqPgrSec(copy.method_h, 'Unique US people who watched this Instagram reel.', '')
+                + '<div class="jiq-pgr-method">'
+                + '<p><b>Who counts.</b> A person opened ' + _jiqPgrEsc(m.url_p || '') + ' or the matching reel URL and played at least three seconds.</p>'
+                + '<p><b>Window.</b> ' + _jiqPgrEsc(m.window_label || '') + '. Posted June 9, 2026.</p>'
+                + '<p><b>Before.</b> The last digital surface in the 20 minutes before first play.</p>'
+                + '<p><b>After.</b> The first next surface in the 20 minutes after the reel, plus research and action in 14 days.</p>'
+                + '<p><b>The same post on other platforms.</b> Across seven platforms the post drew '
+                + _jiqPgrNum(u.views_seven_platforms) + ' views and '
+                + _jiqPgrNum(u.action_seven_platforms) + ' action-page visits. This journey is the Instagram reel only.</p>'
+                + '<p><b>Caption.</b> ' + _jiqPgrEsc(m.caption || '') + '</p>'
+                + '</div>'
+                + _jiqPgrFoot();
+        }
+        var _JIQ_PGR_NEST_RENDER = {
+            case: _jiqPgrNestCase,
+            before: _jiqPgrNestBefore,
+            after: _jiqPgrNestAfter,
+            segments: _jiqPgrNestSegments,
+            read: _jiqPgrNestReadTab,
+            methodology: _jiqPgrNestMethod
+        };
+        function _jiqPgrHydrateRun(key) {
+            if (key !== '__demo_politics_girl_reel__') return null;
+            var data = (typeof _JIQ_PGR_DATA !== 'undefined') ? _JIQ_PGR_DATA : null;
+            if (!data) return null;
+            var u = data.universe || {};
+            var meta = data.meta || {};
+            return {
+                success: true,
+                data: {
+                    meta: {
+                        story_mode: 'politics_girl_reel',
+                        target_name: 'Politics Girl',
+                        target_display: 'Politics Girl · June 9 reel',
+                        project_name: 'Politics Girl · June 9 reel',
+                        customer_brand: 'Politics Girl',
+                        start_date: meta.window_start || '2026-06-09',
+                        end_date: meta.window_end || '2026-10-06',
+                        target_type: 'instagram_reel_journey',
+                        category: 'civic'
+                    },
+                    facts: [
+                        { label: 'Window', value: meta.window_label || 'June 9 to October 6, 2026' },
+                        { label: 'Watched this reel', value: _jiqPgrNum(u.watched) + ' people.' },
+                        { label: 'Researched', value: _jiqPgrNum(u.researched) + ' people in 14 days.' },
+                        { label: 'Opened an action page', value: _jiqPgrNum(u.acted) + ' people.' }
+                    ],
+                    politics_girl_reel: data
+                }
+            };
+        }
+        function _jiqPgrBuildCsv() {
+            var d = _jiqPgrD();
+            var lines = ['section,label,people,pct'];
+            function row(a, b, n, p) {
+                function esc(x) {
+                    x = String(x == null ? '' : x);
+                    if (x.indexOf(',') >= 0 || x.indexOf('"') >= 0) return '"' + x.replace(/"/g, '""') + '"';
+                    return x;
+                }
+                lines.push([esc(a), esc(b), esc(n), esc(p == null ? '' : p)].join(','));
+            }
+            var u = d.universe || {};
+            row('universe', 'watched', u.watched, 100);
+            row('universe', 'finished', u.finished, u.finished_pct);
+            row('universe', 'researched', u.researched, u.researched_pct);
+            row('universe', 'acted', u.acted, u.acted_pct);
+            (d.before || []).forEach(function(r) { row('before', r.label, r.people, r.pct); });
+            (d.after_20 || []).forEach(function(r) { row('after_20', r.label, r.people, r.pct); });
+            (d.after_14 || []).forEach(function(r) { row('after_14', r.label, r.people, r.pct); });
+            return lines.join('\n');
+        }
+        function _jiqPgrDownloadCsv() {
+            var blob = new Blob([_jiqPgrBuildCsv()], { type: 'text/csv' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'Politics_Girl_IG_Reel_Journey_2026_10_06.csv';
             a.click();
         }
 
@@ -118226,7 +118685,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, arrow_pluto: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, heated_rivalry_song: 1, barbie_song: 1, music_catalog: 1, fragrance_shop_journey: 1, young_sheldon_pvod: 1, dexters_lab_pvod: 1, gg_lapsed_flywheel: 1, gg_regular_flywheel: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1, arrow_pluto: 1, politics_girl_reel: 1, adult_animation_discovery: 1, animation_creators_discovery: 1, song_to_title: 1, heated_rivalry_song: 1, barbie_song: 1, music_catalog: 1, fragrance_shop_journey: 1, young_sheldon_pvod: 1, dexters_lab_pvod: 1, gg_lapsed_flywheel: 1, gg_regular_flywheel: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
@@ -188233,6 +188692,161 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
         letter-spacing: -.045em; line-height: .95; text-transform: none !important;
     }
+
+    #jiqPgrNestCard {
+        margin: 0 0 8px;
+        background: var(--cw-page, #111F22);
+        color: #E9E8E1;
+        border-radius: 14px;
+        flex: 0 0 auto;
+    }
+    body[data-theme="light"] #jiqPgrNestCard { background: #E9E8E1; color: #0C1618; }
+    #jiqPgrNestTitle {
+        margin: 14px 0 0 !important; font-size: 52px; font-weight: 800;
+        letter-spacing: -.045em; line-height: .95; text-transform: none !important;
+    }
+    @media (max-width: 1080px) { #jiqPgrNestTitle { font-size: 38px; } }
+    #jiqPgrNestDeck, #jiqPgrNestCard .jiq-frag-label, #jiqPgrNestCard .jiq-frag-doing,
+    #jiqPgrNestCard .jiq-frag-read, #jiqPgrNestCard .jiq-frag-detlab,
+    #jiqPgrNestCard .jiq-frag-kpi-v, #jiqPgrNestCard .jiq-frag-count,
+    #jiqPgrNestCard .jiq-frag-lost, #jiqPgrNestCard .jiq-frag-sec h3,
+    #jiqPgrNestCard .jiq-frag-sec em,
+    #jiqPgrNestCard .jiq-frag-read-lead { text-transform: none !important; }
+    #jiqPgrNestCard .jiq-pgr-sum {
+        display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px;
+        margin: 8px 34px 22px;
+    }
+    #jiqPgrNestCard .jiq-pgr-sum .jiq-ufc-fig { flex: 1 1 140px; margin: 0; }
+    #jiqPgrNestCard .jiq-pgr-glyph {
+        align-self: center; font-size: 22px; font-weight: 700; color: #C7F23E;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-glyph { color: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-sum .is-result { border: 1px solid #C7F23E; }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-sum .is-result { border-color: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-foot {
+        margin: 8px 34px 28px; font-size: 12px; line-height: 1.45; color: #7C878A;
+    }
+    #jiqPgrNestCard .jiq-pgr-means {
+        margin: 4px 34px 22px; font-size: 15px; line-height: 1.45; color: #9AA09B;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-means { color: #5C6560; }
+    #jiqPgrNestCard .jiq-pgr-hfunnel {
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px; margin: 8px 34px 24px;
+    }
+    @media (max-width: 1080px) {
+        #jiqPgrNestCard .jiq-pgr-hfunnel { grid-template-columns: 1fr 1fr; }
+    }
+    #jiqPgrNestCard .jiq-pgr-hnum {
+        font-size: 28px; font-weight: 800; letter-spacing: -.03em;
+    }
+    #jiqPgrNestCard .jiq-pgr-hcol.is-hot .jiq-pgr-hnum { color: #C7F23E; }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-hcol.is-hot .jiq-pgr-hnum { color: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-hlabel {
+        margin-top: 6px; font-size: 15px; font-weight: 700; line-height: 1.3;
+    }
+    #jiqPgrNestCard .jiq-pgr-hdoing {
+        margin-top: 4px; font-size: 13px; line-height: 1.35; color: #9AA09B;
+    }
+    #jiqPgrNestCard .jiq-pgr-hbar {
+        height: 6px; margin-top: 10px; border-radius: 99px; background: #3B3D38; overflow: hidden;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-hbar { background: #DDDACE; }
+    #jiqPgrNestCard .jiq-pgr-hbar i {
+        display: block; height: 100%; border-radius: 99px; background: #C7F23E;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-hbar i { background: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-hpct {
+        margin-top: 6px; font-size: 12px; color: #7C878A;
+    }
+    #jiqPgrNestCard .jiq-pgr-bars { margin: 8px 34px 24px; }
+    #jiqPgrNestCard .jiq-pgr-bars h5 {
+        margin: 0 0 10px; font-size: 13px; letter-spacing: .04em;
+        text-transform: uppercase; color: #7C878A; font-weight: 600;
+    }
+    #jiqPgrNestCard .jiq-pgr-barrow {
+        display: grid; grid-template-columns: minmax(8rem, 1.4fr) minmax(6rem, 2fr) minmax(7rem, auto);
+        gap: 10px; align-items: center; padding: 7px 0;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-barrow { border-bottom-color: #DDDACE; }
+    #jiqPgrNestCard .jiq-pgr-barlab { font-size: 13.5px; line-height: 1.35; }
+    #jiqPgrNestCard .jiq-pgr-bartrack {
+        height: 8px; border-radius: 99px; background: #3B3D38; overflow: hidden;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-bartrack { background: #DDDACE; }
+    #jiqPgrNestCard .jiq-pgr-bartrack i {
+        display: block; height: 100%; border-radius: 99px; background: #B7B3D8;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-bartrack i { background: #8E3FA8; }
+    #jiqPgrNestCard .jiq-pgr-barval {
+        font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap;
+    }
+    #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-barlab,
+    #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-barval { color: #C7F23E; }
+    #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-bartrack i { background: #C7F23E; }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-barlab,
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-barval { color: #5E7E12; }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-barrow.is-hot .jiq-pgr-bartrack i { background: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-donuts {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 28px 18px; margin: 8px 34px 24px;
+    }
+    @media (max-width: 1080px) { #jiqPgrNestCard .jiq-pgr-donuts { grid-template-columns: 1fr; } }
+    #jiqPgrNestCard .jiq-pgr-donut { text-align: center; }
+    #jiqPgrNestCard .jiq-pgr-donut h5 {
+        margin: 0 0 8px; font-size: 13px; letter-spacing: .04em;
+        text-transform: uppercase; color: #7C878A; font-weight: 600;
+    }
+    #jiqPgrNestCard .jiq-pgr-donut svg { display: block; margin: 0 auto; }
+    #jiqPgrNestCard .jiq-pgr-dleg { max-width: 280px; margin: 0 auto; text-align: left; }
+    #jiqPgrNestCard .jiq-pgr-dleg-k,
+    #jiqPgrNestCard .jiq-pgr-dleg-row {
+        display: grid; grid-template-columns: 10px max-content 5.4rem 3.1rem 3.4rem;
+        gap: 3px 6px; align-items: center;
+    }
+    #jiqPgrNestCard .jiq-pgr-dleg-k {
+        font-size: 10px; letter-spacing: .04em; color: #7C878A; font-weight: 700;
+    }
+    #jiqPgrNestCard .jiq-pgr-dleg-k.is-group { margin-top: 10px; }
+    #jiqPgrNestCard .jiq-pgr-dleg-k.is-group .reel { color: #C7F23E; text-align: center; }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-dleg-k.is-group .reel { color: #5E7E12; }
+    #jiqPgrNestCard .jiq-pgr-dleg-k.is-group .gphead { text-align: center; }
+    #jiqPgrNestCard .jiq-pgr-dleg-k.is-sub { margin: 1px 0 3px; }
+    #jiqPgrNestCard .jiq-pgr-dleg-k.is-sub span:nth-child(n+3) { text-align: right; }
+    #jiqPgrNestCard .jiq-pgr-dleg-row {
+        font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    #jiqPgrNestCard .jiq-pgr-dleg-row:last-child { border-bottom: 0; }
+    #jiqPgrNestCard .jiq-pgr-dleg-row i {
+        width: 8px; height: 8px; border-radius: 99px; display: inline-block;
+    }
+    #jiqPgrNestCard .jiq-pgr-dleg-row .lab { padding-right: 2px; }
+    #jiqPgrNestCard .jiq-pgr-dleg-row b,
+    #jiqPgrNestCard .jiq-pgr-dleg-row em,
+    #jiqPgrNestCard .jiq-pgr-dleg-row .gp { text-align: right; }
+    #jiqPgrNestCard .jiq-pgr-dleg-row b { font-weight: 800; }
+    #jiqPgrNestCard .jiq-pgr-dleg-row em,
+    #jiqPgrNestCard .jiq-pgr-dleg-row .gp { color: #9AA09B; font-weight: 600; }
+    #jiqPgrNestCard .jiq-pgr-reads {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 34px 24px;
+    }
+    @media (max-width: 1080px) { #jiqPgrNestCard .jiq-pgr-reads { grid-template-columns: 1fr; } }
+    #jiqPgrNestCard .jiq-pgr-read {
+        padding: 16px 18px; border-radius: 12px; background: #15252A;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-read { background: #DDDACE; }
+    #jiqPgrNestCard .jiq-pgr-read h4 {
+        margin: 0 0 8px; font-size: 16px; font-weight: 800; line-height: 1.25;
+    }
+    #jiqPgrNestCard .jiq-pgr-read p {
+        margin: 0; font-size: 14px; line-height: 1.45; color: #9AA09B;
+    }
+    body[data-theme="light"] #jiqPgrNestCard .jiq-pgr-read p { color: #5C6560; }
+    #jiqPgrNestCard .jiq-pgr-method {
+        margin: 8px 34px 24px; font-size: 15px; line-height: 1.5;
+    }
+    #jiqPgrNestCard .jiq-pgr-method p { margin: 0 0 12px; }
+    #jiqPgrNestCard .jiq-pgr-method b { font-weight: 800; }
     @media (max-width: 1080px) { #jiqArrowNestTitle { font-size: 38px; } }
     #jiqArrowNestDeck, #jiqArrowNestCard .jiq-frag-label, #jiqArrowNestCard .jiq-frag-doing,
     #jiqArrowNestCard .jiq-frag-read, #jiqArrowNestCard .jiq-frag-detlab,
