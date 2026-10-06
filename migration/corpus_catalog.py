@@ -321,6 +321,18 @@ def facts_from_journey(key, payload, user=''):
         facts.append(make_fact('journey', 'conversion_pct', 'share reaching the end point',
                                kpis['conversion_pct'], 'pct', window=window, as_of=as_of,
                                source_key=key, source_user=user, note=note))
+    if not facts:
+        # Hand-built story modes carry their figures as fact strings.
+        for fx in (payload or {}).get('facts') or []:
+            txt = fx.get('fact') if isinstance(fx, dict) else fx
+            if isinstance(txt, str) and txt.strip():
+                for f in facts_from_answer(subject, txt, user=user, thread_id='', source_label='journey'):
+                    f['source']['key'] = key
+                    f['note'] = note
+                    f['window'] = {'start': window.get('start'), 'end': window.get('end')} if window.get('start') else None
+                    facts.append(f)
+                if len(facts) >= 40:
+                    break
     for det in (body.get('detours') or []):
         if not isinstance(det, dict):
             continue
@@ -903,6 +915,10 @@ def anchors_for(subject, window=None, products=None, limit=60, with_ledger=True)
         out['related'] = related_subjects(subject, exclude=out.get('subject_key'))
     except Exception:
         out['related'] = []
+    try:
+        out['trends'] = trends_for(subject)
+    except Exception:
+        out['trends'] = []
     if with_ledger:
         try:
             import insights_ledger as _il
@@ -993,6 +1009,48 @@ def prior_journey(anchors, window=None):
     return cands[0]
 
 
+TRENDS_KEY = 'system/corpus_catalog/trends_latest.json'
+
+
+def write_trends_latest(day, entries):
+    """entries: {subject_key: [{source, label, rank, title, as_of}]}
+    for the latest Trends IQ snapshot day. One document, replaced
+    whole; read lazily by anchors_for."""
+    doc = {'day': day, 'updated': _now_iso(), 'subjects': entries}
+    try:
+        _client().put_object(Bucket=S3_BUCKET, Key=TRENDS_KEY,
+                             Body=json.dumps(doc, separators=(',', ':')).encode('utf-8'),
+                             ContentType='application/json')
+        with _lock:
+            _state['trends'] = (doc, time.time())
+        return True
+    except Exception as e:
+        print(f"[corpus-catalog] trends write failed: {e}")
+        return False
+
+
+def trends_for(subject):
+    """[{source, label, rank, title, as_of}] for the subject on the
+    latest Trends IQ day, or []."""
+    if not enabled():
+        return []
+    skey = subject_key(subject)
+    if not skey:
+        return []
+    now = time.time()
+    with _lock:
+        hit = _state.get('trends')
+    if not hit or now - hit[1] > _PAGE_TTL_S:
+        try:
+            doc, _ = _read_json_with_etag(TRENDS_KEY)
+        except Exception:
+            doc = None
+        hit = (doc if isinstance(doc, dict) else {}, now)
+        with _lock:
+            _state['trends'] = hit
+    return list(((hit[0] or {}).get('subjects') or {}).get(skey) or [])
+
+
 def _fmt_value(f):
     v = f.get('value')
     u = f.get('unit')
@@ -1021,6 +1079,8 @@ def anchors_block(anchors, max_lines=40):
     for f in facts[:max_lines]:
         lines.append(f"- {f.get('note') or f.get('product')}: {f.get('label')} = "
                      f"{_fmt_value(f)}{_fmt_window(f.get('window'))}")
+    for tr in ((anchors or {}).get('trends') or [])[:8]:
+        lines.append(f"- Trends IQ ({tr.get('as_of')}): {tr.get('title')} ranks #{tr.get('rank')} on {tr.get('label')}")
     for rel in (anchors or {}).get('related') or []:
         for f in rel.get('facts') or []:
             lines.append(f"- RELATED {rel.get('subject')}: {f.get('label')} = "

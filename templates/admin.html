@@ -7010,6 +7010,12 @@
                     `${esc(corr.open)} open · ${esc(corr.applied)} applied (${esc(corr.applied_last_7d)} this week) · ${esc(corr.banked)} banked as checks`,
                     `Replay of applied corrections: ${esc(corr.replay || 'unknown')}${corr.replay_failed ? ` (${esc(corr.replay_failed)} failing)` : ''} · ${when(corr.generated_at)}`,
                 ] : ['No triage run yet'];
+                const watch = d.watch || {};
+                const watchLines = watch.present ? [
+                    `${esc(watch.flags_24h || 0)} flagged ask${watch.flags_24h === 1 ? '' : 's'} in 24h (${esc(watch.flags_1h || 0)} in the last hour) · ${esc(watch.open_promises || 0)} open promise${watch.open_promises === 1 ? '' : 's'}${watch.overdue_promises ? `, ${esc(watch.overdue_promises)} overdue` : ''}`,
+                    ...(watch.promises || []).filter(pr => pr.overdue).map(pr => `✗ ${esc(pr.user)}: "${esc(pr.question)}" promised by ${when(pr.due_by)}`),
+                    ...(watch.recent || []).slice(0, 4).map(r => `${esc(r.outcome)} · ${esc(r.user)}: "${esc(r.question)}"`),
+                ] : ['Nothing flagged'];
                 const lockLines = lock.held ? [
                     `Held by ${esc(lock.owner)} since ${when(lock.acquired_at)}${lock.note ? ` · ${esc(lock.note)}` : ''}`,
                     `Expires ${when(lock.expires_at)}`,
@@ -7022,6 +7028,7 @@
                         ${card('Intake canary', lightOf(canary.present ? canary.result === 'green' : null), canaryLines)}
                         ${card('Scheduled jobs', lightOf(timers.length ? (!overdue.length && !(hb.failed_units || []).length) : null), timerLines)}
                         ${card('Corrections', lightOf(corr.present ? (corr.replay !== 'red' && !(corr.open > 0 && corr.applied === 0)) : null), corrLines)}
+                        ${card('Prometheus watch', watch.present ? (watch.light === 'red' ? LIGHT.red : (watch.light === 'amber' ? LIGHT.amber : LIGHT.green)) : LIGHT.green, watchLines)}
                         ${card('Publish lock', lock.held ? LIGHT.amber : LIGHT.green, lockLines)}
                         ${card('Heartbeat', lightOf(hb.present ? (hb.age_min != null && hb.age_min <= 120) : null), hb.present ? [`From ${esc(hb.host || 'build server')} ${ago(hb.age_min)} (${when(hb.generated_at)})`] : ['No heartbeat yet'])}
                     </div>`;

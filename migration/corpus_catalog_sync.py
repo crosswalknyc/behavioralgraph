@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import re
 import os
 import sys
 import time
@@ -218,6 +219,113 @@ def sweep_bpiq(sources, dry_run=False):
     return n, seen
 
 
+def sweep_trends(dry_run=False, top_n=25):
+    """Latest Trends IQ snapshot day -> one small document of ranks per
+    subject (top_n per source), so a Prometheus answer about a title's
+    trend position agrees with the Trends tab."""
+    days = sorted(p['Prefix'].rstrip('/').split('/')[-1] for p in _list('trends_iq_snapshots/', delimiter='/')
+                  if p.get('Prefix') and re.fullmatch(r'trends_iq_snapshots/\d{4}-\d{2}-\d{2}/', p['Prefix']))
+    if not days:
+        print('[sync] trends: no snapshot days')
+        return 0
+    day = days[-1]
+    entries = {}
+    n_sources = 0
+    for o in _list(f'trends_iq_snapshots/{day}/'):
+        key = o.get('Key') or ''
+        if not key.endswith('.json'):
+            continue
+        try:
+            doc = json.loads(_s3().get_object(Bucket=BUCKET, Key=key)['Body'].read())
+        except Exception:
+            continue
+        label = str(doc.get('label') or doc.get('source') or key.rsplit('/', 1)[-1][:-5])
+        rows = doc.get('national') or doc.get('items') or doc.get('rows') or []
+        if not isinstance(rows, list):
+            continue
+        n_sources += 1
+        for r in rows[:top_n]:
+            if not isinstance(r, dict):
+                continue
+            title = str(r.get('title') or r.get('name') or '').strip()
+            rank = r.get('rank') or r.get('bucket_rank')
+            if not title or rank is None:
+                continue
+            skey = cc.subject_key(title)
+            if not skey:
+                continue
+            entries.setdefault(skey, []).append({'source': str(doc.get('source') or ''), 'label': label,
+                                                 'rank': int(rank) if str(rank).isdigit() else rank,
+                                                 'title': title, 'as_of': day})
+    print(f"[sync] trends: day {day}, {n_sources} sources, {len(entries)} subjects")
+    if dry_run or not entries:
+        return len(entries)
+    cc.write_trends_latest(day, entries)
+    return len(entries)
+
+
+def backfill_threads(sources, dry_run=False, max_threads=5000):
+    """Every figure Prometheus stated in chat before the write hook
+    existed, banked under the subject its aliases name (2026-10-06).
+    A thread is re-read only when its ETag changed."""
+    idx = cc.load_index(force=True)
+    aliases = []
+    for skey, ent in (idx.get('subjects') or {}).items():
+        for a in (ent.get('aliases') or []) + [ent.get('subject') or '']:
+            a = str(a or '').strip()
+            if len(a) >= 4:
+                aliases.append((a.lower(), ent.get('subject') or a))
+    aliases.sort(key=lambda x: -len(x[0]))
+    n_threads = n_turns = 0
+    present = set()
+    for o in _list('system/synth_chat_threads/'):
+        key = o.get('Key') or ''
+        if not key.endswith('.json') or key.endswith('/index.json') or '/_backups/' in key:
+            continue
+        present.add(key)
+        et = (o.get('ETag') or '').strip('"')
+        if (sources.get(key) or {}).get('etag') == et:
+            continue
+        if n_threads >= max_threads:
+            break
+        n_threads += 1
+        if dry_run:
+            continue
+        try:
+            turns = json.loads(_s3().get_object(Bucket=BUCKET, Key=key)['Body'].read())
+        except Exception:
+            continue
+        parts = key.split('/')
+        user = parts[2] if len(parts) >= 4 else ''
+        tid = parts[-1][:-5]
+        prev_user = ''
+        banked = 0
+        for turn in (turns if isinstance(turns, list) else []):
+            if not isinstance(turn, dict):
+                continue
+            txt = str(turn.get('text') or '')
+            if turn.get('role') == 'user':
+                prev_user = txt
+                continue
+            if not re.search(r'\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?%', txt):
+                continue
+            hay = (prev_user + ' ' + txt).lower()
+            subject = next((disp for low, disp in aliases if low in hay), '')
+            if not subject:
+                continue
+            if cc.record_answer(subject, txt, user=user, thread_id=tid):
+                banked += 1
+        n_turns += banked
+        # mark the thread as indexed so the next sweep skips it
+        try:
+            cc._update_json(cc.SOURCES_KEY, lambda d, _k=key, _e=et: (d.__setitem__(_k, {
+                'etag': _e, 'product': 'chat', 'subject_key': '', 'indexed_at': cc._now_iso()}) or d))
+        except Exception:
+            pass
+    print(f"[sync] threads: {len(present)} on S3, {n_threads} new or changed, {n_turns} replies banked")
+    return n_turns
+
+
 def forget_gone(sources, present, dry_run=False):
     gone = [k for k, v in sources.items()
             if v.get('product') in ('profile', 'journey', 'attribution', 'bpiq')
@@ -388,6 +496,14 @@ def main(argv=None):
         stats['bpiq'] = n
         present |= seen
         stats['gone'] = forget_gone(sources, present, dry_run=args.dry_run)
+        try:
+            stats['trends_subjects'] = sweep_trends(dry_run=args.dry_run)
+        except Exception as e:
+            print(f"[sync] trends sweep skipped: {e}")
+        try:
+            stats['chat_replies'] = backfill_threads(sources, dry_run=args.dry_run)
+        except Exception as e:
+            print(f"[sync] thread backfill skipped: {e}")
     findings = []
     n_multi = 0
     if not args.no_audit:

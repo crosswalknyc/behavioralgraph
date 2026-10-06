@@ -100,9 +100,11 @@ def main():
     ap.add_argument('--bcc', action='append', default=[],
                     help='extra BCC (jenna@ is always on BCC; repeatable)')
     ap.add_argument('--dry-run', action='store_true')
-    ap.add_argument('--approved-by-jenna', action='store_true',
-                    help='Jenna approved this exact body in chat. Without '
-                         'it the tool dry-runs.')
+    ap.add_argument('--approved-by-jenna', '--instructed', dest='approved_by_jenna',
+                    action='store_true',
+                    help='Jenna told us to send this (2026-10-06: she does not '
+                         'need to approve the body, but nothing goes out unless '
+                         'she said to send). Without it the tool dry-runs.')
     args = ap.parse_args()
 
     body_text = open(args.body_file, encoding='utf-8').read().strip()
@@ -153,16 +155,26 @@ def main():
 
     if args.dry_run or not args.approved_by_jenna:
         if not args.approved_by_jenna and not args.dry_run:
-            print('NOT SENT: user-facing emails need Jenna\'s approval of this exact body first (--approved-by-jenna).')
+            print('NOT SENT: user-facing emails go out only when Jenna says to send (--instructed).')
         print(f'DRY RUN: would send "{msg["Subject"]}" to {dests}, '
               f'pdf={len(pdf or b"")}B, then bank to thread')
         return
 
+    # One door for user-facing mail (2026-10-06): scrub, banned-token
+    # assert, From Prometheus, Jenna + Liz on BCC, logged.
+    from prometheus import outbound_mail as _om
+    resp = _om.send_user_email(
+        to=args.to, subject=str(msg['Subject']), body=body, instructed=True,
+        caller='pm_correction_email', html=html, pdf=pdf or None,
+        pdf_name=f'{safe or "Crosswalk_Read"}.pdf',
+        csv=(open(args.csv, 'rb').read() if args.csv else None),
+        csv_name=(os.path.basename(args.csv) if args.csv else ''),
+        extra_bcc=[b for b in (args.bcc or []) if b])
+    if not resp.get('sent'):
+        print('NOT SENT:', resp.get('reason'))
+        return
+    print('sent:', resp.get('message_id'))
     import boto3
-    ses = boto3.client('ses', region_name='us-east-2')
-    resp = ses.send_raw_email(Source=FROM, Destinations=dests,
-                              RawMessage={'Data': msg.as_string()})
-    print('sent:', resp['MessageId'])
 
     # ---- Bank the corrected read into the Prometheus thread ----
     s3 = boto3.client('s3', region_name='us-east-2')

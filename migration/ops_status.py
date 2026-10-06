@@ -28,6 +28,8 @@ import json
 STATUS_KEY = 'system/ops/status.json'
 CORRECTIONS_KEY = 'system/ops/pm_corrections_status.json'
 SMOKE_KEY = 'system/ops/smoke_latest.json'
+WATCH_KEY = 'system/ops/pm_watch_recent.json'
+HELD_PREFIX = 'system/ops/held_replies/'
 LOCK_KEY = 'system/ops/publish_lock.json'
 STALE_HEARTBEAT_S = 2 * 3600
 
@@ -88,6 +90,60 @@ def timers_view(heartbeat, now):
                     'last_age_min': int((now - last).total_seconds() // 60) if last else None,
                     'overdue': bool(nxt and nxt < now - dt.timedelta(minutes=15))})
     out.sort(key=lambda x: (not x['overdue'], x['unit'] or ''))
+    return out
+
+
+def watch_view(s3, bucket, now):
+    """Prometheus watch (2026-10-06): the asks flagged in the last 24
+    hours (a repeated clarify, an empty or faulted reply, a user saying
+    no / wrong, a held read) and the open promises with a due time.
+    Red when a promise is overdue or three or more flags landed in the
+    last hour; amber when anything is open; green when quiet."""
+    out = {'present': False, 'flags_24h': 0, 'flags_1h': 0, 'recent': [],
+           'open_promises': 0, 'overdue_promises': 0, 'promises': [], 'light': None}
+    try:
+        doc = read_json(s3, bucket, WATCH_KEY)
+        items = [x for x in ((doc or {}).get('items') or []) if isinstance(x, dict)]
+        day = now - dt.timedelta(hours=24)
+        hour = now - dt.timedelta(hours=1)
+        recent = []
+        for x in items:
+            ts = _parse(x.get('ts'))
+            if not ts or ts < day:
+                continue
+            recent.append(x)
+        out['present'] = bool(doc)
+        out['flags_24h'] = len(recent)
+        out['flags_1h'] = sum(1 for x in recent if (_parse(x.get('ts')) or day) >= hour)
+        out['recent'] = [{'ts': x.get('ts'), 'user': x.get('user'), 'outcome': x.get('outcome'),
+                          'route': x.get('route'), 'question': str(x.get('question') or '')[:120]}
+                         for x in sorted(recent, key=lambda x: str(x.get('ts') or ''), reverse=True)[:8]]
+    except Exception:
+        pass
+    try:
+        promises = []
+        for d in (now, now - dt.timedelta(days=1)):
+            prefix = f"{HELD_PREFIX}{d.strftime('%Y-%m-%d')}/"
+            resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+            for o in resp.get('Contents') or []:
+                doc = read_json(s3, bucket, o['Key'])
+                if isinstance(doc, dict) and doc.get('status', 'open') == 'open':
+                    due = _parse(doc.get('due_by'))
+                    promises.append({'user': doc.get('user'), 'question': str(doc.get('question') or '')[:120],
+                                     'kind': doc.get('kind'), 'opened_at': doc.get('opened_at'),
+                                     'due_by': doc.get('due_by'), 'overdue': bool(due and due < now)})
+        out['present'] = out['present'] or bool(promises)
+        out['open_promises'] = len(promises)
+        out['overdue_promises'] = sum(1 for p in promises if p['overdue'])
+        out['promises'] = sorted(promises, key=lambda p: str(p.get('opened_at') or ''), reverse=True)[:8]
+    except Exception:
+        pass
+    if out['overdue_promises'] or out['flags_1h'] >= 3:
+        out['light'] = 'red'
+    elif out['open_promises'] or out['flags_24h']:
+        out['light'] = 'amber'
+    else:
+        out['light'] = 'green'
     return out
 
 
@@ -160,6 +216,7 @@ def build_payload(s3, bucket, this_version=None, now=None):
             for name, st in regression.items() if isinstance(st, dict)
         ],
         'timers': timers_view(hb, now),
+        'watch': watch_view(s3, bucket, now),
         'corrections': {
             'present': bool(corr.get('generated_at')),
             'generated_at': corr.get('generated_at'),

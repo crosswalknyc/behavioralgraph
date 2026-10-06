@@ -5304,8 +5304,104 @@ _PM_GATE_TASK_MESSAGE = (
     "should this be on? Name the show, brand, or person (one line is "
     "enough) and I will take it from there.")
 _PM_GATE_REPEAT_MESSAGE = (
-    "I could not place that answer, so I will not ask again. I am "
-    "taking this to the team and will email you the read.")
+    "I could not place that answer, so I will not ask again. Tell me "
+    "the one you mean in a few words and I will run it right away.")
+_PM_GATE_REPEAT_PICK_MESSAGE = (
+    "I could not place that answer, so I will not ask again. Pick one "
+    "and I will run it right away: {options}.")
+_PM_GATE_HELD_NEXT_MESSAGE = (
+    "I did not land a clean answer on that one. Ask it again in a few "
+    "words, or open the profile and ask from there. I am also looking "
+    "at it and will email you the read.")
+
+
+def _pm_gate_options(history):
+    """The choices the previous agent turn offered (chip labels, or the
+    names in a 'Do you mean for X, or Y?' line), minus utility chips."""
+    try:
+        prev = None
+        for t in reversed(history or []):
+            if isinstance(t, dict) and str(t.get('role') or '') == 'agent':
+                prev = t
+                break
+        if not prev:
+            return []
+        out = []
+        meta = prev.get('meta') if isinstance(prev.get('meta'), dict) else {}
+        mc = meta.get('memory_confirm') if isinstance(meta.get('memory_confirm'), dict) else {}
+        for o in (mc.get('options') or meta.get('options') or []):
+            lbl = str((o.get('label') if isinstance(o, dict) else o) or '').strip()
+            if lbl and not re.match(r'^(?:something else|email me|send me|cancel|no\b|none\b|skip)', lbl, re.I):
+                out.append(lbl)
+        if not out:
+            m = re.match(r'^\s*Do you mean (?:for )?(.+?)(?:,? or (.+?))?\s*\?\s*$',
+                         str(prev.get('text') or ''), re.I | re.S)
+            if m:
+                out = [g.strip() for g in (m.group(1), m.group(2)) if g and g.strip()]
+        return out[:4]
+    except Exception:
+        return []
+
+
+_PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
+                               'mismatched', 'failed_by_user'})
+
+
+def _pm_watch_flag(user, question, route, outcome, extra=None):
+    """Real-time watch feed (2026-10-06): a flagged ask (repeated
+    clarify, empty / faulted reply, error, a build drafted for a task,
+    a user rejecting the previous answer) lands in
+    system/ops/pm_watch_recent.json, bounded to the last 80, which the
+    admin System Status tile reads. Off the request thread; never
+    raises."""
+    try:
+        sig = str((extra or {}).get('user_signal') or '')
+        if outcome not in _PM_WATCH_FLAGGED and sig not in ('rejected', 'wrong', 'no'):
+            return
+        if str(user or '').startswith('canary') or str(user or '') in ('', 'unknown', 'replay'):
+            return
+    except Exception:
+        return
+
+    def _run():
+        try:
+            key = 'system/ops/pm_watch_recent.json'
+            doc = _pm_s3_json(key, {}) or {}
+            items = [x for x in (doc.get('items') or []) if isinstance(x, dict)]
+            items.append({'ts': _pm_iso_now(), 'user': str(user or '')[:60],
+                          'route': str(route or '')[:40], 'outcome': str(outcome or '')[:30],
+                          'signal': sig[:20], 'question': str(question or '')[:200]})
+            doc['items'] = items[-80:]
+            doc['updated_at'] = _pm_iso_now()
+            _pm_s3_put_json(key, doc)
+        except Exception:
+            traceback.print_exc()
+    try:
+        threading.Thread(target=_run, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _pm_record_held_reply(username, question, told, reason, kind):
+    """A held or repeated reply opens a task with a due time (2026-10-06,
+    dead ends): system/ops/held_replies/<day>/<ts>_<id>.json, read by the
+    ops watch so an unanswered promise is flagged, never forgotten."""
+    try:
+        import hashlib as _hl
+        now = datetime.now(timezone.utc)
+        rid = _hl.sha1(f"{username}|{question}|{now.isoformat()}".encode()).hexdigest()[:10]
+        key = (f"system/ops/held_replies/{now.strftime('%Y-%m-%d')}/"
+               f"{now.strftime('%H%M%S')}_{rid}.json")
+        doc = {'id': rid, 'user': username or '', 'question': str(question or '')[:400],
+               'told': str(told or '')[:400], 'reason': str(reason or '')[:400], 'kind': kind,
+               'opened_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
+               'due_by': (now + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+               'status': 'open'}
+        _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=key,
+                                Body=json.dumps(doc).encode('utf-8'),
+                                ContentType='application/json')
+    except Exception:
+        traceback.print_exc()
 _PM_GATE_RETRY_BUDGET_S = 45
 _PM_GATE_HELD = frozenset({'empty', 'faulted'})
 
@@ -5442,33 +5538,47 @@ def _pm_answer_gate(fn, args, kwargs, resp, payload, status_code,
             # same question.
             for k in [k for k in new_payload if str(k).endswith('_collect')]:
                 new_payload.pop(k, None)
-            new_payload['reply'] = _PM_GATE_REPEAT_MESSAGE
+            _opts = _pm_gate_options(history)
+            if _opts:
+                told = _PM_GATE_REPEAT_PICK_MESSAGE.format(
+                    options=' or '.join(_opts))
+                new_payload['followups'] = list(_opts)
+            else:
+                told = _PM_GATE_REPEAT_MESSAGE
+            new_payload['reply'] = told
             new_payload['success'] = True
             new_payload['gate'] = 'repeat'
             new_status = 200
             extra['gate'] = 'repeat'
-            told = _PM_GATE_REPEAT_MESSAGE
             reason = ('The same clarifying question was about to go out '
-                      'twice in a row, so the user was told the read '
-                      'will come by email. Please read the thread and '
-                      'send it.')
+                      'twice in a row; the user was offered the choices '
+                      'as chips to pick from. Please read the thread in '
+                      'case they are still stuck.')
         else:
             new_payload = dict(payload)
             for k in ('answer', 'message', 'text', 'markdown', 'html'):
                 new_payload.pop(k, None)
-            new_payload['reply'] = _PM_GATE_HELD_MESSAGE
+            new_payload['reply'] = _PM_GATE_HELD_NEXT_MESSAGE
             new_payload['success'] = True
             new_payload['gate'] = 'held'
+            _q_short = ' '.join(str(question or '').split())[:70]
+            if _q_short:
+                new_payload['followups'] = [f"Try again: {_q_short}"]
             new_status = 200
             extra['gate'] = extra.get('gate') or 'held'
-            told = _PM_GATE_HELD_MESSAGE
+            told = _PM_GATE_HELD_NEXT_MESSAGE
             reason = ('The reply came back ' + result + ' (blank, '
                       'transport text, or scaffold labels), so the user '
-                      'was told the read will come by email. Please '
-                      'send it.')
+                      'was given a retry and told the read will come by '
+                      'email. Please send it within two hours.')
         try:
             _H._prometheus_manual_look_email(question, told, reason,
                                              user_email=username or None)
+        except Exception:
+            traceback.print_exc()
+        try:
+            _pm_record_held_reply(username, question, told, reason,
+                                  'repeat' if repeat else ('mismatched' if mismatched else 'held'))
         except Exception:
             traceback.print_exc()
         body = new_payload
@@ -5628,6 +5738,7 @@ def _ask_logged(surface):
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject, extra=extra,
                     stages=getattr(_g, '_pm_ask_stages', None))
+                _pm_watch_flag(_pm_ask_log_user(), question, route, outcome, extra)
                 _pm_watch_notify(
                     _pm_ask_log_user(''), question, payload,
                     subject)
@@ -12319,10 +12430,10 @@ def _pm_email_file_response(user, text):
         part.add_header('Content-Disposition', 'attachment',
                         filename=fname)
         msg.attach(part)
-        boto3.client('ses', region_name='us-east-2').send_raw_email(
-            Source='prometheus@crosswalknyc.com',
-            Destinations=[addr, 'jenna@crosswalknyc.com'],
-            RawMessage={'Data': msg.as_string()})
+        from prometheus import outbound_mail as _om
+        _om.send_user_email(
+            to=addr, subject=str(msg['Subject']), body=_bl, instructed=True,
+            caller='csv-by-email', csv=_fbytes, csv_name=fname, bcc_liz=False)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/analyze', e)
@@ -14288,19 +14399,16 @@ def _pm_send_output_email(kind, to_email, data):
                 attc.add_header('Content-Disposition', 'attachment',
                                 filename=csv_name)
                 msg.attach(attc)
-            dests = [to_email]
-            if to_email.lower() != 'jenna@crosswalknyc.com':
-                dests.append('jenna@crosswalknyc.com')
-            ses = boto3.client('ses', region_name='us-east-2')
-            ses.send_raw_email(
-                Source='Prometheus <prometheus@crosswalknyc.com>',
-                Destinations=dests,
-                RawMessage={'Data': msg.as_string()})
-            print(f"[pm-notify] output email sent to {to_email} ({kind}"
-                  + (", pdf attached" if pdf_bytes else "")
-                  + (", csv attached" if csv_bytes else "") + ")")
+            # One door for user-facing mail (2026-10-06): the user asked
+            # for this notification, so it is instructed by them.
+            from prometheus import outbound_mail as _om
+            _om.send_user_email(
+                to=to_email, subject=subject_line[:200], body=body_text,
+                instructed=True, caller=f'pm-notify:{kind}', html=body_html,
+                pdf=pdf_bytes or None, pdf_name=pdf_name,
+                csv=csv_bytes or None, csv_name=csv_name, bcc_liz=False)
         except Exception as e:
-            print(f"[pm-notify] SES send failed: {e}")
+            print(f"[pm-notify] send failed: {e}")
 
     threading.Thread(target=_send, daemon=True).start()
     return True
