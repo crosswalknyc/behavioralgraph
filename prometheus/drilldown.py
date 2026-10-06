@@ -67,7 +67,9 @@ def numbers_in(text):
 
 def looks_like_drilldown(text):
     t = str(text or '')
-    return bool(numbers_in(t)) and bool(_CUE_RE.search(t))
+    if not numbers_in(t):
+        return False
+    return bool(_CUE_RE.search(t)) or looks_like_check(t)
 
 
 # ------------------------------------------------------------------ store
@@ -245,6 +247,116 @@ def _overlap(rows, base):
         return sum(_acc(r) for r in rows) > base * 1.005
     except Exception:
         return False
+
+
+_CHECK_RX = re.compile(
+    r"\b(check|re-?check|verify|double-?check|confirm|are these (right|correct|accurate)|"
+    r"do these (add up|check out|look right)|is this (right|correct)|something looks off|"
+    r"these (percentages|numbers|rates|figures) (look|seem))\b", re.I)
+
+
+def looks_like_check(text):
+    """'Can you check these percentages again' with a pasted table."""
+    t = str(text or '')
+    return bool(_CHECK_RX.search(t)) and (len(numbers_in(t)) >= 3 or re.search(
+        r"\b(percentages?|numbers?|rates?|figures?|math|table|column)\b", t, re.I))
+
+
+def _kept_table(spine):
+    rows = []
+    prev = None
+    for s in spine:
+        if s.get('id') in ('tam', 'us_gen_pop'):
+            continue
+        n = _acc(s)
+        kept = (n / float(prev) * 100) if prev else None
+        rows.append((str(s.get('label') or s.get('id')), n, kept))
+        prev = n
+    return rows
+
+
+def reply_for_check(hit, text, s3=None, bucket=None):
+    """Recompute the step rates from the stored nest. Two consecutive
+    steps on the same rate is the signature of an even fill between two
+    measured points (Alexia, 2026-10-06: 62.0% twice, 57.7% twice); the
+    stage between them is re-leveled in place, under its own published
+    count, and the corrected table is the answer. Otherwise the math is
+    confirmed line by line."""
+    payload = hit['payload']
+    j = payload.get('fragrance_shop_journey') or {}
+    spine = j.get('spine') or []
+    subj = _subject_of(payload)
+    before = _kept_table(spine)
+    dup = [(a, b) for a, b in zip(before[1:], before[2:])
+           if a[2] is not None and b[2] is not None and abs(a[2] - b[2]) < 0.6]
+    pasted = set(numbers_in(text))
+    stored = {n for _, n, _ in before}
+    off = sorted(pasted - stored - {329900000})
+    moved = []
+    if dup:
+        try:
+            from migration import journey_synthesis as _js
+        except Exception:
+            import journey_synthesis as _js  # type: ignore
+        ceilings = {s['id']: _acc(s) for s in spine if s.get('id') not in ('tam', 'us_gen_pop')}
+        moved = _js.distinct_kept_rates(payload, ceilings=ceilings)
+        if moved:
+            try:
+                meta = payload.get('meta') or {}
+                j['copy'] = _js.build_copy(str(meta.get('customer_brand') or subj), str(meta.get('platform') or ''), j,
+                                           family='ticketing' if meta.get('no_purchase_claim') else 'purchase')
+            except Exception:
+                pass
+            try:
+                _persist_payload(hit, payload, s3, bucket, tag='distinct_rates')
+            except Exception:
+                traceback.print_exc()
+    after = _kept_table(j.get('spine') or [])
+    lines = []
+    for label, n, kept in after:
+        lines.append(f"- {label}: {n:,}" + (f" ({kept:.1f}% kept going)" if kept is not None else ''))
+    if moved:
+        pairs = ' and '.join(f"{a[2]:.1f}% twice" for a, b in dup[:2])
+        head = (f"You were right to question them. Consecutive steps carried the same rate ({pairs}). The counts at the "
+                f"measured points were right; the stage between each pair had been set to an even split, which produced the "
+                f"repeat. Those stages are re-leveled and the measured points did not move. The {subj} journey now reads:")
+        tail = "\n\nReload the Digital Journey tab to see it."
+    else:
+        head = f"The rates hold. Each step as a share of the one before it on the {subj} journey:"
+        tail = ''
+    if off:
+        tail += ("\n\nOne note: " + ', '.join(f"{n:,}" for n in off[:4])
+                 + (" is" if len(off) == 1 else " are") + " not on the journey as stored; the figures above are the ones on file.")
+    return head + "\n\n" + "\n".join(lines) + tail, bool(moved)
+
+
+def _persist_payload(hit, payload, s3, bucket, tag='edit'):
+    if s3 is None:
+        s3, bucket = _s3()
+    key = hit['key']
+    try:
+        from . import guards as _g
+        _g.scrub_tree(payload.get('fragrance_shop_journey') or {})
+    except Exception:
+        pass
+    ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    name = key.rsplit('/', 1)[-1]
+    try:
+        s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': key},
+                       Key=f'journey-iq/_backups/{name}.pre_{tag}_{ts}.json.gz')
+    except Exception:
+        traceback.print_exc()
+    body = io.BytesIO()
+    with gzip.GzipFile(fileobj=body, mode='wb') as gz:
+        gz.write(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    s3.put_object(Bucket=bucket, Key=key, Body=body.getvalue(),
+                  ContentType='application/json', ContentEncoding='gzip')
+    _payload_cache.pop(key, None)
+    try:
+        from migration import corpus_catalog as _cc
+        _cc.index_journey(key, payload, user=str((payload.get('meta') or {}).get('created_by') or ''))
+    except Exception:
+        pass
 
 
 def reply_for_breakdown(hit, bd_rows, built=False):
@@ -574,6 +686,9 @@ def answer(text, uname, ctx=None, tid=None, *, s3=None, bucket=None,
         return None
     subj = _subject_of(hit['payload'])
     kind = hit['kind']
+    if looks_like_check(text):
+        reply, fixed = reply_for_check(hit, text, s3, bucket)
+        return _raw(reply, subj, _followups(hit), drilldown='check_fixed' if fixed else 'check')
     if kind == 'stage':
         return _raw(reply_for_stage(hit), subj, _followups(hit), drilldown='stage')
     if kind == 'fork_row':

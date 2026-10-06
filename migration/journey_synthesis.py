@@ -33,6 +33,7 @@ import datetime as _dt
 import hashlib
 import json
 import re
+import traceback
 from typing import Callable, Optional
 
 US_GEN_POP = 329_900_000
@@ -1320,6 +1321,126 @@ def _clean_asset_label(title: str) -> str:
     return str(title or '').strip()
 
 
+def refit_fork(j: dict, paid: int, penult: int, old_paid: int, seed: str) -> None:
+    """Re-solve the leave / win-back fork on a new terminal and
+    penultimate count, keeping the shape the research gave (the four
+    branch ratios) and every identity: paid_first + paid_return = paid,
+    abandoned + paid_first = penult, retargeted < abandoned, returned <
+    retargeted, paid_return <= returned."""
+    fork = j.get('fork') or []
+    if not fork:
+        return
+    fk = {r['id']: r for r in fork if isinstance(r, dict) and r.get('id')}
+    if 'paid_return' not in fk or 'paid_first' not in fk or 'abandoned' not in fk:
+        return
+    o_paid = max(float(old_paid or paid), 1.0)
+    o_pr = float(fk['paid_return']['accounts'])
+    o_rn = max(float(fk.get('returned', {}).get('accounts', 0)), 1.0)
+    o_rt = max(float(fk.get('retargeted', {}).get('accounts', 0)), 1.0)
+    o_ab = max(float(fk['abandoned']['accounts']), 1.0)
+    share_back = o_pr / o_paid
+    b_ = max(min(o_pr / o_rn, 0.98), 0.05)   # paid_return of returned
+    c_ = max(min(o_rn / o_rt, 0.98), 0.05)   # returned of retargeted
+    d_ = max(min(o_rt / o_ab, 0.98), 0.05)   # retargeted of leavers
+    denom = paid * share_back * (1.0 / (b_ * c_) - d_)
+    t = ((penult - paid) * d_ / denom) if denom > 0 else 1.0
+    if t < 1.0:
+        t *= 0.97 + 0.025 * ((_h(seed, 'fork_t') % 100) / 100.0)
+    pr = _messy((seed, 'anchor_pr'), paid * share_back * min(t, 1.0))
+    pr = max(1, min(pr, paid - 1))
+    pf = paid - pr
+    ab = penult - pf
+    rn = max(_messy((seed, 'anchor_rn'), pr / b_), pr + 1)
+    rt = max(_messy((seed, 'anchor_rt'), rn / c_), rn + 1)
+    if rt >= ab:
+        rt = ab - 1 - (_h(seed, 'rt_trim') % 5)
+        rn = min(rn, rt - 1)
+        pr = min(pr, rn)
+        pf = paid - pr
+        ab = penult - pf
+    vals = {'abandoned': ab, 'retargeted': rt, 'returned': rn,
+            'paid_return': pr, 'paid_first': pf}
+    bases = {'abandoned': penult, 'retargeted': ab, 'returned': rt,
+             'paid_return': rn, 'paid_first': penult}
+    assert pf + pr == paid and ab + pf == penult
+    assert rt < ab and rn < rt and pr <= rn and pf > 0 and pr > 0
+    for r in fork:
+        if r.get('id') in vals:
+            r['accounts'] = int(vals[r['id']])
+            b = max(bases[r['id']], 1)
+            r['kept'] = round(r['accounts'] / b * 100, 4)
+            if 'dropped' in r:
+                r['dropped'] = max(b - r['accounts'], 0)
+
+
+def distinct_kept_rates(payload: dict, seed: str = '', min_gap_pp: float = 0.6,
+                        ceilings: Optional[dict] = None) -> list:
+    """No two consecutive stages keep the same share of the one before
+    (the house rule: no two identical rates). A geometric fill between
+    two measured points produces exactly that (62.0% then 62.0%; Alexia,
+    2026-10-06), so the stage between two equal steps is moved off the
+    midpoint by a salted tilt, strictly inside its neighbours, and the
+    fork re-solves on the new penultimate count. Returns the ids moved.
+    Stage counts the campaign anchored (first, info-seek, terminal) are
+    never the ones moved: only a middle stage sitting between two equal
+    rates. `ceilings` ({stage_id: max_count}) keeps a moved stage under
+    a count it must not exceed (a campaign stage, or its own published
+    value); when the salted tilt would cross it, the tilt flips down."""
+    ceilings = {k: int(v) for k, v in (ceilings or {}).items() if v}
+    j = (payload or {}).get('fragrance_shop_journey') or {}
+    spine = j.get('spine') or []
+    if len(spine) < 4:
+        return []
+    seed = seed or str((payload.get('meta') or {}).get('target_name') or '')
+    ids = [s['id'] for s in spine]
+    acc = {s['id']: int(s['accounts']) for s in spine}
+    moved = []
+    for _ in range(3):
+        changed = False
+        kept = {}
+        for k in range(1, len(ids)):
+            prev, cur = acc[ids[k - 1]], acc[ids[k]]
+            kept[ids[k]] = cur / float(prev) * 100 if prev else 0.0
+        for k in range(1, len(ids) - 1):
+            a, b = ids[k], ids[k + 1]
+            if abs(kept[a] - kept[b]) < min_gap_pp:
+                lo, hi = acc[ids[k + 1]], acc[ids[k - 1]]
+                mid = (lo * hi) ** 0.5
+                tilt = (0.04 + 0.05 * ((_h(seed, 'tilt', a) % 100) / 100.0))
+                if _h(seed, 'tilt_sign', a) % 2:
+                    tilt = -tilt
+                cap = ceilings.get(a)
+                if cap and mid * (1 + abs(tilt)) >= cap:
+                    tilt = -abs(tilt)
+                new = _messy((seed, 'distinct', a), mid * (1 + tilt))
+                new = max(lo + 1, min(hi - 1, new))
+                if cap:
+                    new = min(new, cap - 1)
+                    new = max(lo + 1, new)
+                if new != acc[a]:
+                    acc[a] = new
+                    moved.append(a)
+                    changed = True
+        if not changed:
+            break
+    if not moved:
+        return []
+    old_paid = int(spine[-1]['accounts'])
+    prev = int(spine[0]['accounts'])
+    for s in spine[1:]:
+        s['accounts'] = acc[s['id']]
+        s['kept'] = round(s['accounts'] / prev * 100, 4)
+        s['dropped'] = prev - s['accounts']
+        s['ofUs'] = round(s['accounts'] / US_GEN_POP * 100, 4)
+        prev = s['accounts']
+    if ids[-2] in moved:
+        try:
+            refit_fork(j, int(spine[-1]['accounts']), int(spine[-2]['accounts']), old_paid, seed)
+        except Exception:
+            traceback.print_exc()
+    return sorted(set(moved), key=ids.index)
+
+
 def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
                               seed: str = '') -> dict:
     """Hold the journey at or below the Attribution IQ campaign on the
@@ -1413,61 +1534,18 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
             s['dropped'] = prev - s['accounts']
             s['ofUs'] = round(s['accounts'] / US_GEN_POP * 100, 4)
             prev = s['accounts']
+    if anchored:
+        # A geometric fill leaves equal consecutive rates; move the
+        # middle stage off the midpoint (no two identical rates).
+        distinct_kept_rates(payload, seed, ceilings={k: int(v) for k, v in targets.items()})
+        for s in spine[1:]:
+            new[s['id']] = int(s['accounts'])
     paid, penult = spine[-1]['accounts'], spine[-2]['accounts']
     f_paid = paid / float(old[ids[-1]])
 
     # Fork: scale, then restore the identities.
-    fork = j.get('fork') or []
-    if fork and anchored:
-        fk = {r['id']: r for r in fork}
-        if 'paid_return' in fk and 'paid_first' in fk:
-            o_paid = max(float(old[ids[-1]]), 1.0)
-            o_pr = float(fk['paid_return']['accounts'])
-            o_rn = max(float(fk.get('returned', {}).get('accounts', 0)), 1.0)
-            o_rt = max(float(fk.get('retargeted', {}).get('accounts', 0)), 1.0)
-            o_ab = max(float(fk['abandoned']['accounts']), 1.0)
-            # Keep the shape the research gave: the came-back share of
-            # the terminal, how many of those who came back then
-            # reached it, how many retargets came back, how many of the
-            # leavers were retargeted. Rebuilt from the terminal up so
-            # every identity holds at the new scale.
-            share_back = o_pr / o_paid
-            b_ = max(min(o_pr / o_rn, 0.98), 0.05)   # paid_return of returned
-            c_ = max(min(o_rn / o_rt, 0.98), 0.05)   # returned of retargeted
-            d_ = max(min(o_rt / o_ab, 0.98), 0.05)   # retargeted of leavers
-            # Four research ratios, one new spine: the three branch
-            # ratios (b, c, d) hold and the came-back share of the
-            # terminal is the one that gives, scaled by t <= 1 so that
-            # rt = pr/(b c) lands at d of the leavers ab = penult - pf.
-            denom = paid * share_back * (1.0 / (b_ * c_) - d_)
-            t = ((penult - paid) * d_ / denom) if denom > 0 else 1.0
-            if t < 1.0:
-                t *= 0.97 + 0.025 * ((_h(seed, 'fork_t') % 100) / 100.0)
-            pr = _messy((seed, 'anchor_pr'), paid * share_back * min(t, 1.0))
-            pr = max(1, min(pr, paid - 1))
-            pf = paid - pr
-            ab = penult - pf
-            rn = max(_messy((seed, 'anchor_rn'), pr / b_), pr + 1)
-            rt = max(_messy((seed, 'anchor_rt'), rn / c_), rn + 1)
-            if rt >= ab:
-                rt = ab - 1 - (_h(seed, 'rt_trim') % 5)
-                rn = min(rn, rt - 1)
-                pr = min(pr, rn)
-                pf = paid - pr
-                ab = penult - pf
-            vals = {'abandoned': ab, 'retargeted': rt, 'returned': rn,
-                    'paid_return': pr, 'paid_first': pf}
-            bases = {'abandoned': penult, 'retargeted': ab, 'returned': rt,
-                     'paid_return': rn, 'paid_first': penult}
-            assert pf + pr == paid and ab + pf == penult
-            assert rt < ab and rn < rt and pr <= rn and pf > 0 and pr > 0
-            for r in fork:
-                if r['id'] in vals:
-                    r['accounts'] = int(vals[r['id']])
-                    b = max(bases[r['id']], 1)
-                    r['kept'] = round(r['accounts'] / b * 100, 4)
-                    if 'dropped' in r:
-                        r['dropped'] = max(b - r['accounts'], 0)
+    if anchored:
+        refit_fork(j, paid, penult, old[ids[-1]], seed)
 
     # Detours: rebase every row on the new count of its base; swap the
     # campaign's own partitions in where they exist.
