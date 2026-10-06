@@ -18460,12 +18460,19 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             overflow-y: auto !important;
             height: auto !important;
             -webkit-text-size-adjust: 100%;
+            /* Kill iOS elastic/rubber-band overscroll on the document.
+               Without this, pulling down at the top bounces the page and
+               Safari re-lays the position:fixed chrome (#piqStickyChrome)
+               and the Prometheus pill a frame late, so they visibly shake
+               until the bounce settles. Mobile only. */
+            overscroll-behavior-y: none !important;
         }
         body {
             overflow: visible !important;
             overflow-x: hidden !important;
             height: auto !important;
             min-height: 100vh;
+            overscroll-behavior-y: none !important;
         }
         .container {
             height: auto !important;
