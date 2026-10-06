@@ -32,6 +32,7 @@ _APP_BINDINGS = {
     'fw_intent': '_pm_fw_intent',
     'aiq_intent': '_pm_aiq_intent',
     'pricing_question': '_pm_pricing_question',
+    'pricing_copy': '_PM_PRICING_COPY',
     'ask_hint': '_pm_ask_hint',
     # thread store
     'load_history': '_load_synth_chat_history',

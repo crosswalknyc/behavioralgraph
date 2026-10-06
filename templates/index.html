@@ -79091,7 +79091,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 var greet = hr < 12 ? 'Good morning'
                     : (hr < 17 ? 'Good afternoon' : 'Good evening');
                 var lead = greet + ' - welcome back.';
-                if (running > 0) {
+                // Status line from the API (2026-10-06): what finished,
+                // what was reused, what is still running. The brain
+                // composes it; the widget only shows it.
+                if (pro && pro.status_line) {
+                    lead += ' ' + pro.status_line;
+                } else if (running > 0) {
                     lead += ' You have ' + running + ' build' +
                         (running === 1 ? '' : 's') + ' still in motion.';
                 }

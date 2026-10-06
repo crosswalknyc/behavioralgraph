@@ -359,3 +359,86 @@ def referent_label(ref):
     if cohort:
         return f"{subj_clean} ({cohort})"
     return subj_clean
+
+
+# --------------------------------------------------------- user profile
+def user_profile(user, users_doc=None, ask_days=14):
+    """Who this user is, for the brain (2026-10-06, audit item 8):
+    company and role from the account record, the products they live
+    in and the subjects they asked about recently, and their last
+    custom window. Compact, deterministic, fail-safe to {}."""
+    out = {'user': str(user or '')}
+    try:
+        rec = {}
+        if isinstance(users_doc, dict):
+            users = users_doc.get('users') if isinstance(users_doc.get('users'), dict) else users_doc
+            rec = (users or {}).get(str(user)) or {}
+            if not rec:
+                for k, v in (users or {}).items():
+                    if isinstance(v, dict) and str(v.get('email') or '').lower() == str(user).lower():
+                        rec = v
+                        break
+        for k in ('company', 'role', 'title', 'display_name', 'name', 'email'):
+            if rec.get(k):
+                out[k] = str(rec[k])[:80]
+    except Exception:
+        pass
+    try:
+        asks = recall(user)
+        subs = []
+        for a in asks:
+            s = str(a.get('subject') or '').strip()
+            if s and s not in subs:
+                subs.append(s)
+        out['recent_subjects'] = subs[:6]
+        w = last_window(user)
+        if w:
+            out['last_window'] = w
+    except Exception:
+        pass
+    try:
+        import boto3, json as _json
+        from datetime import datetime, timedelta, timezone
+        s3 = boto3.client('s3')
+        views, routes = {}, {}
+        for i in range(ask_days):
+            day = (datetime.now(timezone.utc) - timedelta(days=i)).strftime('%Y-%m-%d')
+            resp = s3.list_objects_v2(Bucket='dashboard-inputs', Prefix=f'system/usage/ask_log/{day}/', MaxKeys=400)
+            for o in resp.get('Contents') or []:
+                try:
+                    d = _json.loads(s3.get_object(Bucket='dashboard-inputs', Key=o['Key'])['Body'].read())
+                except Exception:
+                    continue
+                if str(d.get('user') or '') != str(user):
+                    continue
+                v = str(d.get('view') or '').strip()
+                if v:
+                    views[v] = views.get(v, 0) + 1
+                r = str(d.get('route') or '')
+                routes[r] = routes.get(r, 0) + 1
+        out['views'] = [k for k, _ in sorted(views.items(), key=lambda kv: -kv[1])[:4]]
+        out['asks_14d'] = sum(routes.values())
+        out['builds_14d'] = routes.get('profile_build', 0)
+    except Exception:
+        pass
+    return out
+
+
+def user_block(profile):
+    """Prompt block from user_profile(). '' when nothing is known."""
+    p = profile or {}
+    bits = []
+    who = ' '.join(x for x in (p.get('display_name') or p.get('name') or '', p.get('role') or '') if x).strip()
+    if who or p.get('company'):
+        bits.append(f"{who or 'This user'}{(' at ' + p['company']) if p.get('company') else ''}.")
+    if p.get('views'):
+        bits.append("Works mostly in: " + ', '.join(p['views']) + '.')
+    if p.get('recent_subjects'):
+        bits.append("Recent subjects: " + ', '.join(p['recent_subjects']) + '.')
+    if p.get('last_window'):
+        w = p['last_window']
+        bits.append(f"Last custom window: {w.get('start')} to {w.get('end')}.")
+    if not bits:
+        return ''
+    return ("ABOUT THIS USER (for tone and defaults; never repeat it back to them):\n" +
+            ' '.join(bits))

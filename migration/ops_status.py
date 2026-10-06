@@ -217,6 +217,7 @@ def build_payload(s3, bucket, this_version=None, now=None):
         ],
         'timers': timers_view(hb, now),
         'watch': watch_view(s3, bucket, now),
+        'scorecard': read_json(s3, bucket, 'system/ops/pm_scorecard.json') or {'present': False},
         'corrections': {
             'present': bool(corr.get('generated_at')),
             'generated_at': corr.get('generated_at'),

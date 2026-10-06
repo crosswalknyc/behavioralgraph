@@ -835,81 +835,25 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "without the request (or the clarify answer) naming the "
         "players side.\n\n"
 
-        "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
-        "  KEY INSIGHT: subject_raw is 'how many of the fixed 10,000,000 "
-        "panelists engaged with the subject in the window'. This IS the "
-        "penetration; anchor to realistic US digital reach.\n"
-        "  * Near-universal brand (Google, YouTube, Facebook, Amazon): "
-        "6,500,000 - 9,000,000 panelists (65-90% of the 10M panel).\n"
-        "  * Very-broad brand (Walmart, USPS, Gmail, Instagram): "
-        "3,500,000 - 6,000,000 panelists.\n"
-        "  * Mass-market brand (Netflix, McDonald's, Target, T-Mobile, "
-        "Verizon, Coca-Cola): 1,500,000 - 3,500,000 panelists.\n"
-        "  * Broad-but-not-mass (Peacock, DoorDash, Chick-fil-A, "
-        "Costco): 400,000 - 1,200,000 panelists.\n"
-        "  * High-scale talent (Taylor Swift, Beyonce, MrBeast): "
-        "250,000 - 800,000 panelists.\n"
-        "  * Mid-scale talent (Charlie Puth, Anya Taylor-Joy): "
-        "60,000 - 200,000.\n"
-        "  * Emerging talent / niche music act: 8,000 - 40,000.\n"
-        "  * Micro creator / fan-community: 3,000 - 12,000.\n"
-        "  * Cohort / audience segment (churners, switchers, consumer of X): "
-        "3,000 - 200,000 depending on TAM (Spectrum churners ~30-80K; "
-        "Amazon Prime members ~5-7M).\n"
-        "  * Broad demographic + behavioral persona (a whole-population "
-        "slice defined by an age band + an activity / behavior level + "
-        "a gender or ethnicity skew, with NO named brand / person / "
-        "title - e.g. '18-44 heavy social users, female-skewed'): SIZE "
-        "TO US-POPULATION INCIDENCE, not the niche fandom bands above. "
-        "The anchor is the US population in the stated age band x the "
-        "behavioral incidence x the gender / ethnicity share (all "
-        "countable). These land in the HUNDREDS OF THOUSANDS to LOW "
-        "MILLIONS of panelists. Worked example: ~116M US adults 18-44 "
-        "x ~0.55 heavy-social incidence x ~0.70 female ~= 44.7M "
-        "projected -> subject_raw_tu ~= 1,355,000. Never size such a "
-        "persona like a niche fandom (a few thousand); that under-sizes "
-        "it by 10-100x.\n"
-        "  * Avid cohort: 20-40% of TU sample.\n"
-        "  * HARD CEILING: subject_raw_tu must be <= 9,500,000 "
-        "(the panel is 10M; leave headroom).\n"
-        "  * UNIVERSE-ANCHORED SIZING (MANDATORY on EVERY fresh build "
-        "- Jenna 2026-08-24: 'the sample always has to be based to "
-        "the researched anchor'): subject_raw_tu MUST be derived from "
-        "a countable researched universe anchor, never free-picked. "
-        "An anchor is a counted figure your research surfaces: "
-        "registered voters in a state or district, subscribers, "
-        "members, buyers, verified fanbase, MAU, license holders, "
-        "account holders, category TAM in individuals. Derive "
-        "explicitly: state the anchor, state the engaged share you "
-        "are applying and why, compute projected = anchor x share, "
-        "then subject_raw_tu = projected / 32.99. The implied "
-        "projection (subject_raw_tu x 32.99) must sit BELOW the "
-        "anchor. If your initial research surfaces no countable "
-        "anchor, RESEARCH UNTIL YOU CAN STATE ONE - your web-search "
-        "capability exists for exactly this; a fresh-build draft "
-        "without an anchor is invalid. Emit `universe_anchor` (int), "
-        "`anchor_source` (one plain phrase naming what the figure "
-        "counts, e.g. 'active registered FL voters, June 2026'), and "
-        "`engaged_share` (float fraction of the anchor that is this "
-        "audience) in the JSON - the spec step verifies the math and "
-        "recomputes any sample that does not derive from its anchor. "
-        "Example: 13,426,540 registered voters x 10.6% active "
-        "seekers = 1,423,213 projected -> subject_raw_tu = 43,141.\n"
-        "  * Do NOT default to a round number. Pick a specific value "
-        "with a non-zero last digit (see sample-size rule below).\n"
-        "  * PUBLIC-METRIC-CAPPED COHORTS: if `audience_type` is "
-        "anything other than 'general' (see AUDIENCE TYPE section "
-        "below), `subject_raw_tu` MUST also satisfy `subject_raw_tu "
-        "<= follower_ceiling / 32.99`. It is physically impossible "
-        "for a followers-only / viewers-only / listeners-only / "
-        "attendees-only cohort to project up to more people than the "
-        "underlying public metric. Examples: a creator with 500,000 "
-        "total followers -> max subject_raw_tu ~= 15,156. A YouTube "
-        "video with 8M views -> max ~242,498. A TV broadcast with "
-        "104M viewers -> max ~3,152,470. A superstar with 200M "
-        "followers -> max ~6,062,140. The `_spec_from_draft` step "
-        "re-caps defensively but you should pick a compliant value "
-        "up front.\n\n"
+        "SAMPLE-SIZE (subject_raw_tu for the TU cohort): the number of "
+        "the fixed 10,000,000 panelists who engaged with the subject in "
+        "the window; projected US people = subject_raw_tu x 32.99. Derive "
+        "it from a countable universe anchor (subscribers, members, "
+        "buyers, verified fanbase, MAU, registered voters, category TAM in "
+        "individuals) and an engaged share: emit `universe_anchor` (int), "
+        "`anchor_source` (one plain phrase naming what it counts) and "
+        "`engaged_share` (fraction). The implied projection must sit BELOW "
+        "the anchor. Rough scale: near-universal brands 6.5M-9M panelists; "
+        "mass-market brands 1.5M-3.5M; high-scale talent 250K-800K; "
+        "mid-scale talent 60K-200K; niche acts 8K-40K; a whole-population "
+        "demographic + behavioral persona sizes to US-population incidence "
+        "(hundreds of thousands to low millions), never like a fandom. "
+        "Avid cohort: 20-40% of TU. Hard ceiling 9,500,000. Never a round "
+        "number. The spec step re-derives any sample that does not follow "
+        "from its anchor, holds it to the profile already on the dashboard "
+        "for the subject's window, and re-caps a public-metric audience "
+        "(followers / viewers / listeners / users) at its metric / 32.99, "
+        "so pick a compliant value up front rather than a placeholder.\n\n"
 
         "AUDIENCE TYPE (MANDATORY - determines physical ceilings):\n"
         "  * `audience_type`: one of\n"
@@ -5315,93 +5259,6 @@ _PM_GATE_HELD_NEXT_MESSAGE = (
     "at it and will email you the read.")
 
 
-def _pm_gate_options(history):
-    """The choices the previous agent turn offered (chip labels, or the
-    names in a 'Do you mean for X, or Y?' line), minus utility chips."""
-    try:
-        prev = None
-        for t in reversed(history or []):
-            if isinstance(t, dict) and str(t.get('role') or '') == 'agent':
-                prev = t
-                break
-        if not prev:
-            return []
-        out = []
-        meta = prev.get('meta') if isinstance(prev.get('meta'), dict) else {}
-        mc = meta.get('memory_confirm') if isinstance(meta.get('memory_confirm'), dict) else {}
-        for o in (mc.get('options') or meta.get('options') or []):
-            lbl = str((o.get('label') if isinstance(o, dict) else o) or '').strip()
-            if lbl and not re.match(r'^(?:something else|email me|send me|cancel|no\b|none\b|skip)', lbl, re.I):
-                out.append(lbl)
-        if not out:
-            m = re.match(r'^\s*Do you mean (?:for )?(.+?)(?:,? or (.+?))?\s*\?\s*$',
-                         str(prev.get('text') or ''), re.I | re.S)
-            if m:
-                out = [g.strip() for g in (m.group(1), m.group(2)) if g and g.strip()]
-        return out[:4]
-    except Exception:
-        return []
-
-
-_PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
-                               'mismatched', 'failed_by_user'})
-
-
-def _pm_watch_flag(user, question, route, outcome, extra=None):
-    """Real-time watch feed (2026-10-06): a flagged ask (repeated
-    clarify, empty / faulted reply, error, a build drafted for a task,
-    a user rejecting the previous answer) lands in
-    system/ops/pm_watch_recent.json, bounded to the last 80, which the
-    admin System Status tile reads. Off the request thread; never
-    raises."""
-    try:
-        sig = str((extra or {}).get('user_signal') or '')
-        if outcome not in _PM_WATCH_FLAGGED and sig not in ('rejected', 'wrong', 'no'):
-            return
-        if str(user or '').startswith('canary') or str(user or '') in ('', 'unknown', 'replay'):
-            return
-    except Exception:
-        return
-
-    def _run():
-        try:
-            key = 'system/ops/pm_watch_recent.json'
-            doc = _pm_s3_json(key, {}) or {}
-            items = [x for x in (doc.get('items') or []) if isinstance(x, dict)]
-            items.append({'ts': _pm_iso_now(), 'user': str(user or '')[:60],
-                          'route': str(route or '')[:40], 'outcome': str(outcome or '')[:30],
-                          'signal': sig[:20], 'question': str(question or '')[:200]})
-            doc['items'] = items[-80:]
-            doc['updated_at'] = _pm_iso_now()
-            _pm_s3_put_json(key, doc)
-        except Exception:
-            traceback.print_exc()
-    try:
-        threading.Thread(target=_run, daemon=True).start()
-    except Exception:
-        pass
-
-
-def _pm_record_held_reply(username, question, told, reason, kind):
-    """A held or repeated reply opens a task with a due time (2026-10-06,
-    dead ends): system/ops/held_replies/<day>/<ts>_<id>.json, read by the
-    ops watch so an unanswered promise is flagged, never forgotten."""
-    try:
-        import hashlib as _hl
-        now = datetime.now(timezone.utc)
-        rid = _hl.sha1(f"{username}|{question}|{now.isoformat()}".encode()).hexdigest()[:10]
-        key = (f"system/ops/held_replies/{now.strftime('%Y-%m-%d')}/"
-               f"{now.strftime('%H%M%S')}_{rid}.json")
-        doc = {'id': rid, 'user': username or '', 'question': str(question or '')[:400],
-               'told': str(told or '')[:400], 'reason': str(reason or '')[:400], 'kind': kind,
-               'opened_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
-               'due_by': (now + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ'),
-               'status': 'open'}
-        _H.s3_client.put_object(Bucket=_H.S3_BUCKET, Key=key,
-                                Body=json.dumps(doc).encode('utf-8'),
-                                ContentType='application/json')
-    except Exception:
-        traceback.print_exc()
 _PM_GATE_RETRY_BUDGET_S = 45
 _PM_GATE_HELD = frozenset({'empty', 'faulted'})
 
@@ -5604,6 +5461,14 @@ def _ask_logged(surface):
             question, view, mode = '', '', None
             log_surface = surface
             ask_history = []
+            # One trace id per ask (2026-10-06, observability): on the
+            # ask-log record, in the reply, and on the queue job, so a
+            # user's question can be followed from widget to worker.
+            try:
+                _g._pm_trace_id = (str(request.headers.get('X-Prometheus-Trace') or '').strip()[:32]
+                                   or uuid.uuid4().hex[:12])
+            except Exception:
+                pass
             try:
                 body = request.get_json(force=True, silent=True) or {}
                 question = str(body.get('text') or '').strip()
@@ -5730,6 +5595,13 @@ def _ask_logged(surface):
                     for k, v in (extra or {}).items():
                         merged.setdefault(k, v)
                     extra = merged
+                try:
+                    _tid_trace = getattr(_g, '_pm_trace_id', '')
+                    if _tid_trace:
+                        extra = dict(extra or {})
+                        extra['trace_id'] = _tid_trace
+                except Exception:
+                    pass
                 import render_usage_log as _rul
                 _rul.record_ask(
                     user=_pm_ask_log_user(),
@@ -6217,6 +6089,7 @@ def _pm_interpret_core(user, body, text, history):
                   f"failed, continuing to single interpret: {_marker_err}")
 
     try:
+        _t_prep = time.monotonic()
         try:
             from iq_rankers import MASTER_CATEGORIES
         except Exception:
@@ -6244,11 +6117,16 @@ def _pm_interpret_core(user, body, text, history):
         # 32k ceiling + array salvage (2026-08-20): rule 7 lets this
         # call return a multi-spec ARRAY, which needs far more than
         # 8192 output tokens and must survive truncation.
+        _pm_ask_stage('interpret_prep', t0=_t_prep)
         _t_model = time.monotonic()
+        # Subject verification runs alongside the draft model for the
+        # name the ask plainly carries (2026-10-06, speed): the two
+        # longest steps overlap instead of queuing.
+        _preverify = _pm_start_preverify(text, candidates)
         result = _H._run_nflx_claude_agent(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=32000, temperature=0.4,
+            max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
             salvage_arrays=True,
         )
@@ -6497,7 +6375,8 @@ def _pm_interpret_core(user, body, text, history):
         # Fail-open on errors and timeouts; off under
         # PM_CHAT_SUBJECT_VERIFY=0 for hermetic runs.
         _t_verify = time.monotonic()
-        _sv_block = _pm_chat_subject_verify(spec_draft, candidates, text)
+        _sv_block = _pm_chat_subject_verify(spec_draft, candidates, text,
+                                            preverify=_preverify)
         _pm_ask_stage('verify', t0=_t_verify)
         if _sv_block is not None:
             return _sv_block
@@ -8416,11 +8295,13 @@ def api_synth_chat_approve():
     # search-enabled call - a real show the model did not know resolves
     # without bothering anyone), re-interpret with the verified
     # context, and only ask the user when research genuinely fails.
+    _t_rescue = time.monotonic()
     if str(draft.get('decision') or '').strip().lower() in \
             ('new_build', 'cut_needs_parent') \
             and not draft.get('tu_demos'):
         _uv = _pm_rescue_unverified_draft(
             draft, usage_extras=_pm_usage_extras(user))
+        _pm_ask_stage('approve_rescue', t0=_t_rescue)
         if isinstance(_uv, dict) and _uv.get('draft'):
             draft = _uv['draft']
             print(f"[approve-rescue] proceeding with the researched "
@@ -8430,7 +8311,9 @@ def api_synth_chat_approve():
                 'success': False, 'guidance': True,
                 'error': _uv['ask'], 'followups': []})
 
+    _t_spec = time.monotonic()
     spec = _spec_from_draft(draft)
+    _pm_ask_stage('approve_spec', t0=_t_spec)
     run_avid = bool(body.get('run_avid', True))
     # Accept a single address or a comma / semicolon / whitespace-
     # separated list. Clean each entry, drop obvious garbage, dedupe
@@ -8695,6 +8578,13 @@ def api_synth_chat_approve():
 
     try:
         import requests as _requests
+        try:
+            from flask import g as _g_tr
+            if getattr(_g_tr, '_pm_trace_id', ''):
+                payload['trace_id'] = _g_tr._pm_trace_id
+        except Exception:
+            pass
+        _t_queue = time.monotonic()
         resp = _requests.post(
             f"{_H.SYNTH_QUEUE_URL}/synth/queue",
             json=payload, timeout=30,
@@ -8709,6 +8599,7 @@ def api_synth_chat_approve():
                 tb=str(resp.text or '')[:2000] or '(empty queue reply)')
             return jsonify(_H._chatbot_calm_payload())
         queue_resp = resp.json()
+        _pm_ask_stage('approve_queue_post', t0=_t_queue)
     except Exception as e:
         traceback.print_exc()
         _H._chatbot_error_email('brief-chat/approve', e)
@@ -8842,14 +8733,23 @@ def api_prometheus_proactive():
     if err:
         return err
     uname = user.get('username') or user.get('email') or 'anon'
+    chips = []
     try:
         import prometheus_proactive as _ppro
         out = _ppro.suggestions(uname)
-        return jsonify({'success': True,
-                        'chips': (out or {}).get('chips') or []})
+        chips = (out or {}).get('chips') or []
     except Exception:
         traceback.print_exc()
-        return jsonify({'success': True, 'chips': []})
+    # Status line on open (2026-10-06, audit item 8): what finished
+    # since the user was last here, what is still running, and what was
+    # reused from the dashboard instead of rebuilt. Composed here, in
+    # the API, so every client shows the same sentence.
+    status_line = ''
+    try:
+        status_line = _pm_open_status_line(user)
+    except Exception:
+        traceback.print_exc()
+    return jsonify({'success': True, 'chips': chips, 'status_line': status_line})
 
 
 @_H.app.route('/api/brief-chat/active-runs', methods=['GET'])
@@ -9768,58 +9668,6 @@ def _pm_meter_answer(surface, ppu_extras=None):
         _rul.record_metered_answer(surface, extras=extras)
     except Exception:
         traceback.print_exc()
-
-
-def _pm_catalog_block(subject, window=None, extra_subjects=()):
-    """The corpus catalog's binding figures for a subject (2026-10-05,
-    Jenna): every number Profile IQ, Digital Journey IQ, Attribution IQ,
-    Brand Partnership IQ or an earlier chat already published on it.
-    One cached dict hit plus one small page read; '' on any trouble."""
-    names = [str(subject or '').strip()] + [str(x or '').strip() for x in extra_subjects]
-    names = [n for n in dict.fromkeys(names) if n]
-    if not names:
-        return ''
-    try:
-        from migration import corpus_catalog as _cc
-        parts = []
-        for n in names[:3]:
-            anchors = _cc.anchors_for(n, window=window, with_ledger=False)
-            blk = _cc.anchors_block(anchors)
-            if blk:
-                parts.append(blk)
-        return '\n\n'.join(parts)
-    except Exception:
-        traceback.print_exc()
-        return ''
-
-
-def _pm_ask_log_user(default='unknown'):
-    """The user label an ask is logged under (2026-10-06). Session user,
-    then the API-key / job owner the route set on g, then a synthetic
-    caller marker so canary and smoke asks never read as a real user
-    with no name, else `default`."""
-    try:
-        u = session.get('username')
-        if u:
-            return str(u)
-    except Exception:
-        pass
-    try:
-        from flask import g as _g, request as _rq
-        u = getattr(_g, '_pm_ask_user', None) or getattr(_g, '_pm_api_key_owner', None)
-        if u:
-            return str(u)
-        ua = str(_rq.headers.get('User-Agent') or '')
-        caller = str(_rq.headers.get('X-Prometheus-Caller') or '')
-        if caller:
-            return 'canary:' + re.sub(r'[^a-z0-9_-]+', '', caller.lower())[:40]
-        if 'canary' in ua.lower() or 'smoke' in ua.lower() or 'regression' in ua.lower():
-            return 'canary'
-        if getattr(_g, '_pm_api_key_id', None):
-            return 'apikey:' + str(getattr(_g, '_pm_api_key_id'))[:24]
-    except Exception:
-        pass
-    return default
 
 
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
@@ -10771,6 +10619,26 @@ def _pm_bank_regression_case(username, question, complaint, history,
                 if isinstance(turn, dict)                         and turn.get('role') != 'user':
                     rejected = str(turn.get('text') or '')[:400]
                     break
+            # The learning loop (2026-10-06): the figures the rejected
+            # reply banked leave the corpus catalog, so the regenerated
+            # answer and every later one cannot lean on them.
+            try:
+                from migration import corpus_catalog as _cc_rej
+                _full_rejected = ''
+                for turn in reversed(list(history or [])):
+                    if isinstance(turn, dict) and turn.get('role') != 'user':
+                        _full_rejected = str(turn.get('text') or '')
+                        break
+                _tid = str(getattr(_PM_REQ_THREAD, 'tid', '') or '')
+                if not _tid and username:
+                    try:
+                        _tid = str((_load_threads_index(username) or {}).get('active') or '')
+                    except Exception:
+                        _tid = ''
+                if _full_rejected:
+                    _cc_rej.retire_answer(username or '', _tid, _full_rejected)
+            except Exception:
+                traceback.print_exc()
             vc = view_ctx if isinstance(view_ctx, dict) else {}
             view_id = str(vc.get('view_id') or '').strip()
             view_data = (_pm_compact_for_bank(vc.get('data'))
@@ -11762,10 +11630,69 @@ _PM_UNRESOLVED_SUBJECT_COPY = (
     "I will set up the brief.")
 
 
-def _pm_chat_subject_verify(spec_draft, candidates, text):
+_PM_VERIFY_CACHE = {}
+_PM_VERIFY_CACHE_LOCK = threading.Lock()
+_PM_VERIFY_TTL_S = 24 * 3600
+
+
+def _pm_verify_cached(subj, candidates):
+    """(ok, subject, suggestion) for a subject, from the 24h in-process
+    cache or the verification ladder (2026-10-06, speed: the same name
+    is never web-verified twice in a day)."""
+    key = re.sub(r'[^a-z0-9]+', ' ', str(subj or '').lower()).strip()
+    now = time.time()
+    with _PM_VERIFY_CACHE_LOCK:
+        hit = _PM_VERIFY_CACHE.get(key)
+        if hit and now - hit[0] < _PM_VERIFY_TTL_S:
+            return hit[1]
+    verify = getattr(_H, '_v1_subject_verified', None)
+    if not callable(verify):
+        return (True, subj, None)
+    res = verify({'subject': subj, 'decision': 'new_build'}, 'new_build', None,
+                 candidates=candidates)
+    with _PM_VERIFY_CACHE_LOCK:
+        _PM_VERIFY_CACHE[key] = (now, res)
+        if len(_PM_VERIFY_CACHE) > 2000:
+            for k in sorted(_PM_VERIFY_CACHE, key=lambda k: _PM_VERIFY_CACHE[k][0])[:500]:
+                _PM_VERIFY_CACHE.pop(k, None)
+    return res
+
+
+def _pm_start_preverify(text, candidates):
+    """Start the subject verification for the name the ask plainly
+    carries while the draft model runs (2026-10-06, speed). Returns a
+    Thread whose .result holds (guess, (ok, subj, suggestion)) or None."""
+    try:
+        if os.environ.get('PM_CHAT_SUBJECT_VERIFY', '1') == '0':
+            return None
+        import prometheus_analysis as _pma_pv
+        guess = str(_pma_pv.guess_subject_from_text(text) or '').strip()
+        if not guess or len(guess) < 2:
+            return None
+    except Exception:
+        return None
+
+    class _T(threading.Thread):
+        result = None
+
+        def run(self):
+            try:
+                self.result = (guess, _pm_verify_cached(guess, candidates))
+            except Exception:
+                self.result = None
+
+    t = _T(daemon=True)
+    t.start()
+    return t
+
+
+def _pm_chat_subject_verify(spec_draft, candidates, text, preverify=None):
     """Run the subject-verification ladder on a fresh chat build.
     Returns a guidance response when the subject does not resolve,
-    else None (2026-10-02 S6). Never raises; any failure is None."""
+    else None (2026-10-02 S6). Never raises; any failure is None.
+    `preverify` is the thread _pm_start_preverify returned: when its
+    guess is this draft's subject the result is reused (no second
+    web check); otherwise the ladder runs through the 24h cache."""
     try:
         if os.environ.get('PM_CHAT_SUBJECT_VERIFY', '1') == '0':
             return None
@@ -11781,8 +11708,19 @@ def _pm_chat_subject_verify(spec_draft, candidates, text):
         verify = getattr(_H, '_v1_subject_verified', None)
         if not callable(verify):
             return None
-        ok, _subj, suggest = verify(spec_draft, dec, None,
-                                    candidates=candidates)
+        res = None
+        if preverify is not None:
+            try:
+                preverify.join(timeout=20)
+                pr = getattr(preverify, 'result', None)
+                if pr and re.sub(r'[^a-z0-9]+', ' ', pr[0].lower()).strip() == \
+                        re.sub(r'[^a-z0-9]+', ' ', subj.lower()).strip():
+                    res = pr[1]
+            except Exception:
+                res = None
+        if res is None:
+            res = _pm_verify_cached(subj, candidates)
+        ok, _subj, suggest = res
         if ok:
             return None
         _pm_ask_hint(route='subject_unresolved', outcome='asked_subject',
@@ -16679,6 +16617,14 @@ def _pm_analyze_core(user, body, text, history):
             _led_block = (_cat_block + '\n' + _led_block) if _led_block else _cat_block
     except Exception:
         traceback.print_exc()
+    # Who is asking (2026-10-06): company, role, the views they live in,
+    # recent subjects, last window. Tone and defaults, never echoed.
+    try:
+        _ub = _pm_user_block(_pm_user)
+        if _ub:
+            _led_block = (_led_block + '\n\n' + _ub) if _led_block else _ub
+    except Exception:
+        pass
     # Thread number bank + view glossary (2026-10-02 S4): on a
     # "why is this different" / "how is this calculated" ask, every
     # figure already stated in this thread and the open view's KPI
@@ -18671,6 +18617,18 @@ from prometheus.legacy.jobs import (  # noqa: E402,F401
     api_synth_chat_jiq_status,
     api_synth_chat_fw_status,
     api_synth_chat_aiq_status,
+)
+from prometheus.legacy.watch import (  # noqa: E402,F401
+    _PM_WATCH_FLAGGED,
+    _PM_USER_BLOCK_CACHE,
+    _PM_USER_BLOCK_LOCK,
+    _pm_user_block,
+    _pm_catalog_block,
+    _pm_ask_log_user,
+    _pm_watch_flag,
+    _pm_record_held_reply,
+    _pm_gate_options,
+    _pm_open_status_line,
 )
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
 # the digest caches when a profile loads so the first ask skips the

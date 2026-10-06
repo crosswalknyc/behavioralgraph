@@ -446,16 +446,34 @@ def correction_note(offenders):
         "panel count.")
 
 
-def enforce(reply, pairs, reask=None, log=None):
-    """The full audit: returns (reply, detail). `reask(note)` is the
-    one-shot model re-ask returning new reply text or ''. detail is
-    {} when the reply was already clean."""
+def enforce(reply, pairs, reask=None, log=None, prefer_reask=False):
+    """The full audit: returns (reply, detail). detail is {} when the
+    reply was already clean.
+
+    2026-10-06 (speed): the deterministic substitution runs FIRST. It
+    is exact (the panel -> US pairs came from the prompt) and takes no
+    time; the model re-ask (`reask(note)`) used to run first and cost
+    a median 43 seconds on every affected answer. The re-ask is kept
+    only as an opt-in (`prefer_reask=True`) for callers that want the
+    prose rewritten around the figures."""
     detail = {}
     try:
         offenders = find_unprojected(reply, pairs)
         if not offenders:
             return reply, detail
         detail['unprojected'] = len(offenders)
+        if not prefer_reask:
+            fixed = substitute(reply, offenders)
+            if not find_unprojected(fixed, pairs):
+                detail['fix'] = 'substitute'
+                detail['substituted'] = len(offenders)
+                if log:
+                    try:
+                        log(f"[projection] substituted {len(offenders)} panel "
+                            f"counts in place: {offenders[:8]}")
+                    except Exception:
+                        pass
+                return fixed, detail
         if callable(reask):
             try:
                 redo = str(reask(correction_note(offenders)) or '').strip()

@@ -343,6 +343,36 @@ def ask(user, body, *, via='session'):
         except Exception as e:
             print(f"[prometheus] bare-reply gate skipped: {e}")
 
+    # Pricing (2026-10-06, audit item 5): one deterministic answer from
+    # the rate card on every surface. It used to be an error on one
+    # surface, a decline on another and an answer on the third.
+    if referent_decision is None and not _armed(body):
+        try:
+            _is_price = bool(host.pricing_question(text)) if host.has('pricing_question') else False
+        except Exception:
+            _is_price = False
+        if _is_price:
+            try:
+                copy = str(host.pricing_copy) if host.has('pricing_copy') else ''
+            except Exception:
+                copy = ''
+            if copy:
+                raw = {'success': True, 'action': 'answer', 'reply': copy,
+                       'followups': ['How many credits do I have left?'],
+                       'offer_deck': False, 'deck_angle': None}
+                decision = {'surface': 'analyze', 'mode': None,
+                            'reason': 'product_fact', 'client_hint': None}
+                if _client_surface == 'interpret':
+                    raw = _interpret_shape(raw)
+                try:
+                    host.ask_hint(route='pricing', outcome='answered')
+                except Exception:
+                    pass
+                env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                    thread_id=tid, via=via)
+                _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+                return env, 200
+
     # Catalog lane (2026-10-06, Jenna: speed). "do we have a profile for
     # X", "do you see X", "how big is the X audience" are lookups: the
     # corpus catalog answers them with no model call. Runs before any

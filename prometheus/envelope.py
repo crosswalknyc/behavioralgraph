@@ -92,9 +92,24 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         _g.scrub_method_language_payload(raw)
     except Exception:
         pass
+    # Reply shape (2026-10-06): chat answers read as answers, not
+    # reports (no capital-letter headers, definitions out of the
+    # sentence). Analyze surface only; briefs and guidance keep shape.
+    if surface == 'analyze':
+        try:
+            from . import reply_shape as _rs
+            _rs.shape_payload(raw)
+        except Exception:
+            pass
     job = _job_of(raw, surface)
     draft = raw.get('draft') or raw.get('drafts') or raw.get('batch')
     text = _text_of(raw)
+    trace_id = ''
+    try:
+        from flask import g as _g
+        trace_id = str(getattr(_g, '_pm_trace_id', '') or '')
+    except Exception:
+        trace_id = ''
 
     if job:
         kind = 'job'
@@ -125,6 +140,7 @@ def wrap(raw, *, surface, decision, thread_id=None, via='session'):
         'success': kind not in ('error',),
         'kind': kind,
         'text': text,
+        'trace_id': trace_id or None,
         'options': _options_of(raw),
         'job': job,
         'draft': draft if isinstance(draft, (dict, list)) else None,
