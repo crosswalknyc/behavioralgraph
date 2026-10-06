@@ -148,6 +148,15 @@ def _acc(x):
         return 0
 
 
+def bd_rows(row):
+    """A row's breakdown as a list of rows. Stored either as the list
+    itself or as a small table dict ({'title', 'note', 'rows'})."""
+    bd = (row or {}).get('breakdown')
+    if isinstance(bd, dict):
+        bd = bd.get('rows')
+    return [b for b in (bd or []) if isinstance(b, dict)] if isinstance(bd, list) else []
+
+
 def find_row(numbers, payload, key=''):
     """The first element of this journey whose count is one of the
     numbers: a breakdown item (most specific) first, then a detour row,
@@ -158,7 +167,7 @@ def find_row(numbers, payload, key=''):
         return None
     for di, d in enumerate(j.get('detours') or []):
         for ri, r in enumerate(d.get('rows') or []):
-            for bi, b in enumerate(r.get('breakdown') or []):
+            for bi, b in enumerate(bd_rows(r)):
                 if _acc(b) in want:
                     return {'kind': 'breakdown_item', 'key': key, 'payload': payload,
                             'detour': d, 'detour_index': di, 'row': r, 'row_index': ri,
@@ -204,7 +213,16 @@ def _subject_of(payload):
     meta = (payload or {}).get('meta') or {}
     name = str(meta.get('customer_brand') or meta.get('target_display') or meta.get('target_name') or '').strip()
     name = re.sub(r'\s+-\s+.*journey$', '', name, flags=re.I)
+    name = re.sub(r'\s*\([^)]*\)\s*', ' ', name).strip()
     return name or 'this journey'
+
+
+def _doing_for_chat(doing):
+    """A row's page note, minus any sentence that points at the page
+    ("See the table below ...")."""
+    parts = [p.strip() for p in re.split(r'(?<=[.!?])\s+', str(doing or '').strip()) if p.strip()]
+    parts = [p for p in parts if not re.search(r'\b(below|above|this table)\b', p, re.I)]
+    return ' '.join(parts).rstrip('.')
 
 
 def _window_of(payload):
@@ -236,9 +254,9 @@ def reply_for_breakdown(hit, bd_rows, built=False):
     label = str(row.get('label') or '').strip()
     doing = str(row.get('doing') or '').strip()
     head = (f"The {n:,} are the people in \"{d.get('title')}\" who sit under "
-            f"\"{label}\" on the {subj} journey")
-    if doing:
-        head += f": {doing.rstrip('.')}"
+            f"\"{label}\" on the journey for {subj}")
+    if _doing_for_chat(doing):
+        head += f": {_doing_for_chat(doing)}"
     head += '.'
     body = f"What sits behind that number, with the share of the {n:,} on each:\n\n" + _fmt_rows(bd_rows, n)
     tail = ''
@@ -255,7 +273,7 @@ def reply_for_stage(hit):
     j = payload.get('fragrance_shop_journey') or {}
     n = hit['number']
     subj = _subject_of(payload)
-    parts = [f"{n:,} is the \"{s.get('label')}\" stage of the {subj} journey"]
+    parts = [f"{n:,} is the \"{s.get('label')}\" stage of the journey for {subj}"]
     if s.get('doing'):
         parts[0] += f": {str(s['doing']).rstrip('.')}"
     parts[0] += '.'
@@ -276,7 +294,7 @@ def reply_for_fork(hit):
     payload, r = hit['payload'], hit['row']
     n = hit['number']
     kept = r.get('kept')
-    txt = f"{n:,} is \"{r.get('label')}\" on the {_subject_of(payload)} journey"
+    txt = f"{n:,} is \"{r.get('label')}\" on the journey for {_subject_of(payload)}"
     if r.get('doing'):
         txt += f": {str(r['doing']).rstrip('.')}"
     txt += '.'
@@ -292,7 +310,7 @@ def reply_for_item(hit):
     n = hit['number']
     base = _acc(r)
     txt = (f"{n:,} is \"{b.get('label')}\", one of the things behind \"{r.get('label')}\" "
-           f"({base:,}) on the {_subject_of(payload)} journey: {float(b.get('pct') or 0):.1f}% of that row.")
+           f"({base:,}) on the journey for {_subject_of(payload)}: {float(b.get('pct') or 0):.1f}% of that row.")
     if b.get('doing'):
         txt += f" {str(b['doing']).strip()}"
     return txt
@@ -306,9 +324,9 @@ def reply_for_row_plain(hit):
     rows = d.get('rows') or []
     tot = sum(_acc(r) for r in rows) or n
     txt = (f"The {n:,} are the people in \"{d.get('title')}\" who sit under "
-           f"\"{row.get('label')}\" on the {_subject_of(payload)} journey")
-    if row.get('doing'):
-        txt += f": {str(row['doing']).rstrip('.')}"
+           f"\"{row.get('label')}\" on the journey for {_subject_of(payload)}")
+    if _doing_for_chat(row.get('doing')):
+        txt += f": {_doing_for_chat(row.get('doing'))}"
     txt += f". That is {n / float(tot) * 100:.1f}% of that table."
     return txt
 
@@ -470,10 +488,13 @@ def _raw(reply, subject, followups=None, **extra):
 def _followups(hit):
     j = (hit.get('payload') or {}).get('fragrance_shop_journey') or {}
     outs = []
-    for d in (j.get('detours') or [])[:6]:
+    for d in (j.get('detours') or [])[:8]:
         t = str(d.get('title') or '').strip()
-        if t and t != str((hit.get('detour') or {}).get('title') or ''):
-            outs.append(f"What is behind \"{t}\"?")
+        if not t or t == str((hit.get('detour') or {}).get('title') or ''):
+            continue
+        if re.search(r'\bbehind the [\d,]+$', t):
+            continue
+        outs.append(f"What is behind \"{t}\"?")
     return outs[:3]
 
 
@@ -560,7 +581,7 @@ def answer(text, uname, ctx=None, tid=None, *, s3=None, bucket=None,
     if kind == 'breakdown_item':
         return _raw(reply_for_item(hit), subj, _followups(hit), drilldown='item')
     row = hit['row']
-    bd = row.get('breakdown') or []
+    bd = bd_rows(row)
     if bd:
         return _raw(reply_for_breakdown(hit, bd), subj, _followups(hit), drilldown='stored')
     # Nothing behind the row yet: build it once.
