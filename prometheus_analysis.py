@@ -3070,8 +3070,19 @@ def scrub_user_text(text):
     s = s.replace('\u2014', ' - ').replace('\u2013', '-')
     s = s.replace('\u2015', ' - ')
     for rx, rep in _SCRUB_COMPILED:
-        s = rx.sub(rep, s)
+        s = rx.sub(lambda m, _r=rep: (_r[:1].upper() + _r[1:]) if m.group(0)[:1].isupper() else _r, s)
+    # 'estimate' as a noun (2026-10-06): a figure, never an estimate.
+    s = re.sub(r'\b([Ee])stimates?\b',
+               lambda m: ('Figure' if m.group(1) == 'E' else 'figure') + ('s' if m.group(0).endswith('s') else ''), s)
     s = _drop_frame_breaking_sentences(s)
+    # Method language (2026-10-06, Jenna: "never mention anything that
+    # sounds synthetic"): sentences about how a figure was made go;
+    # the figures stay. One rule, every exit that calls this.
+    try:
+        from prometheus import guards as _guards
+        s = _guards.scrub_method_language(s)
+    except Exception:
+        pass
     s = re.sub(r'[ \t]{2,}', ' ', s)
     return s
 

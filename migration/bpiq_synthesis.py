@@ -869,6 +869,14 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                        surface="bpiq_synthesis", tools=tools)
     if not isinstance(prim, dict) or not prim.get("audience_size"):
         raise RuntimeError("bpiq research returned no primitives")
+    # Catalog hold (2026-10-06): the qualifier's audience inside the
+    # event window can never exceed the profile the dashboard already
+    # holds for it (scaled for a shorter window). Held at the primitive
+    # so every derived count, lift and value moves with it.
+    try:
+        prim = hold_audience_to_catalog(inputs, prim, windows)
+    except Exception as e:
+        print(f"[bpiq-synth] catalog hold skipped: {e}")
     payload = build_payload(inputs, prim, created_by=created_by)
     if validate_bpiq_payload is not None:
         try:
@@ -880,7 +888,52 @@ def synthesize(inputs: dict, claude_json: Callable, *,
             print(f"[bpiq-synth] validator skipped: {e}")
     payload["_bpiq_category"] = str(
         prim.get("category") or "").strip().upper() or None
+    # Every string a reader sees passes the house vocabulary +
+    # method-language scrub (2026-10-06); identifiers and dates stay.
+    try:
+        from prometheus import guards as _g
+        _g.scrub_tree(payload)
+    except Exception as e:
+        print(f"[bpiq-synth] text scrub skipped: {e}")
     return payload
+
+
+def hold_audience_to_catalog(inputs: dict, prim: dict, windows: dict) -> dict:
+    """Ceiling on the research audience primitive from the qualifier's
+    Profile IQ on the dashboard (sample individuals). A same-or-longer
+    event window may reach the profile's sample; a shorter one scales
+    by the square root of the window ratio. Only ever pulls down, with
+    a salted margin under the ceiling so nothing pins."""
+    from migration import corpus_catalog as _cc
+    ev = windows.get("event") or {}
+    win = {"start": ev.get("start"), "end": ev.get("end")}
+    anchors = _cc.anchors_for(str(inputs.get("qualifier") or ""), window=win, with_ledger=False)
+    pa = _cc.profile_anchor(anchors, win)
+    if not pa or not pa.get("sample_size"):
+        return prim
+    ps = float(pa["sample_size"])
+    pw = pa.get("window") or {}
+    try:
+        lp = (_dt.date.fromisoformat(str(pw["end"])) - _dt.date.fromisoformat(str(pw["start"]))).days + 1
+        lw = int(ev.get("days") or 0) or (
+            (_dt.date.fromisoformat(str(win["end"])) - _dt.date.fromisoformat(str(win["start"]))).days + 1)
+    except Exception:
+        lp, lw = 365, 365
+    scale = min(1.0, (float(lw) / float(max(1, lp))) ** 0.5)
+    ceiling = ps * scale
+    cur = float(prim.get("audience_size") or 0)
+    if cur <= ceiling or ceiling <= 0:
+        return prim
+    h = int(hashlib.sha256(f"{inputs.get('qualifier')}|{inputs.get('brand_partner')}|bpiq-hold".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    held = int(ceiling * (0.90 + 0.07 * h))
+    if held % 10 == 0:
+        held += 1 + int(h * 8)
+    print(f"[bpiq-synth] audience held to the dashboard profile: {int(cur):,} -> {held:,} "
+          f"(profile sample {int(ps):,}, window scale {scale:.3f})")
+    prim = dict(prim)
+    prim["audience_size"] = held
+    prim["_held_to_profile"] = pa.get("source_key")
+    return prim
 
 
 def s3_key_for(inputs: dict) -> str:

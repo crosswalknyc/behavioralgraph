@@ -114,6 +114,18 @@ def _bold_lead(text):
             + _esc(m.group(2)))
 
 
+def _scrub_outbound(title, body_text):
+    """Every outbound email passes the same vocabulary scrub as a chat
+    reply (2026-10-06): internal terms replaced, method sentences
+    removed, figures kept. Fail-safe to the original text."""
+    try:
+        import prometheus_analysis as _pma
+        return (_pma.scrub_user_text(str(title or "")),
+                _pma.scrub_user_text(str(body_text or "")))
+    except Exception:
+        return title, body_text
+
+
 def render_answer_email_html(title, body_text, date_label=None,
                              table_highlight_prefix=None,
                              cta_url=None, cta_text=None,
@@ -122,6 +134,7 @@ def render_answer_email_html(title, body_text, date_label=None,
     try:
         if not str(body_text or "").strip():
             return ""
+        title, body_text = _scrub_outbound(title, body_text)
         return _render(title, body_text, date_label,
                        table_highlight_prefix, cta_url, cta_text, eyebrow)
     except Exception:

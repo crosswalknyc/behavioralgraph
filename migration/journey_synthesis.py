@@ -1383,6 +1383,18 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] corpus anchor pass skipped: {exc}')
+    return scrub_payload_text(payload)
+
+
+def scrub_payload_text(payload: dict) -> dict:
+    """Every string a reader sees in the journey (copy, notes, labels,
+    facts) passes the house vocabulary + method-language scrub
+    (2026-10-06). Identifiers, URLs and dates are untouched."""
+    try:
+        from prometheus import guards as _g
+        _g.scrub_tree(payload)
+    except Exception as exc:
+        print(f'[journey] text scrub skipped: {exc}')
     return payload
 
 

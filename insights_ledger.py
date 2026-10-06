@@ -913,6 +913,88 @@ def _find_exact_anywhere(subjects, question):
     return best_key, best
 
 
+_AUDIENCE_METRIC_RX = re.compile(
+    r'\b(audience|viewers|reach|users|people|subscribers|accounts|universe|'
+    r'streamed|watched)\b', re.I)
+
+
+def _entry_window(e):
+    ws, we = str(e.get('ws') or '')[:10], str(e.get('we') or '')[:10]
+    return {'start': ws, 'end': we} if ws and we else None
+
+
+def retire_conflicting_entries(subject, facts, tolerance=0.05):
+    """Dashboard figures win (2026-10-06, Jenna). For the subject's
+    ledger entries, any audience-size metric that disagrees with a
+    Profile IQ / Journey / Attribution / Brand Partnership figure on
+    the same window by more than `tolerance` is retired: it leaves the
+    prompt block and never replays. The entry stays in the index with
+    a `retired` stamp for audit. Returns the number retired."""
+    sizes = [f for f in (facts or []) if isinstance(f, dict)
+             and f.get('kind') in ('audience_size', 'platform_count')
+             and f.get('unit') == 'people' and f.get('product') != 'chat']
+    if not sizes or not str(subject or '').strip():
+        return 0
+    doc = _load_index(force=True)
+    skey = _resolve_subject(doc, subject=subject)
+    if not skey:
+        return 0
+    retired = []
+
+    def _same_window(a, b):
+        return (a and b and str(a.get('start'))[:10] == str(b.get('start'))[:10]
+                and str(a.get('end'))[:10] == str(b.get('end'))[:10])
+
+    def _mut(d):
+        bucket = (d.get('subjects') or {}).get(skey) or {}
+        for e in (bucket.get('entries') or []):
+            if not isinstance(e, dict) or e.get('retired'):
+                continue
+            ew = _entry_window(e)
+            for m in (e.get('metrics') or []):
+                if str(m.get('unit') or '') in ('pct', 'percent', '%', 'usd'):
+                    continue
+                label = f"{m.get('label') or ''} {m.get('name') or ''} {m.get('definition') or ''}"
+                if not _AUDIENCE_METRIC_RX.search(label):
+                    continue
+                try:
+                    v = float(m.get('value'))
+                except (TypeError, ValueError):
+                    continue
+                if v < 1000:
+                    continue
+                for f in sizes:
+                    fw = f.get('window')
+                    if ew and fw and not _same_window(ew, fw):
+                        continue
+                    # a platform figure only compares with a platform metric
+                    if f.get('kind') == 'platform_count':
+                        plat = str(f.get('label') or '').lower().replace('us viewers on ', '')
+                        if plat.split('/')[0].split()[0] not in label.lower():
+                            continue
+                    elif 'on ' in label.lower() and f.get('kind') == 'audience_size':
+                        continue
+                    fv = float(f.get('value') or 0)
+                    if fv <= 0:
+                        continue
+                    if abs(v - fv) / fv > tolerance:
+                        e['retired'] = {'by': 'corpus_catalog', 'metric': m.get('label'),
+                                        'value': v, 'dashboard_value': fv,
+                                        'fact_source': (f.get('source') or {}).get('key'),
+                                        'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+                        retired.append(e.get('k'))
+                        break
+                if e.get('retired'):
+                    break
+        return d if retired else None
+
+    _update_index(_mut)
+    if retired:
+        print(f"[insights-ledger] retired {len(retired)} entr{'y' if len(retired) == 1 else 'ies'} "
+              f"for {subject!r}: dashboard figure wins")
+    return len(retired)
+
+
 def render_block(entries, limit=12):
     """PUBLISHED MEASUREMENTS body for the prompt builders: one line
     per stored metric. Delivered-deck anchor entries render first
@@ -1581,7 +1663,9 @@ def consult(subject=None, question=None, metric_family=None,
                 return empty
             bucket = subjects.get(gkey) or {}
             entries = [e for e in (bucket.get('entries') or [])
-                       if isinstance(e, dict)]
+                       if isinstance(e, dict) and not e.get('retired')]
+            if gexact.get('retired'):
+                return empty
             return {'subject': bucket.get('subject'), 'skey': gkey,
                     'entries': entries, 'block': render_block(entries),
                     'exact': (_exact_if_fresh(gexact) if _can_replay
@@ -1589,7 +1673,7 @@ def consult(subject=None, question=None, metric_family=None,
                     'match': 'exact' if _can_replay else None}
         bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
-                   if isinstance(e, dict)]
+                   if isinstance(e, dict) and not e.get('retired')]
         if not entries:
             return empty
         key = None

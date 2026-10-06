@@ -343,6 +343,37 @@ def ask(user, body, *, via='session'):
         except Exception as e:
             print(f"[prometheus] bare-reply gate skipped: {e}")
 
+    # Catalog lane (2026-10-06, Jenna: speed). "do we have a profile for
+    # X", "do you see X", "how big is the X audience" are lookups: the
+    # corpus catalog answers them with no model call. Runs before any
+    # client-forced surface, so a yes/no question sitting in the build
+    # flow can never draft a build.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import catalog_lane as _cl
+            _cat = _cl.answer(text, ctx)
+        except Exception as e:
+            print(f"[prometheus] catalog lane skipped: {e}")
+            _cat = None
+        if _cat:
+            raw = _cat
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'catalog_lookup', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_cat.get('followups') or [])
+                if _cat.get('memory_confirm'):
+                    raw['memory_confirm'] = _cat['memory_confirm']
+            try:
+                host.ask_hint(route='catalog_lookup', outcome='answered',
+                              subject=_cat.get('subject'))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Capability questions (2026-10-02 audit). "Can I cut the existing
     # Apple TV+ profile by quarter (i.e., 2Q 2026)?" was split into two
     # builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut ...". A
@@ -379,6 +410,20 @@ def ask(user, body, *, via='session'):
     # deck angle picker, a clarify answer) already knows the surface.
     # It names it; the server still gates and runs it.
     forced = str(body.get('surface') or '').strip().lower()
+    # A client sitting in its build flow forces 'interpret' for every
+    # message. A question is still a question (2026-10-06: "do we have
+    # a profile for Ms. Rachel?" drafted a 77 second build that way).
+    # With nothing armed, a question-shaped ask keeps the server's own
+    # read of it.
+    if forced == 'interpret' and referent_decision is None and not _armed(body):
+        try:
+            _own = understand.decide(text, has_ctx=has_ctx, open_tabs=open_tabs)
+            if _own.get('surface') == 'analyze' and str(_own.get('reason') or '') in (
+                    'question', 'subiq_lookup', 'capability_question', 'compare_open',
+                    'data_open'):
+                forced = ''
+        except Exception:
+            pass
     if referent_decision is not None:
         decision = referent_decision
     elif forced in _SURFACES:

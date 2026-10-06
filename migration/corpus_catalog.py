@@ -141,6 +141,12 @@ _CUT_SUFFIX_RX = re.compile(
     r'.*members|.*subscribers|.*shoppers)$', re.I)
 
 
+# ' - Q4 2025', ' CY2025', ' 2023/2024 TU', ' - Jan 2026', ' 2025 YTD':
+# a window label on a profile name is not part of the entity.
+_WINDOW_LABEL_RX = re.compile(
+    r'(?:\s+-\s+|\s+)(?:q[1-4]\s+(?:20)?\d{2}|(?:19|20)\d{2}(?:\s*/\s*(?:19|20)?\d{2})?(?:\s+tu)?|'
+    r'cy\s?(?:20)?\d{2}|calendar\s+(?:20)?\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)'
+    r'[a-z]*\s+(?:20)?\d{2}|(?:19|20)\d{2}\s*-\s*(?:19|20)\d{2}(?:\s+ytd)?(?:\s+tu)?|(?:20)?\d{2}\s+ytd)\s*$')
 _QUALIFIER_RX = re.compile(
     r'[,:]?\s*(?:opening (?:weekend|week|day|night)|premiere (?:week|weekend|night)|'
     r'launch (?:week|weekend)|finale (?:week|weekend)|season \d+ (?:premiere|finale))\b.*$')
@@ -156,6 +162,7 @@ def entity_fold(name):
     t = re.sub(r'\([^)]*\)', ' ', t)
     t = ' '.join(t.split())
     t = _QUALIFIER_RX.sub('', t)
+    t = _WINDOW_LABEL_RX.sub('', t)
     t = _CUT_SUFFIX_RX.sub('', t)
     t = _PLATFORM_RX.sub('', t)
     t = _TRAILING_LABEL_RX.sub('', t)
@@ -167,6 +174,17 @@ def entity_fold(name):
 def subject_key(name):
     f = entity_fold(name)
     return f.replace(' ', '_')[:120] if f else ''
+
+
+def best_display(aliases, fallback=''):
+    """The cleanest name for a subject among its aliases: no cut
+    suffix, no parenthetical, then the shortest."""
+    cands = [str(a).strip() for a in (aliases or []) if str(a or '').strip()]
+    if not cands:
+        return fallback
+    def _rank(a):
+        return (' - ' in a, '(' in a, a.isupper(), len(a))
+    return sorted(cands, key=_rank)[0]
 
 
 def _fact_id(product, source_key, kind, label, window):
@@ -234,7 +252,9 @@ def facts_from_profile_rows(s3_key, display_name, rows, user=''):
             if p:
                 platform_rows.append((val, p))
     subject = display_name or subject_val or re.sub(r'_\d{2}_\d{2}_\d{4}.*$', '', s3_key).replace('_', ' ')
-    is_cut = bool(re.search(r'\s-\s', str(display_name or s3_key)))
+    _label = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}\.csv$', '', str(display_name or s3_key)).replace('_', ' ')
+    _label = _WINDOW_LABEL_RX.sub('', _label.strip().lower())
+    is_cut = bool(re.search(r'\s-\s', _label))
     note = f"Profile IQ: {subject}"
     if sample:
         facts.append(make_fact('profile', 'sample_size', 'viewers inside the 10 million sample',
@@ -621,9 +641,9 @@ def upsert_source(product, s3_key, subject, facts, etag=None, aliases=()):
 
     def _mut_page(doc):
         doc.setdefault('subject_key', skey)
-        doc.setdefault('subject', str(subject).strip())
         al = set(doc.get('aliases') or []) | alias_set
         doc['aliases'] = sorted(a for a in al if a)[:40]
+        doc['subject'] = best_display(doc['aliases'], str(subject).strip())
         kept = [f for f in (doc.get('facts') or [])
                 if not (isinstance(f, dict) and (f.get('source') or {}).get('key') == s3_key)]
         kept.extend(facts)
@@ -640,8 +660,8 @@ def upsert_source(product, s3_key, subject, facts, etag=None, aliases=()):
         doc.setdefault('version', VERSION)
         subs = doc.setdefault('subjects', {})
         ent = subs.get(skey) or {}
-        ent['subject'] = ent.get('subject') or str(subject).strip()
         ent['aliases'] = sorted(set(ent.get('aliases') or []) | alias_set)[:40]
+        ent['subject'] = best_display(ent['aliases'], str(subject).strip())
         prods = set(ent.get('products') or []) | {product}
         ent['products'] = sorted(prods)
         ent['n_facts'] = len(page.get('facts') or [])
@@ -659,6 +679,13 @@ def upsert_source(product, s3_key, subject, facts, etag=None, aliases=()):
     _update_json(INDEX_KEY, _mut_index)
     if not str(s3_key).startswith('thread/'):
         _update_json(SOURCES_KEY, _mut_sources)
+        # Dashboard figures outrank chat-stated ones (2026-10-06): a
+        # ledger entry that now disagrees with this source is retired.
+        try:
+            import insights_ledger as _il
+            _il.retire_conflicting_entries(str(subject), facts)
+        except Exception as e:
+            print(f"[corpus-catalog] ledger reconcile skipped: {e}")
     with _lock:
         _state['index_ts'] = 0.0
         _state['pages'].pop(skey, None)
@@ -692,8 +719,8 @@ def bulk_upsert(records):
 
         def _mut_page(doc, _recs=recs, _subject=subject, _aliases=alias_set, _keys=keys):
             doc.setdefault('subject_key', skey)
-            doc['subject'] = doc.get('subject') or _subject
             doc['aliases'] = sorted(a for a in (set(doc.get('aliases') or []) | _aliases) if a)[:40]
+            doc['subject'] = best_display(doc['aliases'], _subject)
             kept = [f for f in (doc.get('facts') or [])
                     if not (isinstance(f, dict) and (f.get('source') or {}).get('key') in _keys)]
             for r in _recs:
@@ -721,7 +748,6 @@ def bulk_upsert(records):
             if skey not in page_counts:
                 continue
             ent = subs.get(skey) or {}
-            ent['subject'] = ent.get('subject') or str(recs[0].get('subject') or '').strip()
             al = set(ent.get('aliases') or [])
             prods = set(ent.get('products') or [])
             for r in recs:
@@ -731,6 +757,7 @@ def bulk_upsert(records):
                 src_updates[r['s3_key']] = {'etag': r.get('etag') or '', 'product': r['product'],
                                             'subject_key': skey, 'indexed_at': now}
             ent['aliases'] = sorted(a for a in al if a)[:40]
+            ent['subject'] = best_display(ent['aliases'], str(recs[0].get('subject') or '').strip())
             ent['products'] = sorted(prods)
             ent['n_facts'] = page_counts[skey]
             ent['updated'] = now
@@ -748,6 +775,13 @@ def bulk_upsert(records):
     with _lock:
         _state['index_ts'] = 0.0
         _state['pages'] = {}
+    try:
+        import insights_ledger as _il
+        for skey, recs in by_subject.items():
+            facts = [f for r in recs for f in (r.get('facts') or [])]
+            _il.retire_conflicting_entries(str(recs[0].get('subject') or ''), facts)
+    except Exception as e:
+        print(f"[corpus-catalog] ledger reconcile skipped: {e}")
     return len(page_counts)
 
 
@@ -860,7 +894,7 @@ def anchors_for(subject, window=None, products=None, limit=60, with_ledger=True)
             facts.sort(key=lambda f: str(f.get('as_of') or ''), reverse=True)
             facts.sort(key=_score, reverse=True)
             out['subject_key'] = skey
-            out['subject'] = page.get('subject') or out['subject']
+            out['subject'] = best_display(page.get('aliases') or [], page.get('subject') or out['subject'])
             out['facts'] = facts[:limit]
             out['products'] = sorted({f.get('product') for f in facts if f.get('product')})
     except Exception as e:
@@ -885,7 +919,7 @@ def related_subjects(name, exclude='', limit=5):
     """Catalog subjects whose key carries every token of this name
     (the 'Potential The Influencer Project Ticket Buyer' profiles for
     'The Influencer Project'). Headline facts only."""
-    toks = [t for t in entity_fold(name).split() if len(t) > 2]
+    toks = [t for t in entity_fold(name).split() if len(t) > 1]
     if not toks:
         return []
     idx = load_index()

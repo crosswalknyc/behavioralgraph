@@ -305,6 +305,13 @@ def _synth_chat_gate(allow_api_key: bool = True):
             }), 403)
         u.setdefault('username', uname)
         u['_auth_via'] = 'api_key'
+        # The ask log and the watch see the key owner as the user
+        # (2026-10-06: API asks used to log as 'unknown').
+        try:
+            from flask import g as _g_ak
+            _g_ak._pm_api_key_owner = uname or u.get('username') or u.get('email')
+        except Exception:
+            pass
         return u, None
 
     user = _H.get_current_user()
@@ -2727,6 +2734,36 @@ def _synth_chat_is_incidence_request(text):
         r'|\bn( |-)?size\b|\bwhat(\'| i)?s the n\b',
         t)
     return bool(strong)
+
+
+def _pm_hold_sample_to_catalog(subject, tu, start=None, end=None):
+    """Hold a proposed sample to the profile the dashboard already
+    holds for the subject (2026-10-06). Returns the held sample (an
+    int); the input when nothing anchors it."""
+    try:
+        from migration import corpus_catalog as _cc
+    except Exception:
+        return tu
+    w = _pm_window_from_labels(start, end)
+    anchors = _cc.anchors_for(subject, window=w, with_ledger=False)
+    pa = _cc.profile_anchor(anchors, w)
+    if not pa or not pa.get('sample_size'):
+        return tu
+    ps = int(pa['sample_size'])
+    pw = pa.get('window') or {}
+    if w and _cc.same_window(w, pw):
+        return ps
+    lp = _pm_window_days(pw) or 365
+    lw = _pm_window_days(w) or 365
+    scale = (float(lw) / float(lp)) ** 0.5
+    inside = bool(w and pw and str(w.get('start')) >= str(pw.get('start'))
+                  and str(w.get('end')) <= str(pw.get('end')))
+    lo = int(ps * scale * 0.6)
+    hi = int(ps * 0.97) if inside else int(ps * scale * 1.5)
+    lo = min(lo, hi)
+    if tu < lo or tu > hi:
+        return max(lo, min(int(tu), hi))
+    return tu
 
 
 def _pm_window_from_labels(start, end):
@@ -5497,7 +5534,7 @@ def _ask_logged(surface):
                     try:
                         import render_usage_log as _rul
                         _rul.record_ask(
-                            user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
+                            user=_pm_ask_log_user(),
                             view=view, question=question,
                             surface=log_surface, route='unknown',
                             outcome='error',
@@ -5508,7 +5545,7 @@ def _ask_logged(surface):
                         pass
                     try:
                         _pm_watch_notify(
-                            session.get('username') or getattr(_g, '_pm_ask_user', None) or '', question,
+                            _pm_ask_log_user(''), question,
                             {'reply': _H._CHATBOT_CALM_MESSAGE}, None)
                     except Exception:
                         pass
@@ -5564,7 +5601,7 @@ def _ask_logged(surface):
                 outcome, extra = _pm_ask_apply_taxonomy(
                     log_surface, payload, status_code, ask_history,
                     outcome, question,
-                    session.get('username') or getattr(_g, '_pm_ask_user', None) or '')
+                    _pm_ask_log_user(''))
                 # Answer gate (2026-10-02 RCA): the only exit. A held
                 # reply is retried once, then replaced with the honest
                 # email promise; a build card for a task becomes the
@@ -5574,7 +5611,7 @@ def _ask_logged(surface):
                         fn, args, kwargs, resp, payload, status_code,
                         log_surface, outcome, extra, question,
                         ask_history,
-                        session.get('username') or getattr(_g, '_pm_ask_user', None) or '',
+                        _pm_ask_log_user(''),
                         t0)
                 if user_sig:
                     merged = {'user_signal': user_sig.get('signal'),
@@ -5585,14 +5622,14 @@ def _ask_logged(surface):
                     extra = merged
                 import render_usage_log as _rul
                 _rul.record_ask(
-                    user=(session.get('username') or getattr(_g, '_pm_ask_user', None) or 'unknown'),
+                    user=_pm_ask_log_user(),
                     view=view, question=question, surface=log_surface,
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject, extra=extra,
                     stages=getattr(_g, '_pm_ask_stages', None))
                 _pm_watch_notify(
-                    session.get('username') or getattr(_g, '_pm_ask_user', None) or '', question, payload,
+                    _pm_ask_log_user(''), question, payload,
                     subject)
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
@@ -5605,7 +5642,7 @@ def _ask_logged(surface):
                                                 'memory_confirm'):
                         import prometheus_memory as _pmm
                         _pmm.remember(
-                            (session.get('username') or getattr(_g, '_pm_ask_user', None) or '').strip(),
+                            (_pm_ask_log_user('')).strip(),
                             question, subject=subject, view=view,
                             route=route)
                 except Exception:
@@ -7515,6 +7552,25 @@ def _spec_from_draft(draft):
                     'cut_needs_parent', ''):
             _ds, _de = _def_dates()
             spec['date_range'] = f"{_ds} TO {_de}"
+    # Catalog hold (2026-10-06): a profile already on the dashboard
+    # for this subject anchors the sample for its window. Same window:
+    # that sample, exactly. Different window: a band scaled by window
+    # length, a sub-window never above the annual. The same rule the
+    # sample check applies, so the brief, the check and the build agree.
+    try:
+        _m = re.match(r'^\s*(\d{4}-\d{2}-\d{2})\s+TO\s+(\d{4}-\d{2}-\d{2})',
+                      str(spec.get('date_range') or ''), re.I)
+        _held = _pm_hold_sample_to_catalog(
+            subject, int(spec.get('subject_raw_tu') or 0),
+            _m.group(1) if _m else None, _m.group(2) if _m else None)
+        if _held and int(_held) != int(spec.get('subject_raw_tu') or 0):
+            print(f"[spec-guard] sample held to the dashboard profile: "
+                  f"{spec.get('subject_raw_tu')} -> {_held}")
+            spec['subject_raw_tu'] = int(_held)
+            if int(spec.get('subject_raw_avid') or 0) >= int(_held):
+                spec['subject_raw_avid'] = max(801, int(int(_held) * 0.22))
+    except Exception:
+        traceback.print_exc()
     if draft.get('cut_date_range'):
         spec['cut_date_range'] = _scrub(draft['cut_date_range'],
                                         field='cut_date_range',
@@ -9624,6 +9680,35 @@ def _pm_catalog_block(subject, window=None, extra_subjects=()):
     except Exception:
         traceback.print_exc()
         return ''
+
+
+def _pm_ask_log_user(default='unknown'):
+    """The user label an ask is logged under (2026-10-06). Session user,
+    then the API-key / job owner the route set on g, then a synthetic
+    caller marker so canary and smoke asks never read as a real user
+    with no name, else `default`."""
+    try:
+        u = session.get('username')
+        if u:
+            return str(u)
+    except Exception:
+        pass
+    try:
+        from flask import g as _g, request as _rq
+        u = getattr(_g, '_pm_ask_user', None) or getattr(_g, '_pm_api_key_owner', None)
+        if u:
+            return str(u)
+        ua = str(_rq.headers.get('User-Agent') or '')
+        caller = str(_rq.headers.get('X-Prometheus-Caller') or '')
+        if caller:
+            return 'canary:' + re.sub(r'[^a-z0-9_-]+', '', caller.lower())[:40]
+        if 'canary' in ua.lower() or 'smoke' in ua.lower() or 'regression' in ua.lower():
+            return 'canary'
+        if getattr(_g, '_pm_api_key_id', None):
+            return 'apikey:' + str(getattr(_g, '_pm_api_key_id'))[:24]
+    except Exception:
+        pass
+    return default
 
 
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
@@ -17752,6 +17837,14 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                 s3_client=_H.s3_client, bucket=_H.S3_BUCKET)
             if _kb:
                 _deck_prompt = f"{_deck_prompt}\n\n{_kb}"
+        except Exception:
+            pass
+        # Corpus catalog (2026-10-06): the dashboard's own figures on
+        # the subject bind the deck's headline numbers.
+        try:
+            _cat_block = _pm_catalog_block(subject)
+            if _cat_block:
+                _deck_prompt = f"{_deck_prompt}\n\n{_cat_block}"
         except Exception:
             pass
         plan_result = _pm_claude_json(

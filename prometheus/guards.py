@@ -960,3 +960,45 @@ def scrub_method_language_payload(raw):
             raw[k] = scrub_method_language(v)
             raw.setdefault('_scrubbed', []).append(k)
     return raw
+
+
+_SCRUB_SKIP_KEYS = frozenset((
+    'url', 'href', 'key', 's3_key', 'id', 'job_id', 'image', 'hero_image', 'thumbnail',
+    'filename', 'filename_stem', 'slug', 'etag', 'source_key', 'created_by', 'created_at',
+    'start_date', 'end_date', 'as_of', 'story_mode', 'target_type', 'kind', 'type', 'layout',
+    'surface', 'ground', 'accent', 'color', 'hex', 'anchored_to', 'replayed_from',
+))
+
+
+def scrub_tree(obj, skip_keys=_SCRUB_SKIP_KEYS, _depth=0):
+    """Apply the full user-text scrub (internal vocabulary + method
+    language) to every string in a payload, in place. Keys that carry
+    identifiers, URLs and dates are left alone. Returns obj."""
+    if _depth > 12:
+        return obj
+    try:
+        import prometheus_analysis as _pma
+        _scrub = _pma.scrub_user_text
+    except Exception:
+        _scrub = scrub_method_language
+    if isinstance(obj, dict):
+        for k, v in list(obj.items()):
+            if str(k) in skip_keys or str(k).startswith('_'):
+                continue
+            if isinstance(v, str):
+                if v.strip() and not v.startswith(('http://', 'https://', 's3://')):
+                    nv = _scrub(v)
+                    if nv:
+                        obj[k] = nv
+            elif isinstance(v, (dict, list)):
+                scrub_tree(v, skip_keys, _depth + 1)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            if isinstance(v, str):
+                if v.strip() and not v.startswith(('http://', 'https://', 's3://')):
+                    nv = _scrub(v)
+                    if nv:
+                        obj[i] = nv
+            elif isinstance(v, (dict, list)):
+                scrub_tree(v, skip_keys, _depth + 1)
+    return obj

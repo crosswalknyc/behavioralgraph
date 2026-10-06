@@ -348,7 +348,28 @@ def main(argv=None):
     ap.add_argument('--no-email', action='store_true')
     ap.add_argument('--no-audit', action='store_true')
     ap.add_argument('--workers', type=int, default=12)
+    ap.add_argument('--rebuild', action='store_true',
+                    help='forget every indexed source first so the whole corpus is re-read '
+                         '(after a change to the subject fold)')
     args = ap.parse_args(argv)
+    if args.rebuild and not args.dry_run:
+        s3 = _s3()
+        tok = None
+        n = 0
+        while True:
+            kw = dict(Bucket=BUCKET, Prefix='system/corpus_catalog/')
+            if tok:
+                kw['ContinuationToken'] = tok
+            r = s3.list_objects_v2(**kw)
+            keys = [o['Key'] for o in r.get('Contents') or []]
+            for i in range(0, len(keys), 1000):
+                s3.delete_objects(Bucket=BUCKET, Delete={'Objects': [{'Key': k} for k in keys[i:i + 1000]]})
+            n += len(keys)
+            if not r.get('IsTruncated'):
+                break
+            tok = r.get('NextContinuationToken')
+        cc.set_client(None)
+        print(f"[sync] rebuild: cleared {n} catalog objects")
     t0 = time.time()
     stats = {}
     if not args.audit_only:
