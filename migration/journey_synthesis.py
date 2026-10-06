@@ -247,6 +247,8 @@ _TICKETING_SWAPS = [
     (r'\breached (an|the) order page\b', 'looked up showtimes'),
     (r'\border page\b', 'showtimes lookup'),
     (r'\bseat map\b', 'showtimes listing'),
+    (r'\bticketing showtimes page\b', 'showtimes lookup and on to the ticketing site'),
+    (r'\bshowtimes-to-ticketing site flow\b', 'showtimes lookup'),
     (r'\bcheckout flow\b', 'ticketing site'),
     (r'\bcheckout\b', 'ticketing site'),
     (r'\bbefore buying\b', 'before going to the ticketing site'),
