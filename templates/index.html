@@ -52901,7 +52901,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                      _JIQ_FRAGRANCE_DATA, _JIQ_YS_PVOD_DATA,
                      _JIQ_DEXTER_PVOD_DATA, _JIQ_GG_LAPSED_DATA,
                      _JIQ_GG_REGULAR_DATA. -->
+                <div id="jiqFragTabBar" class="jiq-ufc-tabbar" style="display: none;"></div>
                 <div class="jiq-frag" id="jiqFragCard" style="display: none;">
+                    <div id="jiqFragJourneyPane">
                     <div class="jiq-frag-cover">
                         <div class="jiq-frag-copy">
                             <div class="jiq-frag-eyebrow" id="jiqFragMeta"></div>
@@ -52935,12 +52937,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <em>Counts are unique US accounts</em>
                     </div>
                     <div class="jiq-frag-detours" id="jiqFragDetours"></div>
-                    <div class="jiq-frag-sec" id="jiqFragClickSec" style="display: none;">
+                    </div>
+                    <div id="jiqFragClickPane" style="display: none;">
+                    <div class="jiq-frag-sec" id="jiqFragClickSec">
                         <div class="jiq-frag-num" id="jiqFragClickNum">04 Clickstream</div>
                         <h3 id="jiqFragClickHead">The URLs on each step.</h3>
                         <em>People on a URL can sit on more than one. They do not add to the step.</em>
                     </div>
                     <div id="jiqFragClickstream"></div>
+                    </div>
                 </div>
 
                 <!-- Heated Rivalry and Barbie song journeys. Two story
@@ -90011,6 +90016,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (typeof _jiqAnimCrHideTabBar === 'function') _jiqAnimCrHideTabBar();
             _jiqHideCard('jiqNeuroCard');
             _jiqHideCard('jiqFragCard');
+            _jiqHideCard('jiqFragTabBar');
             _jiqHideCard('jiqSongCard');
             if (typeof _jiqSongHide === 'function') _jiqSongHide();
             _jiqHideCard('jiqMusicCatalogCard');
@@ -114849,6 +114855,26 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 ['https://www.reddit.com/search/?q=' + q, 'Forum search for the same name'],
                 ['https://www.google.com/search?q=' + encodeURIComponent(String(subject || '') + ' instagram'), 'Name search on Instagram']
             ];
+            var sites = {
+                fandango: ['https://www.fandango.com/', 'Ticketing site'],
+                amc: ['https://www.amctheatres.com/', 'Ticketing site'],
+                regal: ['https://www.regmovies.com/', 'Ticketing site'],
+                cinemark: ['https://www.cinemark.com/', 'Ticketing site'],
+                atom: ['https://www.atomtickets.com/', 'Ticketing site']
+            };
+            ((d && d.detours) || []).forEach(function(block) {
+                ((block && (block.rows || block.sites)) || []).forEach(function(r) {
+                    var lab = String((r && (r.label || r.site || r.name)) || '').toLowerCase();
+                    Object.keys(sites).forEach(function(key) {
+                        if (lab.indexOf(key) >= 0) {
+                            var pair = sites[key];
+                            if (base.every(function(u) { return u[0] !== pair[0]; })) {
+                                base.push(pair);
+                            }
+                        }
+                    });
+                });
+            });
             var steps = [];
             var prev = 0;
             for (var i = 0; i < spine.length; i++) {
@@ -114902,25 +114928,84 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 + '<th>#</th><th>Date</th><th>Surface</th><th>Action</th><th>People</th><th>URLs</th>'
                 + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
         }
-        function _jiqPaintFragClickstream(d) {
+        function _jiqFragSubject(d) {
+            var copy = (d && d.copy) || {};
+            var meta = (d && d.meta) || {};
+            var run = (typeof _jiqCurrentRun !== 'undefined' && _jiqCurrentRun) || {};
+            var rm = run.meta || run;
+            var raw = meta.target_name || meta.project_name || meta.subject
+                || copy.titleHtml || rm.target_name || rm.project_name
+                || rm.target_display || rm.display_name || rm.title || '';
+            return String(raw).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+        }
+        function _jiqClickstreamLooksForeign(cs, subject) {
+            var sub = String(subject || '').toLowerCase();
+            var blob = JSON.stringify(cs || {}).toLowerCase();
+            if (blob.indexOf('watch+arrow') >= 0 || blob.indexOf('tv-show/arrow') >= 0
+                    || blob.indexOf('search?q=arrow') >= 0) {
+                return sub.indexOf('arrow') < 0;
+            }
+            return false;
+        }
+        function _jiqFragOwnClickstream(d) {
+            var subj = _jiqFragSubject(d);
+            var plat = ((d && d.meta) || {}).platform || '';
+            var cs = (d && d.clickstream) || null;
+            if (cs && (cs.steps || []).length && !_jiqClickstreamLooksForeign(cs, subj)) {
+                return cs;
+            }
+            return _jiqClickstreamFromSpine(d, subj, plat);
+        }
+        var _jiqFragActiveTab = 'journey';
+        var _jiqFragClickData = null;
+        function _jiqPaintFragTabs() {
+            var bar = document.getElementById('jiqFragTabBar');
+            if (!bar) return;
+            bar.style.display = '';
+            var tabs = [
+                { id: 'journey', label: 'The journey' },
+                { id: 'clickstream', label: 'Clickstream' }
+            ];
+            var active = _jiqFragActiveTab || 'journey';
+            bar.innerHTML = '<div class="jiq-ufc-pills">' + tabs.map(function(t) {
+                return '<button type="button" data-frag-tab="' + t.id + '"'
+                    + (t.id === active ? ' class="is-on"' : '') + '>'
+                    + t.label + '</button>';
+            }).join('') + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('[data-frag-tab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqFragActiveTab = btn.getAttribute('data-frag-tab');
+                    _jiqApplyFragTab();
+                    _jiqPaintFragTabs();
+                });
+            });
+        }
+        function _jiqApplyFragTab() {
+            var active = _jiqFragActiveTab || 'journey';
+            var journey = document.getElementById('jiqFragJourneyPane');
+            var click = document.getElementById('jiqFragClickPane');
+            if (journey) journey.style.display = (active === 'journey') ? '' : 'none';
+            if (click) click.style.display = (active === 'clickstream') ? '' : 'none';
+            if (active === 'clickstream' && _jiqFragClickData) {
+                _jiqFillFragClickstream(_jiqFragClickData);
+            }
+        }
+        function _jiqFillFragClickstream(d) {
             var host = document.getElementById('jiqFragClickstream');
-            var sec = document.getElementById('jiqFragClickSec');
             if (!host) return;
             var copy = (d && d.copy) || {};
             var num = document.getElementById('jiqFragClickNum');
-            if (num) num.textContent = copy.clickSec || '04 Clickstream';
+            if (num) num.textContent = copy.clickSec || 'Clickstream';
             var head = document.getElementById('jiqFragClickHead');
             if (head) head.textContent = copy.clickHead || 'The URLs on each step.';
-            var cs = (d && d.clickstream)
-                || (typeof _JIQ_ARROW_CLICKSTREAM !== 'undefined' && _JIQ_ARROW_CLICKSTREAM)
-                || null;
-            if (!cs || !(cs.steps || []).length) {
-                var subj = (copy.titleHtml || '').replace(/<br\/?>/g, ' ').replace(/<[^>]+>/g, '')
-                    || ((d && d.meta && (d.meta.target_name || d.meta.subject)) || '');
-                cs = _jiqClickstreamFromSpine(d, subj, '');
-            }
-            host.innerHTML = _jiqRenderClickstreamTable(cs);
-            if (sec) sec.style.display = '';
+            host.innerHTML = _jiqRenderClickstreamTable(_jiqFragOwnClickstream(d));
+        }
+        function _jiqPaintFragClickstream(d) {
+            _jiqFragClickData = d;
+            _jiqFragActiveTab = 'journey';
+            _jiqPaintFragTabs();
+            _jiqApplyFragTab();
         }
 
         function renderJourneyIqFragrance(p, runMeta) {
