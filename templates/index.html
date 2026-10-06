@@ -18785,6 +18785,17 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             display: none !important;
         }
 
+        /* ---- 11h. Rankers / Trends: drop the cramped export affordances -------
+           On phones the per-tab "Export CSV" chip (.tiq-panel-actions) collides
+           with the wrapped FAST/MUSIC/.../GAMING tab row, and the big meta-bar
+           "Download all" button (#trendsIQExportAllBtn) just adds clutter. Hide
+           both on mobile only. The per-section "Export CSV" menu button
+           (.tiq-export-btn, e.g. Apple Podcasts Top 100) is intentionally kept. */
+        #trendsIQView .tiq-panel-actions,
+        #trendsIQView #trendsIQExportAllBtn {
+            display: none !important;
+        }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
