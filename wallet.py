@@ -3075,6 +3075,62 @@ def grant_company_paid_runs(users_data: dict, company_name: str,
     return wrote
 
 
+def journey_iq_run_access(user) -> tuple:
+    """Resolve Digital Journey IQ per-run access.
+
+    Returns ``(is_admin, allow_all, allowed_keys)``.
+    An explicit ``allowed_journey_iq_runs`` list (including empty)
+    wins over a full Profile IQ catalog. Staff and star / missing
+    lists stay open. Paid-only seats with an empty list stay closed
+    except for complimentary grants checked by the caller.
+    """
+    if not isinstance(user, dict):
+        user = {}
+    role = str(user.get("role") or "").strip().lower()
+    is_admin = role in ("admin", "super_admin")
+    if is_admin:
+        return True, True, set()
+    if is_internal_staff_seat(user):
+        return False, True, set()
+    raw = user.get("allowed_journey_iq_runs")
+    if isinstance(raw, list) and "*" not in raw:
+        return False, False, {
+            str(k).strip() for k in raw if str(k or "").strip()}
+    if has_full_profile_catalog(user):
+        return False, True, set()
+    if raw is None:
+        return False, True, set()
+    if isinstance(raw, list) and "*" in raw:
+        return False, True, set()
+    return False, True, set()
+
+
+def inherit_company_explicit_journey_iq(user: dict, users_data: dict) -> dict:
+    """Copy an explicit company Journey IQ allow-list onto a full-catalog seat.
+
+    Paid-only seats already inherit every catalog list. Full-catalog
+    seats keep Profile IQ open and take only the company's Digital
+    Journey IQ list when that list is explicit (no '*').
+    """
+    if not isinstance(user, dict) or not isinstance(users_data, dict):
+        return user
+    if is_public_signup_seat(user) or is_paid_only_plan(user):
+        return user
+    if is_internal_staff_seat(user):
+        return user
+    key = str(user.get("company") or "").strip()
+    rec = (users_data.get("companies") or {}).get(key)
+    if not isinstance(rec, dict):
+        return user
+    raw = rec.get("allowed_journey_iq_runs")
+    if not isinstance(raw, list) or "*" in raw:
+        return user
+    user["allowed_journey_iq_runs"] = _clean_paid_runs(raw)
+    if user["allowed_journey_iq_runs"]:
+        user["has_journey_iq_access"] = True
+    return user
+
+
 def inherit_company_paid_runs(user: dict, users_data: dict, *,
                               replace: bool = False) -> dict:
     """Copy the company's paid and complimentary lists onto this seat."""
@@ -4636,6 +4692,8 @@ __all__ = [
     "detach_paid_only_seat", "detach_paid_only_company",
     "company_paid_runs", "grant_company_paid_runs",
     "inherit_company_paid_runs",
+    "inherit_company_explicit_journey_iq",
+    "journey_iq_run_access",
     "company_teammate_usernames",
     "admin_billing_row_for_user",
     "norm_usage_desc", "collect_usage_ledger_rows",

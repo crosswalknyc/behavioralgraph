@@ -88044,7 +88044,6 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         // an explicit allow-list (e.g. Landman + Fandango) must
                         // not still list Netflix, UFC, neurotrophic demos, etc.
                         var demos = (DEMO_CARDS[cat.id] || []).filter(function(d) {
-                            if (d.value === '__demo_music_to_long_form__') return true;
                             if (window.__jiqAllowAll) return true;
                             return (window.__jiqAllowedDemos || []).indexOf(d.value) !== -1;
                         });

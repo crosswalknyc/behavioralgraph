@@ -5808,6 +5808,8 @@ def create_user():
         elif str(data['users'][username].get('billing_source') or '').lower() == 'company':
             _wallet_co.ensure_company_record(
                 data, company, seed_user=data['users'][username])
+        _wallet_co.inherit_company_explicit_journey_iq(
+            data['users'][username], data)
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -41283,33 +41285,26 @@ def _user_jiq_run_access(user):
     """Resolve a user's Journey IQ per-run access policy.
 
     Returns a tuple ``(is_admin, allow_all, allowed_keys)``:
-      * ``is_admin`` — admin / super_admin acting as themselves: see everything.
-      * ``allow_all`` — non-admin user with the default-open policy
-        (``allowed_journey_iq_runs`` is missing, not a list, or contains
-        ``'*'``). Preserves existing behavior for users who haven't been
-        gated yet.
-      * ``allowed_keys`` — a ``set[str]`` of explicit S3 keys when
-        ``allow_all`` is False; an empty list ``[]`` means "no journeys
-        granted" (the admin explicitly revoked everything).
+      * ``is_admin`` - admin / super_admin acting as themselves: see everything.
+      * ``allow_all`` - missing list, ``['*']``, staff, or a full-catalog
+        seat that has not been explicitly gated.
+      * ``allowed_keys`` - explicit S3 keys / demo ids when the admin
+        set a list (including empty ``[]``). An explicit list wins even
+        on a full Profile IQ catalog, so Be Good Influence can hold
+        Politics Girl only without losing the rest of the dashboard.
     """
-    role = (user or {}).get('role')
-    is_admin = role in ('admin', 'super_admin')
-    if is_admin:
-        return True, True, set()
     try:
         import wallet as _w
-        if _w.has_full_profile_catalog(user):
-            return False, True, set()
+        return _w.journey_iq_run_access(user)
     except Exception:
-        pass
-    raw = (user or {}).get('allowed_journey_iq_runs')
-    if raw is None:
+        role = (user or {}).get('role')
+        is_admin = role in ('admin', 'super_admin')
+        if is_admin:
+            return True, True, set()
+        raw = (user or {}).get('allowed_journey_iq_runs')
+        if isinstance(raw, list) and '*' not in raw:
+            return False, False, set(raw)
         return False, True, set()
-    if isinstance(raw, list):
-        if '*' in raw:
-            return False, True, set()
-        return False, False, set(raw)
-    return False, True, set()
 
 
 def _jiq_item_allowed(user, key='', demo_id='', project_name=''):
@@ -41320,6 +41315,8 @@ def _jiq_item_allowed(user, key='', demo_id='', project_name=''):
         return True
     try:
         import wallet as _w
+        if _w._key_in_list(key, allowed) or _w._key_in_list(demo_id, allowed):
+            return True
         return _w.catalog_item_allowed(
             user, 'allowed_journey_iq_runs', key or demo_id,
             project_name or demo_id, default_open=False)
