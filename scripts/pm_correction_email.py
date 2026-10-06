@@ -87,6 +87,8 @@ def main():
     ap.add_argument('--date-label', default='')
     ap.add_argument('--subject', default='',
                     help='email subject (default: the title)')
+    ap.add_argument('--bcc', action='append', default=[],
+                    help='extra BCC (jenna@ is always on BCC; repeatable)')
     ap.add_argument('--dry-run', action='store_true')
     args = ap.parse_args()
 
@@ -132,8 +134,9 @@ def main():
         msg.attach(c)
 
     dests = [args.to]
-    if BCC.lower() != args.to.lower():
-        dests.append(BCC)
+    for extra in [BCC] + list(args.bcc or []):
+        if extra and extra.lower() not in [d.lower() for d in dests]:
+            dests.append(extra)
 
     if args.dry_run:
         print(f'DRY RUN: would send "{msg["Subject"]}" to {dests}, '

@@ -159,7 +159,20 @@ defined behavior cohort (e.g. accounts that watched short-form clips
 of the title) whose share_of_tam_pct is the researched share of the
 TAM that did that behavior in window. Later stages narrow from it.
 When start_behavior is null, stage 1 is the discovery step of the
-plain TAM. The TAM row itself never changes."""
+plain TAM. The TAM row itself never changes.
+
+Movie tickets (journey_kind "ticketing"; Jenna 2026-10-05): the
+clickstream sees the visit to a ticketing site or app, never the
+purchase, and Crosswalk never predicts box office. For a film,
+theatrical release, or movie-ticket journey the LAST stage is "Went to
+the ticketing site for a ticket" (reached a ticketing site, circuit
+app, or showtimes-to-checkout flow for THIS title with a showtime in
+window). No stage, fact, fork surface, or detour may say bought,
+buyers, purchased, purchasers, paid, checkout completed, conversion,
+or box office, and nothing may imply a ticket was bought. The fork is
+left-the-ticketing-site -> retarget -> came back -> returned to the
+ticketing site. Detours divide the ticketing-site visitors (where they
+reached it, first touch, last touch, assists)."""
 
 
 _norm = lambda s: re.sub(r'[^A-Z0-9]', '', str(s).upper())
@@ -183,6 +196,258 @@ def _dates(inputs: dict) -> tuple:
         return inputs['start_date'], inputs['end_date']
     start = today.replace(year=today.year - 1)
     return start.isoformat(), today.isoformat()
+
+
+_TICKETING_RE = re.compile(
+    r'\b(box.?office|movie tickets?|ticketing (?:sites?|apps?|platforms?)|'
+    r'theatrical|in theaters|theaters?|theatres?|cinemas?|showtimes?|'
+    r'fandango|atom tickets|opening weekend|\(film\)|\bfilm\b)',
+    re.I)
+
+TICKETING_LAST_LABEL = 'Went to the ticketing site for a ticket'
+TICKETING_NO_CLAIM = ('No claim is made on whether a ticket was then '
+                      'bought; Crosswalk does not predict box office.')
+
+
+def is_ticketing_journey(inputs: dict, prim: Optional[dict] = None) -> bool:
+    """A film / theatrical / movie-ticket journey. Jenna 2026-10-05:
+    the read ends at the ticketing site, never at a purchase."""
+    if str((inputs or {}).get('journey_kind') or '').lower() == 'ticketing':
+        return True
+    if str((inputs or {}).get('journey_kind') or '').lower() == 'watch':
+        return False
+    hay = ' '.join(str((inputs or {}).get(k) or '') for k in
+                   ('subject', 'platform', 'conversion_event', 'notes'))
+    if prim:
+        hay += ' ' + str(prim.get('category') or '')
+    return bool(_TICKETING_RE.search(hay)) and bool(
+        re.search(r'ticket|box.?office|showtime|theat|cinema|fandango',
+                  hay, re.I))
+
+
+# Ordered: longer phrases first so the short ones never pre-empt them.
+_TICKETING_SWAPS = [
+    (r'\bbought the ticket\b', 'went to the ticketing site for a ticket'),
+    (r'\bwhere the ticket was bought\b', 'where the ticketing site was reached'),
+    (r'\bno payment submitted\b', 'no further step observed'),
+    (r'\bcheckout completed\b', 'ticketing site reached'),
+    (r'\bthe ticket purchase\b', 'the ticketing visit'),
+    (r'\bthe account can buy\b', 'the account can look at'),
+    (r'\bcompleted a paid digital ticket purchase for\b',
+     'reached a ticketing site or app for a ticket to'),
+    (r'\bbought a digital ticket to\b',
+     'went to a ticketing site or app for a ticket to'),
+    (r'\bbought a ticket to\b', 'went to a ticketing site for a ticket to'),
+    (r'\bdigital ticket buyers\b', 'ticketing-site visitors'),
+    (r'\bticket buyers\b', 'ticketing-site visitors'),
+    (r'\bticket buyer\b', 'ticketing-site visitor'),
+    (r'\bticket purchasers?\b', 'ticketing-site visitors'),
+    (r'\bbox[- ]office purchases\b', 'in-person box office activity'),
+    (r'\bticket purchases?\b', 'ticketing-site visits'),
+    (r'\bpurchasing accounts?\b', 'ticketing-site visitors'),
+    (r'\bpurchasers\b', 'ticketing-site visitors'),
+    (r'\bpurchaser\b', 'ticketing-site visitor'),
+    (r'\bbuyers\b', 'ticketing-site visitors'),
+    (r'\bbuyer\b', 'ticketing-site visitor'),
+    (r'\bpaid return\b', 'return to the ticketing site'),
+    (r'\bpaid first\b', 'same-session ticketing visit'),
+    (r'\bbefore they paid\b', 'before they reached the ticketing site'),
+    (r'\bthey paid\b', 'they reached the ticketing site'),
+    (r'\bpayment not yet submitted\b', 'no further step observed'),
+    (r'\bsubmitting payment\b', 'the ticketing site itself'),
+    (r'\bpayments\b', 'ticketing visits'),
+    (r'\bpayment\b', 'the ticketing visit'),
+    (r'\bwallet and saved-card (?:payments?|the ticketing visit)\b',
+     'app and web entry points'),
+    (r'\border confirmation\b', 'the ticketing page reached'),
+    (r'\blong enough to be paid for\b', 'before leaving the ticketing site'),
+    (r'\bproduced the most tickets\b',
+     'carried the most ticketing-site visitors'),
+    (r'\bbefore they bought\b', 'before they reached the ticketing site'),
+    (r'\bwas bought\b', 'was reached'),
+    (r'\bbought\b', 'reached the ticketing site'),
+    (r'\bpurchased\b', 'reached the ticketing site'),
+    (r'\broute to purchase\b', 'route to the ticketing site'),
+    (r'\bpurchases\b', 'ticketing-site visits'),
+    (r'\bpurchase surface\b', 'ticketing surface'),
+    (r'\bpurchase\b', 'ticketing visit'),
+    (r'\bconverted\b', 'reached the ticketing site'),
+    (r'\bconverting\b', 'reaching the ticketing site'),
+    (r'\bconversion event\b', 'furthest observed step'),
+    (r'\bconversions?\b', 'ticketing visits'),
+    (r'\bcheckouts\b', 'ticketing pages'),
+    (r'\bcheckout\b', 'ticketing site'),
+    (r'\bbox[- ]office\b', 'in-person box office'),
+]
+_TICKETING_SWAPS = [(re.compile(a, re.I), b) for a, b in _TICKETING_SWAPS]
+
+
+def _swap_case(src: str, repl: str) -> str:
+    if src[:1].isupper() and not src.isupper():
+        return repl[:1].upper() + repl[1:]
+    return repl
+
+
+def ticketing_text(text: str) -> str:
+    """Rewrite purchase language into ticketing-visit language. The
+    standing no-claim sentence is the one place the words 'bought' and
+    'box office' are allowed; it is held out of the swap."""
+    out = str(text)
+    if TICKETING_NO_CLAIM in out:
+        return (TICKETING_NO_CLAIM.join(
+            ticketing_text(part) for part in out.split(TICKETING_NO_CLAIM)))
+    for rx, repl in _TICKETING_SWAPS:
+        out = rx.sub(lambda m, r=repl: _swap_case(m.group(0), r), out)
+    out = re.sub(r'in-person in-person', 'in-person', out)
+    out = re.sub(r'(went to a ticketing site or app for a ticket to [^.]*?)'
+                 r' on a ticketing site or app\b', r'\1', out)
+    out = re.sub(r'\bthe the\b', 'the', out)
+    return out
+
+
+def _walk_strings(obj, fn):
+    if isinstance(obj, dict):
+        return {k: _walk_strings(v, fn) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_walk_strings(v, fn) for v in obj]
+    if isinstance(obj, str):
+        return fn(obj)
+    return obj
+
+
+def apply_ticketing_language(payload: dict) -> dict:
+    """Deterministic in-place language fix for a ticketing journey:
+    every string loses its purchase vocabulary, the last stage is the
+    ticketing-site visit with the no-claim sentence, the fork reads
+    left / came back / returned to the ticketing site. Counts never
+    change. Safe to run twice."""
+    out = _walk_strings(payload, ticketing_text)
+    j = out.get('fragrance_shop_journey') or {}
+    spine = j.get('spine') or []
+    if spine:
+        last = spine[-1]
+        last['label'] = TICKETING_LAST_LABEL
+        if TICKETING_NO_CLAIM not in str(last.get('doing') or ''):
+            last['doing'] = (str(last.get('doing') or '').rstrip('. ')
+                             + '. ' + TICKETING_NO_CLAIM).lstrip('. ')
+        last['job'] = ('the furthest step this read sees; what happened '
+                       'after the ticketing site is not observed or claimed')
+        last['next'] = 'the screening itself, not observed here'
+    fork_labels = {
+        'abandoned': ('Left the ticketing site',
+                      'Left the ticketing site one step from a ticket'),
+        'retargeted': ('Saw a retarget', 'Saw a retarget'),
+        'returned': ('Came back', 'Came back after a retarget'),
+        'paid_return': ('Returned to the ticketing site',
+                        'Reached the ticketing site again after leaving '
+                        'and coming back'),
+        'paid_first': ('Reached the ticketing site in the same session',
+                       'Reached the ticketing site in the same session'),
+    }
+    for row in j.get('fork') or []:
+        lab = fork_labels.get(str(row.get('id') or ''))
+        if lab:
+            row['label'], row['doing'] = lab
+    meta = out.setdefault('meta', {})
+    meta['target_type'] = 'ticketing_visit_journey'
+    meta['no_purchase_claim'] = True
+    meta['unit_note'] = ('Counts are US individuals who went to a '
+                         'ticketing site or app for a ticket. ' +
+                         TICKETING_NO_CLAIM)
+    return out
+
+
+def _fmt_n(v) -> str:
+    try:
+        return f'{int(v):,}'
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _pct1(num, den) -> str:
+    try:
+        return f'{100.0 * float(num) / float(den):.1f}%'
+    except (TypeError, ValueError, ZeroDivisionError):
+        return ''
+
+
+def build_copy(subject: str, platform: str, blob: dict, *,
+               family: str) -> dict:
+    """The copy block the Digital Journey tab paints from (title, lead,
+    deck, section heads, fork branch labels, KPI tiles). Without it the
+    renderer falls back to the luxury-fragrance words, which is how a
+    film ticketing read came to say "Paid for a $95 and up bottle".
+    Family is 'ticketing', 'watch', or 'purchase'; every string is
+    derived from the data, nothing is hand-written per run."""
+    spine = [s for s in (blob.get('spine') or []) if s.get('id') != 'tam']
+    fork = {f.get('id'): f for f in (blob.get('fork') or [])}
+    if not spine:
+        return {}
+    first, last = spine[0], spine[-1]
+    entered, end = first['accounts'], last['accounts']
+    back = (fork.get('paid_return') or {}).get('accounts')
+    window = str((blob.get('meta') or {}).get('window') or '')
+    subj = subject.split(' (film)')[0].split(', opening weekend')[0].strip()
+    plat = platform.split(' (')[0].strip()
+    carry = _pct1(end, entered)
+    if family == 'ticketing':
+        end_verb = 'went to a ticketing site for a ticket'
+        end_short = 'reached the ticketing site'
+        tile_end = f'Went to a ticketing site for a ticket to {subj}'
+        kind_label = 'Ticketing journey'
+        branch_a = 'REACHED THE TICKETING SITE IN THE SAME SESSION'
+        no_claim = ' ' + TICKETING_NO_CLAIM
+    elif family == 'watch':
+        end_verb = 'watched'
+        end_short = 'watched'
+        tile_end = f'Watched {subj} on {plat}'
+        kind_label = 'Watch journey'
+        branch_a = 'WATCHED IN THE SAME SESSION'
+        no_claim = ''
+    else:
+        end_verb = 'bought'
+        end_short = 'bought'
+        tile_end = f'Bought {subj} on {plat}'
+        kind_label = 'Purchase journey'
+        branch_a = 'BOUGHT IN THE SAME SESSION'
+        no_claim = ''
+    steps = ', '.join(('who ' + str(s['label']).strip().lower())
+                      for s in spine[1:-1][:4])
+    copy = {
+        'titleHtml': f'{subj}<br>on {plat}.',
+        'eyebrow': f'{kind_label} \u00b7 {window}',
+        'lead': (f'{carry} of the people who {str(first["label"]).lower()} '
+                 f'went on to the last step: they {end_verb}.{no_claim}'),
+        'deck': (f'This starts with everyone who {str(first["label"]).lower()}. '
+                 + (f'Then we count {steps}, and who {end_short}. ' if steps
+                    else f'Then we count who {end_short}. ')
+                 + f'The bars get smaller each time: {_fmt_n(entered)} people '
+                 f'down to {_fmt_n(end)} who {end_short}.'),
+        'spineSec': '01 The spine',
+        'spineHead': (f'Most people stopped before the last step. {carry} '
+                      f'of those who {str(first["label"]).lower()} '
+                      f'{end_short}.'),
+        'forkSec': '02 Left and came back',
+        'forkHead': 'Journey paths',
+        'forkBranchA': branch_a,
+        'forkBranchB': 'Left, and what happened next',
+        'forkRead': (f'Of the {_fmt_n(end)} who {end_short}, {_fmt_n(back)} '
+                     f'came back after they left. That is {_pct1(back, end)}.'
+                     if back else ''),
+        'detourSec': '03 Detours',
+        'detourHead': 'Where the journey came from, and what closed it.',
+        'kpis': [
+            {'v': _fmt_n(entered), 'l': str(first['label'])},
+            {'v': _fmt_n(end), 'l': tile_end},
+            {'v': carry, 'l': f'Of those who {str(first["label"]).lower()}',
+             'hot': True},
+        ],
+    }
+    if back:
+        copy['kpis'].append({'v': _pct1(back, end),
+                             'l': f'Of those who {end_short} left first, '
+                                  f'then came back'})
+    return copy
 
 
 def build_journey(inputs: dict, prim: dict, *,
@@ -369,6 +634,14 @@ def build_journey(inputs: dict, prim: dict, *,
             'anchors_note': str(prim.get('anchors_note') or ''),
         },
     }
+    ticketing = is_ticketing_journey(inputs, prim)
+    if ticketing:
+        payload = apply_ticketing_language(payload)
+    family = ('ticketing' if ticketing
+              else 'watch' if inputs.get('journey_kind') == 'watch'
+              else 'purchase')
+    payload['fragrance_shop_journey']['copy'] = build_copy(
+        subject, platform, payload['fragrance_shop_journey'], family=family)
     return payload
 
 
@@ -380,7 +653,8 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'subject': inputs['subject'],
         'platform': inputs['platform'],
         'conversion_event': inputs.get('conversion_event') or '',
-        'journey_kind': inputs.get('journey_kind') or 'purchase',
+        'journey_kind': ('ticketing' if is_ticketing_journey(inputs)
+                         else (inputs.get('journey_kind') or 'purchase')),
         'start_behavior': inputs.get('start_behavior') or None,
         'window': {'start': start, 'end': end},
         'tam_label': inputs.get('tam_label') or 'US gen pop',

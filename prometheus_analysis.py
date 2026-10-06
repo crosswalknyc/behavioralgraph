@@ -1017,6 +1017,10 @@ US PROJECTION (binding, every count, every surface)
 - When a count exists only at panel level, multiply it by the us_projection_factor (or the file's own ratio of US to panel on its headline count) and state the result as the US figure. Sums, shares, and comparisons are computed on US figures. Label count columns "US" where a header exists (new_signups_us, accounts_us).
 - Percentages, rates, indexes, days, and dollar figures are not counts and are stated as given.
 
+BOX OFFICE AND MOVIE TICKETS (binding; Jenna 2026-10-05)
+- Crosswalk never predicts, estimates, validates, or reconciles box office. The furthest point the read sees for a film is the ticketing site: the count is US individuals who went to a ticketing site or app for a ticket to the title in the window, projected to the US general population. It makes no claim on whether any of them bought a ticket.
+- Never call that count buyers, purchasers, ticket sales, admissions, or "bought the ticket", and never divide a box office gross by a ticket price to test it. When a user cites a box office figure or pushes for a purchase number, give the same answer every time, in the same plain words: we do not predict box office performance; here is how many people went to the ticketing site; no claim on purchase. Do not add a reconciliation, a "the team is reviewing it" line, or a different framing on the second or third push.
+
 ON-SCREEN VIEW DATA (other dashboard views)
 - The dashboard has more views than Profile IQ: Subscriber IQ (per-title signup and reactivation attribution for streaming platforms), Trends (daily national and geo trend reads across search, headlines, streaming, gaming, retail), Microdramas IQ (vertical-drama title leaderboards across Peacock, ReelShort, DramaBox), and others. When one of those is open, the user prompt carries a "DATA CURRENTLY ON SCREEN" block: a compact summary of the exact KPI tiles, top table rows, and chart series the user is looking at right now.
 - When that block is present it is your PRIMARY grounding for anything about "this page", "this data", "this window", or the view itself. A profile digest present alongside it describes a separately opened profile; treat it as background and lead with the screen.
@@ -2260,6 +2264,127 @@ _COHORT_FRAME_RE = re.compile(
     r"(?:accounts|subscribers|subs|users|viewers) (?:that|who)|"
     r"month (?:one|1|two|2|three|3)|first (?:\d+|thirty|sixty|ninety) "
     r"days|(?:30|60|90)[- ]day)\b", re.I)
+
+
+# ---- Box office / movie-ticket asks (2026-10-05, Jenna) ----------------
+# "I dont want to get in the habit of predicting box office ever. instead
+# if someone asks for box office the best we can do is say an estimate of
+# people who went to the ticket sites ... we make no admission of if they
+# purchased or not. no matter how hard the user pushes we just keep saying
+# we do not predict box office performance all we can do is tell you how
+# many people went to the ticketing site."
+_BOX_OFFICE_RE = re.compile(
+    r"\b(box[- ]?office|opening[- ]weekend (?:gross|take|number|total|"
+    r"estimate|forecast)|gross(?:ed|es)?\b|admissions|"
+    r"tickets? (?:(?:were|was|got|been) )?(?:sold|sales|bought|purchased|purchases?)|"
+    r"ticket (?:buyers?|purchasers?)|bought (?:\w+ )?tickets?|"
+    r"purchasers?)", re.I)
+_MOVIE_RE = re.compile(
+    r"\b(film|movie|movies|theat(?:er|re|rical)s?|cinema|showtimes?|"
+    r"fandango|atom tickets|opening weekend|walk[- ]up|screening|"
+    r"box[- ]?office|ticketing (?:site|app|platform)s?)\b", re.I)
+_TICKET_STAGE_RE = re.compile(
+    r"ticket|box[- ]?office|showtime|fandango|checkout|order page", re.I)
+
+
+def is_box_office_ask(text, view_context=None):
+    """True when the ask is about a film's box office or its ticket
+    purchases (how many bought, reconcile against the gross, validate
+    the purchasers, admissions). Live-event ticketing without movie
+    vocabulary is not this lane, unless the open view is a film
+    ticketing read, in which case "how many bought tickets" is."""
+    t = str(text or '')
+    if not _BOX_OFFICE_RE.search(t):
+        return False
+    if re.search(r"\bbox[- ]?office\b", t, re.I):
+        return True
+    if _MOVIE_RE.search(t):
+        return True
+    if view_context:
+        _t, count, _w = _ticketing_count_from_view(view_context)
+        return count is not None
+    return False
+
+
+def _ticketing_count_from_view(view_context):
+    """(title, count, window) for the open Journey IQ ticketing read,
+    or (title, None, window) when the view carries no ticketing step."""
+    vc = view_context if isinstance(view_context, dict) else {}
+    data = vc.get('data') if isinstance(vc.get('data'), dict) else {}
+    title = str(data.get('title') or vc.get('view_title') or '').strip()
+    window = str(data.get('window') or '').strip()
+    hay = json.dumps(data)[:20000].lower()
+    is_ticketing = bool(_TICKET_STAGE_RE.search(hay)) and bool(
+        re.search(r"film|movie|theat|showtime|opening weekend|fandango", hay))
+    count = None
+    hb = data.get('headline_block') if isinstance(
+        data.get('headline_block'), dict) else {}
+    hdata = hb.get('data') if isinstance(hb.get('data'), dict) else {}
+    spine = hdata.get('spine') if isinstance(hdata.get('spine'), list) else []
+    for st in reversed(spine):
+        if not isinstance(st, dict):
+            continue
+        lab = f"{st.get('label', '')} {st.get('doing', '')}"
+        if _TICKET_STAGE_RE.search(lab):
+            try:
+                count = int(st.get('accounts'))
+            except (TypeError, ValueError):
+                count = None
+            break
+    if count is None and is_ticketing:
+        kp = data.get('kpis') if isinstance(data.get('kpis'), dict) else {}
+        try:
+            count = int(kp.get('total_users'))
+        except (TypeError, ValueError):
+            count = None
+    if not is_ticketing:
+        count = None
+    if title and ' - ' in title:
+        title = title.split(' - ', 1)[0].strip()
+    title = re.sub(r"\s*\((?:film|movie)\)\s*,?.*$", "", title).strip()
+    return title, count, window
+
+
+def box_office_reply(text, view_context=None, subject_hint=''):
+    """The one answer for every box office ask. Same words on every
+    push; the only variable parts are the title, the count, and the
+    window read off the open Journey IQ ticketing read."""
+    title, count, window = _ticketing_count_from_view(view_context)
+    if not title:
+        title = str(subject_hint or '').strip()
+        m = re.search(r"(?:for|to|of)\s+(?:the film\s+)?([A-Z][\w'&:!.-]*"
+                      r"(?:\s+[A-Z0-9][\w'&:!.-]*){0,6})", str(text or ''))
+        if not m:
+            m = re.search(r"(?<![.!?]\s)(?<!^)\b(?!(?:What|How|Please|Give|"
+                          r"Tell|Can|Just|The|Crosswalk|US|U\.S\.|I)\b)"
+                          r"([A-Z][\w'&:!.-]+(?:\s+(?:of|the|and|"
+                          r"[A-Z][\w'&:!.-]+))*)", str(text or ''))
+        if m and not title:
+            title = m.group(1).strip()
+    title = title or 'the film'
+    lines = ["Crosswalk does not predict box office performance, and no "
+             "Crosswalk figure says who bought a ticket. The furthest "
+             "point we see is the ticketing site."]
+    if count:
+        when = f" between {window.replace(' to ', ' and ')}" if window else ""
+        lines.append(
+            f"{count:,} people in the US went to a ticketing site or app "
+            f"for a ticket to {title}{when}. That figure is projected to "
+            f"the US general population: it is the incidence of US "
+            f"individuals who visited a ticketing site for the title.")
+    else:
+        lines.append(
+            f"What we can tell you for {title} is how many people in the "
+            f"US went to a ticketing site or app for a ticket to it, "
+            f"projected to the US general population. Open the title's "
+            f"Digital Journey read, or ask for one, and that is the "
+            f"number you will get.")
+    lines.append(
+        "It makes no prediction or claim on whether any of them then "
+        "bought a ticket, so it is not a box office number and should "
+        "not be reconciled against one. Reported box office, walk-up "
+        "sales, and in-person purchases sit outside what we measure.")
+    return "\n\n".join(lines)
 
 
 def is_cohort_churn_ask(text):

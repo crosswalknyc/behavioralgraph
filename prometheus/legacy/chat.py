@@ -15016,6 +15016,27 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
             'offer_deck': False, 'deck_angle': None})
+    # Box office lane (2026-10-05, Jenna: "I dont want to get in the
+    # habit of predicting box office ever ... no matter how hard the
+    # user pushes we just keep saying we do not predict box office
+    # performance all we can do is tell you how many people went to
+    # the ticketing site"). Deterministic, no model call, same words
+    # on every push; the count comes off the open ticketing read.
+    try:
+        import prometheus_analysis as _pma_bo
+        _bo_ctx = body.get('page_context') or {}
+        if _pma_bo.is_box_office_ask(text, _bo_ctx.get('view_context')):
+            _bo_reply = _pma_bo.box_office_reply(
+                text, view_context=_bo_ctx.get('view_context'),
+                subject_hint=str(((_bo_ctx.get('primary') or {})
+                                  .get('name')) or ''))
+            _pm_ask_hint(route='box_office', outcome='answered')
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _bo_reply, 'followups': [],
+                'offer_deck': False, 'deck_angle': None})
+    except Exception:
+        traceback.print_exc()
     # Prometheus tier gate (2026-08-26): pulls_only users without the
     # pay-as-you-go opt-in get Jenna's offer instead of any analysis
     # flow. Runs before every branch so no analysis path leaks.
