@@ -1201,6 +1201,46 @@ def record_answer(subject, text, user='', thread_id='', product='chat'):
         return ''
 
 
+def retire_answer(user, thread_id, text, subject=None):
+    """A reply the user rejected (2026-10-06, the learning loop): its
+    banked figures leave the catalog so the next answer cannot lean on
+    them. Returns the number of facts removed."""
+    if not enabled() or not str(text or '').strip():
+        return 0
+    try:
+        key = f"thread/{user}/{thread_id}/{hashlib.sha1(str(text).encode('utf-8')).hexdigest()[:10]}"
+        idx = load_index(force=True)
+        keys = [subject_key(subject)] if subject else list((idx.get('subjects') or {}).keys())
+        removed = 0
+        for skey in keys:
+            if not skey:
+                continue
+            page = load_subject_page(skey, force=True) or {}
+            facts = [f for f in (page.get('facts') or []) if isinstance(f, dict)]
+            hit = [f for f in facts if (f.get('source') or {}).get('key') == key]
+            if not hit:
+                continue
+
+            def _mut(doc, _key=key):
+                doc['facts'] = [f for f in (doc.get('facts') or [])
+                                if (f.get('source') or {}).get('key') != _key]
+                doc['updated'] = _now_iso()
+                return doc
+
+            _update_json(_subject_page_key(skey), _mut)
+            removed += len(hit)
+            with _lock:
+                _state['pages'].pop(skey, None)
+            if subject:
+                break
+        if removed:
+            print(f"[corpus-catalog] retired {removed} fact(s) from a rejected reply ({user}/{thread_id})")
+        return removed
+    except Exception as e:
+        print(f"[corpus-catalog] retire_answer failed: {e}")
+        return 0
+
+
 def record_answer_async(subject, text, user='', thread_id='', product='chat'):
     t = threading.Thread(target=record_answer, args=(subject, text, user, thread_id, product),
                          daemon=True)
