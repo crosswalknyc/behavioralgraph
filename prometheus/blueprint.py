@@ -138,6 +138,71 @@ def ask():
     return jsonify(env), status
 
 
+@bp.route('/upload', methods=['POST'])
+@_guarded('prometheus/upload')
+def upload():
+    """A document joins the thread (2026-10-06, Jenna: "upload a document
+    to it. like a powerpoint to be edited, or pdf or other data").
+    Multipart: file (one or many), optional thread_id. Session only.
+    The file and its text land under the asker's thread; the reply
+    names what arrived and what to do next; both turns persist."""
+    user, via, err = _auth()
+    if err:
+        return err
+    if via == 'api_key':
+        return jsonify({'success': False, 'error': 'not available on this key'}), 403
+    from . import documents as _docs
+    uname = service.username_of(user)
+    tid = str(request.form.get('thread_id') or '').strip() or None
+    if tid and not service.thread_exists(uname, tid):
+        tid = None
+    if not tid:
+        tid = service.active_thread_id(uname)
+    files = [f for f in request.files.getlist('file') if f and f.filename]
+    if not files:
+        return jsonify({'success': False, 'error': 'Attach a file: a PowerPoint, PDF, Word document, sheet or image.'}), 400
+    recs, errors = [], []
+    for f in files[:5]:
+        try:
+            data = f.read()
+            if not data:
+                errors.append(f"{f.filename}: empty file"); continue
+            if not _docs.kind_of(f.filename):
+                errors.append(f"{f.filename}: I take .pptx, .pdf, .docx, .xlsx, .csv, .txt, .md and images"); continue
+            recs.append(_docs.store_upload(uname, tid, f.filename, data))
+        except Exception as e:
+            errors.append(f"{f.filename}: {str(e)[:120]}")
+    if not recs:
+        return jsonify({'success': False, 'error': '; '.join(errors) or 'That file did not land. Try again.'}), 400
+    reply, chips = _docs.ack(recs[-1])
+    if len(recs) > 1:
+        reply = f"Got {len(recs)} files: " + ', '.join(r['name'] for r in recs) + '. ' + reply.split('. ', 1)[-1]
+    if errors:
+        reply += ' Not taken: ' + '; '.join(errors) + '.'
+    # Persist both turns so the thread knows what it holds.
+    try:
+        history = service.load_thread(uname, tid) if tid else []
+        now = service._now()
+        history.append({'role': 'user', 'text': 'Uploaded ' + ', '.join(r['name'] for r in recs), 'ts': now,
+                        'meta': {'kind': 'upload', 'attachments': [
+                            {k: r.get(k) for k in ('upload_id', 'name', 'kind', 'summary')} for r in recs]}})
+        history.append({'role': 'agent', 'text': reply, 'ts': now,
+                        'meta': {'kind': 'upload_ack', 'options': [{'label': c, 'send': c} for c in chips]}})
+        if tid:
+            service.save_thread(uname, tid, history)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+    try:
+        host.ask_hint(route='document_upload', outcome='answered')
+    except Exception:
+        pass
+    return jsonify({'success': True, 'thread_id': tid, 'reply': reply,
+                    'options': [{'label': c, 'send': c} for c in chips],
+                    'attachments': [{k: r.get(k) for k in ('upload_id', 'name', 'kind', 'summary', 'pages', 'rows')} for r in recs],
+                    'errors': errors})
+
+
 @bp.route('/understand', methods=['GET', 'POST'])
 @_guarded('prometheus/understand')
 def understand_only():

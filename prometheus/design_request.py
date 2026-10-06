@@ -38,17 +38,23 @@ _CHANGE_RX = re.compile(
 _UI_RX = re.compile(
     r"\b(section ?\d*|tab|column|chart|table|page|view|card|header|heading|title|label|dropdown|"
     r"button|layout|design|display|tile|panel|legend|axis|font|colou?r|graph|row|screen|dashboard|"
-    r"modal|tooltip|footer|sidebar|nest|menu|icon|logo|export|csv|pdf|deck|slide|it is showing|is showing|"
+    r"modal|tooltip|footer|sidebar|nest|menu|icon|logo|export|it is showing|is showing|"
     r"showing data for|shows data for)\b", re.I)
 _DATA_QUESTION_RX = re.compile(
     r"^\s*(how many|how much|what is|what's|what are|who |which |when |why |where |does |do |is |are |can i see|show me)",
     re.I)
 
 
+_DOCUMENT_RX = re.compile(r"\b(slides?|deck|powerpoint|pptx|presentation|pdf|docx|word (?:file|doc)|spreadsheet|xlsx)\b", re.I)
+
+
 def is_design_request(text):
-    """A change-the-page ask about a part of the dashboard."""
+    """A change-the-page ask about a part of the dashboard. An ask about
+    a slide, deck, PDF or document is a document ask, not a design one."""
     t = str(text or '').strip()
     if not t or len(t) > 600:
+        return False
+    if _DOCUMENT_RX.search(t):
         return False
     if _DATA_QUESTION_RX.match(t) and not re.search(r"\b(remove|hide|move|rename|resize)\b", t, re.I):
         return False

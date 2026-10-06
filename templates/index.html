@@ -22852,6 +22852,7 @@ https://www.instagram.com/p/..."></textarea>
             outline: none !important;
             box-shadow: none !important;
         }
+        #prometheusWidget.pm-drop-hover { outline: 2px dashed #C7F23E; outline-offset: -4px; }
         #prometheusWidget #synthChatInput:focus {
             border-color: #3358FF !important;
             box-shadow: 0 0 0 3px rgba(51, 88, 255, 0.20) !important;
@@ -23300,6 +23301,12 @@ https://www.instagram.com/p/..."></textarea>
                                     <span id="synthChatInputHint" style="font-size: 0.66rem; color: var(--text-secondary); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0;">Enter to send &middot; Shift + Enter for new line</span>
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
                                         <button type="button" id="synthChatSuggestBtn" onclick="synthChatSuggestionsShow()" title="Pull custom data" aria-label="Pull custom data" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap; flex: 0 0 auto;">Pull Custom Data</button>
+                                        <input type="file" id="synthChatFileInput" multiple accept=".pptx,.pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" style="display:none" onchange="synthChatFilesChosen(this.files)">
+                                        <button type="button" id="synthChatAttachBtn" onclick="document.getElementById('synthChatFileInput').click()" title="Attach a document (PowerPoint to edit, PDF, Word, sheet)" aria-label="Attach a document" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto;">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                                            </svg>
+                                        </button>
                                         <button type="button" id="synthChatMicBtn" onclick="synthChatMicToggle()" title="Talk to text" aria-label="Talk to text">
                                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                 <rect x="9" y="2" width="6" height="12" rx="3"></rect>
@@ -83986,6 +83993,77 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             return Object.prototype.hasOwnProperty.call(data, 'raw') ? data.raw : data;
         }
+        // Documents in the chat (2026-10-06): a PowerPoint to edit, a PDF,
+        // a Word file, a sheet or an image joins the open thread. The
+        // server reads it once; the thread carries it from then on.
+        var _synthChatUploading = false;
+        async function synthChatFilesChosen(files) {
+            var list = Array.prototype.slice.call(files || []);
+            var input = document.getElementById('synthChatFileInput');
+            if (input) input.value = '';
+            if (!list.length || _synthChatUploading) return;
+            _synthChatUploading = true;
+            var names = list.map(function(f) { return f.name; }).join(', ');
+            synthChatPushTurn('user', 'Uploaded ' + names);
+            var _end = null;
+            try { _end = _synthChatBeginThinking('upload'); } catch (_) {}
+            try {
+                var fd = new FormData();
+                list.slice(0, 5).forEach(function(f) { fd.append('file', f, f.name); });
+                try {
+                    var _tid = (typeof _pmActiveThreadId === 'function') ? _pmActiveThreadId()
+                             : (window._pmThreadId || '');
+                    if (_tid) fd.append('thread_id', _tid);
+                } catch (_) {}
+                var r = await fetch('/api/prometheus/v1/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+                var data = null;
+                try { data = await r.json(); } catch (_) { data = null; }
+                if (!r.ok || !data || !data.success) {
+                    synthChatPushTurn('agent', (data && data.error) ? String(data.error)
+                        : 'That file did not land. Try again, or send it a different way.');
+                    return;
+                }
+                var opts = (data.options || []).map(function(o) {
+                    return { label: String(o.label || o.send || ''), send: String(o.send || o.label || '') };
+                }).filter(function(o) { return o.label; });
+                if (opts.length) {
+                    _synthChatPushTurnWithMeta('agent', String(data.reply || 'Got it.'), { options: opts });
+                } else {
+                    synthChatPushTurn('agent', String(data.reply || 'Got it.'));
+                }
+            } catch (e) {
+                console.error('[prometheus] upload failed', e);
+                synthChatPushTurn('agent', 'That file did not land. Try again, or send it a different way.');
+            } finally {
+                _synthChatUploading = false;
+                try { _end && _end(); } catch (_) {}
+            }
+        }
+        (function _synthChatWireDrop() {
+            function wire() {
+                var host = document.getElementById('prometheusWidget');
+                if (!host || host._pmDropWired) return;
+                host._pmDropWired = true;
+                ['dragenter', 'dragover'].forEach(function(ev) {
+                    host.addEventListener(ev, function(e) {
+                        if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) {
+                            e.preventDefault(); host.classList.add('pm-drop-hover');
+                        }
+                    });
+                });
+                ['dragleave', 'drop'].forEach(function(ev) {
+                    host.addEventListener(ev, function(e) {
+                        host.classList.remove('pm-drop-hover');
+                        if (ev === 'drop' && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                            e.preventDefault(); synthChatFilesChosen(e.dataTransfer.files);
+                        }
+                    });
+                });
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+            else wire();
+        })();
+
         async function _synthChatFetchJson(url, body, signal) {
             window._pmLastActivityAt = Date.now();
             var _req = _pmV1Request(url, body);

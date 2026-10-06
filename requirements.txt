@@ -47,6 +47,11 @@ trendspy>=0.1.6
 # uses python-pptx for slide construction and Pillow for the
 # Crosswalk wordmark + cover-image center-crop.
 python-pptx>=1.0.0
+# Documents in the Prometheus chat (2026-10-06): read PDFs, Word files
+# and sheets a user uploads; edit decks and Word files in place.
+pypdf>=4.0.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
 Pillow>=10.4.0
 # Stripe SDK - powers /admin/billing, /wallet, and pay-per-use
 # session close on Prometheus. billing.py imports the module

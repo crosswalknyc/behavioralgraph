@@ -86,6 +86,15 @@ ROWS = [
         'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'document', 'surface': 'analyze',
+        'reason': 'document', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'An ask about a file attached to the thread: answered from '
+                'the file (slide / page references) or applied to a deck or '
+                'document and handed back as an edited copy (2026-10-06).',
+        'examples': [], 'counter': [],
+    },
+    {
         'id': 'design_request', 'surface': 'analyze',
         'reason': 'design_request', 'client_action': 'analyze',
         'host_only': True,
