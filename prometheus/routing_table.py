@@ -85,6 +85,19 @@ ROWS = [
         'counter': [('can you build me a Nike profile', False)],
     },
     {
+        'id': 'product_fact', 'surface': 'analyze',
+        'reason': 'product_fact', 'client_action': 'analyze',
+        'note': 'A fact about the product with one fixed answer (the '
+                'Crosswalk sample is 10 million US consumers), answered '
+                'deterministically, never drafted.',
+        'examples': [('I want to see what the size of teh Crosswalk '
+                      'sample audience was from January 1, 2026 to date',
+                      False),
+                     ('how big is your panel', True)],
+        'counter': [('how many Netflix viewers in the sample', False),
+                    ('Nike', False)],
+    },
+    {
         'id': 'subiq_lookup', 'surface': 'analyze',
         'reason': 'subiq_lookup', 'client_action': 'analyze',
         'note': '"Do you see the X Subscriber IQ?" is a library lookup.',

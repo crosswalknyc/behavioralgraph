@@ -273,6 +273,17 @@ def _decide(text, *, has_ctx=False, mode=None, extra=None, open_tabs=0,
     except Exception:
         pass
 
+    # 2c2. A product fact with one fixed answer (how big the Crosswalk
+    #      sample is) is answered, never drafted (2026-10-05 Scott:
+    #      "the size of teh Crosswalk sample audience" became a build
+    #      offer for "Teh Crosswalk Sample").
+    try:
+        if guards.is_sample_size_ask(t):
+            d.update(surface='analyze', reason='product_fact')
+            return d
+    except Exception:
+        pass
+
     # 2d. "Do you see the X Subscriber IQ?" is a library lookup. It is
     #     answered from the library and the caller's runs on the
     #     analyze surface, with or without data open (2026-10-02 Bria:

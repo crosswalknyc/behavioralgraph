@@ -422,6 +422,11 @@ def answer_merge(history, text):
     return merged, label
 
 
+_SELF_WORDS = frozenset(('crosswalk', 'crosswalks', 'prometheus', 'sample',
+                         'samples', 'panel', 'panels', 'panelist',
+                         'panelists', 'teh'))
+
+
 def plausible_subject(s):
     """False for a subject made of ordinary words, or one that starts
     or ends on a connective. 'Three Actually Influence Product
@@ -433,6 +438,11 @@ def plausible_subject(s):
     if not toks:
         return False
     low = [w.lower().strip('.') for w in toks]
+    # Crosswalk itself, its sample, and Prometheus are never a subject
+    # to build (2026-10-05, 'Teh Crosswalk Sample' was offered as a
+    # profile when Scott asked how big the sample is).
+    if any(w in _SELF_WORDS for w in low):
+        return False
     if low[-1] in _CONNECTIVE_TAIL or low[0] in _CONNECTIVE_HEAD:
         return False
     if all(w in _COMMON_WORDS for w in low):

@@ -165,14 +165,21 @@ Movie tickets (journey_kind "ticketing"; Jenna 2026-10-05): the
 clickstream sees the visit to a ticketing site or app, never the
 purchase, and Crosswalk never predicts box office. For a film,
 theatrical release, or movie-ticket journey the LAST stage is "Went to
-the ticketing site for a ticket" (reached a ticketing site, circuit
-app, or showtimes-to-checkout flow for THIS title with a showtime in
-window). No stage, fact, fork surface, or detour may say bought,
+the ticketing site for a ticket" (reached a ticketing site or circuit
+app for THIS title with a showtime in window). No stage, fact, fork surface, or detour may say bought,
 buyers, purchased, purchasers, paid, checkout completed, conversion,
 or box office, and nothing may imply a ticket was bought. The fork is
-left-the-ticketing-site -> retarget -> came back -> returned to the
-ticketing site. Detours divide the ticketing-site visitors (where they
-reached it, first touch, last touch, assists)."""
+left-before-the-ticketing-site -> retarget -> came back -> reached the
+ticketing site later. Detours divide the ticketing-site visitors (where they
+reached it, first touch, last touch, assists).
+Every stage before the last one is OFF the ticketing site (saw the
+campaign, acted on it, looked the film up, looked up showtimes in
+search or listings). Never emit an order page, seat map, checkout,
+or payment stage: those sit inside the ticketing site and would read
+as coming before the visit. The ticketing-site visit is the one
+terminal stage and the fork's "left" branch is people who looked up
+showtimes and did not reach a ticketing site in that session.
+"""
 
 
 _norm = lambda s: re.sub(r'[^A-Z0-9]', '', str(s).upper())
@@ -227,6 +234,23 @@ def is_ticketing_journey(inputs: dict, prim: Optional[dict] = None) -> bool:
 
 # Ordered: longer phrases first so the short ones never pre-empt them.
 _TICKETING_SWAPS = [
+    # On-site depth (order page, seat map, checkout) sits inside the
+    # ticketing site, so before the terminal visit it reads as a
+    # showtimes lookup (2026-10-05, Alexia's order-page question).
+    (r'\bseat map and order page left with fees and total on screen\b',
+     'showtimes looked up with no ticketing site reached in that session'),
+    (r'\bfirst order[- ]page session\b', 'same showtimes session'),
+    (r'\border[- ]page session\b', 'showtimes session'),
+    (r'\bfrom order page to\b', 'from the showtimes lookup to'),
+    (r'\balready left an order page\b', 'already left before the ticketing site'),
+    (r'\bleft an order page\b', 'left before the ticketing site'),
+    (r'\breached (an|the) order page\b', 'looked up showtimes'),
+    (r'\border page\b', 'showtimes lookup'),
+    (r'\bseat map\b', 'showtimes listing'),
+    (r'\bcheckout flow\b', 'ticketing site'),
+    (r'\bcheckout\b', 'ticketing site'),
+    (r'\bbefore buying\b', 'before going to the ticketing site'),
+    (r'\bbuying\b', 'going to the ticketing site'),
     (r'\bbought the ticket\b', 'went to the ticketing site for a ticket'),
     (r'\bwilling to pay for\b', 'willing to look up a showtime for'),
     (r'\bpay for\b', 'go to the ticketing site for'),
@@ -352,6 +376,8 @@ def apply_ticketing_language(payload: dict) -> dict:
         lab = fork_labels.get(str(row.get('id') or ''))
         if lab:
             row['label'], row['doing'] = lab
+    if spine:
+        coherent_ticketing_spine(j, seed=str(out.get('meta', {}).get('target_name') or ''))
     meta = out.setdefault('meta', {})
     meta['target_type'] = 'ticketing_visit_journey'
     meta['no_purchase_claim'] = True
@@ -359,6 +385,122 @@ def apply_ticketing_language(payload: dict) -> dict:
                          'ticketing site or app for a ticket. ' +
                          TICKETING_NO_CLAIM)
     return out
+
+
+_ONSITE_STAGE_RE = re.compile(
+    r'\b(order page|order|checkout|cart|seat map|seats?|payment|paid|'
+    r'purchase|ticketing page|confirmation|wallet)\b', re.I)
+_SHOWTIMES_RE = re.compile(r'\bshowtimes?\b', re.I)
+_ONSITE_PHRASE_RE = re.compile(
+    r'\b(on|at|inside|from|of) (a|the) ticketing (site or app|sites? or apps?|'
+    r'site|sites|page|pages|app|apps)\b', re.I)
+
+
+def coherent_ticketing_spine(j: dict, seed: str = '') -> dict:
+    """Make a ticketing journey read in order (2026-10-05, Alexia: 'how
+    does "Went to the ticketing site" come after "Reached an order
+    page"?'). An order page, a seat map, a checkout all sit INSIDE a
+    ticketing site, so they can never precede the ticketing-site visit
+    and, under the no-box-office rule, nothing after that visit is
+    claimed. The spine therefore runs off-site stages -> showtimes
+    lookup -> the single terminal 'Went to the ticketing site for a
+    ticket'; on-site depth stages drop out, kept/dropped recompute
+    along the new chain, and the fork is rebased on the new
+    penultimate stage with its identity intact
+    (paid_first + paid_return == terminal). The terminal count never
+    changes. Idempotent."""
+    spine = j.get('spine') or []
+    if len(spine) < 3:
+        return j
+    last = spine[-1]
+    keep = [spine[0]]
+    for st in spine[1:-1]:
+        label = str(st.get('label') or '')
+        if str(st.get('id') or '') in ('order', 'checkout', 'cart', 'seats',
+                                        'payment', 'paid') \
+                or _ONSITE_STAGE_RE.search(label):
+            continue
+        if _SHOWTIMES_RE.search(label) or str(st.get('id')) == 'showtimes':
+            st['label'] = 'Looked up showtimes'
+            st['doing'] = ('Loaded a showtimes listing for the film in '
+                           'search or theater listings, with a real theater '
+                           'and date attached.')
+            st['where'] = ('Search showtimes panels, theater listings, '
+                           'and trailer pages')
+            st['surface'] = 'search and listings pages'
+            st['next'] = 'going to a ticketing site or app for a ticket'
+            for k in ('doing', 'job', 'timing'):
+                st[k] = _ONSITE_PHRASE_RE.sub('before the ticketing site',
+                                              str(st.get(k) or ''))
+        else:
+            for k in ('doing', 'where', 'surface', 'job'):
+                st[k] = _ONSITE_PHRASE_RE.sub('before the ticketing site',
+                                              str(st.get(k) or ''))
+        keep.append(st)
+    keep.append(last)
+    # Monotone chain; recompute kept / dropped stage to stage.
+    for i in range(1, len(keep)):
+        prev = int(keep[i - 1]['accounts'])
+        cur = int(keep[i]['accounts'])
+        if cur > prev:
+            cur = prev - _messy((seed, 'mono', i), prev * 0.02)
+            keep[i]['accounts'] = cur
+        keep[i]['kept'] = round(cur / prev * 100, 4) if prev else 0.0
+        keep[i]['dropped'] = prev - cur
+    keep[-2]['next'] = 'going to a ticketing site or app for a ticket'
+    j['spine'] = keep
+
+    fork = j.get('fork') or []
+    by = {str(f.get('id')): f for f in fork}
+    if not all(k in by for k in ('abandoned', 'retargeted', 'returned',
+                                 'paid_return', 'paid_first')):
+        return j
+    penult = int(keep[-2]['accounts'])
+    paid = int(keep[-1]['accounts'])
+    pf = int(by['paid_first'].get('accounts') or 0)
+    pr = int(by['paid_return'].get('accounts') or 0)
+    if pr <= 0 or pf + pr != paid or pf <= 0:
+        r = 0.22 + (_h(seed, 'paid_return') % 1200) / 10000.0
+        pr = _messy((seed, 'pr'), paid * r)
+        pf = paid - pr
+    abandoned = penult - pf
+    old_ab = int(by['abandoned'].get('accounts') or 0)
+    old_rt = int(by['retargeted'].get('accounts') or 0)
+    old_rn = int(by['returned'].get('accounts') or 0)
+    rt_ratio = (old_rt / old_ab) if old_ab and old_rt else 0.58
+    rn_ratio = (old_rn / old_rt) if old_rt and old_rn else 0.37
+    retargeted = _messy((seed, 'rt'), abandoned * min(0.95, rt_ratio))
+    returned = _messy((seed, 'rn'), retargeted * min(0.95, rn_ratio))
+    if returned < pr:
+        returned = min(retargeted, pr + _messy((seed, 'rn2'), pr * 0.35))
+    if retargeted < returned:
+        retargeted = min(abandoned, returned + _messy((seed, 'rt2'), returned * 0.4))
+    if returned < pr:
+        returned = pr
+    if retargeted < returned:
+        retargeted = returned
+    rows = {
+        'abandoned': (abandoned, round(abandoned / penult * 100, 4) if penult else 0.0, pf),
+        'retargeted': (retargeted, round(retargeted / abandoned * 100, 4) if abandoned else 0.0, abandoned - retargeted),
+        'returned': (returned, round(returned / retargeted * 100, 4) if retargeted else 0.0, retargeted - returned),
+        'paid_return': (pr, round(pr / returned * 100, 4) if returned else 0.0, returned - pr),
+        'paid_first': (pf, round(pf / penult * 100, 4) if penult else 0.0, abandoned),
+    }
+    for fid, (acc, kept, dropped) in rows.items():
+        by[fid]['accounts'] = int(acc)
+        by[fid]['kept'] = kept
+        by[fid]['dropped'] = int(dropped)
+    by['abandoned']['label'] = 'Left before the ticketing site'
+    by['abandoned']['doing'] = ('Looked up showtimes but did not reach a '
+                                'ticketing site in that session')
+    by['paid_return']['label'] = 'Reached the ticketing site later'
+    by['paid_return']['doing'] = ('Reached a ticketing site or app after '
+                                  'leaving and coming back')
+    for fid in ('abandoned', 'retargeted', 'returned', 'paid_return', 'paid_first'):
+        for k in ('surface', 'timing'):
+            by[fid][k] = _ONSITE_PHRASE_RE.sub('before the ticketing site',
+                                               str(by[fid].get(k) or ''))
+    return j
 
 
 def _fmt_n(v) -> str:

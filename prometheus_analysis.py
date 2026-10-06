@@ -2387,6 +2387,48 @@ def box_office_reply(text, view_context=None, subject_hint=''):
     return "\n\n".join(lines)
 
 
+# ---------------------------------------------------------------------
+# Sample size (Jenna 2026-10-05: "the answer will always be 10 million
+# us gen pop panel ... the panel size is always that 10m"). Scott asked
+# for "the size of the Crosswalk sample audience from January 1, 2026
+# to date" and Prometheus tried to build a profile of "Teh Crosswalk
+# Sample". The sample is a fixed 10 million US consumers in every
+# window; the question never names an audience to build.
+SAMPLE_SIZE = 10_000_000
+US_GEN_POP_SIZE = 329_900_000
+def is_sample_size_ask(text) -> bool:
+    """A question about how big the Crosswalk sample itself is (single
+    implementation in prometheus.guards; the router uses the same)."""
+    from prometheus import guards as _g
+    return _g.is_sample_size_ask(text)
+
+
+def sample_size_reply(text) -> str:
+    t = str(text or '')
+    m = re.search(r"(?:from|since|between)\s+([A-Z][a-z]+ \d{1,2}, \d{4}|"
+                  r"\d{4}-\d{2}-\d{2}|[A-Z][a-z]+ \d{4})"
+                  r"(?:\s+(?:to|through|until|-)\s+(today|date|now|"
+                  r"[A-Z][a-z]+ \d{1,2}, \d{4}|\d{4}-\d{2}-\d{2}))?", t)
+    window = ''
+    if m:
+        end = m.group(2) or ''
+        end = 'today' if end.lower() in ('today', 'date', 'now', '') else end
+        window = f" From {m.group(1)} to {end} it was {SAMPLE_SIZE // 1_000_000} million."
+    return (
+        f"The Crosswalk sample is {SAMPLE_SIZE // 1_000_000} million US "
+        f"consumers, and it is the same size on every date.{window}\n\n"
+        "The sample does not grow or shrink by window. What changes by "
+        "window is how many of those 10 million did a given thing: "
+        "watched a title, visited a site, signed up, searched a brand. "
+        "Every count on the dashboard is that activity projected from the "
+        f"10 million to the US general population of "
+        f"{US_GEN_POP_SIZE / 1_000_000:.1f} million, so the figures read "
+        "as US people, not as sample members.\n\n"
+        "If you want the size of a specific audience inside the sample for "
+        "that window, name the brand, title, or behavior and I will pull it."
+    )
+
+
 def is_cohort_churn_ask(text):
     """True for a churn / retention question about a SIGNUP COHORT
     (accounts that signed up in a month, a title's new subscribers,

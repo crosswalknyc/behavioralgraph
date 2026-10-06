@@ -807,3 +807,49 @@ def humanize_name(s):
         else:
             out.append(w[:1].upper() + w[1:].lower())
     return ' '.join(out)
+
+
+# ── Product facts (2026-10-05) ──────────────────────────────────────
+# "How big is the Crosswalk sample?" is a fact about the product, the
+# same answer for everyone, never a subject to build (Scott's ask was
+# offered as a profile of "Teh Crosswalk Sample").
+_SAMPLE_WORD_RE = re.compile(
+    r"\b(sample|panel|panelists?|crosswalk(?:'?s)? (?:audience|data|universe|"
+    r"footprint|coverage)|your (?:audience|data|universe|footprint|coverage))\b",
+    re.I)
+_SIZE_WORD_RE = re.compile(
+    r"\b(size|sized|how (?:big|large|many)|count|headcount|number of|"
+    r"population|total|n=|what is the|what was the|how much)\b", re.I)
+_SAMPLE_SELF_RE = re.compile(
+    r"\b(crosswalk|your|the|our)\b.{0,30}\b(sample|panel|panelists?)\b|"
+    r"\b(sample|panel|panelists?)\b.{0,20}\b(size|audience|population|do you have)\b", re.I)
+
+
+def is_sample_size_ask(text) -> bool:
+    """A question about how big the Crosswalk sample itself is."""
+    t = str(text or '')
+    if not _SAMPLE_WORD_RE.search(t) or not _SIZE_WORD_RE.search(t):
+        return False
+    # "sample" as a verb or a brand ("sample sale", "Sample the album")
+    # does not count; the ask has to be about the sample as a thing.
+    if not _SAMPLE_SELF_RE.search(t):
+        return False
+    # A named brand or title in the ask ("Netflix viewers in the sample")
+    # is a question about THAT audience inside the sample, not about
+    # the sample itself. Months, Crosswalk, US and the opening word are
+    # not names.
+    body = re.sub(r"^\W*\w+", "", t)
+    for w in re.findall(r"\b[A-Z][A-Za-z0-9&'+.-]*\b", body):
+        if w.lower() in _NOT_A_NAME:
+            continue
+        return False
+    return True
+
+
+_NOT_A_NAME = frozenset((
+    'crosswalk', 'us', 'usa', 'i', 'prometheus', 'january', 'february',
+    'march', 'april', 'may', 'june', 'july', 'august', 'september',
+    'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'jun',
+    'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'q1', 'q2', 'q3',
+    'q4', 'ytd', 'to', 'the', 'from', 'what', 'how', 'is', 'was', 'size',
+    'sample', 'panel', 'audience', 'teh', 'date', 'today'))

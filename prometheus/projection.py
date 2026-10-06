@@ -237,6 +237,65 @@ def _rewrite(node, factor, salt, pairs):
     return node
 
 
+# Markers that say a dataset is ALREADY at the US level. A Digital
+# Journey IQ spine starts at the US general population (329,900,000)
+# and every stage under it is a US count; a Brand Partnership read
+# carries usGenPop on its meta. Projecting those again multiplied
+# 417,594 ticketing-site visitors into 13,776,426 (2026-10-05, Alexia's
+# Influencer Project read), so a view that declares a US basis is
+# passed through untouched.
+_US_LEVEL_KEYS = ('usgenpop', 'us_gen_pop', 'us_pop', 'projected_to_us',
+                  'us_level', 'no_purchase_claim')
+_US_LEVEL_IDS = ('tam', 'us_gen_pop', 'gen_pop')
+US_LEVEL_VIEWS = ('journeyIQ', 'journey_iq', 'brandPartnershipIQ',
+                  'brand_partnership_iq')
+
+
+def is_us_level(data, view_id=''):
+    """True when the dataset states its counts are US figures already."""
+    try:
+        if str(view_id or '') in US_LEVEL_VIEWS:
+            return True
+        found = []
+
+        def walk(node, depth=0):
+            if found or depth > 12:
+                return
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    kl = str(k).lower()
+                    if kl in _US_LEVEL_KEYS and v not in (None, '', False):
+                        found.append(k)
+                        return
+                    if kl == 'id' and str(v).lower() in _US_LEVEL_IDS:
+                        found.append(v)
+                        return
+                    if kl == 'unit' and 'us' in str(v).lower().split():
+                        found.append(v)
+                        return
+                    if kl in ('story_mode', 'target_type') and \
+                            'journey' in str(v).lower():
+                        found.append(v)
+                        return
+                    n = _to_num(v)
+                    if n == US_POP:
+                        found.append(n)
+                        return
+                    walk(v, depth + 1)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v, depth + 1)
+        walk(data)
+        return bool(found)
+    except Exception:
+        return False
+
+
+US_LEVEL_NOTE = (
+    "RULE (binding): every count in this view is already a US-level "
+    "figure. State counts exactly as they appear; never multiply, "
+    "re-project, or restate them at another scale.")
+
 PROJECTION_NOTE = (
     "RULE (binding): every count the user reads is the *_us value, "
     "projected to the US population. panel_* values are internal panel "
@@ -251,8 +310,17 @@ def project_view_data(data, salt=''):
     try:
         if not isinstance(data, dict):
             return data, []
+        if is_us_level(data, salt):
+            out = json.loads(json.dumps(data))
+            out['projection'] = {'basis': 'us', 'note': US_LEVEL_NOTE}
+            return out, []
         seed = []
         _collect_pairs(data, seed)
+        if not seed:
+            # No (panel, US) pair anywhere in the file: the basis of
+            # these counts is unknown, and multiplying a US figure by
+            # 32.99 is the worse mistake. Leave the data alone.
+            return data, []
         factor = factor_from_pairs(seed)
         pairs = []
         out = _rewrite(json.loads(json.dumps(data)), factor, salt, pairs)

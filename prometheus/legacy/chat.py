@@ -2101,6 +2101,46 @@ def _pm_rotate_idle_thread(username):
         return None
 
 
+def _pm_keep_corrected_turns(username, tid, incoming):
+    """Server-side corrections survive the client's next save.
+
+    The widget posts its whole history on every ask, so an agent turn
+    overwritten in place on S3 (a correction, marked by
+    meta.corrected_at) was being put back to the wrong text the moment
+    the user sent another message (2026-10-05, Alexia's thread). The
+    stored turn wins for any turn carrying a correction mark; matching
+    is by timestamp, then by position. Never raises."""
+    try:
+        stored = _pm_s3_json(_pm_thread_key(username, tid), []) or []
+        marks = [(i, t) for i, t in enumerate(stored)
+                 if isinstance(t, dict)
+                 and isinstance(t.get('meta'), dict)
+                 and t['meta'].get('corrected_at')]
+        if not marks or not isinstance(incoming, list):
+            return incoming
+        out = list(incoming)
+        by_ts = {}
+        for j, t in enumerate(out):
+            if isinstance(t, dict) and t.get('ts'):
+                by_ts.setdefault(str(t.get('ts')), j)
+        for i, t in marks:
+            j = by_ts.get(str(t.get('ts') or ''))
+            if j is None and i < len(out) and isinstance(out[i], dict) \
+                    and out[i].get('role') == t.get('role'):
+                j = i
+            if j is None:
+                continue
+            cur = out[j]
+            if isinstance(cur.get('meta'), dict) and \
+                    cur['meta'].get('corrected_at') == t['meta'].get('corrected_at'):
+                continue
+            out[j] = dict(t)
+        return out
+    except Exception:
+        traceback.print_exc()
+        return incoming
+
+
 def _save_synth_chat_history(username, history):
     try:
         # Trim to last 200 turns to bound growth
@@ -2110,6 +2150,7 @@ def _save_synth_chat_history(username, history):
                                     if idx.get('threads') else None)
         if not tid:
             return False
+        trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
         _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
         now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         for th in idx.get('threads', []):
@@ -9377,6 +9418,11 @@ def _pm_intent_view_hydrate(view_ctx):
     return view_ctx
 
 
+_PM_SELF_CONTAINED_VIEWS = frozenset((
+    'journeyIQ', 'journey_iq', 'brandPartnershipIQ', 'brand_partnership_iq',
+    'attributionIQ', 'attribution_iq'))
+
+
 def _pm_validate_page_context(page_context):
     """Access-gate every s3 key in the page context. Returns
     (clean_ctx_or_None, err_response_or_None). A missing/keyless
@@ -9406,6 +9452,13 @@ def _pm_validate_page_context(page_context):
             traceback.print_exc()
     primary = page_context.get('primary') or {}
     p_key = str(primary.get('s3_key') or '').strip()
+    # Self-contained views (2026-10-05, Alexia): a Digital Journey IQ
+    # or Brand Partnership IQ screen carries its own subject. The
+    # profile left selected in the picker (Netflix, in her case) is
+    # stale context there, not the question; binding it made the chat
+    # ask "Do you mean on Netflix?" about a ticketing journey.
+    if view_ctx and str(view_ctx.get('view_id') or '') in _PM_SELF_CONTAINED_VIEWS:
+        p_key = ''
     if not p_key:
         if view_ctx:
             return {'primary': None, 'cuts': [], 'extras': [],
@@ -13714,6 +13767,7 @@ def _pm_save_thread_or_active(username, tid, history):
     if not tid:
         return _save_synth_chat_history(username, history)
     trimmed = list(history or [])[-200:]
+    trimmed = _pm_keep_corrected_turns(username, tid, trimmed)
     _pm_s3_put_json(_pm_thread_key(username, tid), trimmed)
     try:
         idx = _load_threads_index(username)
@@ -14328,6 +14382,13 @@ def _pm_titles_ask_needs_scope(text, page_subject):
     t = str(text or "")
     page = str(page_subject or "").strip()
     if not t or not page or not _PM_TITLES_SCOPE_RE.search(t):
+        return False
+    # A pasted block of figures (2026-10-05, Alexia quoting a reply
+    # back: "these numbers are not displayed on this current
+    # dashboard: 21.8M ticketing-site visitors ...") is not a titles
+    # ask, whatever words sit inside it. Titles asks are short and
+    # carry no counts.
+    if len(t) > 240 or re.search(r"\d{1,3}(?:,\d{3})+|\b\d+(?:\.\d+)?[MK]\b|\d+(?:\.\d+)?%", t):
         return False
     page_toks = [w for w in re.findall(r"[a-z0-9]+", page.lower())
                  if len(w) >= 4]
@@ -15016,6 +15077,20 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
             'offer_deck': False, 'deck_angle': None})
+    # Sample size lane (2026-10-05, Jenna: "the answer will always be
+    # 10 million us gen pop panel ... the panel size is always that
+    # 10m"). Scott's ask was parsed as a subject and offered a build.
+    try:
+        import prometheus_analysis as _pma_ss
+        if _pma_ss.is_sample_size_ask(text):
+            _pm_ask_hint(route='sample_size', outcome='answered')
+            return jsonify({
+                'success': True, 'action': 'answer',
+                'reply': _pma_ss.sample_size_reply(text), 'followups': [],
+                'offer_deck': False, 'deck_angle': None})
+    except Exception:
+        traceback.print_exc()
+
     # Box office lane (2026-10-05, Jenna: "I dont want to get in the
     # habit of predicting box office ever ... no matter how hard the
     # user pushes we just keep saying we do not predict box office
