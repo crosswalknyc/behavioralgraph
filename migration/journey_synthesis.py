@@ -127,6 +127,11 @@ round numbers, no two identical rates. Return STRICT JSON only:
 }
 
 Rules that do not move:
+- If the input carries corpus_anchors, Crosswalk already holds a read
+  on this subject. Reason the sub-window FROM those counts: every
+  matching stage lands at or below its anchor, the partitions and
+  the creators / publishers are the anchor's own, never placeholders
+  like "Creator 01". Two Crosswalk products never disagree on one title.
 - The nest DECREASES: every share and kept rate must produce a strict
   subset of the stage above.
 - partition tables must have pcts that sum to ~100 (the code forces
@@ -810,11 +815,474 @@ def build_journey(inputs: dict, prim: dict, *,
     return payload
 
 
+
+# ---------------------------------------------------------------------------
+# Corpus anchors (2026-10-05, Jenna). A journey never starts from zero on a
+# subject Crosswalk already holds a read on. The Influencer Project journey
+# was researched cold while an Attribution IQ campaign on the same title
+# (64 tracked assets, a nest of US counts, the ticketing partition, per
+# asset converters) sat in the corpus; the two products disagreed by 20x
+# and the journey invented "Creator 01" where the real creators were known.
+# Before research, the campaign is handed to the prompt as the anchor set.
+# After the build, the journey is held at or below the campaign's counts
+# for the stages they share and the campaign's partitions replace the
+# researched ones. Fail-safe: no S3, no match, or JOURNEY_CORPUS_ANCHORS=0
+# means the build proceeds exactly as before.
+# ---------------------------------------------------------------------------
+_ANCHOR_LABEL_TOKENS = frozenset((
+    'the', 'a', 'an', 'of', 'on', 'for', 'and', 'in', 'to', 'at', 'film',
+    'films', 'movie', 'movies', 'opening', 'weekend', 'week', 'any',
+    'digital', 'ticketing', 'ticket', 'tickets', 'platform', 'platforms',
+    'site', 'sites', 'app', 'apps', 'journey', 'viewers', 'fans', 'buyers',
+    'audience', 'series', 'season', 'release', 'theatrical', 'campaign',
+))
+
+
+def _anchor_tokens(text: str) -> list:
+    toks = re.findall(r'[a-z0-9]+', str(text or '').lower())
+    return [t for t in toks if t not in _ANCHOR_LABEL_TOKENS and len(t) > 1]
+
+
+def _anchors_enabled() -> bool:
+    import os
+    return os.environ.get('JOURNEY_CORPUS_ANCHORS', '1') != '0'
+
+
+def _default_s3():
+    try:
+        import boto3
+        return boto3.client('s3', region_name='us-east-2')
+    except Exception:
+        return None
+
+
+def find_attribution_campaign(subject: str, s3=None,
+                              bucket: str = 'dashboard-inputs') -> Optional[dict]:
+    """The Attribution IQ campaign on this subject, if one exists:
+    the latest fitted nest plus the asset list. None when nothing in
+    intent/ covers the subject's distinctive tokens."""
+    want = _anchor_tokens(subject)
+    if not want:
+        return None
+    s3 = s3 or _default_s3()
+    if s3 is None:
+        return None
+    try:
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix='intent/', Delimiter='/')
+    except Exception:
+        return None
+    best = None
+    for cp in resp.get('CommonPrefixes') or []:
+        slug = cp['Prefix'][len('intent/'):].strip('/')
+        have = set(_anchor_tokens(slug.replace('_', ' ')))
+        if not have:
+            continue
+        cover = sum(1 for t in want if t in have) / float(len(want))
+        reverse = sum(1 for t in have if t in want) / float(len(have))
+        # Both directions: the subject's words sit in the slug AND the
+        # slug is mostly the subject, so "Influencer" alone never
+        # anchors to the film and "Chime" never anchors to Chime MyPay.
+        if cover >= 0.8 and reverse >= 0.5 and (best is None or cover + reverse > best[0]):
+            best = (cover + reverse, slug)
+    if not best:
+        return None
+    slug = best[1]
+    try:
+        assets = json.loads(s3.get_object(
+            Bucket=bucket, Key=f'intent/{slug}/source/normalized_assets.json'
+        )['Body'].read())
+    except Exception:
+        assets = {}
+    try:
+        keys = sorted(o['Key'] for o in (s3.list_objects_v2(
+            Bucket=bucket, Prefix=f'intent/{slug}/mta/coefficients_'
+        ).get('Contents') or []))
+        fit = json.loads(s3.get_object(Bucket=bucket, Key=keys[-1])['Body'].read()) if keys else {}
+    except Exception:
+        fit = {}
+    return attribution_anchor_from(slug, assets, fit)
+
+
+def attribution_anchor_from(slug: str, assets: dict, fit: dict) -> Optional[dict]:
+    """Shape the campaign documents into the anchor the journey uses.
+    Pure; the tests feed it fixtures."""
+    overall = (fit or {}).get('overall') or {}
+    paths = overall.get('paths') or {}
+    nest = paths.get('nest') or []
+    if not nest:
+        return None
+    title = (assets or {}).get('title') or {}
+    phases = (assets or {}).get('phases') or []
+    starts = [p.get('start_date') for p in phases if p.get('start_date')]
+    sample = int(paths.get('panel_sample') or overall.get('sample_size') or 0)
+    rate = float(overall.get('conversion_rate') or 0)
+    converters_n = int(round(sample * rate)) if sample and rate else 0
+    tps = []
+    for t in overall.get('touchpoints') or []:
+        if t.get('asset_title') and t.get('converted_n'):
+            tps.append({'asset_title': t['asset_title'],
+                        'channel': t.get('channel') or '',
+                        'converted_n': int(t['converted_n']),
+                        'exposed_n': int(t.get('exposed_n') or 0)})
+    tps.sort(key=lambda t: -t['converted_n'])
+    return {
+        'slug': slug,
+        'display_name': fit.get('display_name') or title.get('display_name') or slug,
+        'as_of': fit.get('as_of') or '',
+        'campaign_start': min(starts) if starts else '',
+        'opening_date': title.get('opening_date') or '',
+        'title_type': fit.get('title_type') or '',
+        'conversion_noun': fit.get('conversion_noun') or '',
+        'nest': [{'stage': n.get('stage'), 'label': n.get('label'),
+                  'us_accounts': int(n.get('us_accounts') or 0)} for n in nest],
+        'ticketer_partition': (paths.get('where') or {}).get('ticketer_partition') or [],
+        'first_touch': (paths.get('attribution') or {}).get('first_touch') or [],
+        'last_touch': (paths.get('attribution') or {}).get('last_touch') or [],
+        'assists': (paths.get('attribution') or {}).get('assists') or [],
+        'converters_n': converters_n,
+        'touchpoints': tps[:12],
+        'asset_count': len((assets or {}).get('assets') or []),
+    }
+
+
+def corpus_anchors(inputs: dict, s3=None) -> dict:
+    """Everything Crosswalk already holds on this subject that a journey
+    must stay coherent with. Today: the Attribution IQ campaign."""
+    out = {'attribution': None}
+    if not _anchors_enabled():
+        return out
+    try:
+        out['attribution'] = find_attribution_campaign(
+            str(inputs.get('subject') or ''), s3=s3)
+    except Exception:
+        out['attribution'] = None
+    return out
+
+
+def anchors_prompt_block(anchors: dict) -> Optional[dict]:
+    camp = (anchors or {}).get('attribution')
+    if not camp:
+        return None
+    return {
+        'note': ("Crosswalk already holds an Attribution IQ read on this "
+                 "title. These are US counts over the whole campaign to "
+                 "date. A journey for a sub-window must land AT OR BELOW "
+                 "each matching stage, and must reuse this partition and "
+                 "these creators and publishers instead of inventing "
+                 "placeholders. Never contradict these numbers."),
+        'campaign': camp['display_name'], 'as_of': camp['as_of'],
+        'campaign_start': camp['campaign_start'],
+        'opening_date': camp['opening_date'],
+        'nest_us_counts': camp['nest'],
+        'ticketing_partition': camp['ticketer_partition'],
+        'first_touch': camp['first_touch'], 'last_touch': camp['last_touch'],
+        'assists': camp['assists'],
+        'top_assets_by_converters': camp['touchpoints'][:8],
+        'tracked_asset_count': camp['asset_count'],
+    }
+
+
+def _nest_count(camp: dict, prefix: str) -> int:
+    for n in camp.get('nest') or []:
+        if str(n.get('stage') or '').startswith(prefix):
+            return int(n.get('us_accounts') or 0)
+    return 0
+
+
+def _parse_day(s):
+    try:
+        return _dt.date.fromisoformat(str(s)[:10])
+    except Exception:
+        return None
+
+
+def window_shares(payload: dict, camp: dict, seed: str) -> dict:
+    """What share of the campaign-to-date counts a journey window can
+    hold. Opening weekend of a film carries the bulk of ticketing
+    (salted band, never a constant); a window that spans the whole
+    campaign sits just under it; anything else is proportional to the
+    days it covers."""
+    meta = payload.get('meta') or {}
+    ws, we = _parse_day(meta.get('start_date')), _parse_day(meta.get('end_date'))
+    cs = _parse_day(camp.get('campaign_start'))
+    ce = _parse_day(camp.get('as_of')) or _dt.date.today()
+    op = _parse_day(camp.get('opening_date'))
+    h = (_h(seed, 'window_share') % 1000) / 1000.0
+    if ws and we and op and ws <= op <= we and (we - ws).days <= 5:
+        return {'exposed': round(0.35 + 0.13 * h, 4),
+                'infoseek': round(0.45 + 0.13 * h, 4),
+                'bottom': round(0.55 + 0.15 * h, 4), 'basis': 'opening_weekend'}
+    if ws and we and cs and ws <= cs and we >= ce:
+        f = round(0.93 + 0.06 * h, 4)
+        return {'exposed': f, 'infoseek': f, 'bottom': f, 'basis': 'whole_campaign'}
+    if ws and we and cs:
+        span = max((ce - cs).days, 1)
+        f = max(0.08, min(1.0, ((we - ws).days + 1) / float(span)))
+        f = round(min(1.0, f) * (0.93 + 0.06 * h), 4)
+        return {'exposed': f, 'infoseek': f, 'bottom': f, 'basis': 'proportional'}
+    f = round(0.93 + 0.06 * h, 4)
+    return {'exposed': f, 'infoseek': f, 'bottom': f, 'basis': 'ceiling'}
+
+
+_INFOSEEK_RE = re.compile(r'search|look|info|research|review|trailer', re.I)
+
+
+def _clean_asset_label(title: str) -> str:
+    parts = [p.strip() for p in str(title or '').split('\u00b7')]
+    if len(parts) >= 3:
+        chan, who, what = parts[0], parts[1], ' '.join(parts[2:])
+        return f"{who} on {chan}: {what}"
+    return str(title or '').strip()
+
+
+def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
+                              seed: str = '') -> dict:
+    """Hold the journey at or below the Attribution IQ campaign on the
+    stages they share, then replace the researched partitions with the
+    campaign's own. Deterministic, in place, recomputes every
+    downstream cell (kept, dropped, fork identity, detours, facts,
+    kpis, copy)."""
+    j = payload.get('fragrance_shop_journey') or {}
+    spine = j.get('spine') or []
+    if len(spine) < 3 or not camp:
+        return payload
+    seed = seed or str((payload.get('meta') or {}).get('target_name') or '')
+    shares = window_shares(payload, camp, seed)
+    ticketing = bool((payload.get('meta') or {}).get('no_purchase_claim'))
+    old = {s['id']: int(s['accounts']) for s in spine}
+    ids = [s['id'] for s in spine[1:]]
+
+    targets = {}
+    c_exp = _nest_count(camp, '1_')
+    if c_exp:
+        targets[ids[0]] = c_exp * shares['exposed']
+    c_mid = _nest_count(camp, '2_')
+    mid_id = next((i for i in ids[1:-1] if _INFOSEEK_RE.search(
+        i + ' ' + next(s['label'] for s in spine if s['id'] == i))), None)
+    if c_mid and mid_id:
+        targets[mid_id] = c_mid * shares['infoseek']
+    c_bot = _nest_count(camp, '3_' if ticketing else
+                        str(camp['nest'][-1]['stage'])[:2])
+    if c_bot:
+        targets[ids[-1]] = c_bot * shares['bottom']
+    if not targets:
+        return payload
+
+    # Only ever pull down. A stage already under its anchor keeps its
+    # own ratio to the nearest anchored neighbour.
+    new = dict(old)
+    for i in ids:
+        if i in targets and targets[i] < old[i]:
+            new[i] = _messy((seed, 'anchor', i), targets[i])
+    anchored = [i for i in ids if new[i] != old[i]]
+    if not anchored:
+        payload.setdefault('meta', {})['anchored_to'] = {
+            'attribution_iq': camp['slug'], 'as_of': camp['as_of'],
+            'basis': shares['basis'], 'changed': False}
+        return payload
+    # Unanchored stages: geometric interpolation between the nearest
+    # anchored (or TAM / terminal) neighbours so the chain stays smooth.
+    pos = {i: k for k, i in enumerate(ids)}
+    fixed = set(anchored)
+    for i in ids:
+        if i in fixed:
+            continue
+        left = next((x for x in reversed(ids[:pos[i]]) if x in fixed), None)
+        right = next((x for x in ids[pos[i] + 1:] if x in fixed), None)
+        if left and right:
+            lo, hi = new[left], new[right]
+            span = pos[right] - pos[left]
+            k = pos[i] - pos[left]
+            val = lo * (hi / float(lo)) ** (k / float(span))
+            new[i] = _messy((seed, 'interp', i), val)
+        elif left:
+            new[i] = _messy((seed, 'interp', i),
+                            new[left] * old[i] / float(old[left]))
+        elif right:
+            new[i] = _messy((seed, 'interp', i),
+                            new[right] * old[i] / float(old[right]))
+    # Monotone, strictly decreasing.
+    prev = int(spine[0]['accounts'])
+    for i in ids:
+        if new[i] >= prev:
+            new[i] = _messy((seed, 'mono', i), prev * 0.9)
+        prev = new[i]
+    prev = int(spine[0]['accounts'])
+    for s in spine[1:]:
+        s['accounts'] = new[s['id']]
+        s['kept'] = round(s['accounts'] / prev * 100, 4)
+        s['dropped'] = prev - s['accounts']
+        s['ofUs'] = round(s['accounts'] / US_GEN_POP * 100, 4)
+        prev = s['accounts']
+    paid, penult = spine[-1]['accounts'], spine[-2]['accounts']
+    f_paid = paid / float(old[ids[-1]])
+
+    # Fork: scale, then restore the identities.
+    fork = j.get('fork') or []
+    if fork:
+        fk = {r['id']: r for r in fork}
+        if 'paid_return' in fk and 'paid_first' in fk:
+            o_paid = max(float(old[ids[-1]]), 1.0)
+            o_pr = float(fk['paid_return']['accounts'])
+            o_rn = max(float(fk.get('returned', {}).get('accounts', 0)), 1.0)
+            o_rt = max(float(fk.get('retargeted', {}).get('accounts', 0)), 1.0)
+            o_ab = max(float(fk['abandoned']['accounts']), 1.0)
+            # Keep the shape the research gave: the came-back share of
+            # the terminal, how many of those who came back then
+            # reached it, how many retargets came back, how many of the
+            # leavers were retargeted. Rebuilt from the terminal up so
+            # every identity holds at the new scale.
+            share_back = o_pr / o_paid
+            b_ = max(min(o_pr / o_rn, 0.98), 0.05)   # paid_return of returned
+            c_ = max(min(o_rn / o_rt, 0.98), 0.05)   # returned of retargeted
+            d_ = max(min(o_rt / o_ab, 0.98), 0.05)   # retargeted of leavers
+            # Four research ratios, one new spine: the three branch
+            # ratios (b, c, d) hold and the came-back share of the
+            # terminal is the one that gives, scaled by t <= 1 so that
+            # rt = pr/(b c) lands at d of the leavers ab = penult - pf.
+            denom = paid * share_back * (1.0 / (b_ * c_) - d_)
+            t = ((penult - paid) * d_ / denom) if denom > 0 else 1.0
+            if t < 1.0:
+                t *= 0.97 + 0.025 * ((_h(seed, 'fork_t') % 100) / 100.0)
+            pr = _messy((seed, 'anchor_pr'), paid * share_back * min(t, 1.0))
+            pr = max(1, min(pr, paid - 1))
+            pf = paid - pr
+            ab = penult - pf
+            rn = max(_messy((seed, 'anchor_rn'), pr / b_), pr + 1)
+            rt = max(_messy((seed, 'anchor_rt'), rn / c_), rn + 1)
+            if rt >= ab:
+                rt = ab - 1 - (_h(seed, 'rt_trim') % 5)
+                rn = min(rn, rt - 1)
+                pr = min(pr, rn)
+                pf = paid - pr
+                ab = penult - pf
+            vals = {'abandoned': ab, 'retargeted': rt, 'returned': rn,
+                    'paid_return': pr, 'paid_first': pf}
+            bases = {'abandoned': penult, 'retargeted': ab, 'returned': rt,
+                     'paid_return': rn, 'paid_first': penult}
+            assert pf + pr == paid and ab + pf == penult
+            assert rt < ab and rn < rt and pr <= rn and pf > 0 and pr > 0
+            for r in fork:
+                if r['id'] in vals:
+                    r['accounts'] = int(vals[r['id']])
+                    b = max(bases[r['id']], 1)
+                    r['kept'] = round(r['accounts'] / b * 100, 4)
+                    if 'dropped' in r:
+                        r['dropped'] = max(b - r['accounts'], 0)
+
+    # Detours: rebase every row on the new count of its base; swap the
+    # campaign's own partitions in where they exist.
+    def _rows(items, base, kind_overlap=False):
+        out = []
+        for it in items:
+            pct = float(it.get('pct') or 0)
+            out.append({'label': it.get('surface') or it.get('touchpoint') or it.get('label'),
+                        'pct': round(pct + ((_h(seed, it.get('surface') or it.get('touchpoint') or '') % 9) - 4) / 100.0, 4),
+                        'accounts': _messy((seed, 'det', str(it)), base * pct / 100.0),
+                        'doing': it.get('doing') or ''})
+        out.sort(key=lambda r: -float(r['pct']))
+        return out
+    for d in j.get('detours') or []:
+        rows = d.get('rows') or []
+        title = str(d.get('title') or '')
+        if ticketing and camp.get('ticketer_partition') and re.search(
+                r'where the ticketing site was reached|ticketing (site|platform)s? (reached|used)', title, re.I):
+            d['rows'] = _rows(camp['ticketer_partition'], paid)
+            d['note'] = 'Share of ticketing-site visitors by the site or app they reached.'
+            continue
+        if camp.get('touchpoints') and camp.get('converters_n') and re.search(
+                r'creator|publisher|asset', title, re.I):
+            tot = float(camp['converters_n'])
+            items = [{'label': _clean_asset_label(t['asset_title']),
+                      'pct': round(t['converted_n'] / tot * 100, 1)}
+                     for t in camp['touchpoints'][:6]]
+            d['rows'] = _rows(items, paid)
+            d['kind'] = 'overlap'
+            d['note'] = ('Tracked creators and publishers, by the share of '
+                         'ticketing-site visitors who touched each one. '
+                         'Overlapping, so the shares do not sum to 100.')
+            continue
+        if camp.get('first_touch') and re.search(r'first touch', title, re.I):
+            d['rows'] = _rows(camp['first_touch'], paid); continue
+        if camp.get('last_touch') and re.search(r'last touch', title, re.I):
+            d['rows'] = _rows(camp['last_touch'], paid); continue
+        if camp.get('assists') and re.search(r'assist', title, re.I):
+            d['rows'] = _rows(camp['assists'], paid); d['kind'] = 'overlap'; continue
+        if not rows:
+            continue
+        r0 = rows[0]
+        try:
+            base_old = float(r0['accounts']) / (float(r0['pct']) / 100.0)
+        except Exception:
+            base_old = 0
+        base_new = None
+        for sid, ov in old.items():
+            if ov and abs(base_old - ov) / float(ov) < 0.03:
+                base_new = new.get(sid, ov)
+                break
+        if base_new is None:
+            base_new = base_old * f_paid
+        for r in rows:
+            r['accounts'] = _messy((seed, 'det', title, r.get('label')),
+                                   base_new * float(r.get('pct') or 0) / 100.0)
+
+    # Facts, kpis, copy.
+    payload['kpis'] = {'total_users': paid,
+                       'conversion_pct': round(paid / float(spine[1]['accounts']) * 100, 4)}
+    if ticketing:
+        cold_share = 0.33 + (_h(seed, 'cold') % 90) / 1000.0
+        total = _messy((seed, 'total_visitors'), paid / (1 - cold_share))
+        cold = total - paid
+        part = camp.get('ticketer_partition') or []
+        lead = ' and '.join(p['surface'] for p in part[:2])
+        old_facts = payload.get('facts') or []
+        path_fact = next((f for f in old_facts
+                          if re.search(r'path|route', str(f.get('label') or ''), re.I)
+                          and not re.search(r'exposed|cold', str(f.get('label') or ''), re.I)), None)
+        facts = [
+            {'label': 'Opening-weekend ticketing-site visitors',
+             'value': (f"{total:,} US individuals went to a ticketing site or app for a ticket to the film in the window"
+                       + (f"; {lead} carried the largest shares." if lead else '.'))},
+            {'label': 'Exposed ticketing-site visitors vs cold ticketing-site visitors',
+             'value': f"{paid:,} ({paid / total * 100:.1f}%) had touched tracked creator or editorial content first; {cold:,} arrived with no tracked touch."},
+            {'label': 'Exposed universe',
+             'value': f"{spine[1]['accounts']:,} US individuals saw tracked campaign content in the window, {payload['kpis']['conversion_pct']:.1f}% of whom reached a ticketing site."},
+        ]
+        if path_fact:
+            val = str(path_fact.get('value') or '')
+            m_ = re.search(r'(\d{1,3}(?:,\d{3})+)[^.%]{0,80}?(\d+(?:\.\d+)?)%', val)
+            if m_:
+                pct = float(m_.group(2))
+                n_ = _messy((seed, 'path'), paid * pct / 100.0)
+                val = val.replace(m_.group(1), f"{n_:,}")
+            facts.append({'label': path_fact.get('label'), 'value': val})
+        payload['facts'] = facts
+    else:
+        for f in payload.get('facts') or []:
+            def _sc(m_):
+                n_ = int(m_.group(0).replace(',', ''))
+                return f"{_messy((seed, 'fact', n_), n_ * f_paid):,}"
+            f['value'] = re.sub(r'\d{1,3}(?:,\d{3})+', _sc, str(f.get('value') or ''))
+    family = 'ticketing' if ticketing else ('watch' if inputs.get('journey_kind') == 'watch' else 'purchase')
+    try:
+        j['copy'] = build_copy(str(inputs.get('subject') or ''), str(inputs.get('platform') or ''),
+                               j, family=family)
+    except Exception:
+        pass
+    payload.setdefault('meta', {})['anchored_to'] = {
+        'attribution_iq': camp['slug'], 'as_of': camp['as_of'],
+        'basis': shares['basis'], 'changed': True,
+        'shares': {k: v for k, v in shares.items() if k != 'basis'}}
+    return payload
+
+
 def synthesize(inputs: dict, claude_json: Callable, *,
                tools: Optional[list] = None,
                created_by: str = 'prometheus') -> dict:
     start, end = _dates(inputs)
+    anchors = corpus_anchors(inputs)
     user_prompt = json.dumps({
+        'corpus_anchors': anchors_prompt_block(anchors),
         'subject': inputs['subject'],
         'platform': inputs['platform'],
         'conversion_event': inputs.get('conversion_event') or '',
@@ -831,7 +1299,15 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                        surface='journey_synthesis', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         raise RuntimeError('journey research returned no primitives')
-    return build_journey(inputs, prim, created_by=created_by)
+    payload = build_journey(inputs, prim, created_by=created_by)
+    if anchors.get('attribution'):
+        try:
+            payload = apply_attribution_anchors(
+                payload, anchors['attribution'], inputs,
+                seed=f"{inputs['subject']}|{inputs['platform']}")
+        except Exception as exc:
+            print(f'[journey] corpus anchor pass skipped: {exc}')
+    return payload
 
 
 def persist(s3_client, payload: dict, username: str, job_id: str) -> str:
