@@ -52935,7 +52935,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     <div class="jiq-frag-sec">
                         <div class="jiq-frag-num" id="jiqFragForkNum">02 The bag splits</div>
                         <h3 id="jiqFragForkHead">Most of the buyer file left first.</h3>
-                        <em>Who paid on the spot and who came back</em>
+                        <em id="jiqFragForkSub">Who paid on the spot and who came back</em>
                     </div>
                     <div id="jiqFragFork"></div>
                     <div class="jiq-frag-sec">
@@ -115180,6 +115180,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (_fragSpineNum) _fragSpineNum.textContent = '01 The spine';
             var _fragForkNum = document.getElementById('jiqFragForkNum');
             if (_fragForkNum) _fragForkNum.textContent = '02 The bag splits';
+            var _fragForkSub = document.getElementById('jiqFragForkSub');
+            if (_fragForkSub) _fragForkSub.textContent = 'Who paid on the spot and who came back';
             var _fragDetourNum = document.getElementById('jiqFragDetourNum');
             if (_fragDetourNum) _fragDetourNum.textContent = '03 Detours';
             var _fragDetourHead = document.getElementById('jiqFragDetourHead');
@@ -115371,6 +115373,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (spineNum && copy.spineSec) spineNum.textContent = copy.spineSec;
             var forkNum = document.getElementById('jiqFragForkNum');
             if (forkNum && copy.forkSec) forkNum.textContent = copy.forkSec;
+            var forkSub = document.getElementById('jiqFragForkSub');
+            if (forkSub) forkSub.textContent = copy.forkSub ||
+                (/ticketing/i.test(copy.forkSameSessionLabel || '')
+                    ? 'Who reached ticketing in the same session and who came back later'
+                    : 'Who paid on the spot and who came back');
             var detNum = document.getElementById('jiqFragDetourNum');
             if (detNum && copy.detourSec) detNum.textContent = copy.detourSec;
             var detHead = document.getElementById('jiqFragDetourHead');
@@ -115522,6 +115529,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (spineNum && copy.spineSec) spineNum.textContent = copy.spineSec;
             var forkNum = document.getElementById('jiqFragForkNum');
             if (forkNum && copy.forkSec) forkNum.textContent = copy.forkSec;
+            var forkSub = document.getElementById('jiqFragForkSub');
+            if (forkSub) forkSub.textContent = copy.forkSub ||
+                (/ticketing/i.test(copy.forkSameSessionLabel || '')
+                    ? 'Who reached ticketing in the same session and who came back later'
+                    : 'Who paid on the spot and who came back');
             var detNum = document.getElementById('jiqFragDetourNum');
             if (detNum && copy.detourSec) detNum.textContent = copy.detourSec;
             var detHead = document.getElementById('jiqFragDetourHead');
@@ -115662,6 +115674,11 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (spineNum && copy.spineSec) spineNum.textContent = copy.spineSec;
             var forkNum = document.getElementById('jiqFragForkNum');
             if (forkNum && copy.forkSec) forkNum.textContent = copy.forkSec;
+            var forkSub = document.getElementById('jiqFragForkSub');
+            if (forkSub) forkSub.textContent = copy.forkSub ||
+                (/ticketing/i.test(copy.forkSameSessionLabel || '')
+                    ? 'Who reached ticketing in the same session and who came back later'
+                    : 'Who paid on the spot and who came back');
             var detNum = document.getElementById('jiqFragDetourNum');
             if (detNum && copy.detourSec) detNum.textContent = copy.detourSec;
             var detHead = document.getElementById('jiqFragDetourHead');
