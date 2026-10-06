@@ -285,19 +285,248 @@ def researched_extras_for(subject: str, platform: str = ''
     return rows
 
 
+_HINT_BANDS = (
+    (52.4183, 41.2761, 28.6418, 19.3842, 14.8126, 11.2473, 9.6184, 7.3419, 6.1847, 4.2718),
+    (61.4187, 33.1864, 22.3471, 16.2186, 12.4713, 8.3184, 6.1842, 5.0716, 4.2183, 3.1471),
+    (48.2714, 31.1847, 22.6418, 16.3471, 12.8126, 9.2473, 7.6184, 5.3419, 4.1847, 3.2718),
+    (57.1842, 36.4183, 24.1863, 18.3471, 13.8642, 10.2186, 8.4713, 6.3184, 5.1842, 4.0716),
+    (44.8137, 29.6418, 21.3842, 15.8126, 11.2473, 8.6184, 6.3419, 5.1847, 4.2718, 3.1842),
+)
+
+
+def step_family(surface: str, action: str, step_id: str = '') -> str:
+    """Which URL set this step is allowed to carry."""
+    blob = f'{surface} {action} {step_id}'.lower()
+    creator = any(x in blob for x in (
+        'creator', 'feed', 'tiktok', 'instagram', 'reels', 'short-form',
+        'short form', 'clip', 'ugc', 'for you', 'influencer'))
+    editorial = any(x in blob for x in (
+        'editorial', 'article', 'review', 'press', 'variety', 'ebert',
+        'screenrant', 'critic', 'media coverage', 'outlet'))
+    if creator and editorial:
+        return 'creator_editorial'
+    act = str(action or '').lower()
+    if any(x in blob for x in (
+            'fandango', 'amctheatres', 'amc theatre', 'regmovies',
+            'cinemark', 'atomtickets', 'atom ticket')):
+        return 'tickets'
+    if any(x in act for x in ('ticket', 'showtimes')):
+        return 'tickets'
+    if any(x in blob for x in ('shop', 'sephora', 'bag', 'cart', 'paid a',
+                               'paid the', 'paid for')):
+        return 'shop'
+    if editorial:
+        return 'editorial'
+    if creator:
+        return 'creator'
+    if any(x in blob for x in ('trailer', 'youtube', 'watch page')):
+        return 'video'
+    if any(x in blob for x in ('amazon', 'prime', 'pvod', 'buy page')):
+        return 'amazon'
+    if any(x in blob for x in ('title page', 'imdb')):
+        return 'title'
+    if any(x in blob for x in ('search', 'google', 'typed')):
+        return 'search'
+    return 'search'
+
+
+def looks_generic_bag(urls: list[tuple[str, str, float]]) -> bool:
+    """The old builder stamped google+youtube+tiktok+reddit on every step."""
+    blob = ' '.join(u[0] for u in urls).lower()
+    if 'reddit.com/search' not in blob:
+        return False
+    hits = sum(1 for t in (
+        'google.com/search', 'youtube.com/results', 'tiktok.com/search',
+        'reddit.com/search', 'imdb.com/find') if t in blob)
+    return hits >= 4
+
+
+def _apply_hints(urls: list[tuple[str, str, float]], step_i: int
+                 ) -> list[tuple[str, str, float]]:
+    band = _HINT_BANDS[(max(step_i, 1) - 1) % len(_HINT_BANDS)]
+    out = []
+    for n, (url, why, _old) in enumerate(urls[:MAX_URLS]):
+        out.append((url, why, band[n] if n < len(band) else 3.1847))
+    return out
+
+
+def urls_for_step(subject: str, platform: str, surface: str = '',
+                  action: str = '', step_i: int = 1
+                  ) -> list[tuple[str, str, float]]:
+    """6 to 10 public pages that belong to THIS step only."""
+    subj = str(subject or '').strip() or 'the title'
+    q = _q(subj)
+    tag = re.sub(r'[^a-z0-9]', '', subj.lower())[:40] or 'title'
+    family = step_family(surface, action)
+    s = subj.lower()
+    rows: list[tuple[str, str]] = []
+
+    def add(url: str, why: str) -> None:
+        if is_safe_url(url) and all(u[0].rstrip('/').lower() != url.rstrip('/').lower()
+                                    for u in rows):
+            rows.append((url, why))
+
+    if family in ('creator', 'creator_editorial'):
+        add(f'https://www.instagram.com/explore/search/keyword/?q={q}',
+            'Creator feed search for this title')
+        add(f'https://www.tiktok.com/search?q={q}',
+            'Short-form feed search')
+        add(f'https://www.tiktok.com/tag/{tag}',
+            'Title tag on short-form')
+        add(f'https://www.instagram.com/explore/tags/{tag}/',
+            'Title tag on Instagram')
+        add(f'https://www.youtube.com/results?search_query={q}',
+            'Creator and clip results')
+        add(f'https://www.google.com/search?q={_q(subj + " instagram")}',
+            'Typed the title plus Instagram')
+        if 'influencer project' in s:
+            add('https://www.youtube.com/results?search_query=The+Influencer+Project+official+trailer',
+                'Official trailer sitting next to the creator cuts')
+    if family in ('editorial', 'creator_editorial'):
+        add(f'https://www.google.com/search?q={_q(subj + " review")}',
+            'Typed search for reviews of this title')
+        if 'influencer project' in s:
+            add('https://screenrant.com/the-influencer-project-movie-review/',
+                'Review page on this title')
+            add('https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026',
+                'Review page on this title')
+            add('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
+                'Review page on this title')
+            add('https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html',
+                'Review page on this title')
+            add('https://www.imdb.com/news/ni66038349/?ref_=nmnw_art_perm',
+                'Editorial stills page on this title')
+        else:
+            add(f'https://www.imdb.com/find/?q={q}',
+                'Title page used as an editorial hop')
+            add(f'https://www.google.com/search?q={_q(subj + " variety review")}',
+                'Trade review search')
+    if family == 'tickets':
+        add(f'https://www.fandango.com/search?q={q}',
+            'Fandango title search')
+        add(f'https://www.amctheatres.com/search?q={q}',
+            'AMC title search')
+        add(f'https://www.regmovies.com/search?query={q}',
+            'Regal title search')
+        add(f'https://www.cinemark.com/search?q={q}',
+            'Cinemark title search')
+        add(f'https://www.atomtickets.com/search?q={q}',
+            'Atom title search')
+        add(f'https://www.google.com/search?q={_q(subj + " tickets")}',
+            'Showtimes search')
+    if family == 'video':
+        add(f'https://www.youtube.com/results?search_query={q}',
+            'Video results for the title')
+        add(f'https://www.youtube.com/results?search_query={_q(subj + " official trailer")}',
+            'Official trailer search')
+        add(f'https://www.google.com/search?q={_q(subj + " trailer")}',
+            'Typed trailer search')
+        add(f'https://www.tiktok.com/search?q={_q(subj + " clip")}',
+            'Short clip next to the trailer')
+        add(f'https://www.youtube.com/results?search_query={_q(subj + " scene")}',
+            'Scene clips on YouTube')
+        add(f'https://www.google.com/search?q={_q(subj + " watch online")}',
+            'Typed watch search')
+    if family == 'amazon':
+        add(f'https://www.amazon.com/s?k={q}',
+            'Amazon listing search')
+        add(f'https://www.amazon.com/gp/video/search?phrase={q}',
+            'Prime Video title search')
+        add(f'https://www.google.com/search?q={_q(subj + " amazon")}',
+            'Typed Amazon search')
+        add(f'https://www.imdb.com/find/?q={q}',
+            'Title page next to the buy page')
+        add(f'https://www.amazon.com/s?k={_q(subj + " season")}',
+            'Amazon season listing')
+        add(f'https://www.google.com/search?q={_q("buy " + subj + " amazon")}',
+            'Typed buy-on-Amazon search')
+    if family == 'netflix':
+        add(f'https://www.netflix.com/search?q={q}',
+            'Netflix title search')
+        add(f'https://www.google.com/search?q={_q(subj + " netflix")}',
+            'Typed Netflix search')
+        add(f'https://www.justwatch.com/us/search?q={q}',
+            'Where to watch this title')
+        add(f'https://www.imdb.com/find/?q={q}',
+            'Title page next to Netflix')
+        add(f'https://www.google.com/search?q={_q("watch " + subj + " netflix")}',
+            'Typed watch-on-Netflix search')
+        add(f'https://www.youtube.com/results?search_query={_q(subj + " netflix trailer")}',
+            'Netflix trailer search')
+    if family == 'shop':
+        add(f'https://www.tiktok.com/search?q={_q(subj + " shop")}',
+            'TikTok Shop search')
+        add('https://www.sephora.com/search?keyword=fragrance',
+            'Retailer fragrance search')
+        add(f'https://www.google.com/search?q={_q(subj + " tiktok shop")}',
+            'Typed search for the shop path')
+        add('https://www.ulta.com/search?search=fragrance',
+            'Second retailer search')
+        add(f'https://www.google.com/search?q={_q(subj + " sephora")}',
+            'Typed retailer search')
+        add(f'https://www.tiktok.com/tag/{tag}',
+            'Shop tag on short-form')
+    if family == 'title':
+        add(f'https://www.imdb.com/find/?q={q}',
+            'Title page search')
+        add(f'https://www.google.com/search?q={q}',
+            'Typed the title')
+        add(f'https://www.justwatch.com/us/search?q={q}',
+            'Where-to-watch title page')
+        add(f'https://www.google.com/search?q={_q(subj + " cast")}',
+            'Typed cast search')
+        add(f'https://en.wikipedia.org/w/index.php?search={q}',
+            'Title encyclopedia page')
+        add(f'https://www.rottentomatoes.com/search?search={q}',
+            'Title score page')
+    if family == 'search':
+        add(f'https://www.google.com/search?q={q}',
+            'Typed search for the subject')
+        add(f'https://www.google.com/search?q={_q((subj + " " + (platform or "")).strip())}',
+            'Subject plus the end-step platform')
+        add(f'https://www.justwatch.com/us/search?q={q}',
+            'Where-to-watch guide')
+        add(f'https://www.google.com/search?q={_q(subj + " watch")}',
+            'Typed watch search')
+        add(f'https://www.youtube.com/results?search_query={q}',
+            'Video results from the same typed name')
+        add(f'https://www.bing.com/search?q={q}',
+            'Second typed search')
+    n = 0
+    while len(rows) < MIN_URLS and n < 6:
+        add(f'https://www.google.com/search?q={_q(subj + " " + family)}',
+            'More pages on this step')
+        n += 1
+        if n > 1:
+            add(f'https://www.google.com/search?q={_q(subj + " " + family + " " + str(n))}',
+                'More pages on this step')
+
+    hinted = [(u, w, 12.0) for u, w in rows[:MAX_URLS]]
+    rot = (max(step_i, 1) - 1) % max(len(hinted), 1)
+    if hinted and rot:
+        hinted = hinted[rot:] + hinted[:rot]
+    return _apply_hints(hinted[:MAX_URLS], step_i)
+
+
 def _pad_urls(urls: list[tuple[str, str, float]],
-              subject: str, platform: str, surface: str) -> list[tuple[str, str, float]]:
+              subject: str, platform: str, surface: str,
+              action: str = '', step_i: int = 1
+              ) -> list[tuple[str, str, float]]:
+    family_rows = urls_for_step(subject, platform, surface, action, step_i)
+    if looks_generic_bag(urls) or not urls:
+        return family_rows
+    if len(urls) >= MIN_URLS:
+        return _apply_hints(urls[:MAX_URLS], step_i)
     have = {u[0].rstrip('/').lower() for u in urls}
-    extra = researched_extras_for(subject, platform)
-    for url, why, hint in public_urls_for(subject, platform, surface, extra=extra):
+    for url, why, hint in family_rows:
         key = url.rstrip('/').lower()
         if key in have:
             continue
         urls.append((url, why, hint))
         have.add(key)
-        if len(urls) >= MAX_URLS:
+        if len(urls) >= MIN_URLS:
             break
-    return urls[:MAX_URLS]
+    return _apply_hints(urls[:MAX_URLS], step_i)
 
 
 def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
@@ -333,7 +562,8 @@ def _step_from_raw(raw: dict, i: int, prev_people: Optional[int],
             continue
         if _clip_ok(url, named_clips):
             raw_urls.append((url, why, hint))
-    raw_urls = _pad_urls(raw_urls, subject, platform, surface)
+    raw_urls = _pad_urls(
+        raw_urls, subject, platform, surface, action, i)
     return {
         'step': i,
         'date': date,
@@ -371,9 +601,9 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
              'doing': 'Watched a short clip'},
             {'label': 'Opened Instagram', 'surface': 'Instagram',
              'doing': 'Opened the app'},
-            {'label': 'Opened a title page', 'surface': platform or 'Web',
+            {'label': 'Opened a title page', 'surface': 'IMDb',
              'doing': 'Opened the title page'},
-            {'label': 'Came back the next day', 'surface': platform or 'Web',
+            {'label': 'Came back the next day', 'surface': 'Return',
              'doing': 'Returned'},
             {'label': 'Compared a second page', 'surface': 'Search',
              'doing': 'Opened a second result'},
@@ -402,12 +632,7 @@ def fallback_clickstream(spine: list[dict], subject: str, platform: str,
             'action': src.get('action') or src.get('label') or src.get('doing'),
             'urls': [],
         }
-        extra_for_step = extra[:2] if i == 1 else extra[2:4] if i == 2 else []
-        raw['urls'] = [
-            {'url': u, 'why': w, 'hint': 14.0 - j}
-            for j, (u, w) in enumerate(extra_for_step)
-            if _clip_ok(u, named_clips)
-        ]
+        raw['urls'] = []
         step = _step_from_raw(raw, i, prev, seed, subject, platform, named_clips)
         if not step:
             continue
@@ -452,6 +677,49 @@ def normalize_clickstream(raw: Any, spine: list[dict], subject: str,
         return fallback_clickstream(
             spine, subject, platform, seed, window, detours,
             named_clips=named)
+    result = {'steps': out}
+    if clickstream_urls_repeat(result):
+        return _rewrite_step_urls(result, subject, platform, seed, named)
+    return result
+
+
+def clickstream_urls_repeat(cs: dict) -> bool:
+    """Same URL list or same lead share on 3+ steps."""
+    steps = list((cs or {}).get('steps') or [])
+    if len(steps) < 3:
+        return False
+    keys, shares = [], []
+    for s in steps:
+        urls = [str(u.get('url') or '').rstrip('/').lower()
+                for u in (s.get('urls') or [])]
+        keys.append(tuple(urls[:4]))
+        if urls:
+            shares.append(round(float(
+                (s.get('urls') or [{}])[0].get('share_of_step_pct') or 0), 1))
+    if keys and len(set(keys)) <= 2:
+        return True
+    if shares and len(set(shares)) <= 2:
+        return True
+    return False
+
+
+def _rewrite_step_urls(cs: dict, subject: str, platform: str, seed: str,
+                       named_clips=None) -> dict:
+    prev = None
+    out = []
+    for i, s in enumerate(cs.get('steps') or [], start=1):
+        raw = {
+            'people': s.get('people'),
+            'date': s.get('date'),
+            'surface': s.get('surface'),
+            'action': s.get('action'),
+            'urls': [],
+        }
+        step = _step_from_raw(raw, i, prev, seed, subject, platform, named_clips)
+        if not step:
+            continue
+        out.append(step)
+        prev = step['people']
     return {'steps': out}
 
 

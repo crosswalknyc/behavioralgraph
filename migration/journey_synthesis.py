@@ -204,6 +204,12 @@ Rules that do not move:
   video ID. A taken-down post is the creator account plus the public
   pages that still name it. URL people overlap and do not add to the
   step. cover_title is the subject name, not a finding.
+- Each clickstream step carries URLs for THAT step only. A creator
+  feed step carries Instagram / TikTok / YouTube creator pages. An
+  editorial step carries review and article pages. A ticketing step
+  carries Fandango / AMC / Regal / Cinemark / Atom. A search step
+  carries typed search. Never paste the same URL list onto every
+  step. Share-of-step percents must differ across steps.
 
 Journey families. journey_kind in the input decides which:
 - "purchase": the shop family. The last stage is the paid event; the
