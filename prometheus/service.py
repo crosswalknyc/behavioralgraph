@@ -702,6 +702,34 @@ def _persist_turn(persist, uname, tid, history, text, env, raw, surface):
         save_thread(uname, tid, turns)
     except Exception as e:
         print(f"[prometheus] persist failed for {uname}: {e}")
+    # Corpus catalog (2026-10-05): every figure this reply states is
+    # banked under its subject, so the next answer or build on the
+    # subject sees it. Off the request path; fail-safe.
+    try:
+        subj = _answer_subject(env, raw)
+        if subj and env.get('text') and env.get('kind') not in ('clarify', 'question'):
+            from migration import corpus_catalog as _cc
+            _cc.record_answer_async(subj, env['text'], user=uname, thread_id=tid or '')
+    except Exception as e:
+        print(f"[prometheus] corpus catalog bank skipped: {e}")
+
+
+def _answer_subject(env, raw):
+    """The subject a reply is about, from the decision, the ask hint,
+    or the bound page."""
+    for src in (env.get('decision') or {}, raw if isinstance(raw, dict) else {}):
+        for k in ('subject', 'bind_subject', 'subject_name'):
+            v = src.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    try:
+        from flask import g as _g
+        v = getattr(_g, '_pm_ask_subject', None)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    except Exception:
+        pass
+    return ''
 
 
 # ------------------------------------------------------------------- jobs

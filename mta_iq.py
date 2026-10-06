@@ -343,10 +343,24 @@ def _save_cache(slug: str, as_of: str, payload: dict) -> Optional[str]:
             Body=json.dumps(payload, default=str).encode("utf-8"),
             ContentType="application/json",
         )
-        return key
     except Exception as e:
         logger.warning("MTA: cache save failed for %s: %s", slug, e)
         return None
+    # Corpus catalog (2026-10-05): the campaign's nest counts and
+    # ticketing partition join the shared subject record. Fail-safe.
+    try:
+        from migration import corpus_catalog as _cc
+        assets = {}
+        try:
+            obj = s3.get_object(Bucket=S3_BUCKET,
+                                Key=f"intent/{slug}/source/normalized_assets.json")
+            assets = json.loads(obj["Body"].read().decode("utf-8"))
+        except Exception:
+            pass
+        _cc.index_attribution(slug, assets, payload)
+    except Exception as e:
+        logger.warning("MTA: corpus catalog hook failed for %s: %s", slug, e)
+    return key
 
 
 # ---------------------------------------------------------------------------

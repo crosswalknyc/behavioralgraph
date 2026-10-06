@@ -833,6 +833,23 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                created_by: str = "prometheus") -> dict:
     """Research + reason the primitives, then derive the payload."""
     windows = _dates(inputs)
+    # Corpus catalog (2026-10-05): every figure already published on the
+    # qualifier (its Profile IQ size, earlier partnership reads, journeys,
+    # chat answers) and on the brand partner rides the research prompt as
+    # binding context. Fail-safe to nothing.
+    published = {}
+    try:
+        from migration import corpus_catalog as _cc
+        ev = windows.get("event") or {}
+        win = {"start": ev.get("start"), "end": ev.get("end")} if isinstance(ev, dict) else None
+        for label, name in (("qualifier", inputs.get("qualifier")),
+                            ("brand_partner", inputs.get("brand_partner")),
+                            ("partnership", f"{inputs.get('qualifier')} x {inputs.get('brand_partner')}")):
+            blk = _cc.anchors_block(_cc.anchors_for(str(name or ""), window=win), max_lines=24)
+            if blk:
+                published[label] = blk
+    except Exception as e:
+        print(f"[bpiq-synth] catalog anchors skipped: {e}")
     user_prompt = json.dumps({
         "brand_partner": inputs["brand_partner"],
         "qualifier": inputs["qualifier"],
@@ -841,6 +858,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         "pre_period": windows["pre"],
         "event_period": windows["event"],
         "post_period": windows["post"],
+        **({"published_figures": published,
+            "published_figures_rule": ("Binding. The audience size and every count "
+                                       "must agree with these where they overlap and "
+                                       "sit inside them for a sub-window.")}
+           if published else {}),
     })
     prim = claude_json(research_prompt(), user_prompt,
                        max_tokens=9000, temperature=0.6,

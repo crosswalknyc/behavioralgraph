@@ -2376,6 +2376,13 @@ def _append_to_index(s3_client, key: str, summary: dict) -> None:
             pass
         meta = summary.get('meta', {}) or {}
         kpis = summary.get('kpis', {}) or {}
+        # Corpus catalog (2026-10-05): the journey's stage counts join
+        # the shared subject record as they land. Fail-safe.
+        try:
+            from migration import corpus_catalog as _cc
+            _cc.index_journey(key, summary, user=str(meta.get('created_by') or ''))
+        except Exception as _cc_err:
+            print(f"[journey-iq] corpus catalog hook failed: {_cc_err}")
         idx['runs'] = [r for r in (idx.get('runs') or []) if r.get('key') != key]
         idx['runs'].append({
             'key':            key,

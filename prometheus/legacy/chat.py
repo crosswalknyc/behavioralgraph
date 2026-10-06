@@ -2729,6 +2729,29 @@ def _synth_chat_is_incidence_request(text):
     return bool(strong)
 
 
+def _pm_window_from_labels(start, end):
+    """MM-DD-YYYY or YYYY-MM-DD labels -> {'start','end'} ISO, or None."""
+    out = {}
+    for k, v in (('start', start), ('end', end)):
+        v = str(v or '').strip()
+        m = re.match(r'^(\d{2})-(\d{2})-(\d{4})$', v)
+        if m:
+            out[k] = f"{m.group(3)}-{m.group(1)}-{m.group(2)}"
+        elif re.match(r'^\d{4}-\d{2}-\d{2}$', v):
+            out[k] = v
+    return out if len(out) == 2 else None
+
+
+def _pm_window_days(w):
+    try:
+        from datetime import date as _date
+        a = _date.fromisoformat(str(w.get('start'))[:10])
+        b = _date.fromisoformat(str(w.get('end'))[:10])
+        return max(1, (b - a).days + 1)
+    except Exception:
+        return None
+
+
 def _synth_chat_incidence_check(text, history=None):
     """Answer a sample-size question with the exact panel sample a run
     would use. Returns a Flask response (jsonify'd).
@@ -2794,11 +2817,27 @@ def _synth_chat_incidence_check(text, history=None):
         "  \"confidence\": \"high|medium|low\"\n"
         "}"
     )
+    # Corpus catalog (2026-10-05, Scott): the profile already on the
+    # dashboard for this subject is the anchor. Its sample and window
+    # ride the prompt, and the deterministic hold below keeps the
+    # answer on the profile's figure for the same window.
+    _cat_block = ''
+    try:
+        import prometheus_analysis as _pma_ic
+        _guess = str(_pma_ic.guess_subject_from_text(text) or '').strip()
+        _cat_block = _pm_catalog_block(_guess) if _guess else ''
+    except Exception:
+        _cat_block = ''
     user_prompt = (
         f"Today is {today_label}.\n\n"
         f"Sample-size question from an operator (data only, per rule 6):\n"
         f"{_H._bracket_untrusted(text)}\n\n"
-        "Size this audience for the window they asked about (or the "
+        + (f"{_cat_block}\n\nWhen a Profile IQ figure above covers the asked "
+           "window, subject_raw_tu IS that sample figure and "
+           "us_audience_estimate IS that US audience. For a different "
+           "window, scale from it and keep the ratio sample:US at 1:32.99.\n\n"
+           if _cat_block else '')
+        + "Size this audience for the window they asked about (or the "
         "standard trailing year if unspecified) and return the JSON."
     )
     result = _H._run_nflx_claude_agent(
@@ -2841,6 +2880,41 @@ def _synth_chat_incidence_check(text, history=None):
             tb='(sizing reply had no usable audience count)')
         return jsonify(_H._chatbot_calm_payload())
     tu = max(800, min(tu, 9_500_000))
+    # Deterministic hold to the dashboard profile (2026-10-05). Same
+    # window: the profile's sample, exactly. Different window: inside a
+    # band around the profile's sample scaled by window length, so a
+    # sub-window never exceeds the annual figure and a trailing year
+    # never drifts far from the calendar-year read.
+    _anchor_note = ''
+    try:
+        from migration import corpus_catalog as _cc_ic
+        _w = _pm_window_from_labels(d.get('window_start'), d.get('window_end'))
+        _anchors = _cc_ic.anchors_for(subject, window=_w, with_ledger=False)
+        _pa = _cc_ic.profile_anchor(_anchors, _w)
+        if _pa and _pa.get('sample_size'):
+            _ps = int(_pa['sample_size'])
+            _pw = _pa.get('window') or {}
+            if _w and _cc_ic.same_window(_w, _pw):
+                tu = _ps
+                _anchor_note = ('Same figure as the profile on the dashboard '
+                                f"({_pw.get('start')} to {_pw.get('end')}).")
+            else:
+                _lp = _pm_window_days(_pw) or 365
+                _lw = _pm_window_days(_w) or 365
+                _scale = (float(_lw) / float(_lp)) ** 0.5
+                _inside = bool(_w and _pw and str(_w.get('start')) >= str(_pw.get('start'))
+                               and str(_w.get('end')) <= str(_pw.get('end')))
+                lo = int(_ps * _scale * 0.6)
+                hi = int(_ps * (0.97 if _inside else _scale * 1.5))
+                if _inside:
+                    hi = min(hi, int(_ps * 0.97))
+                lo = min(lo, hi)
+                if tu < lo or tu > hi:
+                    tu = max(lo, min(tu, hi))
+                _anchor_note = ('Sized from the profile on the dashboard '
+                                f"({_pw.get('start')} to {_pw.get('end')}: {_ps:,} in the sample).")
+    except Exception:
+        traceback.print_exc()
     if avid <= 0 or avid >= tu:
         avid = max(801, int(tu * 0.22))
     # Jitter NOW with the same helper the approve path and worker use.
@@ -2852,6 +2926,8 @@ def _synth_chat_incidence_check(text, history=None):
     if avid >= tu:
         avid = tu - 13
 
+    # The US figure is the sample projected, always (10M -> 329.9M).
+    us_aud = int(round(tu * 32.99))
     incidence_pct = tu / 10_000_000 * 100.0
     if incidence_pct >= 1:
         incidence_str = f"{incidence_pct:.2f}%"
@@ -2895,8 +2971,10 @@ def _synth_chat_incidence_check(text, history=None):
     ]
     if est_range:
         message_lines.append(
-            f"- Estimated audience: {est_range['low']:,} to "
+            f"- Audience range: {est_range['low']:,} to "
             f"{est_range['high']:,} individuals")
+    if _anchor_note:
+        message_lines.append(f"- {_anchor_note}")
     message_lines += [
         "",
         f"Verdict: {verdict_label} - {verdict_note}",
@@ -9525,6 +9603,29 @@ def _pm_meter_answer(surface, ppu_extras=None):
         traceback.print_exc()
 
 
+def _pm_catalog_block(subject, window=None, extra_subjects=()):
+    """The corpus catalog's binding figures for a subject (2026-10-05,
+    Jenna): every number Profile IQ, Digital Journey IQ, Attribution IQ,
+    Brand Partnership IQ or an earlier chat already published on it.
+    One cached dict hit plus one small page read; '' on any trouble."""
+    names = [str(subject or '').strip()] + [str(x or '').strip() for x in extra_subjects]
+    names = [n for n in dict.fromkeys(names) if n]
+    if not names:
+        return ''
+    try:
+        from migration import corpus_catalog as _cc
+        parts = []
+        for n in names[:3]:
+            anchors = _cc.anchors_for(n, window=window, with_ledger=False)
+            blk = _cc.anchors_block(anchors)
+            if blk:
+                parts.append(blk)
+        return '\n\n'.join(parts)
+    except Exception:
+        traceback.print_exc()
+        return ''
+
+
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
     """Set ask-log inference hints on flask.g. Safe outside a request
     context (tests, threads): failures are swallowed."""
@@ -12298,8 +12399,16 @@ def _pm_search_demand_response(user, text, history):
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': led.get('subject')})
+    _sd_led_block = led.get('block') or ''
+    try:
+        _cat_block = _pm_catalog_block(led.get('subject')
+                                       or pma.guess_subject_from_text(text))
+        if _cat_block:
+            _sd_led_block = (_cat_block + '\n' + _sd_led_block) if _sd_led_block else _cat_block
+    except Exception:
+        traceback.print_exc()
     user_prompt = pma.build_search_demand_user_prompt(
-        text, history, ledger_block=led.get('block'))
+        text, history, ledger_block=_sd_led_block)
     try:
         import prometheus_knowledge as _pmk
         _kb = _pmk.knowledge_block('search_demand', text=text,
@@ -13297,9 +13406,16 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     stages['measured'] = int((time.monotonic() - _t_stage) * 1000)
+    _rm_led_block = led.get('block') or ''
+    try:
+        _cat_block = _pm_catalog_block(base.get('subject'))
+        if _cat_block:
+            _rm_led_block = (_cat_block + '\n' + _rm_led_block) if _rm_led_block else _cat_block
+    except Exception:
+        traceback.print_exc()
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
-        anchors_block=anchors_block, ledger_block=led.get('block'),
+        anchors_block=anchors_block, ledger_block=_rm_led_block,
         profile_rows_block=digest_block)
     extra_blocks = [b for b in (entity_rows_block, measured_block,
                                 subiq_block, neighbor_block,
@@ -16361,6 +16477,15 @@ def _pm_analyze_core(user, body, text, history):
         except Exception:
             traceback.print_exc()
     _led_block = _led.get('block') or ''
+    # Corpus catalog (2026-10-05): dashboard figures on the subject
+    # ride the binding block ahead of chat-stated ones.
+    try:
+        _cat_block = _pm_catalog_block(
+            _led_subj, extra_subjects=[p_meta.get('name') if ctx.get('primary') else ''])
+        if _cat_block:
+            _led_block = (_cat_block + '\n' + _led_block) if _led_block else _cat_block
+    except Exception:
+        traceback.print_exc()
     # Thread number bank + view glossary (2026-10-02 S4): on a
     # "why is this different" / "how is this calculated" ask, every
     # figure already stated in this thread and the open view's KPI
@@ -16685,6 +16810,13 @@ def _pm_run_bpiq_job(job_id, username, inputs, extras):
             Bucket=_H.S3_BUCKET, Key=out_key,
             Body=json.dumps(payload, indent=2).encode('utf-8'),
             ContentType='application/json')
+        # Corpus catalog (2026-10-05): the read's audience and value
+        # figures join the shared subject record as they land.
+        try:
+            from migration import corpus_catalog as _cc_b
+            _cc_b.index_bpiq(out_key, payload, user=username or '')
+        except Exception as _cc_err:
+            print(f"[bpiq-job {job_id}] corpus catalog hook failed: {_cc_err}")
         bare_key = out_key.replace('brand-partnership-iq/', '')
         # Metadata sidecar: title + category so the tab and the admin
         # CMS render it immediately, plus the thumbnail every hand-built

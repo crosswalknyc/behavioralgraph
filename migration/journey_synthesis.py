@@ -947,8 +947,14 @@ def attribution_anchor_from(slug: str, assets: dict, fit: dict) -> Optional[dict
 
 def corpus_anchors(inputs: dict, s3=None) -> dict:
     """Everything Crosswalk already holds on this subject that a journey
-    must stay coherent with. Today: the Attribution IQ campaign."""
-    out = {'attribution': None}
+    must stay coherent with: the Attribution IQ campaign (deterministic
+    hold), the corpus catalog's published figures on the subject
+    (Profile IQ sizes, Brand Partnership reads, earlier chat answers;
+    binding in the research prompt), and a prior Digital Journey on the
+    same subject (replayed outright when subject, platform, kind and
+    window all match; otherwise binding in the prompt)."""
+    out = {'attribution': None, 'catalog': None, 'prior_journey': None,
+           'catalog_block': ''}
     if not _anchors_enabled():
         return out
     try:
@@ -956,14 +962,74 @@ def corpus_anchors(inputs: dict, s3=None) -> dict:
             str(inputs.get('subject') or ''), s3=s3)
     except Exception:
         out['attribution'] = None
+    try:
+        from migration import corpus_catalog as _cc
+        start, end = _dates(inputs)
+        win = {'start': start, 'end': end}
+        cat = _cc.anchors_for(str(inputs.get('subject') or ''), window=win)
+        out['catalog'] = cat
+        out['catalog_block'] = _cc.anchors_block(cat, max_lines=30)
+        out['prior_journey'] = _cc.prior_journey(cat, win)
+    except Exception as exc:
+        print(f'[journey] catalog anchors skipped: {exc}')
     return out
+
+
+def _fold(s):
+    return re.sub(r'[^a-z0-9]+', ' ', str(s or '').lower().replace('&', ' and ')).strip()
+
+
+def find_replayable_journey(inputs: dict, anchors: dict, s3=None) -> Optional[dict]:
+    """The stored payload of a prior journey that IS this ask: same
+    subject, same platform, same journey kind, same window. Replayed
+    instead of rebuilt, so two users asking the same thing see the
+    same numbers (the ledger rule, applied to journeys)."""
+    prior = (anchors or {}).get('prior_journey')
+    if not prior or not prior.get('source_key'):
+        return None
+    try:
+        start, end = _dates(inputs)
+        pw = prior.get('window') or {}
+        if str(pw.get('start') or '')[:10] != str(start)[:10] \
+                or str(pw.get('end') or '')[:10] != str(end)[:10]:
+            return None
+        s3 = s3 or _default_s3()
+        import gzip as _gz
+        body = s3.get_object(Bucket='dashboard-inputs', Key=prior['source_key'])['Body'].read()
+        payload = json.loads(_gz.decompress(body).decode('utf-8'))
+        meta = payload.get('meta') or {}
+        kind_new = 'ticketing' if is_ticketing_journey(inputs) else str(inputs.get('journey_kind') or 'purchase')
+        kind_old = 'ticketing' if meta.get('no_purchase_claim') else str(meta.get('journey_kind') or 'purchase')
+        if kind_new != kind_old:
+            return None
+        plat_new = _fold(inputs.get('platform'))
+        tname = _fold(meta.get('target_name') or meta.get('project_name'))
+        if plat_new and plat_new not in tname:
+            return None
+        return payload
+    except Exception as exc:
+        print(f'[journey] replay lookup skipped: {exc}')
+        return None
 
 
 def anchors_prompt_block(anchors: dict) -> Optional[dict]:
     camp = (anchors or {}).get('attribution')
+    extra = {}
+    if (anchors or {}).get('catalog_block'):
+        extra['published_figures'] = anchors['catalog_block']
+    prior = (anchors or {}).get('prior_journey')
+    if prior and prior.get('stages'):
+        extra['prior_journey'] = {
+            'note': ("Crosswalk already published a Digital Journey on this "
+                     "subject. A new journey on an overlapping window must "
+                     "agree with it where the stages match and sit inside it "
+                     "for a sub-window."),
+            'window': prior.get('window'), 'stages': prior.get('stages'),
+            'end_point_total': prior.get('total')}
     if not camp:
-        return None
+        return extra or None
     return {
+        **extra,
         'note': ("Crosswalk already holds an Attribution IQ read on this "
                  "title. These are US counts over the whole campaign to "
                  "date. A journey for a sub-window must land AT OR BELOW "
@@ -1281,6 +1347,16 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                created_by: str = 'prometheus') -> dict:
     start, end = _dates(inputs)
     anchors = corpus_anchors(inputs)
+    # Same ask, same answer (2026-10-05): a stored journey that IS this
+    # ask replays with fresh run metadata instead of a cold rebuild.
+    replay = find_replayable_journey(inputs, anchors)
+    if replay:
+        meta = replay.setdefault('meta', {})
+        meta['created_by'] = created_by
+        meta['created_at'] = _dt.datetime.utcnow().isoformat() + 'Z'
+        meta['replayed_from'] = (anchors.get('prior_journey') or {}).get('source_key')
+        print(f"[journey] replayed prior journey for {inputs.get('subject')!r}")
+        return replay
     user_prompt = json.dumps({
         'corpus_anchors': anchors_prompt_block(anchors),
         'subject': inputs['subject'],

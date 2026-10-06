@@ -271,6 +271,17 @@ def register_profile_in_dashboard(
     except Exception as e:
         print(f"⚠️  category-norm refresh scheduling failed for {s3_key}: {e}")
 
+    # Corpus catalog (2026-10-05, Jenna): the profile's size facts join
+    # the shared record the moment it lands, so every later read or
+    # build on the subject sees them. Fail-safe, off the request path.
+    try:
+        import threading as _th
+        from migration import corpus_catalog as _cc
+        _th.Thread(target=_cc.index_profile_from_s3,
+                   args=(s3_key, display_name or ""), daemon=True).start()
+    except Exception as e:
+        print(f"⚠️  corpus catalog hook failed for {s3_key}: {e}")
+
     return {
         "s3_key": s3_key,
         "cache_added": cache_added,

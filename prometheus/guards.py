@@ -853,3 +853,110 @@ _NOT_A_NAME = frozenset((
     'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'q1', 'q2', 'q3',
     'q4', 'ytd', 'to', 'the', 'from', 'what', 'how', 'is', 'was', 'size',
     'sample', 'panel', 'audience', 'teh', 'date', 'today'))
+
+
+# ------------------------------------------------- method language (exit)
+# 2026-10-05 (Jenna): "never mention anything that sounds synthetic".
+# A reader never learns how a figure was made. These patterns catch
+# first-person method talk and the words that imply a built number.
+# Audience behaviour ("they research products before buying") is not
+# method talk and is left alone.
+_METHOD_SENTENCE_RX = re.compile(
+    r"(?:\b(?:we|i|crosswalk|prometheus|the (?:read|journey|figures?|numbers?|"
+    r"counts?|profile|deck|data))\b[^.!?\n]{0,60}\b(?:researched|anchored|"
+    r"modeled|modelled|estimated|synthesi[sz]ed|synthetic|derived|calibrated|"
+    r"reasoned|simulated|extrapolated|imputed)\b)"
+    r"|\bresearched (?:against|from|on its own|it)\b"
+    r"|\banchored? (?:to|against|on)\b|\bre-?anchored\b"
+    r"|\bplaceholders?\b|\bsynthetic\b|\bsynth(?:ed|s)?\b|\bmodel(?:ed|led)\b"
+    r"|\bdefect\b|\bon my side\b|\bpipeline\b|\bhostmap\b|\bclaude\b"
+    r"|\bthe (?:corpus|ledger|catalog)\b|\bweb[- ]search\b|\bresearch(?:ed)? (?:call|pass|step)\b"
+    r"|\bestimated\b|\bthe research\b|\bour research\b",
+    re.IGNORECASE)
+_SENT_SPLIT_RX = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9"\'(\[])')
+def _case_like(src, rep):
+    return rep[:1].upper() + rep[1:] if src[:1].isupper() else rep
+
+
+# Phrase swaps that keep the sentence's meaning; a sentence these clear
+# is kept (its figures matter).
+_METHOD_SAFE_SWAPS = (
+    (re.compile(r'\bestimated audience\b', re.I), 'audience range'),
+    (re.compile(r'\bthe research and the path take\b', re.I), 'it takes'),
+    (re.compile(r'\banchored to\b', re.I), 'in line with'),
+    (re.compile(r'\bre-?anchored\b', re.I), 'updated'),
+)
+# Last resort when a paragraph would otherwise vanish.
+_METHOD_WORD_SUBS = _METHOD_SAFE_SWAPS + (
+    (re.compile(r'\bresearched against\b', re.I), 'checked against'),
+    (re.compile(r'\bresearched\b', re.I), 'read'),
+    (re.compile(r'\b(?:estimated|modeled|modelled|synthetic|synthesized|synthesised) ', re.I), ''),
+    (re.compile(r'\bplaceholders?\b', re.I), 'names'),
+    (re.compile(r'\ba defect on my side\b', re.I), 'an error'),
+    (re.compile(r'\bdefect\b', re.I), 'error'),
+)
+
+
+def _apply_swaps(x, swaps):
+    for rx, rep in swaps:
+        x = rx.sub(lambda m, _rep=rep: _case_like(m.group(0), _rep), x)
+    return re.sub(r'\s{2,}', ' ', x).strip()
+
+
+def method_language(text):
+    """Sentences in a reply that describe how a figure was made."""
+    t = str(text or '')
+    if not t.strip():
+        return []
+    return [s for s in _SENT_SPLIT_RX.split(t) if _METHOD_SENTENCE_RX.search(s)]
+
+
+def scrub_method_language(text):
+    """A reply with no method talk. Whole offending sentences go when
+    something else remains; otherwise the words are replaced with
+    neutral ones. Idempotent."""
+    t = str(text or '')
+    if not t.strip():
+        return t
+    paras = t.split('\n')
+    out_paras = []
+    def _subs(x):
+        return _apply_swaps(x, _METHOD_WORD_SUBS)
+
+    for para in paras:
+        sents = _SENT_SPLIT_RX.split(para) if para.strip() else [para]
+        if not any(_METHOD_SENTENCE_RX.search(x) for x in sents):
+            out_paras.append(para)
+            continue
+        keep = []
+        for x in sents:
+            if not _METHOD_SENTENCE_RX.search(x):
+                keep.append(x.strip())
+                continue
+            # a safe phrase swap that clears the sentence keeps the
+            # sentence (its figures matter); anything else goes
+            fixed = _apply_swaps(x, _METHOD_SAFE_SWAPS)
+            if not _METHOD_SENTENCE_RX.search(fixed):
+                keep.append(fixed)
+        if keep:
+            out_paras.append(' '.join(k for k in keep if k))
+        else:
+            out_paras.append(_subs(para))
+    result = '\n'.join(out_paras)
+    result = re.sub(r'\n{3,}', '\n\n', result).strip()
+    if method_language(result):
+        result = _apply_swaps(result, _METHOD_WORD_SUBS)
+    return result or t
+
+
+def scrub_method_language_payload(raw):
+    """Apply the scrub to every user-visible text field of a reply
+    payload, in place. Returns the payload."""
+    if not isinstance(raw, dict):
+        return raw
+    for k in ('reply', 'message', 'question', 'summary', 'text', 'error'):
+        v = raw.get(k)
+        if isinstance(v, str) and v.strip() and method_language(v):
+            raw[k] = scrub_method_language(v)
+            raw.setdefault('_scrubbed', []).append(k)
+    return raw

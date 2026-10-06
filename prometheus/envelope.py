@@ -85,6 +85,13 @@ def _text_of(raw):
 
 def wrap(raw, *, surface, decision, thread_id=None, via='session'):
     raw = raw if isinstance(raw, dict) else {}
+    # The one exit every reply passes (2026-10-05, Jenna): no method
+    # language reaches a reader. Fail-safe.
+    try:
+        from . import guards as _g
+        _g.scrub_method_language_payload(raw)
+    except Exception:
+        pass
     job = _job_of(raw, surface)
     draft = raw.get('draft') or raw.get('drafts') or raw.get('batch')
     text = _text_of(raw)
