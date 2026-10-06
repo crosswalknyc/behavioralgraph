@@ -157458,6 +157458,34 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             } catch (_e) { /* fall through to heuristic */ }
 
             if (!Array.isArray(rawLocs) || rawLocs.length === 0) return false;
+            // A US DMA list is a US profile (2026-10-06, Jenna: the 2026
+            // Florida Gubernatorial Voters and Iowa 1st Congressional
+            // District Voters files carried only in-state DMAs, read as
+            // foreign on the New York / Los Angeles anchor alone, and lost
+            // their Gen Pop index on every behavioral card). Any location
+            // that matches the loaded US Gen Pop LOCATION baseline (or the
+            // bundled US DMA table) makes the profile US; so does a
+            // majority of rows ending in a US state code.
+            const _normLoc = function(s) {
+                return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            };
+            let usDmas = null;
+            try {
+                const gpLocs = (genPopBaselineData && (genPopBaselineData.rawLocations || genPopBaselineData.locations)) || [];
+                if (Array.isArray(gpLocs) && gpLocs.length) {
+                    usDmas = new Set(gpLocs.map(function(l) { return _normLoc(l && l.name); }).filter(Boolean));
+                }
+            } catch (_e) { usDmas = null; }
+            if (!usDmas || usDmas.size === 0) {
+                try { usDmas = new Set(Object.keys(GENPOP_DMA).map(_normLoc)); } catch (_e) { usDmas = new Set(); }
+            }
+            const dmaMatches = rawLocs.filter(function(l) { return usDmas.has(_normLoc(l && l.name)); }).length;
+            if (dmaMatches > 0) return false;
+            const _US_STATE_TAIL = /\b(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)$/i;
+            const stateTails = rawLocs.filter(function(l) {
+                return _US_STATE_TAIL.test(String(l && l.name != null ? l.name : '').trim());
+            }).length;
+            if (stateTails >= Math.ceil(rawLocs.length / 2)) return false;
             const hasUsAnchor = rawLocs.some(function(l) {
                 const n = (l && l.name != null ? String(l.name) : '').toLowerCase();
                 return n.includes('new york') || n.includes('los angeles');
