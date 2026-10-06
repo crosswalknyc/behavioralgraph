@@ -207,9 +207,10 @@ Rules that do not move:
 - Each clickstream step carries URLs for THAT step only. A creator
   feed step carries Instagram / TikTok / YouTube creator pages. An
   editorial step carries review and article pages. A ticketing step
-  carries Fandango / AMC / Regal / Cinemark / Atom. A search step
-  carries typed search. Never paste the same URL list onto every
-  step. Share-of-step percents must differ across steps.
+  carries real Fandango / AMC / Regal / Cinemark / Atom title pages
+  for this film, never a /search path. A search step carries typed
+  search. Never paste the same URL list onto every step.
+  Share-of-step percents must differ across steps.
 - LOOK AT WHAT WE ALREADY HOLD BEFORE BUILDING. If corpus_anchors
   lists tracked asset URLs (creator posts, YouTube videos, editorial
   articles from Attribution IQ), the exposure / "saw tracked campaign

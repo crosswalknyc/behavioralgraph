@@ -214,81 +214,445 @@ def _spine_steps(spine: list[dict]) -> list[dict]:
     return rows
 
 
+def researched_catalog(subject: str, platform: str = ''
+                        ) -> dict:
+    """Per-family real public pages. Same method as Music to Long Form:
+    official videos, title pages, accounts, documented press. Never
+    invent a theater search path."""
+    s = (subject or '').lower()
+    empty = {k: [] for k in (
+        'tracked', 'video', 'creator', 'editorial', 'tickets',
+        'title', 'amazon', 'netflix', 'shop', 'search')}
+    if 'influencer project' in s:
+        video = [
+            ('https://www.youtube.com/watch?v=q5DIxirBMx4',
+             'Official trailer', 'video'),
+            ('https://www.tiktok.com/@the.influencer.project/video/7672835530790358302',
+             'Official TikTok video', 'creator_post'),
+            ('https://dailydead.com/the-influencer-project-watch-an-exclusive-preview-of-the-new-found-footage-horror-film/',
+             'Exclusive preview clip', 'video'),
+            ('https://sea.ign.com/the-influencer-project/249731/the-influencer-project-exclusive-clip',
+             'Exclusive clip page', 'video'),
+            ('https://www.dreadcentral.com/trailer/584662/the-influencer-project-trailer-invites-you-into-the-terror-of-being-an-influencer/',
+             'Trailer write-up', 'video'),
+            ('https://www.scifinow.co.uk/news/the-influencer-project-trailer/',
+             'Trailer page', 'video'),
+            ('https://www.movievine.com/movies/the-influencer-project-horror-film-stars-chiara-king-trailer-and-release-date/',
+             'Trailer and release-date page', 'video'),
+        ]
+        creator = [
+            ('https://www.tiktok.com/@the.influencer.project',
+             'Official title account', 'creator'),
+            ('https://www.instagram.com/the.influencer.project/',
+             'Official Instagram', 'creator'),
+            ('https://www.instagram.com/p/Db_pWmQyLzR/',
+             'Official Instagram post', 'creator_post'),
+            ('https://www.instagram.com/p/Db6fWgFDQQ5/',
+             'Official Instagram post', 'creator_post'),
+            ('https://www.tiktok.com/@cvnela',
+             'Tracked creator', 'creator'),
+            ('https://www.tiktok.com/@brandontalks',
+             'Tracked creator', 'creator'),
+            ('https://www.tiktok.com/@ih8meccavellii',
+             'Tracked creator', 'creator'),
+            ('https://www.tiktok.com/@fandango',
+             'Fandango account on this title', 'creator'),
+            ('https://www.tiktok.com/@amctheatres',
+             'AMC account on this title', 'creator'),
+            ('https://www.tiktok.com/@sinfulcutsofficial',
+             'Tracked creator', 'creator'),
+            ('https://www.tiktok.com/@jiggysawgirl',
+             'Tracked creator', 'creator'),
+            ('https://www.tiktok.com/@trickortravis',
+             'Tracked creator', 'creator'),
+        ]
+        editorial = [
+            ('https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html',
+             'New York Times review', 'editorial'),
+            ('https://screenrant.com/the-influencer-project-movie-review/',
+             'ScreenRant review', 'editorial'),
+            ('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
+             'Variety review', 'editorial'),
+            ('https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026',
+             'RogerEbert review', 'editorial'),
+            ('https://www.ign.com/articles/influencer-project-blair-witch-creators-interview',
+             'IGN interview', 'editorial'),
+            ('https://www.dreadcentral.com/reviews/590229/the-influencer-project-review-a-dull-shallow-slog/',
+             'Dread Central review', 'editorial'),
+            ('https://www.flickeringmyth.com/movie-review-the-influencer-project-2026/',
+             'Flickering Myth review', 'editorial'),
+            ('https://www.yahoo.com/entertainment/movies/articles/influencer-project-review-found-footage-172929371.html',
+             'Yahoo review', 'editorial'),
+        ]
+        tickets = [
+            ('https://www.fandango.com/the-influencer-project-2026-246853/movie-overview',
+             'Fandango title page', 'tickets'),
+            ('https://www.cinemark.com/movies/the-influencer-project',
+             'Cinemark title page', 'tickets'),
+            ('https://www.harkins.com/movies/the-influencer-project/2026-10-04',
+             'Harkins title page', 'tickets'),
+            ('https://gatewayfilmcenter.org/movies/the-influencer-project-2026/',
+             'Gateway Film Center title page', 'tickets'),
+            ('https://www.brendentheatres.com/lasvegas/movie/the-influencer-project/',
+             'Brenden Theatres title page', 'tickets'),
+            ('https://www.theinfluencerprojectmovie.com/',
+             'Official title page', 'tickets'),
+            ('https://www.horrorsociety.com/2026/09/17/tickets-now-on-sale-for-found-footage-horror-the-influencer-project-ahead-of-october-2-release/',
+             'Tickets-on-sale page', 'tickets'),
+        ]
+        title = [
+            ('https://www.theinfluencerprojectmovie.com/',
+             'Official title page', 'title'),
+            ('https://www.themoviedb.org/movie/1654086-the-influencer-project',
+             'Title page', 'title'),
+            ('https://www.rottentomatoes.com/m/the_influencer_project',
+             'Title score page', 'title'),
+            ('https://www.imdb.com/news/ni66038349/?ref_=nmnw_art_perm',
+             'IMDb stills page', 'title'),
+            ('https://www.imdb.com/name/nm10434819/',
+             'Lead talent page', 'title'),
+            ('https://www.rottentomatoes.com/m/the_influencer_project/reviews',
+             'Title reviews page', 'title'),
+        ]
+        search = [
+            ('https://www.google.com/search?q=The+Influencer+Project',
+             'Typed search for the title', 'search'),
+            ('https://www.theinfluencerprojectmovie.com/',
+             'Official title page in the results', 'title'),
+            ('https://www.fandango.com/the-influencer-project-2026-246853/movie-overview',
+             'Fandango title page in the results', 'tickets'),
+            ('https://www.youtube.com/watch?v=q5DIxirBMx4',
+             'Official trailer in the results', 'video'),
+            ('https://www.rottentomatoes.com/m/the_influencer_project',
+             'Title score page in the results', 'title'),
+            ('https://www.themoviedb.org/movie/1654086-the-influencer-project',
+             'Title page in the results', 'title'),
+        ]
+        tracked = [
+            video[0], video[1], creator[2],
+            editorial[0], editorial[1], editorial[2],
+        ]
+        empty.update(
+            tracked=tracked, video=video, creator=creator,
+            editorial=editorial, tickets=tickets, title=title,
+            search=search)
+        return empty
+    if 'young sheldon' in s:
+        video = [
+            ('https://www.youtube.com/watch?v=FStMMcj-RiA',
+             'CBS official trailer', 'video'),
+            ('https://www.youtube.com/@YoungSheldonCBS',
+             'Official YouTube', 'video'),
+            ('https://www.youtube.com/watch?v=P941IclyRyE',
+             'CBS sneak peek', 'video'),
+            ('https://www.cbs.com/shows/young-sheldon/',
+             'Official show page', 'title'),
+            ('https://www.paramountplus.com/shows/young-sheldon/',
+             'Paramount+ title page', 'title'),
+            ('https://www.imdb.com/title/tt6226232/',
+             'IMDb title page', 'title'),
+        ]
+        creator = [
+            ('https://www.instagram.com/youngsheldoncbs/',
+             'Official Instagram', 'creator'),
+            ('https://www.youtube.com/@YoungSheldonCBS',
+             'Official YouTube', 'creator'),
+            ('https://www.facebook.com/YoungSheldonCBS',
+             'Official Facebook', 'creator'),
+            ('https://www.youtube.com/watch?v=FStMMcj-RiA',
+             'CBS official trailer', 'video'),
+            ('https://www.cbs.com/shows/young-sheldon/',
+             'Official show page', 'title'),
+            ('https://www.imdb.com/title/tt6226232/',
+             'IMDb title page', 'title'),
+        ]
+        amazon = [
+            ('https://www.amazon.com/s?k=Young+Sheldon',
+             'Amazon listing search', 'amazon'),
+            ('https://www.amazon.com/gp/video/search?phrase=Young+Sheldon',
+             'Prime Video title search', 'amazon'),
+            ('https://www.cbs.com/shows/young-sheldon/',
+             'Official show page next to the buy page', 'title'),
+            ('https://www.imdb.com/title/tt6226232/',
+             'IMDb title page', 'title'),
+            ('https://www.paramountplus.com/shows/young-sheldon/',
+             'Paramount+ title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Young_Sheldon',
+             'Title encyclopedia page', 'title'),
+        ]
+        title = [
+            ('https://www.imdb.com/title/tt6226232/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Young_Sheldon',
+             'Title encyclopedia page', 'title'),
+            ('https://www.cbs.com/shows/young-sheldon/',
+             'Official show page', 'title'),
+            ('https://www.rottentomatoes.com/tv/young_sheldon',
+             'Title score page', 'title'),
+            ('https://www.paramountplus.com/shows/young-sheldon/',
+             'Paramount+ title page', 'title'),
+            ('https://www.youtube.com/watch?v=FStMMcj-RiA',
+             'CBS official trailer', 'video'),
+        ]
+        search = [
+            ('https://www.google.com/search?q=Young+Sheldon',
+             'Typed search for the title', 'search'),
+            ('https://www.imdb.com/title/tt6226232/',
+             'IMDb title page in the results', 'title'),
+            ('https://www.cbs.com/shows/young-sheldon/',
+             'Official show page in the results', 'title'),
+            ('https://www.youtube.com/watch?v=FStMMcj-RiA',
+             'Official trailer in the results', 'video'),
+            ('https://en.wikipedia.org/wiki/Young_Sheldon',
+             'Title encyclopedia page in the results', 'title'),
+            ('https://www.paramountplus.com/shows/young-sheldon/',
+             'Paramount+ title page in the results', 'title'),
+        ]
+        empty.update(video=video, creator=creator, amazon=amazon,
+                     title=title, search=search, tracked=video[:3])
+        return empty
+    if 'dexter' in s:
+        video = [
+            ('https://www.youtube.com/watch?v=8SOnPsZbALQ',
+             'Official Cartoon Network clip', 'video'),
+            ('https://www.youtube.com/channel/UCS3qiNJYHFvXjU3lJKQtYGQ',
+             'Official Dexter Laboratory YouTube', 'video'),
+            ('https://www.youtube.com/@cartoonnetwork',
+             'Cartoon Network YouTube', 'video'),
+            ('https://www.imdb.com/title/tt0115157/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Dexter%27s_Laboratory',
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/dexter_s_laboratory',
+             'Title score page', 'title'),
+        ]
+        creator = [
+            ('https://www.youtube.com/@cartoonnetwork',
+             'Cartoon Network YouTube', 'creator'),
+            ('https://www.instagram.com/cartoonnetwork/',
+             'Cartoon Network Instagram', 'creator'),
+            ('https://www.youtube.com/channel/UCS3qiNJYHFvXjU3lJKQtYGQ',
+             'Official Dexter Laboratory YouTube', 'creator'),
+            ('https://www.youtube.com/watch?v=8SOnPsZbALQ',
+             'Official Cartoon Network clip', 'video'),
+            ('https://www.imdb.com/title/tt0115157/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Dexter%27s_Laboratory',
+             'Title encyclopedia page', 'title'),
+        ]
+        amazon = [
+            ("https://www.amazon.com/s?k=Dexter%27s+Laboratory",
+             'Amazon listing search', 'amazon'),
+            ("https://www.amazon.com/gp/video/search?phrase=Dexter%27s+Laboratory",
+             'Prime Video title search', 'amazon'),
+            ('https://www.imdb.com/title/tt0115157/',
+             'IMDb title page', 'title'),
+            ("https://en.wikipedia.org/wiki/Dexter%27s_Laboratory",
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/dexter_s_laboratory',
+             'Title score page', 'title'),
+            ('https://screenrant.com/db/tv-show/dexter-s-laboratory/',
+             'Title page', 'title'),
+        ]
+        title = [
+            ('https://www.imdb.com/title/tt0115157/',
+             'IMDb title page', 'title'),
+            ("https://en.wikipedia.org/wiki/Dexter%27s_Laboratory",
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/dexter_s_laboratory',
+             'Title score page', 'title'),
+            ('https://screenrant.com/db/tv-show/dexter-s-laboratory/',
+             'Title page', 'title'),
+            ('https://www.youtube.com/watch?v=8SOnPsZbALQ',
+             'Official Cartoon Network clip', 'video'),
+            ('https://www.youtube.com/channel/UCS3qiNJYHFvXjU3lJKQtYGQ',
+             'Official Dexter Laboratory YouTube', 'video'),
+        ]
+        search = [
+            ("https://www.google.com/search?q=Dexter%27s+Laboratory",
+             'Typed search for the title', 'search'),
+            ('https://www.imdb.com/title/tt0115157/',
+             'IMDb title page in the results', 'title'),
+            ("https://en.wikipedia.org/wiki/Dexter%27s_Laboratory",
+             'Title encyclopedia page in the results', 'title'),
+            ('https://www.rottentomatoes.com/tv/dexter_s_laboratory',
+             'Title score page in the results', 'title'),
+            ('https://www.youtube.com/watch?v=8SOnPsZbALQ',
+             'Official clip in the results', 'video'),
+            ('https://screenrant.com/db/tv-show/dexter-s-laboratory/',
+             'Title page in the results', 'title'),
+        ]
+        empty.update(video=video, creator=creator, amazon=amazon,
+                     title=title, search=search, tracked=video[:3])
+        return empty
+    if 'gilmore girls' in s:
+        video = [
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page', 'video'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official Netflix trailer', 'video'),
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page', 'title'),
+            ('https://www.netflix.com/title/80109415',
+             'Netflix revival title page', 'netflix'),
+        ]
+        creator = [
+            ('https://www.instagram.com/gilmoregirls/',
+             'Official Instagram', 'creator'),
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page', 'netflix'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official Netflix trailer', 'video'),
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page', 'title'),
+        ]
+        netflix = [
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page', 'netflix'),
+            ('https://www.netflix.com/title/80109415',
+             'Netflix revival title page', 'netflix'),
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page', 'title'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official Netflix trailer', 'video'),
+        ]
+        amazon = [
+            ('https://www.amazon.com/s?k=Gilmore+Girls',
+             'Amazon listing search', 'amazon'),
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page', 'netflix'),
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page', 'title'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page', 'title'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official Netflix trailer', 'video'),
+        ]
+        title = [
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page', 'title'),
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page', 'title'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page', 'title'),
+            ('https://www.netflix.com/title/80109415',
+             'Netflix revival title page', 'title'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official Netflix trailer', 'video'),
+        ]
+        search = [
+            ('https://www.google.com/search?q=Gilmore+Girls',
+             'Typed search for the title', 'search'),
+            ('https://www.netflix.com/title/70155618',
+             'Netflix title page in the results', 'netflix'),
+            ('https://www.imdb.com/title/tt0238784/',
+             'IMDb title page in the results', 'title'),
+            ('https://en.wikipedia.org/wiki/Gilmore_Girls',
+             'Title encyclopedia page in the results', 'title'),
+            ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
+             'Official trailer in the results', 'video'),
+            ('https://www.rottentomatoes.com/tv/gilmore_girls',
+             'Title score page in the results', 'title'),
+        ]
+        empty.update(video=video, creator=creator, netflix=netflix,
+                     amazon=amazon, title=title, search=search,
+                     tracked=video[:3])
+        return empty
+    if 'fragrance' in s or 'tiktok shop' in (platform or '').lower():
+        shop = [
+            ('https://www.sephora.com/shop/fragrance',
+             'Sephora fragrance aisle', 'shop'),
+            ('https://www.ulta.com/shop/fragrance',
+             'Ulta fragrance aisle', 'shop'),
+            ('https://www.tiktok.com/tag/fragrance',
+             'Fragrance tag on TikTok', 'shop'),
+            ('https://www.tiktok.com/tag/perfume',
+             'Perfume tag on TikTok', 'shop'),
+            ('https://www.sephora.com/shop/perfume',
+             'Sephora perfume aisle', 'shop'),
+            ('https://www.nordstrom.com/browse/beauty/fragrance',
+             'Nordstrom fragrance aisle', 'shop'),
+        ]
+        creator = [
+            ('https://www.tiktok.com/tag/fragrance',
+             'Fragrance tag', 'creator'),
+            ('https://www.tiktok.com/tag/perfume',
+             'Perfume tag', 'creator'),
+            ('https://www.tiktok.com/tag/luxuryfragrance',
+             'Luxury fragrance tag', 'creator'),
+            ('https://www.instagram.com/explore/tags/fragrance/',
+             'Fragrance tag on Instagram', 'creator'),
+            ('https://www.sephora.com/shop/fragrance',
+             'Sephora fragrance aisle', 'shop'),
+            ('https://www.ulta.com/shop/fragrance',
+             'Ulta fragrance aisle', 'shop'),
+        ]
+        search = [
+            ('https://www.google.com/search?q=luxury+fragrance',
+             'Typed search for the category', 'search'),
+            ('https://www.sephora.com/shop/fragrance',
+             'Sephora fragrance aisle in the results', 'shop'),
+            ('https://www.ulta.com/shop/fragrance',
+             'Ulta fragrance aisle in the results', 'shop'),
+            ('https://www.tiktok.com/tag/fragrance',
+             'Fragrance tag in the results', 'shop'),
+            ('https://www.nordstrom.com/browse/beauty/fragrance',
+             'Nordstrom fragrance aisle in the results', 'shop'),
+            ('https://www.tiktok.com/tag/perfume',
+             'Perfume tag in the results', 'shop'),
+        ]
+        empty.update(shop=shop, creator=creator, search=search,
+                     tracked=creator[:3])
+        return empty
+    return empty
+
+
 def researched_extras_for(subject: str, platform: str = ''
                            ) -> list[tuple[str, str]]:
-    """Title-specific public pages. Search homes and known coverage only."""
-    s = (subject or '').lower()
-    rows: list[tuple[str, str]] = []
-    if 'influencer project' in s:
-        rows = [
-            ('https://www.youtube.com/watch?v=q5DIxirBMx4',
-             'Official trailer'),
-            ('https://www.instagram.com/p/Db_pWmQyLzR/',
-             'Official Instagram post'),
-            ('https://www.instagram.com/p/Db6fWgFDQQ5/',
-             'Official Instagram post'),
-            ('https://www.tiktok.com/@the.influencer.project/video/7672835530790358302',
-             'Official TikTok video'),
-            ('https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html',
-             'New York Times review'),
-            ('https://screenrant.com/the-influencer-project-movie-review/',
-             'ScreenRant review'),
-            ('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
-             'Variety review'),
-            ('https://www.fandango.com/the-influencer-project-2026-246853/movie-overview',
-             'Fandango title page'),
-            ('https://www.cinemark.com/movies/the-influencer-project',
-             'Cinemark title page'),
-            ('https://www.harkins.com/movies/the-influencer-project/2026-10-04',
-             'Harkins title page'),
-            ('https://gatewayfilmcenter.org/movies/the-influencer-project-2026/',
-             'Gateway Film Center title page'),
-            ('https://www.theinfluencerprojectmovie.com/',
-             'Official title page'),
-        ]
-    elif 'young sheldon' in s:
-        rows = [
-            ('https://www.amazon.com/s?k=Young+Sheldon',
-             'Amazon listing search'),
-            ('https://www.amazon.com/gp/video/search?phrase=Young+Sheldon',
-             'Prime Video title search'),
-            ('https://www.youtube.com/results?search_query=Young+Sheldon+official+trailer',
-             'Official trailer search'),
-            ('https://www.imdb.com/find/?q=Young%20Sheldon',
-             'Title page search'),
-        ]
-    elif 'dexter' in s and ('lab' in s or 'laboratory' in s):
-        rows = [
-            ("https://www.amazon.com/s?k=Dexter%27s+Laboratory",
-             'Amazon listing search'),
-            ("https://www.amazon.com/gp/video/search?phrase=Dexter%27s+Laboratory",
-             'Prime Video title search'),
-            ("https://www.youtube.com/results?search_query=Dexter%27s+Laboratory+official+trailer",
-             'Official trailer search'),
-            ('https://www.imdb.com/find/?q=Dexter%27s%20Laboratory',
-             'Title page search'),
-        ]
-    elif 'gilmore girls' in s:
-        rows = [
-            ('https://www.amazon.com/s?k=Gilmore+Girls',
-             'Amazon listing search'),
-            ('https://www.netflix.com/search?q=Gilmore+Girls',
-             'Netflix title search'),
-            ('https://www.youtube.com/results?search_query=Gilmore+Girls+official+trailer',
-             'Official trailer search'),
-            ('https://www.imdb.com/find/?q=Gilmore%20Girls',
-             'Title page search'),
-        ]
-    elif 'fragrance' in s or 'tiktok shop' in (platform or '').lower():
-        rows = [
-            ('https://www.tiktok.com/search?q=luxury%20fragrance%20tiktok%20shop',
-             'TikTok Shop search'),
-            ('https://www.sephora.com/search?keyword=fragrance',
-             'Sephora fragrance search'),
-            ('https://www.google.com/search?q=luxury+fragrance+tiktok+shop',
-             'Typed search for the shop path'),
-        ]
-    return rows
+    """Flat union of the researched catalog. First why wins."""
+    seen = set()
+    out: list[tuple[str, str]] = []
+    for fam in ('tracked', 'video', 'creator', 'editorial', 'tickets',
+                'title', 'amazon', 'netflix', 'shop', 'search'):
+        for url, why, _kind in researched_catalog(subject, platform).get(fam, []):
+            key = url.rstrip('/').lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((url, why))
+    return out
+
+
+def catalog_js_entries(subject: str, platform: str = ''
+                       ) -> list[tuple[str, str, str]]:
+    """One [url, why, kind] per page for the dashboard extras map."""
+    seen = set()
+    out = []
+    for fam in ('tracked', 'video', 'creator', 'editorial', 'tickets',
+                'title', 'amazon', 'netflix', 'shop', 'search'):
+        for url, why, kind in researched_catalog(subject, platform).get(fam, []):
+            key = url.rstrip('/').lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((url, why, kind))
+    return out
 
 
 _HINT_BANDS = (
@@ -300,9 +664,10 @@ _HINT_BANDS = (
 )
 
 
-def step_family(surface: str, action: str, step_id: str = '') -> str:
+def step_family(surface: str, action: str, step_id: str = '',
+                subject: str = '', platform: str = '') -> str:
     """Which URL set this step is allowed to carry."""
-    blob = f'{surface} {action} {step_id}'.lower()
+    blob = f'{surface} {action} {step_id} {subject} {platform}'.lower()
     if any(x in blob for x in (
             'tracked campaign', 'saw tracked', 'exposed to',
             'campaign content')):
@@ -322,9 +687,17 @@ def step_family(surface: str, action: str, step_id: str = '') -> str:
         return 'tickets'
     if any(x in act for x in ('ticket', 'showtimes')):
         return 'tickets'
-    if any(x in blob for x in ('shop', 'sephora', 'bag', 'cart', 'paid a',
-                               'paid the', 'paid for')):
+    if any(x in blob for x in (
+            'tiktok shop', 'sephora', 'ulta', 'shop card', 'to bag',
+            'fragrance', 'perfume', 'bottle')):
         return 'shop'
+    if 'paid' in act or 'paid' in blob:
+        if any(x in blob for x in ('amazon', 'pvod', 'episode', 'prime')):
+            return 'amazon'
+        if 'netflix' in blob:
+            return 'netflix'
+        if any(x in blob for x in ('shop', 'fragrance', 'bottle')):
+            return 'shop'
     if editorial:
         return 'editorial'
     if creator:
@@ -333,6 +706,8 @@ def step_family(surface: str, action: str, step_id: str = '') -> str:
         return 'video'
     if any(x in blob for x in ('amazon', 'prime', 'pvod', 'buy page')):
         return 'amazon'
+    if 'netflix' in blob:
+        return 'netflix'
     if any(x in blob for x in ('title page', 'imdb')):
         return 'title'
     if any(x in blob for x in ('search', 'google', 'typed')):
@@ -534,199 +909,119 @@ def _apply_hints(urls: list[tuple[str, str, float]], step_i: int
     return out
 
 
+def looks_invented_theater(urls: list) -> bool:
+    blob = ' '.join(
+        (u[0] if isinstance(u, (list, tuple)) else str(u.get('url') or ''))
+        for u in (urls or [])).lower()
+    return any(x in blob for x in (
+        'cinemark.com/search', 'amctheatres.com/search',
+        'fandango.com/search', 'regmovies.com/search',
+        'atomtickets.com/search'))
+
+
 def urls_for_step(subject: str, platform: str, surface: str = '',
                   action: str = '', step_i: int = 1,
                   tracked: Optional[list] = None
                   ) -> list[tuple[str, str, float]]:
     """6 to 10 public pages that belong to THIS step only.
 
-    When Attribution IQ already tracks this subject, those URLs win
-    on exposure / creator / editorial / video steps.
+    Music to Long Form method: researched destination pages first.
+    Attribution IQ tracked URLs win on exposure / creator / editorial
+    / video. Invented theater search paths never ship.
     """
-    family = step_family(surface, action)
-    tracked_rows = pick_tracked_urls(tracked or [], family, step_i)
-    if not tracked_rows and family in (
-            'tracked', 'creator', 'editorial', 'creator_editorial',
-            'video', 'tickets'):
-        extras = researched_extras_for(subject, platform)
-        if extras and 'influencer project' in (subject or '').lower():
-            tracked_rows = pick_tracked_urls(
-                [{'url': u, 'title': w} for u, w in extras], family, step_i)
-    if tracked_rows:
-        if len(tracked_rows) < MIN_URLS:
-            have = {u[0].rstrip('/').lower() for u in tracked_rows}
-            named_ok = have | {
-                u[0].rstrip('/').lower()
+    family = step_family(surface, action, subject=subject, platform=platform)
+    catalog = researched_catalog(subject, platform)
+    named_ok = {u[0].rstrip('/').lower()
                 for u in researched_extras_for(subject, platform)}
-            for url, why in researched_extras_for(subject, platform):
-                key = url.rstrip('/').lower()
-                if key in have:
-                    continue
-                if not is_safe_url(url, allow_named_clip=key in named_ok):
-                    continue
-                if looks_search_not_asset([(url, why, 12.0)]):
-                    continue
-                tracked_rows.append((url, why, 12.0))
-                have.add(key)
-                if len(tracked_rows) >= MIN_URLS:
-                    break
-        return _apply_hints(tracked_rows[:MAX_URLS], step_i)
-    subj = str(subject or '').strip() or 'the title'
-    q = _q(subj)
-    tag = re.sub(r'[^a-z0-9]', '', subj.lower())[:40] or 'title'
-    s = subj.lower()
-    rows: list[tuple[str, str]] = []
-
-    named_ok = {u[0].rstrip('/').lower() for u in researched_extras_for(subject, platform)}
     named_ok |= {r['url'].rstrip('/').lower()
                  for r in normalize_tracked_assets(tracked or [])}
+    rows: list[tuple[str, str]] = []
 
     def add(url: str, why: str) -> None:
+        if looks_invented_theater([(url, why)]):
+            return
         allow = url.rstrip('/').lower() in named_ok
         if is_safe_url(url, allow_named_clip=allow) and all(
                 u[0].rstrip('/').lower() != url.rstrip('/').lower()
                 for u in rows):
             rows.append((url, why))
 
-    if family in ('creator', 'creator_editorial'):
-        add(f'https://www.instagram.com/explore/search/keyword/?q={q}',
-            'Creator feed search for this title')
-        add(f'https://www.tiktok.com/search?q={q}',
-            'Short-form feed search')
-        add(f'https://www.tiktok.com/tag/{tag}',
-            'Title tag on short-form')
-        add(f'https://www.instagram.com/explore/tags/{tag}/',
-            'Title tag on Instagram')
-        add(f'https://www.youtube.com/results?search_query={q}',
-            'Creator and clip results')
-        add(f'https://www.google.com/search?q={_q(subj + " instagram")}',
-            'Typed the title plus Instagram')
-    if family in ('editorial', 'creator_editorial'):
-        add(f'https://www.google.com/search?q={_q(subj + " review")}',
-            'Typed search for reviews of this title')
-        if 'influencer project' in s:
-            add('https://screenrant.com/the-influencer-project-movie-review/',
-                'Review page on this title')
-            add('https://www.rogerebert.com/reviews/the-influencer-project-shudder-movie-review-2026',
-                'Review page on this title')
-            add('https://variety.com/2026/film/reviews/the-influencer-project-review-1236894453/',
-                'Review page on this title')
-            add('https://www.nytimes.com/2026/10/01/movies/the-influencer-project-review.html',
-                'Review page on this title')
-            add('https://www.imdb.com/news/ni66038349/?ref_=nmnw_art_perm',
-                'Editorial stills page on this title')
-        else:
-            add(f'https://www.imdb.com/find/?q={q}',
-                'Title page used as an editorial hop')
-            add(f'https://www.google.com/search?q={_q(subj + " variety review")}',
-                'Trade review search')
-    if family == 'tickets':
-        for url, why in researched_extras_for(subject, platform):
-            if classify_tracked_url(url) == 'tickets':
+    for url, why, _hint in pick_tracked_urls(tracked or [], family, step_i):
+        add(url, why)
+    want_fams = {
+        'tracked': ('tracked', 'video', 'creator', 'editorial'),
+        'creator_editorial': ('creator', 'editorial', 'video'),
+        'creator': ('creator',),
+        'editorial': ('editorial',),
+        'video': ('video',),
+        'tickets': ('tickets',),
+        'title': ('title',),
+        'search': ('search',),
+        'amazon': ('amazon',),
+        'netflix': ('netflix',),
+        'shop': ('shop',),
+    }.get(family, (family,))
+    for fam in want_fams:
+        for url, why, _kind in catalog.get(fam, []):
+            add(url, why)
+    if family == 'tracked':
+        return _apply_hints(
+            [(u, w, 12.0) for u, w in rows[:TOP_TRACKED_URLS]], step_i)
+    fill_from = {
+        'creator': ('video', 'title'),
+        'editorial': ('title',),
+        'video': ('creator', 'title'),
+        'tickets': ('title',),
+        'title': ('tickets', 'video'),
+        'search': ('title', 'tickets', 'video', 'amazon', 'netflix'),
+        'amazon': ('title', 'video'),
+        'netflix': ('title', 'video'),
+        'shop': ('creator',),
+        'creator_editorial': ('video', 'title'),
+    }.get(family, ('title',))
+    if len(rows) < MIN_URLS:
+        for fam in fill_from:
+            for url, why, _kind in catalog.get(fam, []):
                 add(url, why)
-        if len(rows) < MIN_URLS:
-            add(f'https://www.fandango.com/',
-                'Fandango home')
-            add(f'https://www.cinemark.com/',
-                'Cinemark home')
-            add(f'https://www.amctheatres.com/',
-                'AMC home')
-            add(f'https://www.regmovies.com/',
-                'Regal home')
-            add(f'https://www.atomtickets.com/',
-                'Atom home')
-            add(f'https://www.google.com/search?q={_q(subj + " tickets")}',
-                'Showtimes search')
-    if family == 'video':
-        add(f'https://www.youtube.com/results?search_query={q}',
-            'Video results for the title')
-        add(f'https://www.youtube.com/results?search_query={_q(subj + " official trailer")}',
-            'Official trailer search')
-        add(f'https://www.google.com/search?q={_q(subj + " trailer")}',
-            'Typed trailer search')
-        add(f'https://www.tiktok.com/search?q={_q(subj + " clip")}',
-            'Short clip next to the trailer')
-        add(f'https://www.youtube.com/results?search_query={_q(subj + " scene")}',
-            'Scene clips on YouTube')
-        add(f'https://www.google.com/search?q={_q(subj + " watch online")}',
-            'Typed watch search')
-    if family == 'amazon':
-        add(f'https://www.amazon.com/s?k={q}',
-            'Amazon listing search')
-        add(f'https://www.amazon.com/gp/video/search?phrase={q}',
-            'Prime Video title search')
-        add(f'https://www.google.com/search?q={_q(subj + " amazon")}',
-            'Typed Amazon search')
-        add(f'https://www.imdb.com/find/?q={q}',
-            'Title page next to the buy page')
-        add(f'https://www.amazon.com/s?k={_q(subj + " season")}',
-            'Amazon season listing')
-        add(f'https://www.google.com/search?q={_q("buy " + subj + " amazon")}',
-            'Typed buy-on-Amazon search')
-    if family == 'netflix':
-        add(f'https://www.netflix.com/search?q={q}',
-            'Netflix title search')
-        add(f'https://www.google.com/search?q={_q(subj + " netflix")}',
-            'Typed Netflix search')
-        add(f'https://www.justwatch.com/us/search?q={q}',
-            'Where to watch this title')
-        add(f'https://www.imdb.com/find/?q={q}',
-            'Title page next to Netflix')
-        add(f'https://www.google.com/search?q={_q("watch " + subj + " netflix")}',
-            'Typed watch-on-Netflix search')
-        add(f'https://www.youtube.com/results?search_query={_q(subj + " netflix trailer")}',
-            'Netflix trailer search')
-    if family == 'shop':
-        add(f'https://www.tiktok.com/search?q={_q(subj + " shop")}',
-            'TikTok Shop search')
-        add('https://www.sephora.com/search?keyword=fragrance',
-            'Retailer fragrance search')
-        add(f'https://www.google.com/search?q={_q(subj + " tiktok shop")}',
-            'Typed search for the shop path')
-        add('https://www.ulta.com/search?search=fragrance',
-            'Second retailer search')
-        add(f'https://www.google.com/search?q={_q(subj + " sephora")}',
-            'Typed retailer search')
-        add(f'https://www.tiktok.com/tag/{tag}',
-            'Shop tag on short-form')
-    if family == 'title':
-        add(f'https://www.imdb.com/find/?q={q}',
-            'Title page search')
-        add(f'https://www.google.com/search?q={q}',
-            'Typed the title')
-        add(f'https://www.justwatch.com/us/search?q={q}',
-            'Where-to-watch title page')
-        add(f'https://www.google.com/search?q={_q(subj + " cast")}',
-            'Typed cast search')
-        add(f'https://en.wikipedia.org/w/index.php?search={q}',
-            'Title encyclopedia page')
-        add(f'https://www.rottentomatoes.com/search?search={q}',
-            'Title score page')
-    if family == 'search':
+                if len(rows) >= MIN_URLS:
+                    break
+            if len(rows) >= MIN_URLS:
+                break
+    has_catalog = any(catalog.values())
+    if not has_catalog and len(rows) < MIN_URLS:
+        subj = str(subject or '').strip() or 'the title'
+        q = _q(subj)
         add(f'https://www.google.com/search?q={q}',
             'Typed search for the subject')
-        add(f'https://www.google.com/search?q={_q((subj + " " + (platform or "")).strip())}',
-            'Subject plus the end-step platform')
-        add(f'https://www.justwatch.com/us/search?q={q}',
-            'Where-to-watch guide')
-        add(f'https://www.google.com/search?q={_q(subj + " watch")}',
-            'Typed watch search')
         add(f'https://www.youtube.com/results?search_query={q}',
-            'Video results from the same typed name')
+            'Video results for the subject')
+        add(f'https://www.tiktok.com/search?q={q}',
+            'Short-form search')
+        add(f'https://www.instagram.com/explore/search/keyword/?q={q}',
+            'Instagram name search')
+        add(f'https://www.reddit.com/search/?q={q}',
+            'Forum search for the same name')
         add(f'https://www.bing.com/search?q={q}',
             'Second typed search')
-    n = 0
-    while len(rows) < MIN_URLS and n < 6:
-        add(f'https://www.google.com/search?q={_q(subj + " " + family)}',
-            'More pages on this step')
-        n += 1
-        if n > 1:
-            add(f'https://www.google.com/search?q={_q(subj + " " + family + " " + str(n))}',
+        if family == 'amazon':
+            add(f'https://www.amazon.com/s?k={q}', 'Amazon listing search')
+            add(f'https://www.amazon.com/gp/video/search?phrase={q}',
+                'Prime Video title search')
+        if family == 'netflix':
+            add(f'https://www.netflix.com/search?q={q}', 'Netflix title search')
+        if family == 'title':
+            add(f'https://www.imdb.com/find/?q={q}', 'Title page search')
+        n = 0
+        while len(rows) < MIN_URLS and n < 6:
+            add(f'https://www.google.com/search?q={_q(subj + " " + family + " " + str(n + 1))}',
                 'More pages on this step')
-
+            n += 1
+    elif family == 'search' and len(rows) < MIN_URLS:
+        add(f'https://www.google.com/search?q={_q(subject)}',
+            'Typed search for the subject')
     hinted = [(u, w, 12.0) for u, w in rows[:MAX_URLS]]
     rot = (max(step_i, 1) - 1) % max(len(hinted), 1)
-    if hinted and rot:
+    if hinted and rot and family != 'tracked':
         hinted = hinted[rot:] + hinted[:rot]
     return _apply_hints(hinted[:MAX_URLS], step_i)
 
@@ -738,7 +1033,8 @@ def _pad_urls(urls: list[tuple[str, str, float]],
               ) -> list[tuple[str, str, float]]:
     family_rows = urls_for_step(
         subject, platform, surface, action, step_i, tracked=tracked)
-    if looks_generic_bag(urls) or looks_search_not_asset(urls) or not urls:
+    if (looks_generic_bag(urls) or looks_search_not_asset(urls)
+            or looks_invented_theater(urls) or not urls):
         return family_rows
     if len(urls) >= MIN_URLS:
         return _apply_hints(urls[:MAX_URLS], step_i)
