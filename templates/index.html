@@ -18890,6 +18890,18 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             letter-spacing: 0.08em !important;
         }
 
+        /* ---- 11m. Digital Journey IQ: promote the page title ----------------
+           The "DIGITAL JOURNEY IQ" eyebrow (first inline-styled div in the
+           topbar title cluster) is only 0.7rem/muted. On phones enlarge +
+           brighten it so it reads as the page title above the date range.
+           Mobile only. */
+        #journeyIQView .jiq-topbar > div:first-child > div:first-child {
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.04em !important;
+            color: var(--text-primary) !important;
+        }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
