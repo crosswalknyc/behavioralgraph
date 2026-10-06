@@ -120,9 +120,14 @@ round numbers, no two identical rates. Return STRICT JSON only:
      "kind": "partition"|"overlap",
      "of": "stage:<id>"|"conversion",  // whose count they divide
      "note": str,
-     "rows": [{"label": str, "pct": float, "doing": str}, ...]},
-    ...
-  ],
+     "rows": [{"label": str, "pct": float, "doing": str,
+               "breakdown": [     // REQUIRED on any aggregate row
+                 {"label": str,   // (podcasts, press, reposts, clips,
+                  "pct": float,   // retailers, apps): the real shows,
+                  "doing": str}   // episodes, outlets or sites behind
+               ]}, ...]},         // it, each as a share of the row
+    ...                           // (overlap allowed). Omit on a row
+  ],                              // that is already one named thing.
   "anchors_note": str             // internal: the public anchors used
 }
 
@@ -132,6 +137,10 @@ Rules that do not move:
   matching stage lands at or below its anchor, the partitions and
   the creators / publishers are the anchor's own, never placeholders
   like "Creator 01". Two Crosswalk products never disagree on one title.
+  tracked_channels lists where the campaign's own assets sit; the
+  discovery mix still covers the whole exposed audience, so rows
+  outside that list (creator podcasts, reposts, search) stay when
+  the audience really met the title there.
 - The nest DECREASES: every share and kept rate must produce a strict
   subset of the stage above.
 - partition tables must have pcts that sum to ~100 (the code forces
@@ -144,6 +153,12 @@ Rules that do not move:
   platform. If the category cannot produce a leave-and-return majority
   of conversions, do not copy the fragrance file's shape - re-reason.
 - Rates are messy (never .0 / .5 endings), no two rates identical.
+- An aggregate detour row ("Creator podcast episodes and clips",
+  "Tracked media and editorial articles", "Reposts") carries a
+  breakdown of the REAL shows, episodes, outlets or sites behind it,
+  found by research, with each one's share of the row. A reader will
+  ask "which podcasts?" and the file must already hold the answer.
+  Never a placeholder name, never a show that did not cover the title.
 - Do not invent a sample / observed-file n. Never emit a sample field. The path counts are the file.
 
 Two journey families. journey_kind in the input decides which:
@@ -524,6 +539,53 @@ def _pct1(num, den) -> str:
         return ''
 
 
+def breakdown_rows(items, base: int, seed) -> list:
+    """The named things behind an aggregate detour row (shows, episodes,
+    outlets, sites), each sized as a share of the row. Overlap allowed:
+    a person can sit behind more than one name, so the shares may add
+    to over 100, but no single name exceeds the row. Messy counts,
+    placeholders dropped (2026-10-06, the podcast row Alexia asked
+    about had nothing behind it)."""
+    out = []
+    base = int(base or 0)
+    if not isinstance(items, list) or base <= 0:
+        return out
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        label = str(it.get('label') or '').strip()
+        try:
+            pct = float(it.get('pct') or 0)
+        except Exception:
+            continue
+        if not label or pct <= 0 or re.search(r'\b(creator|podcast|show|outlet|site)\s*0?\d\b', label, re.I):
+            continue
+        acc = _messy((seed, 'bd', label), base * min(pct, 99.9) / 100.0)
+        acc = max(1, min(int(acc), base - 1))
+        out.append({'label': label, 'accounts': acc,
+                    'pct': round(acc / float(base) * 100, 4),
+                    'doing': str(it.get('doing') or '')})
+    out.sort(key=lambda r: -r['accounts'])
+    return out
+
+
+def rescale_breakdown(row: dict, seed) -> None:
+    """Keep a row's breakdown on the row after the row itself moved:
+    every named share holds its pct of the new count."""
+    bd = (row or {}).get('breakdown')
+    base = int((row or {}).get('accounts') or 0)
+    if not isinstance(bd, list) or base <= 0:
+        return
+    for b in bd:
+        try:
+            pct = float(b.get('pct') or 0)
+        except Exception:
+            continue
+        acc = _messy((seed, 'bd', b.get('label')), base * pct / 100.0)
+        b['accounts'] = max(1, min(int(acc), base - 1))
+        b['pct'] = round(b['accounts'] / float(base) * 100, 4)
+
+
 def build_copy(subject: str, platform: str, blob: dict, *,
                family: str) -> dict:
     """The copy block the Digital Journey tab paints from (title, lead,
@@ -749,8 +811,13 @@ def build_journey(inputs: dict, prim: dict, *,
             acc = _messy((seedbase, d['title'], r['label']),
                          parent * float(r['pct']) / 100.0)
             acc = min(acc, parent - 1)
-            rows.append({'label': r['label'], 'accounts': acc,
-                         'doing': r.get('doing') or ''})
+            row = {'label': r['label'], 'accounts': acc,
+                   'doing': r.get('doing') or ''}
+            bd = breakdown_rows(r.get('breakdown'), acc,
+                                (seedbase, d['title'], r['label']))
+            if bd:
+                row['breakdown'] = bd
+            rows.append(row)
         if kind == 'partition' and rows:
             # force exact sum to parent through the largest row
             diff = parent - sum(r['accounts'] for r in rows)
@@ -942,7 +1009,55 @@ def attribution_anchor_from(slug: str, assets: dict, fit: dict) -> Optional[dict
         'converters_n': converters_n,
         'touchpoints': tps[:12],
         'asset_count': len((assets or {}).get('assets') or []),
+        'channel_mix': channel_mix_from(assets, overall.get('touchpoints') or []),
     }
+
+
+def channel_mix_from(assets: dict, touchpoints: list) -> list:
+    """Where the campaign's exposed audience met the title, by tracked
+    channel: one row per channel the campaign actually tracks, with the
+    tracked asset count, the asset types behind it, and its share of
+    tracked exposure. Exposure comes from every fitted touchpoint
+    (converters or not); when the fit carries no exposure counts the
+    share falls back to the tracked asset count. Context for the research
+    call and the anchor trail: the discovery mix covers the whole exposed
+    audience, so surfaces outside this list (a creator podcast, a repost)
+    still belong when the audience met the title there, each with a
+    breakdown naming what sits behind it (2026-10-06, Alexia's 27,559
+    creator-podcast row on The Influencer Project)."""
+    by = {}
+
+    def _slot(ch):
+        ch = str(ch or '').strip() or 'Other'
+        return by.setdefault(ch, {'channel': ch, 'assets': 0, 'exposed_n': 0,
+                                  'converted_n': 0, 'types': {}})
+    for t in touchpoints or []:
+        d = _slot(t.get('channel'))
+        d['assets'] += 1
+        d['exposed_n'] += int(t.get('exposed_n') or 0)
+        d['converted_n'] += int(t.get('converted_n') or 0)
+    for a in ((assets or {}).get('assets') or []):
+        ch = str(a.get('channel') or '').strip()
+        if not ch:
+            continue
+        d = _slot(ch)
+        kind = str(a.get('asset_type') or '').strip()
+        if kind:
+            d['types'][kind] = d['types'].get(kind, 0) + 1
+        if not touchpoints:
+            d['assets'] += 1
+    by = {k: v for k, v in by.items() if v['assets'] > 0}
+    if not by:
+        return []
+    tot = float(sum(d['exposed_n'] for d in by.values()))
+    if tot <= 0:
+        tot = float(sum(d['assets'] for d in by.values())) or 1.0
+        for d in by.values():
+            d['pct'] = round(d['assets'] / tot * 100, 4)
+    else:
+        for d in by.values():
+            d['pct'] = round(d['exposed_n'] / tot * 100, 4)
+    return sorted(by.values(), key=lambda d: (-d['pct'], d['channel']))
 
 
 def corpus_anchors(inputs: dict, s3=None) -> dict:
@@ -1045,6 +1160,17 @@ def anchors_prompt_block(anchors: dict) -> Optional[dict]:
         'assists': camp['assists'],
         'top_assets_by_converters': camp['touchpoints'][:8],
         'tracked_asset_count': camp['asset_count'],
+        'tracked_channels': [
+            {'channel': d['channel'], 'tracked_assets': d['assets'],
+             'share_of_exposure_pct': d['pct']}
+            for d in (camp.get('channel_mix') or [])],
+        'tracked_channels_note': (
+            "Where the campaign's tracked assets sit, with each channel's "
+            "share of tracked exposure. The discovery mix covers the whole "
+            "exposed audience, so it may also carry surfaces outside this "
+            "list where the audience met the title. Every aggregate row "
+            "(podcasts, press, reposts, clips) carries a breakdown naming "
+            "the real shows, episodes or outlets behind it."),
     }
 
 
@@ -1141,17 +1267,18 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
         if i in targets and targets[i] < old[i]:
             new[i] = _messy((seed, 'anchor', i), targets[i])
     anchored = [i for i in ids if new[i] != old[i]]
-    if not anchored:
-        payload.setdefault('meta', {})['anchored_to'] = {
-            'attribution_iq': camp['slug'], 'as_of': camp['as_of'],
-            'basis': shares['basis'], 'changed': False}
-        return payload
+    # A journey already under its anchors keeps its stage counts, but
+    # the campaign's own partitions (ticketing sites, creators, first
+    # and last touch, assists, the tracked channel mix) still replace
+    # the reasoned ones below (2026-10-06: before this the early return
+    # left "Creator 01" and untracked surfaces in place whenever no
+    # stage needed pulling down).
     # Unanchored stages: geometric interpolation between the nearest
     # anchored (or TAM / terminal) neighbours so the chain stays smooth.
     pos = {i: k for k, i in enumerate(ids)}
     fixed = set(anchored)
     for i in ids:
-        if i in fixed:
+        if i in fixed or not anchored:
             continue
         left = next((x for x in reversed(ids[:pos[i]]) if x in fixed), None)
         right = next((x for x in ids[pos[i] + 1:] if x in fixed), None)
@@ -1168,24 +1295,25 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
             new[i] = _messy((seed, 'interp', i),
                             new[right] * old[i] / float(old[right]))
     # Monotone, strictly decreasing.
-    prev = int(spine[0]['accounts'])
-    for i in ids:
-        if new[i] >= prev:
-            new[i] = _messy((seed, 'mono', i), prev * 0.9)
-        prev = new[i]
-    prev = int(spine[0]['accounts'])
-    for s in spine[1:]:
-        s['accounts'] = new[s['id']]
-        s['kept'] = round(s['accounts'] / prev * 100, 4)
-        s['dropped'] = prev - s['accounts']
-        s['ofUs'] = round(s['accounts'] / US_GEN_POP * 100, 4)
-        prev = s['accounts']
+    if anchored:
+        prev = int(spine[0]['accounts'])
+        for i in ids:
+            if new[i] >= prev:
+                new[i] = _messy((seed, 'mono', i), prev * 0.9)
+            prev = new[i]
+        prev = int(spine[0]['accounts'])
+        for s in spine[1:]:
+            s['accounts'] = new[s['id']]
+            s['kept'] = round(s['accounts'] / prev * 100, 4)
+            s['dropped'] = prev - s['accounts']
+            s['ofUs'] = round(s['accounts'] / US_GEN_POP * 100, 4)
+            prev = s['accounts']
     paid, penult = spine[-1]['accounts'], spine[-2]['accounts']
     f_paid = paid / float(old[ids[-1]])
 
     # Fork: scale, then restore the identities.
     fork = j.get('fork') or []
-    if fork:
+    if fork and anchored:
         fk = {r['id']: r for r in fork}
         if 'paid_return' in fk and 'paid_first' in fk:
             o_paid = max(float(old[ids[-1]]), 1.0)
@@ -1274,7 +1402,7 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
             d['rows'] = _rows(camp['last_touch'], paid); continue
         if camp.get('assists') and re.search(r'assist', title, re.I):
             d['rows'] = _rows(camp['assists'], paid); d['kind'] = 'overlap'; continue
-        if not rows:
+        if not rows or not anchored:
             continue
         r0 = rows[0]
         try:
@@ -1291,6 +1419,7 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
         for r in rows:
             r['accounts'] = _messy((seed, 'det', title, r.get('label')),
                                    base_new * float(r.get('pct') or 0) / 100.0)
+            rescale_breakdown(r, (seed, 'det', title, r.get('label')))
 
     # Facts, kpis, copy.
     payload['kpis'] = {'total_users': paid,
@@ -1323,7 +1452,7 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
                 val = val.replace(m_.group(1), f"{n_:,}")
             facts.append({'label': path_fact.get('label'), 'value': val})
         payload['facts'] = facts
-    else:
+    elif anchored:
         for f in payload.get('facts') or []:
             def _sc(m_):
                 n_ = int(m_.group(0).replace(',', ''))
@@ -1337,7 +1466,8 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
         pass
     payload.setdefault('meta', {})['anchored_to'] = {
         'attribution_iq': camp['slug'], 'as_of': camp['as_of'],
-        'basis': shares['basis'], 'changed': True,
+        'basis': shares['basis'], 'changed': bool(anchored),
+        'tracked_channels': [d_['channel'] for d_ in (camp.get('channel_mix') or [])],
         'shares': {k: v for k, v in shares.items() if k != 'basis'}}
     return payload
 

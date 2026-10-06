@@ -404,6 +404,37 @@ def ask(user, body, *, via='session'):
             _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
             return env, 200
 
+    # Drill-down lane (2026-10-06, Alexia's 27,559). A question that
+    # names a number from a Digital Journey is a lookup into that
+    # journey: answer from the breakdown the file holds, or build it once
+    # and write it onto the page under the row. Never a fresh read that
+    # cannot be checked, never the calm line.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import drilldown as _dd
+            _dd_raw = _dd.answer(text, uname, ctx=ctx, tid=tid) if _dd.looks_like_drilldown(text) else None
+        except Exception as e:
+            print(f"[prometheus] drill-down lane skipped: {e}")
+            _dd_raw = None
+        if _dd_raw:
+            raw = _dd_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'journey_drilldown', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = list(_dd_raw.get('followups') or [])
+                if _dd_raw.get('read_job_id'):
+                    raw['read_job_id'] = _dd_raw['read_job_id']
+            try:
+                host.ask_hint(route='journey_drilldown', outcome='answered',
+                              subject=_dd_raw.get('subject'))
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Capability questions (2026-10-02 audit). "Can I cut the existing
     # Apple TV+ profile by quarter (i.e., 2Q 2026)?" was split into two
     # builds named "I.e Can I Cut ..." and "2Q 2026 Can I Cut ...". A

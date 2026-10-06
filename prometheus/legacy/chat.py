@@ -18400,6 +18400,7 @@ _EXPORTS = (
     '_pm_challenge_headsup',
     '_pm_clarify_answer_merge',
     '_pm_classify_chain',
+    '_pm_claude_data',
     '_pm_claude_json',
     '_pm_clean_notify_email',
     '_pm_compact_for_bank',

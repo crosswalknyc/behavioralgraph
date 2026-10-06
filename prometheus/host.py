@@ -33,6 +33,7 @@ _APP_BINDINGS = {
     'aiq_intent': '_pm_aiq_intent',
     'pricing_question': '_pm_pricing_question',
     'pricing_copy': '_PM_PRICING_COPY',
+    'claude_data': '_pm_claude_data',        # (system, user, **kw) -> parsed JSON dict | {}
     'ask_hint': '_pm_ask_hint',
     # thread store
     'load_history': '_load_synth_chat_history',
@@ -62,7 +63,7 @@ _APP_BINDINGS = {
 }
 
 # Bindings that may legitimately be absent on an older host.
-_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate'}
+_OPTIONAL = {'max_threads', 'wallet_snapshot', 'access_gate', 'claude_data'}
 
 
 class HostNotBound(RuntimeError):

@@ -86,6 +86,17 @@ ROWS = [
         'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'journey_drilldown', 'surface': 'analyze',
+        'reason': 'journey_drilldown', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A number from a Digital Journey on screen ("what '
+                'podcasts are behind the 27,559?") is a lookup into that '
+                'journey: answered from the breakdown the file holds, or '
+                'built once and written onto the page under the row '
+                '(2026-10-06).',
+        'examples': [], 'counter': [],
+    },
+    {
         'id': 'capability_question', 'surface': 'analyze',
         'reason': 'capability_question', 'client_action': 'analyze',
         'note': 'A question about what the product can do, answered '
