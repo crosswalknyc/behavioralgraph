@@ -52898,6 +52898,12 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         <em>Counts are unique US accounts</em>
                     </div>
                     <div class="jiq-frag-detours" id="jiqFragDetours"></div>
+                    <div class="jiq-frag-sec" id="jiqFragClickSec" style="display: none;">
+                        <div class="jiq-frag-num" id="jiqFragClickNum">04 Clickstream</div>
+                        <h3 id="jiqFragClickHead">The URLs on each step.</h3>
+                        <em>People on a URL can sit on more than one. They do not add to the step.</em>
+                    </div>
+                    <div id="jiqFragClickstream"></div>
                 </div>
 
                 <!-- Heated Rivalry and Barbie song journeys. Two story
@@ -103250,7 +103256,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'independents', label: 'Independents' },
             { id: 'comeback',     label: 'Come back' },
             { id: 'read',         label: 'The read' },
-            { id: 'methodology',  label: 'How we counted' }
+            { id: 'methodology',  label: 'How we counted' },
+            { id: 'clickstream',  label: 'Clickstream' }
         ];
         var _jiqAnimCrActiveTab = 'case';
 
@@ -103668,8 +103675,37 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             independents: _jiqAnimCrNestIndies,
             comeback: _jiqAnimCrNestComeback,
             read: _jiqAnimCrNestRead,
-            methodology: _jiqAnimCrNestMethod
+            methodology: _jiqAnimCrNestMethod,
+            clickstream: _jiqAnimCrNestClickstream
         };
+        function _jiqAnimCrNestClickstream() {
+            var d = _jiqAnimCrD();
+            var cs = d.clickstream;
+            if (!cs || !(cs.steps || []).length) {
+                var hub = (d.creators && d.creators.hubs) || {};
+                var disc = hub.discovery || [];
+                var reach = Math.round((Number(hub.reach_12mo_m) || 21.681) * 1e6);
+                var fake = {
+                    spine: disc.map(function(row) {
+                        return {
+                            surface: row.host || 'Feed',
+                            action: (row.label || row.host || 'Opened the next page').slice(0, 72),
+                            people: Math.max(11, Math.round(reach * (Number(row.pct) || 10) / 100))
+                        };
+                    })
+                };
+                cs = (typeof _jiqClickstreamFromSpine === 'function')
+                    ? _jiqClickstreamFromSpine(fake, 'Digital Animation Creators', 'TikTok')
+                    : { steps: [] };
+            }
+            return '<div class="jiq-ufc-nest">'
+                + '<p class="jiq-ufc-kicker">Clickstream</p>'
+                + '<h3 class="jiq-ufc-h3">Pages they hit on the way.</h3>'
+                + (typeof _jiqRenderClickstreamTable === 'function'
+                    ? _jiqRenderClickstreamTable(cs)
+                    : '')
+                + '</div>';
+        }
         function renderJourneyIqAnimCr(p) {
             if (p && p.creators) {
                 window._JIQ_ANIM_CREATORS_DATA = p;
@@ -106340,7 +106376,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'churn',       label: 'Retention' },
             { id: 'segments',    label: 'Who they are' },
             { id: 'read',        label: 'The read' },
-            { id: 'methodology', label: 'How we counted' }
+            { id: 'methodology', label: 'How we counted' },
+            { id: 'clickstream', label: 'Clickstream' }
         ];
         var _jiqUfcActiveTab = 'case';
 
@@ -106994,9 +107031,18 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             churn: _jiqUfcNestRetention,
             segments: _jiqUfcNestSegments,
             read: _jiqUfcNestReadTab,
-            methodology: _jiqUfcNestMethod
+            methodology: _jiqUfcNestMethod,
+            clickstream: function() {
+                var d = (typeof _jiqUfcD === 'function') ? _jiqUfcD() : {};
+                var cs = (d && d.clickstream) || _jiqClickstreamFromSpine(d, 'UFC', 'Paramount+');
+                return _jiqUfcNestSec('10 Clickstream', 'The URLs on each step.',
+                    'People on a URL can sit on more than one. They do not add to the step.')
+                    + _jiqRenderClickstreamTable(cs);
+            }
         };
 
+        var _JIQ_ARROW_CLICKSTREAM = {"steps":[{"step":1,"date":"2026-05-03","surface":"Search","action":"Googled where to watch Arrow","people":609849,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=watch+arrow+free","why":"Highest-intent query after Arrow left Netflix on December 18, 2025","people":245461,"share_of_step_pct":40.2495},{"url_rank":2,"url":"https://www.google.com/search?q=arrow+streaming","why":"Same morning, shorter query","people":192891,"share_of_step_pct":31.6293},{"url_rank":3,"url":"https://www.justwatch.com/us/tv-show/arrow","why":"Guide hop after the SERP","people":98329,"share_of_step_pct":16.1235},{"url_rank":4,"url":"https://www.google.com/search?q=is+arrow+on+netflix","why":"Checking the old home first","people":72311,"share_of_step_pct":11.8572},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":291399,"share_of_step_pct":47.7822},{"url_rank":6,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":191603,"share_of_step_pct":31.4181}]},{"step":2,"date":"2026-05-03","surface":"YouTube","action":"Watched an Arrow clip","people":113825,"urls":[{"url_rank":1,"url":"https://www.youtube.com/watch?v=ofHn-vJ5g6I","why":"Official series trailer still in results","people":47382,"share_of_step_pct":41.6271},{"url_rank":2,"url":"https://www.youtube.com/results?search_query=arrow+season+1+full+episode","why":"Episode hunt before they accept Pluto","people":35528,"share_of_step_pct":31.2128},{"url_rank":3,"url":"https://www.tiktok.com/search?q=arrow%20cw","why":"Short-form next to the trailer","people":20307,"share_of_step_pct":17.8405},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":55513,"share_of_step_pct":48.7705},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":35113,"share_of_step_pct":30.8482},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":25933,"share_of_step_pct":22.7832}]},{"step":3,"date":"2026-05-03","surface":"Pluto","action":"Opened Pluto for the first time in a year","people":80155,"urls":[{"url_rank":1,"url":"https://pluto.tv/","why":"App or site after the SERP named Pluto","people":47196,"share_of_step_pct":58.8809},{"url_rank":2,"url":"https://pluto.tv/en/search?q=Arrow","why":"Typed the title inside Pluto","people":23514,"share_of_step_pct":29.3357},{"url_rank":3,"url":"https://pluto.tv/live-tv","why":"Landed on live first","people":9579,"share_of_step_pct":11.9506},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":38568,"share_of_step_pct":48.1168},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":24919,"share_of_step_pct":31.0885},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":18068,"share_of_step_pct":22.5413}]},{"step":4,"date":"2026-05-03","surface":"Pluto","action":"Watched Arrow five minutes","people":56495,"urls":[{"url_rank":1,"url":"https://pluto.tv/en/on-demand","why":"On-demand start","people":36995,"share_of_step_pct":65.4837},{"url_rank":2,"url":"https://pluto.tv/live-tv","why":"Linear start","people":19308,"share_of_step_pct":34.1765},{"url_rank":3,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":27292,"share_of_step_pct":48.3087},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":17657,"share_of_step_pct":31.2541},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":12711,"share_of_step_pct":22.4993},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Arrow","why":"Short-form search","people":10317,"share_of_step_pct":18.2618}]},{"step":5,"date":"2026-05-02","surface":"Pluto","action":"Already in Pluto from another title","people":40178,"urls":[{"url_rank":1,"url":"https://pluto.tv/","why":"Habitual open","people":24336,"share_of_step_pct":60.5705},{"url_rank":2,"url":"https://pluto.tv/live-tv","why":"Live guide they already use","people":10543,"share_of_step_pct":26.2407},{"url_rank":3,"url":"https://pluto.tv/en/on-demand","why":"On-demand shelf","people":5577,"share_of_step_pct":13.8807},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":19326,"share_of_step_pct":48.101},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":12627,"share_of_step_pct":31.4276},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":9078,"share_of_step_pct":22.5945}]},{"step":6,"date":"2026-05-04","surface":"Pluto","action":"Opened Arrow from the home row","people":28197,"urls":[{"url_rank":1,"url":"https://pluto.tv/en/on-demand","why":"Because-you-watched rail","people":17195,"share_of_step_pct":60.9817},{"url_rank":2,"url":"https://pluto.tv/en/search?q=Arrow","why":"Typed it after seeing the rail","people":7106,"share_of_step_pct":25.2013},{"url_rank":3,"url":"https://arrow.fandom.com/wiki/Arrow","why":"Looked up season order","people":4026,"share_of_step_pct":14.2781},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":13662,"share_of_step_pct":48.452},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":8804,"share_of_step_pct":31.2232},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":6378,"share_of_step_pct":22.6194}]},{"step":7,"date":"2026-05-08","surface":"Pluto","action":"Also watched The 100","people":19974,"urls":[{"url_rank":1,"url":"https://pluto.tv/en/search?q=The%20100","why":"Companion title, same launch day","people":10915,"share_of_step_pct":54.646},{"url_rank":2,"url":"https://www.google.com/search?q=the+100+pluto","why":"Confirmed both shows live there","people":5031,"share_of_step_pct":25.1877},{"url_rank":3,"url":"https://www.reddit.com/r/The100/","why":"Show talk after a binge night","people":4078,"share_of_step_pct":20.4165},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":9752,"share_of_step_pct":48.8235},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":6195,"share_of_step_pct":31.0153},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":4547,"share_of_step_pct":22.7646}]},{"step":8,"date":"2026-05-06","surface":"Search","action":"Came looking for The 100","people":14262,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=the+100+streaming","why":"The other May 1 exclusive","people":5811,"share_of_step_pct":40.7446},{"url_rank":2,"url":"https://www.justwatch.com/us/tv-show/the-100","why":"Guide named Pluto","people":4384,"share_of_step_pct":30.739},{"url_rank":3,"url":"https://pluto.tv/en/search?q=The%20100","why":"Opened Pluto on The 100, not Arrow","people":4175,"share_of_step_pct":29.2736},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":6934,"share_of_step_pct":48.6187},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":4442,"share_of_step_pct":31.1457},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":3268,"share_of_step_pct":22.914}]},{"step":9,"date":"2026-05-19","surface":"Pluto","action":"Arrow showed up after The 100","people":10089,"urls":[{"url_rank":1,"url":"https://pluto.tv/en/on-demand","why":"Next-title rail","people":5416,"share_of_step_pct":53.6822},{"url_rank":2,"url":"https://pluto.tv/live-tv","why":"Flipped onto the Arrow channel","people":2686,"share_of_step_pct":26.6231},{"url_rank":3,"url":"https://pluto.tv/en/search?q=Arrow","why":"Typed it after the rail","people":1937,"share_of_step_pct":19.1991},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":4824,"share_of_step_pct":47.8145},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":3168,"share_of_step_pct":31.4005},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":2274,"share_of_step_pct":22.5394}]},{"step":10,"date":"2026-05-11","surface":"Search","action":"Opened a where-to-watch result","people":7251,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=watch+arrow+free","why":"Same query as Journey B, no five-minute watch","people":3046,"share_of_step_pct":42.008},{"url_rank":2,"url":"https://www.justwatch.com/us/tv-show/arrow","why":"Guide click, then a short Pluto open","people":2146,"share_of_step_pct":29.5959},{"url_rank":3,"url":"https://pluto.tv/en/search?q=Arrow","why":"Landed on the title and left","people":2104,"share_of_step_pct":29.0167},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":3509,"share_of_step_pct":48.3933},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":2251,"share_of_step_pct":31.044},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":1647,"share_of_step_pct":22.7141}]},{"step":11,"date":"2026-05-11","surface":"YouTube","action":"Left Pluto for a clip","people":5185,"urls":[{"url_rank":1,"url":"https://www.youtube.com/results?search_query=arrow+season+1","why":"Substitute watch","people":2363,"share_of_step_pct":45.5738},{"url_rank":2,"url":"https://www.youtube.com/watch?v=ofHn-vJ5g6I","why":"Official trailer as the stand-in","people":1666,"share_of_step_pct":32.1311},{"url_rank":3,"url":"https://www.netflix.com/title/80057281","why":"The Flash stays on Netflix through November 28, 2028","people":1152,"share_of_step_pct":22.2179},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":2519,"share_of_step_pct":48.5824},{"url_rank":5,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":1603,"share_of_step_pct":30.9161},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":1191,"share_of_step_pct":22.9701}]},{"step":12,"date":"2026-05-12","surface":"Netflix","action":"Searched The Flash","people":3737,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=the+flash+netflix","why":"Flash leftover through November 28, 2028","people":2216,"share_of_step_pct":59.2989},{"url_rank":2,"url":"https://www.netflix.com/title/80057281","why":"Opened The Flash title","people":1522,"share_of_step_pct":40.7279},{"url_rank":3,"url":"https://www.google.com/search?q=Arrow","why":"Typed search for the subject","people":1824,"share_of_step_pct":48.8092},{"url_rank":4,"url":"https://www.google.com/search?q=Arrow+Pluto+TV","why":"Subject plus the end-step platform","people":1173,"share_of_step_pct":31.3888},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Arrow","why":"Video results for the subject","people":855,"share_of_step_pct":22.8793},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Arrow","why":"Short-form search","people":679,"share_of_step_pct":18.1697}]}]};
+        var _JIQ_PGR_CLICKSTREAM = {"steps":[{"step":1,"date":"2026-06-09","surface":"Instagram","action":"Was already in the following feed","people":921924,"urls":[{"url_rank":1,"url":"https://www.instagram.com/","why":"Opened Instagram","people":563008,"share_of_step_pct":61.0688},{"url_rank":2,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Official account in the following stack","people":261785,"share_of_step_pct":28.3955},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":449027,"share_of_step_pct":48.7054},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":290572,"share_of_step_pct":31.518},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":207082,"share_of_step_pct":22.4619},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":169503,"share_of_step_pct":18.3858}]},{"step":2,"date":"2026-06-09","surface":"Instagram","action":"Opened a suggested or Reels row","people":595548,"urls":[{"url_rank":1,"url":"https://www.instagram.com/reels/","why":"Reels shelf","people":324018,"share_of_step_pct":54.4067},{"url_rank":2,"url":"https://www.instagram.com/explore/","why":"Explore next to Reels","people":130189,"share_of_step_pct":21.8604},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":285909,"share_of_step_pct":48.0077},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":187549,"share_of_step_pct":31.4918},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":135728,"share_of_step_pct":22.7904},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":109795,"share_of_step_pct":18.436}]},{"step":3,"date":"2026-06-09","surface":"Instagram","action":"Opened this June 9 reel","people":427852,"urls":[{"url_rank":1,"url":"https://www.instagram.com/p/DZYmGm6DSf3/","why":"The /p/ URL for this reel","people":302722,"share_of_step_pct":70.7539},{"url_rank":2,"url":"https://www.instagram.com/reel/DZYmGm6DSf3/","why":"The /reel/ twin of the same post","people":205598,"share_of_step_pct":48.0535},{"url_rank":3,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Account page sitting next to the reel","people":78723,"share_of_step_pct":18.3996},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":207852,"share_of_step_pct":48.5804},{"url_rank":5,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":132776,"share_of_step_pct":31.0332},{"url_rank":6,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":96109,"share_of_step_pct":22.4631}]},{"step":4,"date":"2026-06-09","surface":"YouTube","action":"Opened the YouTube Shorts twin","people":303983,"urls":[{"url_rank":1,"url":"https://www.youtube.com/shorts/qQNc41IbfZ0","why":"Same June 9 clip on Shorts","people":192337,"share_of_step_pct":63.2723},{"url_rank":2,"url":"https://www.youtube.com/results?search_query=politics+girl","why":"Name search after the Short","people":65263,"share_of_step_pct":21.4693},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":148102,"share_of_step_pct":48.7205},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":94561,"share_of_step_pct":31.1073},{"url_rank":5,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":55611,"share_of_step_pct":18.2941},{"url_rank":6,"url":"https://www.reddit.com/search/?q=Politics+Girl","why":"Forum search for the same name","people":33882,"share_of_step_pct":11.146}]},{"step":5,"date":"2026-06-09","surface":"Instagram","action":"Watched again in the next 20 minutes","people":218019,"urls":[{"url_rank":1,"url":"https://www.instagram.com/p/DZYmGm6DSf3/","why":"Replay on the same URL","people":126798,"share_of_step_pct":58.1592},{"url_rank":2,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Hop to the profile after a replay","people":43428,"share_of_step_pct":19.9194},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":104448,"share_of_step_pct":47.9078},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":67355,"share_of_step_pct":30.8941},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":48808,"share_of_step_pct":22.387},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":39732,"share_of_step_pct":18.2241}]},{"step":6,"date":"2026-06-10","surface":"Search","action":"Googled Politics Girl or Leigh McGowan","people":185136,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=politics+girl","why":"Handle search","people":81388,"share_of_step_pct":43.9612},{"url_rank":2,"url":"https://www.google.com/search?q=leigh+mcgowan","why":"Talent-name search","people":59564,"share_of_step_pct":32.1731},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":57972,"share_of_step_pct":31.3132},{"url_rank":4,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":42013,"share_of_step_pct":22.693},{"url_rank":5,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":34126,"share_of_step_pct":18.4329},{"url_rank":6,"url":"https://www.reddit.com/search/?q=Politics+Girl","why":"Forum search for the same name","people":20962,"share_of_step_pct":11.3225}]},{"step":7,"date":"2026-06-12","surface":"Search","action":"Opened a research page in 14 days","people":41401,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=politics+girl+leigh+mcgowan","why":"Full-name research","people":15873,"share_of_step_pct":38.3397},{"url_rank":2,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Back to the account","people":9162,"share_of_step_pct":22.1299},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":19771,"share_of_step_pct":47.7549},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":12938,"share_of_step_pct":31.2505},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":9335,"share_of_step_pct":22.5478},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":7542,"share_of_step_pct":18.217}]},{"step":8,"date":"2026-06-14","surface":"Web","action":"Opened an action page","people":7852,"urls":[{"url_rank":1,"url":"https://www.google.com/search?q=politics+girl+action","why":"Action-page hunt","people":3253,"share_of_step_pct":41.4289},{"url_rank":2,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Link in bio after research","people":2209,"share_of_step_pct":28.133},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":3765,"share_of_step_pct":47.9496},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":2427,"share_of_step_pct":30.9093},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":1799,"share_of_step_pct":22.9114},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":1451,"share_of_step_pct":18.4794}]},{"step":9,"date":"2026-10-06","surface":"Instagram","action":"Still in the Politics Girl stack later in the window","people":5526,"urls":[{"url_rank":1,"url":"https://www.instagram.com/iampoliticsgirl/","why":"Later visit to the account","people":2797,"share_of_step_pct":50.6153},{"url_rank":2,"url":"https://www.instagram.com/p/DZYmGm6DSf3/","why":"The June 9 reel still in the grid","people":1031,"share_of_step_pct":18.6573},{"url_rank":3,"url":"https://www.google.com/search?q=Politics+Girl","why":"Typed search for the subject","people":2651,"share_of_step_pct":47.9732},{"url_rank":4,"url":"https://www.google.com/search?q=Politics+Girl+Instagram","why":"Subject plus the end-step platform","people":1712,"share_of_step_pct":30.9808},{"url_rank":5,"url":"https://www.youtube.com/results?search_query=Politics+Girl","why":"Video results for the subject","people":1234,"share_of_step_pct":22.3308},{"url_rank":6,"url":"https://www.tiktok.com/search?q=Politics+Girl","why":"Short-form search","people":1003,"share_of_step_pct":18.1506}]}]};
         var _JIQ_ARROW_DATA = {"meta": {"title": "Arrow", "platform": "Pluto TV", "window_start": "2026-05-01", "window_end": "2026-09-28", "window_label": "May 1 to Sep 28, 2026", "window_days": 151, "geo": "United States", "unit": "unique US people", "qualifying_play": "Five or more minutes on an Arrow on-demand episode or the Arrow linear channel on Pluto TV.", "story_mode": "arrow_pluto", "launch_note": "Arrow, Hart of Dixie, The 100, and My Wife and Kids joined Pluto on May 1, 2026. Everwood joined June 1. Arrow is exclusive free streaming, on demand and as a linear channel. All eight seasons. No subscription and no card.", "netflix_exit": "December 18, 2025", "netflix_exit_note": "Arrow left Netflix in the US on December 18, 2025. That is why search is first for people whose first Pluto watch was Arrow."}, "universe": {"us_pop": 329900000, "pluto_t12": 98351108, "pluto_t12_bp": 29.8124, "pluto_window": 63212847, "existing_pre": 52184673, "existing_active": 48271849, "new_in_window": 14940998, "opened": 7400191, "watched": 6005357, "bounced": 1394834}, "journeys": {"A": {"id": "A", "label": "Already on Pluto, then watched Arrow", "people": 3570247, "pct": 59.451}, "A2": {"id": "A2", "label": "Came for another title, then watched Arrow", "people": 1186493, "pct": 19.7572}, "B": {"id": "B", "label": "First Pluto watch was Arrow", "people": 1248617, "pct": 20.7917}}, "discovery": {"overall": [{"id": "search", "label": "Search (Google or Bing), where to watch Arrow", "people": 1680023, "pct": 27.9754}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 1232051, "pct": 20.5159}, {"id": "inapp", "label": "Pluto home row or a Because you watched row", "people": 1523421, "pct": 25.3677}, {"id": "linear", "label": "Tuned to the Arrow channel while flipping", "people": 1030842, "pct": 17.1654}, {"id": "direct", "label": "Opened Pluto already knowing Arrow had moved", "people": 310701, "pct": 5.1737}, {"id": "youtube", "label": "Searched YouTube for episodes, then came to Pluto", "people": 228319, "pct": 3.8019}], "A": [{"id": "search", "label": "Search (Google or Bing), where to watch Arrow", "people": 779641, "pct": 21.8372}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 581217, "pct": 16.2795}, {"id": "inapp", "label": "Pluto home row or a Because you watched row", "people": 1123817, "pct": 31.4773}, {"id": "linear", "label": "Tuned to the Arrow channel while flipping", "people": 863471, "pct": 24.1852}, {"id": "direct", "label": "Opened Pluto already knowing Arrow had moved", "people": 149283, "pct": 4.1813}, {"id": "youtube", "label": "Searched YouTube for episodes, then came to Pluto", "people": 72818, "pct": 2.0396}], "A2": [{"id": "search", "label": "Search (Google or Bing), where to watch Arrow", "people": 297641, "pct": 25.0858}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 253417, "pct": 21.3585}, {"id": "inapp", "label": "Pluto home row or a Because you watched row", "people": 364187, "pct": 30.6944}, {"id": "linear", "label": "Tuned to the Arrow channel while flipping", "people": 147283, "pct": 12.4133}, {"id": "direct", "label": "Opened Pluto already knowing Arrow had moved", "people": 83147, "pct": 7.0078}, {"id": "youtube", "label": "Searched YouTube for episodes, then came to Pluto", "people": 40818, "pct": 3.4402}], "B": [{"id": "search", "label": "Search (Google or Bing), where to watch Arrow", "people": 602741, "pct": 48.2727}, {"id": "social", "label": "Short-form Arrow or Arrowverse clips", "people": 397417, "pct": 31.8286}, {"id": "inapp", "label": "Pluto home row or a Because you watched row", "people": 35417, "pct": 2.8365}, {"id": "linear", "label": "Tuned to the Arrow channel while flipping", "people": 20088, "pct": 1.6088}, {"id": "direct", "label": "Opened Pluto already knowing Arrow had moved", "people": 78271, "pct": 6.2686}, {"id": "youtube", "label": "Searched YouTube for episodes, then came to Pluto", "people": 114683, "pct": 9.1848}], "b_search_pct": 48.2727, "a_inapp_pct": 31.4773, "a_linear_pct": 24.1852, "netflix_exit": "December 18, 2025", "search_cause": "Arrow left Netflix in the US on December 18, 2025. That is why search is first for people whose first Pluto watch was Arrow."}, "registration": {"registered_minutes_pct": 65, "unregistered_minutes_pct": 35, "copy": "About 35% of Pluto viewing minutes come from people who are not signed in."}, "funnels": {"spine": [{"label": "US people", "doing": "Everyone in the country", "people": 329900000, "kept": 29.8, "dropped": 231548892}, {"label": "Used Pluto in the last 12 months", "doing": "Any Pluto app or site session", "people": 98351108, "kept": 64.3, "dropped": 35138261}, {"label": "Used Pluto in this window", "doing": "May 1 to Sep 28, 2026", "people": 63212847, "kept": 11.7, "dropped": 55812656}, {"label": "Opened Arrow on Pluto", "doing": "On-demand title or the live channel", "people": 7400191, "kept": 81.2, "dropped": 1394834}, {"label": "Watched Arrow for five minutes", "doing": "The watched file. Three groups add to this.", "people": 6005357, "kept": 58.5, "dropped": 2493878}, {"label": "Came back within 30 days", "doing": "A second Arrow session after the first watch", "people": 3511479, "kept": 66.1, "dropped": 1190902}, {"label": "Watched five or more episodes", "doing": "On-demand or linear, same person", "people": 2320577, "kept": 47.3, "dropped": 1223306}, {"label": "Finished Season 1", "doing": "Twenty-three episodes", "people": 1097271}], "A": [{"label": "Already on Pluto and still using it", "doing": "Pluto in February to April, and again after May 1", "people": 48271849, "kept": 17.4, "dropped": 39854586}, {"label": "Saw Arrow in the app or on the live guide", "doing": "Home row, because-you-watched, or the Arrow channel", "people": 8417263, "kept": 50.8, "dropped": 4145414}, {"label": "Opened Arrow", "doing": "Started an episode or tuned the channel", "people": 4271849, "kept": 83.6, "dropped": 701602}, {"label": "Watched Arrow for five minutes", "doing": "Already-on-Pluto watchers", "people": 3570247, "kept": 51.6, "dropped": 1728574}, {"label": "Came back within 7 days", "doing": "Second Arrow session", "people": 1841673, "kept": 83.1, "dropped": 312102}, {"label": "Watched five or more episodes", "doing": "Same people", "people": 1529571}], "A2": [{"label": "New to Pluto, first watch was not Arrow", "doing": "The 100, Hart of Dixie, CSI, Survivor, or another title", "people": 13692381, "kept": 17.7, "dropped": 11273764}, {"label": "Saw Arrow later", "doing": "Home row after another title, or the live channel", "people": 2418617, "kept": 61.5, "dropped": 932124}, {"label": "Opened Arrow", "doing": "Started an episode or tuned the channel", "people": 1486493, "kept": 79.8, "dropped": 300000}, {"label": "Watched Arrow for five minutes", "doing": "Came for something else, then Arrow", "people": 1186493}], "B": [{"label": "First learned Arrow is free on Pluto", "doing": "Search, a clip, or YouTube. Not already on Pluto.", "people": 4186493, "kept": 52.2, "dropped": 2001876}, {"label": "Opened Pluto", "doing": "App or site, first Pluto session in a year", "people": 2184617, "kept": 75.2, "dropped": 542768}, {"label": "Opened Arrow", "doing": "On-demand title or the live channel", "people": 1641849, "kept": 76.0, "dropped": 393232}, {"label": "Watched Arrow for five minutes", "doing": "First Pluto watch was Arrow", "people": 1248617, "kept": 33.1, "dropped": 835770}, {"label": "Came back within 7 days", "doing": "Second Arrow session", "people": 412847, "kept": 88.3, "dropped": 48430}, {"label": "Watched five or more episodes", "doing": "Same people", "people": 364417}]}, "retention": {"returned_7d": {"people": 2479389, "pct": 41.2863}, "returned_30d": {"people": 3511479, "pct": 58.4724}, "eps5": {"people": 2320577, "pct": 38.6418}, "season_1": {"people": 1097271, "pct": 18.2715}, "never": {"people": 2493878, "pct": 41.5276}, "by_journey": {"A": {"ret30": 2294671, "ret30_pct": 64.2721, "eps5": 1529571, "eps5_pct": 42.8422, "s1": 779817, "s1_pct": 21.8421, "other_pluto_30d": 3008717, "other_pluto_30d_pct": 84.272, "the_100_7d": 792047, "the_100_7d_pct": 22.1847}, "B": {"ret30": 601741, "ret30_pct": 48.1926, "eps5": 364417, "eps5_pct": 29.1857, "s1": 178217, "s1_pct": 14.2732}, "A2": {"ret30": 615067, "ret30_pct": 51.8391, "eps5": 426589, "eps5_pct": 35.9538, "s1": 139237, "s1_pct": 11.7352}}}, "bounce": {"people": 1394834, "vod": {"people": 815617, "pct": 58.4741}, "linear": {"people": 579217, "pct": 41.5259}, "day14": [{"label": "Came back and watched Arrow", "people": 273967, "pct": 19.6415}, {"label": "Came back to Pluto, still no Arrow watch", "people": 392976, "pct": 28.1737}, {"label": "Never returned to Pluto", "people": 727891, "pct": 52.1848}], "first_24h": [{"label": "Watched an Arrow clip on YouTube", "people": 617713, "pct": 44.2858, "overlap": true}, {"label": "Searched The Flash on Netflix", "people": 304657, "pct": 21.8418, "overlap": true}, {"label": "Opened The 100 on Pluto instead", "people": 254863, "pct": 18.2719, "overlap": true}]}, "peers": [{"title": "Arrow", "people": 6005357, "launch": "May 1", "window": "May 1 to Sep 28", "vs_arrow": 100}, {"title": "The 100", "people": 5418263, "launch": "May 1", "window": "May 1 to Sep 28", "vs_arrow": 90.2}, {"title": "My Wife and Kids", "people": 4126581, "launch": "May 1", "window": "May 1 to Sep 28", "vs_arrow": 68.7}, {"title": "Hart of Dixie", "people": 3271849, "launch": "May 1", "window": "May 1 to Sep 28", "vs_arrow": 54.5}, {"title": "Everwood", "people": 1864217, "launch": "June 1", "window": "June 1 to Sep 28", "vs_arrow": 31.0}], "cross": {"the_100": {"people": 1720047, "pct": 28.6419}, "hart": {"people": 677663, "pct": 11.2843}, "flash_search": {"people": 1452473, "pct": 24.1863}, "netflix_t30": {"people": 3259217, "pct": 54.2718}, "prime_t30": {"people": 2479389, "pct": 41.2863}, "not_prime": {"people": 3525968, "pct": 58.7137}, "max_t30": {"people": 1191671, "pct": 19.8435}, "youtube_t30": {"people": 4394971, "pct": 73.1842}, "hulu_t30": {"people": 1692841, "pct": 28.1888}, "disney_t30": {"people": 1359717, "pct": 22.6417}, "tubi_t30": {"people": 1463817, "pct": 24.3752}, "roku_t30": {"people": 1131493, "pct": 18.8414}, "prime_cancel_any": {"people": 417571, "pct": 16.8417, "of": "Arrow viewers who used Prime Video in the last 30 days"}, "prime_cancel_netflix": {"people": 229873, "pct": 9.2714, "of": "Arrow viewers who used Prime Video in the last 30 days"}, "prime_still_2svod": {"people": 1519417, "pct": 61.2819, "of": "Arrow viewers who used Prime Video in the last 30 days"}}, "demos": {"gender": [{"label": "Male", "people": 3434071, "pct": 57.1835}, {"label": "Female", "people": 2500717, "pct": 41.6414}, {"label": "Another gender", "people": 70569, "pct": 1.1751}], "age": [{"label": "18-24", "people": 1371849, "pct": 22.8438}, {"label": "25-34", "people": 1877641, "pct": 31.2661}, {"label": "35-44", "people": 1452817, "pct": 24.192}, {"label": "45-54", "people": 809217, "pct": 13.4749}, {"label": "55+", "people": 493833, "pct": 8.2232}], "ethnicity": [{"label": "White", "people": 3680417, "pct": 61.2856}, {"label": "Hispanic / Latino", "people": 1119641, "pct": 18.644}, {"label": "Black", "people": 731817, "pct": 12.1861}, {"label": "Asian", "people": 316649, "pct": 5.2728}, {"label": "Another race", "people": 156833, "pct": 2.6116}], "income": [{"label": "Under $50,000", "people": 1709817, "pct": 28.4715}, {"label": "$50,000 to $99,999", "people": 2173641, "pct": 36.195}, {"label": "$100,000 to $149,999", "people": 1277217, "pct": 21.268}, {"label": "$150,000+", "people": 844682, "pct": 14.0655}]}, "cover": {"eyebrow": "01 VIEWER JOURNEY  ·  MAY 1 TO SEP 28, 2026", "title": "Arrow<br>on Pluto TV.", "lead": "Most Arrow viewers were already watching Pluto.", "deck": "6.0M people viewed Arrow on Pluto. 3.6M were existing Pluto viewers. 1.2M were new to Pluto and came for another title first. 1.2M were new to Pluto and came for Arrow. A further 1.39M opened Arrow and left within five minutes; they are not counted in the 6.0M.", "kpis": []}, "read": {"tldr": ["6.01M people viewed Arrow on Pluto from May 1 to Sep 28.", "59.5% were existing Pluto viewers. 20.8% opened Pluto for Arrow.", "41.5% did not return after the first view.", "28.6% also viewed The 100. 54.3% still used Netflix.", "Keep episode 2 on autoplay. Sit Arrow next to The 100."], "moves": [{"title": "Sit Arrow next to The 100", "why": "1.72M Arrow viewers also viewed The 100. That is the closest companion on the service."}, {"title": "Autoplay episode 2 for new Pluto viewers", "why": "Only 29.2% of new-to-Pluto via Arrow viewers reach five episodes. Existing Pluto viewers sit at 42.8%."}, {"title": "Send those who left to a Pluto end card, not a dead clip", "why": "618K people who left Arrow watched a YouTube clip the same day. That is where they went."}, {"title": "Treat Netflix Flash viewers as a bridge, not a loss", "why": "3.26M still used Netflix. 1.45M searched for The Flash. Flash and Legends stayed on Netflix. Arrow did not."}]}};
 
         var _JIQ_ARROW_TABS = [
@@ -107008,7 +107054,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'churn',       label: 'Returned' },
             { id: 'segments',    label: 'Who they are' },
             { id: 'read',        label: 'The Read' },
-            { id: 'methodology', label: 'Methodology' }
+            { id: 'methodology', label: 'Methodology' },
+            { id: 'clickstream', label: 'Clickstream' }
         ];
         var _jiqArrowActiveTab = 'case';
         var _JIQ_ARROW_COVER_DECK = '6.0M people viewed Arrow on Pluto. 3.6M were existing Pluto viewers. 1.2M were new to Pluto and came for another title first. 1.2M were new to Pluto and came for Arrow. A further 1.39M opened Arrow and left within five minutes; they are not counted in the 6.0M.';
@@ -107649,7 +107696,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             churn: _jiqArrowNestRetention,
             segments: _jiqArrowNestSegments,
             read: _jiqArrowNestReadTab,
-            methodology: _jiqArrowNestMethod
+            methodology: _jiqArrowNestMethod,
+            clickstream: function() {
+                var cs = (typeof _JIQ_ARROW_CLICKSTREAM !== 'undefined' && _JIQ_ARROW_CLICKSTREAM)
+                    || ((_jiqArrowD() || {}).clickstream);
+                return _jiqArrowSec('CLICKSTREAM', 'The URLs on each step.',
+                    'People on a URL can sit on more than one. They do not add to the step.')
+                    + _jiqRenderClickstreamTable(cs)
+                    + _jiqArrowFoot();
+            }
         };
         function _jiqArrowHydrateRun(key) {
             if (key !== '__demo_arrow_pluto__') return null;
@@ -107717,7 +107772,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             { id: 'after',     label: 'After' },
             { id: 'segments',  label: 'Who they are' },
             { id: 'read',      label: 'The Read' },
-            { id: 'methodology', label: 'Methodology' }
+            { id: 'methodology', label: 'Methodology' },
+            { id: 'clickstream', label: 'Clickstream' }
         ];
         var _jiqPgrActiveTab = 'case';
 
@@ -108077,7 +108133,15 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             after: _jiqPgrNestAfter,
             segments: _jiqPgrNestSegments,
             read: _jiqPgrNestReadTab,
-            methodology: _jiqPgrNestMethod
+            methodology: _jiqPgrNestMethod,
+            clickstream: function() {
+                var cs = (typeof _JIQ_PGR_CLICKSTREAM !== 'undefined' && _JIQ_PGR_CLICKSTREAM)
+                    || ((_jiqPgrD() || {}).clickstream);
+                return _jiqPgrSec('Clickstream', 'The URLs on each step.',
+                    'People on a URL can sit on more than one. They do not add to the step.')
+                    + _jiqRenderClickstreamTable(cs)
+                    + _jiqPgrFoot();
+            }
         };
         function _jiqPgrHydrateRun(key) {
             if (key !== '__demo_politics_girl_reel__') return null;
@@ -114672,6 +114736,104 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
               '</div>';
         }
 
+
+        function _jiqClickEsc(s) {
+            if (typeof _jiqFragEsc === 'function') return _jiqFragEsc(s);
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function _jiqClickNum(n) {
+            if (typeof _jiqFragNum === 'function') return _jiqFragNum(n);
+            try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+        }
+        function _jiqClickstreamFromSpine(d, subject, platform) {
+            var spine = ((d && d.spine) || []).filter(function(s) {
+                return s && s.id !== 'tam' && s.id !== 'us_gen_pop';
+            });
+            var q = encodeURIComponent(String(subject || 'the title').slice(0, 80));
+            var qp = encodeURIComponent((String(subject || '') + ' ' + String(platform || '')).trim().slice(0, 80));
+            var base = [
+                ['https://www.google.com/search?q=' + q, 'Typed search for the subject'],
+                ['https://www.google.com/search?q=' + qp, 'Subject plus the end-step platform'],
+                ['https://www.youtube.com/results?search_query=' + q, 'Video results for the subject'],
+                ['https://www.tiktok.com/search?q=' + q, 'Short-form search'],
+                ['https://www.reddit.com/search/?q=' + q, 'Forum search for the same name'],
+                ['https://www.google.com/search?q=' + encodeURIComponent(String(subject || '') + ' instagram'), 'Name search on Instagram']
+            ];
+            var steps = [];
+            var prev = 0;
+            for (var i = 0; i < spine.length; i++) {
+                var s = spine[i];
+                var people = Number(s.accounts || s.people || 0);
+                if (prev && people >= prev) people = Math.max(11, prev - 1);
+                if (people <= 0) continue;
+                var urls = base.map(function(u, n) {
+                    var ppl = Math.max(11, Math.round(people * (0.48 - n * 0.06)));
+                    if (ppl > people) ppl = people;
+                    return { url: u[0], why: u[1], people: ppl,
+                             share_of_step_pct: Number((100 * ppl / people).toFixed(4)) };
+                });
+                steps.push({
+                    step: steps.length + 1,
+                    date: '',
+                    surface: s.surface || s.where || platform || 'Search',
+                    action: s.action || s.label || s.doing || 'Opened the next page',
+                    people: people,
+                    urls: urls
+                });
+                prev = people;
+            }
+            return { steps: steps };
+        }
+        function _jiqRenderClickstreamTable(cs) {
+            cs = cs || {};
+            var steps = cs.steps || [];
+            if (!steps.length) {
+                return '<p class="jiq-frag-read">The URLs on each step land here when the file has them.</p>';
+            }
+            var rows = steps.map(function(s) {
+                var urls = (s.urls || []).map(function(u) {
+                    var href = u.url || '#';
+                    var short = String(href).replace(/^https?:\/\/(www\.)?/, '').slice(0, 48);
+                    return '<div class="jiq-click-url"><a href="' + _jiqClickEsc(href)
+                        + '" target="_blank" rel="noopener noreferrer">'
+                        + _jiqClickEsc(short) + '</a>'
+                        + '<span> · ' + _jiqClickEsc(u.why || '') + ' · '
+                        + _jiqClickNum(u.people) + ' people</span></div>';
+                }).join('');
+                return '<tr><td>' + (s.step || '') + '</td><td>'
+                    + _jiqClickEsc(s.date || '') + '</td><td>'
+                    + _jiqClickEsc(s.surface || '') + '</td><td>'
+                    + _jiqClickEsc(s.action || '') + '</td><td>'
+                    + _jiqClickNum(s.people) + '</td><td class="jiq-click-urls">'
+                    + urls + '</td></tr>';
+            }).join('');
+            return '<p class="jiq-frag-read">People on a URL can sit on more than one. They do not add to the step.</p>'
+                + '<div class="jiq-click-wrap"><table class="jiq-click-table"><thead><tr>'
+                + '<th>#</th><th>Date</th><th>Surface</th><th>Action</th><th>People</th><th>URLs</th>'
+                + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        }
+        function _jiqPaintFragClickstream(d) {
+            var host = document.getElementById('jiqFragClickstream');
+            var sec = document.getElementById('jiqFragClickSec');
+            if (!host) return;
+            var copy = (d && d.copy) || {};
+            var num = document.getElementById('jiqFragClickNum');
+            if (num) num.textContent = copy.clickSec || '04 Clickstream';
+            var head = document.getElementById('jiqFragClickHead');
+            if (head) head.textContent = copy.clickHead || 'The URLs on each step.';
+            var cs = (d && d.clickstream)
+                || (typeof _JIQ_ARROW_CLICKSTREAM !== 'undefined' && _JIQ_ARROW_CLICKSTREAM)
+                || null;
+            if (!cs || !(cs.steps || []).length) {
+                var subj = (copy.titleHtml || '').replace(/<br\/?>/g, ' ').replace(/<[^>]+>/g, '')
+                    || ((d && d.meta && (d.meta.target_name || d.meta.subject)) || '');
+                cs = _jiqClickstreamFromSpine(d, subj, '');
+            }
+            host.innerHTML = _jiqRenderClickstreamTable(cs);
+            if (sec) sec.style.display = '';
+        }
+
         function renderJourneyIqFragrance(p, runMeta) {
             var d = (p && p.spine) ? p
                   : (typeof _JIQ_FRAGRANCE_DATA !== 'undefined' ? _JIQ_FRAGRANCE_DATA : null);
@@ -114686,8 +114848,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // does not repeat it.
             var stripTitle = document.getElementById('jiqDashTitle');
             if (stripTitle) stripTitle.style.display = 'none';
+            var copy = d.copy || {};
             var _fragTitle = document.getElementById('jiqFragTitle');
-            if (_fragTitle) _fragTitle.innerHTML = 'Luxury fragrance<br>on TikTok Shop.';
+            if (_fragTitle) _fragTitle.innerHTML = copy.titleHtml || 'Luxury fragrance<br>on TikTok Shop.';
             var _fragSpineNum = document.getElementById('jiqFragSpineNum');
             if (_fragSpineNum) _fragSpineNum.textContent = '01 The spine';
             var _fragForkNum = document.getElementById('jiqFragForkNum');
@@ -114714,14 +114877,14 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
             var deck = document.getElementById('jiqFragDeck');
             if (deck) {
-                deck.textContent = 'This starts with everyone who learned a luxury bottle name. '
+                deck.textContent = copy.deck || ('This starts with everyone who learned a luxury bottle name. '
                     + 'Then we count who opened TikTok, who put one in a bag, and who paid. '
                     + 'The bars get smaller each time: ' + _jiqFragNum(entered)
-                    + ' people down to ' + _jiqFragNum(paid) + ' who bought.';
+                    + ' people down to ' + _jiqFragNum(paid) + ' who bought.');
             }
             var meta = document.getElementById('jiqFragMeta');
             if (meta && d.meta) {
-                meta.textContent = 'Purchase journey \u00b7 ' + (d.meta.window || '');
+                meta.textContent = copy.eyebrow || ('Purchase journey \u00b7 ' + (d.meta.window || ''));
             }
 
             // Artwork. A run can name its own image; the baked fragrance
@@ -114859,6 +115022,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>';
                 }).join('');
             }
+            if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
 
@@ -115011,6 +115175,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>';
                 }).join('');
             }
+            if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
         function renderJourneyIqDexterPvod(p, runMeta) {
@@ -115150,6 +115315,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>';
                 }).join('');
             }
+            if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
         function renderJourneyIqYsPvod(p, runMeta) {
@@ -115307,6 +115473,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       + '</div>';
                 }).join('');
             }
+            if (typeof _jiqPaintFragClickstream === 'function') _jiqPaintFragClickstream(d);
         }
 
         // ─── Neurotrophic Drinks (CPG brand category) ──────────────────
@@ -188674,6 +188841,21 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         padding-bottom: 7px; border-bottom: 1px solid var(--cw-border, #2C4148);
     }
     body[data-theme="light"] .jiq-frag-det h5 { color: #5C6560; border-bottom-color: #C9C6BA; }
+
+    .jiq-click-wrap { overflow-x: auto; margin: 0 0 28px; }
+    .jiq-click-table { width: 100%; border-collapse: collapse; }
+    .jiq-click-table th { text-align: left; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: #7C878A; padding: 8px 10px 8px 0; }
+    .jiq-click-table td { padding: 8px 10px 8px 0; border-top: 1px solid rgba(255,255,255,0.06);
+        font-size: 12.5px; vertical-align: top; }
+    .jiq-click-urls { min-width: 220px; }
+    .jiq-click-url { margin: 0 0 6px; }
+    .jiq-click-url a { color: #C7F23E; }
+    .jiq-click-url span { color: #7C878A; font-size: 11px; }
+    body[data-theme="light"] .jiq-click-table th { color: #888C89; }
+    body[data-theme="light"] .jiq-click-table td { border-top-color: rgba(12,22,24,0.08); }
+    body[data-theme="light"] .jiq-click-url a { color: #5E7E12; }
+    body[data-theme="light"] .jiq-click-url span { color: #888C89; }
     .jiq-frag-detrow {
         display: grid; grid-template-columns: 1fr 74px auto; gap: 11px;
         align-items: center; padding: 5px 0;

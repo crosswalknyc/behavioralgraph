@@ -17052,22 +17052,29 @@ _PM_JIQ_CREDITS = 15
 _PM_JIQ_ASK_COPY = (
     "Happy to build a Digital Journey. Give me, in one message:\n"
     "1. The category or title the journey follows (e.g. luxury "
-    "fragrance, running shoes, Young Sheldon)\n"
+    "fragrance, running shoes, Young Sheldon). Or paste the clip URL "
+    "when the file is before and after a specific post.\n"
     "2. The end step in one sentence. It can be a purchase (e.g. "
-    "paid $95+ for a house bottle on TikTok Shop) or a behavior "
-    "(e.g. watched a paid episode on Amazon after a clip). 'Engaged "
-    "with the category' is not an end step.\n"
-    "3. Where that end step happens (e.g. TikTok Shop, Amazon, a "
-    "DTC site, Peacock)\n"
+    "paid $95+ for a house bottle on TikTok Shop), a watch (e.g. "
+    "watched a paid episode on Amazon after a clip), a ticketing-site "
+    "visit for a film, a 20-minute before-and-after around a clip, "
+    "new-to-platform vs already on it, or a music-first path into a "
+    "title. 'Engaged with the category' is not an end step.\n"
+    "3. Where that end step happens (e.g. TikTok Shop, Amazon, "
+    "Peacock, Instagram, Pluto)\n"
     "Optional: a defined starting point (e.g. accounts that watched "
     "short-form clips of the title; default is US gen pop) and the "
-    "window (default: trailing 12 months).\n\n"
+    "window (default: trailing 12 months).\n"
+    "Every journey includes a Clickstream last tab: the public URLs "
+    "on each step, with people on each URL.\n\n"
     "Examples:\n"
     "\"Running shoes on Amazon, end step is paid $120+ for a "
     "performance shoe, trailing 12 months\"\n"
     "\"Young Sheldon, start from accounts that watched short-form "
     "clips of the show, end step is watched a paid episode on "
-    "Amazon\"")
+    "Amazon\"\n"
+    "\"Build a journey of people who watched this video and what "
+    "happened before and after: https://www.instagram.com/p/xxxxx/\"")
 
 
 def _pm_jiq_intent(text):
@@ -17156,6 +17163,19 @@ def _pm_jiq_confirm_reply(parsed):
         shape = ("It's a full discovery-to-ticketing-site path - where "
                  "they see the campaign, act on it, look the film up, "
                  "look up showtimes, and reach the ticketing site")
+    elif str(parsed.get('journey_kind') or '') == 'before_after':
+        clip = parsed.get('clip_url') or 'this clip'
+        shape = ("It's a 20-minute before-and-after around the clip "
+                 f"({clip}) - last surface before they opened it, "
+                 "first surface after, then research and action in "
+                 "the rest of the window")
+    elif str(parsed.get('journey_kind') or '') == 'discovery_existing':
+        shape = ("It's new-to-the-platform vs already on it - where "
+                 "each group arrived, what they opened first, and "
+                 "who stayed")
+    elif str(parsed.get('journey_kind') or '') == 'music':
+        shape = ("It's a music-first path into the title - the song, "
+                 "the sound page, the title page, and the watch")
     elif str(parsed.get('journey_kind') or '') == 'watch':
         shape = ("It's a full discovery-to-watch path - where the "
                  "title first reaches them, where they cross to the "
@@ -17165,14 +17185,18 @@ def _pm_jiq_confirm_reply(parsed):
         shape = ("It's a full discovery-to-purchase path - where "
                  "they learn the name, research, compare, hunt a "
                  "code, bag and leave, get retargeted, and pay")
+    clip_line = (f"- Clip: {parsed['clip_url']}\n"
+                 if parsed.get('clip_url') else '')
     return (
         f"Here's the Digital Journey I'll build:\n"
         f"- {parsed['subject']} on {parsed['platform']}\n"
         f"- End step: {end_step}\n"
+        f"{clip_line}"
         f"- Window: {win}\n"
         f"{start_line}\n\n"
-        f"{shape} - and it lands in the Digital Journey tab when "
-        f"finished. It prices at "
+        f"{shape}. Every journey includes a Clickstream last tab of "
+        f"the public URLs on each step. It lands in the Digital "
+        f"Journey tab when finished. It prices at "
         f"{_pm_tool_price_label('journey_iq', '$500')}. Run it?")
 
 

@@ -45,7 +45,8 @@ def master_for(inputs) -> str:
                     ("subject", "journey_kind", "conversion_event",
                      "notes", "category", "platform"))
     if str((inputs or {}).get("journey_kind") or "").lower() in (
-            "watch", "ticketing"):
+            "watch", "ticketing", "before_after", "discovery_existing",
+            "music"):
         return "CONTENT"
     return "CONTENT" if _TITLE_RE.search(blob) else "OTHER"
 

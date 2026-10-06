@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "d941af48a194a89dbfdd7ad09c01797fb96c30edfea362d50f18a9f5f8552339",
+ "content_hash": "de9919ec6a1f737de1c148e2c600ebc5c390e6bac2afd313cf72f1382360b813",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -286,7 +286,26 @@
    "sources": [
     "no-modeled-or-source-language.mdc"
    ]
+  },
+  {
+   "id": "journey_clickstream_always",
+   "decided": "2026-10-06",
+   "statement": "Every Digital Journey includes a Clickstream last tab: eight to thirteen steps, six to ten public URLs on each step, people and share of that step. URLs are real pages (search, official accounts, title pages, documented clips). People on a URL can sit on more than one URL and do not add to the step count. The same file covers shop, watch, ticketing-site visit (no ticket-bought claim), before and after a named clip, new vs already on a platform, and music-first into a title. The cover is the subject name and a real still.",
+   "match_terms": [
+    "digital journey",
+    "journey",
+    "clickstream",
+    "before and after",
+    "ticketing",
+    "song to",
+    "music first",
+    "new to",
+    "already on"
+   ],
+   "sources": [
+    "How_Digital_Journey_IQ_Journeys_Are_Built.md"
+   ]
   }
  ],
- "generated_at": "2026-10-01T16:48:14Z"
+ "generated_at": "2026-10-06T20:04:18Z"
 }

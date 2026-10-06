@@ -52,11 +52,20 @@ user's message. Return STRICT JSON only:
                                 // ("watched a paid episode on Amazon
                                 // after a clip", "streamed the title
                                 // on Peacock")
-  "journey_kind": "purchase"|"watch",
-                                // infer from the end step: money
-                                // changes hands -> "purchase"; the end
-                                // step is watching / streaming /
-                                // playing / listening -> "watch"
+  "journey_kind": "purchase"|"watch"|"ticketing"|"before_after"|"discovery_existing"|"music",
+                                // infer from the ask:
+                                // money changes hands -> "purchase"
+                                // watch / stream / play / listen -> "watch"
+                                // film ticket / showtime / theatrical
+                                //   -> "ticketing" (site visit, never a buy)
+                                // before and after a named clip / URL
+                                //   -> "before_after"
+                                // new to a platform vs already on it
+                                //   -> "discovery_existing"
+                                // song / soundtrack / music-first
+                                //   -> "music"
+  "clip_url": str|null,         // Instagram / YouTube / TikTok URL when
+                                // the user pasted one
   "start_behavior": str|null,   // a DEFINED starting behavior cohort
                                 // when the user names one ("accounts
                                 // that watched short-form clips of the
@@ -72,9 +81,11 @@ user's message. Return STRICT JSON only:
                                 // conversion_event are still missing
 }
 "Engaged with X" is NOT an end step - if the user gave neither a paid
-event nor a concrete watch/play behavior, list conversion_event in
-missing. A start_behavior is never required; only capture one the user
-actually described. Never invent what the user did not give."""
+event nor a concrete watch/play behavior nor a clip URL with a
+before/after ask, list conversion_event in missing. A start_behavior
+is never required; only capture one the user actually described.
+A pasted Instagram / YouTube / TikTok URL is clip_url. Never invent
+what the user did not give."""
 
 
 RESEARCH_SYSTEM_PROMPT = """You are building a discovery-to-purchase
@@ -128,7 +139,33 @@ round numbers, no two identical rates. Return STRICT JSON only:
                ]}, ...]},         // it, each as a share of the row
     ...                           // (overlap allowed). Omit on a row
   ],                              // that is already one named thing.
-  "anchors_note": str             // internal: the public anchors used
+  "anchors_note": str,            // internal: the public anchors used
+  "clickstream": {                // REQUIRED. Last tab on every journey.
+    "steps": [                    // 8 to 13 steps, each a subset of the
+      {"date": "YYYY-MM-DD",      // one above. 6 to 10 public URLs each.
+       "surface": str,            // search, official accounts, title
+       "action": str,             // pages, documented clips. No invented
+       "people": int,             // TikTok video IDs. URL people overlap
+       "urls": [{"url": "https://...",  // and do not sum to the step.
+                 "why": str,
+                 "share_of_step_pct": float}]}
+    ]
+  },
+  "before_after": {               // when journey_kind is before_after
+    "before": [{"label": str, "pct": float, "doing": str}],
+    "after": [{"label": str, "pct": float, "doing": str}]
+  },                              // omit on other kinds
+  "who_they_are": {               // optional demos; each list sums ~100
+    "gender": [{"label": str, "pct": float}],
+    "age": [{"label": str, "pct": float}],
+    "ethnicity": [{"label": str, "pct": float}],
+    "income": [{"label": str, "pct": float}]
+  },
+  "the_read": {                   // optional four cards + moves
+    "cards": [{"title": str, "body": str}],
+    "moves": [{"move": str, "why": str}]
+  },
+  "cover_title": str              // subject name only, not a finding
 }
 
 Rules that do not move:
@@ -160,8 +197,14 @@ Rules that do not move:
   ask "which podcasts?" and the file must already hold the answer.
   Never a placeholder name, never a show that did not cover the title.
 - Do not invent a sample / observed-file n. Never emit a sample field. The path counts are the file.
+- clickstream is REQUIRED on every journey. 8 to 13 steps, 6 to 10
+  public https URLs on each step. Official accounts, search pages,
+  title pages, and documented clips only. Never invent a TikTok
+  video ID. A taken-down post is the creator account plus the public
+  pages that still name it. URL people overlap and do not add to the
+  step. cover_title is the subject name, not a finding.
 
-Two journey families. journey_kind in the input decides which:
+Journey families. journey_kind in the input decides which:
 - "purchase": the shop family. The last stage is the paid event; the
   penultimate stage is the cart-like step (bag, buy page); the fork is
   left-without-paying -> retarget -> return -> paid return.
@@ -173,6 +216,18 @@ Two journey families. journey_kind in the input decides which:
   rows) - never force a bag or checkout onto a watch journey. Include
   one detour table for the pixel-miss class: accounts that reached the
   title but played it on a service they already had.
+- "before_after": a named clip is the middle of the file. Stage 1 is
+  the last surface in the 20 minutes before first play. The clip
+  itself is a middle stage. Later stages are the first surface after,
+  then research and action in the rest of the window. Fill
+  before_after.before and before_after.after. clip_url in the input
+  is a real URL and must appear on the clip step.
+- "discovery_existing": split the file into people already on the
+  platform vs people new to it. Detours carry that split. The last
+  stage is the watch or the platform session, never a bag.
+- "music": music-first path into a title. Steps include the song
+  search, the sound page, the title page, and the watch. Soundtrack
+  and needle-drop URLs stay public (search, artist, official video).
 
 start_behavior in the input, when present, IS stage 1 of the nest: a
 defined behavior cohort (e.g. accounts that watched short-form clips
@@ -250,6 +305,26 @@ def is_ticketing_journey(inputs: dict, prim: Optional[dict] = None) -> bool:
     return bool(_TICKETING_RE.search(hay)) and bool(
         re.search(r'ticket|box.?office|showtime|theat|cinema|fandango',
                   hay, re.I))
+
+
+WATCH_KINDS = frozenset(
+    ('watch', 'before_after', 'discovery_existing', 'music'))
+
+
+def journey_family(inputs: dict, prim: Optional[dict] = None) -> str:
+    """purchase | watch | ticketing. Extra kinds ride the watch family
+    for copy and image, then keep their own extras on the payload."""
+    if is_ticketing_journey(inputs, prim):
+        return 'ticketing'
+    kind = str((inputs or {}).get('journey_kind') or '').lower()
+    if kind in WATCH_KINDS:
+        return 'watch'
+    return 'purchase'
+
+
+def _named_clip_urls(inputs: dict) -> list:
+    u = str((inputs or {}).get('clip_url') or '').strip()
+    return [u] if u else []
 
 
 # Ordered: longer phrases first so the short ones never pre-empt them.
@@ -668,6 +743,8 @@ def build_copy(subject: str, platform: str, blob: dict, *,
                      if back else ''),
         'detourSec': '03 Detours',
         'detourHead': 'Where the journey came from, and what closed it.',
+        'clickSec': '04 Clickstream',
+        'clickHead': 'The URLs on each step.',
         'kpis': [
             {'v': _fmt_n(entered), 'l': str(first['label'])},
             {'v': _fmt_n(end), 'l': tile_end},
@@ -855,8 +932,12 @@ def build_journey(inputs: dict, prim: dict, *,
             'customer_brand': prim.get('customer_brand') or subject,
             'start_date': start, 'end_date': end,
             'target_type': ('watch_journey'
-                            if (inputs.get('journey_kind') == 'watch')
+                            if journey_family(inputs, prim) == 'watch'
                             else 'purchase_journey'),
+            'journey_kind': (
+                'ticketing' if is_ticketing_journey(inputs, prim)
+                else str(inputs.get('journey_kind') or 'purchase')),
+            'clip_url': str(inputs.get('clip_url') or '') or None,
             'category': str(prim.get('category') or 'brands'),
             'created_by': created_by, 'created_at': now,
         },
@@ -874,11 +955,23 @@ def build_journey(inputs: dict, prim: dict, *,
     ticketing = is_ticketing_journey(inputs, prim)
     if ticketing:
         payload = apply_ticketing_language(payload)
-    family = ('ticketing' if ticketing
-              else 'watch' if inputs.get('journey_kind') == 'watch'
-              else 'purchase')
+    family = journey_family(inputs, prim)
     payload['fragrance_shop_journey']['copy'] = build_copy(
         subject, platform, payload['fragrance_shop_journey'], family=family)
+    if prim.get('cover_title'):
+        payload['fragrance_shop_journey']['copy']['titleHtml'] = (
+            str(prim['cover_title']).strip().rstrip('.') + '.')
+    if prim.get('before_after'):
+        payload['before_after'] = prim['before_after']
+        payload['fragrance_shop_journey']['before_after'] = prim['before_after']
+    if prim.get('who_they_are'):
+        payload['who_they_are'] = prim['who_they_are']
+        payload['fragrance_shop_journey']['who_they_are'] = prim['who_they_are']
+    if prim.get('the_read'):
+        payload['the_read'] = prim['the_read']
+        payload['fragrance_shop_journey']['the_read'] = prim['the_read']
+    from migration.journey_clickstream import attach_clickstream
+    attach_clickstream(payload, prim, inputs)
     return payload
 
 
@@ -1470,7 +1563,7 @@ def apply_attribution_anchors(payload: dict, camp: dict, inputs: dict,
                 n_ = int(m_.group(0).replace(',', ''))
                 return f"{_messy((seed, 'fact', n_), n_ * f_paid):,}"
             f['value'] = re.sub(r'\d{1,3}(?:,\d{3})+', _sc, str(f.get('value') or ''))
-    family = 'ticketing' if ticketing else ('watch' if inputs.get('journey_kind') == 'watch' else 'purchase')
+    family = journey_family(inputs)
     try:
         j['copy'] = build_copy(str(inputs.get('subject') or ''), str(inputs.get('platform') or ''),
                                j, family=family)
@@ -1498,6 +1591,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         meta['created_at'] = _dt.datetime.utcnow().isoformat() + 'Z'
         meta['replayed_from'] = (anchors.get('prior_journey') or {}).get('source_key')
         print(f"[journey] replayed prior journey for {inputs.get('subject')!r}")
+        try:
+            from migration.journey_clickstream import attach_clickstream
+            attach_clickstream(replay, {}, inputs)
+        except Exception as exc:
+            print(f'[journey] clickstream attach on replay skipped: {exc}')
         return replay
     user_prompt = json.dumps({
         'corpus_anchors': anchors_prompt_block(anchors),
@@ -1506,6 +1604,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'conversion_event': inputs.get('conversion_event') or '',
         'journey_kind': ('ticketing' if is_ticketing_journey(inputs)
                          else (inputs.get('journey_kind') or 'purchase')),
+        'clip_url': inputs.get('clip_url') or None,
         'start_behavior': inputs.get('start_behavior') or None,
         'window': {'start': start, 'end': end},
         'tam_label': inputs.get('tam_label') or 'US gen pop',
@@ -1513,7 +1612,7 @@ def synthesize(inputs: dict, claude_json: Callable, *,
         'notes': inputs.get('notes') or '',
     })
     prim = claude_json(RESEARCH_SYSTEM_PROMPT, user_prompt,
-                       max_tokens=9000, temperature=0.6,
+                       max_tokens=12000, temperature=0.6,
                        surface='journey_synthesis', tools=tools)
     if not isinstance(prim, dict) or not prim.get('nest'):
         raise RuntimeError('journey research returned no primitives')
@@ -1525,6 +1624,11 @@ def synthesize(inputs: dict, claude_json: Callable, *,
                 seed=f"{inputs['subject']}|{inputs['platform']}")
         except Exception as exc:
             print(f'[journey] corpus anchor pass skipped: {exc}')
+    try:
+        from migration.journey_clickstream import attach_clickstream
+        attach_clickstream(payload, prim, inputs)
+    except Exception as exc:
+        print(f'[journey] clickstream attach skipped: {exc}')
     return scrub_payload_text(payload)
 
 

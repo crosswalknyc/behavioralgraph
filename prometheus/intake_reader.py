@@ -413,6 +413,45 @@ def _resolve_amazon(canon, kind):
     return canon
 
 
+_CLIP_URL = re.compile(
+    r'https?://(?:www\.)?(?:'
+    r'instagram\.com/(?:p|reel|reels)/[A-Za-z0-9_-]+/?'
+    r'|youtube\.com/(?:shorts/[A-Za-z0-9_-]+|watch\?v=[A-Za-z0-9_-]+)'
+    r'|youtu\.be/[A-Za-z0-9_-]+'
+    r'|tiktok\.com/@[\w.]+(?:/video/\d+)?'
+    r'|tiktok\.com/t/[\w]+)',
+    re.I)
+
+
+def find_clip_url(text):
+    m = _CLIP_URL.search(str(text or ''))
+    return (m.group(0).rstrip('/') if m else None)
+
+
+def _platform_from_clip(url):
+    u = str(url or '').lower()
+    if 'instagram.com' in u:
+        return 'Instagram'
+    if 'youtube.com' in u or 'youtu.be' in u:
+        return 'YouTube'
+    if 'tiktok.com' in u:
+        return 'TikTok'
+    return None
+
+
+def _kind_from_ask(text, kind):
+    low = str(text or '').lower()
+    if re.search(r'before and after|before/after|20\s*-?\s*min', low) \
+            and find_clip_url(text):
+        return 'before_after'
+    if re.search(r'\bnew to\b', low) and re.search(
+            r'\balready\b|\bexisting\b', low):
+        return 'discovery_existing'
+    if re.search(r'\bsong to\b|music[- ]first|soundtrack|needle-?drop', low):
+        return 'music'
+    return kind
+
+
 def keyword_parse_journey(text):
     """Digital Journey brief -> the PARSE_SYSTEM_PROMPT shape, best effort.
     Fields it cannot read are None and listed in ``missing``."""
@@ -420,12 +459,19 @@ def keyword_parse_journey(text):
     plats = find_platforms(t)
     start = find_start_behavior(t)
     conv, kind = find_conversion(t, start)
-    platform = _primary_platform(plats, kind, conv)
+    clip_url = find_clip_url(t)
+    kind = _kind_from_ask(t, kind)
+    if clip_url and not conv:
+        conv = 'watched this clip'
+        kind = kind or 'before_after'
+    platform = _primary_platform(plats, kind, conv) \
+        or _platform_from_clip(clip_url)
     subject = find_subject(t, plats)
     sd, ed = find_window(t)
     out = {
         'subject': subject, 'platform': platform,
         'conversion_event': conv, 'journey_kind': kind or None,
+        'clip_url': clip_url,
         'start_behavior': start, 'start_date': sd, 'end_date': ed,
         'tam_label': None, 'tam_accounts': None, 'notes': None,
     }
@@ -462,7 +508,8 @@ def merge_missing(primary, secondary, required):
     overwritten; ``missing`` is recomputed."""
     out = dict(primary or {})
     sec = secondary or {}
-    optional = ('journey_kind', 'start_behavior', 'captured_action',
+    optional = ('journey_kind', 'clip_url', 'start_behavior',
+                'captured_action',
                 'start_date', 'end_date',
                 # brand partnership
                 'pre_start', 'pre_end', 'post_start', 'post_end',
