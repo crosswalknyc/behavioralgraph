@@ -2698,20 +2698,34 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'disneyplus',
      'label': 'Disney+',
-     'ceiling': 15_000_000,
+     'ceiling': 12_662_041,
      'anchors': (
-         'Nielsen: Disney+ #1 (Mandalorian / Loki / Marvel tentpole) '
-         '3-8M US households/week; steady-state top-10 1-3M. Disney '
-         'does not disclose per-title numbers - estimates from '
-         'Whip Media / Samba TV / Nielsen Top-10.'
+         'Disney+ (about 57M US accounts, 2026). Counted in ACCOUNTS: a view '
+         'is one account playing one title on one day. Nielsen minutes put '
+         'the service near 2% of US TV time; spread over the catalog that is '
+         'about 0.35-0.40 top-100 views per account per day. Levels: a '
+         'Marvel / Star Wars tentpole in its premiere week 900K-1.3M US '
+         'accounts a day; steady-state top-10 400K-700K a day; ranks 11-40 '
+         '120K-400K; ranks 41-100 50K-120K; deep library (classic animation, '
+         'Pixar shorts, National Geographic) 8K-50K. Disney does not '
+         'disclose per-title numbers - reason from Nielsen Top-10 minutes '
+         '(divide weekly minutes by runtime, then by about 3.5 arrival days, '
+         'and remember Nielsen households are already accounts), Whip Media '
+         'and Samba TV.'
      )},
     {'key': 'hulu',
      'label': 'Hulu',
-     'ceiling': 15_000_000,
+     'ceiling': 12_790_933,
      'anchors': (
-         'Nielsen: Hulu #1 (Bear, Only Murders): 3-6M US households/'
-         'week. Ad-tier bumps reach but not necessarily views. Long '
-         'tail 0.5-2M. Hulu is ~15% of US streaming minutes.'
+         'Hulu (about 55M US accounts, 2026). Counted in ACCOUNTS: a view is '
+         'one account playing one title on one day. Nielsen puts Hulu near '
+         '2.5-3% of US TV time, about 0.40 top-100 views per account per '
+         'day. Levels: #1 (The Bear, Only Murders in a live window, a big FX '
+         'premiere) 900K-1.3M US accounts a day; steady-state top-10 '
+         '450K-700K; ranks 11-40 120K-450K; ranks 41-100 30K-120K; deep '
+         'library 5K-30K. The ad tier adds reach to the service, not to a '
+         'single title. Nielsen households are already accounts; never '
+         'multiply them by viewers per household.'
      )},
     {'key': 'max',
      'label': 'HBO Max',
@@ -2754,126 +2768,119 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'espnplus',
      'label': 'ESPN+',
-     'ceiling': 3_000_000,
+     'ceiling': 2_129_541,
      'anchors': (
-         'ESPN+ per-title reach is small (sport-specific, event-'
-         'driven). Big UFC PPV weekend: 1-2.5M US buyers. Non-event '
-         'programming <0.5M weekly US.'
+         'ESPN+ (24.1M US accounts disclosed, most of them bundle passengers '
+         'who rarely open it). Counted in ACCOUNTS. Per-title reach is small '
+         'and event-driven: a UFC numbered PPV card 600K-1.2M US accounts on '
+         'the night; a marquee college football or NHL exclusive 150K-400K; '
+         '30 for 30 and studio shows 20K-120K a day; replays, archive and '
+         'non-event programming 3K-30K. Steady-state top-10 60K-130K a day. '
+         'Service-wide the top 100 titles sum near 0.24 views per account '
+         'per day; a title that would push the service past that is too '
+         'high.'
      )},
     {'key': 'britbox',
      'label': 'BritBox',
-     'ceiling': 1_500_000,
+     'ceiling': 410_811,
      'anchors': (
-         "BritBox US is BBC + ITV's joint premium subscription "
-         'streamer. Antenna / Parrot Analytics US subscriber estimates '
-         '~2.5-3.5M as of 2026; that is the ADDRESSABLE ceiling. Weekly '
-         'per-title reach is much lower: top flagship series '
-         '(Shetland, Father Brown, Death in Paradise, Doctor Who back '
-         'catalog) hit 300K-700K US households/week. Steady-state '
-         'top-10 typically 100K-350K. Anchor: ITV Q2 2026 investor '
-         'update + Antenna monthly SVOD engagement reports. British-'
-         'skewed audience: older-female Anglophile fan, extremely '
-         'loyal but small absolute base.'
+         "BritBox US is BBC + ITV's premium subscription streamer, about "
+         '3.0M US accounts (Antenna / ITV, 2026). Counted in ACCOUNTS: a '
+         'view is one account playing one title on one day. A loyal but '
+         'small, older, Anglophile base; the top 100 titles sum near 0.20 '
+         'views per account per day, about 600K, not more. Levels: the '
+         'flagship series of the week (a new Shetland, Vera, Death in '
+         'Paradise or Doctor Who drop) 30K-40K US accounts a day; '
+         'steady-state top-10 13K-30K; ranks 11-40 4K-13K; ranks 41-100 '
+         '1.7K-4K; deep catalog and panel shows 200-1.7K. A title here never '
+         'reaches a Nielsen Top-10 threshold. Reason from the account base '
+         "and these shares, not from BBC's UK ratings."
      )},
     {'key': 'mgmplus',
      'label': 'MGM+',
-     'ceiling': 2_000_000,
+     'ceiling': 602_467,
      'anchors': (
-         'MGM+ (formerly Epix, rebranded Jan 2023, Amazon-owned since '
-         'the MGM acquisition closed 2022). Antenna / Nielsen: US '
-         'subscribers ~4.0-4.8M as of 2026 (majority via cable-'
-         'bundle carriage, minority direct-to-consumer). Top original '
-         'series (FROM, Godfather of Harlem, American Rust) reach '
-         '400K-900K US households/week. Big theatrical windows (Mission '
-         'Impossible, Gladiator II, Bond back-catalog on MGM+) briefly '
-         'spike 1.0-1.8M/week during their exclusive window. Steady-'
-         'state top-10 300K-700K. Anchor: Amazon Q2 2026 earnings + '
-         'Antenna monthly SVOD reports + Nielsen Streaming Content '
-         'Ratings originals list.'
+         'MGM+ (formerly Epix, Amazon-owned), about 4.0-4.8M US accounts, '
+         'the majority through cable-bundle carriage and lightly used. '
+         'Counted in ACCOUNTS: a view is one account playing one title on '
+         'one day. The top 100 titles sum near 0.20 views per account per '
+         'day, about 880K. Levels: the top original in a live season (FROM, '
+         'Godfather of Harlem) or a big theatrical pay-window title in its '
+         'first week 45K-60K US accounts a day; steady-state top-10 19K-45K; '
+         'ranks 11-40 6K-19K; ranks 41-100 2.5K-6K; deep library (Bond and '
+         "MGM back catalog, acquired series) 300-2.5K. Nielsen's originals "
+         'list gives minutes, which are already household-level; never scale '
+         'them up.'
      )},
     {'key': 'starz',
      'label': 'Starz',
-     'ceiling': 5_000_000,
+     'ceiling': 1_912_877,
      'anchors': (
-         "Starz (Lionsgate's premium subscription streamer, US "
-         'subscribers ~12M as of 2026 - the largest of the "premium '
-         'niche" services after HBO Max). Nielsen Streaming Content '
-         'Ratings: flagship originals reach real scale. Power '
-         'Universe episodes (Power Book II: Ghost, Raising Kanan, '
-         'Force) hit 1.5-3.0M US households/week during a live '
-         'season; Outlander mid-season 1.2-2.5M/week; BMF 800K-1.5M. '
-         'Big Lionsgate theatrical windows (John Wick, Saw, Now You '
-         'See Me back-catalog) briefly spike 1.5-3.5M/week during '
-         'their exclusive window. Steady-state top-10 without a '
-         'flagship air-window 400K-1.0M. Anchor: Lionsgate Q2 2026 '
-         'earnings + Antenna monthly SVOD reports + Nielsen Streaming '
-         'Content Ratings originals list. Audience skews female-adult '
-         'for Outlander, male-25-54 for Power Universe.'
+         'Starz (about 12.7M US streaming accounts, 2026, standalone since '
+         'the 2025 Lionsgate separation). Counted in ACCOUNTS: a view is one '
+         'account playing one title on one day. The top 100 titles sum near '
+         '0.22 views per account per day, about 2.8M. Levels: a Power '
+         'Universe or Outlander episode week 140K-190K US accounts a day; '
+         'BMF and other originals in season 80K-140K; a big Lionsgate '
+         'theatrical pay-window film in its first weeks 100K-170K; '
+         'steady-state top-10 60K-120K; ranks 11-40 20K-60K; ranks 41-100 '
+         '8K-20K; deep library 1K-8K. Audience skews female-adult for '
+         'Outlander, male 25-54 for Power. Nielsen households are already '
+         'accounts; do not multiply them.'
      )},
     {'key': 'paramountplus',
      'label': 'Paramount+',
-     'ceiling': 12_000_000,
+     'ceiling': 10_793_917,
      'anchors': (
-         "Paramount+ (Paramount Skydance's flagship streamer, ~77-80M "
-         'global subs, ~40M+ US as of 2026). Nielsen Gauge: Paramount+ '
-         '= ~1.2-1.8% of total US TV usage. Flagship originals '
-         '(Landman, Tulsa King, Lioness, 1923, NCIS franchise, Star '
-         'Trek: Strange New Worlds) hit 3-6M US households/week during '
-         'a live season; the South Park exclusive window and big '
-         'theatrical pay-one titles (Mission: Impossible, Sonic, A '
-         'Quiet Place) reach 2-5M/week. NFL on CBS + UEFA live windows '
-         'briefly spike flagship-adjacent content. Library staples '
-         '(Yellowstone reruns, SpongeBob, Criminal Minds) sustain '
-         '1-3M/week. Steady-state top-10 without a flagship air window '
-         '700K-2.5M. Anchor: Paramount Skydance Q2 2026 earnings + '
-         'Nielsen Streaming Content Ratings + Antenna monthly SVOD '
-         'engagement reports.'
+         'Paramount+ (Paramount Skydance, ~77-80M global, about 42M US '
+         'accounts, 2026). Counted in ACCOUNTS: a view is one account '
+         'playing one title on one day. Nielsen Gauge near 1.5% of US TV '
+         'time, about 0.42 top-100 views per account per day. Levels: a '
+         'flagship original in a live season (Landman, Tulsa King, 1923, '
+         'Strange New Worlds) or a pay-one theatrical in its first week '
+         '800K-1.0M US accounts a day; South Park exclusive and NFL-adjacent '
+         'weekends similar; library staples (Yellowstone, SpongeBob, '
+         'Criminal Minds) 250K-500K; steady-state top-10 400K-650K; ranks '
+         '11-40 120K-400K; ranks 41-100 27K-120K; deep library 4K-27K. '
+         'Nielsen households are already accounts; never multiply them by '
+         'viewers per household.'
      )},
     {'key': 'peacock',
      'label': 'Peacock',
-     'ceiling': 12_000_000,
+     'ceiling': 11_274_871,
      'anchors': (
-         "Peacock (NBCUniversal's streamer, ~36-41M US subs as of "
-         '2026 per Comcast earnings; effectively all-US footprint). '
-         'Nielsen Gauge: Peacock = ~1.3-1.7% of total US TV usage. '
-         'Unscripted tentpoles in a live window (Love Island USA, The '
-         'Traitors) hit 3-7M US viewers/week; Sunday Night Football '
-         'streams 2-4M/week in season; Olympics windows spike well '
-         'above steady state. Scripted originals (Poker Face, Ted, '
-         'Twisted Metal, Happy\'s Place next-day) reach 1.5-4M/week. '
-         'Library staples (The Office, Parks and Recreation, Modern '
-         'Family, Yellowstone licensed run) sustain 2-4M/week - '
-         'The Office alone is a top-5 US streaming library title most '
-         'weeks. Steady-state top-10 without a live tentpole 800K-'
-         '2.5M. Anchor: Comcast Q2 2026 earnings + Nielsen Streaming '
-         'Content Ratings + Antenna monthly SVOD engagement reports.'
+         'Peacock (NBCUniversal, about 40M US accounts per Comcast, 2026, '
+         'all-US footprint). Counted in ACCOUNTS: a view is one account '
+         'playing one title on one day. Nielsen Gauge near 1.5% of US TV '
+         'time, about 0.40 top-100 views per account per day. Levels: an '
+         'unscripted tentpole in a live window (Love Island USA, The '
+         'Traitors) 700K-900K US accounts a day; Sunday Night Football '
+         '500K-800K in season, the Olympics well above; scripted originals '
+         'in season 250K-600K; library staples (The Office, Parks and '
+         'Recreation, Modern Family) 300K-500K; steady-state top-10 '
+         '350K-550K; ranks 11-40 100K-350K; ranks 41-100 24K-100K; deep '
+         'library 4K-24K. Nielsen households are already accounts; never '
+         'multiply them by viewers per household.'
      )},
     {'key': 'amcplus',
      'label': 'AMC+',
-     'ceiling': 4_000_000,
+     'ceiling': 1_506_233,
      'anchors': (
-         "AMC+ (AMC Networks' premium streaming bundle: AMC+, "
-         'Shudder, Sundance Now, IFC Films Unlimited, ~10-12M US '
-         'subscribers as of 2026 per AMC Networks earnings, and a '
-         'near-entirely-US footprint). Much smaller than Paramount+ '
-         'or Peacock, so the ceiling sits with the premium tier '
-         '(Starz / MGM+) rather than with the broad streamers. '
-         'Nielsen does not break AMC+ out of The Gauge as its own '
-         'line, which itself bounds the platform below ~1% of total '
-         'US TV usage. Flagship franchise windows (The Walking Dead: '
-         "Dead City, Daryl Dixon, Anne Rice's Interview with the "
-         'Vampire and Mayfair Witches, Dark Winds) reach 900K-2.2M '
-         'US viewers/week while a season is airing. Library anchors '
-         '(Mad Men, Fear the Walking Dead, the original Walking Dead '
-         'run) sustain 400K-1.1M/week. Shudder horror originals and '
-         'the IFC indie catalog run 80-400K/week; deep catalog and '
-         'acquired arthouse titles 20-120K. Steady-state top-10 '
-         'without a flagship air window 250K-900K. Anchor: AMC '
-         'Networks Q2 2026 earnings + Nielsen Streaming Content '
-         'Ratings + Antenna monthly SVOD engagement reports. '
-         'IMPORTANT: AMC+ the streamer, NOT the AMC cable network '
-         'and NOT AMC Theatres - do not reason from linear AMC '
-         'ratings or from box office.'
+         "AMC+ (AMC Networks' premium bundle: AMC+, Shudder, Sundance Now, "
+         'IFC Films Unlimited; about 11M US accounts, 2026, near-entirely '
+         'US). Counted in ACCOUNTS: a view is one account playing one title '
+         'on one day. Nielsen does not break AMC+ out of The Gauge, which '
+         'bounds the service under ~1% of US TV time; the top 100 titles sum '
+         'near 0.20 views per account per day, about 2.2M. Levels: a Walking '
+         'Dead universe or Anne Rice episode week 110K-135K US accounts a '
+         'day; Dark Winds and other originals in season 60K-110K; library '
+         'anchors (Mad Men, the original Walking Dead run) 30K-60K; Shudder '
+         'originals and IFC indie catalog 6K-30K; steady-state top-10 '
+         '48K-100K; ranks 11-40 15K-48K; ranks 41-100 6K-15K; deep catalog '
+         '800-6K. IMPORTANT: AMC+ the streamer, NOT the AMC cable network '
+         'and NOT AMC Theatres - do not reason from linear ratings or from '
+         'box office. Nielsen minutes are household-level already; never '
+         'scale them up.'
      )},
     # 2026-09-22: MovieSphere+. The smallest service on the Streaming
     # tab by a wide margin, and the newest, so the ceiling is roughly
@@ -3092,9 +3099,10 @@ _STREAMING_PLATFORMS_META = [
     # `scripts/trends_scrapers/derived_rails.py`.
     {'key': 'starz_amazon',
      'label': 'Starz on Amazon',
-     # 5,000,000 (Starz) x 0.868 (top of the film band) since the
-     # 2026-09-29 move to an 80% Amazon anchor; was 2,480,000 at 44%.
-     'ceiling': 4_340_000,
+     # Starz's ceiling x 0.868 (top of the film band). 1,912,877 x
+     # 0.868 since the 2026-10-06 account-level re-level; was
+     # 5,000,000 x 0.868 = 4,340,000 from 2026-09-29.
+     'ceiling': 1_660_377,
      'derived_from': 'starz',
      'anchors': (
          'Starz sold through Amazon Prime Video Channels. Same '
@@ -3120,7 +3128,7 @@ _STREAMING_PLATFORMS_META = [
     # `scripts/trends_scrapers/derived_rails.py`.
     {'key': 'paramountplus_amazon',
      'label': 'Paramount+ on Amazon',
-     'ceiling': 3_816_000,
+     'ceiling': 3_432_465,
      'derived_from': 'paramountplus',
      'anchors': (
          'Paramount+ sold through Amazon Prime Video Channels. Same '
@@ -3153,7 +3161,7 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'peacock_amazon',
      'label': 'Peacock on Amazon',
-     'ceiling': 408_000,
+     'ceiling': 383_345,
      'derived_from': 'peacock',
      'anchors': (
          'Peacock sold through Amazon Prime Video Channels (the ad-free '
@@ -3165,7 +3173,7 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'britbox_amazon',
      'label': 'BritBox on Amazon',
-     'ceiling': 825_000,
+     'ceiling': 225_946,
      'derived_from': 'britbox',
      'anchors': (
          'BritBox sold through Amazon Prime Video Channels. Same '
@@ -3176,7 +3184,7 @@ _STREAMING_PLATFORMS_META = [
      )},
     {'key': 'mgmplus_amazon',
      'label': 'MGM+ on Amazon',
-     'ceiling': 640_000,
+     'ceiling': 192_789,
      'derived_from': 'mgmplus',
      'anchors': (
          'MGM+ sold through Amazon Prime Video Channels. Same catalog '
