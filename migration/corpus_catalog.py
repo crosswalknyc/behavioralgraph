@@ -264,7 +264,7 @@ def facts_from_journey(key, payload, user=''):
     body = (payload or {}).get('fragrance_shop_journey') or {}
     kpis = (payload or {}).get('kpis') or {}
     subject = str(meta.get('customer_brand') or meta.get('subject')
-                  or meta.get('project_name') or '').strip()
+                  or meta.get('target') or meta.get('project_name') or '').strip()
     window = {'start': meta.get('start_date') or meta.get('window_start'),
               'end': meta.get('end_date') or meta.get('window_end')}
     as_of = str(meta.get('created_at') or meta.get('generated_at') or '')[:19] or None
@@ -284,6 +284,15 @@ def facts_from_journey(key, payload, user=''):
         if label and cnt:
             facts.append(make_fact('journey', 'stage_count', label, cnt, 'people', window=window,
                                    as_of=as_of, source_key=key, source_user=user, note=note))
+    if not facts and isinstance(kpis, dict):
+        # Story-mode payloads (subscriber lifecycle, flywheel) carry
+        # their headline figures in kpis; bank the integer ones.
+        for kk, vv in list(kpis.items())[:16]:
+            cnt = _num(vv)
+            if cnt and cnt >= 100 and 'pct' not in str(kk).lower() and not str(kk).endswith('_m'):
+                facts.append(make_fact('journey', 'kpi', str(kk).replace('_', ' '), cnt, 'people',
+                                       window=window, as_of=as_of, source_key=key,
+                                       source_user=user, note=note))
     if kpis.get('total_users'):
         facts.append(make_fact('journey', 'audience_size', 'journey end point, US people',
                                kpis['total_users'], 'people', window=window, as_of=as_of,
@@ -1014,6 +1023,12 @@ def extract_profile_from_s3(s3_key, display_name='', user='', etag=None, head_by
             text = text[:text.rfind('\n')] if '\n' in text else text
         et = etag or (resp.get('ETag') or '').strip('"')
         subject, facts = facts_from_profile_csv_text(s3_key, display_name, text, user=user)
+        if head_bytes and not any(f.get('kind') == 'sample_size' for f in facts):
+            # Rows sorted by Column (ACCESSORIES first) or a very long
+            # BRAND INPUT push the size rows past the head: read it all.
+            resp = s3.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            text = resp['Body'].read().decode('utf-8', errors='replace')
+            subject, facts = facts_from_profile_csv_text(s3_key, display_name, text, user=user)
         if not facts:
             return None
         return {'product': 'profile', 's3_key': s3_key, 'subject': subject, 'facts': facts,
@@ -1025,22 +1040,17 @@ def extract_profile_from_s3(s3_key, display_name='', user='', etag=None, head_by
 
 def index_profile_from_s3(s3_key, display_name='', user='', etag=None, head_bytes=16384):
     """Catalog a profile CSV from its first bytes (BRAND INPUT, SAMPLE
-    SIZE rows sit at the top). Returns subject key or ''."""
+    SIZE rows sit at the top; a full read when they do not). Returns
+    subject key or ''."""
     if not enabled():
         return ''
+    rec = extract_profile_from_s3(s3_key, display_name, user=user, etag=etag,
+                                  head_bytes=head_bytes)
+    if not rec:
+        return ''
     try:
-        s3 = _client()
-        kw = dict(Bucket=S3_BUCKET, Key=s3_key)
-        if head_bytes:
-            kw['Range'] = f'bytes=0-{head_bytes - 1}'
-        resp = s3.get_object(**kw)
-        text = resp['Body'].read().decode('utf-8', errors='replace')
-        if head_bytes:
-            text = text[:text.rfind('\n')] if '\n' in text else text
-        et = etag or (resp.get('ETag') or '').strip('"')
-        subject, facts = facts_from_profile_csv_text(s3_key, display_name, text, user=user)
-        return upsert_source('profile', s3_key, subject, facts, etag=et,
-                             aliases=[display_name] if display_name else ())
+        return upsert_source('profile', rec['s3_key'], rec['subject'], rec['facts'],
+                             etag=rec.get('etag'), aliases=rec.get('aliases') or ())
     except Exception as e:
         print(f"[corpus-catalog] profile index failed {s3_key}: {e}")
         return ''

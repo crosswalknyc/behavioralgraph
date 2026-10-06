@@ -92,7 +92,7 @@ def sweep_profiles(sources, dry_run=False, workers=12):
         key = o.get('Key')
         if not key or not key.lower().endswith('.csv') or '/' in key:
             continue
-        if key.startswith('Gen_Pop') or key.startswith('_'):
+        if key.lower().startswith(('gen_pop', 'gen pop')) or key.startswith('_'):
             continue
         seen.add(key)
         et = (o.get('ETag') or '').strip('"')
