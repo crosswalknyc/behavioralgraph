@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "dbc43061f195b1d31b1874a579386808fa55a4220a5fd9b8109bf1a07beba6c1",
+ "content_hash": "05b48419217a6bdb71e383b29560ebfff68705442970f5ba4c60b2467921b2af",
  "examples_hash": "b44958dcd4c2d7f37ed610089669a1350375cd1327c5f3da896e845908010716",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
@@ -18,6 +18,7 @@
   ".cursor/rules/no-round-sample-sizes.mdc": "e5e519707c0164136da81c82b5c8fccece70a183d809783e488a84a0bbd4e2a3",
   ".cursor/rules/partner-api-shared-catalog.mdc": "10566e53228794e932bfd0cfe843f8658597f60479d765030c181d0343d6244d",
   ".cursor/rules/reasoned-answers-clickstream-boundary.mdc": "d0ce9e8945f21eedb7e3265804ca8b4a0635b43a3e2495ca33c3436676b93ca0",
+  ".cursor/rules/always-project-to-us-genpop.mdc": "b2c64809a609d6fbb064f98f9000e5a8bef73bc323c0ddb8e6b385f1e831a72f",
   ".cursor/rules/reasoning-wins-when-fact-rooted.mdc": "09c11ea03c239a3d23485e547df55cc319471ec14ecb83905236902e8d8b15f3",
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
   ".cursor/skills/crosswalk-brand-standards/SKILL.md": "1adecc2dae85a139bf843dbebee76bc5411c56a4ba5c1e66966eb3a19acc61d0",
@@ -122,7 +123,7 @@
   },
   "playbook_journey_path": {
    "title": "JOURNEY PATH PLAYBOOK",
-   "text": "Applies to path asks: how people moved from a first touch (a clip, a search, a social post, a free episode, a song) to a purchase, a watch, a ticketing-site visit, a signup, or the next surface after a named clip, where they dropped, and how long it took. Families: shop; clip-to-episode; ticketing-site visit for a film (the furthest point is the site, never a ticket bought); 20-minute before and after a pasted clip URL; new to a platform vs already on it; music-first into a title. Every journey includes a Clickstream last tab: eight to thirteen steps, six to ten public URLs on each step (search, official accounts, title pages, documented clips), people and share of that step. URL people can sit on more than one URL and do not add to the step. The cover is the subject name and a real still. Who they are and The Read ride when the ask needs them. Evidence: the ordered step counts, the platform of the last step, time between steps, the public URLs on each step, and any delivered journey for the same subject (binding; reuse its step counts). Compute: a funnel where each step is a subset of the one before it; step share is this step over the first touch; drop is the gap between adjacent steps, named by where it happened ('most left at the paywall, not during the episode'). Verify: no step exceeds the step before it; a step count repeated from a delivered journey matches it to the digit; counts and shares speak flat, why-they-left reads stay directional."
+   "text": "Applies to path asks: how people moved from a first touch (a clip, a search, a social post, a free episode, a song) to a purchase, a watch, a ticketing-site visit, a signup, or the next surface after a named clip, where they dropped, and how long it took. Families: shop; clip-to-episode; ticketing-site visit for a film (the furthest point is the site, never a ticket bought); 20-minute before and after a pasted clip URL; new to a platform vs already on it; music-first into a title. Every journey includes a Clickstream last tab: eight to thirteen steps, six to ten public URLs on each step (search, official accounts, title pages, documented clips), people and share of that step. URL people can sit on more than one URL and do not add to the step. The cover is the subject name and a real still. Who they are and The Read ride when the ask needs them. Evidence: the ordered step counts, the platform of the last step, time between steps, the public URLs on each step, and any delivered journey for the same subject (binding; reuse its step counts). Compute: a funnel where each step is a subset of the one before it; step share is this step over the first touch; drop is the gap between adjacent steps, named by where it happened ('most left at the paywall, not during the episode'). Verify: no step exceeds the step before it; a step count repeated from a delivered journey matches it to the digit; counts and shares speak flat, why-they-left reads stay directional. Music to Long Form people counts stay as incidences inside the Crosswalk 10 million; never multiply them to the US population. Every other journey stays US-projected."
   },
   "playbook_subscriber_churn": {
    "title": "SUBSCRIBER CHURN PLAYBOOK",
@@ -199,5 +200,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-10-06T20:04:18Z"
+ "generated_at": "2026-10-06T20:20:21Z"
 }

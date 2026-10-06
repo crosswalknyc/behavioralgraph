@@ -1,6 +1,6 @@
 {
  "version": 1,
- "content_hash": "de9919ec6a1f737de1c148e2c600ebc5c390e6bac2afd313cf72f1382360b813",
+ "content_hash": "844c65192087f2e63959e952db99a9968640b07736a305a00e60954fefef6d00",
  "decisions": [
   {
    "id": "kids_viewers_default",
@@ -305,7 +305,22 @@
    "sources": [
     "How_Digital_Journey_IQ_Journeys_Are_Built.md"
    ]
+  },
+  {
+   "id": "music_to_long_form_ten_m",
+   "decided": "2026-10-06",
+   "statement": "Music to Long Form people counts are incidences inside the Crosswalk 10 million. Never multiply them to the US population. Every other Digital Journey stays US-projected.",
+   "match_terms": [
+    "music to long form",
+    "music first",
+    "song to",
+    "10 million",
+    "incidence"
+   ],
+   "sources": [
+    "always-project-to-us-genpop.mdc"
+   ]
   }
  ],
- "generated_at": "2026-10-06T20:04:18Z"
+ "generated_at": "2026-10-06T20:20:21Z"
 }

@@ -251,6 +251,45 @@ US_LEVEL_VIEWS = ('journeyIQ', 'journey_iq', 'brandPartnershipIQ',
                   'brand_partnership_iq')
 
 
+def is_ten_m_incidence(data, view_id=''):
+    """True when counts are people inside the Crosswalk 10 million.
+
+    Music to Long Form only (Jenna 2026-10-06). Every other journey
+    stays US-projected. Checked before is_us_level so a journeyIQ
+    view id cannot re-multiply these counts by 32.99.
+    """
+    try:
+        if not isinstance(data, dict):
+            return False
+        if data.get('incidence_of_10m'):
+            return True
+        meta = data.get('meta') if isinstance(data.get('meta'), dict) else {}
+        if meta.get('incidence_of_10m'):
+            return True
+        story = str(meta.get('story_mode') or data.get('story_mode') or '')
+        if story in ('music_catalog', 'barbie_song', 'heated_rivalry_song'):
+            return True
+        ttype = str(meta.get('target_type') or data.get('target_type') or '')
+        if ttype == 'music_to_content_journey':
+            return True
+        name = str(meta.get('target_name') or data.get('target_name')
+                   or data.get('subject') or '').lower()
+        if 'music to long form' in name:
+            return True
+        if isinstance(data.get('music_catalog'), dict):
+            return True
+        return False
+    except Exception:
+        return False
+
+
+TEN_M_NOTE = (
+    "RULE (binding): every count in this view is the number of people "
+    "inside the Crosswalk 10 million. State counts exactly as they "
+    "appear. Never multiply them, never restate them as a US "
+    "population figure.")
+
+
 def is_us_level(data, view_id=''):
     """True when the dataset states its counts are US figures already."""
     try:
@@ -310,6 +349,10 @@ def project_view_data(data, salt=''):
     try:
         if not isinstance(data, dict):
             return data, []
+        if is_ten_m_incidence(data, salt):
+            out = json.loads(json.dumps(data))
+            out['projection'] = {'basis': 'ten_m', 'note': TEN_M_NOTE}
+            return out, []
         if is_us_level(data, salt):
             out = json.loads(json.dumps(data))
             out['projection'] = {'basis': 'us', 'note': US_LEVEL_NOTE}
