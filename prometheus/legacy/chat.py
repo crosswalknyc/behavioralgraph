@@ -16797,6 +16797,17 @@ def _pm_run_jiq_job(job_id, username, inputs, extras):
 
         payload = synthesize(inputs, _cj, tools=tools,
                              created_by=username or 'prometheus')
+        # Hero image (2026-10-05): the tab shows the title's poster or
+        # the brand's image instead of initials. Best-effort, never
+        # blocks the persist.
+        try:
+            from prometheus.jiq_image import resolve_jiq_image, attach_hero
+            _img_url, _img_src = resolve_jiq_image(_H, inputs)
+            if _img_url:
+                attach_hero(payload, _img_url)
+            print(f"[jiq-job {job_id}] hero image: {_img_src}")
+        except Exception as _img_err:
+            print(f"[jiq-job {job_id}] hero image skipped: {_img_err}")
         out_key = persist(_H.s3_client, payload, username or 'prometheus',
                           job_id)
         # Access: the requester must see their own run. Default-open

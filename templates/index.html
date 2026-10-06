@@ -114067,31 +114067,41 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (opts.next) html += _jiqFragBridge(opts.next, { branch: opts.branch });
             return html;
         }
-        function _jiqFragPaidTotal(byId) {
+        function _jiqFragPaidTotal(byId, copy) {
+            // The closing rows of the fork take their words from the
+            // run's copy block (2026-10-05): a film read closes on
+            // "Total ticketing-site visitors ... who reached the
+            // ticketing site", a watch read on viewers, a shop read on
+            // buyers. The PVOD words are only the fallback for the
+            // hand-built PVOD reads that carry no copy.
+            copy = copy || {};
             var first = byId && byId.paid_first;
             var back = byId && byId.paid_return;
             if (!first || !back) return '';
             var firstN = Number(first.accounts) || 0;
             var backN = Number(back.accounts) || 0;
             var total = firstN + backN;
+            var sameLabel = copy.forkSameSessionLabel || 'Same Session Transactions';
+            var totalLabel = copy.forkTotalLabel || 'Total PVOD Purchasers';
+            var totalVerb = copy.forkTotalVerb || 'who paid';
             return '' +
               '<div class="jiq-frag-step is-branch jiq-frag-addin">' +
                 '<div class="jiq-frag-rail"></div>' +
                 '<div class="jiq-frag-body">' +
                   '<div class="jiq-frag-line">' +
-                    '<span class="jiq-frag-label">Same Session Transactions</span>' +
+                    '<span class="jiq-frag-label">' + _jiqFragEsc(sameLabel) + '</span>' +
                     '<span class="jiq-frag-count">' + _jiqFragNum(firstN) + '</span>' +
                   '</div>' +
                   '<div class="jiq-frag-doing">' + _jiqFragNum(backN) + ' + '
                     + _jiqFragNum(firstN) + ' = ' + _jiqFragNum(total)
-                    + ' who paid</div>' +
+                    + ' ' + _jiqFragEsc(totalVerb) + '</div>' +
                 '</div>' +
               '</div>' +
               '<div class="jiq-frag-step is-branch is-terminal jiq-frag-total">' +
                 '<div class="jiq-frag-rail"><i></i></div>' +
                 '<div class="jiq-frag-body">' +
                   '<div class="jiq-frag-line">' +
-                    '<span class="jiq-frag-label">Total PVOD Purchasers</span>' +
+                    '<span class="jiq-frag-label">' + _jiqFragEsc(totalLabel) + '</span>' +
                     '<span class="jiq-frag-count">' + _jiqFragNum(total) + '</span>' +
                   '</div>' +
                 '</div>' +
@@ -114546,7 +114556,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         });
                     }
                 });
-                html += _jiqFragPaidTotal(byId);
+                html += _jiqFragPaidTotal(byId, (d && d.copy) || {});
                 if (copy.forkRead) {
                     html += '<p class="jiq-frag-read">' + _jiqFragEsc(copy.forkRead) + '</p>';
                 }
@@ -114703,7 +114713,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         });
                     }
                 });
-                html += _jiqFragPaidTotal(byId);
+                html += _jiqFragPaidTotal(byId, (d && d.copy) || {});
                 if (copy.forkRead) {
                     html += '<p class="jiq-frag-read">' + _jiqFragEsc(copy.forkRead) + '</p>';
                 }

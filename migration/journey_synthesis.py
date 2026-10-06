@@ -228,6 +228,10 @@ def is_ticketing_journey(inputs: dict, prim: Optional[dict] = None) -> bool:
 # Ordered: longer phrases first so the short ones never pre-empt them.
 _TICKETING_SWAPS = [
     (r'\bbought the ticket\b', 'went to the ticketing site for a ticket'),
+    (r'\bwilling to pay for\b', 'willing to look up a showtime for'),
+    (r'\bpay for\b', 'go to the ticketing site for'),
+    (r'\bpaying for\b', 'reaching the ticketing site for'),
+    (r'\bpay\b', 'reach the ticketing site'),
     (r'\bwhere the ticket was bought\b', 'where the ticketing site was reached'),
     (r'\bno payment submitted\b', 'no further step observed'),
     (r'\bcheckout completed\b', 'ticketing site reached'),
@@ -397,6 +401,10 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         kind_label = 'Ticketing journey'
         branch_a = 'REACHED THE TICKETING SITE IN THE SAME SESSION'
         no_claim = ' ' + TICKETING_NO_CLAIM
+        where = 'at the ticketing site'
+        same_session = 'Reached the ticketing site in the same session'
+        total_label = 'Total ticketing-site visitors'
+        total_verb = 'who reached the ticketing site'
     elif family == 'watch':
         end_verb = 'watched'
         end_short = 'watched'
@@ -404,6 +412,10 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         kind_label = 'Watch journey'
         branch_a = 'WATCHED IN THE SAME SESSION'
         no_claim = ''
+        where = f'on {plat}'
+        same_session = 'Watched in the same session'
+        total_label = 'Total viewers'
+        total_verb = 'who watched'
     else:
         end_verb = 'bought'
         end_short = 'bought'
@@ -411,10 +423,14 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         kind_label = 'Purchase journey'
         branch_a = 'BOUGHT IN THE SAME SESSION'
         no_claim = ''
+        where = f'on {plat}'
+        same_session = 'Bought in the same session'
+        total_label = 'Total buyers'
+        total_verb = 'who bought'
     steps = ', '.join(('who ' + str(s['label']).strip().lower())
                       for s in spine[1:-1][:4])
     copy = {
-        'titleHtml': f'{subj}<br>on {plat}.',
+        'titleHtml': f'{subj}<br>{where}.',
         'eyebrow': f'{kind_label} \u00b7 {window}',
         'lead': (f'{carry} of the people who {str(first["label"]).lower()} '
                  f'went on to the last step: they {end_verb}.{no_claim}'),
@@ -431,6 +447,11 @@ def build_copy(subject: str, platform: str, blob: dict, *,
         'forkHead': 'Journey paths',
         'forkBranchA': branch_a,
         'forkBranchB': 'Left, and what happened next',
+        # The fork's closing rows: the renderer used to hardcode "Same
+        # Session Transactions" / "Total PVOD Purchasers" / "who paid".
+        'forkSameSessionLabel': same_session,
+        'forkTotalLabel': total_label,
+        'forkTotalVerb': total_verb,
         'forkRead': (f'Of the {_fmt_n(end)} who {end_short}, {_fmt_n(back)} '
                      f'came back after they left. That is {_pct1(back, end)}.'
                      if back else ''),
