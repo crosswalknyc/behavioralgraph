@@ -249,6 +249,14 @@ def researched_catalog(subject: str, platform: str = ''
              'Official Instagram post', 'creator_post'),
             ('https://www.instagram.com/p/Db6fWgFDQQ5/',
              'Official Instagram post', 'creator_post'),
+            ('https://www.instagram.com/fandango/',
+             'Fandango Instagram', 'creator'),
+            ('https://www.instagram.com/amctheatres/',
+             'AMC Instagram', 'creator'),
+            ('https://www.instagram.com/cinemark/',
+             'Cinemark Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/theinfluencerproject/',
+             'Title tag on Instagram', 'creator'),
             ('https://www.tiktok.com/@cvnela',
              'Tracked creator', 'creator'),
             ('https://www.tiktok.com/@brandontalks',
@@ -355,6 +363,16 @@ def researched_catalog(subject: str, platform: str = ''
         creator = [
             ('https://www.instagram.com/youngsheldoncbs/',
              'Official Instagram', 'creator'),
+            ('https://www.instagram.com/cbs/',
+             'CBS Instagram', 'creator'),
+            ('https://www.instagram.com/paramountplus/',
+             'Paramount+ Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/youngsheldon/',
+             'Show tag on Instagram', 'creator'),
+            ('https://www.instagram.com/cbscomedy/',
+             'CBS Comedy Instagram', 'creator'),
+            ('https://www.instagram.com/explore/search/keyword/?q=Young%20Sheldon',
+             'Show name on Instagram', 'creator'),
             ('https://www.youtube.com/@YoungSheldonCBS',
              'Official YouTube', 'creator'),
             ('https://www.facebook.com/YoungSheldonCBS',
@@ -431,6 +449,16 @@ def researched_catalog(subject: str, platform: str = ''
              'Cartoon Network YouTube', 'creator'),
             ('https://www.instagram.com/cartoonnetwork/',
              'Cartoon Network Instagram', 'creator'),
+            ('https://www.instagram.com/adultswim/',
+             'Adult Swim Instagram', 'creator'),
+            ('https://www.instagram.com/streamonmax/',
+             'Max Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/dexterslaboratory/',
+             'Show tag on Instagram', 'creator'),
+            ('https://www.instagram.com/hbo/',
+             'HBO Instagram', 'creator'),
+            ('https://www.instagram.com/explore/search/keyword/?q=Dexter%27s%20Laboratory',
+             'Show name on Instagram', 'creator'),
             ('https://www.youtube.com/channel/UCS3qiNJYHFvXjU3lJKQtYGQ',
              'Official Dexter Laboratory YouTube', 'creator'),
             ('https://www.youtube.com/watch?v=8SOnPsZbALQ',
@@ -503,6 +531,16 @@ def researched_catalog(subject: str, platform: str = ''
         creator = [
             ('https://www.instagram.com/gilmoregirls/',
              'Official Instagram', 'creator'),
+            ('https://www.instagram.com/netflix/',
+             'Netflix Instagram', 'creator'),
+            ('https://www.instagram.com/warnerbros/',
+             'Warner Bros Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/gilmoregirls/',
+             'Show tag on Instagram', 'creator'),
+            ('https://www.instagram.com/thecw/',
+             'The CW Instagram', 'creator'),
+            ('https://www.instagram.com/explore/search/keyword/?q=Gilmore%20Girls',
+             'Show name on Instagram', 'creator'),
             ('https://www.netflix.com/title/70155618',
              'Netflix title page', 'netflix'),
             ('https://www.youtube.com/watch?v=VBK6ciLtd1I',
@@ -598,6 +636,16 @@ def researched_catalog(subject: str, platform: str = ''
              'Luxury fragrance tag', 'creator'),
             ('https://www.instagram.com/explore/tags/fragrance/',
              'Fragrance tag on Instagram', 'creator'),
+            ('https://www.instagram.com/sephora/',
+             'Sephora Instagram', 'creator'),
+            ('https://www.instagram.com/ulta/',
+             'Ulta Instagram', 'creator'),
+            ('https://www.instagram.com/nordstrom/',
+             'Nordstrom Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/perfume/',
+             'Perfume tag on Instagram', 'creator'),
+            ('https://www.instagram.com/explore/tags/luxuryfragrance/',
+             'Luxury fragrance tag on Instagram', 'creator'),
             ('https://www.sephora.com/shop/fragrance',
              'Sephora fragrance aisle', 'shop'),
             ('https://www.ulta.com/shop/fragrance',
@@ -919,6 +967,23 @@ def looks_invented_theater(urls: list) -> bool:
         'atomtickets.com/search'))
 
 
+def surface_host_lock(surface: str, action: str = '') -> str:
+    """A TikTok-only step stays on TikTok. Instagram-only stays on Instagram.
+
+    Mixed surfaces (Creator feeds, TikTok and Instagram) stay unlocked.
+    """
+    surf = str(surface or '').lower().strip()
+    act = str(action or '').lower()
+    if any(sep in surf for sep in (',', ' and ', '/', '+', '·')):
+        return ''
+    blob = f'{surf} {act}'
+    if 'tiktok' in blob and 'instagram' not in blob:
+        return 'tiktok.com'
+    if 'instagram' in blob and 'tiktok' not in blob:
+        return 'instagram.com'
+    return ''
+
+
 def urls_for_step(subject: str, platform: str, surface: str = '',
                   action: str = '', step_i: int = 1,
                   tracked: Optional[list] = None
@@ -931,6 +996,7 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
     """
     family = step_family(surface, action, subject=subject, platform=platform)
     catalog = researched_catalog(subject, platform)
+    lock = surface_host_lock(surface, action)
     named_ok = {u[0].rstrip('/').lower()
                 for u in researched_extras_for(subject, platform)}
     named_ok |= {r['url'].rstrip('/').lower()
@@ -939,6 +1005,8 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
 
     def add(url: str, why: str) -> None:
         if looks_invented_theater([(url, why)]):
+            return
+        if lock and lock not in str(url or '').lower():
             return
         allow = url.rstrip('/').lower() in named_ok
         if is_safe_url(url, allow_named_clip=allow) and all(
@@ -981,14 +1049,53 @@ def urls_for_step(subject: str, platform: str, surface: str = '',
     }.get(family, ('title',))
     if len(rows) < MIN_URLS:
         for fam in fill_from:
+            if lock:
+                break
             for url, why, _kind in catalog.get(fam, []):
                 add(url, why)
                 if len(rows) >= MIN_URLS:
                     break
             if len(rows) >= MIN_URLS:
                 break
+    if lock and len(rows) < MIN_URLS:
+        for fam_rows in catalog.values():
+            for url, why, _kind in fam_rows:
+                add(url, why)
+                if len(rows) >= MIN_URLS:
+                    break
+            if len(rows) >= MIN_URLS:
+                break
     has_catalog = any(catalog.values())
-    if not has_catalog and len(rows) < MIN_URLS:
+    if lock and len(rows) < MIN_URLS:
+        q = _q(str(subject or '').strip() or 'the title')
+        tag = re.sub(r'[^a-z0-9]+', '', str(subject or '').lower())[:32] or 'fyp'
+        if lock == 'tiktok.com':
+            for url, why in (
+                (f'https://www.tiktok.com/search?q={q}', 'On-app search'),
+                (f'https://www.tiktok.com/tag/{tag}', 'On-app tag'),
+                (f'https://www.tiktok.com/search?q={q}+clip',
+                 'Clip search on the app'),
+                (f'https://www.tiktok.com/search?q={q}+review',
+                 'Review search on the app'),
+                ('https://www.tiktok.com/explore', 'Opened Explore'),
+                ('https://www.tiktok.com/discover', 'Opened Discover'),
+            ):
+                add(url, why)
+        elif lock == 'instagram.com':
+            for url, why in (
+                (f'https://www.instagram.com/explore/search/keyword/?q={q}',
+                 'On-app search'),
+                (f'https://www.instagram.com/explore/tags/{tag}/',
+                 'On-app tag'),
+                (f'https://www.instagram.com/explore/search/keyword/?q={q}+reel',
+                 'Reel search on the app'),
+                (f'https://www.instagram.com/explore/search/keyword/?q={q}+review',
+                 'Review search on the app'),
+                ('https://www.instagram.com/explore/', 'Opened Explore'),
+                ('https://www.instagram.com/reels/', 'Opened Reels'),
+            ):
+                add(url, why)
+    elif not has_catalog and len(rows) < MIN_URLS:
         subj = str(subject or '').strip() or 'the title'
         q = _q(subj)
         add(f'https://www.google.com/search?q={q}',
