@@ -189,6 +189,68 @@ def _interpret_body(body, text, history, tid=None):
     return out
 
 
+_ACCEPT_RX = re.compile(
+    r"^\s*(ok(ay)?|yes|yeah|yep|yup|sure|please|go|go ahead|do it|run it|"
+    r"build it|approve[d]?|run|build|start|let's do it|lets do it|sounds good|"
+    r"fine)\b[\s,.!-]*(ok(ay)?|yes|please|go|run|build|start|do it|it|that|"
+    r"the run|the profile|the build)?", re.I)
+_OFFER_RX = re.compile(r"^run a profile on (.+)$", re.I)
+
+
+def _last_agent_options(history):
+    for h in reversed([h for h in (history or []) if isinstance(h, dict)]):
+        role = str(h.get('role') or '').lower()
+        if role == 'user':
+            return []
+        if role in ('agent', 'assistant'):
+            meta = h.get('meta') if isinstance(h.get('meta'), dict) else {}
+            opts = meta.get('options') or h.get('options') or []
+            out = []
+            for o in opts:
+                if isinstance(o, dict):
+                    out.append(str(o.get('send') or o.get('label') or ''))
+                elif isinstance(o, str):
+                    out.append(o)
+            return [o for o in out if o]
+    return []
+
+
+def accept_offered_run(history, text):
+    """When the previous agent turn offered 'Run a profile on X' and this
+    turn accepts it in words, return that chip's send value; else ''.
+    'ok run Gunna', 'yes', 'go ahead and build it', 'run gunna' all
+    accept; 'why do I need that', 'not now', a new question do not."""
+    t = str(text or '').strip()
+    if not t or len(t) > 80:
+        return ''
+    offers = [o for o in _last_agent_options(history) if _OFFER_RX.match(o.strip())]
+    if not offers:
+        return ''
+    low = t.lower()
+    if re.search(r"\b(not now|no thanks|no|later|why|what|how|which|who|\?)", low) \
+            and not re.match(r"^\s*(ok|yes|yeah|sure)\b", low):
+        return ''
+    for o in offers:
+        subj = _OFFER_RX.match(o.strip()).group(1).strip()
+        subj_l = subj.lower()
+        if re.search(r"\b(run|build|pull|start|do)\b.*" + re.escape(subj_l), low) \
+                or low == subj_l:
+            return o.strip()
+    # A build verb followed by some OTHER noun phrase is a different ask
+    # ("run a profile on Taylor Swift" under a Gunna offer).
+    m = re.search(r"\b(run|build|pull|start)\b\s+(?:a profile on\s+|a profile for\s+)?(.*)$", low)
+    if m:
+        rest = re.sub(r"\b(it|that|this|the run|the profile|the build|please|now|again|for me|thanks?)\b",
+                      " ", m.group(2))
+        rest = re.sub(r"[^a-z0-9]+", " ", rest).strip()
+        if rest and not any(re.search(re.escape(_OFFER_RX.match(o.strip()).group(1).strip().lower()), rest)
+                            for o in offers):
+            return ''
+    if len(offers) == 1 and _ACCEPT_RX.match(t) and len(t.split()) <= 6:
+        return offers[0].strip()
+    return ''
+
+
 def ask(user, body, *, via='session'):
     """Run one ask end to end. Returns (envelope_dict, http_status)."""
     body = body if isinstance(body, dict) else {}
@@ -226,6 +288,23 @@ def ask(user, body, *, via='session'):
         open_tabs = len((ctx or {}).get('other_tabs') or [])
     except Exception:
         pass
+
+    # Accepting an offered run (2026-10-06, Eliot / Gunna): the build-
+    # first offer ends with the chips 'Run a profile on X' / 'Not now'.
+    # A typed acceptance ("ok run Gunna", "yes", "go ahead", "build
+    # it") is that chip, not a new question; before this it re-ran the
+    # analyze path and re-issued the identical offer. The text becomes
+    # the chip's own send value so the build flow takes it.
+    try:
+        _accepted = accept_offered_run(history, text)
+    except Exception:
+        _accepted = ''
+    if _accepted:
+        print(f"[prometheus] offer accepted: {text[:60]!r} -> {_accepted!r}")
+        text = _accepted
+        body = dict(body)
+        body['text'] = text
+        body['surface'] = 'interpret'
 
     # Unresolved referents (2026-10-02 Jenna: "it should have asked him
     # which 3 influencers he was talking about then actually given him

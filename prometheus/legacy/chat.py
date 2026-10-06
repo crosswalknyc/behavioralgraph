@@ -3585,7 +3585,7 @@ def api_synth_chat_clarify():
                       if qcuts else "")
                    + "). Review the brief below and approve to start the build.")
         else:
-            msg = (f"No add-on cuts - just the national "
+            msg = (f"The build covers the whole audience: the national "
                    f"{_pm_universe_phrase(draft)} + avid. Review the "
                    "brief below and approve to start the build.")
         if notes:
@@ -4934,6 +4934,9 @@ def api_synth_chat_clarify():
         })
 
     if step == 'goal':
+        # Stale-client step. Suggested cuts are retired (Jenna
+        # 2026-10-06), so the goal answer is kept on the draft and the
+        # approval card releases with no cut picker.
         low = answer.lower()
         if answer and not _re.match(
                 r'^(skip|none|no|nothing|nope|na|n/a|pass|'
@@ -4941,10 +4944,8 @@ def api_synth_chat_clarify():
             draft['business_goal'] = answer[:500]
         else:
             draft['business_goal'] = ''
-        recs, _skips, message = _synth_chat_cut_strategist(draft)
-        draft['strategist_recs'] = recs
-        return jsonify({'success': True, 'draft': draft,
-                        'message': message, 'next_step': 'strategy'})
+        draft.pop('strategist_recs', None)
+        return _finalize_cuts_response()
 
     if step == 'strategy':
         cuts, notes = _H._parse_strategy_answer(answer, subject, draft)
@@ -4969,13 +4970,8 @@ def api_synth_chat_clarify():
                 r'^(national|nationwide|nation wide|all|whole country|'
                 r'us|usa|everywhere|no|none|skip|not regional)\s*[.!]?$',
                 low):
-            msg = ("Nationwide it is. Want any additional cuts? "
-                   "Female only, male only, by generation, an age "
-                   "band, or a specific market. "
-                   f"{_H.ADDON_CUT_CREDITS} credits per cut - name the "
-                   "ones you want, or say 'none'.")
-            return jsonify({'success': True, 'draft': draft,
-                            'message': msg, 'next_step': 'cuts'})
+            # Nationwide: release the card (no cut menu, Jenna 2026-10-06).
+            return _finalize_cuts_response()
         resolved, unresolved = _H._resolve_markets_to_dmas(answer)
         if not resolved:
             return jsonify({
@@ -5003,13 +4999,11 @@ def api_synth_chat_clarify():
         if unresolved:
             parts.append(f"(For {', '.join(unresolved)}, tell me "
                          "the metro if you want them added.)")
-        parts.append("Want any other cuts? Female only, male "
-                     "only, by generation, or an age band - "
-                     f"{_H.ADDON_CUT_CREDITS} credits each. Name them, "
-                     "or say none.")
+        parts.append("Review the brief below and approve to start "
+                     "the build.")
         return jsonify({'success': True, 'draft': draft,
                         'message': "\n\n".join(parts),
-                        'next_step': 'cuts'})
+                        'next_step': 'approve'})
 
     # step == 'cuts' (legacy). Merges with any market cuts the region
     # step already added instead of overwriting them.
@@ -6719,9 +6713,14 @@ def _pm_interpret_core(user, body, text, history):
         # runs FIRST - linking to a parent reroutes the whole thing to
         # a 3-credit derive and skips the fresh-build scoping.
         clarify_steps = []
-        if _dec_norm in ('new_build', 'time_shifted_refresh',
-                         'cut_needs_parent'):
-            clarify_steps = ['goal', 'strategy']
+        # Suggested cuts retired (Jenna 2026-10-06: "let's take suggested
+        # cuts out. they seem to be confusing"). A fresh build goes
+        # straight to the brief: the national total universe + avid is
+        # the whole audience. Cuts stay available when a user asks for
+        # one by name (derive_cut / cut_needs_parent / addon phrasing);
+        # the goal question only existed to feed the strategist, so it
+        # goes too. The 'goal' / 'strategy' clarify handlers stay for
+        # stale clients and finish without recommending anything.
         if spec_draft.get('ask_parent_link') and \
                 spec_draft.get('parent_link_candidates'):
             clarify_steps = ['parent_link'] + clarify_steps
