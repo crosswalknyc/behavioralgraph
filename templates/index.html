@@ -18865,6 +18865,14 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             gap: 0 6px !important;
         }
 
+        /* ---- 11l. Digital Journey IQ: Close-all tabs beside PDF/CSV ----------
+           JS (_jiqRelocateCloseAll) moves .jiq-tab-close-all from #jiqTabsBar up
+           into #jiqExportBar next to the PDF/CSV buttons. Kill its right-pushing
+           auto margin so it sits snug after CSV, and let the bar wrap if tight.
+           Mobile only. */
+        #jiqExportBar { flex-wrap: wrap; }
+        #jiqExportBar .jiq-tab-close-all { margin-left: 0 !important; align-self: center; }
+
         /* ---- 11b. Profile IQ v4 toolbar: tidy the parked controls -------------
            v4's _piqV4ParkChrome() moves Data Cuts, Select Profile, Export,
            Hover, US% into #toolbarContent as one flex-wrap row (orders 8/9/10).
@@ -87326,6 +87334,56 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             _jiqResetToEmpty();
         }
         window._jiqCloseAllTabs = _jiqCloseAllTabs;
+        // Mobile only: lift the "Close all tabs" button out of #jiqTabsBar and
+        // place it to the right of the PDF/CSV buttons in #jiqExportBar. The tab
+        // strip rebuilds its innerHTML on every change (re-adding the button), so
+        // a MutationObserver re-applies the move. Click still works via the
+        // document-level [data-jiq-close-all] delegation. Desktop is untouched.
+        (function _jiqWireMobileCloseAll() {
+            function _mob() { return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches; }
+            function relocate() {
+                var tabsBar = document.getElementById('jiqTabsBar');
+                var exportBar = document.getElementById('jiqExportBar');
+                if (!tabsBar) return;
+                if (_mob() && exportBar) {
+                    var hasTabs = !!tabsBar.querySelector('.jiq-tab');
+                    var inTabs = tabsBar.querySelector('.jiq-tab-close-all');
+                    var inExport = exportBar.querySelector('.jiq-tab-close-all');
+                    if (hasTabs) {
+                        if (inTabs) {
+                            if (inExport && inExport !== inTabs) inExport.remove();
+                            exportBar.appendChild(inTabs);
+                        }
+                    } else {
+                        if (inExport) inExport.remove();
+                        if (inTabs) inTabs.remove();
+                    }
+                } else if (exportBar) {
+                    // Desktop: restore the button to the tab strip if it was moved.
+                    var inExport2 = exportBar.querySelector('.jiq-tab-close-all');
+                    var inTabs2 = tabsBar.querySelector('.jiq-tab-close-all');
+                    if (inExport2) {
+                        if (inTabs2 && inTabs2 !== inExport2) inExport2.remove();
+                        else tabsBar.appendChild(inExport2);
+                    }
+                }
+            }
+            window._jiqRelocateCloseAll = relocate;
+            function init() {
+                var tabsBar = document.getElementById('jiqTabsBar');
+                if (!tabsBar) return;
+                try {
+                    new MutationObserver(function () { relocate(); }).observe(tabsBar, { childList: true });
+                } catch (e) {}
+                window.addEventListener('resize', relocate);
+                relocate();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
         function _jiqRenderTabs() {
             var bar = document.getElementById('jiqTabsBar');
             if (!bar) return;
