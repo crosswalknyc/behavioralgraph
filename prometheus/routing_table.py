@@ -86,6 +86,16 @@ ROWS = [
         'counter': [('who watches love island?', False)],
     },
     {
+        'id': 'design_request', 'surface': 'analyze',
+        'reason': 'design_request', 'client_action': 'analyze',
+        'host_only': True,
+        'note': 'A change-the-page ask ("Section 4 is showing Arrow, please '
+                'remove") gets one fixed reply (Prometheus cannot make design '
+                'changes; the user experience team has it) and one email to '
+                'Jenna + Jessie. Never a build offer (2026-10-06).',
+        'examples': [], 'counter': [],
+    },
+    {
         'id': 'journey_drilldown', 'surface': 'analyze',
         'reason': 'journey_drilldown', 'client_action': 'analyze',
         'host_only': True,

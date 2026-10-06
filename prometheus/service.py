@@ -452,6 +452,32 @@ def ask(user, body, *, via='session'):
                 _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
                 return env, 200
 
+    # Design requests (2026-10-06, Jenna, Alexia's "Section 4 ... please
+    # remove"). A change-the-page ask is not a question and never a
+    # build: one fixed reply, one email to the user experience team.
+    if referent_decision is None and not _armed(body):
+        try:
+            from . import design_request as _dr
+            _dr_raw = _dr.answer(text, user, ctx) if _dr.is_design_request(text) else None
+        except Exception as e:
+            print(f"[prometheus] design-request lane skipped: {e}")
+            _dr_raw = None
+        if _dr_raw:
+            raw = _dr_raw
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'design_request', 'client_hint': None}
+            if _client_surface == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = []
+            try:
+                host.ask_hint(route='design_request', outcome='answered')
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            _persist_turn(persist, uname, tid, history, text, env, raw, 'analyze')
+            return env, 200
+
     # Catalog lane (2026-10-06, Jenna: speed). "do we have a profile for
     # X", "do you see X", "how big is the X audience" are lookups: the
     # corpus catalog answers them with no model call. Runs before any
