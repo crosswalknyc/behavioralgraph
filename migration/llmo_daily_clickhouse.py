@@ -59,7 +59,13 @@ import clickhouse_connect
 # migration/llmo_daily_clickhouse.py` (repo-root cwd) can still resolve
 # the sibling helper.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from url_pii_redaction import wrap_url_column  # noqa: E402  (defense-in-depth PII scrub)
+# 2026-10-07: swapped to `wrap_url_column_full` (34-category scrub).
+# The source table `clickstream_final` is now scrubbed at PASS 1 by
+# the comprehensive helper, so this layer is defense-in-depth, but
+# running the same full scrub keeps every downstream reader on the
+# same vocabulary (so a future pre-2026-10-07 row that re-enters the
+# flow still ends up with the same redaction markers).
+from url_pii_redaction import wrap_url_column_full  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -189,7 +195,7 @@ _AI_MATCH_EXPR = """(
 # write path (2026-08-31 lockdown), wrap f.URL in the same email-substring
 # scrub before it lands in llmo_events. If a future writer regresses, the
 # leak stops at this ETL boundary.
-_URL_REDACTED = wrap_url_column("f.URL")
+_URL_REDACTED = wrap_url_column_full("f.URL")
 
 INSERT_LLMO_EVENTS_SQL = f"""
 INSERT INTO clickstream.llmo_events
