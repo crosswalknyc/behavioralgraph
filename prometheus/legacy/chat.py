@@ -13571,10 +13571,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         pass
     if is_strategy:
         extra_blocks.append(pma.STRATEGY_GUIDANCE)
-    # So-what asks answer as a plan, never as another read (2026-10-06).
-    _is_so_what = pma.is_so_what_ask(text)
+    _is_so_what = pma.is_so_what_ask(text)  # so-what asks answer as a plan
     if _is_so_what:
         extra_blocks.append(pma.SO_WHAT_GUIDANCE)
+    _multi_qs = pma.split_questions(text)  # several questions: answer all
+    if _multi_qs:
+        extra_blocks.append(pma.multi_question_guidance(_multi_qs))
     user_prompt = user_prompt + '\n\n' + '\n\n'.join(extra_blocks)
     try:
         import prometheus_knowledge as _pmk
@@ -13630,7 +13632,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _stage_note('composing the answer')
     _t_stage = time.monotonic()
     try:
-        res = pma.enforce_metrics_coherence(data, so_what=_is_so_what)
+        res = pma.enforce_metrics_coherence(data, so_what=_is_so_what, multi=_multi_qs)
         reply = pma.format_generated_metrics_reply(res)
     except Exception as e:
         traceback.print_exc()
@@ -13690,7 +13692,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                   if isinstance(d, dict)), {})
                 if str(data2.get('action') or '').strip().lower() \
                         != 'decline':
-                    res2 = pma.enforce_metrics_coherence(data2, so_what=_is_so_what)
+                    res2 = pma.enforce_metrics_coherence(data2, so_what=_is_so_what, multi=_multi_qs)
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
@@ -13759,7 +13761,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       if isinstance(d, dict)), {})
                     if str(data3.get('action') or '').strip().lower() \
                             != 'decline':
-                        res3 = pma.enforce_metrics_coherence(data3, so_what=_is_so_what)
+                        res3 = pma.enforce_metrics_coherence(data3, so_what=_is_so_what, multi=_multi_qs)
                         reply3 = pma.format_generated_metrics_reply(
                             res3)
                         fam3 = ('strategy' if is_strategy
@@ -15351,8 +15353,7 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
             'offer_deck': False, 'deck_angle': None})
-    # A deictic "how is this calculated?" asks which figure (2026-10-06).
-    _wf = _kpi.which_figure_payload(text, _pm_kpi_view(body)[1])
+    _wf = _kpi.which_figure_payload(text, _pm_kpi_view(body)[1])  # deictic: ask which figure
     if _wf:
         _pm_ask_hint(route='kpi_which_figure', outcome='clarified')
         return jsonify(_wf)

@@ -4409,6 +4409,90 @@ def _dollarize(text):
     return ''.join(out)
 
 
+# ---------------------------------------------------------------------------
+# Multi-question messages (2026-10-06, Jenna on Emmet's three questions in
+# one message: Prometheus "should have realized these were 3 questions and
+# answered them all"). Every question gets its own answered part.
+# ---------------------------------------------------------------------------
+_Q_OPEN_RX = re.compile(
+    r"^\s*(?:can|could|would|will|do|does|did|is|are|was|were|should|how|what|which|who|"
+    r"why|where|when|whats|what's|tell me|show me|list|identify|define|explain|compare)\b", re.I)
+
+
+def split_questions(text):
+    """The distinct questions inside one message, in order. A part counts
+    when it ends in '?' or opens like a question; fragments under four
+    words are folded into their neighbor. Returns [] when the message
+    carries fewer than two questions."""
+    t = str(text or '').strip()
+    if not t or len(t) > 1500:
+        return []
+    raw_parts = [p.strip() for p in re.split(r'(?<=\?)\s+|\n\s*\n|\n', t) if p.strip()]
+    parts = []   # [text, is_question]
+    for p in raw_parts:
+        p = re.sub(r'^\s*(?:[-*\u2022]|\d+[.)])\s*', '', p).strip()
+        if not p:
+            continue
+        is_q = p.endswith('?') or bool(_Q_OPEN_RX.match(p))
+        if parts and len(p.split()) < 4 and not p.endswith('?'):
+            parts[-1][0] = parts[-1][0] + ' ' + p   # a trailing fragment rides its question
+            continue
+        parts.append([p, is_q])
+    qs = [p for p, is_q in parts if is_q]
+    if len(qs) < 2:
+        return []
+    return qs[:6]
+
+
+def multi_question_guidance(qs):
+    lines = ['THIS MESSAGE CARRIES SEVERAL QUESTIONS. Answer every one, in order, '
+             'in the JSON "reads" list: reads[i] answers question i and STARTS with '
+             'the tag "[Q{n}] " followed by a plain restatement of the question in '
+             'six words or fewer, a colon, then the answer in two to five sentences '
+             'with the measured numbers (penetration, projected US people, and the '
+             'plain comparison to the US average). Never answer only the first '
+             'question. The headline covers the most important finding across them. '
+             'Metrics: at most three, the ones the answers lean on.']
+    for i, q in enumerate(qs, start=1):
+        lines.append(f'  Q{i}: {q}')
+    return '\n'.join(lines)
+
+
+def format_multi_question_reply(res):
+    """One numbered part per question; the model's [Qn] tags become the
+    part headers; metrics ride inline."""
+    lines = []
+    if res.get('headline'):
+        lines.append(str(res['headline']).strip())
+        lines.append('')
+    mets = [m for m in (res.get('metrics') or []) if isinstance(m, dict)][:3]
+    if mets:
+        lines.append('The numbers behind this: ' + '; '.join(
+            f"{m.get('label')} {_fmt_metric_value(m)}" for m in mets) + '.')
+        lines.append('')
+    qs = list(res.get('_multi') or [])
+    reads = [str(r).strip() for r in (res.get('reads') or []) if str(r).strip()]
+    n = 0
+    for r in reads:
+        m = re.match(r'^\[?Q\s*(\d+)\]?\s*[:.\-]?\s*(.*)$', r, re.S | re.I)
+        body = m.group(2).strip() if m else r
+        head, sep, rest = body.partition(':')
+        n += 1
+        if sep and len(head.split()) <= 9:
+            lines.append(f"{n}. {head.strip()}")
+            lines.append(rest.strip())
+        else:
+            q = qs[n - 1] if n - 1 < len(qs) else ''
+            if q:
+                lines.append(f"{n}. {q.rstrip('?').strip()}")
+            lines.append(body)
+        lines.append('')
+    missing = len(qs) - n
+    if missing > 0 and qs:
+        lines.append('Still open: ' + '; '.join(q.rstrip('?') for q in qs[n:]) + '. Ask me again and I take those next.')
+    return scrub_user_text('\n'.join(lines).strip())
+
+
 def format_so_what_reply(res):
     """Action-shaped reply for a so-what ask: the money answer, why it
     matters, numbered moves, the first step. Metrics ride inline."""
@@ -5813,7 +5897,7 @@ def build_insights_deck_user_prompt(subject, partner, digest_bundle,
 _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
-def enforce_metrics_coherence(data, so_what=False):
+def enforce_metrics_coherence(data, so_what=False, multi=None):
     """Exactify a reasoned measurement read: counts messy (last digit
     1-9), percentages one decimal and bounded, labels and definitions
     capped. Returns the cleaned dict. `so_what` (2026-10-06) marks the
@@ -5830,7 +5914,7 @@ def enforce_metrics_coherence(data, so_what=False):
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'headline': _clip_text(data.get('headline'), 300),
         'reads': [_clip_text(r, 480)
-                  for r in (data.get('reads') or []) if str(r).strip()][:7 if so_what else 5],
+                  for r in (data.get('reads') or []) if str(r).strip()][:7 if (so_what or multi) else 5],
     }
     metrics, seen = [], set()
     for i, row in enumerate(data.get('metrics') or []):
@@ -5871,6 +5955,8 @@ def enforce_metrics_coherence(data, so_what=False):
     out['metrics'] = metrics
     if so_what:
         out['_so_what'] = True
+    if multi:
+        out['_multi'] = list(multi)
     return out
 
 
@@ -5934,6 +6020,8 @@ def format_generated_metrics_reply(res):
     answer with the category table, not cohort headline stats); the
     cohort context shrinks to a one-line preamble. A so-what ask
     (res['_so_what'], 2026-10-06) renders as a plan instead of a read."""
+    if res.get('_multi') and not res.get('breakdown'):
+        return format_multi_question_reply(res)
     if res.get('_so_what') and not res.get('breakdown'):
         return format_so_what_reply(res)
     lines = []
