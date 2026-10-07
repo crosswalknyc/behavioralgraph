@@ -7,6 +7,9 @@ Jenna, 2026-09-25: do it for every account, not only those two.
 
 Jenna, 2026-09-30: "bcc liz on all prometheus questions."
 
+Jenna, 2026-10-07: "email the questions to jessie too not just me and
+liz for all prometheus queries."
+
 The send never raises into the chat path.
 """
 from __future__ import annotations
@@ -23,7 +26,7 @@ _WATCH = (
 )
 
 _TO = 'jenna@crosswalknyc.com'
-_BCC = 'liz@crosswalknyc.com'
+_BCC = ('liz@crosswalknyc.com', 'jessie@crosswalknyc.com')
 _FROM = 'Prometheus <prometheus@crosswalknyc.com>'
 _REPLY_TO = 'jenna@crosswalknyc.com'
 
@@ -225,7 +228,7 @@ def _send(username, record, question, answer, subject):
     msg.attach(MIMEText(text, 'plain', 'utf-8'))
     msg.attach(MIMEText(html, 'html', 'utf-8'))
     boto3.client('ses', region_name='us-east-2').send_raw_email(
-        Source=_FROM, Destinations=[_TO, _BCC],
+        Source=_FROM, Destinations=[_TO, *_BCC],
         RawMessage={'Data': msg.as_string()})
 
 

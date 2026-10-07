@@ -96,7 +96,8 @@ def _pm_probe_caller():
     names itself as one. '' for a real user's request, or outside a
     request. A probe label wins over the session user (2026-10-06:
     an operator probe run under the admin session was mailed to Jenna
-    and Liz as 'Jenna Menking asked a question')."""
+    and Liz as 'Jenna Menking asked a question'; the copies go to
+    Jenna with Liz and Jessie on BCC since 2026-10-07)."""
     try:
         from flask import has_request_context as _hrc, request as _rq
         if not _hrc():
