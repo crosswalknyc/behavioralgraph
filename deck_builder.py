@@ -250,6 +250,7 @@ def dot(s, x, y, fill=SIGNAL):
 # design: any miss renders the slide text-only exactly as before.
 
 _PHOTO_CACHE = {}
+_PHOTO_SOURCES = {}   # subject -> the candidate photo urls, for the job trail
 _PHOTO_MIN_W = 640
 _PHOTO_MIN_H = 420
 
@@ -306,6 +307,11 @@ def _fetch_photos(subject, kind, max_n):
             urls.append(u)
     except Exception:
         pass
+    # Open-web results must carry the subject in the address (host or
+    # path). A generic query returns stock art of anything; a Starz
+    # deck opened on a Microsoft Teams graphic (2026-10-07, Bria).
+    subj_toks = [w for w in _re.sub(r'[^a-z0-9]+', ' ', subject.lower()).split()
+                 if len(w) >= 4]
     try:
         data, _ct = ib._http_get(
             ib.BING_IMAGES_URL.format(q=_up.quote(f"{subject} photo")),
@@ -315,12 +321,16 @@ def _fetch_photos(subject, kind, max_n):
                 r'&quot;murl&quot;:&quot;([^&"]+)&quot;', html):
             u = raw.replace('\\/', '/').strip()
             low = u.lower().split('?', 1)[0]
-            if low.endswith(('.jpg', '.jpeg', '.png', '.webp')):
-                urls.append(u)
+            if not low.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                continue
+            if subj_toks and not any(t in low for t in subj_toks):
+                continue
+            urls.append(u)
             if len(urls) >= max_n + 5:
                 break
     except Exception:
         pass
+    _PHOTO_SOURCES[subject.lower()] = [u[:160] for u in urls[:max_n + 2]]
     seen, blobs = set(), []
     for u in urls:
         if not u or u in seen:
@@ -340,6 +350,24 @@ def _fetch_photos(subject, kind, max_n):
         if len(blobs) >= max_n:
             break
     return blobs
+
+
+_PERSON_CATS = {'ACTOR', 'ATHLETE', 'COMEDIAN', 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
+                'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER',
+                'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'}
+_TITLE_CATS = {'MOVIE', 'PODCAST', 'GAMES', 'VERTICAL SHORTS', 'GAME PLAYERS'}
+
+
+def photo_kind_for_category(brand_category):
+    """person / title / brand from a profile's BRAND CATEGORY, so a
+    Starz deck looks for a brand image and an actor deck for a person
+    (2026-10-07)."""
+    cat = str(brand_category or '').strip().upper()
+    if cat in _PERSON_CATS:
+        return 'person'
+    if cat.startswith('SERIES') or cat in _TITLE_CATS:
+        return 'title'
+    return 'brand'
 
 
 def _deck_photos(subject, kind='person', max_n=3):
@@ -1070,6 +1098,10 @@ def render_insights_deck(plan, out_path, static_dir=None,
         _p_kind = str(plan.get("image_kind")
                       or photo_kind or 'person').strip().lower()
         photos = _deck_photos(_p_subj, _p_kind) if _p_subj else []
+        plan['_photo_subject'] = _p_subj
+        plan['_photo_sources'] = list(_PHOTO_SOURCES.get(_p_subj.lower()) or [])
+        print(f"[deck] photo subject {_p_subj!r} ({_p_kind}); "
+              f"{len(photos)} photo(s) from {plan['_photo_sources'][:3]}")
         if photos:
             moments = []
             for want in (('cover',), ('hero', 'hero_proof'),

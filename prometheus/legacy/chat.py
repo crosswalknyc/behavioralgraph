@@ -11511,10 +11511,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         traceback.print_exc()
     _alt_named = ''
     if named:
-        # The ask mentions another library subject while this page is
-        # open. That is the torn case, not a silent switch (2026-10-06,
-        # Emmet: a list review of the open profile mentioned Gemini and
-        # the read came back "On Gemini"). Confirm with both as chips.
+        # another library subject in the ask: torn, confirm with both
         _alt_named = named
     try:
         if _pm_titles_ask_needs_scope(text, page):
@@ -11538,10 +11535,7 @@ def _pm_open_screen_confirm(text, ctx, history=None):
             and (bsub == psub or bsub in psub or psub in bsub))
         attach = same
     if not attach:
-        # The ask resolved a catalog subject outside the page's family:
-        # torn between the page and that subject, so confirm with both
-        # (2026-10-06; a silent bind here shipped reads under the
-        # wrong subject twice in one evening).
+        # a catalog subject outside the page's family: confirm with both
         _bsub = str((base or {}).get('subject') or '').strip()
         if _bsub and not _alt_named:
             _alt_named = _bsub
@@ -17985,7 +17979,10 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             os.path.dirname(os.path.abspath(__file__)), 'static')
         deck_builder.render_insights_deck(
             plan, local, static_dir=static_dir,
-            photo_subject=str(subject or p_meta.get('name') or ''))
+            photo_subject=str(subject or p_meta.get('name') or ''),
+            photo_kind=deck_builder.photo_kind_for_category(p_meta.get('brand_category')))
+        base.update(image_subject=plan.get('_photo_subject') or plan.get('image_subject'),
+                    photo_sources=plan.get('_photo_sources') or [])
         s3_key = f"{_PM_DECK_FILE_PREFIX}{job_id}/{fname}"
         with open(local, 'rb') as fh:
             _H.s3_client.put_object(

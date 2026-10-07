@@ -6197,6 +6197,38 @@ def _clean_deck_value(subject, v):
     return v
 
 
+_IMG_SUBJECT_STOP = {'the', 'a', 'an', 'of', 'and', 'audience', 'fans', 'viewers',
+                     'profile', 'insights', 'deck', 'tu', 'universe', 'total', 'avid', 'fan',
+                     'cut', 'q1', 'q2', 'q3', 'q4', 'cy2025', 'cy2026', '2025', '2026'}
+
+
+def _img_tokens(s):
+    return {w for w in re.sub(r'[^a-z0-9]+', ' ', str(s or '').lower()).split()
+            if len(w) >= 3 and w not in _IMG_SUBJECT_STOP}
+
+
+def deck_image_subject(proposed, subject, plan=None):
+    """The subject whose photography opens the deck. The model's pick
+    stands when it shares a distinctive token with the deck subject or
+    appears in a slide title (a talent the deck is about); anything
+    else falls back to the subject itself. Never empty when a subject
+    exists."""
+    subj = str(subject or '').strip()
+    prop = str(proposed or '').strip()
+    if not prop:
+        return subj
+    if not subj:
+        return prop
+    st, pt = _img_tokens(subj), _img_tokens(prop)
+    if pt and (pt & st):
+        return prop
+    titles = ' '.join(str((sl or {}).get('title') or '') for sl in ((plan or {}).get('slides') or []) if isinstance(sl, dict)).lower()
+    if pt and prop.lower() in titles:
+        return prop
+    print(f"[deck] image_subject {prop!r} is off the deck subject {subj!r}; using the subject")
+    return subj
+
+
 def enforce_insights_plan(plan, subject):
     """Validate + scrub an insights-deck slide plan: known slide types
     only, every string field through the vocabulary scrub, every
@@ -6211,12 +6243,20 @@ def enforce_insights_plan(plan, subject):
             r'[^A-Za-z0-9_]+', '_',
             str(plan.get('filename_stem') or '')).strip('_')[:60],
     }
-    # Art direction rides through (2026-09-30 deck photography).
-    out['image_subject'] = scrub_user_text(
-        str(plan.get('image_subject') or '')).strip()[:80]
+    # Art direction rides through (2026-09-30 deck photography), held
+    # to the deck's own subject (2026-10-07, Bria: a Starz insights
+    # deck opened on a Microsoft Teams marketing image because the
+    # plan's image_subject drifted off the subject). The model's pick
+    # survives only when it shares a distinctive token with the
+    # subject or is named in a slide title; otherwise the subject is
+    # the photo subject.
+    _img = scrub_user_text(str(plan.get('image_subject') or '')).strip()[:80]
+    out['image_subject'] = deck_image_subject(_img, subject, plan)
     _ik = str(plan.get('image_kind') or '').strip().lower()
     if _ik not in ('person', 'title', 'brand'):
         _ik = ''
+    if out['image_subject'] != _img:
+        _ik = ''   # the kind is re-read from the subject's category downstream
     out['image_kind'] = _ik
     slides = []
     for sl in (plan.get('slides') or [])[:22]:
