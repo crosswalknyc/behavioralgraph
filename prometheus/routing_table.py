@@ -243,7 +243,11 @@ ROWS = [
         'examples': [('Run a profile for Starz', False),
                      ('Reba McEntire avid fans', False),
                      ('Nike', False),
-                     ('can you build me a Nike profile', False)],
+                     ('can you build me a Nike profile', False),
+                     ('is there a way to build an audience of people who '
+                      'have attended a Gunna concert?', False),
+                     ('is there a way to build an audience of people who '
+                      'have attended a Gunna concert?', True)],
         'counter': [('who watches love island?', False)],
     },
 ]

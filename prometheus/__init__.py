@@ -49,6 +49,14 @@ def init_app(app, host_module):
     except Exception as e:  # pragma: no cover - defensive at boot
         print(f"[prometheus] blueprint registration failed: {e}")
         return False
+    # Offers (2026-10-07, Jenna): a proposed build the user accepts
+    # with one tap from the chat or an email; the signed yes / no
+    # links land here.
+    try:
+        from .offers import bp as _offers_bp
+        app.register_blueprint(_offers_bp)
+    except Exception as e:  # pragma: no cover - defensive at boot
+        print(f"[prometheus] offers blueprint not registered: {e}")
     # Build-first follow-through (2026-10-06, Jenna): a stashed
     # question answers itself on the user's thread once its profile
     # lands, tab open or not. Daemon thread; kill switch

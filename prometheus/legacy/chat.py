@@ -948,6 +948,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Owners', 'Amazon Prime Members', 'EST Buyers', 'TVOD Renters', "
         "'ISP Switchers') is NOT a platform_scope. Those define who is "
         "in the panel; keep `platform_scope: null` for them.\n"
+        "  * CONCERT / LIVE-EVENT ATTENDEES (2026-10-07): 'people who "
+        "attended a Gunna concert', 'went to a Gunna show', 'bought "
+        "tickets to see Gunna', 'Gunna concert goers' is a BEHAVIORAL "
+        "universe of ticket buyers, never the artist's fan profile and "
+        "never a cut of it (the artist's own file in the library is NOT "
+        "an existing_match for it). decision='new_build', "
+        "subject='<Artist> Concert Goers' (the qualifier stays whole), "
+        "brand_category = the artist's talent category (MUSICIAN/BAND, "
+        "COMEDIAN, ...). Populate clickstream_signals with the ticketing "
+        "pages for that artist: ticketmaster.com /<artist>-tickets/, "
+        "stubhub.com /<artist>-tickets/, seatgeek.com /<artist>-tickets, "
+        "vividseats.com /<artist>-tickets, axs.com /artists/<artist>, "
+        "livenation.com /artist/. Size the Total Universe from US "
+        "tickets sold in the window (dates x venue capacity x "
+        "sell-through, one buyer per ~1.8 tickets), never from the fan "
+        "base; the Avid tier is the repeat or presale/VIP buyer.\n"
         "  * When surfacing to the user (draft brief, confirmation "
         "copy), phrase as 'YouTube followers' or 'TikTok audience', "
         "NOT 'platform_scope = [\"youtube\"]'.\n\n"
@@ -9183,6 +9199,15 @@ def _pm_intake_last_agent_stalled(history):
     return False
 
 
+def _pm_intake_breakout(text):
+    """A new ask typed while a guided intake is collecting leaves the
+    intake (2026-10-07 Eliot: "is there a way to build an audience of
+    people who have attended a Gunna concert?" was read as journey
+    fields and answered "I still need platform")."""
+    from prometheus.intake_reader import is_new_ask
+    return is_new_ask(text)
+
+
 def _pm_intake_resolve(flow, text, history, parse_fn, complete_fn,
                        required, ask_copy, user=None, usage_extras=None,
                        fallback_fn=None, propose_fn=None, alert=True):
@@ -11088,122 +11113,56 @@ _PM_CLARIFY_STOP_TOKENS = _PM_BASE_GENERIC_TOKENS | {
 }
 
 
-_PM_CLARIFY_NAME_RES = (
-    # 'profile iq for emily in paris', 'a journey on nike',
-    # 'demographics of yellowstone'
-    re.compile(
-        r'(?:profile(?:\s+iq)?|journey|read|report|data|numbers|'
-        r'demo(?:graphic)?s|insights?|audience|breakdown)\s+'
-        r'(?:for|on|of|about)\s+([a-z0-9][a-z0-9 .&\'-]{1,60})',
-        re.IGNORECASE),
-    # 'look at emily in paris', 'pull up nike', 'switch to yellowstone'
-    re.compile(
-        r'(?:look\s+at|looking\s+at|pull\s+up|switch\s+to|show\s+me|'
-        r'open\s+up)\s+([a-z0-9][a-z0-9 .&\'-]{1,60})',
-        re.IGNORECASE),
-    # 'the yellowstone audience', 'nike buyers', 'bet viewers'
-    re.compile(
-        r'\b([a-z0-9][a-z0-9 .&\'-]{1,40}?)\s+'
-        r'(?:audience|viewers|fans|subscribers|buyers|shoppers|'
-        r'listeners|watchers)\b', re.IGNORECASE),
-)
-
-
-# Comparisons name a second subject on purpose ('compare this to
-# yellowstone viewers') - the page stays the base, never clarify.
-_PM_CLARIFY_COMPARE_RE = re.compile(
-    r'\b(compare[ds]?|comparison|vs\.?|versus|against|'
-    r'relative\s+to|overlap)\b', re.IGNORECASE)
-
-
-# Brand-metric questions about the open page ('how does mcdonalds
-# index for this audience') mention a brand, not a new subject.
-_PM_CLARIFY_METRIC_RE = re.compile(
-    r'\b(index(es|ing)?|over.?index(es|ing)?|rank(s|ed|ing)?|'
-    r'perform(s|ance|ing)?)\b', re.IGNORECASE)
+# One copy of the subject-position rules: prometheus/named_subject.py.
+from prometheus import named_subject as _ns_mod  # noqa: E402
+_PM_CLARIFY_NAME_RES = _ns_mod.NAME_RES
+_PM_CLARIFY_COMPARE_RE = _ns_mod.COMPARE_CUE_RX
+_PM_CLARIFY_METRIC_RE = _ns_mod.METRIC_RX
 
 
 def _pm_page_clarify_subject(text, page_subject):
     """Return the display name of a subject the ask names that is NOT
     the open page, or '' when the ask reads as being about the page.
 
-    Fires only on subject-position phrases with at least one
-    distinctive token and zero token overlap with the page subject.
-    Pronoun asks ('who skews younger here'), brand-metric asks ('how
-    does mcdonalds index for this audience'), and comparisons keep the
-    page base untouched."""
+    Subject-position phrases only (prometheus/named_subject.phrases),
+    plausible labels only (2026-10-07: "Promotoe our Product that
+    Caters to" was offered as a subject); library casing when known."""
     t = str(text or '')
     page = str(page_subject or '').strip()
     if not t or not page:
         return ''
-    if _PM_CLARIFY_COMPARE_RE.search(t):
-        return ''
-    if _PM_CLARIFY_METRIC_RE.search(t):
-        return ''
-    page_d = {w for w in _H._normalize_for_match(page).split()
-              if w not in _PM_CLARIFY_STOP_TOKENS}
+    norm, stop = _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS
+    page_d = _ns_mod.distinct_tokens(page, norm, stop)
     if not page_d:
         return ''
-    for rx in _PM_CLARIFY_NAME_RES:
-        m = rx.search(t)
-        if not m:
-            continue
-        # Cut at sentence boundaries and chained confirm suffixes
-        # ('... . date range: trailing 12 months is good').
-        phrase = re.split(r'[.?!;\n]|\bdate range\b|\bwindow\b',
-                          m.group(1))[0]
-        words = [w for w in re.split(r'\s+', phrase.strip()) if w]
-        while words and _H._normalize_for_match(words[0]) in \
-                _PM_CLARIFY_STOP_TOKENS:
-            words.pop(0)
-        while words and _H._normalize_for_match(words[-1]) in \
-                _PM_CLARIFY_STOP_TOKENS:
-            words.pop()
-        words = words[:6]
-        if not words:
-            continue
-        named_d = {w for w in _H._normalize_for_match(' '.join(words)).split()
-                   if w not in _PM_CLARIFY_STOP_TOKENS}
+    for words in _ns_mod.phrases(t, norm, stop):
+        named_d = _ns_mod.distinct_tokens(' '.join(words), norm, stop)
         if not named_d or (named_d & page_d):
-            # Names nothing distinctive, or names the page itself.
             continue
-        # Canonical catalog casing when the named subject already
-        # exists there (the chip then binds the catalog base and the
-        # answer lands instantly).
         try:
             for entry in _profile_catalog_for_chat():
-                subj = str(entry.get('subject') or '').strip()
-                toks = {w for w in _H._normalize_for_match(subj).split()
-                        if w not in _PM_CLARIFY_STOP_TOKENS}
-                if toks and toks == named_d:
-                    return subj
+                nm = _ns_mod.family_name(entry)
+                if nm and not _ns_mod.is_gen_pop(nm, norm) and \
+                        _ns_mod.distinct_tokens(nm, norm, stop) == named_d:
+                    return nm
         except Exception:
             pass
-        return ' '.join(
-            w if _H._normalize_for_match(w) in _PM_CLARIFY_STOP_TOKENS
-            else (w[:1].upper() + w[1:]) for w in words)
+        label = ' '.join(
+            w if norm(w) in stop else (w[:1].upper() + w[1:]) for w in words)
+        try:
+            from prometheus import referents as _refs
+            if not _refs.plausible_subject(label):
+                continue
+        except Exception:
+            pass
+        return label
     return ''
 
 
 def _pm_ask_names_its_audiences(text):
-    """True when the ask already names who it is about.
-
-    A two-cut request, or a total-universe cut named alongside
-    another audience, is not a guess about the open profile.
-    Casey Pearson, 2026-09-29: hours by genre and platform, total
-    universe and Paramount+ subscribers, was asked twice whether
-    she meant the open Paramount+ profile.
-    """
-    t = str(text or '')
-    if re.search(
-            r"\b(two|both)\b.{0,80}\b(cuts?|audiences?|views?)\b",
-            t, re.I):
-        return True
-    has_tu = bool(re.search(
-        r"\btotal universe\b|\bsubscribers active on streaming\b",
-        t, re.I))
-    has_other = bool(re.search(r"\band\b", t, re.I))
-    return has_tu and has_other
+    """True when the ask already names who it is about (two cuts, or a
+    total universe named alongside another audience)."""
+    return _ns_mod.ask_names_its_audiences(text)
 
 
 _PM_FILE_ASK_RE = re.compile(
@@ -11361,35 +11320,11 @@ _PM_DEFINITE_REF_RE = re.compile(
 
 
 def _pm_screen_bind_verdict(text, page, base, page_key=''):
-    """page | confirm - what the open page is to this ask.
-
-    Jenna 2026-10-06 (supersedes 2026-09-29): "Strip the dashboard
-    assumptions out of the lanes ... just ensure it always asks to
-    confirm." Nothing is inferred from the screen any more. The page
-    binds silently ONLY when the ask names the page's own subject
-    outright (the user said it, no assumption). Every other ask with a
-    profile open - pronouns, "this audience", an elliptical "age
-    breakdown?", a definite reference, a general market question -
-    gets the one-tap confirm with the page as the first chip. The
-    "answer this now" command (S5) is the user's own confirmation and
-    is honored by the caller.
-    """
-    t = str(text or '')
-    tl = ' ' + _H._normalize_for_match(t) + ' '
-    try:
-        page_toks = [w for w in _H._normalize_for_match(
-            str(page or '').split(' - ')[0]).split()
-            if len(w) >= 4 and w not in _PM_CLARIFY_STOP_TOKENS]
-    except Exception:
-        page_toks = []
-    if page_toks and any(f' {w} ' in tl for w in page_toks):
-        # The catalog resolved a DIFFERENT file in the page's own
-        # subject family (cut vs parent): still torn, still confirm.
-        if base and str(base.get('source') or '') == 'catalog' \
-                and str(base.get('s3_key') or '') != str(page_key or ''):
-            return 'confirm'
-        return 'page'
-    return 'confirm'
+    """page | confirm (Jenna 2026-10-06: nothing is inferred from the
+    screen; the page binds only when the ask names it outright)."""
+    return _ns_mod.screen_bind_verdict(text, page, base, page_key,
+                                       _H._normalize_for_match,
+                                       _PM_CLARIFY_STOP_TOKENS)
 
 
 _PM_VIEW_DEIXIS_RE = re.compile(
@@ -11504,21 +11439,45 @@ def _pm_open_screen_confirm(text, ctx, history=None):
     # profile that happens to be open.
     if _pm_ask_names_its_audiences(text):
         return None
-    named = ''
-    try:
-        named = _pm_page_clarify_subject(text, page)
-    except Exception:
-        traceback.print_exc()
-    _alt_named = ''
-    if named:
-        # another library subject in the ask: torn, confirm with both
-        _alt_named = named
     try:
         if _pm_titles_ask_needs_scope(text, page):
             return None
     except Exception:
         traceback.print_exc()
     page_key = str((ctx.get('primary') or {}).get('s3_key') or '')
+    # What the user names is not an assumption (2026-10-07 Jenna: Gunna
+    # asked on the Warriors page drew "Golden State or Gen_Pop?"; "a
+    # script for Brock" on the Brock page drew a confirm). A named
+    # library subject binds (its cut when cued); the page named
+    # outright, first name included, binds the page or its named cut.
+    _norm, _stop = _H._normalize_for_match, _PM_CLARIFY_STOP_TOKENS
+    try:
+        _ent = _ns_mod.named_entry(text, _profile_catalog_for_chat(),
+                                   _norm, _stop)
+    except Exception:
+        traceback.print_exc()
+        _ent = None
+    _pg_named = _ns_mod.page_named(text, page, _norm, _stop)
+    if _ent and str(_ent.get('s3_key') or ''):
+        _ent_name = str(_ent.get('display_name')
+                        or _ent.get('subject') or '').strip()
+        if not _ns_mod.same_family(_ent, page, _norm, _stop):
+            _pm_ask_hint(route='screen_bind', outcome='bound_named_subject',
+                         subject=_ent_name)
+            return {'route': 'bind', 'subject': _ent_name}
+        if _pg_named and str(_ent.get('s3_key')) != page_key:
+            _pm_ask_hint(route='screen_bind', outcome='bound_named_cut',
+                         subject=_ent_name)
+            return {'route': 'bind', 'subject': _ent_name}
+    named = ''
+    if not _pg_named:
+        # a subject not in the library yet: torn, confirm with both
+        # chips. Never when the page itself is named.
+        try:
+            named = _pm_page_clarify_subject(text, page)
+        except Exception:
+            traceback.print_exc()
+    _alt_named = named
     attach = True
     try:
         base = _pm_generation_base('', text, ctx=ctx, prefer_catalog=True)
@@ -11539,11 +11498,8 @@ def _pm_open_screen_confirm(text, ctx, history=None):
         _bsub = str((base or {}).get('subject') or '').strip()
         if _bsub and not _alt_named:
             _alt_named = _bsub
-    # Always confirm (2026-10-06 Jenna, supersedes the 2026-09-29
-    # question-driven default): the page binds silently only when the
-    # ask names it outright; everything else confirms with chips. One
-    # confirmation per thread per page: once the user answered "Yes,
-    # {page}" in this thread, later asks on the same open page bind it.
+    # Always confirm (2026-10-06 Jenna): nothing named, nothing assumed;
+    # one "Yes, {page}" per thread binds later asks on the same page.
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
     if _alt_named:
         verdict = 'confirm'
@@ -11924,6 +11880,8 @@ def _pm_fuzzy_catalog_subject(text, extra_tokens=None):
         for entry in _profile_catalog_for_chat():
             subj = str(entry.get('subject')
                        or entry.get('display_name') or '').strip()
+            if _ns_mod.is_gen_pop(subj, _H._normalize_for_match):
+                continue
             st = [w for w in _H._normalize_for_match(subj).split()
                   if w not in _PM_BASE_GENERIC_TOKENS]
             if not st or sum(len(w) for w in st) < 5 \
@@ -12096,8 +12054,36 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     best, best_score = None, (0, 0)
     partial, partial_score = None, (0, 0.0, 0)
     ask_tokens = q_tokens | hint_tokens
+    # 2026-10-07 (Jenna, the Gunna-on-Warriors ask): a file named by
+    # display name (bound chip, cut label) is the base; a subject named
+    # in subject position beats token presence (Gen Pop, Under Armour
+    # and Nike sat in that ask as objects); Gen Pop is never a base.
+    _norm = _H._normalize_for_match
+    try:
+        _cat = _profile_catalog_for_chat()
+        _hint_n = _norm(subject_hint)
+        _ent = None
+        if _hint_n:
+            _ent = next((e for e in _cat if e.get('s3_key')
+                         and _norm(e.get('display_name')) == _hint_n
+                         and not _ns_mod.is_gen_pop(
+                             _ns_mod.family_name(e), _norm)), None)
+        if not _ent:
+            _ent = _ns_mod.named_entry(
+                f"{subject_hint or ''} {text or ''}", _cat, _norm,
+                _PM_CLARIFY_STOP_TOKENS)
+        if _ent and _ent.get('s3_key'):
+            print(f"[pm-base] named: {_ent.get('display_name')!r}")
+            return {'subject': str(_ent.get('subject')
+                                   or _ent.get('display_name') or '').strip(),
+                    's3_key': str(_ent.get('s3_key') or ''),
+                    'source': 'catalog'}
+    except Exception:
+        traceback.print_exc()
     try:
         for entry in _profile_catalog_for_chat():
+            if _ns_mod.is_gen_pop(_ns_mod.family_name(entry), _norm):
+                continue
             for field in ('subject', 'display_name'):
                 toks = _tokens(entry.get(field))
                 if not toks:
@@ -15497,7 +15483,7 @@ def _pm_analyze_core(user, body, text, history):
                       'ready.'),
             'bpiq_job_id': _bpiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('bpiq_inputs'):
+    if body.get('bpiq_inputs') and not _pm_intake_breakout(text):
         from prometheus.intake_reader import (
             keyword_parse_brand_partnership,
             propose_brand_partnership_field)
@@ -15584,7 +15570,7 @@ def _pm_analyze_core(user, body, text, history):
                          if _adays else '')),
             'aiq_job_id': _aiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('aiq_inputs'):
+    if body.get('aiq_inputs') and not _pm_intake_breakout(text):
         from prometheus.intake_reader import (keyword_parse_attribution,
                                               propose_attribution_field)
         _aparsed, _afault = _pm_intake_resolve(
@@ -15707,7 +15693,7 @@ def _pm_analyze_core(user, body, text, history):
                       'will confirm here when it is ready.'),
             'fw_job_id': _fw_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('fw_inputs'):
+    if body.get('fw_inputs') and not _pm_intake_breakout(text):
         from prometheus.intake_reader import (keyword_parse_flywheel,
                                               propose_flywheel_field)
         _fparsed, _ffault = _pm_intake_resolve(
@@ -15785,7 +15771,7 @@ def _pm_analyze_core(user, body, text, history):
                       'will confirm here when it is ready.'),
             'jiq_job_id': _jiq_job,
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    if body.get('jiq_inputs'):
+    if body.get('jiq_inputs') and not _pm_intake_breakout(text):
         from prometheus.intake_reader import (keyword_parse_journey,
                                               propose_journey_field)
         _jparsed, _jfault = _pm_intake_resolve(

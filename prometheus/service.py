@@ -306,6 +306,44 @@ def ask(user, body, *, via='session'):
         body['text'] = text
         body['surface'] = 'interpret'
 
+    # Answering an offer (2026-10-07 Jenna, Eliot / Gunna Concert Goers):
+    # the previous agent turn asked "Do you still want me to pull it?"
+    # with the offer id on its meta. A yes launches that build through
+    # the approve route (priced, charged, queued like the dashboard
+    # button); a no closes it. Either way the message is the answer to
+    # the offer, never a new ask.
+    try:
+        from . import offers as _offers
+        _oid = _offers.pending_in_history(history)
+        _okind = _offers.answer_kind(text) if _oid else ''
+    except Exception:
+        _oid, _okind = '', ''
+    if _oid and _okind:
+        from flask import current_app as _cur
+        try:
+            _state, _reply, _odoc = _offers.decide(
+                _cur._get_current_object(), _oid, _okind, via='chat',
+                user_text=text, append=persist)
+        except Exception as e:
+            print(f"[prometheus] offer decision failed: {e}")
+            _state, _reply, _odoc = 'failed', '', None
+        if _reply:
+            raw = {'success': True, 'action': 'answer', 'reply': _reply,
+                   'followups': [], 'offer_id': _oid, 'offer_state': _state}
+            decision = {'surface': 'analyze', 'mode': None,
+                        'reason': 'offer_answer', 'client_hint': None}
+            if str(body.get('surface') or '').strip().lower() == 'interpret':
+                raw = _interpret_shape(raw)
+                raw['followups'] = []
+            try:
+                host.ask_hint(route='offer_answer', outcome=_state)
+            except Exception:
+                pass
+            env = envelope.wrap(raw, surface='analyze', decision=decision,
+                                thread_id=tid, via=via)
+            # decide() wrote both turns when this caller persists.
+            return env, 200
+
     # Unresolved referents (2026-10-02 Jenna: "it should have asked him
     # which 3 influencers he was talking about then actually given him
     # the answer"). Two halves, both before any surface runs:

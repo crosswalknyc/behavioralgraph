@@ -452,6 +452,43 @@ def _kind_from_ask(text, kind):
     return kind
 
 
+# ---------------------------------------------------------------------
+# A new ask typed while an intake is collecting (2026-10-07 Eliot: the
+# Digital Journey intake was waiting for a platform when he asked "is
+# there a way to build an audience of people who have attended a Gunna
+# concert?" and got "I still need platform"). Field answers are short,
+# or URLs, or numbered lines, or name a platform / verb the brief
+# needs. A question or a build order about something else is not an
+# answer; the caller drops the intake and routes it normally.
+# ---------------------------------------------------------------------
+_NEW_ASK_OPEN = re.compile(
+    r'^\W*(?:is there a way|can (?:you|we|i)|could (?:you|we|i)|'
+    r'would (?:you|it be possible)|how (?:do|can|would|could) (?:i|we|you)|'
+    r'what|who|which|why|where|when|do you|does|did|are there|is it possible)\b',
+    re.I)
+_BUILD_ASK = re.compile(
+    r'\b(?:build|create|pull|run|make|put together|set up)\b[^.?!]{0,40}'
+    r'\b(?:an?\s+|the\s+)?(?:audience|universe|profile|segment|cohort)s?\b'
+    r'[^.?!]{0,10}\b(?:of|for|on)\b', re.I)
+_FIELD_SHAPE = re.compile(
+    r'https?://|^\s*\d+[.)]\s|^\s*(?:platform|conversion|title|category|'
+    r'brand|partner|window|campaign|urls?)\s*[:=-]', re.I | re.M)
+
+
+def is_new_ask(text):
+    """True when a message sent during a guided intake is a new ask
+    rather than the fields the intake is waiting for."""
+    t = ' '.join(str(text or '').split())
+    if not t or _FIELD_SHAPE.search(t):
+        return False
+    words = t.split()
+    if _BUILD_ASK.search(t):
+        return True
+    if _NEW_ASK_OPEN.match(t) and (t.endswith('?') or len(words) >= 8):
+        return True
+    return False
+
+
 def keyword_parse_journey(text):
     """Digital Journey brief -> the PARSE_SYSTEM_PROMPT shape, best effort.
     Fields it cannot read are None and listed in ``missing``."""

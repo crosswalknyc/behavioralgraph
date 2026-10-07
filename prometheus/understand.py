@@ -43,7 +43,14 @@ _ANALYZE_EXTRA_KEYS = ('bind_subject', 'bind_cohort', 'overall_ranks',
 
 _BUILD_VERB_RX = re.compile(
     r'\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}'
-    r'\bprofiles?\b', re.I)
+    r'\bprofiles?\b'
+    # A people-universe order is a build order whatever it is called
+    # (2026-10-07 Eliot: "is there a way to build an audience of
+    # people who have attended a Gunna concert?" routed as a question).
+    r'|\b(run|build|pull|create|make)\b[^.?!]{0,30}\b(?:an?\s+|the\s+)?'
+    r'(?:audience|universe|segment|cohort)s?\s+(?:of|for)\s+'
+    r'(?:people|those|anyone|everyone|users|fans|folks|consumers|'
+    r'viewers|buyers|shoppers|americans|us\b)', re.I)
 _CUT_BY_RX = re.compile(r'\b(cut|slice)\b[^.]{0,40}\bby\b', re.I)
 _OPS_WORDS_RX = re.compile(
     r'\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b',
