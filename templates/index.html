@@ -20520,6 +20520,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                             <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                             <option value="EMERGING TALENT">Emerging Talent</option>
                                             <option value="HOST/PERSONALITY">Host/Personality</option>
+                                            <option value="BUSINESS/TECH LEADERS">Business/Tech Leaders</option>
                                             <option value="MUSICIAN/BAND">Musician/Band</option>
                                             <option value="PODCASTER">Podcaster</option>
                                             <option value="POLITICS/ACTIVIST">Politics/Activist</option>
@@ -20967,6 +20968,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                                     <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                                     <option value="EMERGING TALENT">Emerging Talent</option>
                                                     <option value="HOST/PERSONALITY">Host/Personality</option>
+                                            <option value="BUSINESS/TECH LEADERS">Business/Tech Leaders</option>
                                                     <option value="MUSICIAN/BAND">Musician/Band</option>
                                                     <option value="PODCASTER">Podcaster</option>
                                                     <option value="POLITICS/ACTIVIST">Politics/Activist</option>
@@ -57110,7 +57112,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
 
         (function() {
             var _sportsSubs = ['AFC','SPORTS TEAM','LA LIGA','METROPOLITAN DIVISION','MLB','MLS','EASTERN CONFERENCE','CENTRAL DIVISION','ATLANTIC DIVISION','AFC EAST','NBA','NFC EAST','NFC NORTH','NFC SOUTH','NFC WEST','NFL','NFC','AFC NORTH','NWSL','PREMIER LEAGUE','RUGBY','SERIE A','SOCCER','PACIFIC DIVISION','AFC SOUTH','AFC WEST','AL','WNBA','AL CENTRAL','AL EAST','AL WEST','SPORTS ORGANIZATIONS','SPORTS ORGANIZATION','HORSE RACING'];
-            var _talentSubs = ['ACTOR','ATHLETE','HOST/PERSONALITY','INFLUENCER/CREATOR','CREATOR/INFLUENCER','MLB ATHLETE','MUSICIAN/BAND','NBA ATHLETE','NFL ATHLETE','NHL ATHLETE','POLITICS/ACTIVIST','SOCCER ATHLETE','WNBA ATHLETE','WRITER/DIRECTOR/AUTHOR/ARTIST'];
+            var _talentSubs = ['ACTOR','ATHLETE','BUSINESS/TECH LEADERS','HOST/PERSONALITY','INFLUENCER/CREATOR','CREATOR/INFLUENCER','MLB ATHLETE','MUSICIAN/BAND','NBA ATHLETE','NFL ATHLETE','NHL ATHLETE','POLITICS/ACTIVIST','SOCCER ATHLETE','WNBA ATHLETE','WRITER/DIRECTOR/AUTHOR/ARTIST'];
             var _mpbSubs = ['ACCESSORIES','APPAREL/FOOTWEAR','BEAUTY/WELLNESS','CPG','HEALTH & WELLNESS','HOME/OUTDOOR','PETS','TECHNOLOGY BRAND','TOYS'];
 
             function _countBehItems(behData, cat) {
@@ -140157,7 +140159,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // only for de-dup: the first list to yield a name owns it.
             const _MKT_TALENT_CATS = [
                 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
-                'HOST/PERSONALITY', 'PODCASTER',
+                'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'PODCASTER',
                 'COMEDIAN', 'MUSICIAN/BAND',
                 'ACTOR', 'ATHLETE',
                 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'EMERGING TALENT',
@@ -140350,6 +140352,8 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                       note: 'Sports figures aligned to this audience. Best for performance messaging, game-day activations, and jersey-tier sponsorships.' },
                     { key: 'host',      icon: '🎙️', title: 'Hosts / Personalities',  cats: ['HOST/PERSONALITY'],
                       note: 'On-air hosts and personalities. Great for talk-format integrations, live-read endorsements, and trusted-voice storytelling.' },
+                    { key: 'leader',    icon: '💼', title: 'Business / Tech Leaders', cats: ['BUSINESS/TECH LEADERS'],
+                      note: 'Founders, executives and technology leaders this audience follows. Best for credibility-led B2B integrations, thought-leadership series, and investor-facing or professional-audience activations.' },
                     { key: 'creator',   icon: '📱', title: 'Creators / Influencers', cats: ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'TALENT'],
                       note: 'Native digital creators. The workhorse tier for always-on social, UGC seeding, and platform-authentic content series. Includes generic talent rows that did not carry a specific subcategory.' },
                     { key: 'comedian',  icon: '😂', title: 'Comedians',              cats: ['COMEDIAN'],
@@ -141013,6 +141017,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 'CREATOR/INFLUENCER': 'Creator / influencer',
                 'INFLUENCER/CREATOR': 'Creator / influencer',
                 'HOST/PERSONALITY': 'Host / personality',
+                'BUSINESS/TECH LEADERS': 'Business / tech leaders',
                 'POLITICS/ACTIVIST': 'Politics / activist',
                 'WRITER/DIRECTOR/AUTHOR/ARTIST': 'Writer / director',
                 'NON PROFIT/CHARITY': 'Non profit / charity',
@@ -171143,7 +171148,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'FAST CHANNEL', 'FAST PLATFORM', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'],
             'TRENDS': ['TRENDS'],
-            'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'BUSINESS/TECH LEADERS', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
         };
         

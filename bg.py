@@ -1285,6 +1285,7 @@ BRAND_CATEGORY_TO_GENPOP_CATS = {
     'ACTOR': ['ACTOR', 'TALENT'],
     'MUSICIAN/BAND': ['MUSICIAN/BAND', 'TALENT'],
     'HOST/PERSONALITY': ['HOST/PERSONALITY', 'TALENT'],
+    'BUSINESS/TECH LEADERS': ['BUSINESS/TECH LEADERS', 'TALENT'],
     'ATHLETE': ['ATHLETE', 'TALENT'],
     'POLITICS/ACTIVIST': ['POLITICS/ACTIVIST', 'TALENT'],
     'WRITER/DIRECTOR/AUTHOR/ARTIST': ['WRITER/DIRECTOR/AUTHOR/ARTIST', 'TALENT'],
@@ -1336,6 +1337,7 @@ DIGITAL_PANEL_TIER_ESTIMATES = {
     'ACTOR': (0.01, 0.12),
     'MUSICIAN/BAND': (0.01, 0.15),
     'HOST/PERSONALITY': (0.005, 0.08),
+    'BUSINESS/TECH LEADERS': (0.005, 0.08),
     'ATHLETE': (0.005, 0.10),
     'CREATOR/INFLUENCER': (0.005, 0.08),
     'POLITICS/ACTIVIST': (0.005, 0.10),
@@ -12133,6 +12135,7 @@ RECLASSIFY_SECTIONS = [
     'Heavy Machinery',
 
     'Host/Personality',
+    'Business/Tech Leaders',
     'Horse Racing',
     # 2026-07-28 (Jenna): flipped slash order from 'Influencer/Creator' to
     # match the actual hostmap SECTION token 'Talent, Creator/Influencer'
@@ -13372,7 +13375,7 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
             talent_brands AS (
                 SELECT DISTINCT Brand as talent_name
                 FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING
-                WHERE UPPER(Category) IN ('TALENT', 'ACTOR', 'COMEDIAN', 'MUSICIAN/BAND', 'HOST/PERSONALITY', 'ATHLETE', 'CREATOR/INFLUENCER', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST')
+                WHERE UPPER(Category) IN ('TALENT', 'ACTOR', 'COMEDIAN', 'MUSICIAN/BAND', 'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'ATHLETE', 'CREATOR/INFLUENCER', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST')
                   AND Brand IS NOT NULL
                   AND Brand != ''
             )
@@ -14768,7 +14771,7 @@ def _enforce_kids_franchise_caps(df_behavior, subject: str = '',
     # actually stream — a category-blanket cap would clobber real signal.
     _bc_u = (brand_category or '').strip().upper()
     _NO_ESCAPE_CATS = {
-        'MUSICIAN/BAND', 'HOST/PERSONALITY', 'ATHLETE',
+        'MUSICIAN/BAND', 'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'ATHLETE',
         'NFL ATHLETE', 'NBA ATHLETE', 'NHL ATHLETE', 'MLB ATHLETE',
         'WNBA ATHLETE', 'SOCCER ATHLETE',
         'POLITICS/ACTIVIST',
@@ -23372,7 +23375,7 @@ def enforce_biographical_floors(df, subject_name, brand_category=None):
             'ATHLETE', 'ACTOR', 'TALENT', 'WHERE THEY DINE', 'WHERE THEY SHOP',
             'NON PROFIT/CHARITY', 'ORGANIZATIONAL MEMBERSHIPS', 'LOCATION',
             'PODCAST', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'HOST/PERSONALITY',
-            'POLITICS/ACTIVIST', 'SPORTS TEAM',
+            'BUSINESS/TECH LEADERS', 'POLITICS/ACTIVIST', 'SPORTS TEAM',
         }
 
         zero_rows = []
@@ -31442,7 +31445,7 @@ def _align_cross_category_bp(df):
     # leaf cats (league/division) winning over the generic SPORTS TEAM bucket.
     _PRIORITY = [
         'POLITICS/ACTIVIST', 'MUSICIAN/BAND', 'ACTOR', 'HOST/PERSONALITY',
-        'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
+        'BUSINESS/TECH LEADERS', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
         'NFL ATHLETE', 'NBA ATHLETE', 'NHL ATHLETE', 'MLB ATHLETE',
         'WNBA ATHLETE', 'SOCCER ATHLETE',
         'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS',
@@ -32782,7 +32785,7 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
             'HEAVY MACHINERY', 'PORN MEDIA', 'GOLF',
             # talent
             'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'ATHLETE',
-            'HOST/PERSONALITY', 'CREATOR/INFLUENCER',
+            'HOST/PERSONALITY', 'CREATOR/INFLUENCER', 'BUSINESS/TECH LEADERS',
             'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST',
             # sports teams
             'SPORTS TEAM', 'SPORTS ORGANIZATION', 'SPORTS ORGANIZATIONS',
@@ -33843,7 +33846,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
         'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'AFC', 'AFC EAST', 'AFC NORTH',
         'AFC SOUTH', 'AFC WEST', 'AL', 'AL CENTRAL', 'AL EAST', 'AL WEST',
         'SERIE A', 'TENNIS', 'UEFA', 'WESTERN CONFERENCE', 'SPORTS', 'LA LIGA',
-        'ACTOR', 'ATHLETE', 'COMEDIAN', 'HOST/PERSONALITY', 'CREATOR/INFLUENCER', 'MLB ATHLETE',
+        'ACTOR', 'ATHLETE', 'COMEDIAN', 'HOST/PERSONALITY', 'BUSINESS/TECH LEADERS', 'CREATOR/INFLUENCER', 'MLB ATHLETE',
         'MUSICIAN/BAND', 'NBA ATHLETE', 'NFL ATHLETE', 'POLITICS/ACTIVIST',
         'SOCCER ATHLETE', 'WNBA ATHLETE', 'TALENT', 'COLLEGE/UNIVERSITY',
         'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR',
@@ -36773,7 +36776,7 @@ def main():
                 "TRAVEL", "QSR", "WHERE THEY DINE", "WHERE THEY SHOP", "SEARCH ENGINE/AI", "SEARCH ENGINE",
                 "SOCIAL MEDIA", "BROADCAST/CABLE", "STREAMING/MUSIC", "STREAMING/PLATFORM", "STREAMING/CHANNEL",
                 "VIRTUAL MVPD FAST", "PORN MEDIA", "TECHNOLOGY/DEVICE", "TELECOM", "WORKOUT FACILITY",
-                "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "COMEDIAN", "HOST/PERSONALITY", "CREATOR/INFLUENCER",
+                "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "COMEDIAN", "HOST/PERSONALITY", "BUSINESS/TECH LEADERS", "CREATOR/INFLUENCER",
                 "MLB ATHLETE", "MUSICIAN/BAND", "NBA ATHLETE", "NFL ATHLETE", "POLITICS/ACTIVIST",
                 "SOCCER ATHLETE", "WNBA ATHLETE", "TALENT", "SPORTS ORGANIZATIONS", "SPORTS TEAM",
                 "WNBA", "NBA", "NFL", "NFC", "NFC EAST", "NFC NORTH", "NFC SOUTH", "NFC WEST",
