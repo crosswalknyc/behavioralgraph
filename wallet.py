@@ -4025,14 +4025,18 @@ def _rows_from_credit_history(hist, *, company, username, email):
 
 
 def _rows_from_wallet_txns(txns, *, company, default_username="",
-                           email="", identities=None, usage_only=False):
+                           email="", identities=None, usage_only=False,
+                           kinds=None):
     out = []
     identities = identities or set()
     for t in txns or []:
         if not isinstance(t, dict):
             continue
         kind = str(t.get("kind") or "").strip().lower()
-        if usage_only and kind != "deduct":
+        if kinds is not None:
+            if kind not in kinds:
+                continue
+        elif usage_only and kind != "deduct":
             continue
         via = str(t.get("billed_via_username") or "").strip()
         if identities:
@@ -4071,6 +4075,119 @@ def _rows_from_wallet_txns(txns, *, company, default_username="",
             ),
         ))
     return out
+
+
+
+_MODAL_SKIP_TOOLS = frozenset({"prometheus"})
+
+
+def usage_row_usd(row) -> float:
+    """Dollar amount for a credits-modal row.
+
+    Prefer the wallet amount that was actually charged or refunded.
+    Fall back to leftover-credit conversion only when no dollar
+    field is present. Refunds stay negative.
+    """
+    if not isinstance(row, dict):
+        return 0.0
+    for key in ("amount_usd", "wallet_charged_usd"):
+        if row.get(key) is None or row.get(key) == "":
+            continue
+        try:
+            return round(float(row[key]), 2)
+        except (TypeError, ValueError):
+            continue
+    try:
+        return round(float(row.get("credits_used") or 0) * LEGACY_CREDIT_USD, 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def credit_usage_for_modal(user, username, users_data=None):
+    """History plus this user's company-wallet deducts and refunds.
+
+    Prometheus sessions stay off this list. They have their own
+    Questions row. Charges are positive. Refunds are negative so
+    Spend to date nets them out.
+    """
+    user = user if isinstance(user, dict) else {}
+    users_data = users_data if isinstance(users_data, dict) else {}
+    username = str(username or "").strip()
+    identities = _history_identities(username, user)
+    rows = []
+    seen_job = set()
+    seen_refund_day = set()
+
+    def _is_refund(row, usd):
+        ptype = str(row.get("pull_type") or "").strip().lower()
+        return ptype == "refund" or usd < 0
+
+    def _add(row):
+        if not isinstance(row, dict):
+            return
+        usd = usage_row_usd(row)
+        jid = str(row.get("job_id") or "").strip()
+        refund = _is_refund(row, usd)
+        tag = "refund" if refund else "charge"
+        day = str(row.get("used_at") or row.get("ts") or "")[:10]
+        if jid:
+            k = (jid, tag)
+            if k in seen_job:
+                return
+            seen_job.add(k)
+        elif refund:
+            rk = (day, round(abs(usd), 2))
+            if rk in seen_refund_day:
+                return
+            seen_refund_day.add(rk)
+        out = dict(row)
+        out["usd"] = usd
+        if out.get("amount_usd") is None:
+            out["amount_usd"] = usd
+        rows.append(out)
+
+    for h in user.get("credit_usage_history") or []:
+        _add(h)
+
+    subject, kind, _key = resolve_billing_subject(user, users_data)
+    txns = []
+    if isinstance(subject, dict):
+        txns.extend(subject.get("wallet_transactions") or [])
+    if kind != "company":
+        txns = list(user.get("wallet_transactions") or []) + txns
+    for t in txns:
+        if not isinstance(t, dict):
+            continue
+        tk = str(t.get("kind") or "").strip().lower()
+        if tk not in ("deduct", "refund"):
+            continue
+        tool = str(t.get("tool") or t.get("tool_key") or "").strip().lower()
+        if tool in _MODAL_SKIP_TOOLS:
+            continue
+        via = str(t.get("billed_via_username") or "").strip().lower()
+        if identities and via and via not in identities:
+            continue
+        if identities and (not via) and tk == "deduct":
+            continue
+        try:
+            raw = float(t.get("amount_usd") or 0)
+        except (TypeError, ValueError):
+            raw = 0.0
+        usd = -raw
+        _add({
+            "used_at": str(t.get("ts") or ""),
+            "description": t.get("description") or "",
+            "job_id": t.get("job_id") or "",
+            "pull_type": "refund" if tk == "refund" else (
+                t.get("tool") or t.get("tool_key") or "wallet"),
+            "credits_used": 0,
+            "amount_usd": usd,
+            "wallet_charged_usd": usd,
+        })
+
+    rows.sort(key=lambda r: str(r.get("used_at") or ""), reverse=True)
+    spend = round(sum(float(r.get("usd") or 0) for r in rows), 2)
+    return rows, spend
 
 
 def collect_transaction_history(data, username="", scope="self",
@@ -4137,7 +4254,7 @@ def collect_transaction_history(data, username="", scope="self",
                     default_username=username,
                     email=email,
                     identities=_history_identities(username, user),
-                    usage_only=True,
+                    kinds=("deduct", "refund"),
                 ))
     seen = set()
     out = []
@@ -4704,6 +4821,7 @@ __all__ = [
     "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
     "existing_wallet_deduct",
+    "usage_row_usd", "credit_usage_for_modal",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb",     "needs_auto_reload",
     "claim_topup_notice",

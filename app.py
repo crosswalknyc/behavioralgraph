@@ -2981,6 +2981,23 @@ def refund_credit(username, credits=1, reason=''):
             user['credits_used'] = max(0, user.get('credits_used', 0) - int(credits))
 
         history = user.setdefault('credit_usage_history', [])
+        if entry.get('amount_usd') is None:
+            for prev in history:
+                if not isinstance(prev, dict):
+                    continue
+                if str(prev.get('pull_type') or '').lower() == 'refund':
+                    continue
+                w = prev.get('wallet_charged_usd')
+                if w is None:
+                    w = prev.get('amount_usd')
+                if w is None:
+                    continue
+                try:
+                    entry['amount_usd'] = -abs(float(w))
+                    entry['wallet_charged_usd'] = -abs(float(w))
+                except (TypeError, ValueError):
+                    pass
+                break
         history.insert(0, entry)
         user['credit_usage_history'] = history[:500]
 
@@ -9792,7 +9809,6 @@ def get_credit_usage():
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
-    history = user.get('credit_usage_history', [])
     uname = session.get('username') or ''
     _, credits_left = check_user_credits(uname)
     snap = _caller_wallet_snapshot(uname)
@@ -9801,23 +9817,38 @@ def get_credit_usage():
         can_export_company = _w_hist.user_can_export_company_history(user)
     except Exception:
         can_export_company = bool(user.get('company_billing_admin'))
+        _w_hist = None
     # Dollars, not credits (2026-09-28 Jenna: "have the credits say a
-    # dollar amount"). Wallet-era rows carry amount_usd; legacy
-    # credit rows convert at the standing $60/credit (a 5-credit
-    # profile is the $300 sheet price).
+    # dollar amount"). Prefer the wallet amount actually charged or
+    # refunded. A 14-credit chatbot row is $300, not 14 x $60.
+    # Company-wallet refunds billed through this user are merged in
+    # so a stopped build shows as money back on their credits modal.
     usage_out = []
     spend_usd = 0.0
-    for row in history:
-        r = dict(row)
-        usd = r.get('amount_usd')
-        if usd is None:
-            try:
-                usd = float(r.get('credits_used', 1) or 0) * 60.0
-            except Exception:
-                usd = 0.0
-        r['usd'] = round(float(usd), 2)
-        spend_usd += r['usd']
-        usage_out.append(r)
+    if _w_hist is not None and hasattr(_w_hist, 'credit_usage_for_modal'):
+        try:
+            data = load_users() or {}
+            fresh = ((data.get('users') or {}).get(uname) or user)
+            usage_out, spend_usd = _w_hist.credit_usage_for_modal(
+                fresh, uname, data)
+        except Exception:
+            traceback.print_exc()
+            usage_out, spend_usd = [], 0.0
+    if not usage_out:
+        history = user.get('credit_usage_history', [])
+        for row in history:
+            r = dict(row)
+            usd = r.get('amount_usd')
+            if usd is None:
+                usd = r.get('wallet_charged_usd')
+            if usd is None:
+                try:
+                    usd = float(r.get('credits_used', 1) or 0) * 60.0
+                except Exception:
+                    usd = 0.0
+            r['usd'] = round(float(usd), 2)
+            spend_usd += r['usd']
+            usage_out.append(r)
     return jsonify({
         'success': True,
         'usage': usage_out,
