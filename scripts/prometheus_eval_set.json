@@ -528,6 +528,7 @@
    "surface": "analyze",
    "input": "what should I look at here",
    "page_context": null,
+   "has_base": false,
    "expected_route": "clarify",
    "source": "constructed"
   },

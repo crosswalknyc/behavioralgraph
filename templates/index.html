@@ -37475,7 +37475,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             }
             function _iiqGoatAssetTableExtras(rowsAll, rowsShown, useInfo, asOf) {
                 var bm = rowsAll.benchmark || {};
-                var noun = useInfo ? 'info-seek' : 'checkout page';
+                // Ladder noun; the brand-campaign relabel map swaps it for the
+                // campaign's own conversion label (ticketing rule, 2026-10-06).
+                var noun = useInfo ? 'info-seek' : 'ticketing site visit';
                 var bench = '';
                 var phrase = _iiqGoatBenchPhrase(bm, noun);
                 if (phrase) {

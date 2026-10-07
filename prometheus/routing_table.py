@@ -80,10 +80,11 @@ ROWS = [
         'reason': 'catalog_lookup', 'client_action': 'analyze',
         'host_only': True,
         'note': 'Existence / "do you see" / audience-size asks answered '
-                'from the corpus catalog with no model call (2026-10-06).',
-        'examples': [('do we have a profile for Ms. Rachel?', False),
-                     ('how big is the Will and Grace audience', False)],
-        'counter': [('who watches love island?', False)],
+                'from the corpus catalog with no model call (2026-10-06). '
+                'Served by the ask service lane, not decide(): "do we '
+                'have a profile for Ms. Rachel?", "how big is the Will '
+                'and Grace audience".',
+        'examples': [], 'counter': [('who watches love island?', False)],
     },
     {
         'id': 'document', 'surface': 'analyze',

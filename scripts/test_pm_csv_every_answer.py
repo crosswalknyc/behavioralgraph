@@ -4,6 +4,7 @@
 helpers plus source wiring for the always-build and render paths."""
 import io
 import json
+import os
 import re
 import sys
 import time
@@ -20,10 +21,7 @@ from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  
 
 ROOT = Path(__file__).resolve().parents[1]
 _APP = _pm_app_path()
-_IDX = ROOT / "templates" / "index.html"
-if not _APP.exists():
-    _APP = _pm_app_path()
-    _IDX = ROOT / "bg-webapp" / "templates" / "index.html"
+_IDX = ROOT / "bg-webapp" / "templates" / "index.html"
 SRC = _APP.read_text()
 IDX = _IDX.read_text()
 
@@ -124,8 +122,13 @@ check("email intercept runs before routing",
 check("email sends from Prometheus",
       "msg['From'] = 'Prometheus <prometheus@crosswalknyc.com>'"
       in SRC)
+# One outbound mail door (2026-10-06): the CSV send goes through
+# prometheus.outbound_mail.send_user_email, which BCCs Jenna on every
+# user-facing send.
+_om_src = (ROOT / 'bg-webapp' / 'prometheus' / 'outbound_mail.py').read_text(encoding='utf-8')
 check("Jenna rides every send",
-      "Destinations=[addr, 'jenna@crosswalknyc.com']" in SRC)
+      "_om.send_user_email(" in SRC and "caller='csv-by-email'" in SRC
+      and "for b in [JENNA]" in _om_src)
 check("reply-to is Jenna",
       "msg['Reply-To'] = 'jenna@crosswalknyc.com'" in SRC)
 check("typed-download path stashes too",

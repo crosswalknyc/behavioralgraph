@@ -14,7 +14,11 @@ from pathlib import Path
 import os as _pm_os, sys as _pm_sys
 _pm_r = _pm_os.path.dirname(_pm_os.path.abspath(__file__))
 while not _pm_os.path.exists(_pm_os.path.join(_pm_r, 'bg-webapp', 'app.py')):
-    _pm_r = _pm_os.path.dirname(_pm_r)
+    _nxt = _pm_os.path.dirname(_pm_r)
+    if _nxt == _pm_r:
+        _pm_r = _pm_os.environ.get('PM_TEST_REPO_ROOT') or _pm_os.path.dirname(_pm_os.path.dirname(_pm_os.path.abspath(__file__)))
+        break
+    _pm_r = _nxt
 _pm_sys.path.insert(0, _pm_os.path.join(_pm_r, 'scripts'))
 from _pm_test_source import app_path as _pm_app_path, host_for as _pm_host_for  # noqa: E402
 
@@ -77,17 +81,26 @@ check("PDF render is fail-safe (email still sends)",
                 FN) is not None)
 check("attachment is conditional on render success",
       "if pdf_bytes and pdf_name:" in FN)
+# One outbound mail door (2026-10-06): the send runs through
+# prometheus.outbound_mail.send_user_email, which sets From Prometheus,
+# Reply-To Jenna, BCCs Jenna (deduped against the recipient) and sends
+# raw MIME so the PDF rides as an attachment.
+_OM = (Path(str(_pm_app_path())).parent / 'prometheus' / 'outbound_mail.py')
+if not _OM.exists():
+    _OM = Path(_pm_r) / 'bg-webapp' / 'prometheus' / 'outbound_mail.py'
+OM = _OM.read_text(encoding='utf-8') if _OM.exists() else ''
 check("sent From Prometheus",
-      FN.count("Prometheus <prometheus@crosswalknyc.com>") >= 2)
+      "_om.send_user_email(" in FN and "FROM = 'Prometheus <prometheus@crosswalknyc.com>'" in OM
+      and "msg['From'] = FROM" in OM)
 check("Reply-To routes to Jenna",
-      "msg['Reply-To'] = 'jenna@crosswalknyc.com'" in FN)
-check("Jenna BCC'd on every user-facing send",
-      "dests.append('jenna@crosswalknyc.com')" in FN)
+      "REPLY_TO = 'jenna@crosswalknyc.com'" in OM and "msg['Reply-To'] = REPLY_TO" in OM)
+check("Jenna BCC'd on every user-facing send", "for b in [JENNA]" in OM)
 check("BCC dedupes when Jenna is the recipient",
-      "to_email.lower() != 'jenna@crosswalknyc.com'" in FN)
+      "b.lower() not in {d.lower() for d in dests}" in OM)
 check("signature reads Prometheus / Crosswalk",
       "Prometheus<br>Crosswalk" in FN and "Crosswalk IQ" not in FN)
-check("raw MIME send (attachment-capable)", "send_raw_email" in FN)
+check("raw MIME send (attachment-capable)",
+      "pdf=pdf_bytes or None, pdf_name=pdf_name" in FN and "send_raw_email" in OM)
 import re as _re
 check("email names the shareable PDF",
       bool(_re.search(r'attached as a PDF you\s*"\s*"?\s*can\s*"?\s*"?\s*share', FN))

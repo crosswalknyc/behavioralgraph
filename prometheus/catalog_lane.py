@@ -29,7 +29,14 @@ _EXISTS_RX = re.compile(
 _SIZE_RX = re.compile(
     r"^\s*(?:how (?:big|large) is (?:the )?(?P<s1>.+?)(?: audience| universe)?|"
     r"(?:what(?:'s| is) the )?(?:audience )?size (?:of|for) (?:the )?(?P<s2>.+?)(?: audience| universe)?|"
-    r"how many (?:people|viewers|users|individuals) (?:watch|watched|stream|streamed|use|used|engage with|engaged with) (?P<s3>.+?))"
+    r"how many (?:people|viewers|users|individuals) (?:watch|watched|stream|streamed|use|used|engage with|engaged with) (?P<s3>.+?)|"
+    # the sample size of a held profile (2026-10-07, Scott: "I was asking
+    # to know what the sample size within our 10million is for Will and
+    # Grace on Hulu" drafted a build)
+    r"(?:i was asking to know |i want to know |i need to know |tell me |can you tell me |just )?"
+    r"what(?:'s| is)? (?:the )?(?:sample size|sample) (?:within|in|inside|of) (?:our |the )?"
+    r"(?:10 ?(?:million|m)|sample|panel)(?: is)? (?:for|of|on) (?:the )?(?P<s4>.+?)|"
+    r"(?:what(?:'s| is) (?:the )?)?sample size (?:for|of|on) (?:the )?(?P<s5>.+?)(?: audience| universe| profile)?)"
     r"[\s?.!]*$", re.I)
 _STRIP_RX = re.compile(
     r"^(?:" + _PRODUCT_WORDS + r")\s+(?:for|on|about|of|covering)\s+", re.I)
@@ -84,7 +91,8 @@ def parse(text):
         return None
     m = _SIZE_RX.match(t)
     if m:
-        subj = _clean_subject(m.group('s1') or m.group('s2') or m.group('s3'))
+        subj = _clean_subject(m.group('s1') or m.group('s2') or m.group('s3')
+                              or m.group('s4') or m.group('s5'))
         if subj and len(subj.split()) <= 10 and _looks_like_entity(subj):
             return 'size', subj
     return None

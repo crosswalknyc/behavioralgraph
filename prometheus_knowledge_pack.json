@@ -1,11 +1,11 @@
 {
  "version": 1,
- "content_hash": "05b48419217a6bdb71e383b29560ebfff68705442970f5ba4c60b2467921b2af",
+ "content_hash": "e01279cdde1c9a569d5565ffdf2355d9f30bb586ab47b92d3b6dfd8f20124ba6",
  "examples_hash": "b44958dcd4c2d7f37ed610089669a1350375cd1327c5f3da896e845908010716",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "3f2d33886bf77e54adde67cbf78f3256fa23fcb86d1ae32dd5ce7294088521f0",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "d5c01e23c4db2669558c41efdf5c706c722fae827c8d78871989ef259a16eaf0",
-  ".cursor/rules/canonical-brand-category.mdc": "9489d976342fda339a1c821a7ad9b43a8cdfad01bd327f3e91d456403c6c3768",
+  ".cursor/rules/canonical-brand-category.mdc": "e02dbf7c1a29d819029e94cf49e96027ab7447a428a23e2740b25f9eb6b26d7e",
   ".cursor/rules/crosswalk-audience-vetting-framework.mdc": "2cc05b465e981135b41bae87fcedfff83ff82289ed97ad3e403574bced7a9ba0",
   ".cursor/rules/crosswalk-brand-standards.mdc": "cc356efe466b9ee3bfbbd741be58e0089559a7055b738e4636cb4e8cf9ea6dde",
   ".cursor/rules/default-date-range.mdc": "af60aa5161cac76e31937132afbaaa7acf83a52727ebb2fbec0ef9d958e82cec",
@@ -200,5 +200,5 @@
    "text": "Among Hotel Transylvania parents of kids 4-7, Action Figures and Playsets is the largest underserved category: it carries 28.8% of the cohort's toy purchase signals while no standing figure line has been on shelf since the Jazwares run wound down.\n\nProjected US people, parents of kids 4-7: 1,357,079, Toy purchase signal penetration: 83.7%, Demand share sitting in thin-coverage categories: 50.7%.\n\nToy category (demand vs current Hotel Transylvania coverage) mix, Jul 1 2025 to Jun 30 2026 (share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 28.8% share, 58.9% penetration. Jazwares figures and ..."
   }
  },
- "generated_at": "2026-10-06T20:20:21Z"
+ "generated_at": "2026-10-07T21:49:41Z"
 }

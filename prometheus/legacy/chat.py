@@ -11609,6 +11609,14 @@ def _pm_start_preverify(text, candidates):
             return None
         import prometheus_analysis as _pma_pv
         guess = str(_pma_pv.guess_subject_from_text(text) or '').strip()
+        # The ladder verifies the entity, never a wrapper phrase around
+        # it ("the appeal of the Spiderwick Chronicles" -> the title).
+        try:
+            from prometheus import guards as _pg_pv
+            core = str(_pg_pv.entity_core(guess) or '').strip()
+            guess = core or guess
+        except Exception:
+            pass
         if not guess or len(guess) < 2:
             return None
     except Exception:
