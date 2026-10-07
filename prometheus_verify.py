@@ -677,6 +677,50 @@ def _income_composite_index(lookup, threshold):
     return round(aud / gp * 100.0, 1)
 
 
+_HEADING_TOKENS = frozenset({
+    'cpg', 'grocery', 'groceries', 'apparel', 'footwear', 'beauty', 'wellness',
+    'brands', 'brand', 'category', 'categories', 'platform', 'platforms',
+    'streaming', 'media', 'podcast', 'podcasts', 'shows', 'show', 'series',
+    'creators', 'creator', 'influencers', 'influencer', 'talent', 'retail',
+    'retailers', 'shopping', 'purchases', 'purchase', 'purchased', 'most',
+    'top', 'social', 'apps', 'app', 'games', 'gaming', 'music', 'video',
+    'travel', 'qsr', 'dining', 'restaurants', 'restaurant', 'auto', 'automotive',
+    'home', 'outdoor', 'accessories', 'pets', 'toys', 'technology', 'devices',
+    'device', 'telecom', 'banking', 'finance', 'insurance', 'and', 'or', 'the',
+    'of', 'in', 'their', 'audience', 'tier', 'mix', 'share', 'spend'})
+
+
+def _is_heading_label(label):
+    """True when a claim label is made only of heading words ("CPG and
+    grocery", "Apparel and footwear", "top podcasts"): a category
+    composite the model summarized, never a row (2026-10-06)."""
+    toks = [w for w in re.split(r'[^a-z0-9]+', str(label or '').lower()) if w]
+    return bool(toks) and all(w in _HEADING_TOKENS or len(w) <= 2 for w in toks)
+
+
+def _category_norms(lookup):
+    """Normalized Column names present in the lookup (cached on it)."""
+    try:
+        cached = lookup.get('_category_norms')
+        if cached is not None:
+            return cached
+        cats = set()
+        for table in ('brands', 'demos'):
+            for rows in (lookup.get(table) or {}).values():
+                for r in rows:
+                    if r and r[0]:
+                        cats.add(_norm(r[0]))
+        # the ask-side spellings of the same headings
+        for extra in ('most purchased brands', 'mpb', 'streaming platform',
+                      'streaming platforms', 'social media', 'where they shop',
+                      'apparel footwear', 'app platform usage', 'app platform'):
+            cats.add(_norm(extra))
+        lookup['_category_norms'] = cats
+        return cats
+    except Exception:
+        return set()
+
+
 def _candidates_for(claim, lookup):
     """Base rows a claim can bind to, by normalized-label match (exact
     first, containment when both sides are 5+ chars). Generic audience
@@ -689,6 +733,11 @@ def _candidates_for(claim, lookup):
             comp = _income_composite_index(lookup, threshold)
             return [comp] if comp is not None else []
     if ln in _GENERIC_LABEL_NORMS:
+        return []
+    # A category name is a heading, never a row (2026-10-06: "most
+    # purchased brands at 91.4%" bound a brand row by containment and
+    # held a clean four-category read).
+    if ln in _category_norms(lookup) or _is_heading_label(claim['label']):
         return []
     # A label ending in a cohort-relation noun ("into Stella Lefty's
     # audience", "her own file") describes a relationship between

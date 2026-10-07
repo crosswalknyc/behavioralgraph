@@ -11481,7 +11481,7 @@ def _pm_view_owns_ask(text, ctx):
     return False
 
 
-def _pm_open_screen_confirm(text, ctx):
+def _pm_open_screen_confirm(text, ctx, history=None):
     """Route an ask against the profile open on screen.
 
     Jenna 2026-10-06 (supersedes the 2026-09-29 question-driven
@@ -11509,14 +11509,13 @@ def _pm_open_screen_confirm(text, ctx):
         named = _pm_page_clarify_subject(text, page)
     except Exception:
         traceback.print_exc()
+    _alt_named = ''
     if named:
-        # The ask names its own subject (2026-09-29 Jenna): the open
-        # page never hijacks it. Bind the named subject silently; the
-        # answer states the audience it used and carries the page as
-        # a one-tap switch chip.
-        _pm_ask_hint(route='ask_named_subject', outcome='bound_named',
-                     subject=named)
-        return {'route': 'bind', 'subject': named}
+        # The ask mentions another library subject while this page is
+        # open. That is the torn case, not a silent switch (2026-10-06,
+        # Emmet: a list review of the open profile mentioned Gemini and
+        # the read came back "On Gemini"). Confirm with both as chips.
+        _alt_named = named
     try:
         if _pm_titles_ask_needs_scope(text, page):
             return None
@@ -11540,18 +11539,24 @@ def _pm_open_screen_confirm(text, ctx):
         attach = same
     if not attach:
         # The ask resolved a catalog subject outside the page's family:
-        # the ask named it. Bind that subject, never the page
-        # (2026-10-06: returning None here let the page bind later).
+        # torn between the page and that subject, so confirm with both
+        # (2026-10-06; a silent bind here shipped reads under the
+        # wrong subject twice in one evening).
         _bsub = str((base or {}).get('subject') or '').strip()
-        if _bsub:
-            _pm_ask_hint(route='ask_named_subject', outcome='bound_named',
-                         subject=_bsub)
-            return {'route': 'bind', 'subject': _bsub}
-        return None
+        if _bsub and not _alt_named:
+            _alt_named = _bsub
     # Always confirm (2026-10-06 Jenna, supersedes the 2026-09-29
     # question-driven default): the page binds silently only when the
-    # ask names it outright; everything else confirms with chips.
+    # ask names it outright; everything else confirms with chips. One
+    # confirmation per thread per page: once the user answered "Yes,
+    # {page}" in this thread, later asks on the same open page bind it.
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
+    if _alt_named:
+        verdict = 'confirm'
+    elif verdict == 'confirm' and _pm_thread_confirmed_page(history, page):
+        _pm_ask_hint(route='screen_bind', outcome='bound_thread_confirmed',
+                     subject=page)
+        return {'route': 'bind', 'subject': page}
     if verdict == 'confirm' and _pm_answer_now_active():
         # The reader said answer now: the thing on their screen is
         # the answer's base, stated in the reply with the other file
@@ -11563,7 +11568,7 @@ def _pm_open_screen_confirm(text, ctx):
         return None
     yes = f'Yes, {page}'
     _opts = [{'label': yes, 'subject': page}]
-    _alt = str((base or {}).get('subject') or '').strip()
+    _alt = _alt_named or str((base or {}).get('subject') or '').strip()
     if _alt and _H._normalize_for_match(_alt) != _H._normalize_for_match(page):
         _opts.append({'label': f'On {_alt}', 'subject': _alt})
     _pm_ask_hint(route='open_screen_confirm',
@@ -12108,6 +12113,11 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                             toks, f"{text or ''} {subject_hint or ''}"):
                     # identity-token floor, with the ALL-CAPS
                     # initialism bypass for 2-5 letter subjects
+                    continue
+                if len(toks) == 1 and toks[0] in _PM_COMMON_IDENTITY_WORDS \
+                        and not _pm_short_name_identity(
+                            toks, f"{text or ''} {subject_hint or ''}"):
+                    # one ordinary word is not an identity (2026-10-06)
                     continue
                 tset = set(toks)
                 is_tu = ' - ' not in str(entry.get('display_name') or '')
@@ -13561,6 +13571,10 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         pass
     if is_strategy:
         extra_blocks.append(pma.STRATEGY_GUIDANCE)
+    # So-what asks answer as a plan, never as another read (2026-10-06).
+    _is_so_what = pma.is_so_what_ask(text)
+    if _is_so_what:
+        extra_blocks.append(pma.SO_WHAT_GUIDANCE)
     user_prompt = user_prompt + '\n\n' + '\n\n'.join(extra_blocks)
     try:
         import prometheus_knowledge as _pmk
@@ -13616,7 +13630,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     _stage_note('composing the answer')
     _t_stage = time.monotonic()
     try:
-        res = pma.enforce_metrics_coherence(data)
+        res = pma.enforce_metrics_coherence(data, so_what=_is_so_what)
         reply = pma.format_generated_metrics_reply(res)
     except Exception as e:
         traceback.print_exc()
@@ -13676,7 +13690,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                   if isinstance(d, dict)), {})
                 if str(data2.get('action') or '').strip().lower() \
                         != 'decline':
-                    res2 = pma.enforce_metrics_coherence(data2)
+                    res2 = pma.enforce_metrics_coherence(data2, so_what=_is_so_what)
                     reply2 = pma.format_generated_metrics_reply(res2)
                     fam2 = ('strategy' if is_strategy
                             else res2.get('metric_family'))
@@ -13745,7 +13759,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                       if isinstance(d, dict)), {})
                     if str(data3.get('action') or '').strip().lower() \
                             != 'decline':
-                        res3 = pma.enforce_metrics_coherence(data3)
+                        res3 = pma.enforce_metrics_coherence(data3, so_what=_is_so_what)
                         reply3 = pma.format_generated_metrics_reply(
                             res3)
                         fam3 = ('strategy' if is_strategy
@@ -13767,11 +13781,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             except Exception:
                 traceback.print_exc()
         if not revised_ok and _purchase_facts and pmv is not None:
-            # In-place rescue (no-rebuild-level-correction): when only
-            # bound purchase facts are still wrong, the measured figures
-            # go in place and the read ships.
-            _resc = pmv.rescue_with_facts(_last_draft, _last_verdict or verdict,
-                                          _purchase_facts)
+            # In-place rescue: only bound purchase facts still wrong.
+            _resc = pmv.rescue_with_facts(_last_draft, _last_verdict or verdict, _purchase_facts)
             if _resc:
                 data, res, reply, fam0, verdict, _nfix = _resc
                 verify_revised = revised_ok = _pm_auto_corrected = True
@@ -13811,9 +13822,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 'deck_angle': None, '_held': True, '_family': fam0,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
-    # Bound purchase facts (2026-10-06): after the passes, the measured
-    # Avid tier and projected counts replace any remaining near-miss in
-    # place. Figures only; never raises.
+    # Bound purchase facts (2026-10-06): measured figures in place.
     if _purchase_facts and pmv is not None:
         try:
             reply, res, _nfix = pmv.facts_enforce(reply, res, _purchase_facts)
@@ -15341,23 +15350,11 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
             'offer_deck': False, 'deck_angle': None})
-    # A deictic definition ask ("how is this calculated?") never
-    # guesses from the screen (2026-10-06, Jenna): it asks which
-    # figure, with the on-screen labels as chips.
-    try:
-        if _kpi.is_definition_ask(text) or _kpi.is_reconcile_ask(text):
-            _vid, _labels = _pm_kpi_view(body)
-            _opts = _kpi.which_figure_options(text, _labels)
-            if _opts:
-                _pm_ask_hint(route='kpi_which_figure', outcome='clarified')
-                return jsonify({
-                    'success': True, 'action': 'answer',
-                    'reply': 'Which figure do you mean? Pick one and I '
-                             'will define it and show how it is counted.',
-                    'followups': [f'Define "{o}"' for o in _opts],
-                    'offer_deck': False, 'deck_angle': None})
-    except Exception:
-        traceback.print_exc()
+    # A deictic "how is this calculated?" asks which figure (2026-10-06).
+    _wf = _kpi.which_figure_payload(text, _pm_kpi_view(body)[1])
+    if _wf:
+        _pm_ask_hint(route='kpi_which_figure', outcome='clarified')
+        return jsonify(_wf)
     # Sample size lane (2026-10-05, Jenna: "the answer will always be
     # 10 million us gen pop panel ... the panel size is always that
     # 10m"). Scott's ask was parsed as a subject and offered a build.
@@ -16323,7 +16320,7 @@ def _pm_analyze_core(user, body, text, history):
             except Exception:
                 pass
         else:
-            _osc = _pm_open_screen_confirm(text, ctx)
+            _osc = _pm_open_screen_confirm(text, ctx, history=history)
             if isinstance(_osc, dict):
                 _sw_page = str((ctx.get('primary') or {}).get('name')
                                or '').strip()
@@ -18687,6 +18684,8 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_ask_log_user,
     _pm_probe_caller,
     _pm_is_probe_user,
+    _PM_COMMON_IDENTITY_WORDS,
+    _pm_thread_confirmed_page,
     _pm_watch_flag,
     _pm_record_held_reply,
     _pm_gate_options,

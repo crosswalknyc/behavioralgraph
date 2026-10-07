@@ -4321,6 +4321,136 @@ _STRATEGY_RX = re.compile(
     r'\b(?:sponsorship|partnership)\b', re.IGNORECASE)
 
 
+# ---------------------------------------------------------------------------
+# So-what asks (2026-10-06, Jenna on Emmet's "why does this matter and
+# what can I do with these insights?": the reply "was more a read than
+# telling him why it mattered and what to do with the data to make
+# money"). A so-what ask is answered as a plan: why it matters in money
+# terms, then the moves, each tied to a number, then the first step.
+# ---------------------------------------------------------------------------
+_SO_WHAT_RX = re.compile(
+    r"\bwhy\s+(?:does|do|would|should|did)\s+(?:this|that|it|these|any\s+of\s+this)\s+matter\b"
+    r"|\bso\s+what\b"
+    r"|\bwhat\s+(?:can|should|do|could|would)\s+(?:i|we|he|she|they|brock|the\s+creator|a\s+creator)\s+do\s+with\b"
+    r"|\bhow\s+(?:do|can|should|could|would)\s+(?:i|we|he|she|they)\s+(?:use|monetize|make\s+money|act\s+on|apply|leverage|turn)\b"
+    r"|\bmake\s+money\b|\bmonetiz\w+"
+    r"|\bwhat\s+should\s+(?:i|we|he|she|they)\s+do\b"
+    r"|\bnext\s+steps?\b"
+    r"|\bhow\s+(?:do|can|should)\s+(?:i|we)\s+(?:sell|pitch|price|package|position)\b"
+    r"|\bwhat\s+(?:are|is)\s+the\s+(?:takeaways?|implications?|plays?|moves?|so\s+what|upshot)\b"
+    r"|\bwhat\s+(?:would|should|do)\s+(?:you|we)\s+recommend\b"
+    r"|\bwhy\s+(?:would|does|should)\s+(?:this|that|it)\s+matter\s+(?:for|to)\b"
+    r"|\bwhat\s+does\s+(?:this|that|it)\s+mean\s+for\s+(?:me|us|my|our|the\s+business|revenue|sponsors?)\b",
+    re.I)
+
+
+def is_so_what_ask(text):
+    """True for a why-does-this-matter / what-do-I-do-with-it ask. Build
+    phrasing and deck asks are excluded as for the strategy playbook."""
+    t = str(text or '').strip()
+    if not t or len(t) > 600:
+        return False
+    if not _SO_WHAT_RX.search(t):
+        return False
+    try:
+        if _is_build_request(t) or detect_deck_intent(t):
+            return False
+    except Exception:
+        pass
+    return True
+
+
+SO_WHAT_GUIDANCE = (
+    'SO-WHAT PLAYBOOK (this ask is "why does this matter / what do I do '
+    'with it"):\n'
+    'The reader does not want another read. They want to know why the '
+    'numbers matter to their money and exactly what to do next. Fill the '
+    'JSON this way:\n'
+    '- "headline": one sentence that answers the money question flat '
+    '(what this audience is worth to them and the single biggest move).\n'
+    '- "metrics": at most 3, only the figures the moves lean on.\n'
+    '- "reads": the plan. reads[0] is WHY IT MATTERS: two or three '
+    'sentences in plain words on what these numbers mean for revenue, '
+    'pricing power, or who will pay (who the audience is to a buyer, what '
+    'it lets the reader charge or sell, what it rules out). Every '
+    'remaining read is one MOVE: start with an imperative verb (Pitch, '
+    'Price, Package, Build, Lead with, Skip), name who to go to and with '
+    'what offer, give the number from the profile that justifies it and '
+    'the dollar or outcome it points to (a rate per thousand, a sponsor '
+    'tier, a deal size, a conversion the audience will deliver). Three to '
+    'five moves, most valuable first. The LAST read is "First step this '
+    'week: ..." one concrete action the reader can take in the next '
+    'seven days.\n'
+    '- Plain words a smart 16-year-old follows. No index without a plain '
+    'comparison next to it ("2x the US average"). No methodology, no '
+    'hedging, no "this reads as" for the moves - say what to do.\n'
+    '- Dollars: when you price inventory or a deal, show the arithmetic '
+    'inside the sentence (people x rate = dollars), put a $ sign on every '
+    'dollar figure including the result, and keep every figure messy '
+    '(never a round number).\n')
+
+
+_DOLLAR_RESULT_RX = re.compile(r'(=\s*)(?<!\$)(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]*\s*(?:people|viewers|seats|buyers|users|accounts|companies|signups|%))')
+_PER_THOUSAND_RX = re.compile(r'(?<![\$\d])(\d{1,3}(?:\.\d+)?)(\s+per\s+thousand)')
+
+
+def _dollarize(text):
+    """A plain reader cannot tell 53,068 from $53,068. In a sentence that
+    already prices something in dollars, the result of the arithmetic
+    and any 'N per thousand' rate carry the sign (2026-10-06)."""
+    out = []
+    parts = re.split(r'((?<=[.!?])\s+)', str(text or ''))  # separators kept
+    for k, sent in enumerate(parts):
+        if k % 2 == 0 and ('$' in sent or re.search(r'\bper thousand\b', sent)):
+            sent = _PER_THOUSAND_RX.sub(r'$\1\2', sent)
+            if '$' in sent:
+                sent = _DOLLAR_RESULT_RX.sub(r'\1$\2', sent)
+        out.append(sent)
+    return ''.join(out)
+
+
+def format_so_what_reply(res):
+    """Action-shaped reply for a so-what ask: the money answer, why it
+    matters, numbered moves, the first step. Metrics ride inline."""
+    lines = []
+    if res.get('headline'):
+        lines.append(str(res['headline']).strip())
+        lines.append('')
+    mets = [m for m in (res.get('metrics') or []) if isinstance(m, dict)][:3]
+    if mets:
+        lines.append('The numbers behind this: ' + '; '.join(
+            f"{m.get('label')} {_fmt_metric_value(m)}" for m in mets) + '.')
+        lines.append('')
+    reads = [str(r).strip() for r in (res.get('reads') or []) if str(r).strip()]
+    # the model sometimes labels the parts itself; the headers below do that
+    reads = [re.sub(r'^(?:why\s+it\s+matters|what\s+to\s+do(?:\s+with\s+it)?|move\s*\d+|'
+                    r'step\s*\d+|\d+[.)])\s*[:\-.]?\s*', '', r, flags=re.I).strip() for r in reads]
+    reads = [_dollarize(r) for r in reads]
+    first_step = None
+    moves = []
+    why = None
+    for r in reads:
+        rl = r.lower()
+        if first_step is None and rl.startswith('first step'):
+            first_step = r
+        elif why is None:
+            why = r
+        else:
+            moves.append(r)
+    if why:
+        lines.append('Why it matters')
+        lines.append(why)
+        lines.append('')
+    if moves:
+        lines.append('What to do with it')
+        for i, mv in enumerate(moves, start=1):
+            lines.append(f"{i}. {mv}")
+        lines.append('')
+    if first_step:
+        lines.append(first_step)
+    return scrub_user_text('\n'.join(lines).strip())
+
+
 def detect_strategy_intent(text):
     """True when the ask is an opportunity / white-space / underserved-
     category question. These are analysis asks that additionally get
@@ -5683,10 +5813,11 @@ def build_insights_deck_user_prompt(subject, partner, digest_bundle,
 _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
-def enforce_metrics_coherence(data):
+def enforce_metrics_coherence(data, so_what=False):
     """Exactify a reasoned measurement read: counts messy (last digit
     1-9), percentages one decimal and bounded, labels and definitions
-    capped. Returns the cleaned dict."""
+    capped. Returns the cleaned dict. `so_what` (2026-10-06) marks the
+    result so the formatter renders a plan instead of a read."""
     if not isinstance(data, dict):
         raise ValueError('measurement payload is not a dict')
     subj = str(data.get('subject') or 'subject').strip() or 'subject'
@@ -5699,7 +5830,7 @@ def enforce_metrics_coherence(data):
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'headline': _clip_text(data.get('headline'), 300),
         'reads': [_clip_text(r, 480)
-                  for r in (data.get('reads') or []) if str(r).strip()][:5],
+                  for r in (data.get('reads') or []) if str(r).strip()][:7 if so_what else 5],
     }
     metrics, seen = [], set()
     for i, row in enumerate(data.get('metrics') or []):
@@ -5738,6 +5869,8 @@ def enforce_metrics_coherence(data):
     if not metrics and not out['breakdown']:
         raise ValueError('measurement read carried no usable metrics')
     out['metrics'] = metrics
+    if so_what:
+        out['_so_what'] = True
     return out
 
 
@@ -5799,7 +5932,10 @@ def format_generated_metrics_reply(res):
     Prometheus reply. When the read carries a breakdown, the ranked
     breakdown IS the reply body (2026-08-27, Jenna: a category ask must
     answer with the category table, not cohort headline stats); the
-    cohort context shrinks to a one-line preamble."""
+    cohort context shrinks to a one-line preamble. A so-what ask
+    (res['_so_what'], 2026-10-06) renders as a plan instead of a read."""
+    if res.get('_so_what') and not res.get('breakdown'):
+        return format_so_what_reply(res)
     lines = []
     if res.get('headline'):
         lines.append(res['headline'])

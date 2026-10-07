@@ -224,8 +224,11 @@ def route_ask(text, *, surface, has_ctx=False, mode='', has_base=False,
             if kind in ('build', 'cut'):
                 d.update(route='build_interpret', why='classifier')
                 return d
-            if not d.get('used_classifier') and not build_shaped \
-                    and _question_shaped(t):
+            # A question with a resolvable base never dead-ends on the
+            # classifier's 'other' (2026-10-06: "why does this matter
+            # and what can Brock do to make money" drew "Do you mean
+            # for Gunna?" from memory); it reads on the named base.
+            if not build_shaped and _question_shaped(t):
                 d.update(route='generate', why='named_base')
                 return d
         # 8. Grounded confirm from cross-session memory.

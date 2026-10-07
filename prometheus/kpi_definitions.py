@@ -386,8 +386,15 @@ def _bare_what_is(text):
 
 
 def is_definition_ask(text):
+    """A short, single definition question. A message carrying several
+    questions, or a long one, is an analysis ask even when one clause
+    says "define" (2026-10-06, Emmet: "identify brand partnerships that
+    index the highest ... Can you define who my key audience is? Is my
+    audience non-tech" drew the Index glossary entry)."""
     t = str(text or '').strip()
     if not t or len(t) > 240:
+        return False
+    if t.count('?') > 1 or len(t.split()) > 24:
         return False
     if any(rx.search(t) for rx in _DEFINITION_ASK_RES):
         return True
@@ -425,6 +432,15 @@ def find_definition(text, view_id='', on_screen_labels=None):
     on-screen label resolves to an entry, that entry wins."""
     nt = _norm(text)
     view_id = str(view_id or '')
+    # the alias must sit in the same sentence as the definition cue
+    # ("define X", "what does X mean"), never elsewhere in the message
+    cue_sent = None
+    for sent in re.split(r'(?<=[.!?])\s+', str(text or '')):
+        if any(rx.search(sent) for rx in _DEFINITION_ASK_RES) or _bare_what_is(sent):
+            cue_sent = _norm(sent)
+            break
+    if cue_sent is not None:
+        nt = cue_sent
     best = None
     for d in DEFINITIONS:
         for alias in d['aliases']:
@@ -603,3 +619,21 @@ def on_screen_labels(view_data, limit=40):
                 walk(x, depth + 1)
     walk(view_data, 0)
     return out[:limit]
+
+
+def which_figure_payload(text, on_screen_labels):
+    """The which-figure confirm as an analyze payload, or None. Never
+    raises (a failure means no confirm, and the ask continues)."""
+    try:
+        if not (is_definition_ask(text) or is_reconcile_ask(text)):
+            return None
+        opts = which_figure_options(text, on_screen_labels)
+        if not opts:
+            return None
+        return {'success': True, 'action': 'answer',
+                'reply': 'Which figure do you mean? Pick one and I will define '
+                         'it and show how it is counted.',
+                'followups': [f'Define "{o}"' for o in opts],
+                'offer_deck': False, 'deck_angle': None}
+    except Exception:
+        return None

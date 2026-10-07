@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -288,3 +288,45 @@ def _pm_open_status_line(user, hours=72):
     if running:
         parts.append(('1 build is' if len(running) == 1 else f"{len(running)} builds are") + ' still in motion.')
     return ' '.join(parts)
+
+
+# A single ordinary English word is never a subject identity on its own
+# (2026-10-06: "the best demo overlap with the Avid tier" bound the
+# catalog's 'Best of the Best - Avid Fan' on the word 'best' and the
+# read shipped under the wrong subject). The ALL-CAPS initialism bypass
+# (BET, CNN) still applies; a multi-token name is unaffected.
+_PM_COMMON_IDENTITY_WORDS = frozenset({
+    'best', 'good', 'great', 'new', 'old', 'big', 'little', 'small', 'top',
+    'first', 'last', 'love', 'life', 'home', 'house', 'game', 'games',
+    'music', 'news', 'world', 'time', 'day', 'night', 'people', 'man',
+    'woman', 'girl', 'boy', 'kids', 'family', 'friends', 'money', 'work',
+    'school', 'city', 'country', 'war', 'star', 'stars', 'light', 'dark',
+    'black', 'white', 'red', 'blue', 'green', 'gold', 'one', 'two', 'three',
+    'real', 'true', 'free', 'happy', 'bad', 'mad', 'hot', 'cold', 'wild',
+    'young', 'party', 'power', 'future', 'american', 'america', 'united',
+    'states', 'modern', 'super', 'team', 'club', 'project', 'story',
+    'stories', 'land', 'king', 'queen', 'lost', 'found', 'dead', 'alive',
+    'fire', 'water', 'earth', 'sun', 'moon', 'summer', 'winter', 'spring',
+    'fall', 'live', 'living', 'daily', 'weekly', 'morning', 'tonight',
+    'today', 'tomorrow', 'open', 'next', 'final', 'late', 'early', 'high',
+    'low', 'long', 'short', 'more', 'most', 'less', 'only', 'other',
+    'thing', 'things', 'place', 'street', 'road', 'way', 'line', 'point',
+    'simple', 'plain', 'perfect', 'better', 'greatest', 'original'})
+
+
+def _pm_thread_confirmed_page(history, page):
+    """True when this thread already answered the open-screen confirm
+    for this page ("Yes, {page}" as a user turn). The user said it once;
+    asking again on every question in the same thread is noise, not
+    caution (2026-10-06, Emmet's thread: four confirms in ten minutes on
+    the same profile)."""
+    try:
+        want = _H._normalize_for_match(f"yes {page}")
+        for t in reversed([h for h in (history or []) if isinstance(h, dict)]):
+            if str(t.get('role') or '').lower() != 'user':
+                continue
+            if _H._normalize_for_match(str(t.get('text') or '')) == want:
+                return True
+    except Exception:
+        pass
+    return False
