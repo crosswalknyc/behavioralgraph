@@ -180,13 +180,34 @@ def _partner_safe_msg(code: str, status: int, raw: str) -> str:
 # so USD -> cents integer)
 # ---------------------------------------------------------------------------
 
-def _to_cents(usd: float) -> int:
-    """USD float -> integer cents. Rounds half-even; refuses values
-    below $0.50 because Stripe's minimum charge is $0.50."""
+def normalize_charge_currency(currency) -> str:
+    """usd or gbp. Ledger amounts stay numeric; only Stripe's
+    charge currency changes."""
+    raw = str(currency or "usd").strip().lower()
+    if raw in ("gbp", "£", "pound", "pounds", "sterling"):
+        return "gbp"
+    return "usd"
+
+
+def _money_label(amount: float, currency: str = "usd") -> str:
+    cur = normalize_charge_currency(currency)
+    try:
+        v = float(amount)
+    except (TypeError, ValueError):
+        v = 0.0
+    sign = "-" if v < 0 else ""
+    sym = "£" if cur == "gbp" else "$"
+    return f"{sign}{sym}{abs(v):,.2f}"
+
+
+def _to_cents(usd: float, currency: str = "usd") -> int:
+    """Major-unit float -> integer minor units. Same 50-unit
+    Stripe floor for USD ($0.50) and GBP (£0.50)."""
     cents = int(round(float(usd) * 100))
     if cents < 50:
         raise BillingError(
-            f"Amount ${usd:.2f} is below the $0.50 Stripe minimum.")
+            f"Amount {_money_label(usd, currency)} is below the "
+            f"{_money_label(0.50, currency)} Stripe minimum.")
     return cents
 
 
@@ -434,7 +455,8 @@ def create_checkout_session(customer_id: str, amount_usd: float,
                             username: str,
                             metadata: Optional[dict] = None,
                             product_name: str = "Crosswalk wallet top-up",
-                            product_description: str = "") -> dict:
+                            product_description: str = "",
+                            currency: str = "usd") -> dict:
     """Create a hosted Checkout Session for a prepay top-up.
 
     The user clicks "Add Funds" -> we call this -> we redirect to
@@ -450,12 +472,15 @@ def create_checkout_session(customer_id: str, amount_usd: float,
         raise BillingError("Missing customer id.")
     if amount_usd <= 0:
         raise BillingError("Top-up amount must be positive.")
-    cents = _to_cents(amount_usd)
+    cur = normalize_charge_currency(currency)
+    cents = _to_cents(amount_usd, cur)
     s = _stripe()
     md = dict(metadata or {})
     md.setdefault("dashboard_username", username)
     md.setdefault("topup_usd", f"{amount_usd:.2f}")
     md.setdefault("purpose", "wallet_topup")
+    md.setdefault("charge_currency", cur)
+    label = _money_label(amount_usd, cur)
     sess = s.checkout.Session.create(
         customer=customer_id,
         mode="payment",
@@ -463,12 +488,12 @@ def create_checkout_session(customer_id: str, amount_usd: float,
         line_items=[{
             "quantity": 1,
             "price_data": {
-                "currency": "usd",
+                "currency": cur,
                 "product_data": {
                     "name": product_name,
                     "description": (
                         product_description
-                        or f"Add ${amount_usd:,.2f} to your Crosswalk "
+                        or f"Add {label} to your Crosswalk "
                            f"dashboard wallet."),
                 },
                 "unit_amount": cents,
@@ -560,7 +585,8 @@ def retrieve_checkout_session(session_id: str) -> dict:
 def charge_saved_card(customer_id: str, payment_method_id: str,
                       amount_usd: float, description: str,
                       username: str,
-                      metadata: Optional[dict] = None) -> dict:
+                      metadata: Optional[dict] = None,
+                      currency: str = "usd") -> dict:
     """Off-session charge against a previously-saved card.
 
     Used by:
@@ -578,15 +604,17 @@ def charge_saved_card(customer_id: str, payment_method_id: str,
         raise BillingError("Missing customer or payment_method id.")
     if amount_usd <= 0:
         raise BillingError("Charge amount must be positive.")
-    cents = _to_cents(amount_usd)
+    cur = normalize_charge_currency(currency)
+    cents = _to_cents(amount_usd, cur)
     md = dict(metadata or {})
     md.setdefault("dashboard_username", username)
     md.setdefault("charge_usd", f"{amount_usd:.2f}")
+    md.setdefault("charge_currency", cur)
     idem = md.pop("idempotency_key", None)
     s = _stripe()
     kwargs = dict(
         amount=cents,
-        currency="usd",
+        currency=cur,
         customer=customer_id,
         payment_method=payment_method_id,
         off_session=True,

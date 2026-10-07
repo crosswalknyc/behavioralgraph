@@ -815,10 +815,10 @@
       /[&<>"']/g, c => (
         {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
          "'":'&#39;'}[c]));
-    const fmtUsd = (n) => {
+    const fmtUsd = (n, sym) => {
       const v = Number(n) || 0;
       const sign = v < 0 ? '-' : '';
-      return sign + '$' + Math.abs(v).toLocaleString('en-US', {
+      return sign + (sym || '$') + Math.abs(v).toLocaleString('en-US', {
         minimumFractionDigits: 2, maximumFractionDigits: 2
       });
     };
@@ -977,10 +977,10 @@
             ? (u.card_brand || 'card') + ' ****' + (u.card_last4 || '')
             : '<span style="color: #B8B8B0;">-</span>') + '</div>';
           html += '<div class="amount' + balCls + '">' +
-            fmtUsd(u.wallet_balance_usd) + '</div>';
+            fmtUsd(u.wallet_balance_usd, u.money_symbol) + '</div>';
         }
         html += '<div class="amount">' +
-          fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
+          fmtUsd(u.wallet_lifetime_spend_usd, u.money_symbol) + '</div>';
         html += '<div><button onclick="openUserOrCompany(\'' +
           esc(u.username) + '\')">Manage</button></div>';
         html += '</div>';
@@ -1057,10 +1057,10 @@
               esc(c.card_last4 || '')
             : '<span style="color:#B8B8B0;">-</span>') + '</div>';
           html += '<div class="amount' + balCls + '">' +
-            fmtUsd(c.wallet_balance_usd) + '</div>';
+            fmtUsd(c.wallet_balance_usd, c.money_symbol) + '</div>';
         }
         html += '<div class="amount">' +
-          fmtUsd(c.wallet_lifetime_spend_usd) + '</div>';
+          fmtUsd(c.wallet_lifetime_spend_usd, c.money_symbol) + '</div>';
         html += '<div><button onclick="openModal(\'' +
           esc(c.company) + '\', \'company\')">Manage</button></div>';
         html += '</div>';
@@ -1137,7 +1137,7 @@
       onUnlimitedToggle();
       // Company default spend scope: hydrate only for company subjects.
       hydrateSpendScope(u);
-      $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+      $('m-balance').textContent = fmtUsd(u.wallet_balance_usd, u.money_symbol);
       if (u.wallet_balance_usd < 0)
         $('m-balance').style.color = '#C43D2E';
       else $('m-balance').style.color = '';
@@ -1579,7 +1579,7 @@
       await reloadAfterMutation();
       const u = findCurrentSubject();
       if (u) {
-        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd, u.money_symbol);
         renderTxns(u.wallet_transactions || []);
       }
     }
@@ -1622,7 +1622,7 @@
       await reloadAfterMutation();
       const u = findCurrentSubject();
       if (u) {
-        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd, u.money_symbol);
         renderTxns(u.wallet_transactions || []);
       }
     });

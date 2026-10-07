@@ -316,6 +316,14 @@ def wallet_state():
         # For company members this describes what tools they can spend
         # the shared wallet on (empty scope_tool_keys + scope_kind="star"
         # means "unrestricted").
+        "billing_currency": (
+            wallet.billing_currency(subject)
+            if callable(getattr(wallet, "billing_currency", None))
+            else "usd"),
+        "money_symbol": (
+            wallet.money_symbol(subject)
+            if callable(getattr(wallet, "money_symbol", None))
+            else "$"),
         "spend_scope": (wallet.user_spend_scope_summary(
             u, ctx["users_data"], subject)
             if ctx["billed_via_company"]
@@ -744,6 +752,7 @@ def create_checkout_session():
                 "subject_key": ctx["subject_key"],
                 "billed_via_username": ctx["uname"],
             },
+            currency=wallet.billing_currency(subject),
         )
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
@@ -1445,6 +1454,7 @@ def admin_custom_charge(target_username):
                 "admin_username": session.get("username", "admin"),
                 "idempotency_key": idem_key,
             },
+            currency=wallet.billing_currency(target),
         )
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 402
@@ -1869,6 +1879,8 @@ def admin_companies_billing():
             "member_prometheus_only": bool(
                 c.get("member_prometheus_only")),
             "paid_only_access": bool(c.get("member_prometheus_only")),
+            "billing_currency": wallet.billing_currency(c),
+            "money_symbol": wallet.money_symbol(c),
         })
     rows.sort(key=lambda r: (
         not r["paying_customer"],
@@ -2274,6 +2286,7 @@ def admin_company_charge_card(company_name):
                 "subject_kind": "company",
                 "subject_key": company_name,
             },
+            currency=wallet.billing_currency(company),
         )
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
@@ -2637,6 +2650,11 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
             b, l = _card_brand_last4_for_subject(subject_after)
             card_brand = card_brand or b
             card_last4 = card_last4 or l
+        import wallet as _wallet_cur  # type: ignore
+        _cur = (
+            _wallet_cur.billing_currency(subject_after)
+            if callable(getattr(_wallet_cur, "billing_currency", None))
+            else "usd")
         if kind != "adjustment":
             send_topup_receipt(
                 buyer_email=info["buyer_email"],
@@ -2647,6 +2665,7 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
                 card_brand=card_brand,
                 card_last4=card_last4,
                 kind=kind,
+                currency=_cur,
             )
         # A self-serve signup's opening balance already emails the
         # team from site_signup.activate_after_payment (with the
@@ -2667,6 +2686,7 @@ def _emit_topup_emails_safe(*, subject_kind, subject_key,
             kind=kind,
             card_brand=card_brand,
             card_last4=card_last4,
+            currency=_cur,
         )
     except Exception as e:
         print(f"[billing] top-up email dispatch failed "
@@ -3715,6 +3735,8 @@ def public_pay_page(token):
             wallet.auto_reload_threshold(subject)
             if callable(getattr(wallet, "auto_reload_threshold", None))
             else 500.0),
+        billing_currency=wallet.billing_currency(subject),
+        money_symbol=wallet.money_symbol(subject),
     )
 
 
@@ -3820,6 +3842,7 @@ def public_pay_checkout(token):
                 "description": "Wallet top-up",
                 "enable_auto_reload": "1" if enable_ar else "0",
             },
+            currency=wallet.billing_currency(subject),
         )
     except billing.BillingError:
         traceback.print_exc()
@@ -3838,19 +3861,36 @@ def public_pay_success(token):
     """Stripe returns here after a successful payment. The wallet is
     credited by the webhook, not by this route."""
     import payment_links  # type: ignore
+    import wallet  # type: ignore
     rec = payment_links.get_link(token)
+    subject = {}
+    try:
+        from app import load_users  # type: ignore
+        data = load_users() or {}
+        skind = str((rec or {}).get("subject_kind") or "user")
+        skey = str((rec or {}).get("subject_key") or "")
+        if skind == "company":
+            subject = (data.get("companies") or {}).get(skey) or {}
+        else:
+            _found, subject = _lookup_user_record(data, skey)
+            subject = subject or {}
+    except Exception:
+        subject = {}
+    add_amt = wallet.format_money(
+        wallet.auto_reload_amount(subject, subject_key=str(
+            (rec or {}).get("subject_key") or "")),
+        subject)
+    thr_amt = wallet.format_money(
+        wallet.auto_reload_threshold(subject), subject)
+    who = (rec or {}).get("display_name")
+    dest = f"{who}'s account" if who else "the account"
     return render_template(
         "pay_link.html", ok=False, paid=True,
         headline="Thank you. Your payment went through.",
         subline=("The funds are on their way to "
-                 f"{rec.get('display_name')}'s account. "
+                 f"{dest}. "
                  "The card is saved on the account. Auto-reload "
-                 "adds $5,000 when the balance drops below $500 "
-                 "unless you turned that off."
-                 if rec and rec.get("display_name") else
-                 "The funds are on their way to the account. "
-                 "The card is saved on the account. Auto-reload "
-                 "adds $5,000 when the balance drops below $500 "
+                 f"adds {add_amt} when the balance drops below {thr_amt} "
                  "unless you turned that off."),
         token="")
 

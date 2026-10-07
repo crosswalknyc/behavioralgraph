@@ -60,11 +60,13 @@ INTERNAL_TO: Tuple[str, ...] = (
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-def _fmt_usd(amount) -> str:
+def _fmt_usd(amount, currency: str = "usd") -> str:
+    raw = str(currency or "usd").strip().lower()
+    sym = "£" if raw in ("gbp", "£", "pound", "pounds", "sterling") else "$"
     try:
-        return f"${float(amount):,.2f}"
+        return f"{sym}{float(amount):,.2f}"
     except (TypeError, ValueError):
-        return "$0.00"
+        return f"{sym}0.00"
 
 
 def _fmt_ts(ts_iso: Optional[str] = None) -> str:
@@ -175,7 +177,8 @@ def send_topup_receipt(*,
                        card_brand: str = '',
                        card_last4: str = '',
                        kind: str = 'topup',
-                       ts_iso: str = '') -> None:
+                       ts_iso: str = '',
+                       currency: str = 'usd') -> None:
     """Send a Crosswalk-branded receipt to the buyer.
 
     kind: one of 'topup' | 'auto_reload' | 'admin_charge' |
@@ -187,8 +190,8 @@ def send_topup_receipt(*,
     if not buyer_email:
         print("[wallet-receipt] no buyer email; skipping receipt")
         return
-    amt = _fmt_usd(amount_usd)
-    bal = _fmt_usd(new_balance_usd)
+    amt = _fmt_usd(amount_usd, currency)
+    bal = _fmt_usd(new_balance_usd, currency)
     ts_str = _fmt_ts(ts_iso)
 
     header = _KIND_TO_BUYER_HEADER.get(
@@ -233,15 +236,16 @@ def send_topup_internal_notice(*,
                                kind: str = 'topup',
                                ts_iso: str = '',
                                card_brand: str = '',
-                               card_last4: str = '') -> None:
+                               card_last4: str = '',
+                               currency: str = 'usd') -> None:
     """Notify jenna@ + liz@ + czarina@ about a wallet top-up.
 
     Fire and forget. Never raises. `subject_kind` is 'user' or
     'company'; `subject_key` is the username or company name that
     holds the wallet.
     """
-    amt = _fmt_usd(amount_usd)
-    bal = _fmt_usd(new_balance_usd)
+    amt = _fmt_usd(amount_usd, currency)
+    bal = _fmt_usd(new_balance_usd, currency)
     ts_str = _fmt_ts(ts_iso)
     kind_label = _KIND_TO_INTERNAL_LABEL.get(kind, kind or 'top-up')
 

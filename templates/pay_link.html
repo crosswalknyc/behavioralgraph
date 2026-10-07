@@ -185,29 +185,30 @@
     <div class="name">{{ display_name }}</div>
   </div>
 
+  {% set sym = money_symbol|default('$') %}
   {% if amount_locked and amount_usd %}
     <label class="fld">Amount</label>
-    <div class="locked-amt">${{ '{:,.2f}'.format(amount_usd) }}</div>
+    <div class="locked-amt">{{ sym }}{{ '{:,.2f}'.format(amount_usd) }}</div>
     <input type="hidden" id="amt" value="{{ '%.2f'|format(amount_usd) }}">
   {% else %}
     <label class="fld" for="amt">Amount to add</label>
     <div class="amt-wrap">
-      <span class="dollar">$</span>
+      <span class="dollar">{{ sym }}</span>
       <input type="text" id="amt" inputmode="decimal" autocomplete="off"
              value="{% if amount_usd %}{{ '%.2f'|format(amount_usd) }}{% endif %}"
              placeholder="0.00">
     </div>
     <div class="presets" id="presets">
-      <button type="button" data-v="5000">$5,000</button>
-      <button type="button" data-v="10000">$10,000</button>
-      <button type="button" data-v="15000">$15,000</button>
+      <button type="button" data-v="5000">{{ sym }}5,000</button>
+      <button type="button" data-v="10000">{{ sym }}10,000</button>
+      <button type="button" data-v="15000">{{ sym }}15,000</button>
     </div>
   {% endif %}
 
   <div class="ar-row">
     <input type="checkbox" id="arOn" checked>
-    <label for="arOn">Automatically add ${{ '{:,.0f}'.format(ar_amount_usd|default(5000)) }} when the balance
-      drops below ${{ '{:,.0f}'.format(ar_threshold_usd|default(500)) }}.
+    <label for="arOn">Automatically add {{ sym }}{{ '{:,.0f}'.format(ar_amount_usd|default(5000)) }} when the balance
+      drops below {{ sym }}{{ '{:,.0f}'.format(ar_threshold_usd|default(500)) }}.
       <span class="hint">The card you use is saved on this account.
         You can uncheck this, or turn it off later in the account.</span>
     </label>
@@ -217,7 +218,7 @@
   <div class="err" id="err"></div>
 
   <div class="foot">{% if not (amount_locked and amount_usd) %}Minimum
-    ${{ '{:,.2f}'.format(min_usd) }}. {% endif %}Funds are added to the
+    {{ money_symbol|default('$') }}{{ '{:,.2f}'.format(min_usd) }}. {% endif %}Funds are added to the
     account above and are available as soon as the payment clears.
     Prepaid purchases are non-refundable. Unused funds have no cash
     value and cannot be refunded or transferred.</div>
@@ -237,6 +238,7 @@
   var MIN     = {{ min_usd|tojson }};
   var LOCKED  = {{ (amount_locked and amount_usd)|tojson }};
   var PACKS   = {{ (pack_sizes or [5000, 10000, 15000])|tojson }};
+  var SYM     = {{ (money_symbol or '$')|tojson }};
   var amtEl   = document.getElementById('amt');
   var payBtn  = document.getElementById('payBtn');
   var errEl   = document.getElementById('err');
@@ -244,7 +246,7 @@
   if (presets && PACKS && PACKS.length) {
     presets.innerHTML = PACKS.map(function (p) {
       var n = Number(p);
-      return '<button type="button" data-v="' + n + '">$' +
+      return '<button type="button" data-v="' + n + '">' + SYM +
         n.toLocaleString('en-US') + '</button>';
     }).join('');
   }
@@ -258,7 +260,7 @@
   // Server-side copy for the machine-readable errors the API returns.
   // Anything unmapped falls back to a calm generic line.
   var ERRORS = {
-    below_minimum: 'That amount is below the $' + MIN.toFixed(2) +
+    below_minimum: 'That amount is below the ' + SYM + MIN.toFixed(2) +
                    ' minimum.',
     above_maximum: 'That amount is too large. Please contact us to ' +
                    'arrange it.',

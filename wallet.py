@@ -1813,6 +1813,38 @@ def billing_mode(user: dict) -> str:
     return "prepay_only"
 
 
+def billing_currency(subject) -> str:
+    """Stripe charge currency for this billed subject.
+
+    The wallet ledger stays in USD (`wallet_balance_usd`). A GBP
+    company is charged in pounds at the same numeric amount: a
+    5000 top-up is £5,000 on Stripe and credits 5000.00 on the
+    wallet. Stripe's GBP-to-USD settlement is the spread we keep.
+    """
+    raw = str((subject or {}).get("billing_currency") or "usd")
+    raw = raw.strip().lower()
+    if raw in ("gbp", "£", "pound", "pounds", "sterling"):
+        return "gbp"
+    return "usd"
+
+
+def money_symbol(subject=None, currency=None) -> str:
+    cur = str(currency or billing_currency(subject) or "usd").strip().lower()
+    return "£" if cur == "gbp" else "$"
+
+
+def format_money(amount, subject=None, currency=None) -> str:
+    cur = str(currency or billing_currency(subject) or "usd").strip().lower()
+    if cur not in ("gbp", "usd"):
+        cur = "usd"
+    try:
+        v = float(amount or 0)
+    except (TypeError, ValueError):
+        v = 0.0
+    sign = "-" if v < 0 else ""
+    return f"{sign}{money_symbol(currency=cur)}{abs(v):,.2f}"
+
+
 def apply_auto_reload_preference(rec: dict, enabled: bool,
                                  subject_key: str = "") -> None:
     """Turn auto-reload on or off on a billed subject.
@@ -1999,12 +2031,13 @@ def wallet_stats(user: dict) -> dict:
         if bal <= thr:
             out["next_reload_note"] = (
                 f"Auto-reload will fire on your next pull "
-                f"(balance ${bal:.2f} is at or below the "
-                f"${thr:.2f} threshold).")
+                f"(balance {format_money(bal, user)} is at or below the "
+                f"{format_money(thr, user)} threshold).")
         else:
             out["next_reload_note"] = (
                 f"Auto-reload fires when balance drops below "
-                f"${thr:.2f}. Next top-up: ${auto_reload_amount(user):.2f}.")
+                f"{format_money(thr, user)}. Next top-up: "
+                f"{format_money(auto_reload_amount(user), user)}.")
     elif mode == "monthly_invoice":
         out["next_reload_note"] = (
             "Monthly invoice reconciles on the 1st of every month.")
@@ -2458,7 +2491,9 @@ def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
                     "idempotency_key": idem,
                     "dashboard_username": billed_via_username or "",
                     "billed_via_username": billed_via_username or "",
+                    "charge_currency": billing_currency(subject_snapshot),
                 },
+                currency=billing_currency(subject_snapshot),
             )
         except _billing.BillingError as e:
             result["error"] = str(e)
@@ -3785,6 +3820,8 @@ def admin_billing_row_for_user(username: str, user: dict,
         "company_wallet_name": key if billed else "",
         "plan": str(user.get("plan") or ""),
         "paid_only_access": is_paid_only_plan(user),
+        "billing_currency": billing_currency(subject),
+        "money_symbol": money_symbol(subject),
     }
 
 
@@ -4661,7 +4698,8 @@ __all__ = [
     "opening_checkout_allowed",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
-    "billing_mode", "apply_auto_reload_preference",
+    "billing_mode", "billing_currency", "money_symbol", "format_money",
+    "apply_auto_reload_preference",
     "parse_auto_reload_flag",
     "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
