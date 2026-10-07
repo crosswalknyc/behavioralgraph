@@ -11361,29 +11361,21 @@ _PM_DEFINITE_REF_RE = re.compile(
 
 
 def _pm_screen_bind_verdict(text, page, base, page_key=''):
-    """page | away | confirm - what the open page is to this ask.
+    """page | confirm - what the open page is to this ask.
 
-    Jenna 2026-09-29: the default is NOT the screen. The question
-    decides and the screen is a tiebreaker: asks that point at the
-    screen bind it silently, general asks answer as if nothing were
-    open, and only the cut-vs-parent tension still confirms.
+    Jenna 2026-10-06 (supersedes 2026-09-29): "Strip the dashboard
+    assumptions out of the lanes ... just ensure it always asks to
+    confirm." Nothing is inferred from the screen any more. The page
+    binds silently ONLY when the ask names the page's own subject
+    outright (the user said it, no assumption). Every other ask with a
+    profile open - pronouns, "this audience", an elliptical "age
+    breakdown?", a definite reference, a general market question -
+    gets the one-tap confirm with the page as the first chip. The
+    "answer this now" command (S5) is the user's own confirmation and
+    is honored by the caller.
     """
     t = str(text or '')
     tl = ' ' + _H._normalize_for_match(t) + ' '
-    # The catalog resolved a DIFFERENT file in the page's own subject
-    # family (scott, Spiderwick cut vs parent, 2026-09-29): torn.
-    if base and str(base.get('source') or '') == 'catalog' \
-            and str(base.get('s3_key') or '') != str(page_key or ''):
-        return 'confirm'
-    # A challenged figure or a definition ask is about what is on
-    # the screen and what this thread already said (2026-10-02 S4):
-    # the reconcile ask stays on the page, never re-derives away.
-    try:
-        if _kpi.is_reconcile_ask(t) or _kpi.is_definition_ask(t):
-            return 'page'
-    except Exception:
-        pass
-    # The ask names the page outright: the page, silently.
     try:
         page_toks = [w for w in _H._normalize_for_match(
             str(page or '').split(' - ')[0]).split()
@@ -11391,21 +11383,13 @@ def _pm_screen_bind_verdict(text, page, base, page_key=''):
     except Exception:
         page_toks = []
     if page_toks and any(f' {w} ' in tl for w in page_toks):
+        # The catalog resolved a DIFFERENT file in the page's own
+        # subject family (cut vs parent): still torn, still confirm.
+        if base and str(base.get('source') or '') == 'catalog' \
+                and str(base.get('s3_key') or '') != str(page_key or ''):
+            return 'confirm'
         return 'page'
-    # "the show" / "its audience" style definite reference: the page
-    # when the page IS the whole subject; torn when a cut is open.
-    if _PM_DEFINITE_REF_RE.search(t):
-        return 'confirm' if ' - ' in str(page or '') else 'page'
-    # Deixis and audience pronouns point at the screen.
-    if _PM_SCREEN_DEIXIS_RE.search(t):
-        return 'page'
-    # Elliptical profile-shaped ask (age breakdown, income skew):
-    # incomplete without a subject, so the screen supplies it,
-    # unless the ask scopes itself to the market.
-    if _PM_PROFILE_SHAPE_RE.search(t) and len(t.strip()) <= 90 \
-            and not _PM_MARKET_SCOPE_RE.search(t):
-        return 'page'
-    return 'away'
+    return 'confirm'
 
 
 _PM_VIEW_DEIXIS_RE = re.compile(
@@ -11500,16 +11484,18 @@ def _pm_view_owns_ask(text, ctx):
 def _pm_open_screen_confirm(text, ctx):
     """Route an ask against the profile open on screen.
 
-    Jenna 2026-09-29 (supersedes the 2026-09-28 always-confirm): the
-    open page is NOT the default subject. Returns:
+    Jenna 2026-10-06 (supersedes the 2026-09-29 question-driven
+    default, which itself supersedes the 2026-09-28 always-confirm):
+    "Strip the dashboard assumptions out of the lanes ... just ensure
+    it always asks to confirm." Returns:
     - {'route': 'bind', 'subject': named} when the ask names its own
-      subject - the caller answers on it silently.
-    - {'route': 'away'} for a general ask - the caller answers as if
-      nothing were open.
-    - None when the page binds silently (the ask points at it) or
-      another handler owns the ask.
-    - a confirm response only for the genuinely torn cut-vs-parent
-      case, with both options as chips.
+      subject (in the text or as a catalog subject) - the caller
+      answers on it and the first line says so.
+    - None only when no profile is open, the ask names its audiences,
+      another handler owns the ask, or the ask names the open page
+      outright (the user said it; nothing is assumed).
+    - otherwise the one-tap confirm with the page as the first chip,
+      the catalog alternative when one resolved, and "Something else".
     """
     page = str((ctx.get('primary') or {}).get('name') or '').strip()
     if not page:
@@ -11536,13 +11522,6 @@ def _pm_open_screen_confirm(text, ctx):
             return None
     except Exception:
         traceback.print_exc()
-    view_id = str(((ctx.get('view_context') or {}).get('view_id'))
-                  or '')
-    if view_id in ('cultureRankerIQ', 'trendsIQ'):
-        toks = [t for t in re.findall(r'[a-z0-9]+', page.lower())
-                if len(t) >= 3]
-        if not (toks and any(t in str(text or '').lower() for t in toks)):
-            return None
     page_key = str((ctx.get('primary') or {}).get('s3_key') or '')
     attach = True
     try:
@@ -11560,11 +11539,18 @@ def _pm_open_screen_confirm(text, ctx):
             and (bsub == psub or bsub in psub or psub in bsub))
         attach = same
     if not attach:
+        # The ask resolved a catalog subject outside the page's family:
+        # the ask named it. Bind that subject, never the page
+        # (2026-10-06: returning None here let the page bind later).
+        _bsub = str((base or {}).get('subject') or '').strip()
+        if _bsub:
+            _pm_ask_hint(route='ask_named_subject', outcome='bound_named',
+                         subject=_bsub)
+            return {'route': 'bind', 'subject': _bsub}
         return None
-    # Question-driven default (2026-09-29 Jenna: "make the default be
-    # NOT on screen"). The page binds silently only when the ask
-    # points at it; general asks answer as if nothing were open; only
-    # the cut-vs-parent tension still confirms.
+    # Always confirm (2026-10-06 Jenna, supersedes the 2026-09-29
+    # question-driven default): the page binds silently only when the
+    # ask names it outright; everything else confirms with chips.
     verdict = _pm_screen_bind_verdict(text, page, base, page_key)
     if verdict == 'confirm' and _pm_answer_now_active():
         # The reader said answer now: the thing on their screen is
@@ -11575,13 +11561,6 @@ def _pm_open_screen_confirm(text, ctx):
         _pm_ask_hint(route='screen_bind', outcome='bound_screen',
                      subject=page)
         return None
-    if verdict == 'away':
-        # No subject stamp (2026-10-01, Jenna): the answer is away
-        # from the page, so the page is NOT what this ask is about.
-        # Stamping it mis-filed a 14-title catalog ask under the open
-        # profile and fed a false pair into cross-session memory.
-        _pm_ask_hint(route='screen_detach', outcome='answered_away')
-        return {'route': 'away'}
     yes = f'Yes, {page}'
     _opts = [{'label': yes, 'subject': page}]
     _alt = str((base or {}).get('subject') or '').strip()
@@ -12081,7 +12060,11 @@ def _pm_generation_base(subject_hint, text, ctx=None,
     # with distinctive tokens (2+) sharing NOTHING with the page
     # subject - pronoun asks ('what are they googling', 'analyze
     # this') carry no hint and keep the page base exactly as before.
-    if page_base is not None and not prefer_catalog:
+    if page_base is not None:
+        # 2026-10-06 (Jenna, strip the dashboard assumptions): the guard
+        # applies on every path, including prefer_catalog callers, so a
+        # named subject with no catalog file never falls back onto the
+        # open page.
         _hint_d = set(_tokens(subject_hint))
         _page_d = set(_tokens(page_base.get('subject')))
         if (len(_hint_d) >= 2 and _page_d
@@ -15358,6 +15341,23 @@ def _pm_analyze_core(user, body, text, history):
             'success': True, 'action': 'answer',
             'reply': _kpi.definition_reply(_kpi_defn), 'followups': [],
             'offer_deck': False, 'deck_angle': None})
+    # A deictic definition ask ("how is this calculated?") never
+    # guesses from the screen (2026-10-06, Jenna): it asks which
+    # figure, with the on-screen labels as chips.
+    try:
+        if _kpi.is_definition_ask(text) or _kpi.is_reconcile_ask(text):
+            _vid, _labels = _pm_kpi_view(body)
+            _opts = _kpi.which_figure_options(text, _labels)
+            if _opts:
+                _pm_ask_hint(route='kpi_which_figure', outcome='clarified')
+                return jsonify({
+                    'success': True, 'action': 'answer',
+                    'reply': 'Which figure do you mean? Pick one and I '
+                             'will define it and show how it is counted.',
+                    'followups': [f'Define "{o}"' for o in _opts],
+                    'offer_deck': False, 'deck_angle': None})
+    except Exception:
+        traceback.print_exc()
     # Sample size lane (2026-10-05, Jenna: "the answer will always be
     # 10 million us gen pop panel ... the panel size is always that
     # 10m"). Scott's ask was parsed as a subject and offered a build.

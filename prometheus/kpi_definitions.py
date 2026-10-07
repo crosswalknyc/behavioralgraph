@@ -441,19 +441,39 @@ def find_definition(text, view_id='', on_screen_labels=None):
     # (2026-10-06, Alexia's "Saw a retarget").
     if re.search(r"[\"\u201c\u201d']([^\"\u201c\u201d']{3,80})[\"\u201c\u201d']", str(text or '')):
         return None
-    if re.search(r'\b(?:this|that|it|these|those)\b', nt) and on_screen_labels:
-        hits = []
-        for lab in on_screen_labels:
-            nl = _norm(lab)
-            if not nl:
-                continue
-            for d in DEFINITIONS:
-                if any(_alias_in(a, nl) for a in d['aliases']) \
-                        and d not in hits:
-                    hits.append(d)
-        if len(hits) == 1:
-            return hits[0]
+    # No silent fallback to whatever is on the screen (2026-10-06,
+    # Jenna: strip the dashboard assumptions; always ask to confirm).
+    # A deictic ask ("how is this calculated?") goes to
+    # which_figure_options, which asks with the on-screen labels as
+    # chips instead of guessing one.
     return None
+
+
+_DEICTIC_RX = re.compile(r'\b(?:this|that|it|these|those)\b', re.I)
+
+
+def which_figure_options(text, on_screen_labels, limit=5):
+    """The on-screen labels a deictic definition / reconcile ask could
+    mean, for a which-figure confirm. [] when the ask names a glossary
+    term already, is not deictic, or the screen offers nothing."""
+    t = str(text or '')
+    if not _DEICTIC_RX.search(t) or not on_screen_labels:
+        return []
+    if find_definition(t) is not None:
+        return []
+    out, seen = [], set()
+    for lab in on_screen_labels:
+        ls = str(lab or '').strip()
+        nl = _norm(ls)
+        if not nl or nl in seen or len(ls) > 60 or len(nl) < 3:
+            continue
+        if nl in {'label', 'name', 'title', 'id', 'rows', 'data', 'items', 'value', 'values'}:
+            continue
+        seen.add(nl)
+        out.append(ls)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def definition_reply(defn, view_id=''):
