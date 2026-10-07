@@ -34,16 +34,31 @@ CSV_COLUMNS = (
     "total_openai_spend",
 )
 
-# Labels that are not a person. Their dollars (and any leftover vs
-# the day's billed total) land on the system row.
+# Labels that are not a person. Leftover vs the day's billed total
+# is split across these rows, never smeared onto a user.
+TRENDS_USERNAME = "trends and rankers"
+LOCAL_OPS_USERNAME = "local-ops"
+UNTAGGED_USERNAME = "untagged box"
+OTHER_USERNAME = "other"
+SYSTEM_USERNAME = "system"
+SYSTEM_COMPANY = "system"
+SYSTEM_ROW_ORDER = (
+    TRENDS_USERNAME,
+    LOCAL_OPS_USERNAME,
+    UNTAGGED_USERNAME,
+    OTHER_USERNAME,
+    SYSTEM_USERNAME,
+)
 UNASSIGNABLE_USERS = frozenset({
     "",
     "local-ops",
     "trends_ranker",
+    "trends and rankers",
+    "untagged box",
+    "untagged",
+    "other",
     "system",
 })
-SYSTEM_USERNAME = "system"
-SYSTEM_COMPANY = "system"
 
 
 def parse_month(ym: str) -> tuple[int, int]:
@@ -113,12 +128,28 @@ def users_index(users: dict) -> dict:
     return idx
 
 
+def _canonical_system_row(label: str) -> str:
+    lab = (label or "").strip().lower()
+    if lab in ("trends and rankers", "trends_ranker", "trends", "rankers"):
+        return TRENDS_USERNAME
+    if lab in ("local-ops", "local ops", "localops"):
+        return LOCAL_OPS_USERNAME
+    if lab in ("untagged box", "untagged", "untagged box spend"):
+        return UNTAGGED_USERNAME
+    if lab in ("other",):
+        return OTHER_USERNAME
+    if lab == SYSTEM_USERNAME:
+        return SYSTEM_USERNAME
+    return ""
+
+
 def resolve_identity(label: str, index: dict) -> tuple[str, str]:
     lab = (label or "").strip()
     if not lab:
         return "", ""
-    if lab.lower() in UNASSIGNABLE_USERS or lab.lower() == SYSTEM_USERNAME:
-        return SYSTEM_USERNAME, SYSTEM_COMPANY
+    sys_row = _canonical_system_row(lab)
+    if sys_row:
+        return sys_row, SYSTEM_COMPANY
     hit = index.get(lab.lower())
     if hit:
         return hit
@@ -130,9 +161,18 @@ def is_assignable_user(label: str) -> bool:
     return bool(lab) and lab not in UNASSIGNABLE_USERS
 
 
-def fold_system_residual(anth: dict, day_total) -> dict:
-    """Keep assignable people; leftover vs the day's billed total
-    becomes the system row. Idempotent if system is already present."""
+def is_system_row(label: str) -> bool:
+    return bool(_canonical_system_row(label))
+
+
+def _round2(v: float) -> float:
+    return round(float(v or 0.0) + 1e-9, 2)
+
+
+def fold_system_residual(anth: dict, day_total, entry=None) -> dict:
+    """Keep assignable people. Leftover vs the day's billed total
+    is split onto trends and rankers, local-ops, untagged box, and
+    other. Any remainder after those asks lands on other."""
     people = {}
     for k, v in (anth or {}).items():
         lab = str(k or "").strip().lower()
@@ -140,13 +180,48 @@ def fold_system_residual(anth: dict, day_total) -> dict:
             continue
         people[lab] = people.get(lab, 0.0) + float(v or 0.0)
     if day_total is None:
-        return {k: round(v + 1e-9, 2) for k, v in people.items()
-                if round(v + 1e-9, 2) > 0.0}
-    residual = round(float(day_total or 0.0) - sum(people.values()) + 1e-9, 2)
-    if residual > 0.0:
-        people[SYSTEM_USERNAME] = residual
-    return {k: round(v + 1e-9, 2) for k, v in people.items()
-            if round(v + 1e-9, 2) > 0.0}
+        return {k: _round2(v) for k, v in people.items() if _round2(v) > 0.0}
+    leftover = _round2(float(day_total or 0.0) - sum(people.values()))
+    if leftover <= 0.0:
+        return {k: _round2(v) for k, v in people.items() if _round2(v) > 0.0}
+
+    day = entry if isinstance(entry, dict) else {}
+    detail = (day.get("detail") or {}) if day else {}
+    local_ops_ask = _round2(
+        detail.get("local_ops_usd")
+        if detail.get("local_ops_usd") is not None
+        else 0.0)
+    trends_ask = _round2(day.get("trends") or 0.0)
+    system_ch = _round2(day.get("system") or 0.0)
+    untagged_ask = _round2(max(0.0, system_ch - local_ops_ask))
+    other_ask = _round2(day.get("other") or 0.0)
+
+    def take(asked: float) -> float:
+        nonlocal leftover
+        amt = _round2(min(max(0.0, asked), leftover))
+        leftover = _round2(leftover - amt)
+        return amt
+
+    # Named asks first. If the day has no channel fields, the whole
+    # leftover falls through to other.
+    has_channels = any(v > 0.0 for v in (
+        trends_ask, local_ops_ask, system_ch, other_ask))
+    if has_channels:
+        t = take(trends_ask)
+        if t:
+            people[TRENDS_USERNAME] = t
+        lo = take(local_ops_ask)
+        if lo:
+            people[LOCAL_OPS_USERNAME] = lo
+        u = take(untagged_ask)
+        if u:
+            people[UNTAGGED_USERNAME] = u
+        o = take(other_ask + leftover)
+        if o:
+            people[OTHER_USERNAME] = o
+    else:
+        people[OTHER_USERNAME] = leftover
+    return {k: _round2(v) for k, v in people.items() if _round2(v) > 0.0}
 
 
 def day_user_spend(entry: dict) -> tuple[dict, dict]:
@@ -162,7 +237,7 @@ def day_user_spend(entry: dict) -> tuple[dict, dict]:
     # Only fold when the day carries a billed/computed total so older
     # test fixtures and days without a headline number stay as-is.
     if isinstance(entry, dict) and "total" in entry:
-        anth = fold_system_residual(anth, entry.get("total"))
+        anth = fold_system_residual(anth, entry.get("total"), entry)
     else:
         anth = {str(k).strip().lower(): float(v or 0.0)
                 for k, v in anth.items() if str(k or "").strip()}
@@ -217,9 +292,16 @@ def month_rows(days: dict, users: dict, year: int, month: int) -> tuple:
     rows.sort(key=lambda r: (-r["total_anthropic_spend"],
                              r["username"].lower()))
     people = [r for r in rows
-              if str(r.get("username") or "").lower() != SYSTEM_USERNAME]
-    system = [r for r in rows
-              if str(r.get("username") or "").lower() == SYSTEM_USERNAME]
+              if not is_system_row(r.get("username") or "")]
+    system = []
+    by_name = {str(r.get("username") or "").lower(): r for r in rows
+               if is_system_row(r.get("username") or "")}
+    for name in SYSTEM_ROW_ORDER:
+        if name in by_name:
+            system.append(by_name[name])
+    for name, r in by_name.items():
+        if name not in SYSTEM_ROW_ORDER:
+            system.append(r)
     return people + system, days_used
 
 
@@ -239,22 +321,26 @@ def filter_rows(rows: list, username: Optional[str] = None,
 
 def totals(rows: list) -> dict:
     people = [r for r in rows
-              if str(r.get("username") or "").lower() != SYSTEM_USERNAME]
+              if not is_system_row(r.get("username") or "")]
     system = [r for r in rows
-              if str(r.get("username") or "").lower() == SYSTEM_USERNAME]
+              if is_system_row(r.get("username") or "")]
     anth = sum(float(r.get("total_anthropic_spend") or 0) for r in rows)
     oai = sum(float(r.get("total_openai_spend") or 0) for r in rows)
     user_anth = sum(float(r.get("total_anthropic_spend") or 0)
                     for r in people)
     sys_anth = sum(float(r.get("total_anthropic_spend") or 0)
                    for r in system)
-    return {
+    out = {
         "total_anthropic_spend": round(anth + 1e-9, 2),
         "total_openai_spend": round(oai + 1e-9, 2),
         "user_anthropic_spend": round(user_anth + 1e-9, 2),
         "system_anthropic_spend": round(sys_anth + 1e-9, 2),
         "users": len(people),
     }
+    for r in system:
+        key = "row_" + str(r.get("username") or "").replace(" ", "_")
+        out[key] = float(r.get("total_anthropic_spend") or 0)
+    return out
 
 
 def csv_text(rows: list, include_total: bool = True) -> str:
@@ -302,9 +388,11 @@ def build_month(year: int, month: int, *, s3=None, users=None,
 __all__ = [
     "BUCKET", "STORE_KEY", "USERS_KEY", "CSV_COLUMNS",
     "UNASSIGNABLE_USERS", "SYSTEM_USERNAME", "SYSTEM_COMPANY",
+    "TRENDS_USERNAME", "LOCAL_OPS_USERNAME", "UNTAGGED_USERNAME",
+    "OTHER_USERNAME", "SYSTEM_ROW_ORDER",
     "parse_month", "month_label", "previous_month", "month_dates",
     "load_store", "load_users_dict", "users_index", "resolve_identity",
-    "is_assignable_user", "fold_system_residual",
+    "is_assignable_user", "is_system_row", "fold_system_residual",
     "day_user_spend", "roll_month", "month_rows", "filter_rows",
     "totals", "csv_text", "build_month",
 ]
