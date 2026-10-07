@@ -37748,6 +37748,13 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             // The multi-touch read follows the as-of picker. Counts scale
             // to the share of campaign exposure accrued by that date;
             // checkout stages open with ticketing. Rates and shares stay.
+            // A share that rounds to 0% on a non-empty set reads as 'under 1%'.
+            function _iiqGoatSharePct(f) {
+                var pct = Number(f || 0) * 100;
+                if (pct > 0 && pct < 0.5) return 'under 1%';
+                return Math.round(pct) + '%';
+            }
+
             function _iiqGoatAsOfPayload(active, d) {
                 var asOf = _iiqAsOfGet();
                 if (!asOf || !active) return active;
@@ -37855,9 +37862,9 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     paths.path_archetypes = [];
                     paths.asof_note = 'Tickets were not on sale at this date, so the ticketing site stages read zero. The attribution cuts, time to convert and path archetypes open with ticketing' + (tOpen ? (' on ' + _iiqFmtAsOfDate(tOpen)) : '') + '.';
                 } else if (fExp < 0.999 && !filtersOn) {
-                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ': ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure had accrued by this date.';
+                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ': ' + _iiqGoatSharePct(fExp) + ' of the campaign\u2019s creative exposure had accrued by this date.';
                 } else if (fExp < 0.999) {
-                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ' on the filtered creative: ' + Math.round(fExp * 100) + '% of the campaign\u2019s creative exposure sits in this set at this date.';
+                    paths.asof_note = 'Read as of ' + _iiqFmtAsOfDate(asOf) + ' on the filtered creative: ' + _iiqGoatSharePct(fExp) + ' of the campaign\u2019s creative exposure sits in this set at this date.';
                 }
                 if (filtersOn) {
                     var fNote = 'Filters on: ' + matchedN + ' of ' + totalN + ' creative assets in this read.';
