@@ -13799,6 +13799,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 _findings_text += (
                     ' || auto-correct retry findings: '
                     + ' | '.join(str(f) for f in _retry_findings))
+            print(f"[pm-verify] HELD after all passes: {_findings_text[:1200]}")
             _H._chatbot_error_email(
                 'brief-chat/verify',
                 'generated read HELD after failed verification '
