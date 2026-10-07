@@ -22873,11 +22873,13 @@ https://www.instagram.com/p/..."></textarea>
             box-shadow: 0 0 8px rgba(51, 88, 255, 0.50),
                         0 0 18px rgba(51, 88, 255, 0.22) !important;
         }
-        #synthChatSubmitBtn.pm-stop {
+        #synthChatSubmitBtn.pm-stop,
+        #synthChatStopBtn {
             background: rgba(255, 107, 107, 0.16) !important;
             color: var(--accent-red, #ff6b6b) !important;
             border: 1px solid var(--accent-red, #ff6b6b) !important;
         }
+        #synthChatStopBtn { margin-right: 6px; }
         #synthChatSubmitBtn.btn-primary {
             background: #C7F23E !important;
             border: 0 !important;
@@ -23317,6 +23319,7 @@ https://www.instagram.com/p/..."></textarea>
                                                 <line x1="8" y1="22" x2="16" y2="22"></line>
                                             </svg>
                                         </button>
+                                        <button type="button" class="btn" id="synthChatStopBtn" onclick="_synthChatStopInflight()" style="display:none" title="Stop the running ask">Stop</button>
                                         <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn">Send</button>
                                     </div>
                                 </div>
@@ -80739,27 +80742,29 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
         }
 
         function _synthChatShowStopButton() {
-            // 2026-09-16 (Jenna): the Working button ITSELF becomes the
-            // Stop button - one control, no sibling. Click routes
-            // through synthChatSubmit's stop guard.
+            // 2026-10-07 (Jenna): "there should be a submit button AND
+            // stop not just one." Stop is its own control beside Send;
+            // Send stays Send so a new message can go out while a long
+            // ask runs. (Supersedes the 2026-09-16 one-button state.)
+            var stop = document.getElementById('synthChatStopBtn');
+            if (stop) stop.style.display = 'inline-flex';
             var btn = document.getElementById('synthChatSubmitBtn');
-            if (!btn) return;
-            var legacy = document.getElementById('synthChatStopBtn');
-            if (legacy) legacy.remove();
-            btn.dataset.pmStop = '1';
-            btn.disabled = false;
-            btn.textContent = 'Stop';
-            btn.classList.add('pm-stop');
+            if (btn) {
+                delete btn.dataset.pmStop;
+                btn.classList.remove('pm-stop');
+                btn.disabled = false;
+                btn.textContent = 'Send';
+            }
         }
 
         function _synthChatHideStopButton() {
+            var stop = document.getElementById('synthChatStopBtn');
+            if (stop) stop.style.display = 'none';
             var btn = document.getElementById('synthChatSubmitBtn');
             if (btn) {
                 delete btn.dataset.pmStop;
                 btn.classList.remove('pm-stop');
             }
-            var legacy = document.getElementById('synthChatStopBtn');
-            if (legacy) legacy.style.display = 'none';
         }
 
         function _synthChatStopInflight() {
@@ -85054,7 +85059,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                         (s.existing_match_days_old != null
                             ? ' from ' + s.existing_match_days_old + ' days ago'
                             : '') +
-                        '. You can grab it now, no credits.';
+                        '. You can grab it now at no charge.';
                     break;
                 case 'derive_cut':
                     // 2026-08-20 lineage naming: when the deliverable
@@ -85145,26 +85150,22 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                     ' (location mix locked to these only)');
             }
             var credits = s.estimated_credits;
-            if (typeof credits === 'number') {
-                // 2026-09-04 Jenna existing_match chip UX: when a
-                // fresh-build cost rides the draft
-                // (estimated_credits_new_build), surface it inline so
-                // the No chip's cost is visible next to the Yes chip's
-                // 0-credit reuse price.
-                var _emFreshCr = (String(s.decision || '').toLowerCase()
-                                  === 'existing_match')
-                    ? s.estimated_credits_new_build : null;
-                if (credits === 0 && typeof _emFreshCr === 'number'
-                        && _emFreshCr > 0) {
-                    facts.push('Cost: 0 credits to reuse, or '
-                        + _emFreshCr + ' credit'
-                        + (_emFreshCr === 1 ? '' : 's')
+            // Money, not credits (Jenna 2026-10-07: "we dont use credits
+            // anymore it's all currency"). The server stamps a price
+            // table by tier on the draft; the card prices the current
+            // decision + add-on cuts from it. Without a table the cost
+            // line is left off rather than printing credits.
+            var _pt = s.price_table || null;
+            var _nCuts = (s.addon_cuts && s.addon_cuts.length) || 0;
+            if (_pt && typeof credits === 'number') {
+                var _dk = String(s.decision || 'new_build').toLowerCase();
+                if (_dk === 'existing_match') {
+                    facts.push('Cost: $0 to reuse the existing file, or '
+                        + _synthChatUsd(_synthChatPriceUsd(_pt, 'new_build', _nCuts))
                         + ' for a fresh build');
                 } else {
-                    facts.push(credits === 0
-                        ? 'Cost: 0 credits (reusing the existing file)'
-                        : 'Cost: ' + credits + ' credit' +
-                            (credits === 1 ? '' : 's') + ' on approval');
+                    facts.push('Cost: ' + _synthChatUsd(_synthChatPriceUsd(_pt, _dk, _nCuts))
+                        + ' on approval');
                 }
             }
             if (mins) facts.push('Build time: ~' + mins + ' min');
@@ -85172,7 +85173,7 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
             if (facts.length) line += '\n\n' + facts.join('\n');
             var _cuts = s.addon_cuts;
             if (_cuts && _cuts.length) {
-                line += '\n\nAdd-on cuts (3 credits each):';
+                line += '\n\nAdd-on cuts' + (_pt ? ' (' + _synthChatUsd(_pt.addon_cut) + ' each)' : '') + ':';
                 for (var _ci = 0; _ci < _cuts.length; _ci++) {
                     line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
                 }
@@ -85194,6 +85195,25 @@ body[data-theme="light"] #intentIQView [style*="; color: #94A3B8"] {
                 return line + '\n\nIs this the one you want?';
             }
             return line + '\n\nApprove to run, or send another message to adjust.';
+        }
+
+        function _synthChatUsd(v) {
+            var n = Math.round(Number(v) || 0);
+            return '$' + n.toLocaleString('en-US');
+        }
+        // Mirrors the server's _v1_price_usd_for: the tier price plus
+        // add-on cuts, with the first cut baked into cut_needs_parent
+        // and a cuts-only derive priced per cut.
+        function _synthChatPriceUsd(pt, decision, nCuts) {
+            var cut = Number(pt.addon_cut) || 0;
+            var n = Math.max(Number(nCuts) || 0, 0);
+            if (decision === 'existing_match') return 0;
+            if (decision === 'derive_cut') return cut * Math.max(n, 1);
+            if (decision === 'cut_needs_parent') {
+                return (Number(pt.cut_needs_parent) || 0) + cut * Math.max(n - 1, 0);
+            }
+            var base = Number(pt[decision] != null ? pt[decision] : pt.new_build) || 0;
+            return base + cut * n;
         }
 
         function synthChatCancelBrief() {

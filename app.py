@@ -44575,11 +44575,36 @@ _IDENTITY_STOP_TOKENS = {
 }
 
 
+# Category words name a market, not an entity. Sharing one of these is
+# not identity: 'run a profile on Travel & Leisure Co' was linked as a
+# cut of 'Sustainable Travel Clothing Buyers' on the word travel alone
+# (Jessie, 2026-10-07). Only a distinctive shared token, or most of the
+# candidate's name, makes the candidate the same subject.
+_COMMON_CATEGORY_TOKENS = {
+    'travel', 'traveler', 'travelers', 'leisure', 'vacation', 'vacations',
+    'clothing', 'apparel', 'fashion', 'footwear', 'shoes', 'beauty',
+    'skincare', 'makeup', 'food', 'foods', 'snack', 'snacks', 'drink',
+    'drinks', 'beverage', 'beverages', 'coffee', 'grocery', 'sports',
+    'sport', 'music', 'news', 'movie', 'movies', 'film', 'films',
+    'television', 'streaming', 'gaming', 'games', 'game', 'health',
+    'wellness', 'fitness', 'finance', 'financial', 'banking', 'bank',
+    'insurance', 'auto', 'automotive', 'car', 'cars', 'home', 'kitchen',
+    'pet', 'pets', 'baby', 'luxury', 'premium', 'digital', 'online',
+    'retail', 'shopping', 'brand', 'brands', 'company', 'group', 'club',
+    'network', 'entertainment', 'lifestyle', 'outdoor', 'outdoors',
+    'tech', 'technology', 'mobile', 'video', 'audio', 'podcast',
+    'podcasts', 'book', 'books', 'reading', 'learning', 'education',
+    'business', 'small', 'enterprise', 'sustainable', 'green', 'organic',
+    'american', 'national', 'global', 'world', 'international', 'united',
+}
+
+
 def _subject_identity_mismatch(prompt, subject, candidate_display):
     """True when the picked candidate's ENTITY name (before any ' - '
-    cut suffix) shares NO real identity token with the ask (the prompt
-    plus the drafted subject). Generic filler, audience nouns, and
-    universe-qualifier tokens do not count as identity. An empty
+    cut suffix) is not the ask's subject. Generic filler, audience
+    nouns, and universe-qualifier tokens do not count as identity; a
+    shared CATEGORY word (travel, clothing, music) does not either,
+    unless the ask carries most of the candidate's name. An empty
     candidate-identity set means we cannot judge, so it is NOT a
     mismatch (leave that call to the qualifier gate). Never raises."""
     try:
@@ -44594,10 +44619,15 @@ def _subject_identity_mismatch(prompt, subject, candidate_display):
             return False
         hay = _normalize_for_match(f"{prompt or ''} {subject or ''}")
         hay_toks = set(hay.split())
-        for ct in cand_toks:
-            if ct in hay_toks or (len(ct) >= 5 and ct in hay):
-                return False
-        return True
+        shared = {ct for ct in cand_toks
+                  if ct in hay_toks or (len(ct) >= 5 and ct in hay)}
+        if not shared:
+            return True
+        if shared - _COMMON_CATEGORY_TOKENS:
+            return False
+        # Only category words in common: the ask has to carry most of
+        # the candidate's name for it to be the same subject.
+        return len(shared) < max(2, (len(cand_toks) + 1) // 2)
     except Exception:
         return False
 
@@ -48666,10 +48696,18 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
     claude_explicit = any(bool(d.get('date_range_explicit'))
                           for d in drafts)
     _dr0 = (drafts[0].get('date_range') or {}) if drafts else {}
+    try:
+        _ptab = _v1_price_table_for(session.get('username'))
+    except Exception:
+        _ptab = _v1_price_table_for(None)
+    for _d in drafts:
+        if isinstance(_d, dict):
+            _d['price_table'] = _ptab
     return jsonify({
         'success': True,
         'batch': True,
         'batch_size': len(drafts),
+        'price_table': _ptab,
         'subjects': [d.get('subject') or d.get('file_stem')
                      or f'profile {i + 1}'
                      for i, d in enumerate(drafts)],
@@ -51539,6 +51577,27 @@ def _v1_balance_usd(username: str) -> float:
         return round(float(_w.wallet_balance(subject)), 2)
     except Exception:
         return 0.0
+
+
+def _v1_price_table_for(username: str = None) -> dict:
+    """Dollar prices by decision tier for one caller, so the chat card
+    can print money instead of credits (Jenna 2026-10-07: "we dont use
+    credits anymore it's all currency"). Same keys the decision
+    normalizer emits; addon_cut is the per-cut price. Company rates
+    (a Kartel $275 pull) ride through username. Never raises."""
+    out = {}
+    try:
+        for d in ('new_build', 'time_shifted_refresh', 'derive_cut',
+                  'cut_needs_parent', 'subscriber_iq', 'existing_match'):
+            out[d] = _v1_price_usd_for(d, 0, username)
+        out['addon_cut'] = round(_v1_tool_price_usd(
+            'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK, username), 2)
+    except Exception:
+        out = {'new_build': 300.0, 'time_shifted_refresh': 300.0,
+               'derive_cut': 100.0, 'cut_needs_parent': 400.0,
+               'subscriber_iq': 1000.0, 'existing_match': 0.0,
+               'addon_cut': 100.0}
+    return out
 
 
 def _v1_price_usd_for_cut() -> float:

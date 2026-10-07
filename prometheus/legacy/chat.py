@@ -2430,6 +2430,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         except Exception:
             pass
 
+        spec_draft['price_table'] = _pm_price_table()
         return {
             'success': True, 'subject_input': subject,
             'spec_draft': spec_draft,
@@ -6929,10 +6930,12 @@ def _pm_interpret_core(user, body, text, history):
                 spec_draft['estimated_credits_new_build'] = _fresh_new_credits
             except Exception:
                 pass
+        spec_draft['price_table'] = _ptab = _pm_price_table()  # money, not credits
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
             'estimated_credits': estimated_credits,
+            'price_table': _ptab,
             'clarify_steps': clarify_steps,
             'candidates': [
                 {k: v for k, v in c.items() if not k.startswith('_') or k == '_score'}
@@ -18683,6 +18686,7 @@ from prometheus.legacy.watch import (  # noqa: E402,F401
     _pm_record_held_reply,
     _pm_gate_options,
     _pm_open_status_line,
+    _pm_price_table,
 )
 # Screen warm-up route (2026-10-02 S7): /api/brief-chat/warm primes
 # the digest caches when a profile loads so the first ask skips the

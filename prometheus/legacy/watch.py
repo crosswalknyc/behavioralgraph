@@ -17,7 +17,7 @@ from flask import session
 
 from prometheus.legacy import H as _H, C as _C  # noqa: E402
 
-__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line']
+__all__ = ['_PM_WATCH_FLAGGED', '_PM_USER_BLOCK_CACHE', '_PM_USER_BLOCK_LOCK', '_pm_user_block', '_pm_catalog_block', '_pm_ask_log_user', '_pm_probe_caller', '_pm_is_probe_user', '_PM_COMMON_IDENTITY_WORDS', '_pm_thread_confirmed_page', '_pm_watch_flag', '_pm_record_held_reply', '_pm_gate_options', '_pm_open_status_line', '_pm_price_table']
 
 
 _PM_WATCH_FLAGGED = frozenset({'clarified_repeat', 'empty', 'faulted', 'error',
@@ -331,3 +331,18 @@ def _pm_thread_confirmed_page(history, page):
     except Exception:
         pass
     return False
+
+
+def _pm_price_table():
+    """Dollar prices by decision tier for the signed-in caller, so the
+    brief card prints money, never credits (Jenna 2026-10-07). None
+    when the host cannot price (the widget then prints nothing)."""
+    try:
+        tab = _H._v1_price_table_for(session.get('username'))
+        if not isinstance(tab, dict):
+            return None
+        out = {str(k): float(v) for k, v in tab.items()
+               if isinstance(v, (int, float))}
+        return out or None
+    except Exception:
+        return None
