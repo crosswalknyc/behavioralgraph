@@ -6398,7 +6398,10 @@ def _stamp_window_tokens(text):
         d = _dt.date.fromisoformat(iso)
         return f"{d.strftime('%b')} {d.day} {d.year}"
 
-    today_iso = _dt.date.today().isoformat()
+    # TODAY and the trailing-12 end share one clock (UTC, the one
+    # default_window uses); the host's local date drifts past it for
+    # two hours each night and the two anchors disagreed.
+    today_iso = end or _dt.datetime.now(_dt.timezone.utc).date().isoformat()
     return (text
             .replace('__T12_START__', start)
             .replace('__T12_END__', end)
